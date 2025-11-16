@@ -1,0 +1,235 @@
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
+
+export interface Worktree {
+  id: number;
+  repo_path: string;
+  worktree_path: string;
+  branch_name: string;
+  created_at: string;
+  metadata?: string;
+}
+
+export interface Command {
+  id: number;
+  worktree_id: number;
+  command: string;
+  created_at: string;
+  status: string;
+  output?: string;
+}
+
+export interface GitStatus {
+  modified: number;
+  added: number;
+  deleted: number;
+  untracked: number;
+}
+
+export interface BranchInfo {
+  name: string;
+  ahead: number;
+  behind: number;
+  upstream?: string;
+}
+
+export interface WorktreeInfo {
+  path: string;
+  branch: string;
+  commit: string;
+}
+
+export interface DirectoryEntry {
+  name: string;
+  path: string;
+  is_directory: boolean;
+}
+
+// Database API
+export const getWorktrees = (): Promise<Worktree[]> => 
+  invoke("get_worktrees");
+
+export const addWorktreeToDb = (
+  repo_path: string,
+  worktree_path: string,
+  branch_name: string,
+  metadata?: string
+): Promise<number> =>
+  invoke("add_worktree_to_db", { repoPath: repo_path, worktreePath: worktree_path, branchName: branch_name, metadata });
+
+export const deleteWorktreeFromDb = (id: number): Promise<void> =>
+  invoke("delete_worktree_from_db", { id });
+
+export const getCommands = (worktree_id: number): Promise<Command[]> =>
+  invoke("get_commands", { worktreeId: worktree_id });
+
+export const addCommand = (
+  worktree_id: number,
+  command: string,
+  status: string,
+  output?: string
+): Promise<number> =>
+  invoke("add_command", { worktreeId: worktree_id, command, status, output });
+
+export const getSetting = (key: string): Promise<string | null> =>
+  invoke("get_setting", { key });
+
+export const setSetting = (key: string, value: string): Promise<void> =>
+  invoke("set_setting", { key, value });
+
+export const getRepoSetting = (repo_path: string, key: string): Promise<string | null> =>
+  invoke("get_repo_setting", { repoPath: repo_path, key });
+
+export const setRepoSetting = (repo_path: string, key: string, value: string): Promise<void> =>
+  invoke("set_repo_setting", { repoPath: repo_path, key, value });
+
+export const deleteRepoSetting = (repo_path: string, key: string): Promise<void> =>
+  invoke("delete_repo_setting", { repoPath: repo_path, key });
+
+// Git API
+export const gitCreateWorktree = (
+  repo_path: string,
+  branch: string,
+  new_branch: boolean
+): Promise<string> =>
+  invoke("git_create_worktree", { repoPath: repo_path, branch, newBranch: new_branch });
+
+export const gitGetCurrentBranch = (repo_path: string): Promise<string> =>
+  invoke("git_get_current_branch", { repoPath: repo_path });
+
+export const gitExecutePostCreateCommand = (worktree_path: string, command: string): Promise<string> =>
+  invoke("git_execute_post_create_command", { worktreePath: worktree_path, command });
+
+export const gitListWorktrees = (repo_path: string): Promise<WorktreeInfo[]> =>
+  invoke("git_list_worktrees", { repoPath: repo_path });
+
+export const gitRemoveWorktree = (repo_path: string, worktree_path: string): Promise<string> =>
+  invoke("git_remove_worktree", { repoPath: repo_path, worktreePath: worktree_path });
+
+export const gitGetStatus = (worktree_path: string): Promise<GitStatus> =>
+  invoke("git_get_status", { worktreePath: worktree_path });
+
+export const gitGetBranchInfo = (worktree_path: string): Promise<BranchInfo> =>
+  invoke("git_get_branch_info", { worktreePath: worktree_path });
+
+export const gitGetFileDiff = (worktree_path: string, file_path: string): Promise<string> =>
+  invoke("git_get_file_diff", { worktreePath: worktree_path, filePath: file_path });
+
+export const gitListBranches = (repo_path: string): Promise<string[]> =>
+  invoke("git_list_branches", { repoPath: repo_path });
+
+// PTY API
+export const ptyCreateSession = (
+  session_id: string,
+  working_dir?: string,
+  shell?: string,
+  initial_command?: string
+): Promise<void> =>
+  invoke("pty_create_session", { sessionId: session_id, workingDir: working_dir, shell, initialCommand: initial_command });
+
+export const ptyWrite = (session_id: string, data: string): Promise<void> =>
+  invoke("pty_write", { sessionId: session_id, data });
+
+export const ptyResize = (session_id: string, rows: number, cols: number): Promise<void> =>
+  invoke("pty_resize", { sessionId: session_id, rows, cols });
+
+export const ptyClose = (session_id: string): Promise<void> =>
+  invoke("pty_close", { sessionId: session_id });
+
+export const ptyListen = (session_id: string, callback: (data: string) => void) =>
+  listen<string>(`pty-data-${session_id}`, (event) => callback(event.payload));
+
+// File System API
+export const readFile = (path: string): Promise<string> =>
+  invoke("read_file", { path });
+
+export const listDirectory = (path: string): Promise<DirectoryEntry[]> =>
+  invoke("list_directory", { path });
+
+// Shell API
+export const shellExecute = (command: string, working_dir?: string): Promise<string> =>
+  invoke("shell_execute", { command, workingDir: working_dir });
+
+export const shellLaunchApp = (app_name: string, path: string): Promise<void> =>
+  invoke("shell_launch_app", { appName: app_name, path });
+
+export const detectAvailableEditors = (): Promise<string[]> =>
+  invoke("detect_editors");
+
+// Git Operations API
+export const gitCommit = (worktree_path: string, message: string): Promise<string> =>
+  invoke("git_commit", { worktreePath: worktree_path, message });
+
+export const gitAddAll = (worktree_path: string): Promise<string> =>
+  invoke("git_add_all", { worktreePath: worktree_path });
+
+export const gitPush = (worktree_path: string): Promise<string> =>
+  invoke("git_push", { worktreePath: worktree_path });
+
+export const gitPull = (worktree_path: string): Promise<string> =>
+  invoke("git_pull", { worktreePath: worktree_path });
+
+export const gitFetch = (worktree_path: string): Promise<string> =>
+  invoke("git_fetch", { worktreePath: worktree_path });
+
+export const gitLog = (worktree_path: string, count: number): Promise<string[]> =>
+  invoke("git_log", { worktreePath: worktree_path, count });
+
+export const gitStageFile = (worktree_path: string, file_path: string): Promise<string> =>
+  invoke("git_stage_file", { worktreePath: worktree_path, filePath: file_path });
+
+export const gitUnstageFile = (worktree_path: string, file_path: string): Promise<string> =>
+  invoke("git_unstage_file", { worktreePath: worktree_path, filePath: file_path });
+
+export const gitGetChangedFiles = (worktree_path: string): Promise<string[]> =>
+  invoke("git_get_changed_files", { worktreePath: worktree_path });
+
+// Calculate directory size (in bytes, excluding .git)
+export const calculateDirectorySize = (path: string): Promise<number> =>
+  invoke("calculate_directory_size", { path });
+
+// Folder picker and git validation
+export const selectFolder = async (): Promise<string | null> => {
+  const selected = await open({
+    directory: true,
+    multiple: false,
+    title: "Select Folder",
+  });
+  return selected;
+};
+
+export const isGitRepository = (path: string): Promise<boolean> =>
+  invoke("git_is_repository", { path });
+
+export const gitInit = (path: string): Promise<string> =>
+  invoke("git_init_repo", { path });
+
+// Plan persistence
+export const savePlanToRepo = async (
+  repoPath: string,
+  planId: string,
+  content: string
+): Promise<void> => {
+  const data = JSON.stringify({
+    content,
+    editedAt: new Date().toISOString(),
+  });
+  return setRepoSetting(repoPath, `plan_${planId}`, data);
+};
+
+export const loadPlanFromRepo = async (
+  repoPath: string,
+  planId: string
+): Promise<{ content: string; editedAt: string } | null> => {
+  const data = await getRepoSetting(repoPath, `plan_${planId}`);
+  if (!data) return null;
+  
+  try {
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Failed to parse plan data:', error);
+    return null;
+  }
+};
+
