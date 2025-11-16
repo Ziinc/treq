@@ -1,13 +1,17 @@
 mod db;
 mod git;
 mod git_ops;
+mod local_db;
+mod plan_storage;
 mod pty;
 mod shell;
 
 use db::{Database, Worktree, Command as DbCommand};
 use git::{is_git_repository, git_init, *};
+use local_db::{PlanHistoryEntry, PlanHistoryInput};
+use plan_storage::{PlanFile, PlanMetadata};
 use pty::PtyManager;
-use shell::{execute_command, launch_application, detect_available_editors};
+use shell::execute_command;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
@@ -115,10 +119,10 @@ fn git_create_worktree(
     branch: String,
     new_branch: bool,
 ) -> Result<String, String> {
-    // Load exclusion patterns from database
-    let exclusion_patterns = {
+    // Load inclusion patterns from database
+    let inclusion_patterns = {
         let db = state.db.lock().unwrap();
-        db.get_repo_setting(&repo_path, "excluded_copy_dirs")
+        db.get_repo_setting(&repo_path, "included_copy_files")
             .ok()
             .flatten()
             .map(|patterns_str| {
@@ -130,7 +134,7 @@ fn git_create_worktree(
             })
     };
     
-    create_worktree(&repo_path, &branch, new_branch, exclusion_patterns)
+    create_worktree(&repo_path, &branch, new_branch, inclusion_patterns)
 }
 
 #[tauri::command]
@@ -181,6 +185,11 @@ fn git_is_repository(path: String) -> Result<bool, String> {
 #[tauri::command]
 fn git_init_repo(path: String) -> Result<String, String> {
     git_init(&path)
+}
+
+#[tauri::command]
+fn git_list_gitignored_files(repo_path: String) -> Result<Vec<String>, String> {
+    list_gitignored_files(&repo_path)
 }
 
 // PTY commands
@@ -293,16 +302,6 @@ fn shell_execute(command: String, working_dir: Option<String>) -> Result<String,
     execute_command(&command, working_dir)
 }
 
-#[tauri::command]
-fn shell_launch_app(app_name: String, path: String) -> Result<(), String> {
-    launch_application(&app_name, &path)
-}
-
-#[tauri::command]
-fn detect_editors() -> Result<Vec<String>, String> {
-    detect_available_editors()
-}
-
 // Git operations
 #[tauri::command]
 fn git_commit(worktree_path: String, message: String) -> Result<String, String> {
@@ -363,9 +362,11 @@ fn calculate_directory_size(path: String) -> Result<u64, String> {
                 let entry = entry?;
                 let path = entry.path();
                 
-                // Skip .git directory
-                if path.file_name().and_then(|n| n.to_str()) == Some(".git") {
-                    continue;
+                // Skip .git and .treq directories
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    if name == ".git" || name == ".treq" {
+                        continue;
+                    }
                 }
                 
                 if path.is_dir() {
@@ -381,6 +382,59 @@ fn calculate_directory_size(path: String) -> Result<u64, String> {
     
     let path = Path::new(&path);
     dir_size(path).map_err(|e| e.to_string())
+}
+
+// Plan history commands
+#[tauri::command]
+fn save_executed_plan_command(
+    repo_path: String,
+    worktree_id: i64,
+    plan_data: PlanHistoryInput,
+) -> Result<i64, String> {
+    local_db::save_executed_plan(&repo_path, worktree_id, plan_data)
+}
+
+#[tauri::command]
+fn get_worktree_plans_command(
+    repo_path: String,
+    worktree_id: i64,
+    limit: Option<i64>,
+) -> Result<Vec<PlanHistoryEntry>, String> {
+    local_db::get_worktree_plans(&repo_path, worktree_id, limit)
+}
+
+#[tauri::command]
+fn get_all_worktree_plans_command(
+    repo_path: String,
+    worktree_id: i64,
+) -> Result<Vec<PlanHistoryEntry>, String> {
+    local_db::get_all_worktree_plans(&repo_path, worktree_id)
+}
+
+// Plan storage commands
+#[tauri::command]
+fn save_plan_to_file(
+    repo_path: String,
+    plan_id: String,
+    content: String,
+    metadata: PlanMetadata,
+) -> Result<(), String> {
+    plan_storage::save_plan_to_file(&repo_path, &plan_id, &content, metadata)
+}
+
+#[tauri::command]
+fn load_plans_from_files(repo_path: String) -> Result<Vec<PlanFile>, String> {
+    plan_storage::load_plans_from_files(&repo_path)
+}
+
+#[tauri::command]
+fn get_plan_file(repo_path: String, plan_id: String) -> Result<PlanFile, String> {
+    plan_storage::get_plan_file(&repo_path, &plan_id)
+}
+
+#[tauri::command]
+fn delete_plan_file(repo_path: String, plan_id: String) -> Result<(), String> {
+    plan_storage::delete_plan_file(&repo_path, &plan_id)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -450,6 +504,7 @@ pub fn run() {
             git_list_branches,
             git_is_repository,
             git_init_repo,
+            git_list_gitignored_files,
             git_commit,
             git_add_all,
             git_push,
@@ -466,9 +521,14 @@ pub fn run() {
             read_file,
             list_directory,
             shell_execute,
-            shell_launch_app,
-            detect_editors,
             calculate_directory_size,
+            save_executed_plan_command,
+            get_worktree_plans_command,
+            get_all_worktree_plans_command,
+            save_plan_to_file,
+            load_plans_from_files,
+            get_plan_file,
+            delete_plan_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

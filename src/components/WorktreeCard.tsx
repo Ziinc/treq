@@ -8,39 +8,82 @@ import {
   CardTitle,
 } from "./ui/card";
 import { Button } from "./ui/button";
-import { Worktree, GitStatus, BranchInfo, gitGetStatus, gitGetBranchInfo, calculateDirectorySize, shellLaunchApp } from "../lib/api";
+import { Worktree, GitStatus, BranchInfo, gitGetStatus, gitGetBranchInfo, calculateDirectorySize, openEditor, EditorType, getSetting } from "../lib/api";
+import { PlanHistoryEntry } from "../types/planHistory";
 import { formatBytes } from "../lib/utils";
-import { GitBranch, FileText, Terminal as TerminalIcon, Trash2, FolderOpen, Code2, HardDrive, ChevronDown } from "lucide-react";
+import { GitBranch, FileText, Terminal as TerminalIcon, Trash2, FolderOpen, Code2, HardDrive, ChevronDown, History, Loader2, Info } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "./ui/popover";
 
 interface WorktreeCardProps {
   worktree: Worktree;
-  onOpenTerminal: (worktree: Worktree) => void;
+  planHistory?: PlanHistoryEntry[];
+  isPlanHistoryLoading?: boolean;
+  onViewPlanHistory?: (worktree: Worktree) => void;
+  onOpenPlanningTerminal: (worktree: Worktree) => void;
+  onOpenExecutionTerminal: (worktree: Worktree) => void;
   onOpenDiff: (worktree: Worktree) => void;
-  onOpenEditor: (worktree: Worktree) => void;
   onDelete: (worktree: Worktree) => void;
-  availableEditors?: string[];
-  preferredEditor?: string;
 }
 
 export const WorktreeCard: React.FC<WorktreeCardProps> = ({
   worktree,
-  onOpenTerminal,
+  planHistory,
+  isPlanHistoryLoading,
+  onViewPlanHistory,
+  onOpenPlanningTerminal,
+  onOpenExecutionTerminal,
   onOpenDiff,
-  onOpenEditor,
   onDelete,
-  availableEditors = [],
-  preferredEditor,
 }) => {
   const [status, setStatus] = useState<GitStatus | null>(null);
   const [branchInfo, setBranchInfo] = useState<BranchInfo | null>(null);
   const [size, setSize] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [defaultEditorType, setDefaultEditorType] = useState<EditorType>("cursor");
+
+  // Parse metadata to get title/intent
+  const getDisplayTitle = (): string => {
+    if (worktree.metadata) {
+      try {
+        const metadata = JSON.parse(worktree.metadata);
+        return metadata.initial_plan_title || metadata.intent || worktree.branch_name;
+      } catch {
+        return worktree.branch_name;
+      }
+    }
+    return worktree.branch_name;
+  };
+
+  const hasMetadata = (): boolean => {
+    if (!worktree.metadata) return false;
+    try {
+      const metadata = JSON.parse(worktree.metadata);
+      return !!(metadata.initial_plan_title || metadata.intent);
+    } catch {
+      return false;
+    }
+  };
+
+  const displayTitle = getDisplayTitle();
+
+  // Load default editor from settings
+  useEffect(() => {
+    getSetting("default_editor").then((editor) => {
+      if (editor && (editor === "vscode" || editor === "cursor" || editor === "zed")) {
+        setDefaultEditorType(editor as EditorType);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     const fetchGitInfo = async () => {
@@ -70,40 +113,132 @@ export const WorktreeCard: React.FC<WorktreeCardProps> = ({
     ? status.modified + status.added + status.deleted + status.untracked
     : 0;
 
-  const handleLaunchEditor = async (editorName: string) => {
+  // Available editors with URL scheme support
+  const editors: Array<{ type: EditorType; name: string }> = [
+    { type: "vscode", name: "VS Code" },
+    { type: "cursor", name: "Cursor" },
+    { type: "zed", name: "Zed" },
+  ];
+
+  const defaultEditor = editors.find(e => e.type === defaultEditorType) || editors[1]; // Default to Cursor
+
+  const handleLaunchEditor = async (editorType: EditorType) => {
     try {
-      await shellLaunchApp(editorName, worktree.worktree_path);
+      await openEditor(editorType, worktree.worktree_path);
     } catch (error) {
       console.error("Failed to launch editor:", error);
     }
   };
 
-  const getEditorDisplayName = (editor: string) => {
-    switch (editor) {
-      case "cursor": return "Cursor";
-      case "code": return "VS Code";
-      case "code-insiders": return "VS Code Insiders";
-      default: return editor;
+  const planEntries = planHistory ?? [];
+  const formatExecutionTime = (value: string) => {
+    try {
+      return new Date(value).toLocaleString();
+    } catch {
+      return value;
     }
   };
 
-  // Determine the default editor (preferred or first available)
-  const defaultEditor = preferredEditor && availableEditors.includes(preferredEditor)
-    ? preferredEditor
-    : availableEditors[0];
+  const renderPlanHistory = () => {
+    if (isPlanHistoryLoading && planEntries.length === 0) {
+      return (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Loading plan history...
+        </div>
+      );
+    }
 
-  const hasEditors = availableEditors.length > 0;
+    if (planEntries.length === 0) {
+      return (
+        <p className="text-xs text-muted-foreground">
+          No plans have been executed for this worktree yet.
+        </p>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {planEntries.map((entry) => (
+          <div key={entry.id} className="p-3 rounded-md border bg-muted/30">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium">{entry.title}</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatExecutionTime(entry.executed_at)}
+                </p>
+              </div>
+              <span className="text-[11px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20">
+                {entry.status}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Type: {entry.type.replace(/_/g, " ")}
+            </p>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <GitBranch className="w-5 h-5" />
-          {worktree.branch_name}
-        </CardTitle>
-        <CardDescription className="truncate">
-          {worktree.worktree_path}
-        </CardDescription>
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <CardTitle className="flex items-center gap-2 mb-1">
+              {hasMetadata() ? (
+                <FileText className="w-5 h-5 flex-shrink-0" />
+              ) : (
+                <GitBranch className="w-5 h-5 flex-shrink-0" />
+              )}
+              <span className="truncate">{displayTitle}</span>
+            </CardTitle>
+            {hasMetadata() && (
+              <CardDescription className="text-xs flex items-center gap-1">
+                <GitBranch className="w-3 h-3" />
+                {worktree.branch_name}
+              </CardDescription>
+            )}
+          </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
+                <Info className="w-4 h-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-80">
+              <div className="space-y-3">
+                <div>
+                  <h4 className="font-semibold text-sm mb-1">Worktree Details</h4>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-0.5">Branch</div>
+                    <div className="font-mono text-xs break-all">{worktree.branch_name}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-0.5">Path</div>
+                    <div className="font-mono text-xs break-all">{worktree.worktree_path}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-0.5">Created</div>
+                    <div className="text-xs">{new Date(worktree.created_at).toLocaleString()}</div>
+                  </div>
+                  {size !== null && (
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-0.5">Size</div>
+                      <div className="text-xs flex items-center gap-1">
+                        <HardDrive className="w-3 h-3" />
+                        {formatBytes(size)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
       </CardHeader>
 
       <CardContent>
@@ -163,60 +298,84 @@ export const WorktreeCard: React.FC<WorktreeCardProps> = ({
                 )}
               </div>
             )}
-
-            {size !== null && (
-              <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                <HardDrive className="w-4 h-4" />
-                <span>{formatBytes(size)}</span>
-              </div>
-            )}
           </div>
         )}
       </CardContent>
 
-      <CardFooter className="flex gap-2 flex-wrap">
-        {hasEditors && (
-          <div className="flex">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => defaultEditor && handleLaunchEditor(defaultEditor)}
-              className="rounded-r-none border-r-0"
-            >
-              <Code2 className="w-4 h-4 mr-2" />
-              {defaultEditor ? getEditorDisplayName(defaultEditor) : "Editor"}
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="rounded-l-none px-2"
-                >
-                  <ChevronDown className="w-4 h-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {availableEditors.map((editor) => (
-                  <DropdownMenuItem
-                    key={editor}
-                    onClick={() => handleLaunchEditor(editor)}
-                  >
-                    <Code2 className="w-4 h-4 mr-2" />
-                    {getEditorDisplayName(editor)}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+      <CardContent className="border-t pt-4 mt-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <History className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm font-semibold">Recent Plans</span>
           </div>
-        )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8"
+            onClick={() => onViewPlanHistory?.(worktree)}
+            disabled={!onViewPlanHistory}
+          >
+            View All
+          </Button>
+        </div>
+        {renderPlanHistory()}
+      </CardContent>
+
+      <CardFooter className="flex gap-2 flex-wrap">
+        <div className="flex">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleLaunchEditor(defaultEditor.type)}
+            className="rounded-r-none border-r-0"
+          >
+            <Code2 className="w-4 h-4 mr-2" />
+            Open in {defaultEditor.name}
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-l-none px-2"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {editors.map((editor) => (
+                <DropdownMenuItem
+                  key={editor.type}
+                  onClick={() => handleLaunchEditor(editor.type)}
+                >
+                  <Code2 className="w-4 h-4 mr-2" />
+                  Open in {editor.name}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuItem
+                onClick={() => window.open(`file://${worktree.worktree_path}`)}
+              >
+                <FolderOpen className="w-4 h-4 mr-2" />
+                Open in File Manager
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
         <Button
           size="sm"
           variant="outline"
-          onClick={() => onOpenTerminal(worktree)}
+          onClick={() => onOpenPlanningTerminal(worktree)}
         >
           <TerminalIcon className="w-4 h-4 mr-2" />
-          Terminal
+          Planning Terminal
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onOpenExecutionTerminal(worktree)}
+        >
+          <TerminalIcon className="w-4 h-4 mr-2" />
+          Execution Terminal
         </Button>
         <Button
           size="sm"
@@ -229,17 +388,6 @@ export const WorktreeCard: React.FC<WorktreeCardProps> = ({
         </Button>
         <Button
           size="sm"
-          variant="outline"
-          onClick={() => {
-            // Open in file manager
-            window.open(`file://${worktree.worktree_path}`);
-          }}
-        >
-          <FolderOpen className="w-4 h-4 mr-2" />
-          Open
-        </Button>
-        <Button
-          size="sm"
           variant="destructive"
           onClick={() => onDelete(worktree)}
         >
@@ -249,4 +397,3 @@ export const WorktreeCard: React.FC<WorktreeCardProps> = ({
     </Card>
   );
 };
-

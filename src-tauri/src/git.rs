@@ -29,7 +29,7 @@ pub struct WorktreeInfo {
     pub commit: String,
 }
 
-pub fn create_worktree(repo_path: &str, branch: &str, new_branch: bool, exclusion_patterns: Option<Vec<String>>) -> Result<String, String> {
+pub fn create_worktree(repo_path: &str, branch: &str, new_branch: bool, inclusion_patterns: Option<Vec<String>>) -> Result<String, String> {
     // Sanitize branch name for path
     let sanitized = sanitize_branch_name_for_path(branch);
     
@@ -63,8 +63,8 @@ pub fn create_worktree(repo_path: &str, branch: &str, new_branch: bool, exclusio
     let output = cmd.output().map_err(|e| e.to_string())?;
 
     if output.status.success() {
-        // Copy ignored files after successful worktree creation
-        if let Err(e) = copy_ignored_files(repo_path, &worktree_path, exclusion_patterns) {
+        // Copy selected ignored files after successful worktree creation
+        if let Err(e) = copy_selected_ignored_files(repo_path, &worktree_path, inclusion_patterns) {
             eprintln!("Warning: Failed to copy ignored files: {}", e);
             // Don't fail the worktree creation, just log the warning
         }
@@ -386,15 +386,15 @@ pub fn execute_post_create_command(worktree_path: &str, command: &str) -> Result
     }
 }
 
-/// Copy ignored files from source repository to worktree
-/// This function identifies files that are gitignored and copies them to the new worktree
-/// Supports exclusion patterns to skip certain directories/files from being copied
-fn copy_ignored_files(source_repo: &str, dest_worktree: &str, exclusion_patterns: Option<Vec<String>>) -> Result<(), String> {
+/// Copy selected ignored files from source repository to worktree
+/// This function identifies files that are gitignored and copies only those matching inclusion patterns
+/// If inclusion_patterns is None or empty, no files are copied (secure by default)
+fn copy_selected_ignored_files(source_repo: &str, dest_worktree: &str, inclusion_patterns: Option<Vec<String>>) -> Result<(), String> {
     let source_path = Path::new(source_repo);
     let dest_path = Path::new(dest_worktree);
     
-    // Build glob set from exclusion patterns
-    let globset = if let Some(patterns) = exclusion_patterns {
+    // Build glob set from inclusion patterns
+    let globset = if let Some(patterns) = inclusion_patterns {
         if !patterns.is_empty() {
             let mut builder = GlobSetBuilder::new();
             for pattern in &patterns {
@@ -424,6 +424,12 @@ fn copy_ignored_files(source_repo: &str, dest_worktree: &str, exclusion_patterns
         None
     };
     
+    // If no inclusion patterns, don't copy anything (secure by default)
+    if globset.is_none() {
+        println!("No inclusion patterns specified, skipping ignored file copy");
+        return Ok(());
+    }
+    
     // Build a walker that respects .gitignore
     let walker = WalkBuilder::new(source_path)
         .hidden(false)
@@ -449,7 +455,6 @@ fn copy_ignored_files(source_repo: &str, dest_worktree: &str, exclusion_patterns
     
     // Find ignored files (files in all_files but not in non_ignored)
     let mut copied_count = 0;
-    let mut excluded_count = 0;
     
     for file_path in all_files {
         // Skip .git directory
@@ -460,12 +465,15 @@ fn copy_ignored_files(source_repo: &str, dest_worktree: &str, exclusion_patterns
         if !non_ignored.contains(&file_path) {
             // This file is ignored
             if let Ok(rel_path) = file_path.strip_prefix(source_path) {
-                // Check if this file matches any exclusion pattern
-                if let Some(ref gs) = globset {
-                    if gs.is_match(rel_path) {
-                        excluded_count += 1;
-                        continue; // Skip this file
-                    }
+                // Check if this file matches any inclusion pattern
+                let should_copy = if let Some(ref gs) = globset {
+                    gs.is_match(rel_path)
+                } else {
+                    false
+                };
+                
+                if !should_copy {
+                    continue; // Skip this file
                 }
                 
                 let dest_file = dest_path.join(rel_path);
@@ -489,11 +497,60 @@ fn copy_ignored_files(source_repo: &str, dest_worktree: &str, exclusion_patterns
     }
     
     if copied_count > 0 {
-        println!("Copied {} ignored files to worktree", copied_count);
-    }
-    if excluded_count > 0 {
-        println!("Excluded {} files matching exclusion patterns", excluded_count);
+        println!("Copied {} ignored files matching inclusion patterns to worktree", copied_count);
     }
     
     Ok(())
+}
+
+/// List gitignored files and directories at the root level of a repository
+/// Excludes .treq and .vscode automatically
+pub fn list_gitignored_files(repo_path: &str) -> Result<Vec<String>, String> {
+    let repo = Path::new(repo_path);
+    
+    // Build a walker that respects .gitignore
+    let walker = WalkBuilder::new(repo)
+        .max_depth(Some(1))  // Only root level
+        .hidden(false)
+        .git_ignore(true)
+        .git_global(true)
+        .git_exclude(true)
+        .build();
+    
+    // Walk all entries at root level
+    let all_entries: Vec<_> = fs::read_dir(repo)
+        .map_err(|e| format!("Failed to read directory: {}", e))?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            // Skip .git, .treq, and .vscode
+            if let Some(name) = e.file_name().to_str() {
+                name != ".git" && name != ".treq" && name != ".vscode"
+            } else {
+                false
+            }
+        })
+        .map(|e| e.path())
+        .collect();
+    
+    // Collect non-ignored entries
+    let non_ignored: std::collections::HashSet<_> = walker
+        .filter_map(|e| e.ok())
+        .map(|e| e.path().to_path_buf())
+        .collect();
+    
+    // Find ignored entries
+    let mut ignored_files = Vec::new();
+    
+    for entry_path in all_entries {
+        if !non_ignored.contains(&entry_path) {
+            if let Some(name) = entry_path.file_name().and_then(|n| n.to_str()) {
+                ignored_files.push(name.to_string());
+            }
+        }
+    }
+    
+    // Sort for consistent ordering
+    ignored_files.sort();
+    
+    Ok(ignored_files)
 }

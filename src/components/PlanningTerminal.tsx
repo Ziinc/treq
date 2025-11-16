@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
-import { ptyCreateSession, ptyWrite, ptyListen, ptyClose, ptyResize, savePlanToRepo, loadPlanFromRepo } from "../lib/api";
+import { ptyCreateSession, ptyWrite, ptyListen, ptyClose, ptyResize, savePlanToRepo, loadPlanFromRepo, savePlanToFile, Worktree, PlanMetadata, saveExecutedPlan } from "../lib/api";
 import { PlanSection } from "../types/planning";
 import { createDebouncedParser } from "../lib/planParser";
 import { PlanDisplay } from "./PlanDisplay";
@@ -10,20 +10,30 @@ import { Button } from "./ui/button";
 import { X, RotateCw, Loader2 } from "lucide-react";
 import { useToast } from "./ui/toast";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
+import { buildPlanHistoryPayload } from "../lib/planHistory";
 import "@xterm/xterm/css/xterm.css";
 
 interface PlanningTerminalProps {
-  repositoryPath: string;
+  repositoryPath?: string;
+  worktree?: Worktree;
   onClose: () => void;
   onExecutePlan?: (section: PlanSection) => void;
 }
 
 export const PlanningTerminal: React.FC<PlanningTerminalProps> = ({
   repositoryPath,
+  worktree,
   onClose,
   onExecutePlan,
 }) => {
-  const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
+  // Determine working directory and repo path
+  const workingDirectory = worktree?.worktree_path || repositoryPath || "";
+  const effectiveRepoPath = worktree?.repo_path || repositoryPath || "";
+  
+  // Generate session ID based on context
+  const [sessionId, setSessionId] = useState(() => 
+    worktree ? `planning-worktree-${worktree.id}` : `planning-repo-${crypto.randomUUID()}`
+  );
   const [planSections, setPlanSections] = useState<PlanSection[]>([]);
   const [terminalOutput, setTerminalOutput] = useState("");
   const [isResetting, setIsResetting] = useState(false);
@@ -37,9 +47,30 @@ export const PlanningTerminal: React.FC<PlanningTerminalProps> = ({
   const { addToast } = useToast();
   const { fontSize } = useTerminalSettings();
 
+  const handleExecuteSection = useCallback(async (section: PlanSection) => {
+    if (worktree) {
+      try {
+        const payload = buildPlanHistoryPayload(section);
+        await saveExecutedPlan(worktree.repo_path, worktree.id, payload);
+      } catch (error) {
+        addToast({
+          title: "Plan History",
+          description: error instanceof Error ? error.message : String(error),
+          type: "error",
+        });
+      }
+    }
+
+    if (onExecutePlan) {
+      onExecutePlan(section);
+    }
+  }, [worktree, onExecutePlan, addToast]);
+
   const handlePlanEdit = useCallback(async (planId: string, newContent: string) => {
     try {
       // Update plan sections in state
+      const updatedSection = planSections.find(s => s.id === planId);
+      
       setPlanSections(prev => prev.map(section => {
         if (section.id === planId) {
           return {
@@ -51,8 +82,22 @@ export const PlanningTerminal: React.FC<PlanningTerminalProps> = ({
         return section;
       }));
 
-      // Persist to database
-      await savePlanToRepo(repositoryPath, planId, newContent);
+      // Save to both file storage and database
+      const metadata: PlanMetadata = {
+        id: planId,
+        title: updatedSection?.title || "Untitled Plan",
+        plan_type: updatedSection?.type || "implementation_plan",
+        worktree_id: worktree?.id,
+        worktree_path: worktree?.worktree_path,
+        branch_name: worktree?.branch_name,
+        timestamp: new Date().toISOString(),
+      };
+
+      // Save to .treq/plans/ file
+      await savePlanToFile(effectiveRepoPath, planId, newContent, metadata);
+      
+      // Also save to database (legacy support)
+      await savePlanToRepo(effectiveRepoPath, planId, newContent);
     } catch (error) {
       console.error('Failed to save plan:', error);
       addToast({
@@ -61,7 +106,7 @@ export const PlanningTerminal: React.FC<PlanningTerminalProps> = ({
         type: "error",
       });
     }
-  }, [repositoryPath, addToast]);
+  }, [effectiveRepoPath, worktree, planSections, addToast]);
 
   const handleReset = useCallback(async () => {
     setIsResetting(true);
@@ -75,7 +120,10 @@ export const PlanningTerminal: React.FC<PlanningTerminalProps> = ({
       setTerminalOutput("");
       
       // Generate new session ID (triggers useEffect re-run)
-      setSessionId(crypto.randomUUID());
+      const newSessionId = worktree 
+        ? `planning-worktree-${worktree.id}-${Date.now()}` 
+        : `planning-repo-${crypto.randomUUID()}`;
+      setSessionId(newSessionId);
       
       addToast({
         title: "Terminal Reset",
@@ -91,7 +139,7 @@ export const PlanningTerminal: React.FC<PlanningTerminalProps> = ({
     } finally {
       setIsResetting(false);
     }
-  }, [sessionId, addToast]);
+  }, [sessionId, worktree, addToast]);
 
   // Parse terminal output for plan sections and merge with saved edits
   useEffect(() => {
@@ -101,7 +149,7 @@ export const PlanningTerminal: React.FC<PlanningTerminalProps> = ({
         const sectionsWithEdits = await Promise.all(
           sections.map(async (section) => {
             try {
-              const savedPlan = await loadPlanFromRepo(repositoryPath, section.id);
+              const savedPlan = await loadPlanFromRepo(effectiveRepoPath, section.id);
               if (savedPlan) {
                 return {
                   ...section,
@@ -118,7 +166,7 @@ export const PlanningTerminal: React.FC<PlanningTerminalProps> = ({
         setPlanSections(sectionsWithEdits);
       });
     }
-  }, [terminalOutput, repositoryPath]);
+  }, [terminalOutput, effectiveRepoPath]);
 
   // Main terminal initialization useEffect - consolidates all terminal setup
   useEffect(() => {
@@ -193,9 +241,9 @@ export const PlanningTerminal: React.FC<PlanningTerminalProps> = ({
     });
 
     // 7. Create PTY session immediately
-    ptyCreateSession(sessionId, repositoryPath)
+    ptyCreateSession(sessionId, workingDirectory)
       .then(async () => {
-        console.log("PTY session created successfully");
+        console.log("PTY session created successfully for:", workingDirectory);
         
         // Setup output listener
         const unlisten = await ptyListen(sessionId, (data) => {
@@ -207,9 +255,11 @@ export const PlanningTerminal: React.FC<PlanningTerminalProps> = ({
         console.log("PTY listener attached");
         
         // Wait for shell to be ready, then execute claude command
+        // Use "plan" mode for both worktree and repo contexts
+        const claudeMode = "plan";
         setTimeout(() => {
-          console.log("Executing: claude --permission-mode plan");
-          ptyWrite(sessionId, "claude --permission-mode plan\n")
+          console.log(`Executing: claude --permission-mode ${claudeMode}`);
+          ptyWrite(sessionId, `claude --permission-mode ${claudeMode}\n`)
             .then(() => console.log("Command sent successfully"))
             .catch((error) => {
               console.error("Failed to execute command:", error);
@@ -259,7 +309,7 @@ export const PlanningTerminal: React.FC<PlanningTerminalProps> = ({
       ptyClose(sessionId).catch(console.error);
       xterm.dispose();
     };
-  }, [sessionId, repositoryPath, addToast, fontSize]);
+  }, [sessionId, workingDirectory, worktree, addToast, fontSize]);
 
   return (
     <div className="h-screen flex flex-col bg-background">
@@ -267,9 +317,17 @@ export const PlanningTerminal: React.FC<PlanningTerminalProps> = ({
       <div className="border-b p-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <h2 className="text-lg font-semibold">Planning Terminal</h2>
-          <span className="text-sm text-muted-foreground">
-            {repositoryPath.split('/').pop() || repositoryPath.split('\\').pop()}
-          </span>
+          {worktree ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="font-mono bg-secondary px-2 py-1 rounded">{worktree.branch_name}</span>
+              <span>•</span>
+              <span className="truncate max-w-md">{worktree.worktree_path}</span>
+            </div>
+          ) : (
+            <span className="text-sm text-muted-foreground">
+              {workingDirectory.split('/').pop() || workingDirectory.split('\\').pop()}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -311,11 +369,10 @@ export const PlanningTerminal: React.FC<PlanningTerminalProps> = ({
           <PlanDisplay 
             planSections={planSections} 
             onPlanEdit={handlePlanEdit}
-            onExecutePlan={onExecutePlan}
+            onExecutePlan={handleExecuteSection}
           />
         </div>
       </div>
     </div>
   );
 };
-

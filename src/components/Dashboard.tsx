@@ -1,28 +1,27 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { WorktreeCard } from "./WorktreeCard";
 import { CreateWorktreeDialog } from "./CreateWorktreeDialog";
-import { RepositorySettings } from "./RepositorySettings";
-import { Terminal } from "./Terminal";
+import { UnifiedSettings } from "./UnifiedSettings";
 import { DiffViewer } from "./DiffViewer";
-import { EditorLauncher } from "./EditorLauncher";
 import { PlanningTerminal } from "./PlanningTerminal";
 import { WorktreeEditSession } from "./WorktreeEditSession";
+import { PlanHistoryDialog } from "./PlanHistoryDialog";
+import { ExecutionTerminal } from "./ExecutionTerminal";
 import { PlanSection } from "../types/planning";
-import { sanitizePlanTitleToBranchName } from "../lib/utils";
+import { PlanHistoryEntry } from "../types/planHistory";
+import { applyBranchNamePattern } from "../lib/utils";
+import { buildPlanHistoryPayload } from "../lib/planHistory";
 import { useToast } from "./ui/toast";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
-import { useTheme } from "../hooks/useTheme";
-import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import {
   getWorktrees,
   deleteWorktreeFromDb,
   gitRemoveWorktree,
   getSetting,
-  setSetting,
   gitGetCurrentBranch,
   gitGetStatus,
   gitGetBranchInfo,
@@ -30,10 +29,8 @@ import {
   Worktree,
   GitStatus,
   BranchInfo,
-  selectFolder,
-  isGitRepository,
-  gitInit,
-  detectAvailableEditors,
+  saveExecutedPlan,
+  getWorktreePlans,
   gitCreateWorktree,
   addWorktreeToDb,
   getRepoSetting,
@@ -42,13 +39,7 @@ import {
   ptyWrite,
 } from "../lib/api";
 import { formatBytes } from "../lib/utils";
-import { Plus, Settings, X, RefreshCw, Search, FolderOpen, Terminal as TerminalIcon, GitBranch, FolderGit2, ArrowUp, ArrowDown, HardDrive } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "./ui/dialog";
+import { Plus, Settings, X, RefreshCw, Search, Terminal as TerminalIcon, GitBranch, FolderGit2, HardDrive } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -56,7 +47,7 @@ import {
   CardTitle,
 } from "./ui/card";
 
-type ViewMode = "dashboard" | "terminal" | "diff" | "planning" | "worktree-edit";
+type ViewMode = "dashboard" | "terminal" | "diff" | "planning" | "worktree-edit" | "worktree-planning" | "execution" | "worktree-execution";
 
 export const Dashboard: React.FC = () => {
   const [repoPath, setRepoPath] = useState("");
@@ -68,20 +59,17 @@ export const Dashboard: React.FC = () => {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("dashboard");
   const [selectedWorktree, setSelectedWorktree] = useState<Worktree | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showRepoSettings, setShowRepoSettings] = useState(false);
-  const [showEditorLauncher, setShowEditorLauncher] = useState(false);
+  const [showUnifiedSettings, setShowUnifiedSettings] = useState(false);
+  const [initialSettingsTab, setInitialSettingsTab] = useState<"application" | "repository">("application");
   const [searchQuery, setSearchQuery] = useState("");
-  const [showGitInitDialog, setShowGitInitDialog] = useState(false);
-  const [pendingRepoPath, setPendingRepoPath] = useState("");
-  const [availableEditors, setAvailableEditors] = useState<string[]>([]);
-  const [preferredEditor, setPreferredEditor] = useState<string>("");
+  const [planHistoryMap, setPlanHistoryMap] = useState<Record<number, PlanHistoryEntry[]>>({});
+  const [planHistoryLoading, setPlanHistoryLoading] = useState<Record<number, boolean>>({});
+  const [planHistoryDialogOpen, setPlanHistoryDialogOpen] = useState(false);
+  const [planHistoryDialogWorktree, setPlanHistoryDialogWorktree] = useState<Worktree | null>(null);
   
   const queryClient = useQueryClient();
   const { addToast } = useToast();
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const { theme, setTheme } = useTheme();
-  const { fontSize, setFontSize } = useTerminalSettings();
 
   // Keyboard shortcuts
   useKeyboardShortcut("n", true, () => {
@@ -107,34 +95,15 @@ export const Dashboard: React.FC = () => {
     }
   });
 
-  useKeyboardShortcut(",", true, () => {
-    if (viewMode === "dashboard") {
-      setShowSettings(true);
-    }
-  });
-
   useKeyboardShortcut("Escape", false, () => {
     if (showCreateDialog) setShowCreateDialog(false);
-    if (showSettings) setShowSettings(false);
-    if (showEditorLauncher) setShowEditorLauncher(false);
+    if (showUnifiedSettings) setShowUnifiedSettings(false);
   });
 
-  // Load saved repo path, detect editors, and load preferred editor
+  // Load saved repo path
   useEffect(() => {
     getSetting("repo_path").then((path) => {
       if (path) setRepoPath(path);
-    });
-
-    // Detect available editors
-    detectAvailableEditors().then((editors) => {
-      setAvailableEditors(editors);
-    }).catch((error) => {
-      console.error("Failed to detect editors:", error);
-    });
-
-    // Load preferred editor
-    getSetting("preferred_editor").then((editor) => {
-      if (editor) setPreferredEditor(editor);
     });
   }, []);
 
@@ -218,88 +187,111 @@ export const Dashboard: React.FC = () => {
     },
   });
 
-  // Filter worktrees based on search query
-  const filteredWorktrees = worktrees.filter((wt) =>
-    wt.branch_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    wt.worktree_path.toLowerCase().includes(searchQuery.toLowerCase())
+  const refreshPlanHistoryForWorktree = useCallback(
+    async (target: Worktree, options?: { shouldCancel?: () => boolean }) => {
+      if (options?.shouldCancel?.()) return;
+      setPlanHistoryLoading((prev) => ({ ...prev, [target.id]: true }));
+      try {
+        const plans = await getWorktreePlans(target.repo_path, target.id, 3);
+        if (options?.shouldCancel?.()) return;
+        setPlanHistoryMap((prev) => ({ ...prev, [target.id]: plans }));
+      } catch (error) {
+        console.error(`Failed to refresh plan history for worktree ${target.id}:`, error);
+      } finally {
+        if (options?.shouldCancel?.()) return;
+        setPlanHistoryLoading((prev) => ({ ...prev, [target.id]: false }));
+      }
+    },
+    []
   );
 
-  const handleSaveRepoPath = async () => {
-    await setSetting("repo_path", repoPath);
-    if (preferredEditor) {
-      await setSetting("preferred_editor", preferredEditor);
+  // Load recent plan history for each worktree
+  useEffect(() => {
+    if (worktrees.length === 0) {
+      setPlanHistoryMap({});
+      setPlanHistoryLoading({});
+      return;
     }
-    refetch();
-    setShowSettings(false);
-    addToast({
-      title: "Settings Saved",
-      description: "Settings updated successfully",
-      type: "success",
+
+    let cancelled = false;
+    const activeIds = new Set(worktrees.map((wt) => wt.id));
+
+    setPlanHistoryMap((prev) => {
+      const next: Record<number, PlanHistoryEntry[]> = {};
+      Object.entries(prev).forEach(([id, value]) => {
+        const numericId = Number(id);
+        if (activeIds.has(numericId)) {
+          next[numericId] = value;
+        }
+      });
+      return next;
     });
-  };
 
-  const handleBrowseRepoPath = async () => {
-    try {
-      const selected = await selectFolder();
-      if (!selected) return;
+    setPlanHistoryLoading((prev) => {
+      const next: Record<number, boolean> = {};
+      Object.entries(prev).forEach(([id, value]) => {
+        const numericId = Number(id);
+        if (activeIds.has(numericId)) {
+          next[numericId] = value;
+        }
+      });
+      return next;
+    });
 
-      const isRepo = await isGitRepository(selected);
-      if (isRepo) {
-        setRepoPath(selected);
-        await setSetting("repo_path", selected);
-        refetch();
-        addToast({
-          title: "Repository Selected",
-          description: "Git repository configured successfully",
-          type: "success",
-        });
-      } else {
-        setPendingRepoPath(selected);
-        setShowGitInitDialog(true);
+    worktrees.forEach((wt) => {
+      refreshPlanHistoryForWorktree(wt, {
+        shouldCancel: () => cancelled,
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [worktrees, refreshPlanHistoryForWorktree]);
+
+  // Filter worktrees based on search query (including metadata)
+  const filteredWorktrees = worktrees.filter((wt) => {
+    const query = searchQuery.toLowerCase();
+    
+    // Check branch name and path
+    if (wt.branch_name.toLowerCase().includes(query) ||
+        wt.worktree_path.toLowerCase().includes(query)) {
+      return true;
+    }
+    
+    // Check metadata fields
+    if (wt.metadata) {
+      try {
+        const metadata = JSON.parse(wt.metadata);
+        if (metadata.initial_plan_title?.toLowerCase().includes(query) ||
+            metadata.intent?.toLowerCase().includes(query)) {
+          return true;
+        }
+      } catch {
+        // Ignore parse errors
       }
-    } catch (error) {
-      addToast({
-        title: "Error",
-        description: error as string,
-        type: "error",
-      });
     }
-  };
+    
+    return false;
+  });
 
-  const handleGitInit = async () => {
-    try {
-      await gitInit(pendingRepoPath);
-      setRepoPath(pendingRepoPath);
-      await setSetting("repo_path", pendingRepoPath);
-      setShowGitInitDialog(false);
-      refetch();
-      addToast({
-        title: "Repository Initialized",
-        description: "Git repository created and configured successfully",
-        type: "success",
-      });
-    } catch (error) {
-      addToast({
-        title: "Initialization Failed",
-        description: error as string,
-        type: "error",
-      });
-    }
-  };
-
-  const handleOpenTerminal = (worktree: Worktree) => {
+  const handleOpenPlanningTerminal = (worktree: Worktree) => {
     setSelectedWorktree(worktree);
-    setViewMode("terminal");
+    setViewMode("worktree-planning");
+  };
+
+  const handleOpenExecutionTerminal = (worktree: Worktree) => {
+    setSelectedWorktree(worktree);
+    setViewMode("worktree-execution");
+  };
+
+  const handleOpenMainExecutionTerminal = () => {
+    setViewMode("execution");
   };
 
   const handleOpenDiff = (worktree: Worktree) => {
     setSelectedWorktree(worktree);
     setViewMode("diff");
-  };
-
-  const handleOpenEditor = (worktree: Worktree) => {
-    setSelectedWorktree(worktree);
-    setShowEditorLauncher(true);
   };
 
   const handleDelete = (worktree: Worktree) => {
@@ -308,10 +300,19 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const handleViewPlanHistory = (worktree: Worktree) => {
+    setPlanHistoryDialogWorktree(worktree);
+    setPlanHistoryDialogOpen(true);
+  };
+
+
   const handleExecutePlan = async (section: PlanSection) => {
     try {
-      // Generate branch name from plan title
-      const branchName = sanitizePlanTitleToBranchName(section.title);
+      // Get branch name pattern from settings
+      const branchPattern = await getRepoSetting(repoPath, "branch_name_pattern") || "treq/{name}";
+      
+      // Generate branch name from plan title using pattern
+      const branchName = applyBranchNamePattern(branchPattern, section.title);
       
       addToast({
         title: "Creating worktree...",
@@ -322,8 +323,13 @@ export const Dashboard: React.FC = () => {
       // Create the worktree
       const worktreePath = await gitCreateWorktree(repoPath, branchName, true);
 
-      // Add to database
-      const worktreeId = await addWorktreeToDb(repoPath, worktreePath, branchName);
+      // Prepare metadata with plan title
+      const metadata = JSON.stringify({
+        initial_plan_title: section.title
+      });
+
+      // Add to database with metadata
+      const worktreeId = await addWorktreeToDb(repoPath, worktreePath, branchName, metadata);
 
       // Execute post-create command if configured
       const postCreateCmd = await getRepoSetting(repoPath, "post_create_command");
@@ -340,7 +346,7 @@ export const Dashboard: React.FC = () => {
       
       // Create Claude code session
       const sessionId = `worktree-edit-${worktreeId}`;
-      const initialCommand = `claude --permission-mode code`;
+      const initialCommand = `claude --permission-mode plan`;
       
       addToast({
         title: "Starting Claude session...",
@@ -370,6 +376,14 @@ export const Dashboard: React.FC = () => {
         branch_name: branchName,
         created_at: new Date().toISOString(),
       };
+
+      try {
+        const payload = buildPlanHistoryPayload(section);
+        await saveExecutedPlan(repoPath, worktreeId, payload);
+        await refreshPlanHistoryForWorktree(newWorktree);
+      } catch (planError) {
+        console.error("Failed to record plan execution:", planError);
+      }
 
       setSelectedWorktree(newWorktree);
       setViewMode("worktree-edit");
@@ -401,9 +415,31 @@ export const Dashboard: React.FC = () => {
     );
   }
 
-  if (viewMode === "worktree-edit" && selectedWorktree) {
+  if (viewMode === "worktree-planning" && selectedWorktree) {
     return (
-      <WorktreeEditSession
+      <PlanningTerminal
+        worktree={selectedWorktree}
+        onClose={() => {
+          setViewMode("dashboard");
+          setSelectedWorktree(null);
+        }}
+        onExecutePlan={handleExecutePlan}
+      />
+    );
+  }
+
+  if (viewMode === "execution") {
+    return (
+      <ExecutionTerminal
+        repositoryPath={repoPath}
+        onClose={() => setViewMode("dashboard")}
+      />
+    );
+  }
+
+  if (viewMode === "worktree-execution" && selectedWorktree) {
+    return (
+      <ExecutionTerminal
         worktree={selectedWorktree}
         onClose={() => {
           setViewMode("dashboard");
@@ -413,28 +449,15 @@ export const Dashboard: React.FC = () => {
     );
   }
 
-  if (viewMode === "terminal" && selectedWorktree) {
+  if (viewMode === "worktree-edit" && selectedWorktree) {
     return (
-      <div className="h-screen flex flex-col">
-        <div className="border-b p-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">
-            Terminal - {selectedWorktree.branch_name}
-          </h2>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setViewMode("dashboard")}
-          >
-            <X className="w-4 h-4" />
-          </Button>
-        </div>
-        <div className="flex-1">
-          <Terminal
-            sessionId={`worktree-${selectedWorktree.id}`}
-            workingDir={selectedWorktree.worktree_path}
-          />
-        </div>
-      </div>
+      <WorktreeEditSession
+        worktree={selectedWorktree}
+        onClose={() => {
+          setViewMode("dashboard");
+          setSelectedWorktree(null);
+        }}
+      />
     );
   }
 
@@ -469,7 +492,10 @@ export const Dashboard: React.FC = () => {
           <Button
             variant="outline"
             size="icon"
-            onClick={() => setShowSettings(true)}
+            onClick={() => {
+              setInitialSettingsTab("application");
+              setShowUnifiedSettings(true);
+            }}
           >
             <Settings className="w-4 h-4" />
           </Button>
@@ -481,7 +507,10 @@ export const Dashboard: React.FC = () => {
             <p className="text-sm text-muted-foreground mb-2">
               Please set your repository path to get started
             </p>
-            <Button variant="outline" onClick={() => setShowSettings(true)}>
+            <Button variant="outline" onClick={() => {
+              setInitialSettingsTab("application");
+              setShowUnifiedSettings(true);
+            }}>
               Configure Repository
             </Button>
           </div>
@@ -505,69 +534,73 @@ export const Dashboard: React.FC = () => {
                     <div className="flex items-center gap-2 text-lg font-semibold">
                       {repoName}
                     </div>
-                    {currentBranch && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <GitBranch className="w-4 h-4" />
-                        <code className="bg-secondary px-2 py-1 rounded">{currentBranch}</code>
-                      </div>
-                    )}
-                    <div className="text-xs text-muted-foreground truncate" title={repoPath}>
-                      {repoPath}
-                    </div>
                   </div>
 
-                  {/* Git Status */}
-                  {mainBranchInfo && (
-                    <div className="flex flex-wrap gap-2 text-xs">
-                      {mainBranchInfo.upstream && (
-                        <>
-                          {mainBranchInfo.ahead > 0 && (
-                            <div className="flex items-center gap-1 px-2 py-1 bg-blue-500/10 text-blue-500 rounded">
-                              <ArrowUp className="w-3 h-3" />
-                              {mainBranchInfo.ahead}
-                            </div>
-                          )}
-                          {mainBranchInfo.behind > 0 && (
-                            <div className="flex items-center gap-1 px-2 py-1 bg-orange-500/10 text-orange-500 rounded">
-                              <ArrowDown className="w-3 h-3" />
-                              {mainBranchInfo.behind}
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
+                  {/* VSCode-style Status Bar */}
+                  <div className="flex items-center gap-2 text-sm flex-wrap">
+                    {currentBranch && (
+                      <>
+                        <div className="flex items-center gap-1">
+                          <GitBranch className="w-4 h-4" />
+                          <code className="text-xs">{currentBranch}</code>
+                        </div>
+                        
+                        {mainRepoStatus && (
+                          <>
+                            {(mainRepoStatus.modified > 0 || mainRepoStatus.deleted > 0) && (
+                              <span className="text-orange-500 font-bold">*</span>
+                            )}
+                            {mainRepoStatus.untracked > 0 && (
+                              <span className="text-green-500 font-bold">+</span>
+                            )}
+                          </>
+                        )}
+                        
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="w-6 h-6"
+                          onClick={() => {
+                            // Refresh git status
+                            if (repoPath) {
+                              gitGetStatus(repoPath)
+                                .then(setMainRepoStatus)
+                                .catch(() => setMainRepoStatus(null));
+                              gitGetBranchInfo(repoPath)
+                                .then(setMainBranchInfo)
+                                .catch(() => setMainBranchInfo(null));
+                              calculateDirectorySize(repoPath)
+                                .then(setMainRepoSize)
+                                .catch(() => setMainRepoSize(null));
+                            }
+                          }}
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                        </Button>
+                        
+                        {mainBranchInfo?.upstream && (
+                          <>
+                            {mainBranchInfo.behind > 0 && (
+                              <span className="text-xs text-muted-foreground">
+                                {mainBranchInfo.behind}↓
+                              </span>
+                            )}
+                            {mainBranchInfo.ahead > 0 && (
+                              <span className="text-xs text-muted-foreground">
+                                {mainBranchInfo.ahead}↑
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
 
-                  {mainRepoStatus && (
-                    <div className="flex flex-wrap gap-2 text-xs">
-                      {mainRepoStatus.modified > 0 && (
-                        <div className="px-2 py-1 bg-yellow-500/10 text-yellow-500 rounded">
-                          {mainRepoStatus.modified} modified
-                        </div>
-                      )}
-                      {mainRepoStatus.added > 0 && (
-                        <div className="px-2 py-1 bg-green-500/10 text-green-500 rounded">
-                          {mainRepoStatus.added} added
-                        </div>
-                      )}
-                      {mainRepoStatus.deleted > 0 && (
-                        <div className="px-2 py-1 bg-red-500/10 text-red-500 rounded">
-                          {mainRepoStatus.deleted} deleted
-                        </div>
-                      )}
-                      {mainRepoStatus.untracked > 0 && (
-                        <div className="px-2 py-1 bg-gray-500/10 text-gray-500 rounded">
-                          {mainRepoStatus.untracked} untracked
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Repository Size */}
+                  {/* Disk Usage */}
                   {mainRepoSize !== null && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <HardDrive className="w-4 h-4" />
-                      <span>{formatBytes(mainRepoSize)}</span>
+                      <span className="text-xs">Disk Usage: {formatBytes(mainRepoSize)}</span>
                     </div>
                   )}
 
@@ -584,10 +617,10 @@ export const Dashboard: React.FC = () => {
                     <Button
                       variant="outline"
                       className="w-full justify-start"
-                      onClick={() => setShowRepoSettings(true)}
+                      onClick={handleOpenMainExecutionTerminal}
                     >
-                      <Settings className="w-4 h-4 mr-2" />
-                      Repository Settings
+                      <TerminalIcon className="w-4 h-4 mr-2" />
+                      Execution Terminal
                     </Button>
                   </div>
                 </CardContent>
@@ -668,12 +701,13 @@ export const Dashboard: React.FC = () => {
                         <WorktreeCard
                           key={worktree.id}
                           worktree={worktree}
-                          onOpenTerminal={handleOpenTerminal}
+                          planHistory={planHistoryMap[worktree.id]}
+                          isPlanHistoryLoading={planHistoryLoading[worktree.id]}
+                          onViewPlanHistory={handleViewPlanHistory}
+                          onOpenPlanningTerminal={handleOpenPlanningTerminal}
+                          onOpenExecutionTerminal={handleOpenExecutionTerminal}
                           onOpenDiff={handleOpenDiff}
-                          onOpenEditor={handleOpenEditor}
                           onDelete={handleDelete}
-                          availableEditors={availableEditors}
-                          preferredEditor={preferredEditor}
                         />
                       ))}
                     </div>
@@ -694,137 +728,25 @@ export const Dashboard: React.FC = () => {
         }}
       />
 
-      <Dialog open={showSettings} onOpenChange={setShowSettings}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Settings</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Repository Path</label>
-              <div className="flex gap-2 mt-2">
-                <Input
-                  value={repoPath}
-                  onChange={(e) => setRepoPath(e.target.value)}
-                  placeholder="/path/to/your/repo"
-                  className="flex-1"
-                />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleBrowseRepoPath}
-                >
-                  <FolderOpen className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium">Theme</label>
-              <select
-                value={theme}
-                onChange={(e) => setTheme(e.target.value as "system" | "light" | "dark")}
-                className="mt-2 w-full px-3 py-2 border rounded-md bg-background text-foreground"
-              >
-                <option value="system">System</option>
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-sm font-medium">Terminal Font Size</label>
-              <Input
-                type="number"
-                min={8}
-                max={32}
-                value={fontSize}
-                onChange={(e) => {
-                  const value = parseInt(e.target.value, 10);
-                  if (!isNaN(value) && value >= 8 && value <= 32) {
-                    setFontSize(value).catch((error) => {
-                      addToast({
-                        title: "Error",
-                        description: error.message,
-                        type: "error",
-                      });
-                    });
-                  }
-                }}
-                placeholder="14"
-                className="mt-2"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Font size for terminal (8-32)
-              </p>
-            </div>
-            <div>
-              <label className="text-sm font-medium">Preferred Editor</label>
-              <select
-                value={preferredEditor}
-                onChange={(e) => setPreferredEditor(e.target.value)}
-                className="mt-2 w-full px-3 py-2 border rounded-md bg-background text-foreground"
-                disabled={availableEditors.length === 0}
-              >
-                <option value="">Select an editor</option>
-                {availableEditors.map((editor) => (
-                  <option key={editor} value={editor}>
-                    {editor === "cursor" ? "Cursor" : editor === "code" ? "VS Code" : editor === "code-insiders" ? "VS Code Insiders" : editor}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-muted-foreground mt-1">
-                {availableEditors.length === 0 
-                  ? "No editors detected. Install Cursor, VS Code, or VS Code Insiders."
-                  : "Default editor to launch from worktree cards"}
-              </p>
-            </div>
-            <Button onClick={handleSaveRepoPath}>Save</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <UnifiedSettings
+        open={showUnifiedSettings}
+        onOpenChange={setShowUnifiedSettings}
+        repoPath={repoPath}
+        onRepoPathChange={setRepoPath}
+        initialTab={initialSettingsTab}
+        onRefresh={refetch}
+      />
 
-      <Dialog open={showGitInitDialog} onOpenChange={setShowGitInitDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Initialize Git Repository</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              This directory is not a git repository. Would you like to initialize it?
-            </p>
-            <p className="text-sm font-mono bg-muted p-2 rounded">
-              {pendingRepoPath}
-            </p>
-            <div className="flex gap-2 justify-end">
-              <Button
-                variant="outline"
-                onClick={() => setShowGitInitDialog(false)}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleGitInit}>
-                Initialize Git Repository
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {selectedWorktree && (
-        <EditorLauncher
-          open={showEditorLauncher}
-          onOpenChange={setShowEditorLauncher}
-          worktree={selectedWorktree}
-        />
-      )}
-
-      {repoPath && (
-        <RepositorySettings
-          open={showRepoSettings}
-          onOpenChange={setShowRepoSettings}
-          repoPath={repoPath}
-        />
-      )}
+      <PlanHistoryDialog
+        open={planHistoryDialogOpen}
+        onOpenChange={(open) => {
+          setPlanHistoryDialogOpen(open);
+          if (!open) {
+            setPlanHistoryDialogWorktree(null);
+          }
+        }}
+        worktree={planHistoryDialogWorktree}
+      />
     </div>
   );
 };
-

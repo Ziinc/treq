@@ -111,7 +111,7 @@ export const extractClaudeCodePlans = (output: string): PlanSection[] => {
  * Parses a single Claude Code plan from collected lines
  * Handles structured format with sections like "Plan:", "Changes Required", etc.
  */
-const parseClaudeCodePlan = (lines: string[], planStartIndex: number): PlanSection | null => {
+const parseClaudeCodePlan = (lines: string[], _planStartIndex: number): PlanSection | null => {
   if (lines.length === 0) return null;
   
   let title = '';

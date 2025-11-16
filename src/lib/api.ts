@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import type { PlanHistoryEntry, PlanHistoryPayload } from "../types/planHistory";
 
 export interface Worktree {
   id: number;
@@ -119,6 +121,9 @@ export const gitGetFileDiff = (worktree_path: string, file_path: string): Promis
 export const gitListBranches = (repo_path: string): Promise<string[]> =>
   invoke("git_list_branches", { repoPath: repo_path });
 
+export const gitListGitignoredFiles = (repo_path: string): Promise<string[]> =>
+  invoke("git_list_gitignored_files", { repoPath: repo_path });
+
 // PTY API
 export const ptyCreateSession = (
   session_id: string,
@@ -151,11 +156,19 @@ export const listDirectory = (path: string): Promise<DirectoryEntry[]> =>
 export const shellExecute = (command: string, working_dir?: string): Promise<string> =>
   invoke("shell_execute", { command, workingDir: working_dir });
 
-export const shellLaunchApp = (app_name: string, path: string): Promise<void> =>
-  invoke("shell_launch_app", { appName: app_name, path });
+// Editor launching using URL schemes
+export type EditorType = "vscode" | "cursor" | "zed";
 
-export const detectAvailableEditors = (): Promise<string[]> =>
-  invoke("detect_editors");
+export const openEditor = async (editor: EditorType, path: string): Promise<void> => {
+  const urlSchemes: Record<EditorType, string> = {
+    vscode: "vscode://file/",
+    cursor: "cursor://file/",
+    zed: "zed://file/",
+  };
+  
+  const url = `${urlSchemes[editor]}${path}`;
+  await openUrl(url);
+};
 
 // Git Operations API
 export const gitCommit = (worktree_path: string, message: string): Promise<string> =>
@@ -205,7 +218,7 @@ export const isGitRepository = (path: string): Promise<boolean> =>
 export const gitInit = (path: string): Promise<string> =>
   invoke("git_init_repo", { path });
 
-// Plan persistence
+// Plan persistence (legacy - database-based)
 export const savePlanToRepo = async (
   repoPath: string,
   planId: string,
@@ -233,3 +246,66 @@ export const loadPlanFromRepo = async (
   }
 };
 
+// Plan history (.treq/local.db)
+export const saveExecutedPlan = (
+  repoPath: string,
+  worktreeId: number,
+  planData: PlanHistoryPayload
+): Promise<number> =>
+  invoke("save_executed_plan_command", { repoPath, worktreeId, planData });
+
+export const getWorktreePlans = (
+  repoPath: string,
+  worktreeId: number,
+  limit?: number
+): Promise<PlanHistoryEntry[]> =>
+  invoke("get_worktree_plans_command", {
+    repoPath,
+    worktreeId,
+    ...(typeof limit === "number" ? { limit } : {}),
+  });
+
+export const getAllWorktreePlans = (
+  repoPath: string,
+  worktreeId: number
+): Promise<PlanHistoryEntry[]> =>
+  invoke("get_all_worktree_plans_command", { repoPath, worktreeId });
+
+// File-based plan storage (.treq/plans/*)
+export interface PlanMetadata {
+  id: string;
+  title: string;
+  plan_type: string;
+  worktree_id?: number;
+  worktree_path?: string;
+  branch_name?: string;
+  timestamp: string;
+}
+
+export interface PlanFile {
+  id: string;
+  title: string;
+  type: string;
+  raw_markdown: string;
+  worktree_id?: number;
+  worktree_path?: string;
+  branch_name?: string;
+  timestamp: string;
+}
+
+export const savePlanToFile = (
+  repoPath: string,
+  planId: string,
+  content: string,
+  metadata: PlanMetadata
+): Promise<void> =>
+  invoke("save_plan_to_file", { repoPath, planId, content, metadata });
+
+export const loadPlansFromFiles = (repoPath: string): Promise<PlanFile[]> =>
+  invoke("load_plans_from_files", { repoPath });
+
+export const getPlanFile = (repoPath: string, planId: string): Promise<PlanFile> =>
+  invoke("get_plan_file", { repoPath, planId });
+
+export const deletePlanFile = (repoPath: string, planId: string): Promise<void> =>
+  invoke("delete_plan_file", { repoPath, planId });

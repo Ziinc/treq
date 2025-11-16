@@ -19,16 +19,11 @@ export function formatBytes(bytes: number): string {
 }
 
 /**
- * Sanitize a plan title to create a valid git branch name
- * Format: treq/{sanitized-title}
+ * Sanitize text for use in branch names
+ * Converts to lowercase, removes special chars, replaces spaces with hyphens
  */
-export function sanitizePlanTitleToBranchName(title: string): string {
-  // Remove any non-alphanumeric characters except spaces and hyphens
-  // Convert to lowercase
-  // Replace spaces with hyphens
-  // Remove consecutive hyphens
-  // Trim hyphens from start and end
-  const sanitized = title
+export function sanitizeForBranchName(text: string): string {
+  const sanitized = text
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, '')
     .replace(/\s+/g, '-')
@@ -36,6 +31,25 @@ export function sanitizePlanTitleToBranchName(title: string): string {
     .replace(/^-+|-+$/g, '')
     .substring(0, 50); // Limit to 50 chars
   
-  return `treq/${sanitized || 'plan'}`;
+  return sanitized || 'unnamed';
+}
+
+/**
+ * Apply branch name pattern with sanitized name
+ * @param pattern - Pattern with {name} placeholder (e.g., "treq/{name}")
+ * @param name - The name/intent to insert
+ */
+export function applyBranchNamePattern(pattern: string, name: string): string {
+  const sanitized = sanitizeForBranchName(name);
+  return pattern.replace(/\{name\}/g, sanitized);
+}
+
+/**
+ * Sanitize a plan title to create a valid git branch name
+ * Format: treq/{sanitized-title}
+ * @deprecated Use applyBranchNamePattern with pattern from settings instead
+ */
+export function sanitizePlanTitleToBranchName(title: string): string {
+  return applyBranchNamePattern("treq/{name}", title);
 }
 
