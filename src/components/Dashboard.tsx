@@ -4,15 +4,15 @@ import { listen } from "@tauri-apps/api/event";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { WorktreeCard } from "./WorktreeCard";
+import { MergeDialog } from "./MergeDialog";
 import { CreateWorktreeDialog } from "./CreateWorktreeDialog";
 import { UnifiedSettings } from "./UnifiedSettings";
 import { DiffViewer } from "./DiffViewer";
 import { PlanningTerminal } from "./PlanningTerminal";
 import { WorktreeEditSession } from "./WorktreeEditSession";
-import { PlanHistoryDialog } from "./PlanHistoryDialog";
 import { ExecutionTerminal } from "./ExecutionTerminal";
+import { SessionSidebar } from "./SessionSidebar";
 import { PlanSection } from "../types/planning";
-import { PlanHistoryEntry } from "../types/planHistory";
 import { applyBranchNamePattern } from "../lib/utils";
 import { buildPlanHistoryPayload } from "../lib/planHistory";
 import { useToast } from "./ui/toast";
@@ -30,14 +30,20 @@ import {
   GitStatus,
   BranchInfo,
   saveExecutedPlan,
-  getWorktreePlans,
   gitCreateWorktree,
   addWorktreeToDb,
   getRepoSetting,
   gitExecutePostCreateCommand,
-  ptyCreateSession,
-  ptyWrite,
+  Session,
+  createSession,
+  updateSessionAccess,
+  getSessions,
+  gitGetChangedFiles,
+  gitMerge,
+  gitDiscardAllChanges,
+  gitHasUncommittedChanges,
 } from "../lib/api";
+import type { MergeStrategy } from "../lib/api";
 import { formatBytes } from "../lib/utils";
 import { Plus, Settings, X, RefreshCw, Search, Terminal as TerminalIcon, GitBranch, FolderGit2, HardDrive } from "lucide-react";
 import {
@@ -48,6 +54,12 @@ import {
 } from "./ui/card";
 
 type ViewMode = "dashboard" | "terminal" | "diff" | "planning" | "worktree-edit" | "worktree-planning" | "execution" | "worktree-execution";
+type SessionViewMode = "planning" | "execution";
+type MergeConfirmPayload = {
+  strategy: MergeStrategy;
+  commitMessage: string;
+  discardChanges: boolean;
+};
 
 export const Dashboard: React.FC = () => {
   const [repoPath, setRepoPath] = useState("");
@@ -62,14 +74,28 @@ export const Dashboard: React.FC = () => {
   const [showUnifiedSettings, setShowUnifiedSettings] = useState(false);
   const [initialSettingsTab, setInitialSettingsTab] = useState<"application" | "repository">("application");
   const [searchQuery, setSearchQuery] = useState("");
-  const [planHistoryMap, setPlanHistoryMap] = useState<Record<number, PlanHistoryEntry[]>>({});
-  const [planHistoryLoading, setPlanHistoryLoading] = useState<Record<number, boolean>>({});
-  const [planHistoryDialogOpen, setPlanHistoryDialogOpen] = useState(false);
-  const [planHistoryDialogWorktree, setPlanHistoryDialogWorktree] = useState<Worktree | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
+  const [selectedWorktreePlanContent, setSelectedWorktreePlanContent] = useState<string | null>(null);
+  const [selectedWorktreePlanTitle, setSelectedWorktreePlanTitle] = useState<string | null>(null);
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+  const [mergeTargetWorktree, setMergeTargetWorktree] = useState<Worktree | null>(null);
+  const [mergeAheadCount, setMergeAheadCount] = useState(0);
+  const [mergeWorktreeHasChanges, setMergeWorktreeHasChanges] = useState(false);
+  const [mergeChangedFiles, setMergeChangedFiles] = useState<string[]>([]);
+  const [mergeDetailsLoading, setMergeDetailsLoading] = useState(false);
   
   const queryClient = useQueryClient();
   const { addToast } = useToast();
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const resetMergeState = useCallback(() => {
+    setMergeDialogOpen(false);
+    setMergeTargetWorktree(null);
+    setMergeAheadCount(0);
+    setMergeWorktreeHasChanges(false);
+    setMergeChangedFiles([]);
+    setMergeDetailsLoading(false);
+  }, []);
 
   // Keyboard shortcuts
   useKeyboardShortcut("n", true, () => {
@@ -124,29 +150,31 @@ export const Dashboard: React.FC = () => {
     }
   }, [repoPath]);
 
-  // Fetch main repository git status and branch info
-  useEffect(() => {
-    if (repoPath) {
-      // Fetch git status
-      gitGetStatus(repoPath)
-        .then(setMainRepoStatus)
-        .catch(() => setMainRepoStatus(null));
-
-      // Fetch branch info
-      gitGetBranchInfo(repoPath)
-        .then(setMainBranchInfo)
-        .catch(() => setMainBranchInfo(null));
-
-      // Fetch directory size
-      calculateDirectorySize(repoPath)
-        .then(setMainRepoSize)
-        .catch(() => setMainRepoSize(null));
-    } else {
+  const refreshMainRepoInfo = useCallback(() => {
+    if (!repoPath) {
       setMainRepoStatus(null);
       setMainBranchInfo(null);
       setMainRepoSize(null);
+      return;
     }
+
+    gitGetStatus(repoPath)
+      .then(setMainRepoStatus)
+      .catch(() => setMainRepoStatus(null));
+
+    gitGetBranchInfo(repoPath)
+      .then(setMainBranchInfo)
+      .catch(() => setMainBranchInfo(null));
+
+    calculateDirectorySize(repoPath)
+      .then(setMainRepoSize)
+      .catch(() => setMainRepoSize(null));
   }, [repoPath]);
+
+  // Fetch main repository git status and branch info
+  useEffect(() => {
+    refreshMainRepoInfo();
+  }, [refreshMainRepoInfo]);
 
   // Listen for menu navigation events
   useEffect(() => {
@@ -159,6 +187,7 @@ export const Dashboard: React.FC = () => {
       unlisten.then((fn) => fn());
     };
   }, []);
+
 
   const { data: worktrees = [], isLoading, refetch } = useQuery({
     queryKey: ["worktrees"],
@@ -187,67 +216,93 @@ export const Dashboard: React.FC = () => {
     },
   });
 
-  const refreshPlanHistoryForWorktree = useCallback(
-    async (target: Worktree, options?: { shouldCancel?: () => boolean }) => {
-      if (options?.shouldCancel?.()) return;
-      setPlanHistoryLoading((prev) => ({ ...prev, [target.id]: true }));
-      try {
-        const plans = await getWorktreePlans(target.repo_path, target.id, 3);
-        if (options?.shouldCancel?.()) return;
-        setPlanHistoryMap((prev) => ({ ...prev, [target.id]: plans }));
-      } catch (error) {
-        console.error(`Failed to refresh plan history for worktree ${target.id}:`, error);
-      } finally {
-        if (options?.shouldCancel?.()) return;
-        setPlanHistoryLoading((prev) => ({ ...prev, [target.id]: false }));
+  const mergeMutation = useMutation({
+    mutationFn: async (payload: MergeConfirmPayload) => {
+      if (!repoPath) {
+        throw new Error("Repository path is not set");
       }
+
+      if (!mergeTargetWorktree) {
+        throw new Error("No worktree selected for merge");
+      }
+
+      const mainRepoDirty = await gitHasUncommittedChanges(repoPath);
+      if (mainRepoDirty) {
+        throw new Error("Main repository has uncommitted changes. Please commit or stash them before merging.");
+      }
+
+      const worktreeDirtyNow = await gitHasUncommittedChanges(mergeTargetWorktree.worktree_path);
+      if (worktreeDirtyNow) {
+        if (payload.discardChanges) {
+          await gitDiscardAllChanges(mergeTargetWorktree.worktree_path);
+        } else {
+          throw new Error("Worktree has uncommitted changes. Discard them before merging.");
+        }
+      }
+
+      return gitMerge(
+        repoPath,
+        mergeTargetWorktree.branch_name,
+        payload.strategy,
+        payload.commitMessage
+      );
     },
-    []
+    onSuccess: () => {
+      const branchName = mergeTargetWorktree?.branch_name || "worktree";
+      addToast({
+        title: "Merge complete",
+        description: `Merged ${branchName} into ${currentBranch || "main"}`,
+        type: "success",
+      });
+      queryClient.invalidateQueries({ queryKey: ["worktrees"] });
+      refreshMainRepoInfo();
+      resetMergeState();
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      const description = message.includes("CONFLICT")
+        ? "Merge conflict detected. Resolve conflicts in the main repository and try again."
+        : message;
+      addToast({
+        title: "Merge failed",
+        description,
+        type: "error",
+      });
+    },
+  });
+
+  // Helper to create or get session
+  const getOrCreateSession = useCallback(
+    async (
+      worktreeId: number | null,
+      sessionType: SessionViewMode,
+      autoName?: string
+    ): Promise<number> => {
+      const sessions = await getSessions();
+      const existing = sessions.find(
+        (s) => s.worktree_id === worktreeId && s.session_type === sessionType
+      );
+      
+      if (existing) {
+        await updateSessionAccess(existing.id);
+        return existing.id;
+      }
+
+      // Generate name if not provided
+      const name = autoName || (() => {
+        const typeCount = sessions.filter(
+          (s) => s.worktree_id === worktreeId && s.session_type === sessionType
+        ).length;
+        const typeLabel = sessionType === "planning" ? "Planning" : "Execution";
+        return `${typeLabel} ${typeCount + 1}`;
+      })();
+
+      const sessionId = await createSession(worktreeId, sessionType, name);
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      return sessionId;
+    },
+    [queryClient]
   );
-
-  // Load recent plan history for each worktree
-  useEffect(() => {
-    if (worktrees.length === 0) {
-      setPlanHistoryMap({});
-      setPlanHistoryLoading({});
-      return;
-    }
-
-    let cancelled = false;
-    const activeIds = new Set(worktrees.map((wt) => wt.id));
-
-    setPlanHistoryMap((prev) => {
-      const next: Record<number, PlanHistoryEntry[]> = {};
-      Object.entries(prev).forEach(([id, value]) => {
-        const numericId = Number(id);
-        if (activeIds.has(numericId)) {
-          next[numericId] = value;
-        }
-      });
-      return next;
-    });
-
-    setPlanHistoryLoading((prev) => {
-      const next: Record<number, boolean> = {};
-      Object.entries(prev).forEach(([id, value]) => {
-        const numericId = Number(id);
-        if (activeIds.has(numericId)) {
-          next[numericId] = value;
-        }
-      });
-      return next;
-    });
-
-    worktrees.forEach((wt) => {
-      refreshPlanHistoryForWorktree(wt, {
-        shouldCancel: () => cancelled,
-      });
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [worktrees, refreshPlanHistoryForWorktree]);
 
   // Filter worktrees based on search query (including metadata)
   const filteredWorktrees = worktrees.filter((wt) => {
@@ -275,18 +330,51 @@ export const Dashboard: React.FC = () => {
     return false;
   });
 
-  const handleOpenPlanningTerminal = (worktree: Worktree) => {
+  const handleOpenPlanningTerminal = async (worktree: Worktree) => {
+    const sessionId = await getOrCreateSession(worktree.id, "planning");
     setSelectedWorktree(worktree);
+    setActiveSessionId(sessionId);
     setViewMode("worktree-planning");
   };
 
-  const handleOpenExecutionTerminal = (worktree: Worktree) => {
+  const handleOpenExecutionTerminal = async (worktree: Worktree) => {
+    const sessionId = await getOrCreateSession(worktree.id, "execution");
     setSelectedWorktree(worktree);
+    setSelectedWorktreePlanContent(null);
+    setSelectedWorktreePlanTitle(null);
+    setActiveSessionId(sessionId);
     setViewMode("worktree-execution");
   };
 
-  const handleOpenMainExecutionTerminal = () => {
+  const handleOpenMainExecutionTerminal = async () => {
+    const sessionId = await getOrCreateSession(null, "execution");
+    setSelectedWorktreePlanContent(null);
+    setSelectedWorktreePlanTitle(null);
+    setActiveSessionId(sessionId);
     setViewMode("execution");
+  };
+
+  const handleOpenMainPlanningTerminal = async () => {
+    const sessionId = await getOrCreateSession(null, "planning");
+    setActiveSessionId(sessionId);
+    setViewMode("planning");
+  };
+
+  const handleSessionClick = async (session: Session) => {
+    await updateSessionAccess(session.id);
+    setActiveSessionId(session.id);
+    
+    if (session.worktree_id) {
+      const worktree = worktrees.find((w) => w.id === session.worktree_id);
+      if (worktree) {
+        setSelectedWorktree(worktree);
+        setViewMode(session.session_type === "planning" ? "worktree-planning" : "worktree-execution");
+      }
+    } else {
+      setSelectedWorktree(null);
+      setViewMode(session.session_type === "planning" ? "planning" : "execution");
+    }
+    queryClient.invalidateQueries({ queryKey: ["sessions"] });
   };
 
   const handleOpenDiff = (worktree: Worktree) => {
@@ -300,10 +388,64 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const handleViewPlanHistory = (worktree: Worktree) => {
-    setPlanHistoryDialogWorktree(worktree);
-    setPlanHistoryDialogOpen(true);
+  const handleMergeRequest = async (worktree: Worktree) => {
+    if (!repoPath) {
+      addToast({
+        title: "Repository not set",
+        description: "Configure a repository path in settings before merging.",
+        type: "error",
+      });
+      return;
+    }
+
+    setMergeTargetWorktree(worktree);
+    setMergeAheadCount(0);
+    setMergeChangedFiles([]);
+    setMergeWorktreeHasChanges(false);
+    setMergeDetailsLoading(true);
+
+    try {
+      const mainRepoDirty = await gitHasUncommittedChanges(repoPath);
+      if (mainRepoDirty) {
+        addToast({
+          title: "Main repository has uncommitted changes",
+          description: "Please clean up or commit changes in the main repository before merging.",
+          type: "error",
+        });
+        setMergeTargetWorktree(null);
+        return;
+      }
+
+      setMergeDialogOpen(true);
+
+      const branchInfo = await gitGetBranchInfo(worktree.worktree_path);
+      setMergeAheadCount(branchInfo.ahead);
+
+      const worktreeDirty = await gitHasUncommittedChanges(worktree.worktree_path);
+      setMergeWorktreeHasChanges(worktreeDirty);
+
+      if (worktreeDirty) {
+        try {
+          const files = await gitGetChangedFiles(worktree.worktree_path);
+          setMergeChangedFiles(files);
+        } catch (fileError) {
+          console.error("Failed to load changed files:", fileError);
+          setMergeChangedFiles([]);
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      addToast({
+        title: "Unable to start merge",
+        description: message,
+        type: "error",
+      });
+      resetMergeState();
+    } finally {
+      setMergeDetailsLoading(false);
+    }
   };
+
 
 
   const handleExecutePlan = async (section: PlanSection) => {
@@ -343,30 +485,6 @@ export const Dashboard: React.FC = () => {
 
       // Get plan content (use edited version if available)
       const planContent = section.editedContent || section.rawMarkdown;
-      
-      // Create Claude code session
-      const sessionId = `worktree-edit-${worktreeId}`;
-      const initialCommand = `claude --permission-mode plan`;
-      
-      addToast({
-        title: "Starting Claude session...",
-        description: "Initializing AI editor with implementation plan",
-        type: "info",
-      });
-
-      // Create PTY session with initial command
-      await ptyCreateSession(sessionId, worktreePath, undefined, initialCommand);
-      
-      // Wait for Claude to start, then paste the plan content
-      setTimeout(async () => {
-        try {
-          // Send the plan content as if the user pasted it
-          await ptyWrite(sessionId, planContent);
-          await ptyWrite(sessionId, "\n");
-        } catch (error) {
-          console.error("Failed to send plan to Claude:", error);
-        }
-      }, 3000); // Wait 3 seconds for Claude to be ready
 
       // Create worktree object and navigate to edit session
       const newWorktree: Worktree = {
@@ -380,17 +498,18 @@ export const Dashboard: React.FC = () => {
       try {
         const payload = buildPlanHistoryPayload(section);
         await saveExecutedPlan(repoPath, worktreeId, payload);
-        await refreshPlanHistoryForWorktree(newWorktree);
       } catch (planError) {
         console.error("Failed to record plan execution:", planError);
       }
 
+      setSelectedWorktreePlanContent(planContent);
+      setSelectedWorktreePlanTitle(section.title);
       setSelectedWorktree(newWorktree);
-      setViewMode("worktree-edit");
+      setViewMode("worktree-execution");
       
       addToast({
         title: "Ready to implement",
-        description: "Worktree created and Claude session started",
+        description: "Worktree created; opening execution terminal",
         type: "success",
       });
 
@@ -405,47 +524,99 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const handleCloseTerminal = () => {
+    setViewMode("dashboard");
+    setSelectedWorktree(null);
+    setActiveSessionId(null);
+    setSelectedWorktreePlanContent(null);
+    setSelectedWorktreePlanTitle(null);
+  };
+
   if (viewMode === "planning") {
     return (
-      <PlanningTerminal
-        repositoryPath={repoPath}
-        onClose={() => setViewMode("dashboard")}
-        onExecutePlan={handleExecutePlan}
-      />
+      <div className="flex h-screen">
+        <SessionSidebar
+          activeSessionId={activeSessionId}
+          onSessionClick={handleSessionClick}
+          onCreatePlanningSession={handleOpenMainPlanningTerminal}
+          onCreateExecutionSession={handleOpenMainExecutionTerminal}
+          repoPath={repoPath}
+        />
+        <div className="flex-1" style={{ width: "calc(100vw - 200px)" }}>
+          <PlanningTerminal
+            repositoryPath={repoPath}
+            sessionId={activeSessionId}
+            onClose={handleCloseTerminal}
+            onExecutePlan={handleExecutePlan}
+          />
+        </div>
+      </div>
     );
   }
 
   if (viewMode === "worktree-planning" && selectedWorktree) {
     return (
-      <PlanningTerminal
-        worktree={selectedWorktree}
-        onClose={() => {
-          setViewMode("dashboard");
-          setSelectedWorktree(null);
-        }}
-        onExecutePlan={handleExecutePlan}
-      />
+      <div className="flex h-screen">
+        <SessionSidebar
+          activeSessionId={activeSessionId}
+          onSessionClick={handleSessionClick}
+          onCreatePlanningSession={handleOpenMainPlanningTerminal}
+          onCreateExecutionSession={handleOpenMainExecutionTerminal}
+          repoPath={repoPath}
+        />
+        <div className="flex-1" style={{ width: "calc(100vw - 200px)" }}>
+          <PlanningTerminal
+            worktree={selectedWorktree}
+            sessionId={activeSessionId}
+            onClose={handleCloseTerminal}
+            onExecutePlan={handleExecutePlan}
+          />
+        </div>
+      </div>
     );
   }
 
   if (viewMode === "execution") {
     return (
-      <ExecutionTerminal
-        repositoryPath={repoPath}
-        onClose={() => setViewMode("dashboard")}
-      />
+      <div className="flex h-screen">
+        <SessionSidebar
+          activeSessionId={activeSessionId}
+          onSessionClick={handleSessionClick}
+          onCreatePlanningSession={handleOpenMainPlanningTerminal}
+          onCreateExecutionSession={handleOpenMainExecutionTerminal}
+          repoPath={repoPath}
+        />
+        <div className="flex-1" style={{ width: "calc(100vw - 200px)" }}>
+          <ExecutionTerminal
+            repositoryPath={repoPath}
+            sessionId={activeSessionId}
+            onClose={handleCloseTerminal}
+          />
+        </div>
+      </div>
     );
   }
 
   if (viewMode === "worktree-execution" && selectedWorktree) {
     return (
-      <ExecutionTerminal
-        worktree={selectedWorktree}
-        onClose={() => {
-          setViewMode("dashboard");
-          setSelectedWorktree(null);
-        }}
-      />
+      <div className="flex h-screen">
+        <SessionSidebar
+          activeSessionId={activeSessionId}
+          onSessionClick={handleSessionClick}
+          onCreatePlanningSession={handleOpenMainPlanningTerminal}
+          onCreateExecutionSession={handleOpenMainExecutionTerminal}
+          repoPath={repoPath}
+        />
+        <div className="flex-1" style={{ width: "calc(100vw - 200px)" }}>
+          <ExecutionTerminal
+            worktree={selectedWorktree}
+            sessionId={activeSessionId}
+            initialPlanContent={selectedWorktreePlanContent || undefined}
+            initialPlanTitle={selectedWorktreePlanTitle || undefined}
+            onClose={handleCloseTerminal}
+          />
+        </div>
+      </div>
     );
   }
 
@@ -484,8 +655,14 @@ export const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-8">
+    <div className="flex h-screen bg-background">
+      <SessionSidebar
+        activeSessionId={activeSessionId}
+        onSessionClick={handleSessionClick}
+        repoPath={repoPath}
+      />
+      <div className="flex-1 overflow-auto" style={{ width: "calc(100vw - 200px)" }}>
+        <div className="container mx-auto p-8">
         {/* Simplified Header */}
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-bold">Git Worktree Manager</h1>
@@ -609,7 +786,7 @@ export const Dashboard: React.FC = () => {
                     <Button
                       variant="outline"
                       className="w-full justify-start"
-                      onClick={() => setViewMode("planning")}
+                      onClick={handleOpenMainPlanningTerminal}
                     >
                       <TerminalIcon className="w-4 h-4 mr-2" />
                       Planning Terminal
@@ -701,13 +878,11 @@ export const Dashboard: React.FC = () => {
                         <WorktreeCard
                           key={worktree.id}
                           worktree={worktree}
-                          planHistory={planHistoryMap[worktree.id]}
-                          isPlanHistoryLoading={planHistoryLoading[worktree.id]}
-                          onViewPlanHistory={handleViewPlanHistory}
                           onOpenPlanningTerminal={handleOpenPlanningTerminal}
                           onOpenExecutionTerminal={handleOpenExecutionTerminal}
                           onOpenDiff={handleOpenDiff}
                           onDelete={handleDelete}
+                          onMerge={handleMergeRequest}
                         />
                       ))}
                     </div>
@@ -717,36 +892,43 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
         )}
+
+        <MergeDialog
+          open={mergeDialogOpen}
+          onOpenChange={(open) => {
+            if (!open && !mergeMutation.isPending) {
+              resetMergeState();
+            }
+          }}
+          worktree={mergeTargetWorktree}
+          mainBranch={currentBranch}
+          aheadCount={mergeAheadCount}
+          hasWorktreeChanges={mergeWorktreeHasChanges}
+          changedFiles={mergeChangedFiles}
+          isLoadingDetails={mergeDetailsLoading}
+          isSubmitting={mergeMutation.isPending}
+          onConfirm={(options) => mergeMutation.mutate(options)}
+        />
+
+        <CreateWorktreeDialog
+          open={showCreateDialog}
+          onOpenChange={setShowCreateDialog}
+          repoPath={repoPath}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["worktrees"] });
+          }}
+        />
+
+        <UnifiedSettings
+          open={showUnifiedSettings}
+          onOpenChange={setShowUnifiedSettings}
+          repoPath={repoPath}
+          onRepoPathChange={setRepoPath}
+          initialTab={initialSettingsTab}
+          onRefresh={refetch}
+        />
       </div>
-
-      <CreateWorktreeDialog
-        open={showCreateDialog}
-        onOpenChange={setShowCreateDialog}
-        repoPath={repoPath}
-        onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ["worktrees"] });
-        }}
-      />
-
-      <UnifiedSettings
-        open={showUnifiedSettings}
-        onOpenChange={setShowUnifiedSettings}
-        repoPath={repoPath}
-        onRepoPathChange={setRepoPath}
-        initialTab={initialSettingsTab}
-        onRefresh={refetch}
-      />
-
-      <PlanHistoryDialog
-        open={planHistoryDialogOpen}
-        onOpenChange={(open) => {
-          setPlanHistoryDialogOpen(open);
-          if (!open) {
-            setPlanHistoryDialogWorktree(null);
-          }
-        }}
-        worktree={planHistoryDialogWorktree}
-      />
+      </div>
     </div>
   );
 };

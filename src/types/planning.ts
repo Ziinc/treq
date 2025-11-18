@@ -8,6 +8,7 @@ export interface PlanSection {
   scope?: string;
   isEdited?: boolean;
   editedContent?: string;
+  editedAt?: Date;
   timestamp: Date;
 }
 

@@ -242,7 +242,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 
 ## License
 
-MIT License - See LICENSE file for details
+This project is licensed under the Apache License, Version 2.0 - See LICENSE file for details
 
 ## Credits
 

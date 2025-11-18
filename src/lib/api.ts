@@ -13,6 +13,15 @@ export interface Worktree {
   metadata?: string;
 }
 
+export interface Session {
+  id: number;
+  worktree_id: number | null;
+  session_type: string;
+  name: string;
+  created_at: string;
+  last_accessed: string;
+}
+
 export interface Command {
   id: number;
   worktree_id: number;
@@ -35,6 +44,16 @@ export interface BranchInfo {
   behind: number;
   upstream?: string;
 }
+
+export interface GitDiffHunk {
+  id: string;
+  header: string;
+  lines: string[];
+  is_staged: boolean;
+  patch: string;
+}
+
+export type MergeStrategy = "regular" | "squash" | "no_ff" | "ff_only";
 
 export interface WorktreeInfo {
   path: string;
@@ -118,11 +137,33 @@ export const gitGetBranchInfo = (worktree_path: string): Promise<BranchInfo> =>
 export const gitGetFileDiff = (worktree_path: string, file_path: string): Promise<string> =>
   invoke("git_get_file_diff", { worktreePath: worktree_path, filePath: file_path });
 
+export const gitGetFileHunks = (worktree_path: string, file_path: string): Promise<GitDiffHunk[]> =>
+  invoke("git_get_file_hunks", { worktreePath: worktree_path, filePath: file_path });
+
 export const gitListBranches = (repo_path: string): Promise<string[]> =>
   invoke("git_list_branches", { repoPath: repo_path });
 
 export const gitListGitignoredFiles = (repo_path: string): Promise<string[]> =>
   invoke("git_list_gitignored_files", { repoPath: repo_path });
+
+export const gitMerge = (
+  repo_path: string,
+  branch: string,
+  strategy: MergeStrategy,
+  commitMessage?: string
+): Promise<string> =>
+  invoke("git_merge", {
+    repoPath: repo_path,
+    branch,
+    strategy,
+    commitMessage: commitMessage && commitMessage.trim() ? commitMessage : undefined,
+  });
+
+export const gitDiscardAllChanges = (worktree_path: string): Promise<string> =>
+  invoke("git_discard_all_changes", { worktreePath: worktree_path });
+
+export const gitHasUncommittedChanges = (worktree_path: string): Promise<boolean> =>
+  invoke("git_has_uncommitted_changes", { worktreePath: worktree_path });
 
 // PTY API
 export const ptyCreateSession = (
@@ -166,7 +207,9 @@ export const openEditor = async (editor: EditorType, path: string): Promise<void
     zed: "zed://file/",
   };
   
-  const url = `${urlSchemes[editor]}${path}`;
+  // URL-encode the path to handle spaces and special characters
+  const encodedPath = encodeURIComponent(path);
+  const url = `${urlSchemes[editor]}${encodedPath}`;
   await openUrl(url);
 };
 
@@ -195,6 +238,12 @@ export const gitStageFile = (worktree_path: string, file_path: string): Promise<
 export const gitUnstageFile = (worktree_path: string, file_path: string): Promise<string> =>
   invoke("git_unstage_file", { worktreePath: worktree_path, filePath: file_path });
 
+export const gitStageHunk = (worktree_path: string, patch: string): Promise<string> =>
+  invoke("git_stage_hunk", { worktreePath: worktree_path, patch });
+
+export const gitUnstageHunk = (worktree_path: string, patch: string): Promise<string> =>
+  invoke("git_unstage_hunk", { worktreePath: worktree_path, patch });
+
 export const gitGetChangedFiles = (worktree_path: string): Promise<string[]> =>
   invoke("git_get_changed_files", { worktreePath: worktree_path });
 
@@ -222,20 +271,38 @@ export const gitInit = (path: string): Promise<string> =>
 export const savePlanToRepo = async (
   repoPath: string,
   planId: string,
-  content: string
+  content: string,
+  sessionId?: string
 ): Promise<void> => {
   const data = JSON.stringify({
     content,
     editedAt: new Date().toISOString(),
+    sessionId: sessionId || null,
   });
-  return setRepoSetting(repoPath, `plan_${planId}`, data);
+  // Include sessionId in the key for session scoping
+  const key = sessionId ? `plan_${sessionId}_${planId}` : `plan_${planId}`;
+  return setRepoSetting(repoPath, key, data);
 };
 
 export const loadPlanFromRepo = async (
   repoPath: string,
-  planId: string
-): Promise<{ content: string; editedAt: string } | null> => {
-  const data = await getRepoSetting(repoPath, `plan_${planId}`);
+  planId: string,
+  sessionId?: string
+): Promise<{ content: string; editedAt: string; sessionId?: string } | null> => {
+  // Try session-scoped key first, then fallback to legacy key
+  const sessionKey = sessionId ? `plan_${sessionId}_${planId}` : null;
+  const legacyKey = `plan_${planId}`;
+  
+  let data: string | null = null;
+  if (sessionKey) {
+    data = await getRepoSetting(repoPath, sessionKey);
+  }
+  
+  // Fallback to legacy key if session-scoped key not found
+  if (!data) {
+    data = await getRepoSetting(repoPath, legacyKey);
+  }
+  
   if (!data) return null;
   
   try {
@@ -244,6 +311,17 @@ export const loadPlanFromRepo = async (
     console.error('Failed to parse plan data:', error);
     return null;
   }
+};
+
+export const clearSessionPlans = async (
+  repoPath: string,
+  sessionId: string
+): Promise<void> => {
+  // Get all repo settings and filter for this session's plans
+  // Note: This requires backend support, but for now we'll delete known keys
+  // The backend would need to implement a listRepoSettings function for full cleanup
+  // For now, we'll rely on the session-scoped keys being automatically ignored
+  // when loading plans with a different sessionId
 };
 
 // Plan history (.treq/local.db)
@@ -309,3 +387,26 @@ export const getPlanFile = (repoPath: string, planId: string): Promise<PlanFile>
 
 export const deletePlanFile = (repoPath: string, planId: string): Promise<void> =>
   invoke("delete_plan_file", { repoPath, planId });
+
+// Session management API
+export const createSession = (
+  worktreeId: number | null,
+  sessionType: string,
+  name: string
+): Promise<number> =>
+  invoke("create_session", { worktreeId, sessionType, name });
+
+export const getSessions = (): Promise<Session[]> =>
+  invoke("get_sessions");
+
+export const getSessionsByWorktree = (worktreeId: number): Promise<Session[]> =>
+  invoke("get_sessions_by_worktree", { worktreeId });
+
+export const getMainRepoSessions = (): Promise<Session[]> =>
+  invoke("get_main_repo_sessions");
+
+export const updateSessionAccess = (id: number): Promise<void> =>
+  invoke("update_session_access", { id });
+
+export const deleteSession = (id: number): Promise<void> =>
+  invoke("delete_session", { id });

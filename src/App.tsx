@@ -20,7 +20,9 @@ function App() {
       <ThemeProvider>
         <TerminalSettingsProvider>
           <ToastProvider>
-            <Dashboard />
+            <div className="flex h-screen">
+              <Dashboard />
+            </div>
           </ToastProvider>
         </TerminalSettingsProvider>
       </ThemeProvider>

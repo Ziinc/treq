@@ -1,4 +1,4 @@
-use rusqlite::{Connection, Result};
+use rusqlite::{params, Connection, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use sha2::{Sha256, Digest};
@@ -21,6 +21,16 @@ pub struct Command {
     pub created_at: String,
     pub status: String,
     pub output: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Session {
+    pub id: i64,
+    pub worktree_id: Option<i64>,
+    pub session_type: String,
+    pub name: String,
+    pub created_at: String,
+    pub last_accessed: String,
 }
 
 pub struct Database {
@@ -67,6 +77,19 @@ impl Database {
             [],
         )?;
 
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                worktree_id INTEGER,
+                type TEXT NOT NULL,
+                name TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                last_accessed TEXT NOT NULL,
+                FOREIGN KEY (worktree_id) REFERENCES worktrees(id) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+
         Ok(())
     }
 
@@ -107,6 +130,7 @@ impl Database {
 
     pub fn delete_worktree(&self, id: i64) -> Result<()> {
         self.conn.execute("DELETE FROM commands WHERE worktree_id = ?1", [id])?;
+        self.conn.execute("DELETE FROM sessions WHERE worktree_id = ?1", [id])?;
         self.conn.execute("DELETE FROM worktrees WHERE id = ?1", [id])?;
         Ok(())
     }
@@ -192,5 +216,92 @@ impl Database {
         )?;
         Ok(())
     }
-}
 
+    pub fn add_session(&self, session: &Session) -> Result<i64> {
+        self.conn.execute(
+            "INSERT INTO sessions (worktree_id, type, name, created_at, last_accessed)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            (
+                &session.worktree_id,
+                &session.session_type,
+                &session.name,
+                &session.created_at,
+                &session.last_accessed,
+            ),
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn get_sessions(&self) -> Result<Vec<Session>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, worktree_id, type, name, created_at, last_accessed 
+             FROM sessions ORDER BY last_accessed DESC",
+        )?;
+
+        let sessions = stmt.query_map([], |row| {
+            Ok(Session {
+                id: row.get(0)?,
+                worktree_id: row.get(1)?,
+                session_type: row.get(2)?,
+                name: row.get(3)?,
+                created_at: row.get(4)?,
+                last_accessed: row.get(5)?,
+            })
+        })?;
+
+        sessions.collect()
+    }
+
+    pub fn get_sessions_by_worktree(&self, worktree_id: i64) -> Result<Vec<Session>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, worktree_id, type, name, created_at, last_accessed 
+             FROM sessions WHERE worktree_id = ?1 ORDER BY last_accessed DESC",
+        )?;
+
+        let sessions = stmt.query_map([worktree_id], |row| {
+            Ok(Session {
+                id: row.get(0)?,
+                worktree_id: row.get(1)?,
+                session_type: row.get(2)?,
+                name: row.get(3)?,
+                created_at: row.get(4)?,
+                last_accessed: row.get(5)?,
+            })
+        })?;
+
+        sessions.collect()
+    }
+
+    pub fn get_main_repo_sessions(&self) -> Result<Vec<Session>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, worktree_id, type, name, created_at, last_accessed 
+             FROM sessions WHERE worktree_id IS NULL ORDER BY last_accessed DESC",
+        )?;
+
+        let sessions = stmt.query_map([], |row| {
+            Ok(Session {
+                id: row.get(0)?,
+                worktree_id: row.get(1)?,
+                session_type: row.get(2)?,
+                name: row.get(3)?,
+                created_at: row.get(4)?,
+                last_accessed: row.get(5)?,
+            })
+        })?;
+
+        sessions.collect()
+    }
+
+    pub fn update_session_access(&self, id: i64, last_accessed: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE sessions SET last_accessed = ?1 WHERE id = ?2",
+            params![last_accessed, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_session(&self, id: i64) -> Result<()> {
+        self.conn.execute("DELETE FROM sessions WHERE id = ?1", [id])?;
+        Ok(())
+    }
+}

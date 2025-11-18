@@ -1,6 +1,27 @@
 import { PlanSection } from '../types/planning';
 
 /**
+ * Creates a content-based hash for plan IDs
+ * Uses title + first 200 chars of content to ensure deterministic IDs
+ */
+const createPlanHash = (title: string, content: string): string => {
+  const contentPreview = content.substring(0, 200);
+  const hashInput = `${title}|${contentPreview}`;
+  
+  // Simple hash function for deterministic IDs
+  let hash = 0;
+  for (let i = 0; i < hashInput.length; i++) {
+    const char = hashInput.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  
+  // Convert to positive hex string
+  const hexHash = Math.abs(hash).toString(16).padStart(8, '0');
+  return `claude-${hexHash}`;
+};
+
+/**
  * Strips ANSI escape sequences from terminal output
  * Essential for reliable pattern matching in terminal output
  */
@@ -209,8 +230,11 @@ const parseClaudeCodePlan = (lines: string[], _planStartIndex: number): PlanSect
   
   const rawMarkdown = lines.join('\n');
   
+  // Generate content-based ID for deterministic lookups
+  const planId = createPlanHash(title, rawMarkdown);
+  
   return {
-    id: `claude-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    id: planId,
     type: 'implementation_plan',
     title,
     steps,
@@ -299,6 +323,8 @@ export const extractPlanSections = (output: string): PlanSection[] => {
           currentSection.rawText = content;
           currentSection.rawMarkdown = content;
           if (currentSection.steps.length > 0) {
+            // Generate content-based ID for legacy format plans
+            currentSection.id = createPlanHash(currentSection.title, content);
             sections.push(currentSection as PlanSection);
           }
         }
@@ -307,8 +333,10 @@ export const extractPlanSections = (output: string): PlanSection[] => {
       // Start new section
       const headerType = match[2];
       const title = match[3] || headerType;
+      // Generate content-based ID (will be finalized when section is complete)
+      const tempId = `plan-${sections.length}`;
       currentSection = {
-        id: `${Date.now()}-${sections.length}`,
+        id: tempId,
         type: detectPlanType(headerType),
         title: title.trim(),
         timestamp: new Date(),
@@ -328,6 +356,8 @@ export const extractPlanSections = (output: string): PlanSection[] => {
       currentSection.rawText = content;
       currentSection.rawMarkdown = content;
       if (currentSection.steps.length > 0) {
+        // Generate content-based ID for legacy format plans too
+        currentSection.id = createPlanHash(currentSection.title, content);
         sections.push(currentSection as PlanSection);
       }
     }

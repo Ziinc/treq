@@ -9,9 +9,9 @@ import {
 } from "./ui/card";
 import { Button } from "./ui/button";
 import { Worktree, GitStatus, BranchInfo, gitGetStatus, gitGetBranchInfo, calculateDirectorySize, openEditor, EditorType, getSetting } from "../lib/api";
-import { PlanHistoryEntry } from "../types/planHistory";
 import { formatBytes } from "../lib/utils";
-import { GitBranch, FileText, Terminal as TerminalIcon, Trash2, FolderOpen, Code2, HardDrive, ChevronDown, History, Loader2, Info } from "lucide-react";
+import { GitBranch, FileText, Terminal as TerminalIcon, Trash2, FolderOpen, Code2, HardDrive, ChevronDown, Info, GitMerge } from "lucide-react";
+import { useToast } from "./ui/toast";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,30 +26,27 @@ import {
 
 interface WorktreeCardProps {
   worktree: Worktree;
-  planHistory?: PlanHistoryEntry[];
-  isPlanHistoryLoading?: boolean;
-  onViewPlanHistory?: (worktree: Worktree) => void;
   onOpenPlanningTerminal: (worktree: Worktree) => void;
   onOpenExecutionTerminal: (worktree: Worktree) => void;
   onOpenDiff: (worktree: Worktree) => void;
   onDelete: (worktree: Worktree) => void;
+  onMerge: (worktree: Worktree) => void;
 }
 
 export const WorktreeCard: React.FC<WorktreeCardProps> = ({
   worktree,
-  planHistory,
-  isPlanHistoryLoading,
-  onViewPlanHistory,
   onOpenPlanningTerminal,
   onOpenExecutionTerminal,
   onOpenDiff,
   onDelete,
+  onMerge,
 }) => {
   const [status, setStatus] = useState<GitStatus | null>(null);
   const [branchInfo, setBranchInfo] = useState<BranchInfo | null>(null);
   const [size, setSize] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [defaultEditorType, setDefaultEditorType] = useState<EditorType>("cursor");
+  const { addToast } = useToast();
 
   // Parse metadata to get title/intent
   const getDisplayTitle = (): string => {
@@ -127,59 +124,21 @@ export const WorktreeCard: React.FC<WorktreeCardProps> = ({
       await openEditor(editorType, worktree.worktree_path);
     } catch (error) {
       console.error("Failed to launch editor:", error);
+      const editorNames: Record<EditorType, string> = {
+        vscode: "VS Code",
+        cursor: "Cursor",
+        zed: "Zed",
+      };
+      addToast({
+        type: "error",
+        title: `Failed to open ${editorNames[editorType]}`,
+        description: `${editorNames[editorType]} may not be installed or the URL scheme is not available.`,
+      });
     }
   };
 
-  const planEntries = planHistory ?? [];
-  const formatExecutionTime = (value: string) => {
-    try {
-      return new Date(value).toLocaleString();
-    } catch {
-      return value;
-    }
-  };
 
-  const renderPlanHistory = () => {
-    if (isPlanHistoryLoading && planEntries.length === 0) {
-      return (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          Loading plan history...
-        </div>
-      );
-    }
-
-    if (planEntries.length === 0) {
-      return (
-        <p className="text-xs text-muted-foreground">
-          No plans have been executed for this worktree yet.
-        </p>
-      );
-    }
-
-    return (
-      <div className="space-y-3">
-        {planEntries.map((entry) => (
-          <div key={entry.id} className="p-3 rounded-md border bg-muted/30">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <p className="text-sm font-medium">{entry.title}</p>
-                <p className="text-xs text-muted-foreground">
-                  {formatExecutionTime(entry.executed_at)}
-                </p>
-              </div>
-              <span className="text-[11px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20">
-                {entry.status}
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Type: {entry.type.replace(/_/g, " ")}
-            </p>
-          </div>
-        ))}
-      </div>
-    );
-  };
+  const canMerge = !!branchInfo && branchInfo.ahead > 0;
 
   return (
     <Card>
@@ -302,25 +261,6 @@ export const WorktreeCard: React.FC<WorktreeCardProps> = ({
         )}
       </CardContent>
 
-      <CardContent className="border-t pt-4 mt-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <History className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-semibold">Recent Plans</span>
-          </div>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8"
-            onClick={() => onViewPlanHistory?.(worktree)}
-            disabled={!onViewPlanHistory}
-          >
-            View All
-          </Button>
-        </div>
-        {renderPlanHistory()}
-      </CardContent>
-
       <CardFooter className="flex gap-2 flex-wrap">
         <div className="flex">
           <Button
@@ -385,6 +325,15 @@ export const WorktreeCard: React.FC<WorktreeCardProps> = ({
         >
           <FileText className="w-4 h-4 mr-2" />
           Diff
+        </Button>
+        <Button
+          size="sm"
+          onClick={() => onMerge(worktree)}
+          disabled={!canMerge}
+          className="bg-blue-600 text-white hover:bg-blue-500"
+        >
+          <GitMerge className="w-4 h-4 mr-2" />
+          Merge
         </Button>
         <Button
           size="sm"

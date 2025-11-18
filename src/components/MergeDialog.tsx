@@ -1,0 +1,193 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
+import { Button } from "./ui/button";
+import { Label } from "./ui/label";
+import { Textarea } from "./ui/textarea";
+import type { MergeStrategy, Worktree } from "../lib/api";
+import { ArrowRight, AlertTriangle } from "lucide-react";
+
+interface MergeDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  worktree: Worktree | null;
+  mainBranch: string | null;
+  aheadCount: number;
+  hasWorktreeChanges: boolean;
+  changedFiles: string[];
+  isLoadingDetails: boolean;
+  isSubmitting: boolean;
+  onConfirm: (options: { strategy: MergeStrategy; commitMessage: string; discardChanges: boolean }) => void;
+}
+
+const STRATEGY_OPTIONS: Array<{ value: MergeStrategy; label: string; description: string }> = [
+  { value: "regular", label: "Regular", description: "Allow fast-forward when possible" },
+  { value: "squash", label: "Squash", description: "Combine commits into a single commit" },
+  { value: "no_ff", label: "No Fast-Forward", description: "Always create a merge commit" },
+  { value: "ff_only", label: "Fast-Forward Only", description: "Abort unless fast-forward is possible" },
+];
+
+export const MergeDialog: React.FC<MergeDialogProps> = ({
+  open,
+  onOpenChange,
+  worktree,
+  mainBranch,
+  aheadCount,
+  hasWorktreeChanges,
+  changedFiles,
+  isLoadingDetails,
+  isSubmitting,
+  onConfirm,
+}) => {
+  const [strategy, setStrategy] = useState<MergeStrategy>("regular");
+  const [commitMessage, setCommitMessage] = useState("");
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+
+  useEffect(() => {
+    if (open && worktree) {
+      setStrategy("regular");
+      setCommitMessage(`Merge ${worktree.branch_name} into ${mainBranch || "main"}`);
+      setConfirmDiscard(false);
+    }
+  }, [open, worktree, mainBranch]);
+
+  useEffect(() => {
+    if (!hasWorktreeChanges) {
+      setConfirmDiscard(false);
+    }
+  }, [hasWorktreeChanges]);
+
+  const canConfirm = useMemo(() => {
+    if (!worktree || isLoadingDetails) return false;
+    if (hasWorktreeChanges && !confirmDiscard) return false;
+    if (strategy === "squash" && !commitMessage.trim()) return false;
+    return !isSubmitting;
+  }, [worktree, isLoadingDetails, hasWorktreeChanges, confirmDiscard, strategy, commitMessage, isSubmitting]);
+
+  const handleConfirm = () => {
+    if (!worktree) return;
+    onConfirm({
+      strategy,
+      commitMessage,
+      discardChanges: hasWorktreeChanges,
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[600px]">
+        <DialogHeader>
+          <DialogTitle>Merge Worktree</DialogTitle>
+          <DialogDescription>
+            Merge changes from this worktree into the main repository branch.
+          </DialogDescription>
+        </DialogHeader>
+
+        {!worktree ? (
+          <div className="text-sm text-muted-foreground">Select a worktree to merge.</div>
+        ) : isLoadingDetails ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            Preparing merge details...
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="bg-muted/50 rounded-lg p-3">
+              <div className="text-sm font-medium mb-1">Merge Direction</div>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="font-mono text-xs sm:text-sm">{worktree.branch_name}</span>
+                <ArrowRight className="w-4 h-4" />
+                <span className="font-mono text-xs sm:text-sm">{mainBranch || "Current"}</span>
+              </div>
+              <div className="text-xs text-muted-foreground mt-2">
+                {aheadCount > 0 ? `${aheadCount} commits ahead of ${mainBranch || "main"}` : "No new commits to merge"}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="strategy">Merge Strategy</Label>
+              <div className="border rounded-md">
+                <select
+                  id="strategy"
+                  value={strategy}
+                  onChange={(event) => setStrategy(event.target.value as MergeStrategy)}
+                  className="w-full bg-transparent px-3 py-2 text-sm focus:outline-none"
+                >
+                  {STRATEGY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="px-3 py-2 text-xs text-muted-foreground border-t">
+                  {STRATEGY_OPTIONS.find((opt) => opt.value === strategy)?.description}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="message">Commit Message</Label>
+              <Textarea
+                id="message"
+                value={commitMessage}
+                onChange={(event) => setCommitMessage(event.target.value)}
+                rows={3}
+                placeholder="Enter a commit message"
+              />
+              {strategy === "ff_only" && (
+                <p className="text-xs text-muted-foreground">
+                  Fast-forward merges do not create a commit message but we keep this field for other strategies.
+                </p>
+              )}
+            </div>
+
+            {hasWorktreeChanges && (
+              <div className="border border-yellow-500/50 bg-yellow-500/5 rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2 text-yellow-600 dark:text-yellow-400">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span className="text-sm font-medium">Worktree has uncommitted changes</span>
+                </div>
+                <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                  These changes must be discarded before merging. Review the files below and confirm you want to proceed.
+                </p>
+                {changedFiles.length > 0 && (
+                  <div className="max-h-32 overflow-auto rounded bg-background/60 border text-xs">
+                    <ul className="divide-y">
+                      {changedFiles.map((file) => (
+                        <li key={file} className="px-3 py-1 font-mono text-[11px]">
+                          {file}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <label className="flex items-start gap-2 text-xs text-yellow-700 dark:text-yellow-300">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={confirmDiscard}
+                    onChange={(event) => setConfirmDiscard(event.target.checked)}
+                  />
+                  <span>I understand these changes will be permanently discarded.</span>
+                </label>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button onClick={handleConfirm} disabled={!canConfirm}>
+            {isSubmitting ? "Merging..." : "Confirm Merge"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};

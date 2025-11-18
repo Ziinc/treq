@@ -6,8 +6,9 @@ mod plan_storage;
 mod pty;
 mod shell;
 
-use db::{Database, Worktree, Command as DbCommand};
+use db::{Database, Worktree, Command as DbCommand, Session};
 use git::{is_git_repository, git_init, *};
+use git_ops::{DiffHunk, MergeStrategy};
 use local_db::{PlanHistoryEntry, PlanHistoryInput};
 use plan_storage::{PlanFile, PlanMetadata};
 use pty::PtyManager;
@@ -52,6 +53,7 @@ fn add_worktree_to_db(
 #[tauri::command]
 fn delete_worktree_from_db(state: State<AppState>, id: i64) -> Result<(), String> {
     let db = state.db.lock().unwrap();
+    // Cascade delete sessions (handled by DB foreign key constraint)
     db.delete_worktree(id).map_err(|e| e.to_string())
 }
 
@@ -190,6 +192,36 @@ fn git_init_repo(path: String) -> Result<String, String> {
 #[tauri::command]
 fn git_list_gitignored_files(repo_path: String) -> Result<Vec<String>, String> {
     list_gitignored_files(&repo_path)
+}
+
+#[tauri::command]
+fn git_merge(
+    repo_path: String,
+    branch: String,
+    strategy: String,
+    commit_message: Option<String>,
+) -> Result<String, String> {
+    let strategy = match strategy.as_str() {
+        "regular" => MergeStrategy::Regular,
+        "squash" => MergeStrategy::Squash,
+        "no_ff" => MergeStrategy::NoFastForward,
+        "ff_only" => MergeStrategy::FastForwardOnly,
+        other => {
+            return Err(format!("Unsupported merge strategy: {}", other));
+        }
+    };
+
+    git_ops::git_merge(&repo_path, &branch, strategy, commit_message.as_deref())
+}
+
+#[tauri::command]
+fn git_discard_all_changes(worktree_path: String) -> Result<String, String> {
+    git_ops::git_discard_all_changes(&worktree_path)
+}
+
+#[tauri::command]
+fn git_has_uncommitted_changes(worktree_path: String) -> Result<bool, String> {
+    git_ops::has_uncommitted_changes(&worktree_path)
 }
 
 // PTY commands
@@ -348,6 +380,21 @@ fn git_get_changed_files(worktree_path: String) -> Result<Vec<String>, String> {
     git_ops::git_get_changed_files(&worktree_path)
 }
 
+#[tauri::command]
+fn git_stage_hunk(worktree_path: String, patch: String) -> Result<String, String> {
+    git_ops::git_stage_hunk(&worktree_path, &patch)
+}
+
+#[tauri::command]
+fn git_unstage_hunk(worktree_path: String, patch: String) -> Result<String, String> {
+    git_ops::git_unstage_hunk(&worktree_path, &patch)
+}
+
+#[tauri::command]
+fn git_get_file_hunks(worktree_path: String, file_path: String) -> Result<Vec<DiffHunk>, String> {
+    git_ops::git_get_file_hunks(&worktree_path, &file_path)
+}
+
 // Calculate directory size (excluding .git)
 #[tauri::command]
 fn calculate_directory_size(path: String) -> Result<u64, String> {
@@ -437,6 +484,58 @@ fn delete_plan_file(repo_path: String, plan_id: String) -> Result<(), String> {
     plan_storage::delete_plan_file(&repo_path, &plan_id)
 }
 
+// Session management commands
+#[tauri::command]
+fn create_session(
+    state: State<AppState>,
+    worktree_id: Option<i64>,
+    session_type: String,
+    name: String,
+) -> Result<i64, String> {
+    let db = state.db.lock().unwrap();
+    let now = chrono::Utc::now().to_rfc3339();
+    let session = Session {
+        id: 0,
+        worktree_id,
+        session_type,
+        name,
+        created_at: now.clone(),
+        last_accessed: now,
+    };
+    db.add_session(&session).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_sessions(state: State<AppState>) -> Result<Vec<Session>, String> {
+    let db = state.db.lock().unwrap();
+    db.get_sessions().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_sessions_by_worktree(state: State<AppState>, worktree_id: i64) -> Result<Vec<Session>, String> {
+    let db = state.db.lock().unwrap();
+    db.get_sessions_by_worktree(worktree_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_main_repo_sessions(state: State<AppState>) -> Result<Vec<Session>, String> {
+    let db = state.db.lock().unwrap();
+    db.get_main_repo_sessions().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn update_session_access(state: State<AppState>, id: i64) -> Result<(), String> {
+    let db = state.db.lock().unwrap();
+    let now = chrono::Utc::now().to_rfc3339();
+    db.update_session_access(id, &now).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_session(state: State<AppState>, id: i64) -> Result<(), String> {
+    let db = state.db.lock().unwrap();
+    db.delete_session(id).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -505,6 +604,9 @@ pub fn run() {
             git_is_repository,
             git_init_repo,
             git_list_gitignored_files,
+            git_merge,
+            git_discard_all_changes,
+            git_has_uncommitted_changes,
             git_commit,
             git_add_all,
             git_push,
@@ -513,7 +615,10 @@ pub fn run() {
             git_log,
             git_stage_file,
             git_unstage_file,
+            git_stage_hunk,
+            git_unstage_hunk,
             git_get_changed_files,
+            git_get_file_hunks,
             pty_create_session,
             pty_write,
             pty_resize,
@@ -529,6 +634,12 @@ pub fn run() {
             load_plans_from_files,
             get_plan_file,
             delete_plan_file,
+            create_session,
+            get_sessions,
+            get_sessions_by_worktree,
+            get_main_repo_sessions,
+            update_session_access,
+            delete_session,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

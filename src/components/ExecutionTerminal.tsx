@@ -1,199 +1,198 @@
-import { useEffect, useRef, useState } from "react";
-import { Terminal as XTerm } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
-import { WebLinksAddon } from "@xterm/addon-web-links";
-import { ptyCreateSession, ptyWrite, ptyListen, ptyClose, ptyResize, Worktree } from "../lib/api";
+import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { gitCommit, gitPush, ptyWrite, Worktree } from "../lib/api";
 import { StagingDiffViewer } from "./StagingDiffViewer";
 import { Button } from "./ui/button";
-import { X } from "lucide-react";
+import { Textarea } from "./ui/textarea";
+import { Loader2, X } from "lucide-react";
 import { useToast } from "./ui/toast";
-import { useTerminalSettings } from "../hooks/useTerminalSettings";
-import "@xterm/xterm/css/xterm.css";
+import { ConsolidatedTerminal } from "./ConsolidatedTerminal";
 
 interface ExecutionTerminalProps {
   repositoryPath?: string;
   worktree?: Worktree;
+  initialPlanContent?: string;
+  initialPlanTitle?: string;
+  sessionId: number | null;
   onClose: () => void;
 }
 
 export const ExecutionTerminal: React.FC<ExecutionTerminalProps> = ({
   repositoryPath,
   worktree,
+  initialPlanContent,
+  initialPlanTitle,
+  sessionId,
   onClose,
 }) => {
-  // Determine working directory
   const workingDirectory = worktree?.worktree_path || repositoryPath || "";
-  
-  // Generate session ID based on context
-  const [sessionId] = useState(() => 
-    worktree ? `execution-worktree-${worktree.id}` : `execution-main-${crypto.randomUUID()}`
-  );
-  
-  const terminalRef = useRef<HTMLDivElement>(null);
-  const xtermRef = useRef<XTerm | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
-  const unlistenRef = useRef<(() => void) | null>(null);
-  
+  const ptySessionId = sessionId ? `session-${sessionId}` : `execution-${crypto.randomUUID()}`;
+  const hasSentInitialPlanRef = useRef(false);
+  const [autoCommandReady, setAutoCommandReady] = useState(false);
+  const [commitMessage, setCommitMessage] = useState("");
+  const [commitAndPush, setCommitAndPush] = useState(false);
+  const [stagedFiles, setStagedFiles] = useState<string[]>([]);
+  const [commitPending, setCommitPending] = useState(false);
+  const [refreshSignal, setRefreshSignal] = useState(0);
   const { addToast } = useToast();
-  const { fontSize } = useTerminalSettings();
 
-  // Terminal initialization
-  useEffect(() => {
-    if (!terminalRef.current) return;
-
-    console.log("Initializing execution terminal for session:", sessionId);
-    
-    // 1. Dispose old terminal if exists
-    if (xtermRef.current) {
-      console.log("Disposing old terminal");
-      xtermRef.current.dispose();
+  const sendInitialPlanPrompt = useCallback(() => {
+    if (!initialPlanContent || hasSentInitialPlanRef.current) {
+      return;
     }
 
-    // 2. Create new terminal
-    const xterm = new XTerm({
-      cursorBlink: true,
-      fontSize: fontSize,
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      theme: {
-        background: "#1e1e1e",
-        foreground: "#d4d4d4",
-        cursor: "#d4d4d4",
-      },
-      scrollback: 10000,
+    const title = initialPlanTitle?.trim() || "Implementation Plan";
+    const formattedPrompt = `Please implement the following plan:\n\n# ${title}\n\n${initialPlanContent}\n`;
+    hasSentInitialPlanRef.current = true;
+
+    ptyWrite(ptySessionId, formattedPrompt).catch((error) => {
+      hasSentInitialPlanRef.current = false;
+      console.error("Failed to send initial plan to Claude:", error);
+      addToast({
+        title: "Claude Error",
+        description: "Could not send the implementation plan to Claude.",
+        type: "error",
+      });
     });
+  }, [initialPlanContent, initialPlanTitle, ptySessionId, addToast]);
 
-    // 3. Setup addons
-    const fitAddon = new FitAddon();
-    const webLinksAddon = new WebLinksAddon();
-    xterm.loadAddon(fitAddon);
-    xterm.loadAddon(webLinksAddon);
+  useEffect(() => {
+    hasSentInitialPlanRef.current = false;
+    setAutoCommandReady(false);
+  }, [ptySessionId]);
 
-    // 4. Open terminal and fit
-    xterm.open(terminalRef.current);
-    fitAddon.fit();
-    console.log("Terminal opened, dimensions:", xterm.cols, "x", xterm.rows);
+  useEffect(() => {
+    if (!initialPlanContent || !autoCommandReady) {
+      return;
+    }
 
-    xtermRef.current = xterm;
-    fitAddonRef.current = fitAddon;
+    const planPromptTimeout = setTimeout(() => {
+      sendInitialPlanPrompt();
+    }, 2000);
 
-    // 5. Handle copy/paste
-    xterm.attachCustomKeyEventHandler((event) => {
-      const isCmdOrCtrl = event.metaKey || event.ctrlKey;
-      
-      // Copy: Cmd/Ctrl+C
-      if (isCmdOrCtrl && event.key === 'c' && event.type === 'keydown') {
-        if (xterm.hasSelection()) {
-          const selection = xterm.getSelection();
-          navigator.clipboard.writeText(selection).catch(console.error);
-          return false; // Prevent default terminal behavior
+    return () => clearTimeout(planPromptTimeout);
+  }, [autoCommandReady, initialPlanContent, sendInitialPlanPrompt]);
+
+  const handleSessionError = useCallback((message: string) => {
+    addToast({
+      title: "PTY Error",
+      description: message,
+      type: "error",
+    });
+  }, [addToast]);
+
+  const handleAutoCommandError = useCallback((message: string) => {
+    addToast({
+      title: "Command Error",
+      description: message,
+      type: "error",
+    });
+  }, [addToast]);
+
+  const handleStagedFilesChange = useCallback((files: string[]) => {
+    setStagedFiles(files);
+  }, []);
+
+  const triggerSidebarRefresh = useCallback(() => {
+    setRefreshSignal((prev) => prev + 1);
+  }, []);
+
+  const extractCommitHash = useCallback((output: string) => {
+    const bracketMatch = output.match(/\[.+? ([0-9a-f]{7,})\]/i);
+    if (bracketMatch && bracketMatch[1]) {
+      return bracketMatch[1];
+    }
+    const looseMatch = output.match(/\b[0-9a-f]{7,40}\b/i);
+    return looseMatch ? looseMatch[0] : null;
+  }, []);
+
+  const handleCommit = useCallback(async () => {
+    if (!workingDirectory) {
+      addToast({
+        title: "Missing Worktree",
+        description: "Select a worktree before committing.",
+        type: "error",
+      });
+      return;
+    }
+
+    const trimmed = commitMessage.trim();
+    if (!trimmed) {
+      addToast({ title: "Commit message", description: "Enter a commit message.", type: "error" });
+      return;
+    }
+
+    if (trimmed.length > 500) {
+      addToast({ title: "Commit message", description: "Please keep the message under 500 characters.", type: "error" });
+      return;
+    }
+
+    if (stagedFiles.length === 0) {
+      addToast({ title: "No staged files", description: "Stage changes before committing.", type: "error" });
+      return;
+    }
+
+    setCommitPending(true);
+    try {
+      const result = await gitCommit(workingDirectory, trimmed);
+      const hash = extractCommitHash(result);
+      addToast({
+        title: "Commit created",
+        description: hash ? `Created ${hash}` : result.trim() || "Commit successful",
+        type: "success",
+      });
+      setCommitMessage("");
+      triggerSidebarRefresh();
+
+      if (commitAndPush) {
+        try {
+          const pushResult = await gitPush(workingDirectory);
+          addToast({
+            title: "Push complete",
+            description: pushResult.trim() || "Changes pushed",
+            type: "success",
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          addToast({ title: "Push failed", description: message, type: "error" });
         }
       }
-      
-      // Paste: Cmd/Ctrl+V
-      if (isCmdOrCtrl && event.key === 'v' && event.type === 'keydown') {
-        navigator.clipboard.readText()
-          .then(text => {
-            ptyWrite(sessionId, text).catch(console.error);
-          })
-          .catch(console.error);
-        return false; // Prevent default terminal behavior
-      }
-      
-      return true; // Allow other keys to pass through
-    });
-
-    // 6. Handle terminal input
-    xterm.onData((data) => {
-      ptyWrite(sessionId, data).catch((error) => {
-        console.error("PTY write error:", error);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      addToast({
+        title: "Commit failed",
+        description: message,
+        type: "error",
       });
-    });
+    } finally {
+      setCommitPending(false);
+    }
+  }, [workingDirectory, commitMessage, stagedFiles, commitAndPush, addToast, extractCommitHash, triggerSidebarRefresh]);
 
-    // 7. Create PTY session immediately
-    ptyCreateSession(sessionId, workingDirectory)
-      .then(async () => {
-        console.log("PTY session created successfully for:", workingDirectory);
-        
-        // Setup output listener
-        const unlisten = await ptyListen(sessionId, (data) => {
-          xterm.write(data);
-        });
-        
-        unlistenRef.current = unlisten;
-        console.log("PTY listener attached");
-        
-        // Wait for shell to be ready, then execute claude command in acceptEdits mode
-        setTimeout(() => {
-          console.log("Executing: claude --permission-mode acceptEdits");
-          ptyWrite(sessionId, "claude --permission-mode acceptEdits\n")
-            .then(() => console.log("Command sent successfully"))
-            .catch((error) => {
-              console.error("Failed to execute command:", error);
-              addToast({
-                title: "Command Error",
-                description: "Failed to execute claude command",
-                type: "error",
-              });
-            });
-        }, 500);
-      })
-      .catch((error) => {
-        console.error("PTY creation error:", error);
-        addToast({
-          title: "PTY Error",
-          description: error instanceof Error ? error.message : String(error),
-          type: "error",
-        });
-      });
+  const canCommit = useMemo(() => {
+    const trimmed = commitMessage.trim();
+    return Boolean(trimmed) && trimmed.length <= 500 && stagedFiles.length > 0 && !commitPending;
+  }, [commitMessage, stagedFiles.length, commitPending]);
 
-    // 8. Setup resize handling
-    const handleResize = () => {
-      fitAddon.fit();
-      const { rows, cols } = xterm;
-      ptyResize(sessionId, rows, cols).catch(console.error);
-    };
-
-    // Initial resize after a brief delay
-    setTimeout(handleResize, 100);
-
-    // Listen for window resize
-    window.addEventListener("resize", handleResize);
-
-    // Listen for container resize
-    const resizeObserver = new ResizeObserver(handleResize);
-    resizeObserver.observe(terminalRef.current);
-
-    // 9. Cleanup on unmount
-    return () => {
-      console.log("Cleaning up execution terminal session:", sessionId);
-      resizeObserver.disconnect();
-      window.removeEventListener("resize", handleResize);
-      if (unlistenRef.current) {
-        unlistenRef.current();
-        unlistenRef.current = null;
+  const handleCommitKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLTextAreaElement>) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+        event.preventDefault();
+        if (canCommit) {
+          handleCommit();
+        }
       }
-      ptyClose(sessionId).catch(console.error);
-      xterm.dispose();
-    };
-  }, [sessionId, workingDirectory, addToast, fontSize]);
+    },
+    [canCommit, handleCommit]
+  );
 
   return (
     <div className="h-screen flex flex-col bg-background">
-      {/* Header */}
       <div className="border-b p-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col gap-1">
           <h2 className="text-lg font-semibold">Execution Terminal</h2>
-          {worktree ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="font-mono bg-secondary px-2 py-1 rounded">{worktree.branch_name}</span>
-              <span>•</span>
-              <span className="truncate max-w-md">{worktree.worktree_path}</span>
-            </div>
-          ) : (
-            <span className="text-sm text-muted-foreground">
-              {workingDirectory.split('/').pop() || workingDirectory.split('\\').pop()}
-            </span>
-          )}
+          <span className="text-xs text-muted-foreground font-mono">
+            {worktree ? worktree.branch_name : "Main Repository"}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -202,22 +201,71 @@ export const ExecutionTerminal: React.FC<ExecutionTerminalProps> = ({
         </div>
       </div>
 
-      {/* Two-panel layout: Terminal on left (33%), Diff viewer on right (67%) */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left panel - Terminal */}
-        <div className="w-1/3 min-w-0 relative bg-[#1e1e1e] border-r">
-          <div ref={terminalRef} className="h-full w-full" />
-        </div>
-
-        {/* Right panel - StagingDiffViewer in read-only mode */}
-        <div className="w-2/3 border-l border-border">
-          <StagingDiffViewer 
-            worktreePath={workingDirectory} 
-            readOnly={true}
-          />
-        </div>
-      </div>
+      <ConsolidatedTerminal
+        sessionId={ptySessionId}
+        workingDirectory={workingDirectory}
+        autoCommand="claude --permission-mode acceptEdits"
+        onAutoCommandComplete={() => setAutoCommandReady(true)}
+        onAutoCommandError={handleAutoCommandError}
+        onSessionError={handleSessionError}
+        rightPanel={(
+          <div className="flex flex-col h-full">
+            <div className="flex-1 min-h-0">
+              <StagingDiffViewer
+                worktreePath={workingDirectory}
+                disableInteractions={commitPending}
+                onStagedFilesChange={handleStagedFilesChange}
+                refreshSignal={refreshSignal}
+              />
+            </div>
+            <div className="border-t border-border bg-background/80 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold">Commit Message</p>
+                  <p className="text-xs text-muted-foreground">{stagedFiles.length} staged file(s)</p>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {commitMessage.length}/500
+                </span>
+              </div>
+              <Textarea
+                placeholder="Describe your changes"
+                value={commitMessage}
+                onChange={(event) => setCommitMessage(event.target.value)}
+                onKeyDown={handleCommitKeyDown}
+                disabled={commitPending}
+              />
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="h-3 w-3 accent-primary"
+                    checked={commitAndPush}
+                    onChange={(event) => setCommitAndPush(event.target.checked)}
+                    disabled={commitPending}
+                  />
+                  Commit & Push
+                </label>
+                <span>Ctrl/Cmd + Enter to commit</span>
+              </div>
+              <Button
+                className="w-full"
+                disabled={!canCommit}
+                onClick={handleCommit}
+              >
+                {commitPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Commit"
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+        showDiffViewer
+        containerClassName="flex-1 flex overflow-hidden"
+        terminalPaneClassName="border-r"
+      />
     </div>
   );
 };
-
