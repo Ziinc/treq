@@ -10,7 +10,7 @@ pub fn execute_command(command: &str, working_dir: Option<String>) -> Result<Str
 
     let mut cmd = Command::new(shell.0);
     cmd.args(shell.1);
-    
+
     if let Some(dir) = working_dir {
         cmd.current_dir(dir);
     }
@@ -23,4 +23,3 @@ pub fn execute_command(command: &str, working_dir: Option<String>) -> Result<Str
         Err(String::from_utf8_lossy(&output.stderr).to_string())
     }
 }
-

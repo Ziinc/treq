@@ -1,6 +1,6 @@
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlanMetadata {
@@ -34,7 +34,8 @@ fn get_plans_dir(repo_path: &str) -> PathBuf {
 /// Ensure the .treq/plans directory exists
 fn ensure_plans_dir(repo_path: &str) -> Result<PathBuf, String> {
     let plans_dir = get_plans_dir(repo_path);
-    fs::create_dir_all(&plans_dir).map_err(|e| format!("Failed to create plans directory: {}", e))?;
+    fs::create_dir_all(&plans_dir)
+        .map_err(|e| format!("Failed to create plans directory: {}", e))?;
     Ok(plans_dir)
 }
 
@@ -47,7 +48,7 @@ pub fn save_plan_to_file(
 ) -> Result<(), String> {
     let plans_dir = ensure_plans_dir(repo_path)?;
     let plan_file_path = plans_dir.join(format!("plan_{}.json", plan_id));
-    
+
     let plan_file = PlanFile {
         id: plan_id.to_string(),
         title: metadata.title,
@@ -58,55 +59,53 @@ pub fn save_plan_to_file(
         branch_name: metadata.branch_name,
         timestamp: metadata.timestamp,
     };
-    
+
     let json_content = serde_json::to_string_pretty(&plan_file)
         .map_err(|e| format!("Failed to serialize plan: {}", e))?;
-    
+
     fs::write(&plan_file_path, json_content)
         .map_err(|e| format!("Failed to write plan file: {}", e))?;
-    
+
     Ok(())
 }
 
 /// Load all plans from .treq/plans/
 pub fn load_plans_from_files(repo_path: &str) -> Result<Vec<PlanFile>, String> {
     let plans_dir = get_plans_dir(repo_path);
-    
+
     // If directory doesn't exist, return empty vec
     if !plans_dir.exists() {
         return Ok(Vec::new());
     }
-    
+
     let mut plans = Vec::new();
-    
-    let entries = fs::read_dir(&plans_dir)
-        .map_err(|e| format!("Failed to read plans directory: {}", e))?;
-    
+
+    let entries =
+        fs::read_dir(&plans_dir).map_err(|e| format!("Failed to read plans directory: {}", e))?;
+
     for entry in entries {
         let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
         let path = entry.path();
-        
+
         // Only process .json files that start with "plan_"
         if path.is_file() {
             if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
                 if file_name.starts_with("plan_") && file_name.ends_with(".json") {
                     match fs::read_to_string(&path) {
-                        Ok(content) => {
-                            match serde_json::from_str::<PlanFile>(&content) {
-                                Ok(plan) => plans.push(plan),
-                                Err(e) => eprintln!("Failed to parse plan file {}: {}", file_name, e),
-                            }
-                        }
+                        Ok(content) => match serde_json::from_str::<PlanFile>(&content) {
+                            Ok(plan) => plans.push(plan),
+                            Err(e) => eprintln!("Failed to parse plan file {}: {}", file_name, e),
+                        },
                         Err(e) => eprintln!("Failed to read plan file {}: {}", file_name, e),
                     }
                 }
             }
         }
     }
-    
+
     // Sort by timestamp (newest first)
     plans.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
-    
+
     Ok(plans)
 }
 
@@ -114,17 +113,17 @@ pub fn load_plans_from_files(repo_path: &str) -> Result<Vec<PlanFile>, String> {
 pub fn get_plan_file(repo_path: &str, plan_id: &str) -> Result<PlanFile, String> {
     let plans_dir = get_plans_dir(repo_path);
     let plan_file_path = plans_dir.join(format!("plan_{}.json", plan_id));
-    
+
     if !plan_file_path.exists() {
         return Err(format!("Plan file not found: {}", plan_id));
     }
-    
+
     let content = fs::read_to_string(&plan_file_path)
         .map_err(|e| format!("Failed to read plan file: {}", e))?;
-    
+
     let plan = serde_json::from_str::<PlanFile>(&content)
         .map_err(|e| format!("Failed to parse plan file: {}", e))?;
-    
+
     Ok(plan)
 }
 
@@ -132,12 +131,11 @@ pub fn get_plan_file(repo_path: &str, plan_id: &str) -> Result<PlanFile, String>
 pub fn delete_plan_file(repo_path: &str, plan_id: &str) -> Result<(), String> {
     let plans_dir = get_plans_dir(repo_path);
     let plan_file_path = plans_dir.join(format!("plan_{}.json", plan_id));
-    
+
     if plan_file_path.exists() {
         fs::remove_file(&plan_file_path)
             .map_err(|e| format!("Failed to delete plan file: {}", e))?;
     }
-    
+
     Ok(())
 }
-

@@ -1,7 +1,7 @@
 use rusqlite::{params, Connection, Result};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::path::PathBuf;
-use sha2::{Sha256, Digest};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Worktree {
@@ -27,10 +27,10 @@ pub struct Command {
 pub struct Session {
     pub id: i64,
     pub worktree_id: Option<i64>,
-    pub session_type: String,
     pub name: String,
     pub created_at: String,
     pub last_accessed: String,
+    pub plan_title: Option<String>,
 }
 
 pub struct Database {
@@ -85,10 +85,21 @@ impl Database {
                 name TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 last_accessed TEXT NOT NULL,
+                plan_title TEXT,
                 FOREIGN KEY (worktree_id) REFERENCES worktrees(id) ON DELETE CASCADE
             )",
             [],
         )?;
+
+        // Migration: Add plan_title column if it doesn't exist
+        let _ = self.conn.execute(
+            "ALTER TABLE sessions ADD COLUMN plan_title TEXT",
+            [],
+        );
+
+        let _ = self
+            .conn
+            .execute("DELETE FROM sessions WHERE type IS NULL OR type <> 'session'", []);
 
         Ok(())
     }
@@ -129,9 +140,12 @@ impl Database {
     }
 
     pub fn delete_worktree(&self, id: i64) -> Result<()> {
-        self.conn.execute("DELETE FROM commands WHERE worktree_id = ?1", [id])?;
-        self.conn.execute("DELETE FROM sessions WHERE worktree_id = ?1", [id])?;
-        self.conn.execute("DELETE FROM worktrees WHERE id = ?1", [id])?;
+        self.conn
+            .execute("DELETE FROM commands WHERE worktree_id = ?1", [id])?;
+        self.conn
+            .execute("DELETE FROM sessions WHERE worktree_id = ?1", [id])?;
+        self.conn
+            .execute("DELETE FROM worktrees WHERE id = ?1", [id])?;
         Ok(())
     }
 
@@ -171,9 +185,11 @@ impl Database {
     }
 
     pub fn get_setting(&self, key: &str) -> Result<Option<String>> {
-        let mut stmt = self.conn.prepare("SELECT value FROM settings WHERE key = ?1")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT value FROM settings WHERE key = ?1")?;
         let mut rows = stmt.query([key])?;
-        
+
         if let Some(row) = rows.next()? {
             Ok(Some(row.get(0)?))
         } else {
@@ -210,23 +226,21 @@ impl Database {
 
     pub fn delete_repo_setting(&self, repo_path: &str, key: &str) -> Result<()> {
         let composite_key = Self::make_repo_key(repo_path, key);
-        self.conn.execute(
-            "DELETE FROM settings WHERE key = ?1",
-            [composite_key],
-        )?;
+        self.conn
+            .execute("DELETE FROM settings WHERE key = ?1", [composite_key])?;
         Ok(())
     }
 
     pub fn add_session(&self, session: &Session) -> Result<i64> {
         self.conn.execute(
-            "INSERT INTO sessions (worktree_id, type, name, created_at, last_accessed)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO sessions (worktree_id, type, name, created_at, last_accessed, plan_title)
+             VALUES (?1, 'session', ?2, ?3, ?4, ?5)",
             (
                 &session.worktree_id,
-                &session.session_type,
                 &session.name,
                 &session.created_at,
                 &session.last_accessed,
+                &session.plan_title,
             ),
         )?;
         Ok(self.conn.last_insert_rowid())
@@ -234,18 +248,18 @@ impl Database {
 
     pub fn get_sessions(&self) -> Result<Vec<Session>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, worktree_id, type, name, created_at, last_accessed 
-             FROM sessions ORDER BY last_accessed DESC",
+            "SELECT id, worktree_id, name, created_at, last_accessed, plan_title 
+             FROM sessions ORDER BY created_at ASC",
         )?;
 
         let sessions = stmt.query_map([], |row| {
             Ok(Session {
                 id: row.get(0)?,
                 worktree_id: row.get(1)?,
-                session_type: row.get(2)?,
-                name: row.get(3)?,
-                created_at: row.get(4)?,
-                last_accessed: row.get(5)?,
+                name: row.get(2)?,
+                created_at: row.get(3)?,
+                last_accessed: row.get(4)?,
+                plan_title: row.get(5)?,
             })
         })?;
 
@@ -254,18 +268,18 @@ impl Database {
 
     pub fn get_sessions_by_worktree(&self, worktree_id: i64) -> Result<Vec<Session>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, worktree_id, type, name, created_at, last_accessed 
-             FROM sessions WHERE worktree_id = ?1 ORDER BY last_accessed DESC",
+            "SELECT id, worktree_id, name, created_at, last_accessed, plan_title 
+             FROM sessions WHERE worktree_id = ?1 ORDER BY created_at ASC",
         )?;
 
         let sessions = stmt.query_map([worktree_id], |row| {
             Ok(Session {
                 id: row.get(0)?,
                 worktree_id: row.get(1)?,
-                session_type: row.get(2)?,
-                name: row.get(3)?,
-                created_at: row.get(4)?,
-                last_accessed: row.get(5)?,
+                name: row.get(2)?,
+                created_at: row.get(3)?,
+                last_accessed: row.get(4)?,
+                plan_title: row.get(5)?,
             })
         })?;
 
@@ -274,18 +288,18 @@ impl Database {
 
     pub fn get_main_repo_sessions(&self) -> Result<Vec<Session>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, worktree_id, type, name, created_at, last_accessed 
-             FROM sessions WHERE worktree_id IS NULL ORDER BY last_accessed DESC",
+            "SELECT id, worktree_id, name, created_at, last_accessed, plan_title 
+             FROM sessions WHERE worktree_id IS NULL ORDER BY created_at ASC",
         )?;
 
         let sessions = stmt.query_map([], |row| {
             Ok(Session {
                 id: row.get(0)?,
                 worktree_id: row.get(1)?,
-                session_type: row.get(2)?,
-                name: row.get(3)?,
-                created_at: row.get(4)?,
-                last_accessed: row.get(5)?,
+                name: row.get(2)?,
+                created_at: row.get(3)?,
+                last_accessed: row.get(4)?,
+                plan_title: row.get(5)?,
             })
         })?;
 
@@ -300,8 +314,15 @@ impl Database {
         Ok(())
     }
 
+    pub fn update_session_name(&self, id: i64, name: &str) -> Result<()> {
+        self.conn
+            .execute("UPDATE sessions SET name = ?1 WHERE id = ?2", params![name, id])?;
+        Ok(())
+    }
+
     pub fn delete_session(&self, id: i64) -> Result<()> {
-        self.conn.execute("DELETE FROM sessions WHERE id = ?1", [id])?;
+        self.conn
+            .execute("DELETE FROM sessions WHERE id = ?1", [id])?;
         Ok(())
     }
 }

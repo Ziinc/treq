@@ -6,17 +6,19 @@ mod plan_storage;
 mod pty;
 mod shell;
 
-use db::{Database, Worktree, Command as DbCommand, Session};
-use git::{is_git_repository, git_init, *};
-use git_ops::{DiffHunk, MergeStrategy};
+use db::{Command as DbCommand, Database, Session, Worktree};
+use git::{git_init, is_git_repository, *};
+use git_ops::{
+    BranchCommitInfo, BranchDiffFileChange, BranchDiffFileDiff, DiffHunk, MergeStrategy,
+};
+use ignore::WalkBuilder;
 use local_db::{PlanHistoryEntry, PlanHistoryInput};
 use plan_storage::{PlanFile, PlanMetadata};
 use pty::PtyManager;
 use shell::execute_command;
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager, State};
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
-use ignore::WalkBuilder;
+use tauri::{AppHandle, Emitter, Manager, State};
 
 struct AppState {
     db: Mutex<Database>,
@@ -96,21 +98,37 @@ fn set_setting(state: State<AppState>, key: String, value: String) -> Result<(),
 }
 
 #[tauri::command]
-fn get_repo_setting(state: State<AppState>, repo_path: String, key: String) -> Result<Option<String>, String> {
+fn get_repo_setting(
+    state: State<AppState>,
+    repo_path: String,
+    key: String,
+) -> Result<Option<String>, String> {
     let db = state.db.lock().unwrap();
-    db.get_repo_setting(&repo_path, &key).map_err(|e| e.to_string())
+    db.get_repo_setting(&repo_path, &key)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn set_repo_setting(state: State<AppState>, repo_path: String, key: String, value: String) -> Result<(), String> {
+fn set_repo_setting(
+    state: State<AppState>,
+    repo_path: String,
+    key: String,
+    value: String,
+) -> Result<(), String> {
     let db = state.db.lock().unwrap();
-    db.set_repo_setting(&repo_path, &key, &value).map_err(|e| e.to_string())
+    db.set_repo_setting(&repo_path, &key, &value)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn delete_repo_setting(state: State<AppState>, repo_path: String, key: String) -> Result<(), String> {
+fn delete_repo_setting(
+    state: State<AppState>,
+    repo_path: String,
+    key: String,
+) -> Result<(), String> {
     let db = state.db.lock().unwrap();
-    db.delete_repo_setting(&repo_path, &key).map_err(|e| e.to_string())
+    db.delete_repo_setting(&repo_path, &key)
+        .map_err(|e| e.to_string())
 }
 
 // Git commands
@@ -135,7 +153,7 @@ fn git_create_worktree(
                     .collect::<Vec<String>>()
             })
     };
-    
+
     create_worktree(&repo_path, &branch, new_branch, inclusion_patterns)
 }
 
@@ -145,7 +163,10 @@ fn git_get_current_branch(repo_path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn git_execute_post_create_command(worktree_path: String, command: String) -> Result<String, String> {
+fn git_execute_post_create_command(
+    worktree_path: String,
+    command: String,
+) -> Result<String, String> {
     git::execute_post_create_command(&worktree_path, &command)
 }
 
@@ -170,8 +191,44 @@ fn git_get_branch_info(worktree_path: String) -> Result<BranchInfo, String> {
 }
 
 #[tauri::command]
+fn git_get_branch_divergence(
+    worktree_path: String,
+    base_branch: String,
+) -> Result<BranchDivergence, String> {
+    get_branch_divergence(&worktree_path, &base_branch)
+}
+
+#[tauri::command]
 fn git_get_file_diff(worktree_path: String, file_path: String) -> Result<String, String> {
     get_file_diff(&worktree_path, &file_path)
+}
+
+#[tauri::command]
+fn git_get_diff_between_branches(
+    repo_path: String,
+    base_branch: String,
+    head_branch: String,
+) -> Result<Vec<BranchDiffFileDiff>, String> {
+    git_ops::git_get_diff_between_branches(&repo_path, &base_branch, &head_branch)
+}
+
+#[tauri::command]
+fn git_get_changed_files_between_branches(
+    repo_path: String,
+    base_branch: String,
+    head_branch: String,
+) -> Result<Vec<BranchDiffFileChange>, String> {
+    git_ops::git_get_changed_files_between_branches(&repo_path, &base_branch, &head_branch)
+}
+
+#[tauri::command]
+fn git_get_commits_between_branches(
+    repo_path: String,
+    base_branch: String,
+    head_branch: String,
+    limit: Option<usize>,
+) -> Result<Vec<BranchCommitInfo>, String> {
+    git_ops::git_get_commits_between_branches(&repo_path, &base_branch, &head_branch, limit)
 }
 
 #[tauri::command]
@@ -236,7 +293,7 @@ fn pty_create_session(
 ) -> Result<(), String> {
     let pty_manager = state.pty_manager.lock().unwrap();
     let sid = session_id.clone();
-    
+
     pty_manager.create_session(
         session_id,
         working_dir,
@@ -249,13 +306,24 @@ fn pty_create_session(
 }
 
 #[tauri::command]
+fn pty_session_exists(state: State<AppState>, session_id: String) -> Result<bool, String> {
+    let pty_manager = state.pty_manager.lock().unwrap();
+    Ok(pty_manager.session_exists(&session_id))
+}
+
+#[tauri::command]
 fn pty_write(state: State<AppState>, session_id: String, data: String) -> Result<(), String> {
     let pty_manager = state.pty_manager.lock().unwrap();
     pty_manager.write_to_session(&session_id, &data)
 }
 
 #[tauri::command]
-fn pty_resize(state: State<AppState>, session_id: String, rows: u16, cols: u16) -> Result<(), String> {
+fn pty_resize(
+    state: State<AppState>,
+    session_id: String,
+    rows: u16,
+    cols: u16,
+) -> Result<(), String> {
     let pty_manager = state.pty_manager.lock().unwrap();
     pty_manager.resize_session(&session_id, rows, cols)
 }
@@ -282,29 +350,29 @@ struct DirectoryEntry {
 #[tauri::command]
 fn list_directory(path: String) -> Result<Vec<DirectoryEntry>, String> {
     use std::path::Path;
-    
+
     let base_path = Path::new(&path);
     let mut files = Vec::new();
-    
+
     // Use ignore::WalkBuilder to respect .gitignore patterns
     let walker = WalkBuilder::new(&path)
-        .max_depth(Some(1))           // Only immediate children
-        .hidden(false)                 // Show hidden files (except those in .gitignore)
-        .git_ignore(true)              // Respect .gitignore patterns
-        .git_global(true)              // Respect global gitignore
-        .git_exclude(true)             // Respect .git/info/exclude
-        .parents(true)                 // Check parent directories for ignore files
+        .max_depth(Some(1)) // Only immediate children
+        .hidden(false) // Show hidden files (except those in .gitignore)
+        .git_ignore(true) // Respect .gitignore patterns
+        .git_global(true) // Respect global gitignore
+        .git_exclude(true) // Respect .git/info/exclude
+        .parents(true) // Check parent directories for ignore files
         .build();
-    
+
     for entry in walker {
         if let Ok(entry) = entry {
             let entry_path = entry.path();
-            
+
             // Skip the base directory itself
             if entry_path == base_path {
                 continue;
             }
-            
+
             if let Some(name) = entry_path.file_name().and_then(|n| n.to_str()) {
                 let is_dir = entry_path.is_dir();
                 files.push(DirectoryEntry {
@@ -315,16 +383,14 @@ fn list_directory(path: String) -> Result<Vec<DirectoryEntry>, String> {
             }
         }
     }
-    
+
     // Sort: directories first, then files
-    files.sort_by(|a, b| {
-        match (a.is_directory, b.is_directory) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.cmp(&b.name),
-        }
+    files.sort_by(|a, b| match (a.is_directory, b.is_directory) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.cmp(&b.name),
     });
-    
+
     Ok(files)
 }
 
@@ -348,6 +414,16 @@ fn git_add_all(worktree_path: String) -> Result<String, String> {
 #[tauri::command]
 fn git_push(worktree_path: String) -> Result<String, String> {
     git_ops::git_push(&worktree_path)
+}
+
+#[tauri::command]
+fn git_push_force(worktree_path: String) -> Result<String, String> {
+    git_ops::git_push_force(&worktree_path)
+}
+
+#[tauri::command]
+fn git_commit_amend(worktree_path: String, message: String) -> Result<String, String> {
+    git_ops::git_commit_amend(&worktree_path, &message)
 }
 
 #[tauri::command]
@@ -400,22 +476,22 @@ fn git_get_file_hunks(worktree_path: String, file_path: String) -> Result<Vec<Di
 fn calculate_directory_size(path: String) -> Result<u64, String> {
     use std::fs;
     use std::path::Path;
-    
+
     fn dir_size(path: &Path) -> std::io::Result<u64> {
         let mut total = 0;
-        
+
         if path.is_dir() {
             for entry in fs::read_dir(path)? {
                 let entry = entry?;
                 let path = entry.path();
-                
+
                 // Skip .git and .treq directories
                 if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
                     if name == ".git" || name == ".treq" {
                         continue;
                     }
                 }
-                
+
                 if path.is_dir() {
                     total += dir_size(&path)?;
                 } else {
@@ -423,10 +499,10 @@ fn calculate_directory_size(path: String) -> Result<u64, String> {
                 }
             }
         }
-        
+
         Ok(total)
     }
-    
+
     let path = Path::new(&path);
     dir_size(path).map_err(|e| e.to_string())
 }
@@ -489,18 +565,18 @@ fn delete_plan_file(repo_path: String, plan_id: String) -> Result<(), String> {
 fn create_session(
     state: State<AppState>,
     worktree_id: Option<i64>,
-    session_type: String,
     name: String,
+    plan_title: Option<String>,
 ) -> Result<i64, String> {
     let db = state.db.lock().unwrap();
     let now = chrono::Utc::now().to_rfc3339();
     let session = Session {
         id: 0,
         worktree_id,
-        session_type,
         name,
         created_at: now.clone(),
         last_accessed: now,
+        plan_title,
     };
     db.add_session(&session).map_err(|e| e.to_string())
 }
@@ -512,9 +588,13 @@ fn get_sessions(state: State<AppState>) -> Result<Vec<Session>, String> {
 }
 
 #[tauri::command]
-fn get_sessions_by_worktree(state: State<AppState>, worktree_id: i64) -> Result<Vec<Session>, String> {
+fn get_sessions_by_worktree(
+    state: State<AppState>,
+    worktree_id: i64,
+) -> Result<Vec<Session>, String> {
     let db = state.db.lock().unwrap();
-    db.get_sessions_by_worktree(worktree_id).map_err(|e| e.to_string())
+    db.get_sessions_by_worktree(worktree_id)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -527,7 +607,14 @@ fn get_main_repo_sessions(state: State<AppState>) -> Result<Vec<Session>, String
 fn update_session_access(state: State<AppState>, id: i64) -> Result<(), String> {
     let db = state.db.lock().unwrap();
     let now = chrono::Utc::now().to_rfc3339();
-    db.update_session_access(id, &now).map_err(|e| e.to_string())
+    db.update_session_access(id, &now)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn update_session_name(state: State<AppState>, id: i64, name: String) -> Result<(), String> {
+    let db = state.db.lock().unwrap();
+    db.update_session_name(id, &name).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -543,42 +630,52 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // Initialize database
-            let app_dir = app.path().app_data_dir().expect("Failed to get app data dir");
+            let app_dir = app
+                .path()
+                .app_data_dir()
+                .expect("Failed to get app data dir");
             std::fs::create_dir_all(&app_dir).expect("Failed to create app data directory");
             let db_path = app_dir.join("treq.db");
-            
+
             let db = Database::new(db_path).expect("Failed to open database");
             db.init().expect("Failed to initialize database");
-            
+
             let pty_manager = PtyManager::new();
-            
-            app.manage(AppState {
+
+            let app_state = AppState {
                 db: Mutex::new(db),
                 pty_manager: Mutex::new(pty_manager),
-            });
+            };
+
+            app.manage(app_state);
 
             // Create menu
             let dashboard_item = MenuItemBuilder::with_id("dashboard", "Dashboard")
                 .accelerator("CmdOrCtrl+D")
                 .build(app)?;
-            
+
+            let settings_item = MenuItemBuilder::with_id("settings", "Settings")
+                .accelerator("CmdOrCtrl+,")
+                .build(app)?;
+
             let go_menu = SubmenuBuilder::new(app, "Go")
                 .item(&dashboard_item)
+                .item(&settings_item)
                 .build()?;
-            
-            let menu = MenuBuilder::new(app)
-                .item(&go_menu)
-                .build()?;
-            
+
+            let menu = MenuBuilder::new(app).item(&go_menu).build()?;
+
             app.set_menu(menu)?;
 
             // Handle menu events
             app.on_menu_event(move |app, event| {
                 if event.id() == "dashboard" {
                     let _ = app.emit("navigate-to-dashboard", ());
+                } else if event.id() == "settings" {
+                    let _ = app.emit("navigate-to-settings", ());
                 }
             });
-            
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -599,7 +696,11 @@ pub fn run() {
             git_remove_worktree,
             git_get_status,
             git_get_branch_info,
+            git_get_branch_divergence,
             git_get_file_diff,
+            git_get_diff_between_branches,
+            git_get_changed_files_between_branches,
+            git_get_commits_between_branches,
             git_list_branches,
             git_is_repository,
             git_init_repo,
@@ -608,8 +709,10 @@ pub fn run() {
             git_discard_all_changes,
             git_has_uncommitted_changes,
             git_commit,
+            git_commit_amend,
             git_add_all,
             git_push,
+            git_push_force,
             git_pull,
             git_fetch,
             git_log,
@@ -620,6 +723,7 @@ pub fn run() {
             git_get_changed_files,
             git_get_file_hunks,
             pty_create_session,
+            pty_session_exists,
             pty_write,
             pty_resize,
             pty_close,
@@ -639,6 +743,7 @@ pub fn run() {
             get_sessions_by_worktree,
             get_main_repo_sessions,
             update_session_access,
+            update_session_name,
             delete_session,
         ])
         .run(tauri::generate_context!())

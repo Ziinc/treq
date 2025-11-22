@@ -3,6 +3,7 @@ import { Dashboard } from "./components/Dashboard";
 import { ToastProvider } from "./components/ui/toast";
 import { ThemeProvider } from "./hooks/useTheme";
 import { TerminalSettingsProvider } from "./hooks/useTerminalSettings";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -21,7 +22,16 @@ function App() {
         <TerminalSettingsProvider>
           <ToastProvider>
             <div className="flex h-screen">
-              <Dashboard />
+              <ErrorBoundary
+                fallbackTitle="Dashboard crashed"
+                onGoDashboard={() => {
+                  if (typeof window !== "undefined") {
+                    window.location.reload();
+                  }
+                }}
+              >
+                <Dashboard />
+              </ErrorBoundary>
             </div>
           </ToastProvider>
         </TerminalSettingsProvider>

@@ -1,12 +1,17 @@
-import { ReactNode, useEffect, useMemo, useRef } from "react";
-import { Terminal as XTerm } from "@xterm/xterm";
+import { ReactNode, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { Terminal as XTerm, type IDisposable } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
-import { ptyClose, ptyCreateSession, ptyListen, ptyResize, ptyWrite } from "../lib/api";
+import { LigaturesAddon } from "@xterm/addon-ligatures";
+import { WebglAddon } from "@xterm/addon-webgl";
+import { SearchAddon, ISearchOptions } from "@xterm/addon-search";
+import { ClipboardAddon, type IClipboardProvider } from "@xterm/addon-clipboard";
+import { ptyCreateSession, ptyListen, ptyResize, ptyWrite, ptySessionExists } from "../lib/api";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import { cn } from "../lib/utils";
 import "@xterm/xterm/css/xterm.css";
+import { Loader2 } from "lucide-react";
 
 interface ConsolidatedTerminalProps {
   sessionId: string;
@@ -27,6 +32,14 @@ interface ConsolidatedTerminalProps {
   rightPaneClassName?: string;
   terminalBackgroundClassName?: string;
   terminalOverlay?: ReactNode;
+  clipboardProvider?: IClipboardProvider;
+}
+
+export interface ConsolidatedTerminalHandle {
+  findNext: (term: string, options?: ISearchOptions) => boolean;
+  findPrevious: (term: string, options?: ISearchOptions) => boolean;
+  clearSearch: () => void;
+  focus: () => void;
 }
 
 const normalizeCommand = (command: string) => {
@@ -36,7 +49,30 @@ const normalizeCommand = (command: string) => {
   return `${command}\r\n`;
 };
 
-export const ConsolidatedTerminal: React.FC<ConsolidatedTerminalProps> = ({
+const createDefaultClipboardProvider = (): IClipboardProvider => ({
+  async readText() {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
+      try {
+        return await navigator.clipboard.readText();
+      } catch (error) {
+        console.warn("Clipboard read failed", error);
+      }
+    }
+    return "";
+  },
+  async writeText(_selection, data: string) {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(data);
+      } catch (error) {
+        console.warn("Clipboard write failed", error);
+      }
+    }
+  },
+});
+
+export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, ConsolidatedTerminalProps>(
+({
   sessionId,
   workingDirectory,
   shell,
@@ -55,18 +91,29 @@ export const ConsolidatedTerminal: React.FC<ConsolidatedTerminalProps> = ({
   rightPaneClassName,
   terminalBackgroundClassName,
   terminalOverlay,
-}) => {
+  clipboardProvider,
+}, ref) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const searchAddonRef = useRef<SearchAddon | null>(null);
+  const webglAddonRef = useRef<WebglAddon | null>(null);
+  const webglContextLossDisposeRef = useRef<IDisposable | null>(null);
+  const clipboardAddonRef = useRef<ClipboardAddon | null>(null);
   const unlistenRef = useRef<(() => void) | null>(null);
   const outputRef = useRef("");
   const autoCommandCompleteRef = useRef(onAutoCommandComplete);
   const autoCommandErrorRef = useRef(onAutoCommandError);
   const sessionErrorRef = useRef(onSessionError);
   const terminalOutputRef = useRef(onTerminalOutput);
+  const [isPtyReady, setIsPtyReady] = useState(false);
+  const isPtyReadyRef = useRef(isPtyReady);
 
   const { fontSize } = useTerminalSettings();
+  const resolvedClipboardProvider = useMemo(
+    () => clipboardProvider ?? createDefaultClipboardProvider(),
+    [clipboardProvider]
+  );
 
   useEffect(() => {
     autoCommandCompleteRef.current = onAutoCommandComplete;
@@ -85,6 +132,10 @@ export const ConsolidatedTerminal: React.FC<ConsolidatedTerminalProps> = ({
   }, [onTerminalOutput]);
 
   useEffect(() => {
+    isPtyReadyRef.current = isPtyReady;
+  }, [isPtyReady]);
+
+  useEffect(() => {
     outputRef.current = "";
   }, [sessionId]);
 
@@ -92,6 +143,9 @@ export const ConsolidatedTerminal: React.FC<ConsolidatedTerminalProps> = ({
     if (!terminalRef.current) {
       return;
     }
+
+    setIsPtyReady(false);
+    isPtyReadyRef.current = false;
 
     const xterm = new XTerm({
       cursorBlink: true,
@@ -109,13 +163,49 @@ export const ConsolidatedTerminal: React.FC<ConsolidatedTerminalProps> = ({
     const fitAddon = new FitAddon();
     const webLinksAddon = new WebLinksAddon();
     const unicode11Addon = new Unicode11Addon();
+    const ligaturesAddon = new LigaturesAddon();
+    const searchAddon = new SearchAddon();
+    const clipboardAddon = new ClipboardAddon(resolvedClipboardProvider);
 
+    // Load addons that don't require the terminal to be opened first
     xterm.loadAddon(fitAddon);
     xterm.loadAddon(webLinksAddon);
     xterm.loadAddon(unicode11Addon);
+    xterm.loadAddon(searchAddon);
+    xterm.loadAddon(clipboardAddon);
     xterm.unicode.activeVersion = "11";
+    searchAddonRef.current = searchAddon;
+    clipboardAddonRef.current = clipboardAddon;
 
+    // Open terminal in DOM first
     xterm.open(terminalRef.current);
+
+    // Load LigaturesAddon AFTER opening (it requires the terminal to be in the DOM)
+    xterm.loadAddon(ligaturesAddon);
+
+    // Load WebGL addon before initial fit to prevent renderer issues
+    if (typeof window !== "undefined" && "WebGLRenderingContext" in window) {
+      try {
+        const webglAddon = new WebglAddon();
+        webglAddon.onContextLoss(() => {
+          console.warn("WebGL context lost; reverting to canvas renderer");
+          webglAddonRef.current?.dispose();
+          webglAddonRef.current = null;
+          webglContextLossDisposeRef.current?.dispose();
+          webglContextLossDisposeRef.current = null;
+        });
+        xterm.loadAddon(webglAddon);
+        webglAddonRef.current = webglAddon;
+      } catch (error) {
+        console.warn("Failed to enable WebGL renderer", error);
+        webglAddonRef.current?.dispose();
+        webglAddonRef.current = null;
+        webglContextLossDisposeRef.current?.dispose();
+        webglContextLossDisposeRef.current = null;
+      }
+    }
+
+    // Fit after all addons are loaded
     fitAddon.fit();
 
     xtermRef.current = xterm;
@@ -130,26 +220,10 @@ export const ConsolidatedTerminal: React.FC<ConsolidatedTerminalProps> = ({
     };
 
     xterm.attachCustomKeyEventHandler((event) => {
-      const isCmdOrCtrl = event.metaKey || event.ctrlKey;
-
-      if (isCmdOrCtrl && event.key === "c" && event.type === "keydown") {
-        if (xterm.hasSelection()) {
-          const selection = xterm.getSelection();
-          navigator.clipboard.writeText(selection).catch(console.error);
-          return false;
-        }
-      }
-
-      if (isCmdOrCtrl && event.key === "v" && event.type === "keydown") {
-        navigator.clipboard
-          .readText()
-          .then((text) => ptyWrite(sessionId, text).catch(console.error))
-          .catch(console.error);
-        return false;
-      }
-
       if (event.key === "Enter" && event.shiftKey && event.type === "keydown") {
-        ptyWrite(sessionId, "\r\n").catch(handleError);
+        if (isPtyReadyRef.current) {
+          ptyWrite(sessionId, "\r\n").catch(handleError);
+        }
         return false;
       }
 
@@ -157,14 +231,40 @@ export const ConsolidatedTerminal: React.FC<ConsolidatedTerminalProps> = ({
     });
 
     xterm.onData((data) => {
+      if (!isPtyReadyRef.current) {
+        return;
+      }
       ptyWrite(sessionId, data).catch(handleError);
     });
 
     let resizeObserver: ResizeObserver | null = null;
     let autoCommandTimeout: ReturnType<typeof setTimeout> | null = null;
+    let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
 
-    ptyCreateSession(sessionId, workingDirectory, shell)
-      .then(async () => {
+    const handleResize = () => {
+      fitAddon.fit();
+      const { rows, cols } = xterm;
+      if (!isPtyReadyRef.current) {
+        return;
+      }
+      ptyResize(sessionId, rows, cols).catch(handleError);
+    };
+
+    // Set up resize event listeners (they won't fire ptyResize until isPtyReady is true)
+    window.addEventListener("resize", handleResize);
+    resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(terminalRef.current);
+
+    // Check if PTY session already exists, if not create it
+    const setupPty = async () => {
+      try {
+        const exists = await ptySessionExists(sessionId);
+        const isNewSession = !exists;
+
+        if (isNewSession) {
+          await ptyCreateSession(sessionId, workingDirectory, shell);
+        }
+
         const unlisten = await ptyListen(sessionId, (chunk) => {
           xterm.write(chunk);
           outputRef.current += chunk;
@@ -173,8 +273,14 @@ export const ConsolidatedTerminal: React.FC<ConsolidatedTerminalProps> = ({
           }
         });
         unlistenRef.current = unlisten;
+        setIsPtyReady(true);
+        isPtyReadyRef.current = true;
 
-        if (autoCommand) {
+        // Now that PTY is ready, perform initial resize
+        resizeTimeout = setTimeout(handleResize, 100);
+
+        // Only run autoCommand for newly created sessions, not when reattaching
+        if (autoCommand && isNewSession) {
           autoCommandTimeout = setTimeout(() => {
             ptyWrite(sessionId, normalizeCommand(autoCommand))
               .then(() => {
@@ -190,19 +296,12 @@ export const ConsolidatedTerminal: React.FC<ConsolidatedTerminalProps> = ({
               });
           }, autoCommandDelay);
         }
-      })
-      .catch(handleError);
-
-    const handleResize = () => {
-      fitAddon.fit();
-      const { rows, cols } = xterm;
-      ptyResize(sessionId, rows, cols).catch(handleError);
+      } catch (error) {
+        handleError(error);
+      }
     };
 
-    const resizeTimeout = setTimeout(handleResize, 100);
-    window.addEventListener("resize", handleResize);
-    resizeObserver = new ResizeObserver(handleResize);
-    resizeObserver.observe(terminalRef.current);
+    setupPty();
 
     return () => {
       clearTimeout(resizeTimeout);
@@ -215,12 +314,50 @@ export const ConsolidatedTerminal: React.FC<ConsolidatedTerminalProps> = ({
         unlistenRef.current();
         unlistenRef.current = null;
       }
-      if (!persistSession) {
-        ptyClose(sessionId).catch(console.error);
-      }
+      // Keep PTY session alive in background (don't close on unmount)
+      // PTY will only be closed when session is explicitly deleted
       xterm.dispose();
+      searchAddonRef.current = null;
+      webglAddonRef.current?.dispose();
+      webglAddonRef.current = null;
+      webglContextLossDisposeRef.current?.dispose();
+      webglContextLossDisposeRef.current = null;
+      clipboardAddonRef.current?.dispose();
+      clipboardAddonRef.current = null;
+      setIsPtyReady(false);
+      isPtyReadyRef.current = false;
     };
-  }, [sessionId, workingDirectory, shell, fontSize, autoCommand, autoCommandDelay, persistSession]);
+  }, [
+    sessionId,
+    workingDirectory,
+    shell,
+    fontSize,
+    autoCommand,
+    autoCommandDelay,
+    persistSession,
+    resolvedClipboardProvider,
+  ]);
+
+  useImperativeHandle(ref, () => ({
+    findNext: (term: string, options?: ISearchOptions) => {
+      if (!term || !searchAddonRef.current) {
+        return false;
+      }
+      return searchAddonRef.current.findNext(term, options);
+    },
+    findPrevious: (term: string, options?: ISearchOptions) => {
+      if (!term || !searchAddonRef.current) {
+        return false;
+      }
+      return searchAddonRef.current.findPrevious(term, options);
+    },
+    clearSearch: () => {
+      searchAddonRef.current?.clearDecorations();
+    },
+    focus: () => {
+      xtermRef.current?.focus();
+    },
+  }));
 
   const terminalPaneWidthClass = useMemo(() => {
     if (!rightPanel) {
@@ -259,6 +396,12 @@ export const ConsolidatedTerminal: React.FC<ConsolidatedTerminalProps> = ({
         )}
       >
         <div ref={terminalRef} className="h-full w-full" />
+        {!isPtyReady && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 text-sm text-muted-foreground z-10">
+            <Loader2 className="w-5 h-5 animate-spin mb-2" />
+            <span>Preparing terminal...</span>
+          </div>
+        )}
         {terminalOverlay ?? null}
       </div>
       {rightPanel ? (
@@ -268,4 +411,6 @@ export const ConsolidatedTerminal: React.FC<ConsolidatedTerminalProps> = ({
       ) : null}
     </div>
   );
-};
+});
+
+ConsolidatedTerminal.displayName = "ConsolidatedTerminal";

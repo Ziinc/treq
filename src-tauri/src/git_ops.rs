@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::collections::HashMap;
 use std::io::Write;
 use std::process::{Command, Stdio};
 
@@ -17,6 +18,57 @@ pub struct DiffHunk {
     pub lines: Vec<String>,
     pub is_staged: bool,
     pub patch: String,
+}
+
+#[derive(Debug, Serialize, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum DiffLineKind {
+    Context,
+    Addition,
+    Deletion,
+    Meta,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BranchDiffLine {
+    pub content: String,
+    pub kind: DiffLineKind,
+    pub old_line: Option<usize>,
+    pub new_line: Option<usize>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BranchDiffHunk {
+    pub header: String,
+    pub lines: Vec<BranchDiffLine>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BranchDiffFileDiff {
+    pub path: String,
+    pub previous_path: Option<String>,
+    pub status: String,
+    pub is_binary: bool,
+    pub binary_message: Option<String>,
+    pub metadata: Vec<String>,
+    pub hunks: Vec<BranchDiffHunk>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct BranchDiffFileChange {
+    pub path: String,
+    pub previous_path: Option<String>,
+    pub status: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BranchCommitInfo {
+    pub hash: String,
+    pub abbreviated_hash: String,
+    pub author_name: String,
+    pub author_email: String,
+    pub date: String,
+    pub message: String,
 }
 
 /// Execute git commit with message
@@ -191,6 +243,38 @@ pub fn git_push(worktree_path: &str) -> Result<String, String> {
     }
 }
 
+/// Force push changes to remote (use with caution)
+pub fn git_push_force(worktree_path: &str) -> Result<String, String> {
+    let output = Command::new("git")
+        .current_dir(worktree_path)
+        .args(["push", "--force"])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        Ok(format!("{}{}", stdout, stderr))
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+/// Amend the last commit with a new message
+pub fn git_commit_amend(worktree_path: &str, message: &str) -> Result<String, String> {
+    let output = Command::new("git")
+        .current_dir(worktree_path)
+        .args(["commit", "--amend", "-m", message])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
 /// Pull changes from remote
 pub fn git_pull(worktree_path: &str) -> Result<String, String> {
     let output = Command::new("git")
@@ -313,6 +397,147 @@ pub fn git_get_changed_files(worktree_path: &str) -> Result<Vec<String>, String>
     }
 
     Ok(files)
+}
+
+pub fn git_get_changed_files_between_branches(
+    repo_path: &str,
+    base_branch: &str,
+    head_branch: &str,
+) -> Result<Vec<BranchDiffFileChange>, String> {
+    let range = format!("{}..{}", base_branch, head_branch);
+    let output = Command::new("git")
+        .current_dir(repo_path)
+        .args(["diff", "--name-status", &range])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut changes = Vec::new();
+
+    for line in stdout.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        let mut parts = line.split('\t');
+        let status_raw = parts.next().unwrap_or("").trim();
+        let status = status_raw.chars().next().unwrap_or('M').to_string();
+        let remaining: Vec<&str> = parts.collect();
+
+        let (path, previous_path) = match remaining.as_slice() {
+            [] => (String::new(), None),
+            [single] => (single.trim().to_string(), None),
+            [old_path, new_path] => (
+                new_path.trim().to_string(),
+                Some(old_path.trim().to_string()),
+            ),
+            _ => {
+                let last = remaining.last().unwrap().trim().to_string();
+                (last, None)
+            }
+        };
+
+        if path.is_empty() {
+            continue;
+        }
+
+        changes.push(BranchDiffFileChange {
+            path,
+            previous_path,
+            status,
+        });
+    }
+
+    Ok(changes)
+}
+
+pub fn git_get_diff_between_branches(
+    repo_path: &str,
+    base_branch: &str,
+    head_branch: &str,
+) -> Result<Vec<BranchDiffFileDiff>, String> {
+    let range = format!("{}..{}", base_branch, head_branch);
+    let changes = git_get_changed_files_between_branches(repo_path, base_branch, head_branch)?;
+    let mut status_map: HashMap<String, BranchDiffFileChange> = HashMap::new();
+    for change in changes.into_iter() {
+        if let Some(prev) = &change.previous_path {
+            status_map.insert(prev.clone(), change.clone());
+        }
+        status_map.insert(change.path.clone(), change);
+    }
+
+    let output = Command::new("git")
+        .current_dir(repo_path)
+        .args(["diff", "--unified=200", "--no-color", &range])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    let diff_text = String::from_utf8_lossy(&output.stdout);
+    Ok(parse_branch_diff(&diff_text, &status_map))
+}
+
+pub fn git_get_commits_between_branches(
+    repo_path: &str,
+    base_branch: &str,
+    head_branch: &str,
+    limit: Option<usize>,
+) -> Result<Vec<BranchCommitInfo>, String> {
+    let range = format!("{}..{}", base_branch, head_branch);
+    let max_count = limit.unwrap_or(50);
+    let format = "%H\x1f%h\x1f%an\x1f%ae\x1f%ad\x1f%s\x1e";
+
+    let output = Command::new("git")
+        .current_dir(repo_path)
+        .args([
+            "log",
+            &format!("--max-count={}", max_count),
+            "--date=iso-strict",
+            &format!("--pretty=format:{}", format),
+            &range,
+        ])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut commits = Vec::new();
+    for record in stdout.split('\x1e') {
+        if record.trim().is_empty() {
+            continue;
+        }
+        let mut fields = record.split('\x1f');
+        let hash = fields.next().unwrap_or("").trim();
+        if hash.is_empty() {
+            continue;
+        }
+        let abbreviated_hash = fields.next().unwrap_or("").trim().to_string();
+        let author_name = fields.next().unwrap_or("").trim().to_string();
+        let author_email = fields.next().unwrap_or("").trim().to_string();
+        let date = fields.next().unwrap_or("").trim().to_string();
+        let message = fields.next().unwrap_or("").trim().to_string();
+
+        commits.push(BranchCommitInfo {
+            hash: hash.to_string(),
+            abbreviated_hash,
+            author_name,
+            author_email,
+            date,
+            message,
+        });
+    }
+
+    Ok(commits)
 }
 
 pub fn git_stage_hunk(worktree_path: &str, patch: &str) -> Result<String, String> {
@@ -500,9 +725,7 @@ fn build_patch(file_path: &str, metadata_lines: &[String], hunk_lines: &[String]
 
 fn apply_patch(worktree_path: &str, patch: &str, reverse: bool) -> Result<String, String> {
     let mut cmd = Command::new("git");
-    cmd.current_dir(worktree_path)
-        .arg("apply")
-        .arg("--cached");
+    cmd.current_dir(worktree_path).arg("apply").arg("--cached");
 
     if reverse {
         cmd.arg("--reverse");
@@ -532,4 +755,235 @@ fn apply_patch(worktree_path: &str, patch: &str, reverse: bool) -> Result<String
     } else {
         Err(String::from_utf8_lossy(&output.stderr).to_string())
     }
+}
+
+fn parse_branch_diff(
+    diff_text: &str,
+    status_map: &HashMap<String, BranchDiffFileChange>,
+) -> Vec<BranchDiffFileDiff> {
+    fn normalize_diff_path(token: &str) -> String {
+        let trimmed = token.trim().trim_matches('"');
+        if let Some(stripped) = trimmed.strip_prefix("a/") {
+            stripped.to_string()
+        } else if let Some(stripped) = trimmed.strip_prefix("b/") {
+            stripped.to_string()
+        } else {
+            trimmed.to_string()
+        }
+    }
+
+    let mut files = Vec::new();
+    let mut current_file: Option<BranchDiffFileDiff> = None;
+    let mut current_hunk: Option<BranchDiffHunk> = None;
+    let mut old_line = 0usize;
+    let mut new_line = 0usize;
+
+    let finalize_current_file =
+        |current_file: &mut Option<BranchDiffFileDiff>,
+         current_hunk: &mut Option<BranchDiffHunk>,
+         files: &mut Vec<BranchDiffFileDiff>| {
+            if let Some(mut file) = current_file.take() {
+                if let Some(hunk) = current_hunk.take() {
+                    file.hunks.push(hunk);
+                }
+                files.push(file);
+            }
+        };
+
+    for line in diff_text.lines() {
+        if line.starts_with("diff --git ") {
+            finalize_current_file(&mut current_file, &mut current_hunk, &mut files);
+
+            let mut parts = line.split_whitespace().skip(2);
+            let old_token = parts.next().unwrap_or("");
+            let new_token = parts.next().unwrap_or("");
+            let old_path = normalize_diff_path(old_token);
+            let mut path = normalize_diff_path(new_token);
+            if path.is_empty() {
+                path = old_path.clone();
+            }
+
+            let mut file_diff = BranchDiffFileDiff {
+                path: path.clone(),
+                previous_path: None,
+                status: "M".to_string(),
+                is_binary: false,
+                binary_message: None,
+                metadata: Vec::new(),
+                hunks: Vec::new(),
+            };
+
+            if let Some(change) = status_map.get(&file_diff.path) {
+                file_diff.status = change.status.clone();
+                file_diff.previous_path = change.previous_path.clone();
+            } else if let Some(change) = status_map.get(&old_path) {
+                file_diff.status = change.status.clone();
+                file_diff.previous_path = change
+                    .previous_path
+                    .clone()
+                    .or_else(|| Some(old_path.clone()));
+            }
+
+            current_file = Some(file_diff);
+            current_hunk = None;
+            continue;
+        }
+
+        if let Some(ref mut file) = current_file {
+            if line.starts_with("@@") {
+                if let Some(hunk) = current_hunk.take() {
+                    file.hunks.push(hunk);
+                }
+                let (old_start, new_start) = parse_hunk_header(line);
+                old_line = old_start;
+                new_line = new_start;
+                current_hunk = Some(BranchDiffHunk {
+                    header: line.to_string(),
+                    lines: Vec::new(),
+                });
+                continue;
+            }
+
+            if line.starts_with("--- ") {
+                file.metadata.push(line.to_string());
+                continue;
+            }
+
+            if line.starts_with("+++ ") {
+                file.metadata.push(line.to_string());
+                let new_token = line.trim_start_matches("+++ ").trim();
+                if new_token != "/dev/null" {
+                    let normalized = normalize_diff_path(new_token);
+                    if !normalized.is_empty() {
+                        file.path = normalized.clone();
+                        if let Some(change) = status_map.get(&file.path) {
+                            file.status = change.status.clone();
+                            file.previous_path = change.previous_path.clone();
+                        }
+                    }
+                }
+                continue;
+            }
+
+            if line.starts_with("rename from ") {
+                file.metadata.push(line.to_string());
+                let prev = line.trim_start_matches("rename from ").trim().to_string();
+                if !prev.is_empty() {
+                    file.previous_path = Some(prev);
+                }
+                continue;
+            }
+
+            if line.starts_with("rename to ") {
+                file.metadata.push(line.to_string());
+                let new_name = line.trim_start_matches("rename to ").trim().to_string();
+                if !new_name.is_empty() {
+                    file.path = new_name;
+                }
+                continue;
+            }
+
+            if line.starts_with("new file mode")
+                || line.starts_with("deleted file mode")
+                || line.starts_with("index ")
+                || line.starts_with("similarity index")
+                || line.starts_with("old mode")
+                || line.starts_with("new mode")
+            {
+                file.metadata.push(line.to_string());
+                continue;
+            }
+
+            if line.starts_with("Binary files") || line.starts_with("GIT binary patch") {
+                file.is_binary = true;
+                if file.binary_message.is_none() {
+                    file.binary_message = Some(line.to_string());
+                }
+                file.metadata.push(line.to_string());
+                continue;
+            }
+
+            if let Some(ref mut hunk) = current_hunk {
+                if line.starts_with('\\') {
+                    hunk.lines.push(BranchDiffLine {
+                        content: line.to_string(),
+                        kind: DiffLineKind::Meta,
+                        old_line: None,
+                        new_line: None,
+                    });
+                    continue;
+                }
+
+                if let Some(first_char) = line.chars().next() {
+                    match first_char {
+                        '+' => {
+                            let content = line.get(1..).unwrap_or("").to_string();
+                            hunk.lines.push(BranchDiffLine {
+                                content,
+                                kind: DiffLineKind::Addition,
+                                old_line: None,
+                                new_line: Some(new_line),
+                            });
+                            new_line = new_line.saturating_add(1);
+                        }
+                        '-' => {
+                            let content = line.get(1..).unwrap_or("").to_string();
+                            hunk.lines.push(BranchDiffLine {
+                                content,
+                                kind: DiffLineKind::Deletion,
+                                old_line: Some(old_line),
+                                new_line: None,
+                            });
+                            old_line = old_line.saturating_add(1);
+                        }
+                        ' ' => {
+                            let content = line.get(1..).unwrap_or("").to_string();
+                            hunk.lines.push(BranchDiffLine {
+                                content,
+                                kind: DiffLineKind::Context,
+                                old_line: Some(old_line),
+                                new_line: Some(new_line),
+                            });
+                            old_line = old_line.saturating_add(1);
+                            new_line = new_line.saturating_add(1);
+                        }
+                        _ => {
+                            hunk.lines.push(BranchDiffLine {
+                                content: line.to_string(),
+                                kind: DiffLineKind::Meta,
+                                old_line: None,
+                                new_line: None,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    finalize_current_file(&mut current_file, &mut current_hunk, &mut files);
+    files
+}
+
+fn parse_hunk_header(header: &str) -> (usize, usize) {
+    let mut old_start = 0usize;
+    let mut new_start = 0usize;
+    let parts: Vec<&str> = header.split_whitespace().collect();
+    if parts.len() >= 3 {
+        old_start = parts[1]
+            .trim_start_matches('-')
+            .split(',')
+            .next()
+            .unwrap_or("0")
+            .parse()
+            .unwrap_or(0);
+        new_start = parts[2]
+            .trim_start_matches('+')
+            .split(',')
+            .next()
+            .unwrap_or("0")
+            .parse()
+            .unwrap_or(0);
+    }
+    (old_start, new_start)
 }

@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openPath } from "@tauri-apps/plugin-opener";
 import type { PlanHistoryEntry, PlanHistoryPayload } from "../types/planHistory";
 
 export interface Worktree {
@@ -16,10 +16,10 @@ export interface Worktree {
 export interface Session {
   id: number;
   worktree_id: number | null;
-  session_type: string;
   name: string;
   created_at: string;
   last_accessed: string;
+  plan_title?: string;
 }
 
 export interface Command {
@@ -45,12 +45,56 @@ export interface BranchInfo {
   upstream?: string;
 }
 
+export interface BranchDivergence {
+  ahead: number;
+  behind: number;
+}
+
 export interface GitDiffHunk {
   id: string;
   header: string;
   lines: string[];
   is_staged: boolean;
   patch: string;
+}
+
+export type DiffLineKind = "context" | "addition" | "deletion" | "meta";
+
+export interface BranchDiffLine {
+  content: string;
+  kind: DiffLineKind;
+  old_line?: number | null;
+  new_line?: number | null;
+}
+
+export interface BranchDiffHunk {
+  header: string;
+  lines: BranchDiffLine[];
+}
+
+export interface BranchDiffFileDiff {
+  path: string;
+  previous_path?: string | null;
+  status: string;
+  is_binary: boolean;
+  binary_message?: string | null;
+  metadata: string[];
+  hunks: BranchDiffHunk[];
+}
+
+export interface BranchDiffFileChange {
+  path: string;
+  previous_path?: string | null;
+  status: string;
+}
+
+export interface BranchCommitInfo {
+  hash: string;
+  abbreviated_hash: string;
+  author_name: string;
+  author_email: string;
+  date: string;
+  message: string;
 }
 
 export type MergeStrategy = "regular" | "squash" | "no_ff" | "ff_only";
@@ -134,8 +178,41 @@ export const gitGetStatus = (worktree_path: string): Promise<GitStatus> =>
 export const gitGetBranchInfo = (worktree_path: string): Promise<BranchInfo> =>
   invoke("git_get_branch_info", { worktreePath: worktree_path });
 
+export const gitGetBranchDivergence = (
+  worktree_path: string,
+  base_branch: string
+): Promise<BranchDivergence> =>
+  invoke("git_get_branch_divergence", { worktreePath: worktree_path, baseBranch: base_branch });
+
 export const gitGetFileDiff = (worktree_path: string, file_path: string): Promise<string> =>
   invoke("git_get_file_diff", { worktreePath: worktree_path, filePath: file_path });
+
+export const gitGetDiffBetweenBranches = (
+  repo_path: string,
+  base_branch: string,
+  head_branch: string
+): Promise<BranchDiffFileDiff[]> =>
+  invoke("git_get_diff_between_branches", { repoPath: repo_path, baseBranch: base_branch, headBranch: head_branch });
+
+export const gitGetChangedFilesBetweenBranches = (
+  repo_path: string,
+  base_branch: string,
+  head_branch: string
+): Promise<BranchDiffFileChange[]> =>
+  invoke("git_get_changed_files_between_branches", { repoPath: repo_path, baseBranch: base_branch, headBranch: head_branch });
+
+export const gitGetCommitsBetweenBranches = (
+  repo_path: string,
+  base_branch: string,
+  head_branch: string,
+  limit?: number
+): Promise<BranchCommitInfo[]> =>
+  invoke("git_get_commits_between_branches", {
+    repoPath: repo_path,
+    baseBranch: base_branch,
+    headBranch: head_branch,
+    ...(typeof limit === "number" ? { limit } : {}),
+  });
 
 export const gitGetFileHunks = (worktree_path: string, file_path: string): Promise<GitDiffHunk[]> =>
   invoke("git_get_file_hunks", { worktreePath: worktree_path, filePath: file_path });
@@ -183,6 +260,9 @@ export const ptyResize = (session_id: string, rows: number, cols: number): Promi
 export const ptyClose = (session_id: string): Promise<void> =>
   invoke("pty_close", { sessionId: session_id });
 
+export const ptySessionExists = (session_id: string): Promise<boolean> =>
+  invoke("pty_session_exists", { sessionId: session_id });
+
 export const ptyListen = (session_id: string, callback: (data: string) => void) =>
   listen<string>(`pty-data-${session_id}`, (event) => callback(event.payload));
 
@@ -197,31 +277,35 @@ export const listDirectory = (path: string): Promise<DirectoryEntry[]> =>
 export const shellExecute = (command: string, working_dir?: string): Promise<string> =>
   invoke("shell_execute", { command, workingDir: working_dir });
 
-// Editor launching using URL schemes
+// Editor launching using CLI commands
 export type EditorType = "vscode" | "cursor" | "zed";
 
 export const openEditor = async (editor: EditorType, path: string): Promise<void> => {
-  const urlSchemes: Record<EditorType, string> = {
-    vscode: "vscode://file/",
-    cursor: "cursor://file/",
-    zed: "zed://file/",
+  const editorCommands: Record<EditorType, string> = {
+    vscode: "code",
+    cursor: "cursor",
+    zed: "zed",
   };
   
-  // URL-encode the path to handle spaces and special characters
-  const encodedPath = encodeURIComponent(path);
-  const url = `${urlSchemes[editor]}${encodedPath}`;
-  await openUrl(url);
+  const editorCommand = editorCommands[editor];
+  await openPath(path, editorCommand);
 };
 
 // Git Operations API
 export const gitCommit = (worktree_path: string, message: string): Promise<string> =>
   invoke("git_commit", { worktreePath: worktree_path, message });
 
+export const gitCommitAmend = (worktree_path: string, message: string): Promise<string> =>
+  invoke("git_commit_amend", { worktreePath: worktree_path, message });
+
 export const gitAddAll = (worktree_path: string): Promise<string> =>
   invoke("git_add_all", { worktreePath: worktree_path });
 
 export const gitPush = (worktree_path: string): Promise<string> =>
   invoke("git_push", { worktreePath: worktree_path });
+
+export const gitPushForce = (worktree_path: string): Promise<string> =>
+  invoke("git_push_force", { worktreePath: worktree_path });
 
 export const gitPull = (worktree_path: string): Promise<string> =>
   invoke("git_pull", { worktreePath: worktree_path });
@@ -314,8 +398,8 @@ export const loadPlanFromRepo = async (
 };
 
 export const clearSessionPlans = async (
-  repoPath: string,
-  sessionId: string
+  _repoPath: string,
+  _sessionId: string
 ): Promise<void> => {
   // Get all repo settings and filter for this session's plans
   // Note: This requires backend support, but for now we'll delete known keys
@@ -391,10 +475,10 @@ export const deletePlanFile = (repoPath: string, planId: string): Promise<void> 
 // Session management API
 export const createSession = (
   worktreeId: number | null,
-  sessionType: string,
-  name: string
+  name: string,
+  planTitle?: string
 ): Promise<number> =>
-  invoke("create_session", { worktreeId, sessionType, name });
+  invoke("create_session", { worktreeId, name, planTitle });
 
 export const getSessions = (): Promise<Session[]> =>
   invoke("get_sessions");
@@ -407,6 +491,9 @@ export const getMainRepoSessions = (): Promise<Session[]> =>
 
 export const updateSessionAccess = (id: number): Promise<void> =>
   invoke("update_session_access", { id });
+
+export const updateSessionName = (id: number, name: string): Promise<void> =>
+  invoke("update_session_name", { id, name });
 
 export const deleteSession = (id: number): Promise<void> =>
   invoke("delete_session", { id });

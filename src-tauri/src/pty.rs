@@ -17,12 +17,14 @@ impl PtySession {
     }
 
     pub fn resize(&mut self, rows: u16, cols: u16) -> std::io::Result<()> {
-        self.master.resize(PtySize {
-            rows,
-            cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        }).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+        self.master
+            .resize(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
     }
 }
 
@@ -46,7 +48,7 @@ impl PtyManager {
         callback: Box<dyn Fn(String) + Send + 'static>,
     ) -> Result<(), String> {
         let pty_system = native_pty_system();
-        
+
         let pair = pty_system
             .openpty(PtySize {
                 rows: 24,
@@ -139,5 +141,10 @@ impl PtyManager {
         let mut sessions = self.sessions.lock().unwrap();
         sessions.remove(session_id);
         Ok(())
+    }
+
+    pub fn session_exists(&self, session_id: &str) -> bool {
+        let sessions = self.sessions.lock().unwrap();
+        sessions.contains_key(session_id)
     }
 }

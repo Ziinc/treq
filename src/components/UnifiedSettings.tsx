@@ -13,8 +13,9 @@ import { RepositorySettingsContent } from "./RepositorySettingsContent";
 import { useTheme } from "../hooks/useTheme";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import { useToast } from "./ui/toast";
-import { getSetting, setSetting, selectFolder, isGitRepository, gitInit } from "../lib/api";
-import { Settings, FolderGit2, FolderOpen } from "lucide-react";
+import { getSetting, setSetting, selectFolder, isGitRepository, gitInit, BranchInfo } from "../lib/api";
+import { Settings, FolderGit2, FolderOpen, GitBranch, HardDrive } from "lucide-react";
+import { formatBytes } from "../lib/utils";
 
 type TabValue = "application" | "repository";
 
@@ -25,6 +26,10 @@ interface UnifiedSettingsProps {
   onRepoPathChange: (path: string) => void;
   initialTab?: TabValue;
   onRefresh?: () => void;
+  repoName?: string;
+  mainRepoSize?: number | null;
+  currentBranch?: string | null;
+  mainBranchInfo?: BranchInfo | null;
 }
 
 export const UnifiedSettings: React.FC<UnifiedSettingsProps> = ({
@@ -34,6 +39,10 @@ export const UnifiedSettings: React.FC<UnifiedSettingsProps> = ({
   onRepoPathChange,
   initialTab = "application",
   onRefresh,
+  repoName,
+  mainRepoSize,
+  currentBranch,
+  mainBranchInfo,
 }) => {
   const [currentTab, setCurrentTab] = useState<TabValue>(initialTab);
   const [localRepoPath, setLocalRepoPath] = useState(repoPath);
@@ -254,10 +263,47 @@ export const UnifiedSettings: React.FC<UnifiedSettingsProps> = ({
 
               <TabsContent value="repository">
                 {repoPath ? (
-                  <RepositorySettingsContent
-                    repoPath={repoPath}
-                    onClose={() => onOpenChange(false)}
-                  />
+                  <div className="space-y-6">
+                    {/* Repository Info Section */}
+                    <div className="space-y-3 text-sm border-b border-border pb-6">
+                      <div>
+                        <div className="text-xs text-muted-foreground mb-0.5">Repository</div>
+                        <div className="font-medium">{repoName || "Main repository"}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground mb-0.5">Path</div>
+                        <div className="font-mono text-xs break-all">{repoPath}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground mb-0.5">Disk Usage</div>
+                        <div className="text-xs flex items-center gap-1 text-muted-foreground">
+                          <HardDrive className="w-3 h-3" />
+                          {mainRepoSize !== null ? formatBytes(mainRepoSize) : "Calculating..."}
+                        </div>
+                      </div>
+                      {currentBranch && (
+                        <div className="space-y-1">
+                          <div className="text-xs text-muted-foreground">Current Branch</div>
+                          <div className="flex items-center gap-2 text-xs">
+                            <GitBranch className="w-3 h-3" />
+                            <code>{currentBranch}</code>
+                          </div>
+                          {mainBranchInfo?.upstream && (
+                            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                              {mainBranchInfo.behind > 0 && <span>{mainBranchInfo.behind}↓</span>}
+                              {mainBranchInfo.ahead > 0 && <span>{mainBranchInfo.ahead}↑</span>}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Repository Settings */}
+                    <RepositorySettingsContent
+                      repoPath={repoPath}
+                      onClose={() => onOpenChange(false)}
+                    />
+                  </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">
                     Please configure a repository path in the Application tab first.

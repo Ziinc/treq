@@ -40,8 +40,7 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
             .map_err(|e| format!("Failed to create .treq directory: {}", e))?;
     }
 
-    let conn = Connection::open(db_path)
-        .map_err(|e| format!("Failed to open local db: {}", e))?;
+    let conn = Connection::open(db_path).map_err(|e| format!("Failed to open local db: {}", e))?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS plans (
@@ -91,9 +90,7 @@ pub fn save_executed_plan(
     let executed_at = plan_data
         .executed_at
         .unwrap_or_else(|| Utc::now().to_rfc3339());
-    let status = plan_data
-        .status
-        .unwrap_or_else(|| "executed".to_string());
+    let status = plan_data.status.unwrap_or_else(|| "executed".to_string());
     let content = serde_json::to_string(&plan_data.content)
         .map_err(|e| format!("Failed to serialize plan content: {}", e))?;
 
@@ -135,7 +132,9 @@ pub fn get_worktree_plans(
         let rows = stmt
             .query_map(params![worktree_id, limit], |row| row_to_plan(row))
             .map_err(|e| format!("Failed to query plans: {}", e))?;
-        return rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string());
+        return rows
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string());
     }
 
     let mut stmt = conn
@@ -144,10 +143,14 @@ pub fn get_worktree_plans(
     let rows = stmt
         .query_map(params![worktree_id], |row| row_to_plan(row))
         .map_err(|e| format!("Failed to query plans: {}", e))?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
 }
 
-pub fn get_all_worktree_plans(repo_path: &str, worktree_id: i64) -> Result<Vec<PlanHistoryEntry>, String> {
+pub fn get_all_worktree_plans(
+    repo_path: &str,
+    worktree_id: i64,
+) -> Result<Vec<PlanHistoryEntry>, String> {
     get_worktree_plans(repo_path, worktree_id, None)
 }
 

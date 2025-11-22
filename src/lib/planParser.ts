@@ -324,7 +324,7 @@ export const extractPlanSections = (output: string): PlanSection[] => {
           currentSection.rawMarkdown = content;
           if (currentSection.steps.length > 0) {
             // Generate content-based ID for legacy format plans
-            currentSection.id = createPlanHash(currentSection.title, content);
+            currentSection.id = createPlanHash(currentSection.title || "Untitled Section", content);
             sections.push(currentSection as PlanSection);
           }
         }
@@ -357,7 +357,7 @@ export const extractPlanSections = (output: string): PlanSection[] => {
       currentSection.rawMarkdown = content;
       if (currentSection.steps.length > 0) {
         // Generate content-based ID for legacy format plans too
-        currentSection.id = createPlanHash(currentSection.title, content);
+        currentSection.id = createPlanHash(currentSection.title || "Untitled Section", content);
         sections.push(currentSection as PlanSection);
       }
     }
@@ -382,4 +382,3 @@ export const createDebouncedParser = (delay: number = 1000) => {
     }, delay);
   };
 };
-
