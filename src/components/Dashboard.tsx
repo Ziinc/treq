@@ -62,6 +62,7 @@ import {
   gitPush,
   gitStageFile,
   gitUnstageFile,
+  gitAddAll,
   gitCommit,
   invalidateGitCache,
 } from "../lib/api";
@@ -304,7 +305,7 @@ export const Dashboard: React.FC = () => {
     }
   }, [repoName]);
 
-  const refreshMainRepoInfo = useCallback(() => {
+  const refreshMainRepoInfo = useCallback(async () => {
     if (!repoPath) {
       setMainRepoStatus(null);
       setMainBranchInfo(null);
@@ -313,22 +314,19 @@ export const Dashboard: React.FC = () => {
       return;
     }
 
-    gitGetStatus(repoPath)
-      .then(setMainRepoStatus)
-      .catch(() => setMainRepoStatus(null));
+    // Run all fetches in parallel
+    const [status, branchInfo, size, changedFiles] = await Promise.all([
+      gitGetStatus(repoPath).catch(() => null),
+      gitGetBranchInfo(repoPath).catch(() => null),
+      calculateDirectorySize(repoPath).catch(() => null),
+      gitGetChangedFiles(repoPath).catch(() => [] as string[]),
+    ]);
 
-    gitGetBranchInfo(repoPath)
-      .then(setMainBranchInfo)
-      .catch(() => setMainBranchInfo(null));
-
-    calculateDirectorySize(repoPath)
-      .then(setMainRepoSize)
-      .catch(() => setMainRepoSize(null));
-
-    gitGetChangedFiles(repoPath)
-      .then((files) => setMainRepoChangedFiles(parseChangedFiles(files)))
-      .catch(() => setMainRepoChangedFiles([]));
-  }, [repoPath, parseChangedFiles]);
+    setMainRepoStatus(status);
+    setMainBranchInfo(branchInfo);
+    setMainRepoSize(size);
+    setMainRepoChangedFiles(parseChangedFiles(changedFiles));
+  }, [repoPath]);
 
   const handleMainRepoSync = useCallback(async () => {
     if (!repoPath) {
@@ -1025,6 +1023,18 @@ export const Dashboard: React.FC = () => {
     [repoPath, addToast, refreshMainRepoInfo]
   );
 
+  const handleMainRepoStageAll = useCallback(async () => {
+    if (!repoPath) return;
+    try {
+      await gitAddAll(repoPath);
+      addToast({ title: "Staged", description: "All changes staged", type: "success" });
+      refreshMainRepoInfo();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      addToast({ title: "Stage All Failed", description: message, type: "error" });
+    }
+  }, [repoPath, addToast, refreshMainRepoInfo]);
+
   const handleMainRepoCommit = useCallback(async () => {
     if (!repoPath) {
       addToast({ title: "Repository not set", description: "Configure a repository path before committing.", type: "error" });
@@ -1103,8 +1113,8 @@ export const Dashboard: React.FC = () => {
     />
   );
 
-  // Render session terminals - keep them mounted but hidden for state preservation
-  const renderSessionTerminals = () => {
+  // Memoized session terminals - keep them mounted but hidden for state preservation
+  const memoizedSessionTerminals = useMemo(() => {
     // Get unique sessions that have been visited (have an activeSessionId match or are currently active)
     const sessionsToRender = sessions.filter(s => s.id === activeSessionId || mountedSessionIds.has(s.id));
 
@@ -1142,40 +1152,89 @@ export const Dashboard: React.FC = () => {
         </div>
       );
     });
-  };
+  }, [
+    sessions,
+    activeSessionId,
+    mountedSessionIds,
+    viewMode,
+    worktrees,
+    repoPath,
+    sessionPlanContent,
+    sessionPlanTitle,
+    sessionInitialPrompt,
+    sessionPromptLabel,
+    sessionSelectedFile,
+    handleCloseTerminal,
+    handleExecutePlan,
+    handleSessionActivity,
+  ]);
 
-  if (viewMode === "session" || viewMode === "worktree-session") {
-    return (
-      <>
-        <div className="flex h-screen bg-background">
-          <SessionSidebar
-            activeSessionId={activeSessionId}
-            onSessionClick={handleSessionClick}
-            onCreateSession={handleCreateSessionFromSidebar}
-            onCloseActiveSession={handleCloseTerminal}
-            repoPath={repoPath}
-            currentBranch={currentBranch}
-            onDeleteWorktree={handleDelete}
-            onCreateWorktree={() => setShowCreateDialog(true)}
-            onSessionActivityListenerChange={handleSessionActivityListenerChange}
-            openSettings={openSettings}
-            navigateToDashboard={handleReturnToDashboard}
-            onOpenCommandPalette={() => setShowCommandPalette(true)}
-          />
-          <div className="flex-1 flex flex-col" style={{ width: "calc(100vw - 240px)" }}>
-            {renderSessionTerminals()}
-          </div>
+  const isSessionView = viewMode === "session" || viewMode === "worktree-session";
+  const showSidebar = viewMode !== "merge-review" && viewMode !== "worktree-edit";
+  const highlightedSessionId = isSessionView ? activeSessionId : null;
+
+  return (
+    <div className="flex h-screen bg-background">
+      {/* SessionSidebar - shown in session, settings, dashboard views */}
+      {showSidebar && (
+        <SessionSidebar
+          activeSessionId={highlightedSessionId}
+          onSessionClick={handleSessionClick}
+          onCreateSession={handleCreateSessionFromSidebar}
+          onCloseActiveSession={handleCloseTerminal}
+          repoPath={repoPath}
+          currentBranch={currentBranch}
+          onDeleteWorktree={handleDelete}
+          onCreateWorktree={() => setShowCreateDialog(true)}
+          onSessionActivityListenerChange={handleSessionActivityListenerChange}
+          openSettings={openSettings}
+          navigateToDashboard={handleReturnToDashboard}
+          onOpenCommandPalette={() => setShowCommandPalette(true)}
+        />
+      )}
+
+      <div
+        className="flex-1 relative"
+        style={{ width: showSidebar ? "calc(100vw - 240px)" : "100%" }}
+      >
+        {/* Sessions Layer - ALWAYS RENDERED ONCE */}
+        <div
+          className="absolute inset-0 flex flex-col"
+          style={{
+            visibility: isSessionView ? 'visible' : 'hidden',
+            zIndex: isSessionView ? 10 : 0,
+            pointerEvents: isSessionView ? 'auto' : 'none',
+          }}
+        >
+          {memoizedSessionTerminals}
         </div>
-        {commandPaletteElement}
-      </>
-    );
-  }
 
-  if (viewMode === "merge-review" && selectedWorktree) {
-    return (
-      <>
-        <div className="flex flex-col h-screen bg-background">
-          <div className="flex-1 overflow-auto">
+        {/* Content Layer - Dashboard, Settings, Merge-Review, Worktree-Edit */}
+        <div
+          className="absolute inset-0 overflow-auto"
+          style={{
+            visibility: !isSessionView ? 'visible' : 'hidden',
+            zIndex: !isSessionView ? 10 : 0,
+            pointerEvents: !isSessionView ? 'auto' : 'none',
+          }}
+        >
+          {/* Settings View */}
+          {viewMode === "settings" && (
+            <SettingsPage
+              repoPath={repoPath}
+              onRepoPathChange={setRepoPath}
+              initialTab={initialSettingsTab}
+              onRefresh={refetch}
+              onClose={() => setViewMode("dashboard")}
+              repoName={repoName}
+              mainRepoSize={mainRepoSize}
+              currentBranch={currentBranch}
+              mainBranchInfo={mainBranchInfo}
+            />
+          )}
+
+          {/* Merge Review View */}
+          {viewMode === "merge-review" && selectedWorktree && (
             <ErrorBoundary
               fallbackTitle="Merge review failed"
               resetKeys={[selectedWorktree.id, currentBranch ?? ""]}
@@ -1193,18 +1252,10 @@ export const Dashboard: React.FC = () => {
                 onRequestChanges={(prompt) => openSessionWithPrompt(selectedWorktree, prompt, "Review response")}
               />
             </ErrorBoundary>
-          </div>
-        </div>
-        {commandPaletteElement}
-      </>
-    );
-  }
+          )}
 
-  if (viewMode === "worktree-edit" && selectedWorktree) {
-    return (
-      <>
-        <div className="flex flex-col h-screen bg-background">
-          <div className="flex-1 overflow-auto">
+          {/* Worktree Edit View */}
+          {viewMode === "worktree-edit" && selectedWorktree && (
             <ErrorBoundary
               fallbackTitle="Worktree edit failed"
               resetKeys={[selectedWorktree.id]}
@@ -1218,68 +1269,11 @@ export const Dashboard: React.FC = () => {
                 }}
               />
             </ErrorBoundary>
-          </div>
-        </div>
-        {commandPaletteElement}
-      </>
-    );
-  }
+          )}
 
-  if (viewMode === "settings") {
-    return (
-      <>
-        <div className="flex h-screen bg-background">
-          <SessionSidebar
-            activeSessionId={activeSessionId}
-            onSessionClick={handleSessionClick}
-            onCreateSession={handleCreateSessionFromSidebar}
-            onCloseActiveSession={handleCloseTerminal}
-            repoPath={repoPath}
-            currentBranch={currentBranch}
-            onDeleteWorktree={handleDelete}
-            onCreateWorktree={() => setShowCreateDialog(true)}
-            onSessionActivityListenerChange={handleSessionActivityListenerChange}
-            openSettings={openSettings}
-            navigateToDashboard={handleReturnToDashboard}
-            onOpenCommandPalette={() => setShowCommandPalette(true)}
-          />
-          <div className="flex-1" style={{ width: "calc(100vw - 240px)" }}>
-            <SettingsPage
-              repoPath={repoPath}
-              onRepoPathChange={setRepoPath}
-              initialTab={initialSettingsTab}
-              onRefresh={refetch}
-              onClose={() => setViewMode("dashboard")}
-              repoName={repoName}
-              mainRepoSize={mainRepoSize}
-              currentBranch={currentBranch}
-              mainBranchInfo={mainBranchInfo}
-            />
-          </div>
-        </div>
-        {commandPaletteElement}
-      </>
-    );
-  }
-
-  return (
-    <div className="flex h-screen bg-background">
-      <SessionSidebar
-        activeSessionId={activeSessionId}
-        onSessionClick={handleSessionClick}
-        onCreateSession={handleCreateSessionFromSidebar}
-        onCloseActiveSession={handleCloseTerminal}
-        repoPath={repoPath}
-        currentBranch={currentBranch}
-        onDeleteWorktree={handleDelete}
-        onCreateWorktree={() => setShowCreateDialog(true)}
-        onSessionActivityListenerChange={handleSessionActivityListenerChange}
-        openSettings={openSettings}
-        navigateToDashboard={handleReturnToDashboard}
-        onOpenCommandPalette={() => setShowCommandPalette(true)}
-      />
-      <div className="flex-1 overflow-auto" style={{ width: "calc(100vw - 240px)" }}>
-        <ErrorBoundary
+          {/* Dashboard View */}
+          {viewMode === "dashboard" && (
+            <ErrorBoundary
           fallbackTitle="Dashboard content error"
           resetKeys={[repoPath, worktrees.length]}
           onGoDashboard={handleReturnToDashboard}
@@ -1416,6 +1410,7 @@ export const Dashboard: React.FC = () => {
                                 if (file) handleMainRepoFileClick(file);
                               }}
                               onStage={handleMainRepoStageFile}
+                              onStageAll={handleMainRepoStageAll}
                             />
                           )}
                         </div>
@@ -1558,43 +1553,47 @@ export const Dashboard: React.FC = () => {
               </div>
             )}
 
-            <MergeDialog
-              open={mergeDialogOpen}
-              onOpenChange={(open) => {
-                if (!open && !mergeMutation.isPending) {
-                  resetMergeState();
-                }
-              }}
-              worktree={mergeTargetWorktree}
-              mainBranch={currentBranch}
-              aheadCount={mergeAheadCount}
-              hasWorktreeChanges={mergeWorktreeHasChanges}
-              changedFiles={mergeChangedFiles}
-              isLoadingDetails={mergeDetailsLoading}
-              isSubmitting={mergeMutation.isPending}
-              onConfirm={(options) => mergeMutation.mutate(options)}
-            />
-
-            <CreateWorktreeDialog
-              open={showCreateDialog}
-              onOpenChange={setShowCreateDialog}
-              repoPath={repoPath}
-              onSuccess={() => {
-                queryClient.invalidateQueries({ queryKey: ["worktrees"] });
-              }}
-            />
-
-            <MoveToWorktreeDialog
-              open={moveDialogOpen}
-              onOpenChange={setMoveDialogOpen}
-              repoPath={repoPath}
-              selectedFiles={Array.from(selectedUnstagedFiles)}
-              onSuccess={handleMoveToWorktreeSuccess}
-            />
-
           </div>
-        </ErrorBoundary>
+            </ErrorBoundary>
+          )}
+        </div>
       </div>
+
+      {/* Global Dialogs */}
+      <MergeDialog
+        open={mergeDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && !mergeMutation.isPending) {
+            resetMergeState();
+          }
+        }}
+        worktree={mergeTargetWorktree}
+        mainBranch={currentBranch}
+        aheadCount={mergeAheadCount}
+        hasWorktreeChanges={mergeWorktreeHasChanges}
+        changedFiles={mergeChangedFiles}
+        isLoadingDetails={mergeDetailsLoading}
+        isSubmitting={mergeMutation.isPending}
+        onConfirm={(options) => mergeMutation.mutate(options)}
+      />
+
+      <CreateWorktreeDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        repoPath={repoPath}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["worktrees"] });
+        }}
+      />
+
+      <MoveToWorktreeDialog
+        open={moveDialogOpen}
+        onOpenChange={setMoveDialogOpen}
+        repoPath={repoPath}
+        selectedFiles={Array.from(selectedUnstagedFiles)}
+        onSuccess={handleMoveToWorktreeSuccess}
+      />
+
       {commandPaletteElement}
     </div>
   );

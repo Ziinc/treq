@@ -103,6 +103,8 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const searchAddonRef = useRef<SearchAddon | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const handleResizeRef = useRef<(() => void) | null>(null);
   const webglAddonRef = useRef<WebglAddon | null>(null);
   const webglContextLossDisposeRef = useRef<IDisposable | null>(null);
   const clipboardAddonRef = useRef<ClipboardAddon | null>(null);
@@ -118,6 +120,7 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
   const isPtyReadyRef = useRef(isPtyReady);
   const lastValidDimensionsRef = useRef<{ rows: number; cols: number } | null>(null);
   const previousIsHiddenRef = useRef(isHidden);
+  const autoCommandSentRef = useRef(false);
 
   const { fontSize } = useTerminalSettings();
   const resolvedClipboardProvider = useMemo(
@@ -151,6 +154,7 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
 
   useEffect(() => {
     outputRef.current = "";
+    autoCommandSentRef.current = false;
   }, [sessionId]);
 
   useEffect(() => {
@@ -256,12 +260,15 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
     };
 
     xterm.attachCustomKeyEventHandler((event) => {
-      // Let browser handle events when input elements are focused
-      const activeElement = document.activeElement;
+      // Let browser handle events when input elements are focused (but not xterm's own textarea)
+      const activeElement = document.activeElement as HTMLElement | null;
+      const isWithinXterm = activeElement?.closest('.xterm') !== null;
       const isInputFocused =
-        activeElement?.tagName === "INPUT" ||
-        activeElement?.tagName === "TEXTAREA" ||
-        activeElement?.getAttribute("contenteditable") === "true";
+        !isWithinXterm && (
+          activeElement?.tagName === "INPUT" ||
+          activeElement?.tagName === "TEXTAREA" ||
+          activeElement?.getAttribute("contenteditable") === "true"
+        );
 
       if (isInputFocused) {
         return false; // Don't let xterm handle this event
@@ -306,16 +313,10 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
       ptyWrite(sessionId, data).catch(handleError);
     });
 
-    let resizeObserver: ResizeObserver | null = null;
     let autoCommandTimeout: ReturnType<typeof setTimeout> | null = null;
     let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const handleResize = () => {
-      // Skip resize if terminal is hidden to prevent text rewrapping
-      if (isHidden) {
-        return;
-      }
-
       fitAddon.fit();
       const { rows, cols } = xterm;
 
@@ -328,10 +329,16 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
       ptyResize(sessionId, rows, cols).catch(handleError);
     };
 
-    // Set up resize event listeners (they won't fire ptyResize until isPtyReady is true)
-    window.addEventListener("resize", handleResize);
-    resizeObserver = new ResizeObserver(handleResize);
-    resizeObserver.observe(terminalRef.current);
+    // Store handleResize in ref for use by visibility effect
+    handleResizeRef.current = handleResize;
+
+    // Only set up resize observers if not hidden
+    // Visibility effect will manage connection/disconnection
+    if (!isHidden && terminalRef.current) {
+      window.addEventListener("resize", handleResize);
+      resizeObserverRef.current = new ResizeObserver(handleResize);
+      resizeObserverRef.current.observe(terminalRef.current);
+    }
 
     // Check if PTY session already exists, if not create it
     const setupPty = async () => {
@@ -365,8 +372,14 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
         resizeTimeout = setTimeout(handleResize, 100);
 
         // Only run autoCommand for newly created sessions, not when reattaching
-        if (autoCommand && isNewSession) {
+        // Use ref guard to ensure command is only sent once per session
+        if (autoCommand && isNewSession && !autoCommandSentRef.current) {
           autoCommandTimeout = setTimeout(() => {
+            // Check again inside timeout in case effect re-ran
+            if (autoCommandSentRef.current) {
+              return;
+            }
+            autoCommandSentRef.current = true;
             ptyWrite(sessionId, normalizeCommand(autoCommand))
               .then(() => {
                 autoCommandCompleteRef.current?.();
@@ -399,8 +412,12 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
         clearTimeout(idleTimeoutRef.current);
         idleTimeoutRef.current = null;
       }
-      window.removeEventListener("resize", handleResize);
-      resizeObserver?.disconnect();
+      if (handleResizeRef.current) {
+        window.removeEventListener("resize", handleResizeRef.current);
+      }
+      resizeObserverRef.current?.disconnect();
+      resizeObserverRef.current = null;
+      handleResizeRef.current = null;
       if (unlistenRef.current) {
         unlistenRef.current();
         unlistenRef.current = null;
@@ -430,13 +447,21 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
     idleTimeoutMs,
   ]);
 
-  // Handle transition from hidden to visible state
+  // Handle visibility transitions and manage ResizeObserver
   useEffect(() => {
     const wasHidden = previousIsHiddenRef.current;
     const isNowVisible = !isHidden;
+    const isNowHidden = isHidden;
 
     if (wasHidden && isNowVisible) {
       // Terminal is transitioning from hidden to visible
+      // Reconnect ResizeObserver and trigger resize
+      if (terminalRef.current && handleResizeRef.current) {
+        window.addEventListener("resize", handleResizeRef.current);
+        resizeObserverRef.current = new ResizeObserver(handleResizeRef.current);
+        resizeObserverRef.current.observe(terminalRef.current);
+      }
+
       // Trigger resize to restore proper dimensions
       if (fitAddonRef.current && xtermRef.current && isPtyReady) {
         fitAddonRef.current.fit();
@@ -447,6 +472,14 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
           console.error("Terminal error:", message);
         });
       }
+    } else if (!wasHidden && isNowHidden) {
+      // Terminal is transitioning from visible to hidden
+      // Disconnect ResizeObserver to prevent unnecessary callbacks
+      if (handleResizeRef.current) {
+        window.removeEventListener("resize", handleResizeRef.current);
+      }
+      resizeObserverRef.current?.disconnect();
+      resizeObserverRef.current = null;
     }
 
     previousIsHiddenRef.current = isHidden;

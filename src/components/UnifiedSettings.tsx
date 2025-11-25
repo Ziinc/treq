@@ -255,11 +255,11 @@ export const UnifiedSettings: React.FC<UnifiedSettingsProps> = ({
                           });
                         }
                       }}
-                      placeholder="10"
+                      placeholder="11"
                       className="mt-2"
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Font size for code diff display (8-16)
+                      Font size for code diff display (8-16, default: 11)
                     </p>
                   </div>
 

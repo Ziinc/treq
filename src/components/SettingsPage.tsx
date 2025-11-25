@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { RepositorySettingsContent } from "./RepositorySettingsContent";
 import { useTheme } from "../hooks/useTheme";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
+import { useDiffSettings } from "../hooks/useDiffSettings";
 import { useToast } from "./ui/toast";
 import { setSetting, selectFolder, isGitRepository, gitInit, BranchInfo } from "../lib/api";
 import { Settings, FolderGit2, FolderOpen, GitBranch, HardDrive } from "lucide-react";
@@ -44,19 +45,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
   const { theme, setTheme } = useTheme();
   const { fontSize, setFontSize } = useTerminalSettings();
+  const { fontSize: diffFontSize, setFontSize: setDiffFontSize } = useDiffSettings();
   const { addToast } = useToast();
-
-  // Track if there are unsaved changes
-  const hasChanges = localRepoPath !== repoPath;
 
   // Load settings on mount
   useEffect(() => {
     setLocalRepoPath(repoPath);
   }, [repoPath]);
-
-  const handleCancelChanges = () => {
-    setLocalRepoPath(repoPath);
-  };
 
   const handleSaveApplicationSettings = async () => {
     try {
@@ -140,15 +135,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             <Button
               variant="outline"
               size="sm"
-              onClick={handleCancelChanges}
-              disabled={!hasChanges}
+              onClick={onClose}
             >
-              Cancel
+              Close
             </Button>
             <Button
               size="sm"
               onClick={handleSaveApplicationSettings}
-              disabled={!hasChanges}
             >
               Save Settings
             </Button>
@@ -239,6 +232,34 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       />
                       <p className="text-xs text-muted-foreground mt-1">
                         Font size for terminal (8-32)
+                      </p>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="diff-font-size">Diff Viewer Font Size</Label>
+                      <Input
+                        id="diff-font-size"
+                        type="number"
+                        min={8}
+                        max={16}
+                        value={diffFontSize}
+                        onChange={(e) => {
+                          const value = parseInt(e.target.value, 10);
+                          if (!isNaN(value) && value >= 8 && value <= 16) {
+                            setDiffFontSize(value).catch((error) => {
+                              addToast({
+                                title: "Error",
+                                description: error.message,
+                                type: "error",
+                              });
+                            });
+                          }
+                        }}
+                        placeholder="11"
+                        className="mt-2"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Font size for code diff display (8-16, default: 11)
                       </p>
                     </div>
                   </div>

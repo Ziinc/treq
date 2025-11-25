@@ -9,7 +9,7 @@ interface DiffSettingsContextType {
 const DiffSettingsContext = createContext<DiffSettingsContextType | undefined>(undefined);
 
 export function DiffSettingsProvider({ children }: { children: ReactNode }) {
-  const [fontSize, setFontSizeState] = useState<number>(10);
+  const [fontSize, setFontSizeState] = useState<number>(11);
 
   // Load saved font size from database on mount
   useEffect(() => {

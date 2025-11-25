@@ -699,10 +699,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                         {onDeleteWorktree && (
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive"
-                            onSelect={(event) => {
-                              event.preventDefault();
-                              onDeleteWorktree(worktree);
-                            }}
+                            onSelect={() => onDeleteWorktree(worktree)}
                           >
                             <Trash2 className="w-4 h-4 mr-2" />
                             Delete Worktree

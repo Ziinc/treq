@@ -94,14 +94,6 @@ interface LineComment {
   createdAt: string;
 }
 
-interface LineSelection {
-  filePath: string;
-  hunkId: string;
-  startLineIndex: number;
-  endLineIndex: number | null;
-  isSelecting: boolean;
-}
-
 // Extended line selection for staging (supports multi-hunk)
 interface DiffLineSelection {
   filePath: string;
@@ -242,9 +234,20 @@ const ROW_PADDING_BOTTOM = 16; // pb-4 class = 1rem = 16px
 interface CommentInputProps {
   onSubmit: (text: string) => void;
   onCancel: () => void;
+  filePath?: string;
+  startLine?: number;
+  endLine?: number;
+  lineContents?: string[];
 }
 
-const CommentInput: React.FC<CommentInputProps> = memo(({ onSubmit, onCancel }) => {
+const CommentInput: React.FC<CommentInputProps> = memo(({
+  onSubmit,
+  onCancel,
+  filePath,
+  startLine,
+  endLine,
+  lineContents,
+}) => {
   const [text, setText] = useState("");
 
   const handleSubmit = useCallback(() => {
@@ -270,8 +273,24 @@ const CommentInput: React.FC<CommentInputProps> = memo(({ onSubmit, onCancel }) 
     }
   }, [onCancel, handleSubmit]);
 
+  const lineLabel = startLine && endLine
+    ? (startLine === endLine ? `L${startLine}` : `L${startLine}-${endLine}`)
+    : null;
+
   return (
     <div className="bg-muted/60 border-y border-border/40 px-4 py-3">
+      {(lineLabel || lineContents) && (
+        <div className="mb-2 text-xs text-muted-foreground">
+          {filePath && lineLabel && (
+            <span className="font-mono">{filePath}:{lineLabel}</span>
+          )}
+          {lineContents && lineContents.length > 0 && (
+            <div className="mt-1 bg-background/50 rounded border border-border/40 p-2 max-h-[100px] overflow-auto">
+              <pre className="font-mono text-[11px] whitespace-pre-wrap">{lineContents.join('\n')}</pre>
+            </div>
+          )}
+        </div>
+      )}
       <Textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -340,16 +359,17 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
 
   // Review/comment state
   const [comments, setComments] = useState<LineComment[]>([]);
-  const [lineSelection, setLineSelection] = useState<LineSelection | null>(null);
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [reviewPopoverOpen, setReviewPopoverOpen] = useState(false);
   const [finalReviewComment, setFinalReviewComment] = useState("");
   const [sendingReview, setSendingReview] = useState(false);
-  // Pre-computed data for multi-line comments from diff selection
-  const [pendingMultiLineComment, setPendingMultiLineComment] = useState<{
+  // Pending comment data (used for both single and multi-line)
+  const [pendingComment, setPendingComment] = useState<{
     filePath: string;
-    startLine: number;
-    endLine: number;
+    hunkId: string;
+    displayAtLineIndex: number;  // Where to show the inline input
+    startLine: number;           // Actual file line number (1-indexed)
+    endLine: number;             // Actual file line number (1-indexed)
     lineContent: string[];
   } | null>(null);
 
@@ -438,15 +458,15 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
         }
 
         // Check for comment input
-        if (showCommentInput && lineSelection?.filePath === file.path &&
-            lineSelection?.hunkId === hunk.id && lineIndex === lineSelection.startLineIndex) {
+        if (showCommentInput && pendingComment?.filePath === file.path &&
+            pendingComment?.hunkId === hunk.id && lineIndex === pendingComment.displayAtLineIndex) {
           height += COMMENT_INPUT_HEIGHT;
         }
       }
     }
 
     return height + ROW_PADDING_BOTTOM;
-  }, [files, collapsedFiles, allFileHunks, comments, showCommentInput, lineSelection]);
+  }, [files, collapsedFiles, allFileHunks, comments, showCommentInput, pendingComment]);
 
   const loadChangedFiles = useCallback(async () => {
     if (!worktreePath) {
@@ -910,7 +930,7 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
     // In react-window v2, heights are recalculated automatically when rowHeight function changes
   }, []);
 
-  // Line selection handlers for staging
+  // Line selection handlers for staging and comments
   const handleLineMouseDown = useCallback((
     e: React.MouseEvent,
     filePath: string,
@@ -919,7 +939,7 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
     lineContent: string,
     isStaged: boolean
   ) => {
-    if (e.button !== 0 || (!lineContent.startsWith('+') && !lineContent.startsWith('-'))) {
+    if (e.button !== 0) {
       return;
     }
     e.preventDefault();
@@ -936,13 +956,10 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
     filePath: string,
     hunkIndex: number,
     lineIndex: number,
-    lineContent: string,
+    _lineContent: string,
     _isStaged: boolean
   ) => {
     if (!isSelecting || !selectionAnchor || selectionAnchor.filePath !== filePath) {
-      return;
-    }
-    if (!lineContent.startsWith('+') && !lineContent.startsWith('-')) {
       return;
     }
 
@@ -969,7 +986,7 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
 
       for (let l = actualStart; l <= actualEnd; l++) {
         const line = hunk.lines[l];
-        if (line && (line.startsWith('+') || line.startsWith('-'))) {
+        if (line) {
           newLines.push({
             hunkIndex: h,
             lineIndex: l,
@@ -1017,7 +1034,10 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
     const fileData = allFileHunks.get(diffLineSelection.filePath);
     if (!fileData) return;
 
-    const unstagedLines = diffLineSelection.lines.filter(l => !l.isStaged);
+    // Filter to only +/- lines that aren't already staged
+    const unstagedLines = diffLineSelection.lines.filter(l =>
+      !l.isStaged && (l.content.startsWith('+') || l.content.startsWith('-'))
+    );
     if (unstagedLines.length === 0) {
       addToast({ title: "No unstaged lines", description: "Selected lines are already staged", type: "info" });
       return;
@@ -1076,7 +1096,10 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
     const fileData = allFileHunks.get(diffLineSelection.filePath);
     if (!fileData) return;
 
-    const stagedLines = diffLineSelection.lines.filter(l => l.isStaged);
+    // Filter to only +/- lines that are staged
+    const stagedLines = diffLineSelection.lines.filter(l =>
+      l.isStaged && (l.content.startsWith('+') || l.content.startsWith('-'))
+    );
     if (stagedLines.length === 0) {
       addToast({ title: "No staged lines", description: "Selected lines are not staged", type: "info" });
       return;
@@ -1150,62 +1173,25 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
 
   // Comment management
   const addComment = useCallback((text: string) => {
-    if (!text.trim()) return;
-
-    // Check for pending multi-line comment first (from context menu selection)
-    if (pendingMultiLineComment) {
-      const newComment: LineComment = {
-        id: uuidv4(),
-        filePath: pendingMultiLineComment.filePath,
-        hunkId: 'multi-line',
-        startLine: pendingMultiLineComment.startLine,
-        endLine: pendingMultiLineComment.endLine,
-        lineContent: pendingMultiLineComment.lineContent,
-        text: text.trim(),
-        createdAt: new Date().toISOString(),
-      };
-      setComments((prev) => [...prev, newComment]);
-      setShowCommentInput(false);
-      setPendingMultiLineComment(null);
-      setDiffLineSelection(null);
-      setContextMenuPosition(null);
-      return;
-    }
-
-    // Fall back to single-line selection
-    if (!lineSelection) return;
-
-    const fileData = allFileHunks.get(lineSelection.filePath);
-    if (!fileData) return;
-
-    const hunk = fileData.hunks.find((h) => h.id === lineSelection.hunkId);
-    if (!hunk) return;
-
-    const startIdx = Math.min(lineSelection.startLineIndex, lineSelection.endLineIndex ?? lineSelection.startLineIndex);
-    const endIdx = Math.max(lineSelection.startLineIndex, lineSelection.endLineIndex ?? lineSelection.startLineIndex);
-    const selectedLines = hunk.lines.slice(startIdx, endIdx + 1);
-
-    // Compute actual line numbers
-    const lineNumbers = computeHunkLineNumbers(hunk);
-    const startLineNum = lineNumbers[startIdx]?.new ?? lineNumbers[startIdx]?.old ?? startIdx + 1;
-    const endLineNum = lineNumbers[endIdx]?.new ?? lineNumbers[endIdx]?.old ?? endIdx + 1;
+    if (!text.trim() || !pendingComment) return;
 
     const newComment: LineComment = {
       id: uuidv4(),
-      filePath: lineSelection.filePath,
-      hunkId: lineSelection.hunkId,
-      startLine: startLineNum,
-      endLine: endLineNum,
-      lineContent: selectedLines,
+      filePath: pendingComment.filePath,
+      hunkId: pendingComment.hunkId,
+      startLine: pendingComment.startLine,
+      endLine: pendingComment.endLine,
+      lineContent: pendingComment.lineContent,
       text: text.trim(),
       createdAt: new Date().toISOString(),
     };
 
     setComments((prev) => [...prev, newComment]);
     setShowCommentInput(false);
-    setLineSelection(null);
-
-  }, [lineSelection, allFileHunks, pendingMultiLineComment]);
+    setPendingComment(null);
+    setDiffLineSelection(null);
+    setContextMenuPosition(null);
+  }, [pendingComment]);
 
   // Handle adding comment from multi-line diff selection (context menu)
   const handleAddCommentFromSelection = useCallback(() => {
@@ -1215,10 +1201,12 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
     const fileData = allFileHunks.get(filePath);
     if (!fileData) return;
 
-    // Collect all selected line contents
+    // Collect all selected line contents and find position info
     const lineContents: string[] = [];
     let minLineNum = Infinity;
     let maxLineNum = -Infinity;
+    let lastHunkId = '';
+    let lastLineIndex = 0;
 
     for (const line of diffLineSelection.lines) {
       const hunk = fileData.hunks[line.hunkIndex];
@@ -1230,11 +1218,15 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
       minLineNum = Math.min(minLineNum, lineNum);
       maxLineNum = Math.max(maxLineNum, lineNum);
       lineContents.push(line.content);
+      lastHunkId = hunk.id;
+      lastLineIndex = line.lineIndex;
     }
 
-    // Set pending comment data
-    setPendingMultiLineComment({
+    // Set pending comment data with position for inline display
+    setPendingComment({
       filePath,
+      hunkId: lastHunkId,
+      displayAtLineIndex: lastLineIndex,
       startLine: minLineNum,
       endLine: maxLineNum,
       lineContent: lineContents,
@@ -1245,8 +1237,7 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
 
   const cancelComment = useCallback(() => {
     setShowCommentInput(false);
-    setLineSelection(null);
-    setPendingMultiLineComment(null);
+    setPendingComment(null);
   }, []);
 
   const deleteComment = useCallback((commentId: string) => {
@@ -1605,30 +1596,31 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
         {hunk.lines.map((line, lineIndex) => {
           const lineComments = getCommentsForLine(filePath, hunk.id, lineIndex);
           const showCommentInputHere = showCommentInput &&
-            lineSelection &&
-            lineSelection.filePath === filePath &&
-            lineSelection.hunkId === hunk.id &&
-            lineIndex === lineSelection.startLineIndex;
+            pendingComment &&
+            pendingComment.filePath === filePath &&
+            pendingComment.hunkId === hunk.id &&
+            lineIndex === pendingComment.displayAtLineIndex;
           const selected = isLineSelected(filePath, hunkIndex, lineIndex);
-          const isChangeLine = line.startsWith('+') || line.startsWith('-');
           const lineNum = lineNumbers[lineIndex];
+          const actualLineNum = lineNum?.new ?? lineNum?.old ?? lineIndex + 1;
 
           return (
             <Fragment key={`${hunk.id}-line-${lineIndex}`}>
               <div
                 data-diff-line
                 className={cn(
-                  "group flex items-stretch cursor-default",
+                  "group flex items-stretch",
                   getLineTypeClass(line),
-                  selected && "!bg-blue-500/30 ring-1 ring-inset ring-blue-500/50",
-                  isChangeLine && "cursor-pointer"
+                  selected && "!bg-blue-500/30 ring-1 ring-inset ring-blue-500/50"
                 )}
-                onMouseDown={(e) => handleLineMouseDown(e, filePath, hunkIndex, lineIndex, line, hunk.is_staged)}
                 onMouseEnter={() => handleLineMouseEnter(filePath, hunkIndex, lineIndex, line, hunk.is_staged)}
                 onMouseUp={handleLineMouseUp}
               >
-                {/* Line number / comment indicator */}
-                <div className="w-16 flex-shrink-0 text-muted-foreground select-none border-r border-border/40 flex items-center gap-1">
+                {/* Line number / comment indicator - click here to select lines */}
+                <div
+                  className="w-16 flex-shrink-0 text-muted-foreground select-none border-r border-border/40 flex items-center gap-1 cursor-pointer hover:bg-muted/50"
+                  onMouseDown={(e) => handleLineMouseDown(e, filePath, hunkIndex, lineIndex, line, hunk.is_staged)}
+                >
                   {lineComments.length > 0 && (
                     <MessageSquare className="w-3 h-3 text-primary ml-1" />
                   )}
@@ -1636,20 +1628,26 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
                   <span className="w-6 text-right" style={{ fontSize: `${Math.max(8, diffFontSize - 2)}px` }}>{lineNum?.new ?? ''}</span>
                 </div>
                 {/* Add comment button - shows on hover */}
-                <div className="w-6 flex-shrink-0 flex items-center justify-center">
+                <div className="w-6 flex-shrink-0 flex items-center justify-center select-none">
                   <button
                     className="invisible group-hover:visible p-0.5 rounded bg-primary text-primary-foreground hover:bg-primary/90"
                     onMouseDown={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation();
-                      setLineSelection({
-                        filePath,
-                        hunkId: hunk.id,
-                        startLineIndex: lineIndex,
-                        endLineIndex: lineIndex,
-                        isSelecting: false,
-                      });
-                      setShowCommentInput(true);
+                      // If there are selected lines, use those; otherwise use single line
+                      if (diffLineSelection && diffLineSelection.lines.length > 0) {
+                        handleAddCommentFromSelection();
+                      } else {
+                        setPendingComment({
+                          filePath,
+                          hunkId: hunk.id,
+                          displayAtLineIndex: lineIndex,
+                          startLine: actualLineNum,
+                          endLine: actualLineNum,
+                          lineContent: [line],
+                        });
+                        setShowCommentInput(true);
+                      }
                     }}
                     title="Add comment"
                   >
@@ -1660,8 +1658,8 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
                 <div className="w-5 flex-shrink-0 text-center select-none">
                   {getLinePrefix(line)}
                 </div>
-                {/* Line content */}
-                <div className="flex-1 px-2 py-0.5 whitespace-pre-wrap break-all select-none">
+                {/* Line content - selectable for copying */}
+                <div className="flex-1 px-2 py-0.5 whitespace-pre-wrap break-all">
                   <HighlightedLine content={line.substring(1) || " "} language={language} />
                 </div>
               </div>
@@ -1687,8 +1685,15 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
               )}
 
               {/* Comment input */}
-              {showCommentInputHere && (
-                <CommentInput onSubmit={addComment} onCancel={cancelComment} />
+              {showCommentInputHere && pendingComment && (
+                <CommentInput
+                  onSubmit={addComment}
+                  onCancel={cancelComment}
+                  filePath={pendingComment.filePath}
+                  startLine={pendingComment.startLine}
+                  endLine={pendingComment.endLine}
+                  lineContents={pendingComment.lineContent}
+                />
               )}
             </Fragment>
           );
@@ -2109,7 +2114,7 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
           style={{ left: contextMenuPosition.x, top: contextMenuPosition.y }}
           onClick={(e) => e.stopPropagation()}
         >
-          {diffLineSelection.lines.some(l => !l.isStaged) && (
+          {diffLineSelection.lines.some(l => !l.isStaged && (l.content.startsWith('+') || l.content.startsWith('-'))) && (
             <button
               className="w-full px-3 py-1.5 text-sm text-left hover:bg-accent flex items-center gap-2 disabled:opacity-50"
               onClick={handleStageSelectedLines}
@@ -2123,7 +2128,7 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
               Stage selected lines
             </button>
           )}
-          {diffLineSelection.lines.some(l => l.isStaged) && (
+          {diffLineSelection.lines.some(l => l.isStaged && (l.content.startsWith('+') || l.content.startsWith('-'))) && (
             <button
               className="w-full px-3 py-1.5 text-sm text-left hover:bg-accent flex items-center gap-2 disabled:opacity-50"
               onClick={handleUnstageSelectedLines}
@@ -2144,29 +2149,6 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
             <MessageSquare className="w-4 h-4" />
             Add comment
           </button>
-        </div>
-      )}
-
-      {/* Floating Comment Input for multi-line selection */}
-      {showCommentInput && pendingMultiLineComment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-popover border border-border rounded-lg shadow-xl p-4 w-[500px] max-w-[90vw]">
-            <div className="mb-3">
-              <div className="text-sm font-medium text-foreground mb-1">
-                Add comment on {pendingMultiLineComment.lineContent.length} line(s)
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {pendingMultiLineComment.filePath}:{pendingMultiLineComment.startLine}
-                {pendingMultiLineComment.startLine !== pendingMultiLineComment.endLine && `:${pendingMultiLineComment.endLine}`}
-              </div>
-            </div>
-            <div className="bg-muted/50 rounded border border-border/60 p-2 mb-3 max-h-[200px] overflow-auto">
-              <pre className="text-xs font-mono whitespace-pre-wrap">
-                {pendingMultiLineComment.lineContent.join('\n')}
-              </pre>
-            </div>
-            <CommentInput onSubmit={addComment} onCancel={cancelComment} />
-          </div>
         </div>
       )}
 

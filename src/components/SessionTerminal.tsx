@@ -1,4 +1,4 @@
-import { type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Worktree,
@@ -11,6 +11,7 @@ import {
   loadPlanFromRepo,
   clearSessionPlans,
   ptyWrite,
+  ptyClose,
   updateSessionName,
   gitPush,
   gitPushForce,
@@ -42,7 +43,7 @@ import {
   DialogDescription,
 } from "./ui/dialog";
 import { PlanHistoryDialog } from "./PlanHistoryDialog";
-import { Loader2, RotateCw, X, GitBranch, Search, ChevronDown, ChevronUp, Pencil, Check, MoreVertical, GitMerge, Upload, AlertTriangle, FileText } from "lucide-react";
+import { Loader2, RotateCw, X, GitBranch, Search, ChevronDown, ChevronUp, Pencil, Check, MoreVertical, GitMerge, Upload, AlertTriangle, FileText, ArrowDownToLine } from "lucide-react";
 import { PlanDisplayModal } from "./PlanDisplayModal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { cn } from "../lib/utils";
@@ -65,7 +66,7 @@ interface SessionTerminalProps {
   isHidden?: boolean;
 }
 
-export const SessionTerminal: React.FC<SessionTerminalProps> = ({
+export const SessionTerminal = memo<SessionTerminalProps>(function SessionTerminal({
   repositoryPath,
   worktree,
   session,
@@ -79,7 +80,7 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
   initialSelectedFile,
   onSessionActivity,
   isHidden = false,
-}) => {
+}) {
   const workingDirectory = worktree?.worktree_path || repositoryPath || "";
   const effectiveRepoPath = worktree?.repo_path || repositoryPath || "";
   const ptySessionId = sessionId ? `session-${sessionId}` : `session-${crypto.randomUUID()}`;
@@ -148,6 +149,11 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
   }, [ptySessionId]);
 
   useEffect(() => {
+    // Skip git preload when hidden to avoid unnecessary work
+    if (isHidden) {
+      return;
+    }
+
     const normalized = workingDirectory.trim();
     if (!normalized) {
       return;
@@ -156,7 +162,7 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
     preloadWorktreeGitData(normalized).catch((error) => {
       console.debug("git cache preload failed", normalized, error);
     });
-  }, [workingDirectory]);
+  }, [workingDirectory, isHidden]);
 
   useEffect(() => {
     if (isEditingSessionName) {
@@ -457,23 +463,28 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
   }, [terminalOutput, effectiveRepoPath, ptySessionId]);
 
   const handleReset = useCallback(async () => {
-    if (!effectiveRepoPath) {
-      setPlanSections([]);
-      setTerminalOutput("");
-      setActivePanel(null);
-      return;
-    }
-
     setIsResetting(true);
     setTerminalError(null);
     try {
-      await clearSessionPlans(effectiveRepoPath, ptySessionId).catch(console.error);
+      // Close the existing PTY session to force a fresh Claude instance
+      await ptyClose(ptySessionId).catch(console.error);
+
+      if (effectiveRepoPath) {
+        await clearSessionPlans(effectiveRepoPath, ptySessionId).catch(console.error);
+      }
+
       setPlanSections([]);
       setTerminalOutput("");
       setActivePanel(null);
+      setAutoCommandReady(false);
+      queuedMessagesRef.current = [];
+
+      // Increment instance key to remount ConsolidatedTerminal with a fresh PTY
+      setTerminalInstanceKey((prev) => prev + 1);
+
       addToast({
         title: "Terminal Reset",
-        description: "Starting new session",
+        description: "Starting new Claude session",
         type: "info",
       });
     } catch (error) {
@@ -541,6 +552,11 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
   }, []);
 
   useEffect(() => {
+    // Skip expensive git operations when hidden
+    if (isHidden) {
+      return;
+    }
+
     let isCancelled = false;
 
     const loadBranchComparisons = async () => {
@@ -612,7 +628,7 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
     return () => {
       isCancelled = true;
     };
-  }, [worktree?.worktree_path, mainTreePath, refreshSignal]);
+  }, [worktree?.worktree_path, mainTreePath, refreshSignal, isHidden]);
 
   const handleMergeIntoMaintree = useCallback(async () => {
     if (!mainTreePath || !worktree?.branch_name) {
@@ -644,6 +660,37 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
       setActionPending(null);
     }
   }, [mainTreePath, worktree?.branch_name, addToast, triggerSidebarRefresh]);
+
+  const handleUpdateFromMaintree = useCallback(async () => {
+    if (!workingDirectory || !maintreeBranchName) {
+      addToast({
+        title: "Cannot update",
+        description: "Working directory or maintree branch not available",
+        type: "error",
+      });
+      return;
+    }
+
+    setActionPending('merge');
+    try {
+      await gitMerge(workingDirectory, maintreeBranchName, "regular");
+      addToast({
+        title: "Updated",
+        description: `Branch updated with changes from ${maintreeBranchName}`,
+        type: "success",
+      });
+      triggerSidebarRefresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      addToast({
+        title: "Update failed",
+        description: message,
+        type: "error",
+      });
+    } finally {
+      setActionPending(null);
+    }
+  }, [workingDirectory, maintreeBranchName, addToast, triggerSidebarRefresh]);
 
   const handlePushToRemote = useCallback(async () => {
     if (!workingDirectory) return;
@@ -853,16 +900,6 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
         ? session.name.trim()
         : "Session Terminal";
 
-  const modeBadge = (
-    <span
-      className={`px-2 py-1 rounded-full text-xs font-semibold ${
-        activePanel === "planning" ? "bg-blue-500/10 text-blue-500" : "bg-green-500/10 text-green-500"
-      }`}
-    >
-      {activePanel === "planning" ? "Planning Panel" : "Execution Panel"}
-    </span>
-  );
-
   return (
     <div className="h-screen w-full flex flex-col bg-background">
       <div className="border-b p-4 flex flex-col gap-2">
@@ -935,6 +972,16 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
                 <DropdownMenuItem
                   onSelect={(e) => {
                     e.preventDefault();
+                    handleUpdateFromMaintree();
+                  }}
+                  disabled={!maintreeBranchName || !workingDirectory}
+                >
+                  <ArrowDownToLine className="w-4 h-4 mr-2" />
+                  Update from maintree
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
                     handleMergeIntoMaintree();
                   }}
                   disabled={!mainTreePath || !worktree?.branch_name}
@@ -967,10 +1014,9 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
           </div>
         </div>
 
-        {/* Row 2: Mode badge */}
+        {/* Row 2: Worktree info */}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-col gap-1 items-start">
-            {modeBadge}
             {worktree && (
               <span className="text-xs text-muted-foreground font-mono">{getWorktreeTitle()}</span>
             )}
@@ -1148,7 +1194,8 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
             ref={consolidatedTerminalRef}
             sessionId={ptySessionId}
             workingDirectory={workingDirectory}
-            autoCommand="claude"
+            autoCommand="claude --permission-mode plan"
+            autoCommandDelay={300}
             onAutoCommandComplete={() => setAutoCommandReady(true)}
             onAutoCommandError={handleAutoCommandError}
             onSessionError={handleSessionError}
@@ -1218,4 +1265,4 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
       </Dialog>
     </div>
   );
-};
+});
