@@ -2,14 +2,13 @@ import { useEffect, useState } from "react";
 import {
   Card,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "./ui/card";
 import { Button } from "./ui/button";
 import { Worktree, GitStatus, BranchInfo, gitGetStatus, gitGetBranchInfo, calculateDirectorySize } from "../lib/api";
 import { formatBytes } from "../lib/utils";
-import { GitBranch, FileText, HardDrive, Info, GitMerge } from "lucide-react";
+import { GitBranch, FileText, HardDrive, Info } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -18,14 +17,10 @@ import {
 
 interface WorktreeCardProps {
   worktree: Worktree;
-  onOpenDiff: (worktree: Worktree) => void;
-  onMerge: (worktree: Worktree) => void;
 }
 
 export const WorktreeCard: React.FC<WorktreeCardProps> = ({
   worktree,
-  onOpenDiff,
-  onMerge,
 }) => {
   const [status, setStatus] = useState<GitStatus | null>(null);
   const [branchInfo, setBranchInfo] = useState<BranchInfo | null>(null);
@@ -84,8 +79,6 @@ export const WorktreeCard: React.FC<WorktreeCardProps> = ({
   const totalChanges = status
     ? status.modified + status.added + status.deleted + status.untracked
     : 0;
-
-  const canMerge = !!branchInfo && branchInfo.ahead > 0;
 
   return (
     <Card>
@@ -201,27 +194,6 @@ export const WorktreeCard: React.FC<WorktreeCardProps> = ({
           </Popover>
         </div>
       </CardHeader>
-
-      <CardFooter className="flex gap-2 flex-wrap">
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => onOpenDiff(worktree)}
-          disabled={totalChanges === 0}
-        >
-          <FileText className="w-4 h-4 mr-2" />
-          Diff
-        </Button>
-        <Button
-          size="sm"
-          onClick={() => onMerge(worktree)}
-          disabled={!canMerge}
-          className="bg-blue-600 text-white hover:bg-blue-500"
-        >
-          <GitMerge className="w-4 h-4 mr-2" />
-          Review...
-        </Button>
-      </CardFooter>
     </Card>
   );
 };

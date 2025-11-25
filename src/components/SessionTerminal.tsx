@@ -18,6 +18,7 @@ import {
   getSetting,
   gitGetBranchInfo,
   gitGetBranchDivergence,
+  preloadWorktreeGitData,
 } from "../lib/api";
 import { PlanSection } from "../types/planning";
 import { createDebouncedParser } from "../lib/planParser";
@@ -42,7 +43,7 @@ import {
   DialogDescription,
 } from "./ui/dialog";
 import { PlanHistoryDialog } from "./PlanHistoryDialog";
-import { Loader2, RotateCw, X, History, GitBranch, Search, ChevronDown, ChevronUp, Pencil, Check, MoreVertical, GitMerge, Upload, AlertTriangle } from "lucide-react";
+import { Loader2, RotateCw, X, GitBranch, Search, ChevronDown, ChevronUp, Pencil, Check, MoreVertical, GitMerge, Upload, AlertTriangle } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { cn } from "../lib/utils";
 
@@ -61,6 +62,7 @@ interface SessionTerminalProps {
   initialPromptLabel?: string;
   initialSelectedFile?: string;
   onSessionActivity?: (sessionId: number) => void;
+  isHidden?: boolean;
 }
 
 export const SessionTerminal: React.FC<SessionTerminalProps> = ({
@@ -76,6 +78,7 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
   initialPromptLabel,
   initialSelectedFile,
   onSessionActivity,
+  isHidden = false,
 }) => {
   const workingDirectory = worktree?.worktree_path || repositoryPath || "";
   const effectiveRepoPath = worktree?.repo_path || repositoryPath || "";
@@ -91,7 +94,6 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
   const [autoCommandReady, setAutoCommandReady] = useState(false);
   const debouncedParserRef = useRef(createDebouncedParser(1000));
 
-  const [stagedFiles, setStagedFiles] = useState<string[]>([]);
   const [refreshSignal, setRefreshSignal] = useState(0);
   const [lastPromptLabel, setLastPromptLabel] = useState<string | null>(null);
   const [terminalError, setTerminalError] = useState<string | null>(null);
@@ -103,8 +105,6 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
   const sessionNameInputRef = useRef<HTMLInputElement>(null);
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [terminalWidth, setTerminalWidth] = useState(33); // percentage
-  const [isResizing, setIsResizing] = useState(false);
   const [isEditingSessionName, setIsEditingSessionName] = useState(false);
   const [editedSessionName, setEditedSessionName] = useState("");
   const [sessionDisplayName, setSessionDisplayName] = useState<string | null>(session?.name ?? null);
@@ -115,6 +115,8 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
   const [remoteBranchInfo, setRemoteBranchInfo] = useState<BranchInfo | null>(null);
   const [maintreeBranchName, setMaintreeBranchName] = useState<string | null>(null);
   const [maintreeDivergence, setMaintreeDivergence] = useState<BranchDivergence | null>(null);
+  const [showSwitchOverlay, setShowSwitchOverlay] = useState(false);
+  const prevIsHiddenRef = useRef(isHidden);
 
   const handleTerminalOutput = useCallback((output: string) => {
     setTerminalOutput(output);
@@ -139,6 +141,17 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
     setTerminalInstanceKey(0);
     setTerminalError(null);
   }, [ptySessionId]);
+
+  useEffect(() => {
+    const normalized = workingDirectory.trim();
+    if (!normalized) {
+      return;
+    }
+
+    preloadWorktreeGitData(normalized).catch((error) => {
+      console.debug("git cache preload failed", normalized, error);
+    });
+  }, [workingDirectory]);
 
   useEffect(() => {
     if (isEditingSessionName) {
@@ -174,6 +187,28 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
   useEffect(() => {
     setActivePanel(detectPanelFromOutput(terminalOutput));
   }, [terminalOutput, detectPanelFromOutput]);
+
+  // Reset right panel when session becomes hidden to unmount PlanDisplay/StagingDiffViewer
+  useEffect(() => {
+    if (isHidden) {
+      setActivePanel(null);
+    }
+  }, [isHidden]);
+
+  // Show loading overlay when switching from hidden to visible (canvas redraw)
+  useEffect(() => {
+    const wasHidden = prevIsHiddenRef.current;
+    prevIsHiddenRef.current = isHidden;
+
+    // Transition from hidden to visible - show overlay for 300ms
+    if (wasHidden && !isHidden) {
+      setShowSwitchOverlay(true);
+      const timer = setTimeout(() => {
+        setShowSwitchOverlay(false);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isHidden]);
 
   const openSearchPanel = useCallback(() => {
     setSearchVisible(true);
@@ -460,13 +495,20 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
     });
   }, [addToast]);
 
-  const handleStagedFilesChange = useCallback((files: string[]) => {
-    setStagedFiles(files);
+  const handleStagedFilesChange = useCallback((_files: string[]) => {
+    // No-op: staged files tracking not currently used
   }, []);
 
   const triggerSidebarRefresh = useCallback(() => {
     setRefreshSignal((prev) => prev + 1);
   }, []);
+
+  const handleTerminalIdle = useCallback(() => {
+    // Refresh git status when terminal goes idle (after command output stops)
+    if (activePanel === "execution") {
+      triggerSidebarRefresh();
+    }
+  }, [activePanel, triggerSidebarRefresh]);
 
   // Load main tree path from settings
   useEffect(() => {
@@ -567,7 +609,7 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
 
     setActionPending('merge');
     try {
-      await gitMerge(mainTreePath, worktree.branch_name, "default");
+      await gitMerge(mainTreePath, worktree.branch_name, "regular");
       addToast({
         title: "Merged",
         description: `Branch ${worktree.branch_name} merged into main tree`,
@@ -635,47 +677,6 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
     }
   }, [workingDirectory, addToast, triggerSidebarRefresh]);
 
-  const handleMouseDown = useCallback(() => {
-    setIsResizing(true);
-  }, []);
-
-  const handleMouseMove = useCallback(
-    (event: MouseEvent) => {
-      if (!isResizing) return;
-
-      const container = document.querySelector('.resize-container');
-      if (!container) return;
-
-      const rect = container.getBoundingClientRect();
-      const percentage = ((event.clientX - rect.left) / rect.width) * 100;
-
-      // Constrain between 20% and 80%
-      const constrainedPercentage = Math.max(20, Math.min(80, percentage));
-      setTerminalWidth(constrainedPercentage);
-    },
-    [isResizing]
-  );
-
-  const handleMouseUp = useCallback(() => {
-    setIsResizing(false);
-  }, []);
-
-  useEffect(() => {
-    if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      };
-    }
-  }, [isResizing, handleMouseMove, handleMouseUp]);
-
   const buildPlanPrompt = useCallback(() => {
     if (!initialPlanContent) return null;
     const title = initialPlanTitle?.trim() || "Implementation Plan";
@@ -697,6 +698,9 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
           setTimeout(() => {
             flushQueuedMessages();
           }, 400);
+        } else {
+          // All messages sent - focus terminal
+          consolidatedTerminalRef.current?.focus();
         }
       })
       .catch((error) => {
@@ -713,6 +717,8 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
     setAutoCommandReady(false);
   }, [ptySessionId]);
 
+  const prevInitialPromptRef = useRef<string | undefined>(undefined);
+
   useEffect(() => {
     const queue: string[] = [];
     const planPrompt = buildPlanPrompt();
@@ -726,7 +732,17 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
       setLastPromptLabel(null);
     }
     queuedMessagesRef.current = queue;
-  }, [ptySessionId, buildPlanPrompt, initialPrompt, initialPromptLabel]);
+
+    // If initialPrompt changed while session is already ready, flush immediately
+    const promptChanged = prevInitialPromptRef.current !== initialPrompt;
+    prevInitialPromptRef.current = initialPrompt;
+
+    if (promptChanged && autoCommandReady && initialPrompt && initialPrompt.trim()) {
+      setTimeout(() => {
+        flushQueuedMessages();
+      }, 500);
+    }
+  }, [ptySessionId, buildPlanPrompt, initialPrompt, initialPromptLabel, autoCommandReady, flushQueuedMessages]);
 
   useEffect(() => {
     if (!autoCommandReady) {
@@ -759,20 +775,12 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
           onStagedFilesChange={handleStagedFilesChange}
           refreshSignal={refreshSignal}
           initialSelectedFile={initialSelectedFile}
+          terminalSessionId={ptySessionId}
         />
     </div>
   ) : (
     <div className="h-full flex items-center justify-center text-center p-6 text-sm text-muted-foreground">
       Configure a worktree or repository path to manage commits.
-    </div>
-  );
-
-  const defaultPanel = (
-    <div className="h-full flex items-center justify-center text-center p-6">
-      <div className="text-sm text-muted-foreground">
-        <p className="mb-2">Session panel</p>
-        <p className="text-xs">Enable planning or execution mode to see content</p>
-      </div>
     </div>
   );
 
@@ -809,8 +817,16 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
       );
     }
 
+    if (showSwitchOverlay) {
+      return (
+        <div className="absolute inset-0 flex items-center justify-center bg-[#1e1e1e] z-20">
+          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+
     return undefined;
-  }, [handleRetryTerminal, isResetting, onClose, terminalError]);
+  }, [handleRetryTerminal, isResetting, onClose, terminalError, showSwitchOverlay]);
 
   const getWorktreeTitle = (): string => {
     if (worktree?.metadata) {
@@ -842,7 +858,7 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
   );
 
   return (
-    <div className="h-screen flex flex-col bg-background">
+    <div className="h-screen w-full flex flex-col bg-background">
       <div className="border-b p-4 flex flex-col gap-2">
         {/* Row 1: Session name */}
         <div className="flex items-center justify-between">
@@ -990,8 +1006,8 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
                   )}
                   title={remoteBranchInfo?.upstream ? `Tracking ${remoteBranchInfo.upstream}` : "No upstream configured"}
                 >
-                  <span>⬆{remoteBranchInfo?.ahead ?? 0}</span>
-                  <span>⬇{remoteBranchInfo?.behind ?? 0}</span>
+                  <span>{remoteBranchInfo?.ahead ?? 0}↑</span>
+                  <span>{remoteBranchInfo?.behind ?? 0}↓</span>
                 </span>
                 <span className="text-[10px] uppercase tracking-wide">remote</span>
               </div>
@@ -1001,7 +1017,7 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
       </div>
 
       <div className="flex-1 flex overflow-hidden resize-container relative">
-        <div style={{ width: `${terminalWidth}%` }} className="flex flex-col overflow-hidden relative">
+        <div className="w-1/3 flex flex-col overflow-hidden relative">
           {/* Floating refresh and search buttons */}
           {!searchVisible && (
             <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
@@ -1114,6 +1130,7 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
             onAutoCommandError={handleAutoCommandError}
             onSessionError={handleSessionError}
             onTerminalOutput={handleTerminalOutput}
+            onTerminalIdle={handleTerminalIdle}
             rightPanel={null}
             showDiffViewer={true}
             containerClassName="flex-1 flex overflow-hidden"
@@ -1123,15 +1140,9 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
           />
         </div>
 
-        <div
-          className={cn(
-            "w-1 bg-border hover:bg-primary cursor-col-resize flex-shrink-0 transition-colors",
-            isResizing && "bg-primary"
-          )}
-          onMouseDown={handleMouseDown}
-        />
+        <div className="w-1 bg-border flex-shrink-0" />
 
-        <div style={{ width: `${100 - terminalWidth}%` }} className="flex flex-col overflow-hidden">
+        <div className="w-2/3 flex flex-col overflow-hidden">
           {rightPanel}
         </div>
       </div>

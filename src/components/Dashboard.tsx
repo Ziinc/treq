@@ -3,10 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { WorktreeCard } from "./WorktreeCard";
 import { MergeDialog } from "./MergeDialog";
 import { CreateWorktreeDialog } from "./CreateWorktreeDialog";
-import { DiffViewer } from "./DiffViewer";
 import { CommandPalette } from "./CommandPalette";
 import { SettingsPage } from "./SettingsPage";
 import { SessionTerminal } from "./SessionTerminal";
@@ -14,12 +12,19 @@ import { WorktreeEditSession } from "./WorktreeEditSession";
 import { MergeReviewPage } from "./MergeReviewPage";
 import { SessionSidebar } from "./SessionSidebar";
 import { ErrorBoundary } from "./ErrorBoundary";
-import { GitFileListItem } from "./GitFileListItem";
+import { GitChangesSection } from "./GitChangesSection";
 import { PlanSection } from "../types/planning";
+import {
+  parseChangedFiles,
+  filterStagedFiles,
+  filterUnstagedFiles,
+  type ParsedFileChange,
+} from "../lib/git-utils";
 import { applyBranchNamePattern } from "../lib/utils";
 import { buildPlanHistoryPayload } from "../lib/planHistory";
 import { useToast } from "./ui/toast";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
+import { useGitCachePreloader } from "../hooks/useGitCachePreloader";
 import {
   getWorktrees,
   deleteWorktreeFromDb,
@@ -28,10 +33,12 @@ import {
   gitGetCurrentBranch,
   gitGetStatus,
   gitGetBranchInfo,
+  gitGetBranchDivergence,
   calculateDirectorySize,
   Worktree,
   GitStatus,
   BranchInfo,
+  BranchDivergence,
   saveExecutedPlan,
   gitCreateWorktree,
   addWorktreeToDb,
@@ -52,19 +59,15 @@ import {
   gitCommit,
 } from "../lib/api";
 import type { MergeStrategy } from "../lib/api";
-import { formatBytes } from "../lib/utils";
-import { Plus, Settings, X, RefreshCw, Search, GitBranch, HardDrive, Info, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { RefreshCw, GitBranch, Loader2 } from "lucide-react";
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
 } from "./ui/card";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 
 type ViewMode =
   | "dashboard"
-  | "diff"
   | "session"
   | "worktree-edit"
   | "worktree-session"
@@ -86,13 +89,6 @@ type SessionOpenOptions = {
   selectedFilePath?: string;
 };
 
-interface ParsedFileChange {
-  path: string;
-  stagedStatus?: string | null;
-  worktreeStatus?: string | null;
-  isUntracked: boolean;
-}
-
 export const Dashboard: React.FC = () => {
   const [repoPath, setRepoPath] = useState("");
   const [repoName, setRepoName] = useState("");
@@ -105,7 +101,6 @@ export const Dashboard: React.FC = () => {
   const [selectedWorktree, setSelectedWorktree] = useState<Worktree | null>(null);
   const [initialSettingsTab, setInitialSettingsTab] = useState<"application" | "repository">("repository");
   const [showCommandPalette, setShowCommandPalette] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [sessionPlanContent, setSessionPlanContent] = useState<string | null>(null);
   const [sessionPlanTitle, setSessionPlanTitle] = useState<string | null>(null);
@@ -119,65 +114,53 @@ export const Dashboard: React.FC = () => {
   const [mergeWorktreeHasChanges, setMergeWorktreeHasChanges] = useState(false);
   const [mergeChangedFiles, setMergeChangedFiles] = useState<string[]>([]);
   const [mergeDetailsLoading, setMergeDetailsLoading] = useState(false);
+  const [selectedWorktreeId, setSelectedWorktreeId] = useState<number | null>(null);
 
   // Main repo git changes state
   const [mainRepoChangedFiles, setMainRepoChangedFiles] = useState<ParsedFileChange[]>([]);
   const [mainRepoCommitMessage, setMainRepoCommitMessage] = useState("");
   const [mainRepoCommitPending, setMainRepoCommitPending] = useState(false);
   const [mainRepoFileActionTarget, setMainRepoFileActionTarget] = useState<string | null>(null);
-  const [stagedChangesExpanded, setStagedChangesExpanded] = useState(true);
-  const [unstagedChangesExpanded, setUnstagedChangesExpanded] = useState(true);
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+  const [mountedSessionIds, setMountedSessionIds] = useState<Set<number>>(new Set());
+
+  // Worktree git info state
+  const [worktreeBranchInfo, setWorktreeBranchInfo] = useState<Record<number, BranchInfo>>({});
+  const [worktreeDivergence, setWorktreeDivergence] = useState<Record<number, BranchDivergence>>({});
 
   const queryClient = useQueryClient();
   const { addToast } = useToast();
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const sessionActivityListenerRef = useRef<((sessionId: number) => void) | null>(null);
 
   const mainRepoChangeCount = mainRepoStatus
     ? mainRepoStatus.modified + mainRepoStatus.added + mainRepoStatus.deleted + mainRepoStatus.untracked
     : 0;
 
-  const mainRepoStagedFiles = useMemo(
-    () => mainRepoChangedFiles.filter((file) => file.stagedStatus && file.stagedStatus !== " "),
-    [mainRepoChangedFiles]
-  );
-
-  const mainRepoUnstagedFiles = useMemo(
-    () => mainRepoChangedFiles.filter((file) => (file.worktreeStatus && file.worktreeStatus !== " ") || file.isUntracked),
-    [mainRepoChangedFiles]
-  );
-
-  const parseChangedFiles = useCallback((changedFiles: string[]): ParsedFileChange[] => {
-    return changedFiles.map((file) => {
-      if (file.startsWith("?? ")) {
-        return {
-          path: file.substring(3).trim(),
-          stagedStatus: null,
-          worktreeStatus: "??",
-          isUntracked: true,
-        };
+  // Helper to get worktree display title from metadata
+  const getWorktreeTitle = useCallback((worktree: Worktree): string => {
+    if (worktree.metadata) {
+      try {
+        const metadata = JSON.parse(worktree.metadata);
+        return metadata.initial_plan_title || metadata.intent || worktree.branch_name;
+      } catch {
+        return worktree.branch_name;
       }
+    }
+    return worktree.branch_name;
+  }, []);
 
-      if (file.length < 3) {
-        return {
-          path: file.trim(),
-          stagedStatus: null,
-          worktreeStatus: null,
-          isUntracked: false,
-        };
+  const mainRepoStagedFiles = useMemo(() => filterStagedFiles(mainRepoChangedFiles), [mainRepoChangedFiles]);
+  const mainRepoUnstagedFiles = useMemo(() => filterUnstagedFiles(mainRepoChangedFiles), [mainRepoChangedFiles]);
+
+  const toggleSectionCollapse = useCallback((sectionId: string) => {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(sectionId)) {
+        next.delete(sectionId);
+      } else {
+        next.add(sectionId);
       }
-
-      const stagedStatus = file[0] !== " " ? file[0] : null;
-      const worktreeStatus = file[1] !== " " ? file[1] : null;
-      const rawPath = file.substring(3).trim();
-      const path = rawPath.includes(" -> ") ? rawPath.split(" -> ").pop() || rawPath : rawPath;
-
-      return {
-        path,
-        stagedStatus,
-        worktreeStatus,
-        isUntracked: false,
-      };
+      return next;
     });
   }, []);
 
@@ -190,8 +173,8 @@ export const Dashboard: React.FC = () => {
     setMergeDetailsLoading(false);
   }, []);
 
-  const openSettings = useCallback((tab: "application" | "repository" = "repository") => {
-    setInitialSettingsTab(tab);
+  const openSettings = useCallback((tab?: string) => {
+    setInitialSettingsTab((tab as "application" | "repository") || "repository");
     setViewMode("settings");
   }, []);
 
@@ -218,12 +201,6 @@ export const Dashboard: React.FC = () => {
         description: "Worktree list updated",
         type: "info",
       });
-    }
-  });
-
-  useKeyboardShortcut("f", true, () => {
-    if (viewMode === "dashboard") {
-      searchInputRef.current?.focus();
     }
   });
 
@@ -296,6 +273,12 @@ export const Dashboard: React.FC = () => {
       return;
     }
 
+    addToast({
+      title: "Syncing repository",
+      description: "Pulling latest changes and pushing local commits...",
+      type: "info",
+    });
+
     setMainRepoSyncing(true);
     try {
       try {
@@ -364,15 +347,63 @@ export const Dashboard: React.FC = () => {
     refetchInterval: 5000,
   });
 
-  const { data: worktrees = [], isLoading, refetch } = useQuery({
+  const { data: worktrees = [], refetch } = useQuery({
     queryKey: ["worktrees"],
     queryFn: getWorktrees,
   });
 
-  const activeSession = useMemo(() => {
-    if (!activeSessionId) return null;
-    return sessions.find((session) => session.id === activeSessionId) ?? null;
-  }, [sessions, activeSessionId]);
+  useGitCachePreloader(worktrees, repoPath || null);
+
+  // Fetch git info for each worktree (remote branch info + divergence from main)
+  useEffect(() => {
+    if (!currentBranch || worktrees.length === 0) return;
+
+    const fetchWorktreeGitInfo = async () => {
+      const branchInfoResults: Record<number, BranchInfo> = {};
+      const divergenceResults: Record<number, BranchDivergence> = {};
+
+      await Promise.all(
+        worktrees.map(async (worktree) => {
+          try {
+            // Fetch remote branch info (ahead/behind upstream)
+            const branchInfo = await gitGetBranchInfo(worktree.worktree_path);
+            branchInfoResults[worktree.id] = branchInfo;
+          } catch {
+            // Ignore errors for individual worktrees
+          }
+
+          try {
+            // Fetch divergence from main branch
+            const divergence = await gitGetBranchDivergence(worktree.worktree_path, currentBranch);
+            divergenceResults[worktree.id] = divergence;
+          } catch {
+            // Ignore errors for individual worktrees
+          }
+        })
+      );
+
+      setWorktreeBranchInfo(branchInfoResults);
+      setWorktreeDivergence(divergenceResults);
+    };
+
+    fetchWorktreeGitInfo();
+
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchWorktreeGitInfo, 30000);
+    return () => clearInterval(interval);
+  }, [worktrees, currentBranch]);
+
+  // Track mounted session IDs to preserve terminal state
+  useEffect(() => {
+    if (activeSessionId !== null) {
+      setMountedSessionIds(prev => {
+        if (prev.has(activeSessionId)) return prev;
+        const next = new Set(prev);
+        next.add(activeSessionId);
+        return next;
+      });
+    }
+  }, [activeSessionId]);
 
   const deleteWorktree = useMutation({
     mutationFn: async (worktree: Worktree) => {
@@ -451,6 +482,54 @@ export const Dashboard: React.FC = () => {
     },
   });
 
+  const updateBranchMutation = useMutation({
+    mutationFn: async (worktree: Worktree) => {
+      if (!currentBranch) {
+        throw new Error("Current branch is not set");
+      }
+
+      const worktreeDirty = await gitHasUncommittedChanges(worktree.worktree_path);
+      if (worktreeDirty) {
+        throw new Error("Worktree has uncommitted changes. Please commit or stash them before updating.");
+      }
+
+      return gitMerge(
+        worktree.worktree_path,
+        currentBranch,
+        "regular",
+        undefined
+      );
+    },
+    onSuccess: (_result, worktree) => {
+      addToast({
+        title: "Branch updated",
+        description: `Merged ${currentBranch} into ${worktree.branch_name}`,
+        type: "success",
+      });
+      // Refresh divergence info
+      queryClient.invalidateQueries({ queryKey: ["worktrees"] });
+      // Re-fetch git info for worktrees
+      if (currentBranch) {
+        gitGetBranchDivergence(worktree.worktree_path, currentBranch)
+          .then((divergence) => {
+            setWorktreeDivergence((prev) => ({ ...prev, [worktree.id]: divergence }));
+          })
+          .catch(() => {});
+      }
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      const description = message.includes("CONFLICT")
+        ? "Merge conflict detected. Resolve conflicts in the worktree and try again."
+        : message;
+      addToast({
+        title: "Update failed",
+        description,
+        type: "error",
+      });
+    },
+  });
+
   // Helper to create or get session
   const getOrCreateSession = useCallback(
     async (
@@ -498,32 +577,6 @@ export const Dashboard: React.FC = () => {
     },
     [queryClient, worktrees]
   );
-
-  // Filter worktrees based on search query (including metadata)
-  const filteredWorktrees = worktrees.filter((wt) => {
-    const query = searchQuery.toLowerCase();
-    
-    // Check branch name and path
-    if (wt.branch_name.toLowerCase().includes(query) ||
-        wt.worktree_path.toLowerCase().includes(query)) {
-      return true;
-    }
-    
-    // Check metadata fields
-    if (wt.metadata) {
-      try {
-        const metadata = JSON.parse(wt.metadata);
-        if (metadata.initial_plan_title?.toLowerCase().includes(query) ||
-            metadata.intent?.toLowerCase().includes(query)) {
-          return true;
-        }
-      } catch {
-        // Ignore parse errors
-      }
-    }
-    
-    return false;
-  });
 
   const handleOpenSession = useCallback(
     async (worktree: Worktree | null, options?: SessionOpenOptions) => {
@@ -579,11 +632,6 @@ export const Dashboard: React.FC = () => {
       setSelectedWorktree(null);
       setViewMode("session");
     }
-  };
-
-  const handleOpenDiff = (worktree: Worktree) => {
-    setSelectedWorktree(worktree);
-    setViewMode("diff");
   };
 
   const handleDelete = (worktree: Worktree) => {
@@ -649,55 +697,6 @@ export const Dashboard: React.FC = () => {
       setMergeDetailsLoading(false);
     }
   };
-
-  const handleOpenMergeReview = async (worktree: Worktree) => {
-    if (!repoPath) {
-      addToast({
-        title: "Repository not set",
-        description: "Configure a repository path before starting a review.",
-        type: "error",
-      });
-      return;
-    }
-
-    if (!currentBranch) {
-      addToast({
-        title: "Missing base branch",
-        description: "Checkout the main branch in the repo before reviewing",
-        type: "error",
-      });
-      return;
-    }
-
-    try {
-      const mainDirty = await gitHasUncommittedChanges(repoPath);
-      if (mainDirty) {
-        addToast({
-          title: "Main repository dirty",
-          description: "Commit or stash changes on the main tree before reviewing.",
-          type: "error",
-        });
-        return;
-      }
-
-      setSelectedWorktree(worktree);
-      setSessionPlanContent(null);
-      setSessionPlanTitle(null);
-      setSessionInitialPrompt(null);
-      setSessionPromptLabel(null);
-      setSessionSelectedFile(null);
-      setActiveSessionId(null);
-      setViewMode("merge-review");
-    } catch (error) {
-      addToast({
-        title: "Unable to open review",
-        description: error instanceof Error ? error.message : String(error),
-        type: "error",
-      });
-    }
-  };
-
-
 
   const handleExecutePlan = async (section: PlanSection) => {
     try {
@@ -908,49 +907,48 @@ export const Dashboard: React.FC = () => {
     />
   );
 
-  if (viewMode === "session") {
-    return (
-      <>
-        <div className="flex h-screen bg-background">
-          <SessionSidebar
-            activeSessionId={activeSessionId}
-            onSessionClick={handleSessionClick}
-            onCreateSession={handleCreateSessionFromSidebar}
-            onCloseActiveSession={handleCloseTerminal}
-            repoPath={repoPath}
-            currentBranch={currentBranch}
-            onDeleteWorktree={handleDelete}
-            onSessionActivityListenerChange={handleSessionActivityListenerChange}
-            openSettings={openSettings}
-          />
-          <div className="flex-1" style={{ width: "calc(100vw - 240px)" }}>
-            <ErrorBoundary
-              fallbackTitle="Session terminal error"
-              resetKeys={[activeSessionId ?? "main"]}
-              onGoDashboard={handleCloseTerminal}
-            >
-              <SessionTerminal
-                repositoryPath={repoPath}
-                session={activeSession}
-                sessionId={activeSessionId}
-                onClose={handleCloseTerminal}
-                onExecutePlan={handleExecutePlan}
-                initialPlanContent={sessionPlanContent || undefined}
-                initialPlanTitle={sessionPlanTitle || undefined}
-                initialPrompt={sessionInitialPrompt || undefined}
-                initialPromptLabel={sessionPromptLabel || undefined}
-                initialSelectedFile={sessionSelectedFile || undefined}
-                onSessionActivity={handleSessionActivity}
-              />
-            </ErrorBoundary>
-          </div>
-        </div>
-        {commandPaletteElement}
-      </>
-    );
-  }
+  // Render session terminals - keep them mounted but hidden for state preservation
+  const renderSessionTerminals = () => {
+    // Get unique sessions that have been visited (have an activeSessionId match or are currently active)
+    const sessionsToRender = sessions.filter(s => s.id === activeSessionId || mountedSessionIds.has(s.id));
 
-  if (viewMode === "worktree-session" && selectedWorktree) {
+    return sessionsToRender.map(session => {
+      const isActive = session.id === activeSessionId && (viewMode === "session" || viewMode === "worktree-session");
+      const sessionWorktree = session.worktree_id ? worktrees.find(w => w.id === session.worktree_id) : null;
+
+      return (
+        <div
+          key={session.id}
+          style={{ display: isActive ? 'flex' : 'none' }}
+          className="flex-1 h-full w-full"
+        >
+          <ErrorBoundary
+            fallbackTitle={sessionWorktree ? "Worktree terminal error" : "Session terminal error"}
+            resetKeys={[session.id]}
+            onGoDashboard={handleCloseTerminal}
+          >
+            <SessionTerminal
+              repositoryPath={sessionWorktree ? undefined : repoPath}
+              worktree={sessionWorktree || undefined}
+              session={session}
+              sessionId={session.id}
+              onClose={handleCloseTerminal}
+              onExecutePlan={handleExecutePlan}
+              initialPlanContent={session.id === activeSessionId ? (sessionPlanContent || undefined) : undefined}
+              initialPlanTitle={session.id === activeSessionId ? (sessionPlanTitle || undefined) : undefined}
+              initialPrompt={session.id === activeSessionId ? (sessionInitialPrompt || undefined) : undefined}
+              initialPromptLabel={session.id === activeSessionId ? (sessionPromptLabel || undefined) : undefined}
+              initialSelectedFile={session.id === activeSessionId ? (sessionSelectedFile || undefined) : undefined}
+              onSessionActivity={handleSessionActivity}
+              isHidden={!isActive}
+            />
+          </ErrorBoundary>
+        </div>
+      );
+    });
+  };
+
+  if (viewMode === "session" || viewMode === "worktree-session") {
     return (
       <>
         <div className="flex h-screen bg-background">
@@ -962,29 +960,14 @@ export const Dashboard: React.FC = () => {
             repoPath={repoPath}
             currentBranch={currentBranch}
             onDeleteWorktree={handleDelete}
+            onCreateWorktree={() => setShowCreateDialog(true)}
             onSessionActivityListenerChange={handleSessionActivityListenerChange}
             openSettings={openSettings}
+            navigateToDashboard={handleReturnToDashboard}
+            onOpenCommandPalette={() => setShowCommandPalette(true)}
           />
-          <div className="flex-1" style={{ width: "calc(100vw - 240px)" }}>
-            <ErrorBoundary
-              fallbackTitle="Worktree terminal error"
-              resetKeys={[activeSessionId ?? "main", selectedWorktree.id]}
-              onGoDashboard={handleCloseTerminal}
-            >
-              <SessionTerminal
-                worktree={selectedWorktree}
-                session={activeSession}
-                sessionId={activeSessionId}
-                onClose={handleCloseTerminal}
-                onExecutePlan={handleExecutePlan}
-                initialPlanContent={sessionPlanContent || undefined}
-                initialPlanTitle={sessionPlanTitle || undefined}
-                initialPrompt={sessionInitialPrompt || undefined}
-                initialPromptLabel={sessionPromptLabel || undefined}
-                initialSelectedFile={sessionSelectedFile || undefined}
-                onSessionActivity={handleSessionActivity}
-              />
-            </ErrorBoundary>
+          <div className="flex-1 flex flex-col" style={{ width: "calc(100vw - 240px)" }}>
+            {renderSessionTerminals()}
           </div>
         </div>
         {commandPaletteElement}
@@ -1046,39 +1029,6 @@ export const Dashboard: React.FC = () => {
     );
   }
 
-  if (viewMode === "diff" && selectedWorktree) {
-    return (
-      <>
-        <div className="h-screen flex flex-col bg-background">
-          <div className="flex-1 flex flex-col">
-            <div className="border-b p-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">
-                Diff Viewer - {selectedWorktree.branch_name}
-              </h2>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setViewMode("dashboard")}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-            <div className="flex-1">
-              <ErrorBoundary
-                fallbackTitle="Diff viewer failed"
-                resetKeys={[selectedWorktree.id]}
-                onGoDashboard={handleReturnToDashboard}
-              >
-                <DiffViewer worktreePath={selectedWorktree.worktree_path} />
-              </ErrorBoundary>
-            </div>
-          </div>
-        </div>
-        {commandPaletteElement}
-      </>
-    );
-  }
-
   if (viewMode === "settings") {
     return (
       <>
@@ -1091,8 +1041,11 @@ export const Dashboard: React.FC = () => {
             repoPath={repoPath}
             currentBranch={currentBranch}
             onDeleteWorktree={handleDelete}
+            onCreateWorktree={() => setShowCreateDialog(true)}
             onSessionActivityListenerChange={handleSessionActivityListenerChange}
             openSettings={openSettings}
+            navigateToDashboard={handleReturnToDashboard}
+            onOpenCommandPalette={() => setShowCommandPalette(true)}
           />
           <div className="flex-1" style={{ width: "calc(100vw - 240px)" }}>
             <SettingsPage
@@ -1123,8 +1076,11 @@ export const Dashboard: React.FC = () => {
         repoPath={repoPath}
         currentBranch={currentBranch}
         onDeleteWorktree={handleDelete}
+        onCreateWorktree={() => setShowCreateDialog(true)}
         onSessionActivityListenerChange={handleSessionActivityListenerChange}
         openSettings={openSettings}
+        navigateToDashboard={handleReturnToDashboard}
+        onOpenCommandPalette={() => setShowCommandPalette(true)}
       />
       <div className="flex-1 overflow-auto" style={{ width: "calc(100vw - 240px)" }}>
         <ErrorBoundary
@@ -1151,7 +1107,7 @@ export const Dashboard: React.FC = () => {
                 {/* Main Tree Section */}
                 <div className="lg:sticky lg:top-6 lg:self-start">
                   <Card className="bg-sidebar">
-                    <CardContent className="space-y-4">
+                    <CardContent className="p-4 space-y-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 space-y-3 text-sm">
                           {currentBranch && (
@@ -1161,15 +1117,24 @@ export const Dashboard: React.FC = () => {
                                 <code className="text-xs">{currentBranch}</code>
                               </div>
 
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="w-6 h-6"
-                                onClick={handleMainRepoSync}
-                                disabled={mainRepoSyncing}
-                              >
-                                <RefreshCw className={`w-3 h-3 ${mainRepoSyncing ? "animate-spin" : ""}`} />
-                              </Button>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="w-6 h-6"
+                                      onClick={handleMainRepoSync}
+                                      disabled={mainRepoSyncing}
+                                    >
+                                      <RefreshCw className={`w-3 h-3 ${mainRepoSyncing ? "animate-spin" : ""}`} />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="bottom">
+                                    {mainRepoSyncing ? "Syncing..." : "Sync with remote"}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
 
                               {mainBranchInfo?.upstream && (
                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -1185,52 +1150,11 @@ export const Dashboard: React.FC = () => {
                           )}
 
                         </div>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
-                              <Info className="w-4 h-4" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent align="end" className="w-80">
-                            <div className="space-y-3 text-sm">
-                              <div>
-                                <div className="text-xs text-muted-foreground mb-0.5">Repository</div>
-                                <div className="font-medium">{repoName || "Main repository"}</div>
-                              </div>
-                              <div>
-                                <div className="text-xs text-muted-foreground mb-0.5">Path</div>
-                                <div className="font-mono text-xs break-all">{repoPath}</div>
-                              </div>
-                              <div>
-                                <div className="text-xs text-muted-foreground mb-0.5">Disk Usage</div>
-                                <div className="text-xs flex items-center gap-1 text-muted-foreground">
-                                  <HardDrive className="w-3 h-3" />
-                                  {mainRepoSize !== null ? formatBytes(mainRepoSize) : "Calculating..."}
-                                </div>
-                              </div>
-                              {currentBranch && (
-                                <div className="space-y-1">
-                                  <div className="text-xs text-muted-foreground">Current Branch</div>
-                                  <div className="flex items-center gap-2 text-xs">
-                                    <GitBranch className="w-3 h-3" />
-                                    <code>{currentBranch}</code>
-                                  </div>
-                                  {mainBranchInfo?.upstream && (
-                                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                                      {mainBranchInfo.behind > 0 && <span>{mainBranchInfo.behind}↓</span>}
-                                      {mainBranchInfo.ahead > 0 && <span>{mainBranchInfo.ahead}↑</span>}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </PopoverContent>
-                        </Popover>
                       </div>
 
                       {/* Git Changes List */}
                       {mainRepoChangeCount > 0 && (
-                        <div className="space-y-3 mt-4 pt-4 border-t border-border">
+                        <div className="space-y-3 mt-4 pt-4 border-t border-border -mx-4 px-4">
                           {/* Commit Message Input */}
                           <div className="space-y-2">
                             <Input
@@ -1262,66 +1186,38 @@ export const Dashboard: React.FC = () => {
 
                           {/* Staged Changes */}
                           {mainRepoStagedFiles.length > 0 && (
-                            <div className="space-y-1">
-                              <button
-                                className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground w-full"
-                                onClick={() => setStagedChangesExpanded(!stagedChangesExpanded)}
-                              >
-                                {stagedChangesExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                                <span>Staged Changes</span>
-                                <span className="ml-auto px-1.5 py-0.5 bg-green-500/10 text-green-600 dark:text-green-400 rounded">
-                                  {mainRepoStagedFiles.length}
-                                </span>
-                              </button>
-                              {stagedChangesExpanded && (
-                                <div className="border border-border/40 rounded-sm overflow-hidden">
-                                  {mainRepoStagedFiles.map((file: ParsedFileChange) => (
-                                    <GitFileListItem
-                                      key={`staged-${file.path}`}
-                                      file={file.path}
-                                      status={file.stagedStatus || file.worktreeStatus || "M"}
-                                      isStaged={true}
-                                      isBusy={mainRepoFileActionTarget === file.path}
-                                      onClick={() => handleMainRepoFileClick(file)}
-                                      onUnstage={() => handleMainRepoUnstageFile(file.path)}
-                                      readOnly={mainRepoCommitPending}
-                                    />
-                                  ))}
-                                </div>
-                              )}
-                            </div>
+                            <GitChangesSection
+                              title="Staged Changes"
+                              files={mainRepoStagedFiles}
+                              isStaged={true}
+                              isCollapsed={collapsedSections.has("staged")}
+                              onToggleCollapse={() => toggleSectionCollapse("staged")}
+                              fileActionTarget={mainRepoFileActionTarget}
+                              readOnly={mainRepoCommitPending}
+                              onFileClick={(path) => {
+                                const file = mainRepoStagedFiles.find((f) => f.path === path);
+                                if (file) handleMainRepoFileClick(file);
+                              }}
+                              onUnstage={handleMainRepoUnstageFile}
+                            />
                           )}
 
                           {/* Unstaged Changes */}
                           {mainRepoUnstagedFiles.length > 0 && (
-                            <div className="space-y-1">
-                              <button
-                                className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground w-full"
-                                onClick={() => setUnstagedChangesExpanded(!unstagedChangesExpanded)}
-                              >
-                                {unstagedChangesExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                                <span>Changes</span>
-                                <span className="ml-auto px-1.5 py-0.5 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 rounded">
-                                  {mainRepoUnstagedFiles.length}
-                                </span>
-                              </button>
-                              {unstagedChangesExpanded && (
-                                <div className="border border-border/40 rounded-sm overflow-hidden">
-                                  {mainRepoUnstagedFiles.map((file: ParsedFileChange) => (
-                                    <GitFileListItem
-                                      key={`unstaged-${file.path}`}
-                                      file={file.path}
-                                      status={file.worktreeStatus || file.stagedStatus || "M"}
-                                      isStaged={false}
-                                      isBusy={mainRepoFileActionTarget === file.path}
-                                      onClick={() => handleMainRepoFileClick(file)}
-                                      onStage={() => handleMainRepoStageFile(file.path)}
-                                      readOnly={mainRepoCommitPending}
-                                    />
-                                  ))}
-                                </div>
-                              )}
-                            </div>
+                            <GitChangesSection
+                              title="Changes"
+                              files={mainRepoUnstagedFiles}
+                              isStaged={false}
+                              isCollapsed={collapsedSections.has("unstaged")}
+                              onToggleCollapse={() => toggleSectionCollapse("unstaged")}
+                              fileActionTarget={mainRepoFileActionTarget}
+                              readOnly={mainRepoCommitPending}
+                              onFileClick={(path) => {
+                                const file = mainRepoUnstagedFiles.find((f) => f.path === path);
+                                if (file) handleMainRepoFileClick(file);
+                              }}
+                              onStage={handleMainRepoStageFile}
+                            />
                           )}
                         </div>
                       )}
@@ -1330,89 +1226,139 @@ export const Dashboard: React.FC = () => {
                   </Card>
                 </div>
 
-            {/* Worktrees Section */}
-                <div>
-                  <Card>
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle>Worktrees</CardTitle>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => {
-                              refetch();
-                              addToast({
-                                title: "Refreshed",
-                                description: "Worktree list updated",
-                                type: "info",
-                              });
-                            }}
-                          >
-                            <RefreshCw className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => setShowCreateDialog(true)}
-                          >
-                            <Plus className="w-4 h-4 mr-2" />
-                            New Worktree
-                          </Button>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      {/* Search Bar */}
-                      {worktrees.length > 0 && (
-                        <div className="relative mb-4">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                          <Input
-                            ref={searchInputRef}
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="Search worktrees... (Ctrl+F)"
-                            className="pl-10"
-                          />
-                        </div>
-                      )}
+                {/* Worktrees Section */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-medium text-muted-foreground">
+                      Worktrees {worktrees.length > 0 && <span className="text-xs">({worktrees.length})</span>}
+                    </h2>
+                  </div>
 
-                      {/* Worktrees Grid */}
-                      {isLoading ? (
-                        <div>Loading worktrees...</div>
-                      ) : worktrees.length === 0 ? (
-                        <div className="text-center py-12">
-                          <p className="text-muted-foreground mb-4">
-                            No worktrees yet. Create your first one!
-                          </p>
-                          <Button onClick={() => setShowCreateDialog(true)}>
-                            <Plus className="w-4 h-4 mr-2" />
-                            Create Worktree
-                          </Button>
-                        </div>
-                      ) : filteredWorktrees.length === 0 ? (
-                        <div className="text-center py-12">
-                          <p className="text-muted-foreground mb-4">
-                            No worktrees match your search
-                          </p>
-                          <Button variant="outline" onClick={() => setSearchQuery("")}>
-                            Clear Search
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {filteredWorktrees.map((worktree) => (
-                            <WorktreeCard
-                              key={worktree.id}
-                              worktree={worktree}
-                              onOpenDiff={handleOpenDiff}
-                              onMerge={handleOpenMergeReview}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                  {worktrees.length === 0 ? (
+                    <div className="text-sm text-muted-foreground py-4 text-center">
+                      No worktrees yet
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {worktrees.map((worktree) => {
+                        const branchInfo = worktreeBranchInfo[worktree.id];
+                        const divergence = worktreeDivergence[worktree.id];
+                        const title = getWorktreeTitle(worktree);
+                        const isSelected = selectedWorktreeId === worktree.id;
+                        const isBehindMain = divergence && divergence.behind > 0;
+
+                        return (
+                          <div
+                            key={worktree.id}
+                            onClick={() => setSelectedWorktreeId(isSelected ? null : worktree.id)}
+                            onDoubleClick={() => handleOpenSession(worktree)}
+                            className={`w-full text-left p-3 rounded-lg border transition-colors cursor-pointer ${
+                              isSelected
+                                ? "border-primary ring-2 ring-primary/20 bg-sidebar"
+                                : "border-border bg-sidebar hover:bg-sidebar-accent"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="text-sm font-medium truncate flex-1">
+                                {title}
+                              </span>
+                            </div>
+
+                            {/* Git indicators */}
+                            <div className="flex flex-wrap gap-2 mt-2 text-xs">
+                              {/* Remote ahead/behind */}
+                              {branchInfo?.upstream && (branchInfo.ahead > 0 || branchInfo.behind > 0) && (
+                                <div className="flex items-center gap-1.5 text-muted-foreground">
+                                  <span className="opacity-60">remote:</span>
+                                  {branchInfo.behind > 0 && (
+                                    <span className="text-orange-600 dark:text-orange-400">
+                                      {branchInfo.behind}↓
+                                    </span>
+                                  )}
+                                  {branchInfo.ahead > 0 && (
+                                    <span className="text-green-600 dark:text-green-400">
+                                      {branchInfo.ahead}↑
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Divergence from main */}
+                              {divergence && (divergence.ahead > 0 || divergence.behind > 0) && (
+                                <div className="flex items-center gap-1.5 text-muted-foreground">
+                                  <span className="opacity-60">vs {currentBranch}:</span>
+                                  {divergence.behind > 0 && (
+                                    <span className="text-orange-600 dark:text-orange-400">
+                                      {divergence.behind}↓
+                                    </span>
+                                  )}
+                                  {divergence.ahead > 0 && (
+                                    <span className="text-green-600 dark:text-green-400">
+                                      {divergence.ahead}↑
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Show "up to date" if no divergence at all */}
+                              {(!branchInfo?.upstream || (branchInfo.ahead === 0 && branchInfo.behind === 0)) &&
+                               (!divergence || (divergence.ahead === 0 && divergence.behind === 0)) && (
+                                <span className="text-muted-foreground opacity-60">up to date</span>
+                              )}
+                            </div>
+
+                            {/* Action buttons when selected */}
+                            {isSelected && (
+                              <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-border">
+                                {isBehindMain && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs"
+                                    disabled={updateBranchMutation.isPending}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      updateBranchMutation.mutate(worktree);
+                                    }}
+                                  >
+                                    {updateBranchMutation.isPending ? (
+                                      <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                    ) : null}
+                                    Update branch
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  disabled={mergeMutation.isPending}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openMergeDialogForWorktree(worktree);
+                                  }}
+                                >
+                                  Merge into {currentBranch || "main"}
+                                </Button>
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenSession(worktree);
+                                  }}
+                                >
+                                  Open session
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
+
               </div>
             )}
 

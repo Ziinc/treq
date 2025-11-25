@@ -76,6 +76,15 @@ export default {
         '18': '4.5rem',    // 72px
         '88': '22rem',     // 352px
       },
+      keyframes: {
+        'pulse-highlight': {
+          '0%, 100%': { backgroundColor: 'transparent' },
+          '50%': { backgroundColor: 'hsl(var(--accent) / 0.5)' },
+        },
+      },
+      animation: {
+        'pulse-highlight': 'pulse-highlight 0.6s ease-in-out 2',
+      },
     },
   },
   plugins: [],

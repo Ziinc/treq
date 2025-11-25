@@ -121,6 +121,17 @@ export const AnnotatableDiffViewer: React.FC<AnnotatableDiffViewerProps> = ({
 
   useEffect(() => {
     const handleKeydown = (event: KeyboardEvent) => {
+      // Skip keyboard shortcuts when user is typing in an input field
+      const target = event.target as HTMLElement;
+      const isEditableElement =
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable;
+
+      if (isEditableElement) {
+        return;
+      }
+
       if (event.key.toLowerCase() === "c" && !event.metaKey && !event.ctrlKey && !event.altKey) {
         if (!draft && hoverTargetRef.current) {
           event.preventDefault();

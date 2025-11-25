@@ -31,6 +31,15 @@ export interface Command {
   output?: string;
 }
 
+export interface GitCacheEntry {
+  id: number;
+  worktree_path: string;
+  file_path: string | null;
+  cache_type: string;
+  data: string;
+  updated_at: string;
+}
+
 export interface GitStatus {
   modified: number;
   added: number;
@@ -151,6 +160,38 @@ export const setRepoSetting = (repo_path: string, key: string, value: string): P
 
 export const deleteRepoSetting = (repo_path: string, key: string): Promise<void> =>
   invoke("delete_repo_setting", { repoPath: repo_path, key });
+
+export const getGitCache = (
+  worktree_path: string,
+  cache_type: "changed_files" | "file_hunks",
+  file_path?: string
+): Promise<GitCacheEntry | null> =>
+  invoke("get_git_cache", {
+    worktreePath: worktree_path,
+    cacheType: cache_type,
+    ...(file_path ? { filePath: file_path } : {}),
+  });
+
+export const setGitCache = (
+  worktree_path: string,
+  cache_type: "changed_files" | "file_hunks",
+  data: unknown,
+  file_path?: string
+): Promise<void> => {
+  const serialized = typeof data === "string" ? data : JSON.stringify(data);
+  return invoke("set_git_cache", {
+    worktreePath: worktree_path,
+    cacheType: cache_type,
+    data: serialized,
+    ...(file_path ? { filePath: file_path } : {}),
+  });
+};
+
+export const invalidateGitCache = (worktree_path: string): Promise<void> =>
+  invoke("invalidate_git_cache", { worktreePath: worktree_path });
+
+export const preloadWorktreeGitData = (worktree_path: string): Promise<void> =>
+  invoke("preload_worktree_git_data", { worktreePath: worktree_path });
 
 // Git API
 export const gitCreateWorktree = (
@@ -301,6 +342,9 @@ export const gitCommitAmend = (worktree_path: string, message: string): Promise<
 export const gitAddAll = (worktree_path: string): Promise<string> =>
   invoke("git_add_all", { worktreePath: worktree_path });
 
+export const gitUnstageAll = (worktree_path: string): Promise<string> =>
+  invoke("git_unstage_all", { worktreePath: worktree_path });
+
 export const gitPush = (worktree_path: string): Promise<string> =>
   invoke("git_push", { worktreePath: worktree_path });
 
@@ -330,6 +374,43 @@ export const gitUnstageHunk = (worktree_path: string, patch: string): Promise<st
 
 export const gitGetChangedFiles = (worktree_path: string): Promise<string[]> =>
   invoke("git_get_changed_files", { worktreePath: worktree_path });
+
+// Line selection type for staging individual lines
+export interface LineSelectionPayload {
+  hunk_index: number;
+  line_index: number;
+  content: string;
+}
+
+export const gitStageSelectedLines = (
+  worktree_path: string,
+  file_path: string,
+  selections: LineSelectionPayload[],
+  metadata_lines: string[],
+  hunks: [string, string[]][]
+): Promise<string> =>
+  invoke("git_stage_selected_lines", {
+    worktreePath: worktree_path,
+    filePath: file_path,
+    selections,
+    metadataLines: metadata_lines,
+    hunks,
+  });
+
+export const gitUnstageSelectedLines = (
+  worktree_path: string,
+  file_path: string,
+  selections: LineSelectionPayload[],
+  metadata_lines: string[],
+  hunks: [string, string[]][]
+): Promise<string> =>
+  invoke("git_unstage_selected_lines", {
+    worktreePath: worktree_path,
+    filePath: file_path,
+    selections,
+    metadataLines: metadata_lines,
+    hunks,
+  });
 
 // Calculate directory size (in bytes, excluding .git)
 export const calculateDirectorySize = (path: string): Promise<number> =>
@@ -497,3 +578,31 @@ export const updateSessionName = (id: number, name: string): Promise<void> =>
 
 export const deleteSession = (id: number): Promise<void> =>
   invoke("delete_session", { id });
+
+// File view tracking API
+export interface FileView {
+  id: number;
+  worktree_path: string;
+  file_path: string;
+  viewed_at: string;
+  content_hash: string;
+}
+
+export const markFileViewed = (
+  worktreePath: string,
+  filePath: string,
+  contentHash: string
+): Promise<void> =>
+  invoke("mark_file_viewed", { worktreePath, filePath, contentHash });
+
+export const unmarkFileViewed = (
+  worktreePath: string,
+  filePath: string
+): Promise<void> =>
+  invoke("unmark_file_viewed", { worktreePath, filePath });
+
+export const getViewedFiles = (worktreePath: string): Promise<FileView[]> =>
+  invoke("get_viewed_files", { worktreePath });
+
+export const clearAllViewedFiles = (worktreePath: string): Promise<void> =>
+  invoke("clear_all_viewed_files", { worktreePath });

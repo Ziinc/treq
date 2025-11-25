@@ -8,7 +8,7 @@ import { RepositorySettingsContent } from "./RepositorySettingsContent";
 import { useTheme } from "../hooks/useTheme";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import { useToast } from "./ui/toast";
-import { getSetting, setSetting, selectFolder, isGitRepository, gitInit, BranchInfo } from "../lib/api";
+import { setSetting, selectFolder, isGitRepository, gitInit, BranchInfo } from "../lib/api";
 import { Settings, FolderGit2, FolderOpen, GitBranch, HardDrive } from "lucide-react";
 import { formatBytes } from "../lib/utils";
 
@@ -261,7 +261,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                           <div className="text-xs text-muted-foreground mb-0.5">Disk Usage</div>
                           <div className="text-xs flex items-center gap-1 text-muted-foreground">
                             <HardDrive className="w-3 h-3" />
-                            {mainRepoSize !== null ? formatBytes(mainRepoSize) : "Calculating..."}
+                            {mainRepoSize !== null && mainRepoSize !== undefined ? formatBytes(mainRepoSize) : "Calculating..."}
                           </div>
                         </div>
                         {currentBranch && (

@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Session, Worktree, GitStatus, BranchInfo, getSessions, getWorktrees, deleteSession, ptyClose, ptySessionExists, gitGetStatus, gitGetBranchInfo, calculateDirectorySize } from "../lib/api";
 import { useToast } from "./ui/toast";
-import { X, Plus, Pause, MoreVertical, MoreHorizontal, FolderOpen, GitBranch, Trash2, Terminal as TerminalIcon, HardDrive, Settings } from "lucide-react";
+import { X, Plus, Pause, MoreVertical, MoreHorizontal, FolderOpen, GitBranch, Trash2, Terminal as TerminalIcon, HardDrive, Settings, Home, Search } from "lucide-react";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -27,8 +27,11 @@ interface SessionSidebarProps {
   repoPath?: string;
   currentBranch?: string | null;
   onDeleteWorktree?: (worktree: Worktree) => void;
+  onCreateWorktree?: () => void;
   onSessionActivityListenerChange?: (listener: ((sessionId: number) => void) | null) => void;
   openSettings?: (tab?: string) => void;
+  navigateToDashboard?: () => void;
+  onOpenCommandPalette?: () => void;
 }
 
 interface WorktreeInfoPopoverProps {
@@ -72,9 +75,14 @@ const WorktreeInfoPopover: React.FC<WorktreeInfoPopoverProps> = ({ worktree, tit
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        {children}
-      </PopoverTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            {children}
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{title}</TooltipContent>
+      </Tooltip>
       <PopoverContent align="start" className="w-80">
         <div className="space-y-3">
           <div>
@@ -172,8 +180,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   repoPath,
   currentBranch,
   onDeleteWorktree,
+  onCreateWorktree,
   onSessionActivityListenerChange,
   openSettings,
+  navigateToDashboard,
+  onOpenCommandPalette,
 }) => {
   const { addToast } = useToast();
   const queryClient = useQueryClient();
@@ -383,6 +394,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     return { fileManagerLabel: "Explorer", fileManagerCommand: undefined };
   }, []);
 
+  const repoName = useMemo(() => {
+    if (!repoPath) return "Repository";
+    const segments = repoPath.split("/").filter(Boolean);
+    return segments[segments.length - 1] || "Repository";
+  }, [repoPath]);
+
   const handleOpenInFileManager = useCallback(
     async (path?: string | null) => {
       if (!path) {
@@ -467,6 +484,15 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   return (
     <TooltipProvider delayDuration={200} skipDelayDuration={100}>
       <div className="group/sidebar w-[240px] bg-sidebar border-r border-border flex flex-col h-screen">
+      {/* Repository selector / Command palette trigger */}
+      <button
+        onClick={onOpenCommandPalette}
+        className="flex items-center gap-2 mx-2 mt-2 px-3 py-1.5 rounded-lg border border-border bg-muted/50 hover:bg-muted text-muted-foreground transition-colors"
+      >
+        <Search className="w-4 h-4 shrink-0" />
+        <span className="flex-1 text-xs text-left truncate">{repoName}</span>
+        <span className="text-[10px] text-muted-foreground/60 shrink-0">⌘K</span>
+      </button>
       <div className="pl-1 pr-2 py-2 space-y-1 min-h-[120px] flex-1 overflow-y-auto">
         <div className="relative flex items-center text-[12px] text-muted-foreground uppercase tracking-wide px-2 py-1">
           <span className="truncate flex items-center" title={currentBranch || "Main"}>
@@ -545,8 +571,23 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         {(worktrees.length > 0 || orphanSessions.length > 0) && (
         <div className="space-y-2 border-t border-border">
           {worktrees.length > 0 && (
-            <div className="text-[12px] text-muted-foreground uppercase tracking-wide px-2 py-1">
-              Worktrees
+            <div className="flex items-center justify-between text-[12px] text-muted-foreground uppercase tracking-wide px-2 py-1">
+              <span>Worktrees</span>
+              {onCreateWorktree && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="p-1 rounded hover:bg-muted"
+                      aria-label="New worktree"
+                      onClick={onCreateWorktree}
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">New worktree</TooltipContent>
+                </Tooltip>
+              )}
             </div>
           )}
           {worktrees.map((worktree) => {
@@ -662,22 +703,39 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         </div>
       )}
       </div>
-      {/* Footer with settings button */}
-      {openSettings && (
-        <div className="border-t border-border px-2 py-2 flex justify-start">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={() => openSettings("application")}
-                className="h-6 w-6 rounded-md hover:bg-muted flex items-center justify-center transition-colors"
-                aria-label="Settings"
-              >
-                <Settings className="w-3.5 h-3.5 text-muted-foreground" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top">Settings</TooltipContent>
-          </Tooltip>
+      {/* Footer with actions */}
+      {(openSettings || navigateToDashboard) && (
+        <div className="border-t border-border px-2 py-2 flex items-center gap-2">
+          {navigateToDashboard && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={navigateToDashboard}
+                  className="h-6 w-6 rounded-md hover:bg-muted flex items-center justify-center transition-colors"
+                  aria-label="Dashboard"
+                >
+                  <Home className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Dashboard</TooltipContent>
+            </Tooltip>
+          )}
+          {openSettings && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => openSettings("application")}
+                  className="h-6 w-6 rounded-md hover:bg-muted flex items-center justify-center transition-colors"
+                  aria-label="Settings"
+                >
+                  <Settings className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Settings</TooltipContent>
+            </Tooltip>
+          )}
         </div>
       )}
     </div>

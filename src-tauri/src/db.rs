@@ -1,3 +1,4 @@
+use chrono::Utc;
 use rusqlite::{params, Connection, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -31,6 +32,25 @@ pub struct Session {
     pub created_at: String,
     pub last_accessed: String,
     pub plan_title: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GitCacheEntry {
+    pub id: i64,
+    pub worktree_path: String,
+    pub file_path: Option<String>,
+    pub cache_type: String,
+    pub data: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FileView {
+    pub id: i64,
+    pub worktree_path: String,
+    pub file_path: String,
+    pub viewed_at: String,
+    pub content_hash: String,
 }
 
 pub struct Database {
@@ -92,14 +112,54 @@ impl Database {
         )?;
 
         // Migration: Add plan_title column if it doesn't exist
+        let _ = self
+            .conn
+            .execute("ALTER TABLE sessions ADD COLUMN plan_title TEXT", []);
+
         let _ = self.conn.execute(
-            "ALTER TABLE sessions ADD COLUMN plan_title TEXT",
+            "DELETE FROM sessions WHERE type IS NULL OR type <> 'session'",
             [],
         );
 
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS git_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                worktree_path TEXT NOT NULL,
+                file_path TEXT,
+                cache_type TEXT NOT NULL,
+                data TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(worktree_path, file_path, cache_type)
+            )",
+            [],
+        )?;
+
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_git_cache_worktree ON git_cache(worktree_path)",
+            [],
+        )?;
+
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS file_views (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                worktree_path TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                viewed_at TEXT NOT NULL,
+                content_hash TEXT NOT NULL DEFAULT '',
+                UNIQUE(worktree_path, file_path)
+            )",
+            [],
+        )?;
+
+        // Migration: Add content_hash column if it doesn't exist
         let _ = self
             .conn
-            .execute("DELETE FROM sessions WHERE type IS NULL OR type <> 'session'", []);
+            .execute("ALTER TABLE file_views ADD COLUMN content_hash TEXT NOT NULL DEFAULT ''", []);
+
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_file_views_worktree ON file_views(worktree_path)",
+            [],
+        )?;
 
         Ok(())
     }
@@ -231,6 +291,72 @@ impl Database {
         Ok(())
     }
 
+    pub fn get_git_cache(
+        &self,
+        worktree_path: &str,
+        file_path: Option<&str>,
+        cache_type: &str,
+    ) -> Result<Option<GitCacheEntry>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, worktree_path, file_path, cache_type, data, updated_at
+             FROM git_cache
+             WHERE worktree_path = ?1
+               AND cache_type = ?3
+               AND ((?2 IS NULL AND file_path IS NULL) OR file_path = ?2)
+             LIMIT 1",
+        )?;
+
+        let mut rows = stmt.query(params![worktree_path, file_path, cache_type])?;
+
+        if let Some(row) = rows.next()? {
+            Ok(Some(GitCacheEntry {
+                id: row.get(0)?,
+                worktree_path: row.get(1)?,
+                file_path: row.get(2)?,
+                cache_type: row.get(3)?,
+                data: row.get(4)?,
+                updated_at: row.get(5)?,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn set_git_cache(
+        &self,
+        worktree_path: &str,
+        file_path: Option<&str>,
+        cache_type: &str,
+        data: &str,
+    ) -> Result<()> {
+        let updated_at = Utc::now().to_rfc3339();
+        self.conn.execute(
+            "INSERT INTO git_cache (worktree_path, file_path, cache_type, data, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(worktree_path, file_path, cache_type)
+             DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at",
+            params![worktree_path, file_path, cache_type, data, updated_at],
+        )?;
+        Ok(())
+    }
+
+    pub fn invalidate_git_cache(&self, worktree_path: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM git_cache WHERE worktree_path = ?1",
+            [worktree_path],
+        )?;
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub fn get_all_cached_worktrees(&self) -> Result<Vec<String>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT DISTINCT worktree_path FROM git_cache ORDER BY worktree_path")?;
+        let rows = stmt.query_map([], |row| row.get(0))?;
+        rows.collect()
+    }
+
     pub fn add_session(&self, session: &Session) -> Result<i64> {
         self.conn.execute(
             "INSERT INTO sessions (worktree_id, type, name, created_at, last_accessed, plan_title)
@@ -315,14 +441,71 @@ impl Database {
     }
 
     pub fn update_session_name(&self, id: i64, name: &str) -> Result<()> {
-        self.conn
-            .execute("UPDATE sessions SET name = ?1 WHERE id = ?2", params![name, id])?;
+        self.conn.execute(
+            "UPDATE sessions SET name = ?1 WHERE id = ?2",
+            params![name, id],
+        )?;
         Ok(())
     }
 
     pub fn delete_session(&self, id: i64) -> Result<()> {
         self.conn
             .execute("DELETE FROM sessions WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    // File view tracking methods
+    pub fn mark_file_viewed(
+        &self,
+        worktree_path: &str,
+        file_path: &str,
+        content_hash: &str,
+    ) -> Result<()> {
+        let viewed_at = Utc::now().to_rfc3339();
+        self.conn.execute(
+            "INSERT INTO file_views (worktree_path, file_path, viewed_at, content_hash)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(worktree_path, file_path)
+             DO UPDATE SET viewed_at = excluded.viewed_at, content_hash = excluded.content_hash",
+            params![worktree_path, file_path, viewed_at, content_hash],
+        )?;
+        Ok(())
+    }
+
+    pub fn unmark_file_viewed(&self, worktree_path: &str, file_path: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM file_views WHERE worktree_path = ?1 AND file_path = ?2",
+            params![worktree_path, file_path],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_viewed_files(&self, worktree_path: &str) -> Result<Vec<FileView>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, worktree_path, file_path, viewed_at, content_hash
+             FROM file_views
+             WHERE worktree_path = ?1
+             ORDER BY viewed_at DESC",
+        )?;
+
+        let views = stmt.query_map([worktree_path], |row| {
+            Ok(FileView {
+                id: row.get(0)?,
+                worktree_path: row.get(1)?,
+                file_path: row.get(2)?,
+                viewed_at: row.get(3)?,
+                content_hash: row.get(4)?,
+            })
+        })?;
+
+        views.collect()
+    }
+
+    pub fn clear_all_viewed_files(&self, worktree_path: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM file_views WHERE worktree_path = ?1",
+            [worktree_path],
+        )?;
         Ok(())
     }
 }

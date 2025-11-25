@@ -226,6 +226,21 @@ pub fn git_add_all(worktree_path: &str) -> Result<String, String> {
     }
 }
 
+/// Unstage all staged changes
+pub fn git_unstage_all(worktree_path: &str) -> Result<String, String> {
+    let output = Command::new("git")
+        .current_dir(worktree_path)
+        .args(["reset", "HEAD"])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
 /// Push changes to remote
 pub fn git_push(worktree_path: &str) -> Result<String, String> {
     let output = Command::new("git")
@@ -546,6 +561,177 @@ pub fn git_stage_hunk(worktree_path: &str, patch: &str) -> Result<String, String
 
 pub fn git_unstage_hunk(worktree_path: &str, patch: &str) -> Result<String, String> {
     apply_patch(worktree_path, patch, true)
+}
+
+/// Represents a line selection for staging
+#[derive(Debug, serde::Deserialize)]
+pub struct LineSelection {
+    /// The hunk index this line belongs to
+    pub hunk_index: usize,
+    /// The line index within the hunk
+    pub line_index: usize,
+    /// The line content (including +/- prefix)
+    #[allow(dead_code)]
+    pub content: String,
+}
+
+/// Stage selected lines from multiple hunks
+/// This builds a custom patch containing only the selected changed lines with proper context
+pub fn git_stage_selected_lines(
+    worktree_path: &str,
+    file_path: &str,
+    selections: Vec<LineSelection>,
+    metadata_lines: Vec<String>,
+    hunks: Vec<(String, Vec<String>)>, // (header, lines) for each hunk
+) -> Result<String, String> {
+    let patch = build_selected_lines_patch(file_path, &metadata_lines, &hunks, &selections, false)?;
+    apply_patch(worktree_path, &patch, false)
+}
+
+/// Unstage selected lines
+pub fn git_unstage_selected_lines(
+    worktree_path: &str,
+    file_path: &str,
+    selections: Vec<LineSelection>,
+    metadata_lines: Vec<String>,
+    hunks: Vec<(String, Vec<String>)>,
+) -> Result<String, String> {
+    let patch = build_selected_lines_patch(file_path, &metadata_lines, &hunks, &selections, true)?;
+    apply_patch(worktree_path, &patch, true)
+}
+
+/// Build a patch containing only the selected changed lines with proper context
+fn build_selected_lines_patch(
+    file_path: &str,
+    metadata_lines: &[String],
+    hunks: &[(String, Vec<String>)],
+    selections: &[LineSelection],
+    _for_unstage: bool,
+) -> Result<String, String> {
+    if selections.is_empty() {
+        return Err("No lines selected".to_string());
+    }
+
+    // Group selections by hunk
+    let mut selections_by_hunk: std::collections::HashMap<usize, Vec<&LineSelection>> =
+        std::collections::HashMap::new();
+    for sel in selections {
+        selections_by_hunk
+            .entry(sel.hunk_index)
+            .or_default()
+            .push(sel);
+    }
+
+    let mut patch_parts: Vec<String> = Vec::new();
+
+    // Add metadata
+    let mut has_diff = false;
+    let mut has_old = false;
+    let mut has_new = false;
+
+    for line in metadata_lines {
+        if line.starts_with("diff --git") {
+            has_diff = true;
+            patch_parts.push(line.clone());
+        } else if line.starts_with("index ")
+            || line.starts_with("old mode")
+            || line.starts_with("new mode")
+            || line.starts_with("deleted file mode")
+            || line.starts_with("new file mode")
+            || line.starts_with("similarity index")
+            || line.starts_with("rename from")
+            || line.starts_with("rename to")
+        {
+            patch_parts.push(line.clone());
+        } else if line.starts_with("--- ") {
+            has_old = true;
+            patch_parts.push(line.clone());
+        } else if line.starts_with("+++ ") {
+            has_new = true;
+            patch_parts.push(line.clone());
+        }
+    }
+
+    if !has_diff {
+        patch_parts.push(format!("diff --git a/{0} b/{0}", file_path));
+    }
+    if !has_old {
+        patch_parts.push(format!("--- a/{}", file_path));
+    }
+    if !has_new {
+        patch_parts.push(format!("+++ b/{}", file_path));
+    }
+
+    // Process each hunk that has selections
+    for (hunk_idx, (header, lines)) in hunks.iter().enumerate() {
+        let Some(hunk_selections) = selections_by_hunk.get(&hunk_idx) else {
+            continue;
+        };
+
+        // Parse the original hunk header to get starting line numbers
+        let (old_start, new_start) = parse_hunk_header(header);
+
+        // Build the new hunk with only selected changes
+        let mut new_hunk_lines: Vec<String> = Vec::new();
+        let mut old_count = 0usize;
+        let mut new_count = 0usize;
+
+        // Get the set of selected line indices
+        let selected_indices: std::collections::HashSet<usize> =
+            hunk_selections.iter().map(|s| s.line_index).collect();
+
+        for (line_idx, line) in lines.iter().enumerate() {
+            let first_char = line.chars().next().unwrap_or(' ');
+
+            match first_char {
+                '+' => {
+                    if selected_indices.contains(&line_idx) {
+                        // Include this addition
+                        new_hunk_lines.push(line.clone());
+                        new_count += 1;
+                    }
+                    // If not selected, we skip it (don't add to new file)
+                }
+                '-' => {
+                    if selected_indices.contains(&line_idx) {
+                        // Include this deletion
+                        new_hunk_lines.push(line.clone());
+                        old_count += 1;
+                    } else {
+                        // Convert unselected deletion to context line
+                        let content = line.get(1..).unwrap_or("");
+                        new_hunk_lines.push(format!(" {}", content));
+                        old_count += 1;
+                        new_count += 1;
+                    }
+                }
+                ' ' | _ => {
+                    // Context line - always include
+                    new_hunk_lines.push(line.clone());
+                    old_count += 1;
+                    new_count += 1;
+                }
+            }
+        }
+
+        // Only add the hunk if it has actual changes
+        let has_changes = new_hunk_lines
+            .iter()
+            .any(|l| l.starts_with('+') || l.starts_with('-'));
+
+        if has_changes {
+            // Create new header with updated counts
+            let new_header = format!(
+                "@@ -{},{} +{},{} @@",
+                old_start, old_count, new_start, new_count
+            );
+            patch_parts.push(new_header);
+            patch_parts.extend(new_hunk_lines);
+        }
+    }
+
+    patch_parts.push(String::new());
+    Ok(patch_parts.join("\n"))
 }
 
 pub fn git_get_file_hunks(worktree_path: &str, file_path: &str) -> Result<Vec<DiffHunk>, String> {

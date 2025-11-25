@@ -278,7 +278,7 @@ export const UnifiedSettings: React.FC<UnifiedSettingsProps> = ({
                         <div className="text-xs text-muted-foreground mb-0.5">Disk Usage</div>
                         <div className="text-xs flex items-center gap-1 text-muted-foreground">
                           <HardDrive className="w-3 h-3" />
-                          {mainRepoSize !== null ? formatBytes(mainRepoSize) : "Calculating..."}
+                          {mainRepoSize !== null && mainRepoSize !== undefined ? formatBytes(mainRepoSize) : "Calculating..."}
                         </div>
                       </div>
                       {currentBranch && (

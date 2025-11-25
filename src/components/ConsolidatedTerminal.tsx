@@ -24,6 +24,8 @@ interface ConsolidatedTerminalProps {
   onAutoCommandError?: (message: string) => void;
   onSessionError?: (message: string) => void;
   onTerminalOutput?: (output: string) => void;
+  onTerminalIdle?: () => void;
+  idleTimeoutMs?: number;
   rightPanel?: ReactNode;
   showDiffViewer?: boolean;
   showPlanDisplay?: boolean;
@@ -83,6 +85,8 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
   onAutoCommandError,
   onSessionError,
   onTerminalOutput,
+  onTerminalIdle,
+  idleTimeoutMs = 2000,
   rightPanel,
   showDiffViewer,
   showPlanDisplay,
@@ -106,6 +110,8 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
   const autoCommandErrorRef = useRef(onAutoCommandError);
   const sessionErrorRef = useRef(onSessionError);
   const terminalOutputRef = useRef(onTerminalOutput);
+  const terminalIdleRef = useRef(onTerminalIdle);
+  const idleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isPtyReady, setIsPtyReady] = useState(false);
   const isPtyReadyRef = useRef(isPtyReady);
 
@@ -130,6 +136,10 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
   useEffect(() => {
     terminalOutputRef.current = onTerminalOutput;
   }, [onTerminalOutput]);
+
+  useEffect(() => {
+    terminalIdleRef.current = onTerminalIdle;
+  }, [onTerminalIdle]);
 
   useEffect(() => {
     isPtyReadyRef.current = isPtyReady;
@@ -271,6 +281,13 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
           if (terminalOutputRef.current) {
             terminalOutputRef.current(outputRef.current);
           }
+          // Reset idle timeout on each output chunk
+          if (idleTimeoutRef.current) {
+            clearTimeout(idleTimeoutRef.current);
+          }
+          idleTimeoutRef.current = setTimeout(() => {
+            terminalIdleRef.current?.();
+          }, idleTimeoutMs);
         });
         unlistenRef.current = unlisten;
         setIsPtyReady(true);
@@ -304,9 +321,15 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
     setupPty();
 
     return () => {
-      clearTimeout(resizeTimeout);
+      if (resizeTimeout) {
+        clearTimeout(resizeTimeout);
+      }
       if (autoCommandTimeout) {
         clearTimeout(autoCommandTimeout);
+      }
+      if (idleTimeoutRef.current) {
+        clearTimeout(idleTimeoutRef.current);
+        idleTimeoutRef.current = null;
       }
       window.removeEventListener("resize", handleResize);
       resizeObserver?.disconnect();
@@ -336,6 +359,7 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
     autoCommandDelay,
     persistSession,
     resolvedClipboardProvider,
+    idleTimeoutMs,
   ]);
 
   useImperativeHandle(ref, () => ({

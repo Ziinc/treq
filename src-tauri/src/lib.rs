@@ -6,16 +6,18 @@ mod plan_storage;
 mod pty;
 mod shell;
 
-use db::{Command as DbCommand, Database, Session, Worktree};
+use db::{Command as DbCommand, Database, FileView, GitCacheEntry, Session, Worktree};
 use git::{git_init, is_git_repository, *};
 use git_ops::{
-    BranchCommitInfo, BranchDiffFileChange, BranchDiffFileDiff, DiffHunk, MergeStrategy,
+    BranchCommitInfo, BranchDiffFileChange, BranchDiffFileDiff, DiffHunk, LineSelection,
+    MergeStrategy,
 };
 use ignore::WalkBuilder;
 use local_db::{PlanHistoryEntry, PlanHistoryInput};
 use plan_storage::{PlanFile, PlanMetadata};
 use pty::PtyManager;
 use shell::execute_command;
+use std::collections::HashSet;
 use std::sync::Mutex;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -83,6 +85,84 @@ fn add_command(
         output,
     };
     db.add_command(&cmd).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_git_cache(
+    state: State<AppState>,
+    worktree_path: String,
+    file_path: Option<String>,
+    cache_type: String,
+) -> Result<Option<GitCacheEntry>, String> {
+    let db = state.db.lock().unwrap();
+    db.get_git_cache(&worktree_path, file_path.as_deref(), &cache_type)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_git_cache(
+    state: State<AppState>,
+    worktree_path: String,
+    file_path: Option<String>,
+    cache_type: String,
+    data: String,
+) -> Result<(), String> {
+    let db = state.db.lock().unwrap();
+    db.set_git_cache(&worktree_path, file_path.as_deref(), &cache_type, &data)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn invalidate_git_cache(state: State<AppState>, worktree_path: String) -> Result<(), String> {
+    let db = state.db.lock().unwrap();
+    db.invalidate_git_cache(&worktree_path)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn preload_worktree_git_data(state: State<AppState>, worktree_path: String) -> Result<(), String> {
+    let changed_files = git_ops::git_get_changed_files(&worktree_path)?;
+    let serialized_changes = serde_json::to_string(&changed_files).map_err(|e| e.to_string())?;
+
+    {
+        let db = state.db.lock().unwrap();
+        db.set_git_cache(&worktree_path, None, "changed_files", &serialized_changes)
+            .map_err(|e| e.to_string())?;
+    }
+
+    let file_paths: HashSet<String> = changed_files
+        .iter()
+        .filter_map(|entry| extract_path_from_status_entry(entry))
+        .collect();
+
+    for path in file_paths {
+        match git_ops::git_get_file_hunks(&worktree_path, &path) {
+            Ok(hunks) => match serde_json::to_string(&hunks) {
+                Ok(serialized_hunks) => {
+                    let cache_result = {
+                        let db = state.db.lock().unwrap();
+                        db.set_git_cache(
+                            &worktree_path,
+                            Some(&path),
+                            "file_hunks",
+                            &serialized_hunks,
+                        )
+                    };
+                    if let Err(err) = cache_result {
+                        eprintln!("Failed to cache hunks for {}: {}", path, err);
+                    }
+                }
+                Err(err) => {
+                    eprintln!("Failed to serialize hunks for {}: {}", path, err);
+                }
+            },
+            Err(err) => {
+                eprintln!("Failed to preload hunks for {}: {}", path, err);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -412,6 +492,11 @@ fn git_add_all(worktree_path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn git_unstage_all(worktree_path: String) -> Result<String, String> {
+    git_ops::git_unstage_all(&worktree_path)
+}
+
+#[tauri::command]
 fn git_push(worktree_path: String) -> Result<String, String> {
     git_ops::git_push(&worktree_path)
 }
@@ -456,6 +541,27 @@ fn git_get_changed_files(worktree_path: String) -> Result<Vec<String>, String> {
     git_ops::git_get_changed_files(&worktree_path)
 }
 
+fn extract_path_from_status_entry(entry: &str) -> Option<String> {
+    if entry.starts_with("?? ") {
+        return Some(entry[3..].trim().to_string());
+    }
+
+    if entry.len() < 4 {
+        return None;
+    }
+
+    let raw = entry[3..].trim();
+    if raw.is_empty() {
+        return None;
+    }
+
+    if let Some(idx) = raw.rfind(" -> ") {
+        Some(raw[idx + 4..].trim().to_string())
+    } else {
+        Some(raw.to_string())
+    }
+}
+
 #[tauri::command]
 fn git_stage_hunk(worktree_path: String, patch: String) -> Result<String, String> {
     git_ops::git_stage_hunk(&worktree_path, &patch)
@@ -469,6 +575,40 @@ fn git_unstage_hunk(worktree_path: String, patch: String) -> Result<String, Stri
 #[tauri::command]
 fn git_get_file_hunks(worktree_path: String, file_path: String) -> Result<Vec<DiffHunk>, String> {
     git_ops::git_get_file_hunks(&worktree_path, &file_path)
+}
+
+#[tauri::command]
+fn git_stage_selected_lines(
+    worktree_path: String,
+    file_path: String,
+    selections: Vec<LineSelection>,
+    metadata_lines: Vec<String>,
+    hunks: Vec<(String, Vec<String>)>,
+) -> Result<String, String> {
+    git_ops::git_stage_selected_lines(
+        &worktree_path,
+        &file_path,
+        selections,
+        metadata_lines,
+        hunks,
+    )
+}
+
+#[tauri::command]
+fn git_unstage_selected_lines(
+    worktree_path: String,
+    file_path: String,
+    selections: Vec<LineSelection>,
+    metadata_lines: Vec<String>,
+    hunks: Vec<(String, Vec<String>)>,
+) -> Result<String, String> {
+    git_ops::git_unstage_selected_lines(
+        &worktree_path,
+        &file_path,
+        selections,
+        metadata_lines,
+        hunks,
+    )
 }
 
 // Calculate directory size (excluding .git)
@@ -623,6 +763,47 @@ fn delete_session(state: State<AppState>, id: i64) -> Result<(), String> {
     db.delete_session(id).map_err(|e| e.to_string())
 }
 
+// File view tracking commands
+#[tauri::command]
+fn mark_file_viewed(
+    state: State<AppState>,
+    worktree_path: String,
+    file_path: String,
+    content_hash: String,
+) -> Result<(), String> {
+    let db = state.db.lock().unwrap();
+    db.mark_file_viewed(&worktree_path, &file_path, &content_hash)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn unmark_file_viewed(
+    state: State<AppState>,
+    worktree_path: String,
+    file_path: String,
+) -> Result<(), String> {
+    let db = state.db.lock().unwrap();
+    db.unmark_file_viewed(&worktree_path, &file_path)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_viewed_files(
+    state: State<AppState>,
+    worktree_path: String,
+) -> Result<Vec<FileView>, String> {
+    let db = state.db.lock().unwrap();
+    db.get_viewed_files(&worktree_path)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn clear_all_viewed_files(state: State<AppState>, worktree_path: String) -> Result<(), String> {
+    let db = state.db.lock().unwrap();
+    db.clear_all_viewed_files(&worktree_path)
+        .map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -689,6 +870,10 @@ pub fn run() {
             get_repo_setting,
             set_repo_setting,
             delete_repo_setting,
+            get_git_cache,
+            set_git_cache,
+            invalidate_git_cache,
+            preload_worktree_git_data,
             git_create_worktree,
             git_get_current_branch,
             git_execute_post_create_command,
@@ -711,6 +896,7 @@ pub fn run() {
             git_commit,
             git_commit_amend,
             git_add_all,
+            git_unstage_all,
             git_push,
             git_push_force,
             git_pull,
@@ -722,6 +908,8 @@ pub fn run() {
             git_unstage_hunk,
             git_get_changed_files,
             git_get_file_hunks,
+            git_stage_selected_lines,
+            git_unstage_selected_lines,
             pty_create_session,
             pty_session_exists,
             pty_write,
@@ -745,6 +933,10 @@ pub fn run() {
             update_session_access,
             update_session_name,
             delete_session,
+            mark_file_viewed,
+            unmark_file_viewed,
+            get_viewed_files,
+            clear_all_viewed_files,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
