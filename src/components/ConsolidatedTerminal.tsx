@@ -35,6 +35,7 @@ interface ConsolidatedTerminalProps {
   terminalBackgroundClassName?: string;
   terminalOverlay?: ReactNode;
   clipboardProvider?: IClipboardProvider;
+  isHidden?: boolean;
 }
 
 export interface ConsolidatedTerminalHandle {
@@ -96,6 +97,7 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
   terminalBackgroundClassName,
   terminalOverlay,
   clipboardProvider,
+  isHidden = false,
 }, ref) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
@@ -114,6 +116,8 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
   const idleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isPtyReady, setIsPtyReady] = useState(false);
   const isPtyReadyRef = useRef(isPtyReady);
+  const lastValidDimensionsRef = useRef<{ rows: number; cols: number } | null>(null);
+  const previousIsHiddenRef = useRef(isHidden);
 
   const { fontSize } = useTerminalSettings();
   const resolvedClipboardProvider = useMemo(
@@ -159,12 +163,34 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
 
     const xterm = new XTerm({
       cursorBlink: true,
+      cursorStyle: "block",
       fontSize,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       theme: {
         background: "#1e1e1e",
         foreground: "#d4d4d4",
         cursor: "#d4d4d4",
+        cursorAccent: "#1e1e1e",
+        selectionBackground: "#264f78",
+        selectionForeground: "#ffffff",
+        // Standard ANSI colors
+        black: "#000000",
+        red: "#cd3131",
+        green: "#0dbc79",
+        yellow: "#e5e510",
+        blue: "#2472c8",
+        magenta: "#bc3fbc",
+        cyan: "#11a8cd",
+        white: "#e5e5e5",
+        // Bright ANSI colors
+        brightBlack: "#666666",
+        brightRed: "#f14c4c",
+        brightGreen: "#23d18b",
+        brightYellow: "#f5f543",
+        brightBlue: "#3b8eea",
+        brightMagenta: "#d670d6",
+        brightCyan: "#29b8db",
+        brightWhite: "#ffffff",
       },
       scrollback: 10000,
       allowProposedApi: true,
@@ -230,11 +256,33 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
     };
 
     xterm.attachCustomKeyEventHandler((event) => {
+      // Handle Shift+Enter for newline
       if (event.key === "Enter" && event.shiftKey && event.type === "keydown") {
         if (isPtyReadyRef.current) {
           ptyWrite(sessionId, "\r\n").catch(handleError);
         }
         return false;
+      }
+
+      // Allow browser shortcuts (Cmd/Ctrl + key) to pass through to browser
+      // Except for terminal-specific ones like Ctrl+C (interrupt), Ctrl+D (EOF), Ctrl+Z (suspend)
+      const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+      const isModifierPressed = isMac ? event.metaKey : event.ctrlKey;
+
+      if (isModifierPressed && event.type === "keydown") {
+        const key = event.key.toLowerCase();
+        // Terminal control characters that should be sent to PTY
+        const terminalControlKeys = ["c", "d", "z", "l", "u", "w", "r"];
+        // On Mac, Ctrl+key should go to terminal, Cmd+key should go to browser
+        // On other platforms, just check if it's a terminal control key
+        if (isMac && event.metaKey) {
+          // Cmd+key on Mac - let browser handle it (select all, copy, paste, find, etc.)
+          return false;
+        }
+        if (!isMac && event.ctrlKey && !terminalControlKeys.includes(key)) {
+          // Ctrl+key on non-Mac that's not a terminal control - let browser handle it
+          return false;
+        }
       }
 
       return true;
@@ -252,8 +300,17 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
     let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const handleResize = () => {
+      // Skip resize if terminal is hidden to prevent text rewrapping
+      if (isHidden) {
+        return;
+      }
+
       fitAddon.fit();
       const { rows, cols } = xterm;
+
+      // Store last valid dimensions
+      lastValidDimensionsRef.current = { rows, cols };
+
       if (!isPtyReadyRef.current) {
         return;
       }
@@ -361,6 +418,28 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
     resolvedClipboardProvider,
     idleTimeoutMs,
   ]);
+
+  // Handle transition from hidden to visible state
+  useEffect(() => {
+    const wasHidden = previousIsHiddenRef.current;
+    const isNowVisible = !isHidden;
+
+    if (wasHidden && isNowVisible) {
+      // Terminal is transitioning from hidden to visible
+      // Trigger resize to restore proper dimensions
+      if (fitAddonRef.current && xtermRef.current && isPtyReady) {
+        fitAddonRef.current.fit();
+        const { rows, cols } = xtermRef.current;
+        lastValidDimensionsRef.current = { rows, cols };
+        ptyResize(sessionId, rows, cols).catch((error) => {
+          const message = error instanceof Error ? error.message : String(error);
+          console.error("Terminal error:", message);
+        });
+      }
+    }
+
+    previousIsHiddenRef.current = isHidden;
+  }, [isHidden, isPtyReady, sessionId]);
 
   useImperativeHandle(ref, () => ({
     findNext: (term: string, options?: ISearchOptions) => {
