@@ -340,10 +340,22 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
   );
 
   useEffect(() => {
+    const isWithinTerminal = (element: HTMLElement | null): boolean => {
+      if (!element) return false;
+      return element.closest('.xterm') !== null;
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const activeElement = document.activeElement as HTMLElement | null;
+
+      // Don't intercept events when terminal is focused
+      if (isWithinTerminal(target) || isWithinTerminal(activeElement)) {
+        return;
+      }
+
       const isModifierPressed = event.metaKey || event.ctrlKey;
       if (isModifierPressed && event.key.toLowerCase() === "f") {
-        const target = event.target as HTMLElement | null;
         const isTextInput =
           target?.tagName === "INPUT" ||
           target?.tagName === "TEXTAREA" ||
