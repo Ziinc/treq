@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { RepositorySettingsContent } from "./RepositorySettingsContent";
 import { useTheme } from "../hooks/useTheme";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
+import { useDiffSettings } from "../hooks/useDiffSettings";
 import { useToast } from "./ui/toast";
 import { getSetting, setSetting, selectFolder, isGitRepository, gitInit, BranchInfo } from "../lib/api";
 import { Settings, FolderGit2, FolderOpen, GitBranch, HardDrive } from "lucide-react";
@@ -52,6 +53,7 @@ export const UnifiedSettings: React.FC<UnifiedSettingsProps> = ({
   
   const { theme, setTheme } = useTheme();
   const { fontSize, setFontSize } = useTerminalSettings();
+  const { fontSize: diffFontSize, setFontSize: setDiffFontSize } = useDiffSettings();
   const { addToast } = useToast();
 
   // Load settings when dialog opens
@@ -230,6 +232,34 @@ export const UnifiedSettings: React.FC<UnifiedSettingsProps> = ({
                     />
                     <p className="text-xs text-muted-foreground mt-1">
                       Font size for terminal (8-32)
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="diff-font-size">Diff Viewer Font Size</Label>
+                    <Input
+                      id="diff-font-size"
+                      type="number"
+                      min={8}
+                      max={16}
+                      value={diffFontSize}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value, 10);
+                        if (!isNaN(value) && value >= 8 && value <= 16) {
+                          setDiffFontSize(value).catch((error) => {
+                            addToast({
+                              title: "Error",
+                              description: error.message,
+                              type: "error",
+                            });
+                          });
+                        }
+                      }}
+                      placeholder="10"
+                      className="mt-2"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Font size for code diff display (8-16)
                     </p>
                   </div>
 

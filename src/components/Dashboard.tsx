@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { MergeDialog } from "./MergeDialog";
@@ -13,6 +15,7 @@ import { MergeReviewPage } from "./MergeReviewPage";
 import { SessionSidebar } from "./SessionSidebar";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { GitChangesSection } from "./GitChangesSection";
+import { MoveToWorktreeDialog } from "./MoveToWorktreeDialog";
 import { PlanSection } from "../types/planning";
 import {
   parseChangedFiles,
@@ -30,6 +33,9 @@ import {
   deleteWorktreeFromDb,
   gitRemoveWorktree,
   getSetting,
+  setSetting,
+  selectFolder,
+  isGitRepository,
   gitGetCurrentBranch,
   gitGetStatus,
   gitGetBranchInfo,
@@ -57,6 +63,7 @@ import {
   gitStageFile,
   gitUnstageFile,
   gitCommit,
+  invalidateGitCache,
 } from "../lib/api";
 import type { MergeStrategy } from "../lib/api";
 import { RefreshCw, GitBranch, Loader2 } from "lucide-react";
@@ -124,6 +131,11 @@ export const Dashboard: React.FC = () => {
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [mountedSessionIds, setMountedSessionIds] = useState<Set<number>>(new Set());
 
+  // File selection state for moving to worktree
+  const [selectedUnstagedFiles, setSelectedUnstagedFiles] = useState<Set<string>>(new Set());
+  const [lastSelectedFileIndex, setLastSelectedFileIndex] = useState<number | null>(null);
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+
   // Worktree git info state
   const [worktreeBranchInfo, setWorktreeBranchInfo] = useState<Record<number, BranchInfo>>({});
   const [worktreeDivergence, setWorktreeDivergence] = useState<Record<number, BranchDivergence>>({});
@@ -163,6 +175,34 @@ export const Dashboard: React.FC = () => {
       return next;
     });
   }, []);
+
+  // File selection handler for move to worktree feature
+  const handleFileSelect = useCallback((path: string, shiftKey: boolean) => {
+    const fileIndex = mainRepoUnstagedFiles.findIndex(f => f.path === path);
+
+    setSelectedUnstagedFiles(prev => {
+      const next = new Set(prev);
+
+      if (shiftKey && lastSelectedFileIndex !== null) {
+        // Range selection
+        const start = Math.min(lastSelectedFileIndex, fileIndex);
+        const end = Math.max(lastSelectedFileIndex, fileIndex);
+        for (let i = start; i <= end; i++) {
+          next.add(mainRepoUnstagedFiles[i].path);
+        }
+      } else {
+        // Toggle single file
+        if (next.has(path)) {
+          next.delete(path);
+        } else {
+          next.add(path);
+        }
+      }
+      return next;
+    });
+
+    setLastSelectedFileIndex(fileIndex);
+  }, [lastSelectedFileIndex, mainRepoUnstagedFiles]);
 
   const resetMergeState = useCallback(() => {
     setMergeDialogOpen(false);
@@ -213,11 +253,29 @@ export const Dashboard: React.FC = () => {
     if (showCommandPalette) setShowCommandPalette(false);
   });
 
-  // Load saved repo path
+  // Load repo path from URL params (for new windows) or saved settings
   useEffect(() => {
-    getSetting("repo_path").then((path) => {
-      if (path) setRepoPath(path);
-    });
+    const loadInitialRepo = async () => {
+      // Check URL params first (for new windows opened via "Open in New Window...")
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlRepoPath = urlParams.get("repo");
+
+      if (urlRepoPath) {
+        const isValid = await isGitRepository(urlRepoPath);
+        if (isValid) {
+          setRepoPath(urlRepoPath);
+          return;
+        }
+      }
+
+      // Fall back to saved setting (for main window)
+      const savedPath = await getSetting("repo_path");
+      if (savedPath) {
+        setRepoPath(savedPath);
+      }
+    };
+
+    loadInitialRepo();
   }, []);
 
   // Load repo name and current branch when repo path changes
@@ -236,6 +294,15 @@ export const Dashboard: React.FC = () => {
       setCurrentBranch(null);
     }
   }, [repoPath]);
+
+  // Update window title when repo changes
+  useEffect(() => {
+    if (repoName) {
+      getCurrentWindow().setTitle(`Treq - ${repoName}`);
+    } else {
+      getCurrentWindow().setTitle("Treq - Git Worktree Manager");
+    }
+  }, [repoName]);
 
   const refreshMainRepoInfo = useCallback(() => {
     if (!repoPath) {
@@ -340,6 +407,79 @@ export const Dashboard: React.FC = () => {
     };
   }, []);
 
+  // Listen for "Open..." menu action
+  useEffect(() => {
+    const unlisten = listen("menu-open-repository", async () => {
+      const selected = await selectFolder();
+      if (!selected) return;
+
+      const isRepo = await isGitRepository(selected);
+      if (!isRepo) {
+        addToast({
+          title: "Not a Git Repository",
+          description: "Please select a folder that contains a git repository.",
+          type: "error",
+        });
+        return;
+      }
+
+      await setSetting("repo_path", selected);
+      setRepoPath(selected);
+      setViewMode("dashboard");
+      setSelectedWorktree(null);
+      queryClient.invalidateQueries({ queryKey: ["worktrees"] });
+      addToast({
+        title: "Repository Opened",
+        description: `Now viewing ${selected.split("/").pop() || selected}`,
+        type: "success",
+      });
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [queryClient, addToast]);
+
+  // Listen for "Open in New Window..." menu action
+  useEffect(() => {
+    const unlisten = listen("menu-open-in-new-window", async () => {
+      const selected = await selectFolder();
+      if (!selected) return;
+
+      const isRepo = await isGitRepository(selected);
+      if (!isRepo) {
+        addToast({
+          title: "Not a Git Repository",
+          description: "Please select a folder that contains a git repository.",
+          type: "error",
+        });
+        return;
+      }
+
+      const windowLabel = `treq-${Date.now()}`;
+      const repoName = selected.split("/").pop() || selected.split("\\").pop() || selected;
+
+      const webview = new WebviewWindow(windowLabel, {
+        url: `index.html?repo=${encodeURIComponent(selected)}`,
+        title: `Treq - ${repoName}`,
+        width: 1400,
+        height: 900,
+      });
+
+      webview.once("tauri://error", (e) => {
+        console.error("Failed to create window:", e);
+        addToast({
+          title: "Failed to open window",
+          description: "Could not create new window",
+          type: "error",
+        });
+      });
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [addToast]);
 
   const { data: sessions = [] } = useQuery({
     queryKey: ["sessions"],
@@ -404,6 +544,27 @@ export const Dashboard: React.FC = () => {
       });
     }
   }, [activeSessionId]);
+
+  // Poll for git changes when dashboard view is active
+  useEffect(() => {
+    if (viewMode !== "dashboard" || !repoPath) {
+      return;
+    }
+
+    const pollGitChanges = async () => {
+      try {
+        await invalidateGitCache(repoPath);
+        refreshMainRepoInfo();
+      } catch (error) {
+        console.debug("Git polling failed", error);
+      }
+    };
+
+    // Poll every 5 seconds
+    const interval = setInterval(pollGitChanges, 5000);
+
+    return () => clearInterval(interval);
+  }, [viewMode, repoPath, refreshMainRepoInfo]);
 
   const deleteWorktree = useMutation({
     mutationFn: async (worktree: Worktree) => {
@@ -612,6 +773,41 @@ export const Dashboard: React.FC = () => {
     },
     [handleOpenSession]
   );
+
+  // Handler for when files are successfully moved to worktree
+  const handleMoveToWorktreeSuccess = useCallback(async (worktreeInfo: {
+    id: number;
+    worktreePath: string;
+    branchName: string;
+    metadata: string;
+  }) => {
+    setMoveDialogOpen(false);
+    setSelectedUnstagedFiles(new Set());
+    setLastSelectedFileIndex(null);
+    queryClient.invalidateQueries({ queryKey: ["worktrees"] });
+
+    // Refresh the changed files list
+    if (repoPath) {
+      try {
+        const files = await gitGetChangedFiles(repoPath);
+        setMainRepoChangedFiles(parseChangedFiles(files));
+      } catch {
+        setMainRepoChangedFiles([]);
+      }
+    }
+
+    // Construct worktree object and navigate to session
+    const newWorktree: Worktree = {
+      id: worktreeInfo.id,
+      repo_path: repoPath,
+      worktree_path: worktreeInfo.worktreePath,
+      branch_name: worktreeInfo.branchName,
+      created_at: new Date().toISOString(),
+      metadata: worktreeInfo.metadata,
+    };
+
+    await handleOpenSession(newWorktree, { forceNew: true });
+  }, [queryClient, repoPath, handleOpenSession]);
 
   const handleSessionClick = async (session: Session) => {
     await updateSessionAccess(session.id);
@@ -1212,6 +1408,9 @@ export const Dashboard: React.FC = () => {
                               onToggleCollapse={() => toggleSectionCollapse("unstaged")}
                               fileActionTarget={mainRepoFileActionTarget}
                               readOnly={mainRepoCommitPending}
+                              selectedFiles={selectedUnstagedFiles}
+                              onFileSelect={handleFileSelect}
+                              onMoveToWorktree={() => setMoveDialogOpen(true)}
                               onFileClick={(path) => {
                                 const file = mainRepoUnstagedFiles.find((f) => f.path === path);
                                 if (file) handleMainRepoFileClick(file);
@@ -1285,18 +1484,15 @@ export const Dashboard: React.FC = () => {
 
                               {/* Divergence from main */}
                               {divergence && (divergence.ahead > 0 || divergence.behind > 0) && (
-                                <div className="flex items-center gap-1.5 text-muted-foreground">
-                                  <span className="opacity-60">vs {currentBranch}:</span>
-                                  {divergence.behind > 0 && (
-                                    <span className="text-orange-600 dark:text-orange-400">
-                                      {divergence.behind}↓
-                                    </span>
-                                  )}
+                                <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
                                   {divergence.ahead > 0 && (
-                                    <span className="text-green-600 dark:text-green-400">
-                                      {divergence.ahead}↑
-                                    </span>
+                                    <span className="text-green-600 dark:text-green-400">{divergence.ahead} ahead</span>
                                   )}
+                                  {divergence.ahead > 0 && divergence.behind > 0 && <span>,</span>}
+                                  {divergence.behind > 0 && (
+                                    <span className="text-orange-600 dark:text-orange-400">{divergence.behind} behind</span>
+                                  )}
+                                  <span className="font-mono bg-muted px-1.5 py-0.5 rounded">{currentBranch}</span>
                                 </div>
                               )}
 
@@ -1386,6 +1582,14 @@ export const Dashboard: React.FC = () => {
               onSuccess={() => {
                 queryClient.invalidateQueries({ queryKey: ["worktrees"] });
               }}
+            />
+
+            <MoveToWorktreeDialog
+              open={moveDialogOpen}
+              onOpenChange={setMoveDialogOpen}
+              repoPath={repoPath}
+              selectedFiles={Array.from(selectedUnstagedFiles)}
+              onSuccess={handleMoveToWorktreeSuccess}
             />
 
           </div>

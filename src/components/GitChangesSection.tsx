@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { ChevronDown, ChevronRight, Plus, Minus, Undo2 } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, Plus, Minus, Undo2 } from "lucide-react";
 import { GitFileRow } from "./GitFileRow";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "./ui/tooltip";
 import type { ParsedFileChange } from "../lib/git-utils";
@@ -13,7 +13,9 @@ export interface GitChangesSectionProps {
   selectedFile?: string | null;
   fileActionTarget?: string | null;
   readOnly?: boolean;
-  highlightedFiles?: Set<string>;
+  selectedFiles?: Set<string>;
+  onFileSelect?: (path: string, shiftKey: boolean) => void;
+  onMoveToWorktree?: () => void;
   onFileClick?: (path: string) => void;
   onStage?: (path: string) => void;
   onUnstage?: (path: string) => void;
@@ -31,7 +33,9 @@ export const GitChangesSection = memo<GitChangesSectionProps>(({
   selectedFile,
   fileActionTarget,
   readOnly = false,
-  highlightedFiles,
+  selectedFiles,
+  onFileSelect,
+  onMoveToWorktree,
   onFileClick,
   onStage,
   onUnstage,
@@ -40,6 +44,7 @@ export const GitChangesSection = memo<GitChangesSectionProps>(({
   onDiscardAll,
 }) => {
   const hasFiles = files.length > 0;
+  const hasSelectedFiles = selectedFiles && selectedFiles.size > 0;
 
   return (
     <div className="mt-4">
@@ -75,6 +80,25 @@ export const GitChangesSection = memo<GitChangesSectionProps>(({
                   </TooltipTrigger>
                   <TooltipContent side="bottom">Discard all changes</TooltipContent>
                 </Tooltip>
+                {hasSelectedFiles && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="p-1 hover:text-foreground hover:bg-primary/20 bg-primary/10 rounded transition-colors text-primary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onMoveToWorktree?.();
+                        }}
+                      >
+                        <ArrowRight className="w-3 h-3" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      Move {selectedFiles?.size} file(s) to new worktree
+                    </TooltipContent>
+                  </Tooltip>
+                )}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
@@ -123,7 +147,9 @@ export const GitChangesSection = memo<GitChangesSectionProps>(({
               isSelected={selectedFile === file.path}
               isBusy={fileActionTarget === file.path}
               readOnly={readOnly}
-              shouldHighlight={highlightedFiles?.has(file.path)}
+              showCheckbox={!isStaged && !!onFileSelect}
+              isChecked={selectedFiles?.has(file.path)}
+              onCheckChange={onFileSelect}
               onFileClick={onFileClick}
               onStage={onStage}
               onUnstage={onUnstage}

@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Loader2, Minus, Plus } from "lucide-react";
+import { Check, Loader2, Minus, Plus } from "lucide-react";
 import { cn } from "../lib/utils";
 import { formatFileLabel, type ParsedFileChange } from "../lib/git-utils";
 
@@ -9,7 +9,9 @@ export interface GitFileRowProps {
   isSelected?: boolean;
   isBusy?: boolean;
   readOnly?: boolean;
-  shouldHighlight?: boolean;
+  showCheckbox?: boolean;
+  isChecked?: boolean;
+  onCheckChange?: (path: string, shiftKey: boolean) => void;
   onFileClick?: (path: string) => void;
   onStage?: (path: string) => void;
   onUnstage?: (path: string) => void;
@@ -21,7 +23,9 @@ export const GitFileRow = memo<GitFileRowProps>(({
   isSelected = false,
   isBusy = false,
   readOnly = false,
-  shouldHighlight = false,
+  showCheckbox = false,
+  isChecked = false,
+  onCheckChange,
   onFileClick,
   onStage,
   onUnstage,
@@ -35,11 +39,30 @@ export const GitFileRow = memo<GitFileRowProps>(({
   return (
     <div
       className={cn(
-        "group/row relative px-3 py-1.5 text-xs flex items-center gap-2",
+        "group/row relative pl-1 pr-3 py-1.5 text-xs flex items-center gap-1",
         isSelected ? "bg-accent/40" : "hover:bg-accent/30",
-        shouldHighlight && "animate-pulse-highlight"
+        isChecked && "bg-primary/10"
       )}
     >
+      {showCheckbox ? (
+        <button
+          type="button"
+          className={cn(
+            "w-4 h-4 border rounded flex items-center justify-center flex-shrink-0 transition-colors",
+            isChecked
+              ? "bg-primary border-primary text-primary-foreground"
+              : "border-muted-foreground/50 hover:border-primary invisible group-hover/row:visible"
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            onCheckChange?.(file.path, e.shiftKey);
+          }}
+        >
+          {isChecked && <Check className="w-3 h-3" />}
+        </button>
+      ) : (
+        <div className="w-4 flex-shrink-0" />
+      )}
       <button
         type="button"
         className="flex-1 text-left flex items-center gap-2 min-w-0"

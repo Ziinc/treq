@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Session, Worktree, GitStatus, BranchInfo, getSessions, getWorktrees, deleteSession, ptyClose, ptySessionExists, gitGetStatus, gitGetBranchInfo, calculateDirectorySize } from "../lib/api";
 import { useToast } from "./ui/toast";
-import { X, Plus, Pause, MoreVertical, MoreHorizontal, FolderOpen, GitBranch, Trash2, Terminal as TerminalIcon, HardDrive, Settings, Home, Search } from "lucide-react";
+import { X, Plus, Pause, MoreVertical, MoreHorizontal, FolderOpen, Trash2, Terminal as TerminalIcon, HardDrive, Settings, Home, Search } from "lucide-react";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -170,6 +170,51 @@ const WorktreeInfoPopover: React.FC<WorktreeInfoPopoverProps> = ({ worktree, tit
       </PopoverContent>
     </Popover>
   );
+};
+
+const StatusPill: React.FC<{ path: string }> = ({ path }) => {
+  const [status, setStatus] = useState<GitStatus | null>(null);
+  const [branchInfo, setBranchInfo] = useState<BranchInfo | null>(null);
+
+  useEffect(() => {
+    const fetchInfo = async () => {
+      try {
+        const [gitStatus, branch] = await Promise.all([
+          gitGetStatus(path),
+          gitGetBranchInfo(path),
+        ]);
+        setStatus(gitStatus);
+        setBranchInfo(branch);
+      } catch (err) {
+        console.error("Failed to fetch status:", err);
+      }
+    };
+    fetchInfo();
+    const interval = setInterval(fetchInfo, 30000);
+    return () => clearInterval(interval);
+  }, [path]);
+
+  const totalChanges = status
+    ? status.modified + status.added + status.deleted + status.untracked
+    : 0;
+
+  if (totalChanges > 0) {
+    return (
+      <span className="px-1 py-0.5 text-[9px] font-semibold bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-full ml-auto shrink-0">
+        {totalChanges}
+      </span>
+    );
+  }
+
+  if (branchInfo && branchInfo.ahead > 0) {
+    return (
+      <span className="px-1 py-0.5 text-[9px] font-semibold bg-green-500/20 text-green-600 dark:text-green-400 rounded-full ml-auto shrink-0">
+        {branchInfo.ahead} ↑
+      </span>
+    );
+  }
+
+  return null;
 };
 
 export const SessionSidebar: React.FC<SessionSidebarProps> = ({
@@ -412,7 +457,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       }
 
       try {
-        await openPath(path, fileManagerCommand);
+        await openPath(path);
       } catch (error) {
         try {
           if (typeof window !== "undefined") {
@@ -496,9 +541,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       <div className="pl-1 pr-2 py-2 space-y-1 min-h-[120px] flex-1 overflow-y-auto">
         <div className="relative flex items-center text-[12px] text-muted-foreground uppercase tracking-wide px-2 py-1">
           <span className="truncate flex items-center" title={currentBranch || "Main"}>
-            <GitBranch className="w-4 h-4 mr-1" />
             {currentBranch || "main"}
           </span>
+          {repoPath && <StatusPill path={repoPath} />}
           <div className="absolute right-2 flex items-center gap-1 pl-4 bg-gradient-to-l from-sidebar from-60% opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200">
             {onCreateSession && (
               <Tooltip>
@@ -597,10 +642,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 <div className="relative flex items-center text-[12px] text-muted-foreground uppercase tracking-wide px-2 pt-1">
                   <WorktreeInfoPopover worktree={worktree} title={getWorktreeTitle(worktree.id)}>
                     <span className="truncate flex items-center cursor-pointer hover:text-foreground transition-colors" title={getWorktreeTitle(worktree.id)}>
-                      <GitBranch className="w-4 h-4 mr-1" />
                       {getWorktreeTitle(worktree.id)}
                     </span>
                   </WorktreeInfoPopover>
+                  <StatusPill path={worktree.worktree_path} />
                   <div className="absolute right-2 flex items-center gap-1 pl-4 bg-gradient-to-l from-sidebar from-60% opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200">
                     {onCreateSession && (
                       <Tooltip>

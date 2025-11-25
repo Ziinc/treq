@@ -645,3 +645,47 @@ pub fn list_gitignored_files(repo_path: &str) -> Result<Vec<String>, String> {
 
     Ok(ignored_files)
 }
+
+/// Stash specific files with a message
+/// Uses: git stash push -m "{message}" -- file1 file2 ...
+pub fn git_stash_push_files(
+    worktree_path: &str,
+    file_paths: Vec<String>,
+    message: &str,
+) -> Result<String, String> {
+    if file_paths.is_empty() {
+        return Err("No files specified for stashing".to_string());
+    }
+
+    let mut cmd = Command::new("git");
+    cmd.current_dir(worktree_path);
+    cmd.args(["stash", "push", "-m", message, "--"]);
+
+    for path in &file_paths {
+        cmd.arg(path);
+    }
+
+    let output = cmd.output().map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+/// Pop the most recent stash
+/// Uses: git stash pop
+pub fn git_stash_pop(worktree_path: &str) -> Result<String, String> {
+    let output = Command::new("git")
+        .current_dir(worktree_path)
+        .args(["stash", "pop"])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}

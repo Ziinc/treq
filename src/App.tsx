@@ -3,6 +3,7 @@ import { Dashboard } from "./components/Dashboard";
 import { ToastProvider } from "./components/ui/toast";
 import { ThemeProvider } from "./hooks/useTheme";
 import { TerminalSettingsProvider } from "./hooks/useTerminalSettings";
+import { DiffSettingsProvider } from "./hooks/useDiffSettings";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./index.css";
 
@@ -20,7 +21,8 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <TerminalSettingsProvider>
-          <ToastProvider>
+          <DiffSettingsProvider>
+            <ToastProvider>
             <div className="flex h-screen">
               <ErrorBoundary
                 fallbackTitle="Dashboard crashed"
@@ -33,7 +35,8 @@ function App() {
                 <Dashboard />
               </ErrorBoundary>
             </div>
-          </ToastProvider>
+            </ToastProvider>
+          </DiffSettingsProvider>
         </TerminalSettingsProvider>
       </ThemeProvider>
     </QueryClientProvider>

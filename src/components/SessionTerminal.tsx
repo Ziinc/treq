@@ -23,7 +23,6 @@ import {
 import { PlanSection } from "../types/planning";
 import { createDebouncedParser } from "../lib/planParser";
 import { ConsolidatedTerminal, type ConsolidatedTerminalHandle } from "./ConsolidatedTerminal";
-import { PlanDisplay } from "./PlanDisplay";
 import { StagingDiffViewer } from "./StagingDiffViewer";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -43,7 +42,8 @@ import {
   DialogDescription,
 } from "./ui/dialog";
 import { PlanHistoryDialog } from "./PlanHistoryDialog";
-import { Loader2, RotateCw, X, GitBranch, Search, ChevronDown, ChevronUp, Pencil, Check, MoreVertical, GitMerge, Upload, AlertTriangle } from "lucide-react";
+import { Loader2, RotateCw, X, GitBranch, Search, ChevronDown, ChevronUp, Pencil, Check, MoreVertical, GitMerge, Upload, AlertTriangle, FileText } from "lucide-react";
+import { PlanDisplayModal } from "./PlanDisplayModal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { cn } from "../lib/utils";
 
@@ -90,6 +90,7 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
   const [terminalOutput, setTerminalOutput] = useState("");
   const [activePanel, setActivePanel] = useState<SessionPanel>(null);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [planModalOpen, setPlanModalOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [autoCommandReady, setAutoCommandReady] = useState(false);
   const debouncedParserRef = useRef(createDebouncedParser(1000));
@@ -117,6 +118,10 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
   const [maintreeDivergence, setMaintreeDivergence] = useState<BranchDivergence | null>(null);
   const [showSwitchOverlay, setShowSwitchOverlay] = useState(false);
   const prevIsHiddenRef = useRef(isHidden);
+
+  const hasImplementationPlan = planSections.some(
+    section => section.type === 'implementation_plan'
+  );
 
   const handleTerminalOutput = useCallback((output: string) => {
     setTerminalOutput(output);
@@ -756,17 +761,6 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
     return () => clearTimeout(timeout);
   }, [autoCommandReady, flushQueuedMessages]);
 
-  const planningPanel = (
-    <PlanDisplay
-      planSections={planSections}
-      onPlanEdit={handlePlanEdit}
-      onExecutePlan={handleExecuteSection}
-      sessionId={ptySessionId}
-      repoPath={effectiveRepoPath}
-      worktreeId={worktree?.id}
-    />
-  );
-
   const executionPanel = workingDirectory ? (
     <div className="flex flex-col h-full">
         <StagingDiffViewer
@@ -784,7 +778,7 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
     </div>
   );
 
-  const rightPanel = activePanel === "planning" ? planningPanel : executionPanel;
+  const rightPanel = executionPanel;
 
   const terminalOverlay = useMemo(() => {
     if (terminalError) {
@@ -1056,6 +1050,23 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
                   <TooltipContent>Search (Cmd+F)</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+              {hasImplementationPlan && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => setPlanModalOpen(true)}
+                        className="h-6 w-6 rounded-md bg-background/90 border border-border/60 hover:bg-muted flex items-center justify-center transition-colors shadow-sm"
+                        aria-label="View implementation plan"
+                      >
+                        <FileText className="w-3 h-3" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>View Plan</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
           )}
 
@@ -1137,6 +1148,7 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
             terminalPaneClassName="w-full"
             rightPaneClassName="hidden"
             terminalOverlay={terminalOverlay}
+            isHidden={isHidden}
           />
         </div>
 
@@ -1148,6 +1160,17 @@ export const SessionTerminal: React.FC<SessionTerminalProps> = ({
       </div>
 
       <PlanHistoryDialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen} worktree={worktree || null} />
+
+      <PlanDisplayModal
+        open={planModalOpen}
+        onOpenChange={setPlanModalOpen}
+        planSections={planSections}
+        onPlanEdit={handlePlanEdit}
+        onExecutePlan={handleExecuteSection}
+        sessionId={ptySessionId}
+        repoPath={effectiveRepoPath}
+        worktreeId={worktree?.id}
+      />
 
       {/* Force Push Confirmation Dialog */}
       <Dialog open={showForcePushDialog} onOpenChange={setShowForcePushDialog}>

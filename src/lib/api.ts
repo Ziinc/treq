@@ -283,6 +283,16 @@ export const gitDiscardAllChanges = (worktree_path: string): Promise<string> =>
 export const gitHasUncommittedChanges = (worktree_path: string): Promise<boolean> =>
   invoke("git_has_uncommitted_changes", { worktreePath: worktree_path });
 
+export const gitStashPushFiles = (
+  worktree_path: string,
+  file_paths: string[],
+  message: string
+): Promise<string> =>
+  invoke("git_stash_push_files", { worktreePath: worktree_path, filePaths: file_paths, message });
+
+export const gitStashPop = (worktree_path: string): Promise<string> =>
+  invoke("git_stash_pop", { worktreePath: worktree_path });
+
 // PTY API
 export const ptyCreateSession = (
   session_id: string,

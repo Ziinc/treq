@@ -361,6 +361,20 @@ fn git_has_uncommitted_changes(worktree_path: String) -> Result<bool, String> {
     git_ops::has_uncommitted_changes(&worktree_path)
 }
 
+#[tauri::command]
+fn git_stash_push_files(
+    worktree_path: String,
+    file_paths: Vec<String>,
+    message: String,
+) -> Result<String, String> {
+    git::git_stash_push_files(&worktree_path, file_paths, &message)
+}
+
+#[tauri::command]
+fn git_stash_pop(worktree_path: String) -> Result<String, String> {
+    git::git_stash_pop(&worktree_path)
+}
+
 // PTY commands
 #[tauri::command]
 fn pty_create_session(
@@ -831,6 +845,22 @@ pub fn run() {
             app.manage(app_state);
 
             // Create menu
+            // File menu items
+            let open_item = MenuItemBuilder::with_id("open", "Open...")
+                .accelerator("CmdOrCtrl+O")
+                .build(app)?;
+
+            let open_new_window_item =
+                MenuItemBuilder::with_id("open_new_window", "Open in New Window...")
+                    .accelerator("CmdOrCtrl+Shift+O")
+                    .build(app)?;
+
+            let file_menu = SubmenuBuilder::new(app, "File")
+                .item(&open_item)
+                .item(&open_new_window_item)
+                .build()?;
+
+            // Go menu items
             let dashboard_item = MenuItemBuilder::with_id("dashboard", "Dashboard")
                 .accelerator("CmdOrCtrl+D")
                 .build(app)?;
@@ -844,7 +874,10 @@ pub fn run() {
                 .item(&settings_item)
                 .build()?;
 
-            let menu = MenuBuilder::new(app).item(&go_menu).build()?;
+            let menu = MenuBuilder::new(app)
+                .item(&file_menu)
+                .item(&go_menu)
+                .build()?;
 
             app.set_menu(menu)?;
 
@@ -854,6 +887,10 @@ pub fn run() {
                     let _ = app.emit("navigate-to-dashboard", ());
                 } else if event.id() == "settings" {
                     let _ = app.emit("navigate-to-settings", ());
+                } else if event.id() == "open" {
+                    let _ = app.emit("menu-open-repository", ());
+                } else if event.id() == "open_new_window" {
+                    let _ = app.emit("menu-open-in-new-window", ());
                 }
             });
 
@@ -893,6 +930,8 @@ pub fn run() {
             git_merge,
             git_discard_all_changes,
             git_has_uncommitted_changes,
+            git_stash_push_files,
+            git_stash_pop,
             git_commit,
             git_commit_amend,
             git_add_all,

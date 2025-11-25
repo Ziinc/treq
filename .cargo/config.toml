@@ -1,20 +1,44 @@
 # Cargo configuration for faster builds and optimized binaries
 # This file is automatically picked up by Cargo
 
+# =============================================================================
+# Parallel Compilation (Rust 1.83+)
+# =============================================================================
+# -C codegen-units: Controls parallel code generation (stable)
+# -Z threads: Parallelizes type checking, borrow checking, MIR optimization (nightly only)
+#
+# To use -Z threads, you need nightly Rust:
+#   rustup override set nightly
+# Or create a rust-toolchain.toml with: channel = "nightly"
+
 # Faster linker configuration for different platforms
 [target.x86_64-apple-darwin]
-rustflags = ["-C", "link-arg=-fuse-ld=/usr/bin/ld"] # Use system linker for stability
-# Alternative: Install zld via `brew install zld` and use: rustflags = ["-C", "link-arg=-fuse-ld=zld"]
+rustflags = [
+    "-C", "link-arg=-fuse-ld=/usr/bin/ld",
+    "-C", "codegen-units=16",
+    "-Z", "threads=16",  # Parallel frontend (type check, borrow check, MIR opt)
+]
 
 [target.aarch64-apple-darwin]
-rustflags = ["-C", "link-arg=-fuse-ld=/usr/bin/ld"] # Use system linker for stability
-# Alternative: Install zld via `brew install zld` and use: rustflags = ["-C", "link-arg=-fuse-ld=zld"]
+rustflags = [
+    "-C", "link-arg=-fuse-ld=/usr/bin/ld",
+    "-C", "codegen-units=16",
+    "-Z", "threads=16",  # Parallel frontend (type check, borrow check, MIR opt)
+]
 
 [target.x86_64-unknown-linux-gnu]
-rustflags = ["-C", "link-arg=-fuse-ld=lld"] # Use lld linker (install via package manager)
+rustflags = [
+    "-C", "link-arg=-fuse-ld=lld",
+    "-C", "codegen-units=16",
+    "-Z", "threads=16",
+]
 
 [target.x86_64-pc-windows-msvc]
-rustflags = ["-C", "link-arg=/DEBUG:NONE"] # Disable debug info in linker for faster builds
+rustflags = [
+    "-C", "link-arg=/DEBUG:NONE",
+    "-C", "codegen-units=16",
+    "-Z", "threads=16",
+]
 
 # Build configuration
 [build]

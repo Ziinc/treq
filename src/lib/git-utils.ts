@@ -72,3 +72,27 @@ export const filterUnstagedFiles = (files: ParsedFileChange[]): ParsedFileChange
     (file) => (file.worktreeStatus && file.worktreeStatus !== " ") || file.isUntracked
   );
 };
+
+const BINARY_EXTENSIONS = new Set([
+  // Images
+  '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.webp', '.svg', '.tiff', '.avif', '.heic',
+  // Documents
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+  // Archives
+  '.zip', '.tar', '.gz', '.rar', '.7z', '.bz2', '.xz',
+  // Media
+  '.mp3', '.mp4', '.wav', '.avi', '.mov', '.mkv', '.flac', '.ogg', '.webm',
+  // Binaries
+  '.exe', '.dll', '.so', '.dylib', '.wasm', '.o', '.a',
+  // Fonts
+  '.ttf', '.otf', '.woff', '.woff2', '.eot',
+  // Other
+  '.bin', '.dat', '.db', '.sqlite', '.sqlite3',
+]);
+
+export const isBinaryFile = (filePath: string): boolean => {
+  const lastDot = filePath.lastIndexOf('.');
+  if (lastDot === -1) return false;
+  const ext = filePath.substring(lastDot).toLowerCase();
+  return BINARY_EXTENSIONS.has(ext);
+};
