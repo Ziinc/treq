@@ -197,9 +197,15 @@ export const preloadWorktreeGitData = (worktree_path: string): Promise<void> =>
 export const gitCreateWorktree = (
   repo_path: string,
   branch: string,
-  new_branch: boolean
+  new_branch: boolean,
+  source_branch?: string
 ): Promise<string> =>
-  invoke("git_create_worktree", { repoPath: repo_path, branch, newBranch: new_branch });
+  invoke("git_create_worktree", {
+    repoPath: repo_path,
+    branch,
+    newBranch: new_branch,
+    sourceBranch: source_branch ?? null,
+  });
 
 export const gitGetCurrentBranch = (repo_path: string): Promise<string> =>
   invoke("git_get_current_branch", { repoPath: repo_path });

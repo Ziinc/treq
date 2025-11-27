@@ -10,7 +10,6 @@ import { ClipboardAddon, type IClipboardProvider } from "@xterm/addon-clipboard"
 import { ptyCreateSession, ptyListen, ptyResize, ptyWrite, ptySessionExists } from "../lib/api";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import { cn } from "../lib/utils";
-import "@xterm/xterm/css/xterm.css";
 import { Loader2 } from "lucide-react";
 
 interface ConsolidatedTerminalProps {
@@ -274,10 +273,10 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
         return false; // Don't let xterm handle this event
       }
 
-      // Handle Shift+Enter for newline
+      // Handle Shift+Enter for line continuation (backslash + newline)
       if (event.key === "Enter" && event.shiftKey && event.type === "keydown") {
         if (isPtyReadyRef.current) {
-          ptyWrite(sessionId, "\r\n").catch(handleError);
+          ptyWrite(sessionId, "\\").catch(handleError);
         }
         return false;
       }

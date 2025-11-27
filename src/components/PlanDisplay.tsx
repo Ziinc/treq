@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { PlanSection } from '../types/planning';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
-import { Copy, CheckCircle2, ListTodo, Lightbulb, FileText, Edit3, Play, ArrowRight, Loader2 } from 'lucide-react';
+import { Copy, CheckCircle2, ListTodo, Lightbulb, FileText, Edit3, Play, ArrowRight, Loader2, GitBranch } from 'lucide-react';
 import { useToast } from './ui/toast';
 import { PlanEditor } from './PlanEditor';
 import { getWorktreePlans, ptyWrite } from '../lib/api';
@@ -12,6 +12,8 @@ interface PlanDisplayProps {
   planSections: PlanSection[];
   onPlanEdit?: (planId: string, newContent: string) => void;
   onExecutePlan?: (section: PlanSection) => void;
+  onExecuteInWorktree?: (section: PlanSection) => void;
+  isExecutingInWorktree?: boolean;
   sessionId?: string;
   repoPath?: string;
   worktreeId?: number;
@@ -110,10 +112,12 @@ const formatRelativeTime = (date: Date): string => {
   }
 };
 
-export const PlanDisplay: React.FC<PlanDisplayProps> = ({ 
-  planSections, 
-  onPlanEdit, 
+export const PlanDisplay: React.FC<PlanDisplayProps> = ({
+  planSections,
+  onPlanEdit,
   onExecutePlan,
+  onExecuteInWorktree,
+  isExecutingInWorktree,
   sessionId,
   repoPath,
   worktreeId,
@@ -313,6 +317,22 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {section.type === 'implementation_plan' && onExecuteInWorktree && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onExecuteInWorktree(section)}
+                    disabled={isExecutingInWorktree}
+                    className="h-8"
+                  >
+                    {isExecutingInWorktree ? (
+                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                    ) : (
+                      <GitBranch className="w-3 h-3 mr-1" />
+                    )}
+                    Execute in new worktree
+                  </Button>
+                )}
                 {section.type === 'implementation_plan' && onExecutePlan && (
                   <Button
                     variant="default"

@@ -72,6 +72,7 @@ impl PtyManager {
         if let Some(dir) = working_dir {
             cmd.cwd(dir);
         }
+        cmd.env("TERM", "xterm-256color");
 
         let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
         drop(pair.slave);

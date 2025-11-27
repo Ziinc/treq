@@ -178,18 +178,7 @@ export const CreateWorktreeDialog: React.FC<CreateWorktreeDialogProps> = ({
           </div>
 
           <div className="grid gap-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="branch">Branch Name (auto-generated)</Label>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-6 text-xs"
-                onClick={() => setIsEditingBranch(!isEditingBranch)}
-              >
-                {isEditingBranch ? "Auto" : "Edit"}
-              </Button>
-            </div>
+            <Label htmlFor="branch">Branch Name</Label>
             <Input
               id="branch"
               value={branchName}
@@ -198,8 +187,6 @@ export const CreateWorktreeDialog: React.FC<CreateWorktreeDialogProps> = ({
                 setIsEditingBranch(true);
               }}
               placeholder={branchPattern.replace("{name}", "example")}
-              readOnly={!isEditingBranch}
-              className={!isEditingBranch ? "bg-secondary cursor-default" : ""}
             />
             <p className="text-xs text-muted-foreground">
               Pattern: {branchPattern} (configure in Repository Settings)

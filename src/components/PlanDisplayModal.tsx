@@ -15,6 +15,8 @@ interface PlanDisplayModalProps {
   planSections: PlanSection[];
   onPlanEdit?: (planId: string, newContent: string) => void;
   onExecutePlan?: (section: PlanSection) => void;
+  onExecuteInWorktree?: (section: PlanSection) => void;
+  isExecutingInWorktree?: boolean;
   sessionId?: string;
   repoPath?: string;
   worktreeId?: number;
@@ -26,6 +28,8 @@ export const PlanDisplayModal: React.FC<PlanDisplayModalProps> = ({
   planSections,
   onPlanEdit,
   onExecutePlan,
+  onExecuteInWorktree,
+  isExecutingInWorktree,
   sessionId,
   repoPath,
   worktreeId,
@@ -47,6 +51,8 @@ export const PlanDisplayModal: React.FC<PlanDisplayModalProps> = ({
             planSections={planSections}
             onPlanEdit={onPlanEdit}
             onExecutePlan={onExecutePlan}
+            onExecuteInWorktree={onExecuteInWorktree}
+            isExecutingInWorktree={isExecutingInWorktree}
             sessionId={sessionId}
             repoPath={repoPath}
             worktreeId={worktreeId}

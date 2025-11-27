@@ -613,28 +613,25 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           </Button>
         )}
 
-        {(worktrees.length > 0 || orphanSessions.length > 0) && (
         <div className="space-y-2 border-t border-border">
-          {worktrees.length > 0 && (
-            <div className="flex items-center justify-between text-[12px] text-muted-foreground uppercase tracking-wide px-2 py-1">
-              <span>Worktrees</span>
-              {onCreateWorktree && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      className="p-1 rounded hover:bg-muted"
-                      aria-label="New worktree"
-                      onClick={onCreateWorktree}
-                    >
-                      <Plus className="w-3 h-3" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">New worktree</TooltipContent>
-                </Tooltip>
-              )}
-            </div>
-          )}
+          <div className="flex items-center justify-between text-[12px] text-muted-foreground uppercase tracking-wide px-2 py-1">
+            <span>Worktrees</span>
+            {onCreateWorktree && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="p-1 rounded hover:bg-muted"
+                    aria-label="New worktree"
+                    onClick={onCreateWorktree}
+                  >
+                    <Plus className="w-3 h-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">New worktree</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
           {worktrees.map((worktree) => {
             const sessionsForWorktree = sessionsByWorktree.get(worktree.id) || [];
             return (
@@ -743,7 +740,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
             </div>
           )}
         </div>
-      )}
       </div>
       {/* Footer with actions */}
       {(openSettings || navigateToDashboard) && (

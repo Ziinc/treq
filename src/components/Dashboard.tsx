@@ -971,6 +971,92 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const handleExecutePlanInWorktree = useCallback(async (section: PlanSection, sourceBranch: string) => {
+    try {
+      // Get branch name pattern from settings
+      const branchPattern = await getRepoSetting(repoPath, "branch_name_pattern") || "treq/{name}";
+
+      // Generate branch name from plan title using pattern
+      const branchName = applyBranchNamePattern(branchPattern, section.title);
+
+      addToast({
+        title: "Creating worktree...",
+        description: `Branch: ${branchName} (from ${sourceBranch})`,
+        type: "info",
+      });
+
+      // Create the worktree with source branch
+      const worktreePath = await gitCreateWorktree(repoPath, branchName, true, sourceBranch);
+
+      // Prepare metadata with plan title and source branch
+      const metadata = JSON.stringify({
+        initial_plan_title: section.title,
+        source_branch: sourceBranch,
+      });
+
+      // Add to database with metadata
+      const worktreeId = await addWorktreeToDb(repoPath, worktreePath, branchName, metadata);
+
+      // Execute post-create command if configured
+      const postCreateCmd = await getRepoSetting(repoPath, "post_create_command");
+      if (postCreateCmd && postCreateCmd.trim()) {
+        try {
+          await gitExecutePostCreateCommand(worktreePath, postCreateCmd);
+        } catch (cmdError) {
+          console.error("Post-create command failed:", cmdError);
+          addToast({
+            title: "Post-create warning",
+            description: "Post-create command failed but worktree was created",
+            type: "warning",
+          });
+        }
+      }
+
+      // Get plan content (use edited version if available)
+      const planContent = section.editedContent || section.rawMarkdown;
+
+      // Create worktree object
+      const newWorktree: Worktree = {
+        id: worktreeId,
+        repo_path: repoPath,
+        worktree_path: worktreePath,
+        branch_name: branchName,
+        created_at: new Date().toISOString(),
+        metadata,
+      };
+
+      // Record plan execution
+      try {
+        const payload = buildPlanHistoryPayload(section);
+        await saveExecutedPlan(repoPath, worktreeId, payload);
+      } catch (planError) {
+        console.error("Failed to record plan execution:", planError);
+      }
+
+      // Navigate to new worktree and open session with plan content
+      await handleOpenSession(newWorktree, {
+        planTitle: section.title,
+        planContent,
+        forceNew: true,
+      });
+
+      addToast({
+        title: "Ready to implement",
+        description: "Worktree created; plan sent to Claude",
+        type: "success",
+      });
+
+      // Refresh worktree list
+      refetch();
+    } catch (error) {
+      addToast({
+        title: "Failed to create worktree",
+        description: error instanceof Error ? error.message : String(error),
+        type: "error",
+      });
+    }
+  }, [repoPath, addToast, handleOpenSession, refetch]);
+
   const handleCloseTerminal = () => {
     setViewMode("dashboard");
     setSelectedWorktree(null);
@@ -1140,6 +1226,7 @@ export const Dashboard: React.FC = () => {
               sessionId={session.id}
               onClose={handleCloseTerminal}
               onExecutePlan={handleExecutePlan}
+              onExecutePlanInWorktree={handleExecutePlanInWorktree}
               initialPlanContent={session.id === activeSessionId ? (sessionPlanContent || undefined) : undefined}
               initialPlanTitle={session.id === activeSessionId ? (sessionPlanTitle || undefined) : undefined}
               initialPrompt={session.id === activeSessionId ? (sessionInitialPrompt || undefined) : undefined}
@@ -1166,6 +1253,7 @@ export const Dashboard: React.FC = () => {
     sessionSelectedFile,
     handleCloseTerminal,
     handleExecutePlan,
+    handleExecutePlanInWorktree,
     handleSessionActivity,
   ]);
 

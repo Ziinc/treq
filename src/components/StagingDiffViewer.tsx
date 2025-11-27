@@ -312,6 +312,144 @@ const CommentInput: React.FC<CommentInputProps> = memo(({
 });
 CommentInput.displayName = "CommentInput";
 
+// Isolated commit input component to prevent parent re-renders during typing
+interface CommitInputProps {
+  onCommit: (message: string) => void;
+  onCommitAmend: (message: string) => void;
+  onCommitAndPush: (message: string) => void;
+  onCommitAndSync: (message: string) => void;
+  stagedFilesCount: number;
+  disabled: boolean;
+  pending: boolean;
+  actionPending: 'commit' | 'amend' | 'push' | 'sync' | null;
+}
+
+const CommitInput: React.FC<CommitInputProps> = memo(({
+  onCommit,
+  onCommitAmend,
+  onCommitAndPush,
+  onCommitAndSync,
+  stagedFilesCount,
+  disabled,
+  pending,
+  actionPending,
+}) => {
+  const [message, setMessage] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const canCommit = useMemo(() => {
+    const trimmed = message.trim();
+    return Boolean(trimmed) && trimmed.length <= 500 && stagedFilesCount > 0 && !pending && !actionPending;
+  }, [message, stagedFilesCount, pending, actionPending]);
+
+  const adjustHeight = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    const lineHeight = 20;
+    const minHeight = lineHeight + 16;
+    textarea.style.height = `${Math.max(minHeight, textarea.scrollHeight)}px`;
+  }, []);
+
+  useEffect(() => {
+    adjustHeight();
+  }, [message, adjustHeight]);
+
+  const handleKeyDown = useCallback((event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      event.preventDefault();
+      if (canCommit) {
+        onCommit(message.trim());
+        setMessage("");
+      }
+    }
+  }, [canCommit, message, onCommit]);
+
+  const handleCommit = useCallback(() => {
+    if (canCommit) {
+      onCommit(message.trim());
+      setMessage("");
+    }
+  }, [canCommit, message, onCommit]);
+
+  const handleAmend = useCallback(() => {
+    const trimmed = message.trim();
+    if (trimmed) {
+      onCommitAmend(trimmed);
+      setMessage("");
+    }
+  }, [message, onCommitAmend]);
+
+  const handlePush = useCallback(() => {
+    if (canCommit) {
+      onCommitAndPush(message.trim());
+      setMessage("");
+    }
+  }, [canCommit, message, onCommitAndPush]);
+
+  const handleSync = useCallback(() => {
+    if (canCommit) {
+      onCommitAndSync(message.trim());
+      setMessage("");
+    }
+  }, [canCommit, message, onCommitAndSync]);
+
+  return (
+    <div className="px-4 py-3 border-b border-border space-y-2">
+      <Textarea
+        ref={textareaRef}
+        placeholder="Message"
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        onKeyDown={handleKeyDown}
+        disabled={disabled || pending}
+        className="resize-none overflow-hidden"
+        style={{ minHeight: "24px" }}
+      />
+      <div className="flex gap-1">
+        <div className="flex flex-1">
+          <Button
+            className="flex-1 rounded-r-none border-r-0 text-xs !h-auto py-1.5"
+            disabled={!canCommit || disabled}
+            onClick={handleCommit}
+            size="sm"
+          >
+            {pending || actionPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Commit"}
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                className="px-2 rounded-l-none text-xs !h-auto py-1.5"
+                disabled={!canCommit || disabled}
+                size="sm"
+                variant="default"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" sideOffset={4}>
+              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleCommit(); }} disabled={!canCommit}>
+                Commit
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleAmend(); }} disabled={!message.trim()}>
+                Commit (Amend)
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handlePush(); }} disabled={!canCommit}>
+                Commit & Push
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleSync(); }} disabled={!canCommit}>
+                Commit & Sync
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+    </div>
+  );
+});
+CommitInput.displayName = "CommitInput";
+
 // Memoized syntax-highlighted line content
 interface HighlightedLineProps {
   content: string;
@@ -350,10 +488,8 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
   const [selectionAnchor, setSelectionAnchor] = useState<{ filePath: string; hunkIndex: number; lineIndex: number } | null>(null);
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const [stagingLines, setStagingLines] = useState(false);
-  const [commitMessage, setCommitMessage] = useState("");
   const [commitPending, setCommitPending] = useState(false);
   const [actionPending, setActionPending] = useState<'commit' | 'amend' | 'push' | 'sync' | null>(null);
-  const commitMessageTextareaRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<ListImperativeAPI | null>(null);
   const prevFilePathsRef = useRef<string[]>([]);
 
@@ -1348,7 +1484,7 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
     return looseMatch ? looseMatch[0] : null;
   }, []);
 
-  const handleCommit = useCallback(async () => {
+  const handleCommit = useCallback(async (commitMsg: string) => {
     if (!worktreePath) {
       addToast({
         title: "Missing Worktree",
@@ -1358,13 +1494,12 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
       return;
     }
 
-    const trimmed = commitMessage.trim();
-    if (!trimmed) {
+    if (!commitMsg) {
       addToast({ title: "Commit message", description: "Enter a commit message.", type: "error" });
       return;
     }
 
-    if (trimmed.length > 500) {
+    if (commitMsg.length > 500) {
       addToast({ title: "Commit message", description: "Please keep the message under 500 characters.", type: "error" });
       return;
     }
@@ -1376,7 +1511,7 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
 
     setCommitPending(true);
     try {
-      const result = await gitCommit(worktreePath, trimmed);
+      const result = await gitCommit(worktreePath, commitMsg);
       const hash = extractCommitHash(result);
       await invalidateCache();
       addToast({
@@ -1384,7 +1519,6 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
         description: hash ? `Created ${hash}` : result.trim() || "Commit successful",
         type: "success",
       });
-      setCommitMessage("");
       refresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1396,23 +1530,9 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
     } finally {
       setCommitPending(false);
     }
-  }, [worktreePath, commitMessage, stagedFiles, addToast, extractCommitHash, refresh, invalidateCache]);
+  }, [worktreePath, stagedFiles, addToast, extractCommitHash, refresh, invalidateCache]);
 
-  const canCommit = useMemo(() => {
-    const trimmed = commitMessage.trim();
-    return Boolean(trimmed) && trimmed.length <= 500 && stagedFiles.length > 0 && !commitPending && !actionPending;
-  }, [commitMessage, stagedFiles, commitPending, actionPending]);
-
-  const handleCommitKeyDown = useCallback((event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-      event.preventDefault();
-      if (canCommit) {
-        handleCommit();
-      }
-    }
-  }, [canCommit, handleCommit]);
-
-  const handleCommitAmend = useCallback(async () => {
+  const handleCommitAmend = useCallback(async (commitMsg: string) => {
     if (!worktreePath) {
       addToast({
         title: "Missing Worktree",
@@ -1422,15 +1542,14 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
       return;
     }
 
-    const trimmed = commitMessage.trim();
-    if (!trimmed) {
+    if (!commitMsg) {
       addToast({ title: "Commit message", description: "Enter a commit message.", type: "error" });
       return;
     }
 
     setActionPending('amend');
     try {
-      const result = await gitCommitAmend(worktreePath, trimmed);
+      const result = await gitCommitAmend(worktreePath, commitMsg);
       const hash = extractCommitHash(result);
       await invalidateCache();
       addToast({
@@ -1438,7 +1557,6 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
         description: hash ? `Amended to ${hash}` : result.trim() || "Amend successful",
         type: "success",
       });
-      setCommitMessage("");
       refresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1450,15 +1568,15 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
     } finally {
       setActionPending(null);
     }
-  }, [worktreePath, commitMessage, addToast, extractCommitHash, refresh, invalidateCache]);
+  }, [worktreePath, addToast, extractCommitHash, refresh, invalidateCache]);
 
-  const handleCommitAndPush = useCallback(async () => {
-    if (!canCommit) return;
+  const handleCommitAndPush = useCallback(async (commitMsg: string) => {
+    if (!commitMsg || stagedFiles.length === 0) return;
 
     setActionPending('push');
     try {
       // First commit
-      const commitResult = await gitCommit(worktreePath, commitMessage.trim());
+      const commitResult = await gitCommit(worktreePath, commitMsg);
       const hash = extractCommitHash(commitResult);
       await invalidateCache();
       addToast({
@@ -1475,7 +1593,6 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
         type: "success",
       });
 
-      setCommitMessage("");
       refresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1487,15 +1604,15 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
     } finally {
       setActionPending(null);
     }
-  }, [canCommit, worktreePath, commitMessage, addToast, extractCommitHash, refresh, invalidateCache]);
+  }, [worktreePath, stagedFiles, addToast, extractCommitHash, refresh, invalidateCache]);
 
-  const handleCommitAndSync = useCallback(async () => {
-    if (!canCommit) return;
+  const handleCommitAndSync = useCallback(async (commitMsg: string) => {
+    if (!commitMsg || stagedFiles.length === 0) return;
 
     setActionPending('sync');
     try {
       // First commit
-      const commitResult = await gitCommit(worktreePath, commitMessage.trim());
+      const commitResult = await gitCommit(worktreePath, commitMsg);
       const hash = extractCommitHash(commitResult);
       await invalidateCache();
       addToast({
@@ -1521,7 +1638,6 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
         type: "success",
       });
 
-      setCommitMessage("");
       refresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1533,24 +1649,7 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
     } finally {
       setActionPending(null);
     }
-  }, [canCommit, worktreePath, commitMessage, addToast, extractCommitHash, refresh, invalidateCache]);
-
-
-  const adjustTextareaHeight = useCallback(() => {
-    const textarea = commitMessageTextareaRef.current;
-    if (!textarea) return;
-    
-    // Reset height to get accurate scrollHeight
-    textarea.style.height = "auto";
-    // Set height based on scrollHeight, with minimum of 1 line
-    const lineHeight = 20; // Approximate line height
-    const minHeight = lineHeight + 16; // 1 line + padding
-    textarea.style.height = `${Math.max(minHeight, textarea.scrollHeight)}px`;
-  }, []);
-
-  useEffect(() => {
-    adjustTextareaHeight();
-  }, [commitMessage, adjustTextareaHeight]);
+  }, [worktreePath, stagedFiles, addToast, extractCommitHash, refresh, invalidateCache]);
 
   const toggleSectionCollapse = useCallback((sectionId: string) => {
     setCollapsedSections((prev) => {
@@ -1889,85 +1988,16 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
   return (
     <div className="flex h-full overflow-hidden">
       <div className="w-72 border-r border-border bg-sidebar flex flex-col">
-        <div className="px-4 py-3 border-b border-border space-y-2">
-          <Textarea
-            ref={commitMessageTextareaRef}
-            placeholder="Message"
-            value={commitMessage}
-            onChange={(event) => {
-              setCommitMessage(event.target.value);
-              adjustTextareaHeight();
-            }}
-            onKeyDown={handleCommitKeyDown}
-            disabled={readOnly || disableInteractions || commitPending}
-            className="resize-none overflow-hidden"
-            style={{ minHeight: "24px" }}
-          />
-          <div className="flex gap-1">
-            {/* Commit Button Group */}
-            <div className="flex flex-1">
-              <Button
-                className="flex-1 rounded-r-none border-r-0 text-xs !h-auto py-1.5"
-                disabled={!canCommit || readOnly || disableInteractions}
-                onClick={handleCommit}
-                size="sm"
-              >
-                {commitPending || actionPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Commit"}
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    className="px-2 rounded-l-none text-xs !h-auto py-1.5"
-                    disabled={!canCommit || readOnly || disableInteractions}
-                    size="sm"
-                    variant="default"
-                  >
-                    <ChevronDown className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" sideOffset={4}>
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      handleCommit();
-                    }}
-                    disabled={!canCommit}
-                  >
-                    Commit
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      handleCommitAmend();
-                    }}
-                    disabled={!commitMessage.trim()}
-                  >
-                    Commit (Amend)
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      handleCommitAndPush();
-                    }}
-                    disabled={!canCommit}
-                  >
-                    Commit & Push
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      handleCommitAndSync();
-                    }}
-                    disabled={!canCommit}
-                  >
-                    Commit & Sync
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-        </div>
+        <CommitInput
+          onCommit={handleCommit}
+          onCommitAmend={handleCommitAmend}
+          onCommitAndPush={handleCommitAndPush}
+          onCommitAndSync={handleCommitAndSync}
+          stagedFilesCount={stagedFiles.length}
+          disabled={readOnly || disableInteractions}
+          pending={commitPending}
+          actionPending={actionPending}
+        />
         <div className="flex-1 overflow-y-auto px-4 pb-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full">
           {stagedFiles.length === 0 && unstagedFiles.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center py-12">

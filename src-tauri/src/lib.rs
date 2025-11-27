@@ -20,7 +20,7 @@ use shell::execute_command;
 use std::collections::HashSet;
 use std::sync::Mutex;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, EventTarget, Manager, State};
 
 struct AppState {
     db: Mutex<Database>,
@@ -218,6 +218,7 @@ fn git_create_worktree(
     repo_path: String,
     branch: String,
     new_branch: bool,
+    source_branch: Option<String>,
 ) -> Result<String, String> {
     // Load inclusion patterns from database
     let inclusion_patterns = {
@@ -234,7 +235,13 @@ fn git_create_worktree(
             })
     };
 
-    create_worktree(&repo_path, &branch, new_branch, inclusion_patterns)
+    create_worktree(
+        &repo_path,
+        &branch,
+        new_branch,
+        source_branch.as_deref(),
+        inclusion_patterns,
+    )
 }
 
 #[tauri::command]
@@ -818,6 +825,19 @@ fn clear_all_viewed_files(state: State<AppState>, worktree_path: String) -> Resu
         .map_err(|e| e.to_string())
 }
 
+/// Emits an event only to the focused webview window.
+/// Falls back to broadcasting if no focused window is found.
+fn emit_to_focused<S: serde::Serialize + Clone>(app: &AppHandle, event: &str, payload: S) {
+    for (label, window) in app.webview_windows() {
+        if window.is_focused().unwrap_or(false) {
+            let _ = app.emit_to(EventTarget::webview_window(&label), event, payload);
+            return;
+        }
+    }
+    // Fallback: emit globally if no focused window found
+    let _ = app.emit(event, payload);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -881,16 +901,16 @@ pub fn run() {
 
             app.set_menu(menu)?;
 
-            // Handle menu events
+            // Handle menu events - emit only to focused window
             app.on_menu_event(move |app, event| {
                 if event.id() == "dashboard" {
-                    let _ = app.emit("navigate-to-dashboard", ());
+                    emit_to_focused(app, "navigate-to-dashboard", ());
                 } else if event.id() == "settings" {
-                    let _ = app.emit("navigate-to-settings", ());
+                    emit_to_focused(app, "navigate-to-settings", ());
                 } else if event.id() == "open" {
-                    let _ = app.emit("menu-open-repository", ());
+                    emit_to_focused(app, "menu-open-repository", ());
                 } else if event.id() == "open_new_window" {
-                    let _ = app.emit("menu-open-in-new-window", ());
+                    emit_to_focused(app, "menu-open-in-new-window", ());
                 }
             });
 

@@ -43,8 +43,11 @@ rustflags = [
 # Build configuration
 [build]
 # Parallel compilation jobs (defaults to number of CPU cores)
-# jobs = 8  # Uncomment and adjust if needed
+jobs = 16
 
 # Incremental compilation for faster rebuilds (enabled by default in dev)
 incremental = true
+
+# Use sccache for compilation caching
+rustc-wrapper = "sccache"
 

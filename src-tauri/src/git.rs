@@ -39,6 +39,7 @@ pub fn create_worktree(
     repo_path: &str,
     branch: &str,
     new_branch: bool,
+    source_branch: Option<&str>,
     inclusion_patterns: Option<Vec<String>>,
 ) -> Result<String, String> {
     // Sanitize branch name for path
@@ -58,6 +59,12 @@ pub fn create_worktree(
     }
 
     // Execute git worktree add command
+    // When new_branch is true and source_branch is provided:
+    //   git worktree add -b <new_branch> <path> <source_branch>
+    // When new_branch is true and no source_branch:
+    //   git worktree add -b <new_branch> <path>
+    // When new_branch is false:
+    //   git worktree add <path> <branch>
     let mut cmd = Command::new("git");
     cmd.current_dir(repo_path);
     cmd.arg("worktree").arg("add");
@@ -68,7 +75,12 @@ pub fn create_worktree(
 
     cmd.arg(&worktree_path);
 
-    if !new_branch {
+    if new_branch {
+        // If source_branch is provided, use it as the base for the new branch
+        if let Some(source) = source_branch {
+            cmd.arg(source);
+        }
+    } else {
         cmd.arg(branch);
     }
 

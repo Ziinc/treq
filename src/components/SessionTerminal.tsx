@@ -20,6 +20,7 @@ import {
   gitGetBranchInfo,
   gitGetBranchDivergence,
   preloadWorktreeGitData,
+  gitGetCurrentBranch,
 } from "../lib/api";
 import { PlanSection } from "../types/planning";
 import { createDebouncedParser } from "../lib/planParser";
@@ -57,6 +58,7 @@ interface SessionTerminalProps {
   sessionId: number | null;
   onClose: () => void;
   onExecutePlan?: (section: PlanSection) => void;
+  onExecutePlanInWorktree?: (section: PlanSection, sourceBranch: string) => Promise<void>;
   initialPlanContent?: string;
   initialPlanTitle?: string;
   initialPrompt?: string;
@@ -73,6 +75,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
   sessionId,
   onClose,
   onExecutePlan,
+  onExecutePlanInWorktree,
   initialPlanContent,
   initialPlanTitle,
   initialPrompt,
@@ -113,6 +116,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
   const [isRenamingSession, setIsRenamingSession] = useState(false);
   const [actionPending, setActionPending] = useState<'push' | 'merge' | 'forcePush' | null>(null);
   const [showForcePushDialog, setShowForcePushDialog] = useState(false);
+  const [isExecutingInWorktree, setIsExecutingInWorktree] = useState(false);
   const [mainTreePath, setMainTreePath] = useState<string | null>(null);
   const [remoteBranchInfo, setRemoteBranchInfo] = useState<BranchInfo | null>(null);
   const [maintreeBranchName, setMaintreeBranchName] = useState<string | null>(null);
@@ -424,6 +428,37 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
   const handleExecuteSection = useCallback((section: PlanSection) => {
     onExecutePlan?.(section);
   }, [onExecutePlan]);
+
+  const handleExecuteInWorktree = useCallback(async (section: PlanSection) => {
+    if (!onExecutePlanInWorktree) return;
+
+    // Close modal immediately when user clicks execute
+    setPlanModalOpen(false);
+
+    setIsExecutingInWorktree(true);
+    try {
+      // Determine source branch
+      let sourceBranch: string;
+      if (worktree) {
+        sourceBranch = worktree.branch_name;
+      } else if (effectiveRepoPath) {
+        sourceBranch = await gitGetCurrentBranch(effectiveRepoPath);
+      } else {
+        throw new Error("No repository context available");
+      }
+
+      // This will create worktree and navigate to it
+      await onExecutePlanInWorktree(section, sourceBranch);
+    } catch (error) {
+      addToast({
+        title: "Failed to execute in worktree",
+        description: error instanceof Error ? error.message : String(error),
+        type: "error",
+      });
+    } finally {
+      setIsExecutingInWorktree(false);
+    }
+  }, [worktree, effectiveRepoPath, onExecutePlanInWorktree, addToast]);
 
   useEffect(() => {
     if (!terminalOutput) {
@@ -1108,20 +1143,28 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
                   <TooltipContent>Search (Cmd+F)</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-              {hasImplementationPlan && (
+              {activePanel === "planning" && (
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
                         type="button"
                         onClick={() => setPlanModalOpen(true)}
-                        className="h-6 w-6 rounded-md bg-background/90 border border-border/60 hover:bg-muted flex items-center justify-center transition-colors shadow-sm"
+                        disabled={!hasImplementationPlan}
+                        className={cn(
+                          "h-6 w-6 rounded-md bg-background/90 border border-border/60 flex items-center justify-center transition-colors shadow-sm",
+                          hasImplementationPlan
+                            ? "hover:bg-muted cursor-pointer"
+                            : "opacity-50 cursor-not-allowed"
+                        )}
                         aria-label="View implementation plan"
                       >
                         <FileText className="w-3 h-3" />
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent>View Plan</TooltipContent>
+                    <TooltipContent>
+                      {hasImplementationPlan ? "View Plan" : "No plan detected"}
+                    </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               )}
@@ -1226,6 +1269,8 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
         planSections={planSections}
         onPlanEdit={handlePlanEdit}
         onExecutePlan={handleExecuteSection}
+        onExecuteInWorktree={handleExecuteInWorktree}
+        isExecutingInWorktree={isExecutingInWorktree}
         sessionId={ptySessionId}
         repoPath={effectiveRepoPath}
         worktreeId={worktree?.id}
