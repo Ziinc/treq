@@ -121,8 +121,11 @@ export interface DirectoryEntry {
 }
 
 // Database API
-export const getWorktrees = (): Promise<Worktree[]> => 
-  invoke("get_worktrees");
+export const getWorktrees = (repo_path: string): Promise<Worktree[]> =>
+  invoke("get_worktrees", { repoPath: repo_path });
+
+export const rebuildWorktrees = (repo_path: string): Promise<Worktree[]> =>
+  invoke("rebuild_worktrees", { repoPath: repo_path });
 
 export const addWorktreeToDb = (
   repo_path: string,
@@ -132,8 +135,8 @@ export const addWorktreeToDb = (
 ): Promise<number> =>
   invoke("add_worktree_to_db", { repoPath: repo_path, worktreePath: worktree_path, branchName: branch_name, metadata });
 
-export const deleteWorktreeFromDb = (id: number): Promise<void> =>
-  invoke("delete_worktree_from_db", { id });
+export const deleteWorktreeFromDb = (repo_path: string, id: number): Promise<void> =>
+  invoke("delete_worktree_from_db", { repoPath: repo_path, id });
 
 export const getCommands = (worktree_id: number): Promise<Command[]> =>
   invoke("get_commands", { worktreeId: worktree_id });
@@ -571,29 +574,30 @@ export const deletePlanFile = (repoPath: string, planId: string): Promise<void> 
 
 // Session management API
 export const createSession = (
+  repo_path: string,
   worktreeId: number | null,
   name: string,
   planTitle?: string
 ): Promise<number> =>
-  invoke("create_session", { worktreeId, name, planTitle });
+  invoke("create_session", { repoPath: repo_path, worktreeId, name, planTitle });
 
-export const getSessions = (): Promise<Session[]> =>
-  invoke("get_sessions");
+export const getSessions = (repo_path: string): Promise<Session[]> =>
+  invoke("get_sessions", { repoPath: repo_path });
 
-export const getSessionsByWorktree = (worktreeId: number): Promise<Session[]> =>
-  invoke("get_sessions_by_worktree", { worktreeId });
+export const getSessionsByWorktree = (repo_path: string, worktreeId: number): Promise<Session[]> =>
+  invoke("get_sessions_by_worktree", { repoPath: repo_path, worktreeId });
 
-export const getMainRepoSessions = (): Promise<Session[]> =>
-  invoke("get_main_repo_sessions");
+export const getMainRepoSessions = (repo_path: string): Promise<Session[]> =>
+  invoke("get_main_repo_sessions", { repoPath: repo_path });
 
-export const updateSessionAccess = (id: number): Promise<void> =>
-  invoke("update_session_access", { id });
+export const updateSessionAccess = (repo_path: string, id: number): Promise<void> =>
+  invoke("update_session_access", { repoPath: repo_path, id });
 
-export const updateSessionName = (id: number, name: string): Promise<void> =>
-  invoke("update_session_name", { id, name });
+export const updateSessionName = (repo_path: string, id: number, name: string): Promise<void> =>
+  invoke("update_session_name", { repoPath: repo_path, id, name });
 
-export const deleteSession = (id: number): Promise<void> =>
-  invoke("delete_session", { id });
+export const deleteSession = (repo_path: string, id: number): Promise<void> =>
+  invoke("delete_session", { repoPath: repo_path, id });
 
 // File view tracking API
 export interface FileView {

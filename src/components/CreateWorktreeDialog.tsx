@@ -12,18 +12,29 @@ import { Textarea } from "./ui/textarea";
 import { Label } from "./ui/label";
 import { useToast } from "./ui/toast";
 import { applyBranchNamePattern, sanitizeForBranchName } from "../lib/utils";
-import { 
-  gitCreateWorktree, 
-  addWorktreeToDb, 
-  getRepoSetting, 
+import {
+  gitCreateWorktree,
+  addWorktreeToDb,
+  getRepoSetting,
   gitExecutePostCreateCommand
 } from "../lib/api";
+import { PlanSection } from "../types/planning";
 
 interface CreateWorktreeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   repoPath: string;
   onSuccess: () => void;
+
+  // Plan execution mode props
+  planSection?: PlanSection;
+  sourceBranch?: string;
+  initialSessionName?: string;
+  onSuccessWithPlan?: (
+    worktreeInfo: { id: number; worktreePath: string; branchName: string; metadata: string },
+    planSection: PlanSection,
+    sessionName?: string
+  ) => void;
 }
 
 export const CreateWorktreeDialog: React.FC<CreateWorktreeDialogProps> = ({
@@ -31,6 +42,10 @@ export const CreateWorktreeDialog: React.FC<CreateWorktreeDialogProps> = ({
   onOpenChange,
   repoPath,
   onSuccess,
+  planSection,
+  sourceBranch,
+  initialSessionName,
+  onSuccessWithPlan,
 }) => {
   const [intent, setIntent] = useState("");
   const [branchName, setBranchName] = useState("");
@@ -39,6 +54,16 @@ export const CreateWorktreeDialog: React.FC<CreateWorktreeDialogProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const { addToast } = useToast();
+
+  // Plan execution mode detection
+  const isPlanExecution = !!planSection;
+
+  // Pre-populate intent from plan title when in plan execution mode
+  useEffect(() => {
+    if (open && planSection) {
+      setIntent(planSection.title);
+    }
+  }, [open, planSection]);
 
   // Load branch pattern from repository settings
   useEffect(() => {
@@ -87,15 +112,26 @@ export const CreateWorktreeDialog: React.FC<CreateWorktreeDialogProps> = ({
 
     try {
       // Create the worktree (auto-generates path)
-      const worktreePath = await gitCreateWorktree(repoPath, branchName, true);
+      // Pass source branch if executing from worktree
+      const worktreePath = await gitCreateWorktree(
+        repoPath,
+        branchName,
+        true,
+        sourceBranch || undefined
+      );
 
-      // Prepare metadata with intent
-      const metadata = JSON.stringify({
-        intent: intent.trim()
-      });
+      // Prepare metadata based on execution mode
+      const metadata = JSON.stringify(
+        isPlanExecution && planSection
+          ? {
+              initial_plan_title: planSection.title,
+              source_branch: sourceBranch,
+            }
+          : { intent: intent.trim() }
+      );
 
       // Add to database with metadata
-      await addWorktreeToDb(repoPath, worktreePath, branchName, metadata);
+      const worktreeId = await addWorktreeToDb(repoPath, worktreePath, branchName, metadata);
 
       // Get and execute post-create command if configured
       const postCreateCmd = await getRepoSetting(repoPath, "post_create_command");
@@ -135,8 +171,17 @@ export const CreateWorktreeDialog: React.FC<CreateWorktreeDialogProps> = ({
       setIntent("");
       setBranchName("");
       setIsEditingBranch(false);
-      
-      onSuccess();
+
+      // Call appropriate success callback based on mode
+      if (isPlanExecution && onSuccessWithPlan && planSection) {
+        await onSuccessWithPlan(
+          { id: worktreeId, worktreePath, branchName, metadata },
+          planSection,
+          initialSessionName
+        );
+      } else {
+        onSuccess();
+      }
       onOpenChange(false);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);

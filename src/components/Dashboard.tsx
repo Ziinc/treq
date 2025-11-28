@@ -30,6 +30,7 @@ import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { useGitCachePreloader } from "../hooks/useGitCachePreloader";
 import {
   getWorktrees,
+  rebuildWorktrees,
   deleteWorktreeFromDb,
   gitRemoveWorktree,
   getSetting,
@@ -123,6 +124,13 @@ export const Dashboard: React.FC = () => {
   const [mergeChangedFiles, setMergeChangedFiles] = useState<string[]>([]);
   const [mergeDetailsLoading, setMergeDetailsLoading] = useState(false);
   const [selectedWorktreeId, setSelectedWorktreeId] = useState<number | null>(null);
+
+  // Plan execution pending state
+  const [planExecutionPending, setPlanExecutionPending] = useState<{
+    section: PlanSection;
+    sourceBranch: string;
+    sessionName?: string;
+  } | null>(null);
 
   // Main repo git changes state
   const [mainRepoChangedFiles, setMainRepoChangedFiles] = useState<ParsedFileChange[]>([]);
@@ -305,6 +313,29 @@ export const Dashboard: React.FC = () => {
     }
   }, [repoName]);
 
+  // Listen for git config initialization errors
+  useEffect(() => {
+    const unlisten = listen<{ repo_path: string; error: string }>(
+      "git-config-init-error",
+      (event) => {
+        const { repo_path, error } = event.payload;
+
+        // Only show toast if error is for current repo
+        if (repoPath && repo_path === repoPath) {
+          addToast({
+            title: "Git configuration warning",
+            description: `Could not configure automatic remote tracking: ${error}`,
+            type: "warning",
+          });
+        }
+      }
+    );
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [repoPath, addToast]);
+
   const refreshMainRepoInfo = useCallback(async () => {
     if (!repoPath) {
       setMainRepoStatus(null);
@@ -425,7 +456,34 @@ export const Dashboard: React.FC = () => {
       setRepoPath(selected);
       setViewMode("dashboard");
       setSelectedWorktree(null);
+
+      // Reset session state
+      setActiveSessionId(null);
+      setMountedSessionIds(new Set());
+      setSessionPlanContent(null);
+      setSessionPlanTitle(null);
+      setSessionInitialPrompt(null);
+      setSessionPromptLabel(null);
+      setSessionSelectedFile(null);
+
+      // Reset UI state
+      setCollapsedSections(new Set());
+      setSelectedUnstagedFiles(new Set());
+      setLastSelectedFileIndex(null);
+      setMoveDialogOpen(false);
+      setSelectedWorktreeId(null);
+
+      // Reset worktree git info cache
+      setWorktreeBranchInfo({});
+      setWorktreeDivergence({});
+
+      // Reset merge state
+      resetMergeState();
+
+      // Invalidate queries to force immediate refresh
       queryClient.invalidateQueries({ queryKey: ["worktrees"] });
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+
       addToast({
         title: "Repository Opened",
         description: `Now viewing ${selected.split("/").pop() || selected}`,
@@ -436,7 +494,7 @@ export const Dashboard: React.FC = () => {
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [queryClient, addToast]);
+  }, [queryClient, addToast, resetMergeState]);
 
   // Listen for "Open in New Window..." menu action
   useEffect(() => {
@@ -480,15 +538,39 @@ export const Dashboard: React.FC = () => {
   }, [addToast]);
 
   const { data: sessions = [] } = useQuery({
-    queryKey: ["sessions"],
-    queryFn: getSessions,
+    queryKey: ["sessions", repoPath],
+    queryFn: () => getSessions(repoPath),
     refetchInterval: 5000,
+    enabled: !!repoPath,
   });
 
   const { data: worktrees = [], refetch } = useQuery({
-    queryKey: ["worktrees"],
-    queryFn: getWorktrees,
+    queryKey: ["worktrees", repoPath],
+    queryFn: () => getWorktrees(repoPath),
+    enabled: !!repoPath,
   });
+
+  // Rebuild worktrees from filesystem if database is empty
+  useEffect(() => {
+    const rebuildIfNeeded = async () => {
+      if (repoPath && worktrees.length === 0) {
+        try {
+          const rebuilt = await rebuildWorktrees(repoPath);
+          if (rebuilt.length > 0) {
+            queryClient.invalidateQueries({ queryKey: ["worktrees", repoPath] });
+            addToast({
+              title: "Worktrees Restored",
+              description: `Found ${rebuilt.length} worktree(s) and added them to the database.`,
+              type: "success",
+            });
+          }
+        } catch (error) {
+          console.error("Failed to rebuild worktrees:", error);
+        }
+      }
+    };
+    rebuildIfNeeded();
+  }, [repoPath, worktrees.length, queryClient, addToast]);
 
   useGitCachePreloader(worktrees, repoPath || null);
 
@@ -564,13 +646,26 @@ export const Dashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, [viewMode, repoPath, refreshMainRepoInfo]);
 
+  // Refresh git changes when session tab is focused
+  useEffect(() => {
+    if (viewMode === "session" || viewMode === "worktree-session") {
+      if (repoPath && activeSessionId) {
+        // Invalidate cache and refresh on session focus change
+        invalidateGitCache(repoPath).catch((err) => {
+          console.debug("Failed to invalidate git cache on session focus", err);
+        });
+        refreshMainRepoInfo();
+      }
+    }
+  }, [activeSessionId, viewMode, repoPath, refreshMainRepoInfo]);
+
   const deleteWorktree = useMutation({
     mutationFn: async (worktree: Worktree) => {
       await gitRemoveWorktree(worktree.repo_path, worktree.worktree_path);
-      await deleteWorktreeFromDb(worktree.id);
+      await deleteWorktreeFromDb(worktree.repo_path, worktree.id);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["worktrees"] });
+      queryClient.invalidateQueries({ queryKey: ["worktrees", repoPath] });
       addToast({
         title: "Worktree Deleted",
         description: "Worktree has been removed successfully",
@@ -624,7 +719,7 @@ export const Dashboard: React.FC = () => {
         description: `Merged ${branchName} into ${currentBranch || "main"}`,
         type: "success",
       });
-      queryClient.invalidateQueries({ queryKey: ["worktrees"] });
+      queryClient.invalidateQueries({ queryKey: ["worktrees", repoPath] });
       refreshMainRepoInfo();
       resetMergeState();
     },
@@ -666,7 +761,7 @@ export const Dashboard: React.FC = () => {
         type: "success",
       });
       // Refresh divergence info
-      queryClient.invalidateQueries({ queryKey: ["worktrees"] });
+      queryClient.invalidateQueries({ queryKey: ["worktrees", worktree.repo_path] });
       // Re-fetch git info for worktrees
       if (currentBranch) {
         gitGetBranchDivergence(worktree.worktree_path, currentBranch)
@@ -700,11 +795,11 @@ export const Dashboard: React.FC = () => {
         name?: string;
       }
     ): Promise<number> => {
-      const sessions = await getSessions();
+      const sessions = await getSessions(repoPath);
       if (!options?.forceNew) {
         const existing = sessions.find((s) => s.worktree_id === worktreeId);
         if (existing) {
-          await updateSessionAccess(existing.id);
+          await updateSessionAccess(repoPath, existing.id);
           return existing.id;
         }
       }
@@ -730,11 +825,11 @@ export const Dashboard: React.FC = () => {
       }
 
       const finalPlanTitleForDb = worktreeId !== null ? finalPlanTitle : undefined;
-      const sessionId = await createSession(worktreeId, name, finalPlanTitleForDb);
+      const sessionId = await createSession(repoPath, worktreeId, name, finalPlanTitleForDb);
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
       return sessionId;
     },
-    [queryClient, worktrees]
+    [queryClient, worktrees, repoPath]
   );
 
   const handleOpenSession = useCallback(
@@ -768,6 +863,17 @@ export const Dashboard: React.FC = () => {
   const openSessionWithPrompt = useCallback(
     async (worktree: Worktree, prompt: string, label = "Review response") => {
       await handleOpenSession(worktree, { initialPrompt: prompt, promptLabel: label });
+
+      // Focus terminal after session opens
+      setTimeout(() => {
+        const terminalContainer = document.querySelector('.xterm');
+        if (terminalContainer) {
+          const textarea = terminalContainer.querySelector('textarea');
+          if (textarea instanceof HTMLTextAreaElement) {
+            textarea.focus();
+          }
+        }
+      }, 300);
     },
     [handleOpenSession]
   );
@@ -782,7 +888,7 @@ export const Dashboard: React.FC = () => {
     setMoveDialogOpen(false);
     setSelectedUnstagedFiles(new Set());
     setLastSelectedFileIndex(null);
-    queryClient.invalidateQueries({ queryKey: ["worktrees"] });
+    await queryClient.refetchQueries({ queryKey: ["worktrees", repoPath] });
 
     // Refresh the changed files list
     if (repoPath) {
@@ -808,7 +914,7 @@ export const Dashboard: React.FC = () => {
   }, [queryClient, repoPath, handleOpenSession]);
 
   const handleSessionClick = async (session: Session) => {
-    await updateSessionAccess(session.id);
+    await updateSessionAccess(repoPath, session.id);
     setActiveSessionId(session.id);
     setSessionPlanContent(null);
     setSessionPlanTitle(null);
@@ -971,91 +1077,69 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const handleExecutePlanInWorktree = useCallback(async (section: PlanSection, sourceBranch: string) => {
+  const handleExecutePlanInWorktree = useCallback(async (
+    section: PlanSection,
+    sourceBranch: string,
+    currentSessionName?: string
+  ) => {
+    // Instead of creating immediately, open the modal with context
+    setPlanExecutionPending({
+      section,
+      sourceBranch,
+      sessionName: currentSessionName,
+    });
+    setShowCreateDialog(true);
+  }, []);
+
+  const handleWorktreeCreatedWithPlan = useCallback(async (
+    worktreeInfo: { id: number; worktreePath: string; branchName: string; metadata: string },
+    planSection: PlanSection,
+    sessionName?: string
+  ) => {
+    // Close modal
+    setShowCreateDialog(false);
+
+    // Get plan content
+    const planContent = planSection.editedContent || planSection.rawMarkdown;
+
+    // Create worktree object
+    const newWorktree: Worktree = {
+      id: worktreeInfo.id,
+      repo_path: repoPath,
+      worktree_path: worktreeInfo.worktreePath,
+      branch_name: worktreeInfo.branchName,
+      created_at: new Date().toISOString(),
+      metadata: worktreeInfo.metadata,
+    };
+
+    // Record plan execution
     try {
-      // Get branch name pattern from settings
-      const branchPattern = await getRepoSetting(repoPath, "branch_name_pattern") || "treq/{name}";
-
-      // Generate branch name from plan title using pattern
-      const branchName = applyBranchNamePattern(branchPattern, section.title);
-
-      addToast({
-        title: "Creating worktree...",
-        description: `Branch: ${branchName} (from ${sourceBranch})`,
-        type: "info",
-      });
-
-      // Create the worktree with source branch
-      const worktreePath = await gitCreateWorktree(repoPath, branchName, true, sourceBranch);
-
-      // Prepare metadata with plan title and source branch
-      const metadata = JSON.stringify({
-        initial_plan_title: section.title,
-        source_branch: sourceBranch,
-      });
-
-      // Add to database with metadata
-      const worktreeId = await addWorktreeToDb(repoPath, worktreePath, branchName, metadata);
-
-      // Execute post-create command if configured
-      const postCreateCmd = await getRepoSetting(repoPath, "post_create_command");
-      if (postCreateCmd && postCreateCmd.trim()) {
-        try {
-          await gitExecutePostCreateCommand(worktreePath, postCreateCmd);
-        } catch (cmdError) {
-          console.error("Post-create command failed:", cmdError);
-          addToast({
-            title: "Post-create warning",
-            description: "Post-create command failed but worktree was created",
-            type: "warning",
-          });
-        }
-      }
-
-      // Get plan content (use edited version if available)
-      const planContent = section.editedContent || section.rawMarkdown;
-
-      // Create worktree object
-      const newWorktree: Worktree = {
-        id: worktreeId,
-        repo_path: repoPath,
-        worktree_path: worktreePath,
-        branch_name: branchName,
-        created_at: new Date().toISOString(),
-        metadata,
-      };
-
-      // Record plan execution
-      try {
-        const payload = buildPlanHistoryPayload(section);
-        await saveExecutedPlan(repoPath, worktreeId, payload);
-      } catch (planError) {
-        console.error("Failed to record plan execution:", planError);
-      }
-
-      // Navigate to new worktree and open session with plan content
-      await handleOpenSession(newWorktree, {
-        planTitle: section.title,
-        planContent,
-        forceNew: true,
-      });
-
-      addToast({
-        title: "Ready to implement",
-        description: "Worktree created; plan sent to Claude",
-        type: "success",
-      });
-
-      // Refresh worktree list
-      refetch();
-    } catch (error) {
-      addToast({
-        title: "Failed to create worktree",
-        description: error instanceof Error ? error.message : String(error),
-        type: "error",
-      });
+      const payload = buildPlanHistoryPayload(planSection);
+      await saveExecutedPlan(repoPath, worktreeInfo.id, payload);
+    } catch (planError) {
+      console.error("Failed to record plan execution:", planError);
     }
-  }, [repoPath, addToast, handleOpenSession, refetch]);
+
+    // Open session with transferred name
+    await handleOpenSession(newWorktree, {
+      planTitle: planSection.title,
+      planContent,
+      forceNew: true,
+      sessionName: sessionName, // Transfer session name
+    });
+
+    addToast({
+      title: "Ready to implement",
+      description: "Worktree created; plan sent to Claude",
+      type: "success",
+    });
+
+    // Clear pending state
+    setPlanExecutionPending(null);
+
+    // Refresh worktree list
+    refetch();
+  }, [repoPath, handleOpenSession, refetch, addToast]);
 
   const handleCloseTerminal = () => {
     setViewMode("dashboard");
@@ -1667,11 +1751,20 @@ export const Dashboard: React.FC = () => {
 
       <CreateWorktreeDialog
         open={showCreateDialog}
-        onOpenChange={setShowCreateDialog}
+        onOpenChange={(open) => {
+          setShowCreateDialog(open);
+          if (!open) {
+            setPlanExecutionPending(null); // Clear on close
+          }
+        }}
         repoPath={repoPath}
         onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ["worktrees"] });
+          queryClient.invalidateQueries({ queryKey: ["worktrees", repoPath] });
         }}
+        planSection={planExecutionPending?.section}
+        sourceBranch={planExecutionPending?.sourceBranch}
+        initialSessionName={planExecutionPending?.sessionName}
+        onSuccessWithPlan={handleWorktreeCreatedWithPlan}
       />
 
       <MoveToWorktreeDialog

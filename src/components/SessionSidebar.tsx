@@ -267,14 +267,16 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   }, [activeSessionId]);
 
   const { data: sessions = [] } = useQuery({
-    queryKey: ["sessions"],
-    queryFn: getSessions,
+    queryKey: ["sessions", repoPath],
+    queryFn: () => getSessions(repoPath || ""),
     refetchInterval: 5000,
+    enabled: !!repoPath,
   });
 
   const { data: worktrees = [] } = useQuery({
-    queryKey: ["worktrees"],
-    queryFn: getWorktrees,
+    queryKey: ["worktrees", repoPath],
+    queryFn: () => getWorktrees(repoPath || ""),
+    enabled: !!repoPath,
   });
 
   useEffect(() => {
@@ -343,7 +345,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const deleteSessionMutation = useMutation({
     mutationFn: async (session: Session) => {
       await ptyClose(`session-${session.id}`);
-      await deleteSession(session.id);
+      await deleteSession(repoPath || "", session.id);
       return session.id;
     },
     onSuccess: (sessionId) => {

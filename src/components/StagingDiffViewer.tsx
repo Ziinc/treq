@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, Fragment } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, Fragment, forwardRef, useImperativeHandle } from "react";
 import { type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { v4 as uuidv4 } from "uuid";
@@ -57,6 +57,7 @@ import {
   Copy,
   Check,
   Square,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
@@ -81,6 +82,10 @@ interface StagingDiffViewerProps {
   refreshSignal?: number;
   initialSelectedFile?: string;
   terminalSessionId?: string;
+}
+
+export interface StagingDiffViewerHandle {
+  focusCommitInput: () => void;
 }
 
 interface LineComment {
@@ -313,6 +318,10 @@ const CommentInput: React.FC<CommentInputProps> = memo(({
 CommentInput.displayName = "CommentInput";
 
 // Isolated commit input component to prevent parent re-renders during typing
+interface CommitInputHandle {
+  focus: () => void;
+}
+
 interface CommitInputProps {
   onCommit: (message: string) => void;
   onCommitAmend: (message: string) => void;
@@ -322,9 +331,10 @@ interface CommitInputProps {
   disabled: boolean;
   pending: boolean;
   actionPending: 'commit' | 'amend' | 'push' | 'sync' | null;
+  onRefresh?: () => void;
 }
 
-const CommitInput: React.FC<CommitInputProps> = memo(({
+const CommitInput = memo(forwardRef<CommitInputHandle, CommitInputProps>(({
   onCommit,
   onCommitAmend,
   onCommitAndPush,
@@ -333,9 +343,23 @@ const CommitInput: React.FC<CommitInputProps> = memo(({
   disabled,
   pending,
   actionPending,
-}) => {
+  onRefresh,
+}, ref) => {
   const [message, setMessage] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Expose focus method via ref
+  useImperativeHandle(ref, () => ({
+    focus: () => {
+      requestAnimationFrame(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          // Select all text for easy overwriting
+          textareaRef.current.select();
+        }
+      });
+    }
+  }), []);
 
   const canCommit = useMemo(() => {
     const trimmed = message.trim();
@@ -396,6 +420,20 @@ const CommitInput: React.FC<CommitInputProps> = memo(({
 
   return (
     <div className="px-4 py-3 border-b border-border space-y-2">
+      {onRefresh && (
+        <div className="flex justify-end">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onRefresh}
+            disabled={disabled || pending}
+            className="h-7 text-xs"
+          >
+            <RefreshCw className="w-3 h-3 mr-1" />
+            Refresh
+          </Button>
+        </div>
+      )}
       <Textarea
         ref={textareaRef}
         placeholder="Message"
@@ -447,7 +485,7 @@ const CommitInput: React.FC<CommitInputProps> = memo(({
       </div>
     </div>
   );
-});
+}));
 CommitInput.displayName = "CommitInput";
 
 // Memoized syntax-highlighted line content
@@ -462,7 +500,7 @@ const HighlightedLine: React.FC<HighlightedLineProps> = memo(({ content, languag
 });
 HighlightedLine.displayName = "HighlightedLine";
 
-export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
+export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, StagingDiffViewerProps>(({
   worktreePath,
   readOnly = false,
   disableInteractions = false,
@@ -470,7 +508,7 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
   refreshSignal = 0,
   initialSelectedFile,
   terminalSessionId,
-}) => {
+}, ref) => {
   const { addToast } = useToast();
   const { fontSize: diffFontSize } = useDiffSettings();
   const [files, setFiles] = useState<ParsedFileChange[]>([]);
@@ -490,8 +528,16 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
   const [stagingLines, setStagingLines] = useState(false);
   const [commitPending, setCommitPending] = useState(false);
   const [actionPending, setActionPending] = useState<'commit' | 'amend' | 'push' | 'sync' | null>(null);
+  const commitInputRef = useRef<CommitInputHandle>(null);
   const listRef = useRef<ListImperativeAPI | null>(null);
   const prevFilePathsRef = useRef<string[]>([]);
+
+  // Expose focusCommitInput method via ref
+  useImperativeHandle(ref, () => ({
+    focusCommitInput: () => {
+      commitInputRef.current?.focus();
+    }
+  }), []);
 
   // Review/comment state
   const [comments, setComments] = useState<LineComment[]>([]);
@@ -1989,6 +2035,7 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
     <div className="flex h-full overflow-hidden">
       <div className="w-72 border-r border-border bg-sidebar flex flex-col">
         <CommitInput
+          ref={commitInputRef}
           onCommit={handleCommit}
           onCommitAmend={handleCommitAmend}
           onCommitAndPush={handleCommitAndPush}
@@ -1997,6 +2044,7 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
           disabled={readOnly || disableInteractions}
           pending={commitPending}
           actionPending={actionPending}
+          onRefresh={refresh}
         />
         <div className="flex-1 overflow-y-auto px-4 pb-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full">
           {stagedFiles.length === 0 && unstagedFiles.length === 0 ? (
@@ -2192,6 +2240,6 @@ export const StagingDiffViewer: React.FC<StagingDiffViewerProps> = memo(({
       />
     </div>
   );
-});
+}));
 
 StagingDiffViewer.displayName = "StagingDiffViewer";

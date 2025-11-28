@@ -6,24 +6,15 @@ This document provides essential information for AI agents working with the Treq
 
 Treq is a modern desktop application for managing Git worktrees with integrated terminal, diff viewer, and AI editor launcher support. Built with Tauri 2.0 (Rust backend) and React/TypeScript (frontend).
 
-**Tech Stack:**
-- **Backend**: Tauri 2.0, Rust, rusqlite 0.32, portable-pty 0.8, tokio 1.0
-- **Frontend**: React 18.3, TypeScript 5.6, Tailwind CSS 3.3, TanStack Query 5.12, xterm.js 5.5, Monaco Editor 0.45
-- **Build Tools**: Vite 6.0, npm
-
 ## Development Commands
 
 ```bash
-# Setup
-npm install                    # Install dependencies
+npm install                   # Install dependencies
+npm run build                 # Build frontend (production)
+npm run tauri build           # Build complete production app
 
-# Development - DO NOT RUN THESE COMMANDS, ONLY DEVELOPER SHOULD RUN THIS
-npm run tauri dev             # Run app in dev mode (builds Rust + starts dev server)
-npm run dev                   # Frontend-only dev server (without Tauri) 
-
-# Building
-npm run build                 # Build frontend
-npm run tauri build           # Build production app
+# DO NOT RUN DEV COMMANDS - ONLY DEVELOPER SHOULD RUN THESE
+npm run tauri dev            # Run in dev mode (Rust + frontend dev server)
 ```
 
 
@@ -33,7 +24,9 @@ npm run tauri build           # Build production app
 ### Backend Structure (src-tauri/src/)
 
 - **lib.rs** - Main entry point, Tauri command registry, global state (AppState.db, AppState.pty_manager)
-- **db.rs** - SQLite database layer with 3 tables: worktrees, commands, settings
+- **db.rs** - SQLite database layer with dual-database architecture:
+  - **Local DB** (`.treq/local.db` in each repo): worktrees, commands (repo-specific data)
+  - **Global DB** (`~/Library/Application Support/.../treq.db`): settings (application-level config)
 - **git.rs** - Git CLI wrapper for worktree operations (create, list, remove, status)
 - **git_ops.rs** - Git operations (commit, push, pull, fetch, log)
 - **pty.rs** - PTY management using portable-pty, background threads for output streaming
@@ -41,16 +34,17 @@ npm run tauri build           # Build production app
 
 ### Frontend Structure (src/)
 
-- **App.tsx** - Root component with QueryClient and ToastProvider
-- **components/Dashboard.tsx** - Main view controller (dashboard/terminal/diff modes)
-- **components/WorktreeCard.tsx** - Individual worktree display with actions
-- **components/Terminal.tsx** - xterm.js wrapper with PTY integration
-- **components/DiffViewer.tsx** - Monaco Editor with hierarchical file tree
-- **components/CreateWorktreeDialog.tsx** - Worktree creation form
-- **components/EditorLauncher.tsx** - Dropdown for launching Cursor/VS Code/Aider
-- **components/ui/** - Reusable UI components (button, card, dialog, input, label, toast)
-- **lib/api.ts** - Type-safe wrappers around Tauri invoke() commands
-- **hooks/useKeyboard.ts** - Keyboard shortcut handler
+**Core Components:**
+- **App.tsx** - Root with QueryClient provider, routing, and global state
+- **components/Dashboard.tsx** - Main UI controller (repository dashboard)
+- **components/SessionTerminal.tsx** - PTY terminal with xterm.js integration
+- **components/StagingDiffViewer.tsx** - Git staging area with file tree and diff view
+- **components/AnnotatableDiffViewer.tsx** - Diff viewer with annotation support
+- **components/ui/** - Shadcn-based UI primitives
+
+**Key Modules:**
+- **lib/api.ts** - Type-safe Tauri command wrappers
+- **hooks/** - React hooks for keyboard shortcuts, terminal management, etc.
 
 ### Communication Flow
 
@@ -59,65 +53,20 @@ npm run tauri build           # Build production app
 
 ### Database Schema
 
-Location: `~/Library/Application Support/com.treq.app/treq.db` (macOS), `~/.local/share/com.treq.app/treq.db` (Linux), `%APPDATA%/com.treq.app/treq.db` (Windows)
+Treq uses a dual-database architecture to separate local repository data from global application settings:
 
-Tables:
+#### Local Database (`.treq/local.db`)
+**Location**: `.treq/local.db` in each Git repository root
+**Purpose**: Repository-specific worktree and command history data
+**Tables**:
 - **worktrees**: id, repo_path, worktree_path, branch_name, created_at, metadata
 - **commands**: id, worktree_id, command, created_at, status, output
-- **settings**: key, value (e.g., "repo_path" for main repository)
 
-## Complete Feature Set
-
-### Core Git Worktree Management
-- Create worktrees (new or existing branches)
-- List all worktrees with details
-- Delete worktrees with confirmation
-- Real-time git status monitoring
-- Branch ahead/behind tracking
-- File change detection (modified, added, deleted, untracked)
-- Post-creation command execution
-
-### User Interface
-- Modern, responsive design with Tailwind CSS
-- Dark mode support
-- Worktree cards with status indicators
-- Dashboard with three view modes (dashboard, terminal, diff)
-- Settings dialog for repository configuration
-- Create worktree dialog with validation
-- Toast notification system (success, error, info, warning)
-- Search/filter worktrees
-- Responsive grid layout
-
-### Terminal Integration
-- Full PTY terminal emulation with bidirectional I/O
-- Proper terminal resizing
-- Working directory context per worktree
-- Shell detection (bash, zsh, PowerShell)
-- Web links addon (clickable URLs)
-
-### Diff Viewer
-- Monaco Editor integration with syntax highlighting
-- Hierarchical directory tree (expandable/collapsible)
-- Lazy loading of directory contents
-- Unified diff format, read-only mode
-
-### AI Editor Integration
-- Cursor, VS Code, Aider launchers
-- Actual command execution (background processes)
-- Cross-platform support
-
-### Keyboard Shortcuts
-- Ctrl/Cmd + N: New worktree
-- Ctrl/Cmd + R: Refresh
-- Ctrl/Cmd + F: Focus search
-- Ctrl/Cmd + ,: Settings
-- Esc: Close dialogs
-
-### Git Operations
-- Commit with message, stage all changes
-- Push to remote, pull from remote, fetch from remote
-- Get commit log, git status, branch info
-- Get file diffs, list branches
+#### Global Database (`treq.db`)
+**Location**: `~/Library/Application Support/com.treq.app/treq.db` (macOS), `~/.local/share/com.treq.app/treq.db` (Linux), `%APPDATA%/com.treq.app/treq.db` (Windows)
+**Purpose**: Application-level settings and state shared across all repositories
+**Tables**:
+- **settings**: key, value (e.g., "last_repo_path", global preferences)
 
 ## Key Design Patterns
 
@@ -187,35 +136,39 @@ Tables:
 ### Debugging
 - Frontend: Browser DevTools (Tauri opens with DevTools in dev mode)
 - Backend: Rust logs via `println!` or `eprintln!` appear in terminal
-- Database: Use SQLite CLI to inspect `treq.db` directly
+- Database: Use SQLite CLI to inspect databases:
+  - Local DB: `.treq/local.db` in each repository (worktrees, commands)
+  - Global DB: `treq.db` in app data directory (settings)
 
 ## Key Tauri Commands
 
 ### Database
-- `get_worktrees()`, `add_worktree_to_db()`, `delete_worktree_from_db(id)`
-- `get_commands(worktree_id)`, `add_command()`
-- `get_setting(key)`, `set_setting(key, value)`
+- **Worktrees**: `get_worktrees()`, `add_worktree_to_db()`, `delete_worktree_from_db()`
+- **Settings**: `get_setting()`, `set_setting()`, `get_repo_setting()`, `set_repo_setting()`, `delete_repo_setting()`
+- **Sessions**: `create_session()`, `get_sessions()`, `update_session_access()`, `delete_session()`
+- **Cache**: `get_git_cache()`, `set_git_cache()`, `invalidate_git_cache()`, `preload_worktree_git_data()`
+- **File Views**: `mark_file_viewed()`, `unmark_file_viewed()`, `get_viewed_files()`, `clear_all_viewed_files()`
 
 ### Git
-- `git_create_worktree()`, `git_list_worktrees()`, `git_remove_worktree()`
-- `git_get_status()`, `git_get_branch_info()`, `git_get_file_diff()`
-- `git_list_branches()`, `git_commit()`, `git_push()`, `git_pull()`, `git_fetch()`, `git_log()`
+- **Worktrees**: `git_create_worktree()`, `git_list_worktrees()`, `git_remove_worktree()`
+- **Status**: `git_get_status()`, `git_get_branch_info()`, `git_get_branch_divergence()`, `git_get_changed_files()`, `git_get_file_hunks()`
+- **Diffs**: `git_get_file_diff()`, `git_get_diff_between_branches()`, `git_get_commits_between_branches()`
+- **Staging**: `git_stage_file()`, `git_unstage_file()`, `git_add_all()`, `git_unstage_all()`, `git_stage_hunk()`, `git_stage_selected_lines()`
+- **Commits**: `git_commit()`, `git_commit_amend()`, `git_log()`
+- **Remote**: `git_push()`, `git_push_force()`, `git_pull()`, `git_fetch()`
+- **Branches**: `git_list_branches()`, `git_merge()`, `git_get_current_branch()`
+- **Changes**: `git_discard_all_changes()`, `git_stash_push_files()`, `git_stash_pop()`
 
 ### PTY
-- `pty_create_session()`, `pty_write()`, `pty_resize()`, `pty_close()`
-
-### Shell
-- `shell_execute()`, `shell_launch_app()`
+- `pty_create_session()`, `pty_write()`, `pty_resize()`, `pty_close()`, `pty_session_exists()`
 
 ### File System
-- `read_file(path)`, `list_directory(path)`
+- `read_file()`, `list_directory()`, `calculate_directory_size()`
 
-## Performance Notes
+### Shell
+- `shell_execute(command, working_dir)`
 
-- Auto-refresh every 30 seconds with manual refresh button
-- Lazy directory loading in diff viewer
-- Optimistic UI updates
-- Efficient state management with TanStack Query
-- Background process handling for editors and terminals
-- Toast auto-dismiss to prevent memory buildup
+### Plans
+- `save_executed_plan_command()`, `get_worktree_plans_command()`, `save_plan_to_file()`, `load_plans_from_files()`
+
 

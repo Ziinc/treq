@@ -424,6 +424,51 @@ pub fn get_current_branch(repo_path: &str) -> Result<String, String> {
     }
 }
 
+/// Configure push.autoSetupRemote for the repository
+/// Returns Ok(()) if successful or already configured
+pub fn configure_push_auto_setup_remote(repo_path: &str) -> Result<(), String> {
+    let output = Command::new("git")
+        .current_dir(repo_path)
+        .args(["config", "--local", "push.autoSetupRemote", "true"])
+        .output()
+        .map_err(|e| format!("Failed to execute git config: {}", e))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+/// Ensure repository has required git configuration
+/// This is idempotent and safe to call multiple times
+pub fn ensure_repo_configured(
+    db: &crate::db::Database,
+    repo_path: &str,
+) -> Result<(), String> {
+    // Check if already configured
+    let flag_key = "git_push_auto_setup_remote_configured";
+    let already_configured = db
+        .get_repo_setting(repo_path, flag_key)
+        .ok()
+        .flatten()
+        .map(|v| v == "true")
+        .unwrap_or(false);
+
+    if already_configured {
+        return Ok(());
+    }
+
+    // Run git config
+    configure_push_auto_setup_remote(repo_path)?;
+
+    // Mark as configured
+    db.set_repo_setting(repo_path, flag_key, "true")
+        .map_err(|e| format!("Failed to save configuration flag: {}", e))?;
+
+    Ok(())
+}
+
 pub fn sanitize_branch_name_for_path(branch: &str) -> String {
     branch
         .replace('/', "-")

@@ -25,7 +25,7 @@ import {
 import { PlanSection } from "../types/planning";
 import { createDebouncedParser } from "../lib/planParser";
 import { ConsolidatedTerminal, type ConsolidatedTerminalHandle } from "./ConsolidatedTerminal";
-import { StagingDiffViewer } from "./StagingDiffViewer";
+import { StagingDiffViewer, type StagingDiffViewerHandle } from "./StagingDiffViewer";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { useToast } from "./ui/toast";
@@ -48,6 +48,7 @@ import { Loader2, RotateCw, X, GitBranch, Search, ChevronDown, ChevronUp, Pencil
 import { PlanDisplayModal } from "./PlanDisplayModal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { cn } from "../lib/utils";
+import { useKeyboardShortcut } from "../hooks/useKeyboard";
 
 type SessionPanel = "planning" | "execution" | null;
 
@@ -58,7 +59,7 @@ interface SessionTerminalProps {
   sessionId: number | null;
   onClose: () => void;
   onExecutePlan?: (section: PlanSection) => void;
-  onExecutePlanInWorktree?: (section: PlanSection, sourceBranch: string) => Promise<void>;
+  onExecutePlanInWorktree?: (section: PlanSection, sourceBranch: string, currentSessionName?: string) => Promise<void>;
   initialPlanContent?: string;
   initialPlanTitle?: string;
   initialPrompt?: string;
@@ -106,6 +107,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
 
   const queuedMessagesRef = useRef<string[]>([]);
   const consolidatedTerminalRef = useRef<ConsolidatedTerminalHandle | null>(null);
+  const stagingDiffViewerRef = useRef<StagingDiffViewerHandle>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const sessionNameInputRef = useRef<HTMLInputElement>(null);
   const [searchVisible, setSearchVisible] = useState(false);
@@ -313,7 +315,8 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
 
     try {
       setIsRenamingSession(true);
-      await updateSessionName(session.id, trimmed);
+      const repoPath = worktree?.repo_path || repositoryPath || "";
+      await updateSessionName(repoPath, session.id, trimmed);
       setSessionDisplayName(trimmed);
       setIsEditingSessionName(false);
       setEditedSessionName("");
@@ -386,6 +389,16 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [openSearchPanel, closeSearchPanel, searchVisible]);
 
+  // Cmd+E: Edit session name
+  useKeyboardShortcut("e", true, () => {
+    handleStartEditingSessionName();
+  }, [session, sessionDisplayName]);
+
+  // Cmd+/: Focus commit message
+  useKeyboardShortcut("/", true, () => {
+    stagingDiffViewerRef.current?.focusCommitInput();
+  }, []);
+
   const handlePlanEdit = useCallback(async (planId: string, newContent: string) => {
     if (!effectiveRepoPath) return;
     try {
@@ -448,7 +461,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
       }
 
       // This will create worktree and navigate to it
-      await onExecutePlanInWorktree(section, sourceBranch);
+      await onExecutePlanInWorktree(section, sourceBranch, session?.name);
     } catch (error) {
       addToast({
         title: "Failed to execute in worktree",
@@ -858,6 +871,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
   const executionPanel = workingDirectory ? (
     <div className="flex flex-col h-full">
         <StagingDiffViewer
+          ref={stagingDiffViewerRef}
           worktreePath={workingDirectory}
           disableInteractions={false}
           onStagedFilesChange={handleStagedFilesChange}

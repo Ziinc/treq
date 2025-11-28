@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import type { BranchDiffFileDiff, BranchDiffHunk, DiffLineKind } from "../lib/api";
 import type { ReviewComment } from "./MergeReviewPage";
 import { cn } from "../lib/utils";
@@ -63,7 +63,7 @@ const formatLineLabel = (oldLine?: number | null, newLine?: number | null) => {
   return "Line";
 };
 
-export const AnnotatableDiffViewer: React.FC<AnnotatableDiffViewerProps> = ({
+const AnnotatableDiffViewerComponent: React.FC<AnnotatableDiffViewerProps> = ({
   diff,
   comments,
   selectedCommentId,
@@ -377,3 +377,6 @@ export const AnnotatableDiffViewer: React.FC<AnnotatableDiffViewerProps> = ({
     </div>
   );
 };
+
+export const AnnotatableDiffViewer = memo(AnnotatableDiffViewerComponent);
+AnnotatableDiffViewer.displayName = "AnnotatableDiffViewer";

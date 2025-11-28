@@ -29,36 +29,29 @@ struct AppState {
 
 // Database commands
 #[tauri::command]
-fn get_worktrees(state: State<AppState>) -> Result<Vec<Worktree>, String> {
-    let db = state.db.lock().unwrap();
-    db.get_worktrees().map_err(|e| e.to_string())
+fn get_worktrees(repo_path: String) -> Result<Vec<Worktree>, String> {
+    local_db::get_worktrees(&repo_path)
 }
 
 #[tauri::command]
 fn add_worktree_to_db(
-    state: State<AppState>,
     repo_path: String,
     worktree_path: String,
     branch_name: String,
     metadata: Option<String>,
 ) -> Result<i64, String> {
-    let db = state.db.lock().unwrap();
-    let worktree = Worktree {
-        id: 0,
-        repo_path,
-        worktree_path,
-        branch_name,
-        created_at: chrono::Utc::now().to_rfc3339(),
-        metadata,
-    };
-    db.add_worktree(&worktree).map_err(|e| e.to_string())
+    local_db::add_worktree(&repo_path, worktree_path, branch_name, metadata)
 }
 
 #[tauri::command]
-fn delete_worktree_from_db(state: State<AppState>, id: i64) -> Result<(), String> {
-    let db = state.db.lock().unwrap();
+fn delete_worktree_from_db(repo_path: String, id: i64) -> Result<(), String> {
     // Cascade delete sessions (handled by DB foreign key constraint)
-    db.delete_worktree(id).map_err(|e| e.to_string())
+    local_db::delete_worktree(&repo_path, id)
+}
+
+#[tauri::command]
+fn rebuild_worktrees(repo_path: String) -> Result<Vec<Worktree>, String> {
+    local_db::rebuild_worktrees_from_filesystem(&repo_path)
 }
 
 #[tauri::command]
@@ -215,11 +208,15 @@ fn delete_repo_setting(
 #[tauri::command]
 fn git_create_worktree(
     state: State<AppState>,
+    app: AppHandle,
     repo_path: String,
     branch: String,
     new_branch: bool,
     source_branch: Option<String>,
 ) -> Result<String, String> {
+    // Ensure repo is properly configured
+    ensure_repo_ready(&state, &app, &repo_path)?;
+
     // Load inclusion patterns from database
     let inclusion_patterns = {
         let db = state.db.lock().unwrap();
@@ -245,7 +242,12 @@ fn git_create_worktree(
 }
 
 #[tauri::command]
-fn git_get_current_branch(repo_path: String) -> Result<String, String> {
+fn git_get_current_branch(
+    state: State<AppState>,
+    app: AppHandle,
+    repo_path: String,
+) -> Result<String, String> {
+    ensure_repo_ready(&state, &app, &repo_path)?;
     get_current_branch(&repo_path)
 }
 
@@ -258,7 +260,12 @@ fn git_execute_post_create_command(
 }
 
 #[tauri::command]
-fn git_list_worktrees(repo_path: String) -> Result<Vec<WorktreeInfo>, String> {
+fn git_list_worktrees(
+    state: State<AppState>,
+    app: AppHandle,
+    repo_path: String,
+) -> Result<Vec<WorktreeInfo>, String> {
+    ensure_repo_ready(&state, &app, &repo_path)?;
     list_worktrees(&repo_path)
 }
 
@@ -724,64 +731,57 @@ fn delete_plan_file(repo_path: String, plan_id: String) -> Result<(), String> {
 // Session management commands
 #[tauri::command]
 fn create_session(
-    state: State<AppState>,
+    repo_path: String,
     worktree_id: Option<i64>,
     name: String,
     plan_title: Option<String>,
 ) -> Result<i64, String> {
-    let db = state.db.lock().unwrap();
-    let now = chrono::Utc::now().to_rfc3339();
-    let session = Session {
-        id: 0,
-        worktree_id,
-        name,
-        created_at: now.clone(),
-        last_accessed: now,
-        plan_title,
-    };
-    db.add_session(&session).map_err(|e| e.to_string())
+    local_db::add_session(&repo_path, worktree_id, name, plan_title)
 }
 
 #[tauri::command]
-fn get_sessions(state: State<AppState>) -> Result<Vec<Session>, String> {
-    let db = state.db.lock().unwrap();
-    db.get_sessions().map_err(|e| e.to_string())
+fn get_sessions(repo_path: String) -> Result<Vec<Session>, String> {
+    local_db::get_sessions(&repo_path)
 }
 
 #[tauri::command]
 fn get_sessions_by_worktree(
-    state: State<AppState>,
+    repo_path: String,
     worktree_id: i64,
 ) -> Result<Vec<Session>, String> {
-    let db = state.db.lock().unwrap();
-    db.get_sessions_by_worktree(worktree_id)
-        .map_err(|e| e.to_string())
+    // Filter sessions by worktree_id on the frontend after getting all sessions
+    let sessions = local_db::get_sessions(&repo_path)?;
+    Ok(sessions
+        .into_iter()
+        .filter(|s| s.worktree_id == Some(worktree_id))
+        .collect())
 }
 
 #[tauri::command]
-fn get_main_repo_sessions(state: State<AppState>) -> Result<Vec<Session>, String> {
-    let db = state.db.lock().unwrap();
-    db.get_main_repo_sessions().map_err(|e| e.to_string())
+fn get_main_repo_sessions(repo_path: String) -> Result<Vec<Session>, String> {
+    // Get sessions without a worktree_id (main repo sessions)
+    let sessions = local_db::get_sessions(&repo_path)?;
+    Ok(sessions
+        .into_iter()
+        .filter(|s| s.worktree_id.is_none())
+        .collect())
 }
 
 #[tauri::command]
-fn update_session_access(state: State<AppState>, id: i64) -> Result<(), String> {
-    let db = state.db.lock().unwrap();
-    let now = chrono::Utc::now().to_rfc3339();
-    db.update_session_access(id, &now)
-        .map_err(|e| e.to_string())
+fn update_session_access(repo_path: String, id: i64) -> Result<(), String> {
+    local_db::update_session_access(&repo_path, id)
 }
 
 #[tauri::command]
-fn update_session_name(state: State<AppState>, id: i64, name: String) -> Result<(), String> {
-    let db = state.db.lock().unwrap();
-    db.update_session_name(id, &name).map_err(|e| e.to_string())
+fn update_session_name(repo_path: String, id: i64, name: String) -> Result<(), String> {
+    // This function doesn't exist in local_db yet, we'll need to add it if needed
+    // For now, return an error or implement it
+    Err("update_session_name not yet implemented for local_db".to_string())
 }
 
 #[tauri::command]
-fn delete_session(state: State<AppState>, id: i64) -> Result<(), String> {
-    let db = state.db.lock().unwrap();
-    db.delete_session(id).map_err(|e| e.to_string())
+fn delete_session(repo_path: String, id: i64) -> Result<(), String> {
+    local_db::delete_session(&repo_path, id)
 }
 
 // File view tracking commands
@@ -823,6 +823,45 @@ fn clear_all_viewed_files(state: State<AppState>, worktree_path: String) -> Resu
     let db = state.db.lock().unwrap();
     db.clear_all_viewed_files(&worktree_path)
         .map_err(|e| e.to_string())
+}
+
+/// Ensure repository is properly configured before operations
+/// Emits event to frontend if initialization fails
+fn ensure_repo_ready(
+    state: &State<AppState>,
+    app: &AppHandle,
+    repo_path: &str,
+) -> Result<(), String> {
+    // Only initialize if it's a git repository
+    if !is_git_repository(repo_path).unwrap_or(false) {
+        return Ok(());
+    }
+
+    // Get DB and check/initialize
+    let result = {
+        let db = state.db.lock().unwrap();
+        git::ensure_repo_configured(&db, repo_path)
+    };
+
+    // If initialization failed, emit event for frontend notification
+    if let Err(ref error) = result {
+        #[derive(Clone, serde::Serialize)]
+        struct InitError {
+            repo_path: String,
+            error: String,
+        }
+
+        let _ = app.emit(
+            "git-config-init-error",
+            InitError {
+                repo_path: repo_path.to_string(),
+                error: error.clone(),
+            },
+        );
+    }
+
+    // Don't block operation even if config failed
+    Ok(())
 }
 
 /// Emits an event only to the focused webview window.
@@ -920,6 +959,7 @@ pub fn run() {
             get_worktrees,
             add_worktree_to_db,
             delete_worktree_from_db,
+            rebuild_worktrees,
             get_commands,
             add_command,
             get_setting,
