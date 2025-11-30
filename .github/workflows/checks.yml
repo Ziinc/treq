@@ -1,0 +1,27 @@
+name: Build Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - { name: 'App', dir: '.', script: 'build' }
+          - { name: 'Docs', dir: 'docs', script: 'build' }
+    name: ${{ matrix.target.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: ${{ matrix.target.dir }}/package-lock.json
+      - run: npm ci
+        working-directory: ${{ matrix.target.dir }}
+      - run: npm run ${{ matrix.target.script }}
+        working-directory: ${{ matrix.target.dir }}

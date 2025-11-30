@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Dialog, DialogContent } from "./ui/dialog";
-import { Input } from "./ui/input";
+import { useMemo } from "react";
+import { Command } from "cmdk";
 import { Worktree, Session } from "../lib/api";
 import {
   Home,
@@ -9,7 +8,6 @@ import {
   Terminal,
   ArrowRight,
 } from "lucide-react";
-import { cn } from "../lib/utils";
 
 interface CommandItem {
   id: string;
@@ -29,6 +27,8 @@ interface CommandPaletteProps {
   onNavigateToSettings: () => void;
   onOpenWorktreeSession: (worktree: Worktree) => void;
   onOpenSession: (session: Session, worktree?: Worktree) => void;
+  onOpenBranchSwitcher?: () => void;
+  repoPath?: string;
 }
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
@@ -40,12 +40,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onNavigateToSettings,
   onOpenWorktreeSession,
   onOpenSession,
+  onOpenBranchSwitcher,
+  repoPath,
 }) => {
-  const [query, setQuery] = useState("");
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-
   // Build command items
   const items = useMemo<CommandItem[]>(() => {
     const result: CommandItem[] = [];
@@ -72,6 +69,21 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         onOpenChange(false);
       },
     });
+
+    // Add Switch Branch action if we have a repo path
+    if (repoPath && onOpenBranchSwitcher) {
+      result.push({
+        id: "switch-branch",
+        type: "action",
+        label: "Switch Branch",
+        description: "Checkout a different branch in main tree",
+        icon: <GitBranch className="w-4 h-4" />,
+        onSelect: () => {
+          onOpenBranchSwitcher();
+          onOpenChange(false);
+        },
+      });
+    }
 
     // Worktrees
     for (const worktree of worktrees) {
@@ -106,157 +118,82 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     }
 
     return result;
-  }, [worktrees, sessions, onNavigateToDashboard, onNavigateToSettings, onOpenWorktreeSession, onOpenSession, onOpenChange]);
-
-  // Filter items based on query
-  const filteredItems = useMemo(() => {
-    if (!query.trim()) return items;
-    const lowerQuery = query.toLowerCase();
-    return items.filter(item =>
-      item.label.toLowerCase().includes(lowerQuery) ||
-      item.description?.toLowerCase().includes(lowerQuery)
-    );
-  }, [items, query]);
-
-  // Reset selection when query changes
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [query]);
-
-  // Reset state when opened
-  useEffect(() => {
-    if (open) {
-      setQuery("");
-      setSelectedIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 0);
-    }
-  }, [open]);
-
-  // Scroll selected item into view
-  useEffect(() => {
-    if (listRef.current) {
-      const selectedElement = listRef.current.children[selectedIndex] as HTMLElement;
-      if (selectedElement) {
-        selectedElement.scrollIntoView({ block: "nearest" });
-      }
-    }
-  }, [selectedIndex]);
-
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    switch (e.key) {
-      case "ArrowDown":
-        e.preventDefault();
-        setSelectedIndex(i => Math.min(i + 1, filteredItems.length - 1));
-        break;
-      case "ArrowUp":
-        e.preventDefault();
-        setSelectedIndex(i => Math.max(i - 1, 0));
-        break;
-      case "Enter":
-        e.preventDefault();
-        if (filteredItems[selectedIndex]) {
-          filteredItems[selectedIndex].onSelect();
-        }
-        break;
-      case "Escape":
-        e.preventDefault();
-        onOpenChange(false);
-        break;
-    }
-  }, [filteredItems, selectedIndex, onOpenChange]);
-
-  const getTypeLabel = (type: CommandItem["type"]) => {
-    switch (type) {
-      case "action": return "Actions";
-      case "worktree": return "Worktrees";
-      case "session": return "Sessions";
-    }
-  };
+  }, [worktrees, sessions, onNavigateToDashboard, onNavigateToSettings, onOpenWorktreeSession, onOpenSession, onOpenBranchSwitcher, onOpenChange, repoPath]);
 
   // Group items by type
-  const groupedItems = useMemo(() => {
-    const groups: { type: CommandItem["type"]; items: CommandItem[] }[] = [];
-    let currentType: CommandItem["type"] | null = null;
+  const groupedByType = useMemo(() => ({
+    actions: items.filter(i => i.type === "action"),
+    worktrees: items.filter(i => i.type === "worktree"),
+    sessions: items.filter(i => i.type === "session")
+  }), [items]);
 
-    for (const item of filteredItems) {
-      if (item.type !== currentType) {
-        groups.push({ type: item.type, items: [item] });
-        currentType = item.type;
-      } else {
-        groups[groups.length - 1].items.push(item);
-      }
-    }
-
-    return groups;
-  }, [filteredItems]);
-
-  // Calculate flat index for an item
-  const getFlatIndex = (groupIndex: number, itemIndex: number) => {
-    let index = 0;
-    for (let g = 0; g < groupIndex; g++) {
-      index += groupedItems[g].items.length;
-    }
-    return index + itemIndex;
-  };
+  // Render a command item
+  const renderItem = (item: CommandItem) => (
+    <Command.Item
+      key={item.id}
+      value={item.label}
+      onSelect={item.onSelect}
+      className="px-3 py-2 flex items-center gap-3 cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground data-[disabled]:opacity-50 data-[disabled]:pointer-events-none"
+    >
+      <span className="text-muted-foreground">{item.icon}</span>
+      <div className="flex-1 min-w-0">
+        <div className="truncate text-sm">{item.label}</div>
+        {item.description && (
+          <div className="truncate text-xs text-muted-foreground">
+            {item.description}
+          </div>
+        )}
+      </div>
+    </Command.Item>
+  );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="p-0 w-[40vw] max-w-none overflow-hidden">
+    <Command.Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      label="Command Menu"
+    >
+      <div className="bg-popover text-popover-foreground rounded-xl border border-border/50 shadow-2xl w-[40vw] max-w-none overflow-hidden">
+        {/* Search Input */}
         <div className="flex items-center border-b border-border px-3">
           <ArrowRight className="w-4 h-4 text-muted-foreground mr-2" />
-          <Input
-            ref={inputRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
+          <Command.Input
             placeholder="Type a command or search..."
-            className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 h-12"
+            className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 h-12 flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
           />
         </div>
 
-        <div ref={listRef} className="max-h-[300px] overflow-y-auto py-2">
-          {filteredItems.length === 0 ? (
+        {/* Results List */}
+        <Command.List className="max-h-[300px] overflow-y-auto py-2">
+          <Command.Empty>
             <div className="px-4 py-8 text-center text-muted-foreground text-sm">
               No results found
             </div>
-          ) : (
-            groupedItems.map((group, groupIndex) => (
-              <div key={group.type}>
-                <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  {getTypeLabel(group.type)}
-                </div>
-                {group.items.map((item, itemIndex) => {
-                  const flatIndex = getFlatIndex(groupIndex, itemIndex);
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={cn(
-                        "w-full px-3 py-2 flex items-center gap-3 text-left transition-colors",
-                        flatIndex === selectedIndex
-                          ? "bg-accent text-accent-foreground"
-                          : "hover:bg-muted"
-                      )}
-                      onClick={() => item.onSelect()}
-                      onMouseEnter={() => setSelectedIndex(flatIndex)}
-                    >
-                      <span className="text-muted-foreground">{item.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="truncate text-sm">{item.label}</div>
-                        {item.description && (
-                          <div className="truncate text-xs text-muted-foreground">
-                            {item.description}
-                          </div>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            ))
-          )}
-        </div>
+          </Command.Empty>
 
+          {/* Actions Group */}
+          {groupedByType.actions.length > 0 && (
+            <Command.Group heading="Actions">
+              {groupedByType.actions.map(renderItem)}
+            </Command.Group>
+          )}
+
+          {/* Worktrees Group */}
+          {groupedByType.worktrees.length > 0 && (
+            <Command.Group heading="Worktrees">
+              {groupedByType.worktrees.map(renderItem)}
+            </Command.Group>
+          )}
+
+          {/* Sessions Group */}
+          {groupedByType.sessions.length > 0 && (
+            <Command.Group heading="Sessions">
+              {groupedByType.sessions.map(renderItem)}
+            </Command.Group>
+          )}
+        </Command.List>
+
+        {/* Footer with keyboard hints */}
         <div className="border-t border-border px-3 py-2 flex items-center justify-between text-xs text-muted-foreground">
           <div className="flex items-center gap-3">
             <span><kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">↑↓</kbd> Navigate</span>
@@ -264,7 +201,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             <span><kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Esc</kbd> Close</span>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </Command.Dialog>
   );
 };

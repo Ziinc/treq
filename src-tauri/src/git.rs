@@ -373,6 +373,96 @@ pub fn list_branches(repo_path: &str) -> Result<Vec<String>, String> {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BranchListItem {
+    pub name: String,
+    pub full_name: String,
+    pub is_remote: bool,
+    pub is_current: bool,
+}
+
+pub fn list_branches_detailed(repo_path: &str) -> Result<Vec<BranchListItem>, String> {
+    // Get current branch
+    let current_branch = get_current_branch(repo_path).ok();
+
+    // Get all branches with their ref names
+    let output = Command::new("git")
+        .current_dir(repo_path)
+        .args(["branch", "-a", "--format=%(refname:short)\t%(HEAD)"])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    let mut branches = Vec::new();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    for line in stdout.lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.is_empty() {
+            continue;
+        }
+
+        let full_name = parts[0].trim();
+        let is_current = parts.get(1).map(|s| s.trim() == "*").unwrap_or(false);
+
+        // Skip HEAD references
+        if full_name.contains("HEAD") {
+            continue;
+        }
+
+        // Determine if remote and extract clean name
+        let (name, is_remote) = if full_name.starts_with("remotes/") {
+            let clean_name = full_name.strip_prefix("remotes/").unwrap_or(full_name);
+            // For remote branches, show the remote name too
+            (clean_name.to_string(), true)
+        } else {
+            (full_name.to_string(), false)
+        };
+
+        branches.push(BranchListItem {
+            name: name.clone(),
+            full_name: full_name.to_string(),
+            is_remote,
+            is_current: is_current || current_branch.as_ref().map(|cb| cb == full_name).unwrap_or(false),
+        });
+    }
+
+    // Sort: current first, then local branches, then remote branches
+    branches.sort_by(|a, b| {
+        if a.is_current != b.is_current {
+            return b.is_current.cmp(&a.is_current);
+        }
+        if a.is_remote != b.is_remote {
+            return a.is_remote.cmp(&b.is_remote);
+        }
+        a.name.cmp(&b.name)
+    });
+
+    Ok(branches)
+}
+
+pub fn checkout_branch(repo_path: &str, branch_name: &str, create_new: bool) -> Result<String, String> {
+    let mut cmd = Command::new("git");
+    cmd.current_dir(repo_path).arg("checkout");
+
+    if create_new {
+        cmd.arg("-b");
+    }
+
+    cmd.arg(branch_name);
+
+    let output = cmd.output().map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
 pub fn is_git_repository(path: &str) -> Result<bool, String> {
     let git_path = Path::new(path).join(".git");
     Ok(git_path.exists())

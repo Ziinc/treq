@@ -7,7 +7,9 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { MergeDialog } from "./MergeDialog";
 import { CreateWorktreeDialog } from "./CreateWorktreeDialog";
+import { CreateWorktreeFromRemoteDialog } from "./CreateWorktreeFromRemoteDialog";
 import { CommandPalette } from "./CommandPalette";
+import { BranchSwitcher } from "./BranchSwitcher";
 import { SettingsPage } from "./SettingsPage";
 import { SessionTerminal } from "./SessionTerminal";
 import { WorktreeEditSession } from "./WorktreeEditSession";
@@ -16,6 +18,7 @@ import { SessionSidebar } from "./SessionSidebar";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { GitChangesSection } from "./GitChangesSection";
 import { MoveToWorktreeDialog } from "./MoveToWorktreeDialog";
+import { FileBrowser } from "./FileBrowser";
 import { PlanSection } from "../types/planning";
 import {
   parseChangedFiles,
@@ -32,6 +35,7 @@ import {
   getWorktrees,
   rebuildWorktrees,
   deleteWorktreeFromDb,
+  toggleWorktreePin,
   gitRemoveWorktree,
   getSetting,
   setSetting,
@@ -55,6 +59,7 @@ import {
   createSession,
   updateSessionAccess,
   getSessions,
+  setSessionModel,
   gitGetChangedFiles,
   gitMerge,
   gitDiscardAllChanges,
@@ -68,12 +73,18 @@ import {
   invalidateGitCache,
 } from "../lib/api";
 import type { MergeStrategy } from "../lib/api";
-import { RefreshCw, GitBranch, Loader2 } from "lucide-react";
+import { RefreshCw, GitBranch, Loader2, Pin, MoreVertical } from "lucide-react";
 import {
   Card,
   CardContent,
 } from "./ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "./ui/dropdown-menu";
 
 type ViewMode =
   | "dashboard"
@@ -81,6 +92,7 @@ type ViewMode =
   | "worktree-edit"
   | "worktree-session"
   | "merge-review"
+  | "file-browser"
   | "settings";
 type MergeConfirmPayload = {
   strategy: MergeStrategy;
@@ -106,10 +118,13 @@ export const Dashboard: React.FC = () => {
   const [mainBranchInfo, setMainBranchInfo] = useState<BranchInfo | null>(null);
   const [mainRepoSize, setMainRepoSize] = useState<number | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showCreateFromRemoteDialog, setShowCreateFromRemoteDialog] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("dashboard");
   const [selectedWorktree, setSelectedWorktree] = useState<Worktree | null>(null);
+  const [fileBrowserWorktree, setFileBrowserWorktree] = useState<Worktree | null>(null);
   const [initialSettingsTab, setInitialSettingsTab] = useState<"application" | "repository">("repository");
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [sessionPlanContent, setSessionPlanContent] = useState<string | null>(null);
   const [sessionPlanTitle, setSessionPlanTitle] = useState<string | null>(null);
@@ -185,32 +200,56 @@ export const Dashboard: React.FC = () => {
     });
   }, []);
 
-  // File selection handler for move to worktree feature
-  const handleFileSelect = useCallback((path: string, shiftKey: boolean) => {
+  // Forward declaration reference - will be defined after handleOpenSession
+  const handleMainRepoFileClickRef = useRef<((file: ParsedFileChange) => Promise<void>) | null>(null);
+
+  // File selection handler - VSCode-style click selection
+  const handleFileSelect = useCallback((path: string, event: React.MouseEvent) => {
     const fileIndex = mainRepoUnstagedFiles.findIndex(f => f.path === path);
+    if (fileIndex === -1) return;
+
+    const isMetaKey = event.metaKey || event.ctrlKey;
+    const isShiftKey = event.shiftKey;
 
     setSelectedUnstagedFiles(prev => {
       const next = new Set(prev);
 
-      if (shiftKey && lastSelectedFileIndex !== null) {
-        // Range selection
+      if (isShiftKey && lastSelectedFileIndex !== null) {
+        // Range selection - clear others and select range
+        next.clear();
         const start = Math.min(lastSelectedFileIndex, fileIndex);
         const end = Math.max(lastSelectedFileIndex, fileIndex);
         for (let i = start; i <= end; i++) {
           next.add(mainRepoUnstagedFiles[i].path);
         }
-      } else {
-        // Toggle single file
+      } else if (isMetaKey) {
+        // Cmd/Ctrl+click - toggle individual file
         if (next.has(path)) {
           next.delete(path);
         } else {
           next.add(path);
         }
+      } else {
+        // Single click - select only this file (unless already sole selection)
+        if (next.size === 1 && next.has(path)) {
+          // Already sole selection - keep it
+          return prev;
+        }
+        next.clear();
+        next.add(path);
       }
       return next;
     });
 
     setLastSelectedFileIndex(fileIndex);
+
+    // Trigger file click handler only for plain single clicks (no modifiers)
+    if (!isMetaKey && !isShiftKey) {
+      const file = mainRepoUnstagedFiles.find((f) => f.path === path);
+      if (file && handleMainRepoFileClickRef.current) {
+        handleMainRepoFileClickRef.current(file);
+      }
+    }
   }, [lastSelectedFileIndex, mainRepoUnstagedFiles]);
 
   const resetMergeState = useCallback(() => {
@@ -435,6 +474,35 @@ export const Dashboard: React.FC = () => {
       unlisten.then((fn) => fn());
     };
   }, []);
+
+  // Listen for window focus to refresh git status
+  useEffect(() => {
+    if (!repoPath) return;
+
+    const handleFocus = async () => {
+      try {
+        // Check if the current branch has changed
+        const branch = await gitGetCurrentBranch(repoPath);
+        if (branch !== currentBranch) {
+          setCurrentBranch(branch);
+        }
+        // Refresh main repo info
+        refreshMainRepoInfo();
+      } catch (error) {
+        console.error("Failed to refresh git info on window focus:", error);
+      }
+    };
+
+    const unlistenFocus = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+      if (focused) {
+        handleFocus();
+      }
+    });
+
+    return () => {
+      unlistenFocus.then((fn) => fn());
+    };
+  }, [repoPath, currentBranch, refreshMainRepoInfo]);
 
   // Listen for "Open..." menu action
   useEffect(() => {
@@ -681,6 +749,15 @@ export const Dashboard: React.FC = () => {
     },
   });
 
+  const togglePinMutation = useMutation({
+    mutationFn: async ({ worktreeId, repoPath }: { worktreeId: number; repoPath: string }) => {
+      return toggleWorktreePin(repoPath, worktreeId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["worktrees", repoPath] });
+    },
+  });
+
   const mergeMutation = useMutation({
     mutationFn: async (payload: MergeConfirmPayload) => {
       if (!repoPath) {
@@ -826,6 +903,20 @@ export const Dashboard: React.FC = () => {
 
       const finalPlanTitleForDb = worktreeId !== null ? finalPlanTitle : undefined;
       const sessionId = await createSession(repoPath, worktreeId, name, finalPlanTitleForDb);
+
+      // Apply default model from settings (repo-level overrides application-level)
+      try {
+        const repoDefaultModel = await getRepoSetting(repoPath, "default_model");
+        const appDefaultModel = await getSetting("default_model");
+        const defaultModel = repoDefaultModel || appDefaultModel;
+
+        if (defaultModel) {
+          await setSessionModel(repoPath, sessionId, defaultModel);
+        }
+      } catch (error) {
+        console.warn("Failed to set default model for session:", error);
+      }
+
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
       return sessionId;
     },
@@ -908,6 +999,7 @@ export const Dashboard: React.FC = () => {
       branch_name: worktreeInfo.branchName,
       created_at: new Date().toISOString(),
       metadata: worktreeInfo.metadata,
+      is_pinned: false,
     };
 
     await handleOpenSession(newWorktree, { forceNew: true });
@@ -1044,6 +1136,7 @@ export const Dashboard: React.FC = () => {
         branch_name: branchName,
         created_at: new Date().toISOString(),
         metadata,
+        is_pinned: false,
       };
 
       try {
@@ -1110,6 +1203,7 @@ export const Dashboard: React.FC = () => {
       branch_name: worktreeInfo.branchName,
       created_at: new Date().toISOString(),
       metadata: worktreeInfo.metadata,
+      is_pinned: false,
     };
 
     // Record plan execution
@@ -1156,6 +1250,24 @@ export const Dashboard: React.FC = () => {
     setViewMode("dashboard");
     setSelectedWorktree(null);
   }, []);
+
+  // File click handler for main repo - opens diff viewer session
+  const handleMainRepoFileClick = useCallback(
+    async (file: ParsedFileChange) => {
+      await handleOpenSession(null, {
+        forceNew: false,
+        initialPrompt: "/edits on",
+        promptLabel: "Opening diff viewer",
+        selectedFilePath: file.path,
+      });
+    },
+    [handleOpenSession]
+  );
+
+  // Update the ref so handleFileSelect can use it
+  useEffect(() => {
+    handleMainRepoFileClickRef.current = handleMainRepoFileClick;
+  }, [handleMainRepoFileClick]);
 
   const handleMainRepoStageFile = useCallback(
     async (filePath: string) => {
@@ -1247,17 +1359,14 @@ export const Dashboard: React.FC = () => {
     }
   }, [repoPath, mainRepoCommitMessage, mainRepoStagedFiles, addToast, refreshMainRepoInfo]);
 
-  const handleMainRepoFileClick = useCallback(
-    async (file: ParsedFileChange) => {
-      await handleOpenSession(null, {
-        forceNew: false,
-        initialPrompt: "/edits on",
-        promptLabel: "Opening diff viewer",
-        selectedFilePath: file.path,
-      });
-    },
-    [handleOpenSession]
-  );
+  // Handle branch change after switching
+  const handleBranchChanged = useCallback(() => {
+    // Refresh main repo info
+    queryClient.invalidateQueries({ queryKey: ["mainRepoBranch", repoPath] });
+    queryClient.invalidateQueries({ queryKey: ["mainRepoStatus", repoPath] });
+    queryClient.invalidateQueries({ queryKey: ["mainRepoChangedFiles", repoPath] });
+    addToast({ title: "Branch switched successfully", type: "success" });
+  }, [repoPath, queryClient, addToast]);
 
   // Render command palette for all views
   const commandPaletteElement = (
@@ -1280,8 +1389,20 @@ export const Dashboard: React.FC = () => {
           setViewMode("session");
         }
       }}
+      onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
+      repoPath={repoPath}
     />
   );
+
+  // Render branch switcher modal
+  const branchSwitcherElement = repoPath ? (
+    <BranchSwitcher
+      open={showBranchSwitcher}
+      onOpenChange={setShowBranchSwitcher}
+      repoPath={repoPath}
+      onBranchChanged={handleBranchChanged}
+    />
+  ) : null;
 
   // Memoized session terminals - keep them mounted but hidden for state preservation
   const memoizedSessionTerminals = useMemo(() => {
@@ -1342,7 +1463,7 @@ export const Dashboard: React.FC = () => {
   ]);
 
   const isSessionView = viewMode === "session" || viewMode === "worktree-session";
-  const showSidebar = viewMode !== "merge-review" && viewMode !== "worktree-edit";
+  const showSidebar = viewMode !== "merge-review" && viewMode !== "worktree-edit" && viewMode !== "file-browser";
   const highlightedSessionId = isSessionView ? activeSessionId : null;
 
   return (
@@ -1358,6 +1479,7 @@ export const Dashboard: React.FC = () => {
           currentBranch={currentBranch}
           onDeleteWorktree={handleDelete}
           onCreateWorktree={() => setShowCreateDialog(true)}
+          onCreateWorktreeFromRemote={() => setShowCreateFromRemoteDialog(true)}
           onSessionActivityListenerChange={handleSessionActivityListenerChange}
           openSettings={openSettings}
           navigateToDashboard={handleReturnToDashboard}
@@ -1443,6 +1565,23 @@ export const Dashboard: React.FC = () => {
             </ErrorBoundary>
           )}
 
+          {/* File Browser View */}
+          {viewMode === "file-browser" && fileBrowserWorktree && (
+            <ErrorBoundary
+              fallbackTitle="File browser error"
+              resetKeys={[fileBrowserWorktree.id]}
+              onGoDashboard={handleReturnToDashboard}
+            >
+              <FileBrowser
+                worktree={fileBrowserWorktree}
+                onClose={() => {
+                  setViewMode("dashboard");
+                  setFileBrowserWorktree(null);
+                }}
+              />
+            </ErrorBoundary>
+          )}
+
           {/* Dashboard View */}
           {viewMode === "dashboard" && (
             <ErrorBoundary
@@ -1473,10 +1612,10 @@ export const Dashboard: React.FC = () => {
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 space-y-3 text-sm">
                           {currentBranch && (
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <div className="flex items-center gap-1">
-                                <GitBranch className="w-4 h-4" />
-                                <code className="text-xs">{currentBranch}</code>
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1 min-w-0 flex-1">
+                                <GitBranch className="w-4 h-4 shrink-0" />
+                                <code className="text-xs truncate" title={currentBranch}>{currentBranch}</code>
                               </div>
 
                               <TooltipProvider>
@@ -1556,10 +1695,6 @@ export const Dashboard: React.FC = () => {
                               onToggleCollapse={() => toggleSectionCollapse("staged")}
                               fileActionTarget={mainRepoFileActionTarget}
                               readOnly={mainRepoCommitPending}
-                              onFileClick={(path) => {
-                                const file = mainRepoStagedFiles.find((f) => f.path === path);
-                                if (file) handleMainRepoFileClick(file);
-                              }}
                               onUnstage={handleMainRepoUnstageFile}
                             />
                           )}
@@ -1577,10 +1712,6 @@ export const Dashboard: React.FC = () => {
                               selectedFiles={selectedUnstagedFiles}
                               onFileSelect={handleFileSelect}
                               onMoveToWorktree={() => setMoveDialogOpen(true)}
-                              onFileClick={(path) => {
-                                const file = mainRepoUnstagedFiles.find((f) => f.path === path);
-                                if (file) handleMainRepoFileClick(file);
-                              }}
                               onStage={handleMainRepoStageFile}
                               onStageAll={handleMainRepoStageAll}
                             />
@@ -1618,16 +1749,48 @@ export const Dashboard: React.FC = () => {
                             key={worktree.id}
                             onClick={() => setSelectedWorktreeId(isSelected ? null : worktree.id)}
                             onDoubleClick={() => handleOpenSession(worktree)}
-                            className={`w-full text-left p-3 rounded-lg border transition-colors cursor-pointer ${
+                            className={`group w-full text-left p-3 rounded-lg border transition-colors cursor-pointer ${
                               isSelected
                                 ? "border-primary ring-2 ring-primary/20 bg-sidebar"
                                 : "border-border bg-sidebar hover:bg-sidebar-accent"
                             }`}
                           >
                             <div className="flex items-start justify-between gap-2">
-                              <span className="text-sm font-medium truncate flex-1">
-                                {title}
-                              </span>
+                              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                <span className="text-sm font-medium truncate">
+                                  {title}
+                                </span>
+                                {worktree.is_pinned && (
+                                  <Pin className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                                )}
+                              </div>
+
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    className="p-1 rounded hover:bg-muted transition-opacity opacity-0 group-hover:opacity-100"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <MoreVertical className="w-3.5 h-3.5" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onSelect={(event) => {
+                                      event.preventDefault();
+                                      if (repoPath) {
+                                        togglePinMutation.mutate({
+                                          worktreeId: worktree.id,
+                                          repoPath
+                                        });
+                                      }
+                                    }}
+                                  >
+                                    <Pin className="w-4 h-4 mr-2" />
+                                    {worktree.is_pinned ? "Unpin" : "Pin"} Worktree
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
 
                             {/* Git indicators */}
@@ -1703,6 +1866,18 @@ export const Dashboard: React.FC = () => {
                                   Merge into {currentBranch || "main"}
                                 </Button>
                                 <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setFileBrowserWorktree(worktree);
+                                    setViewMode("file-browser");
+                                  }}
+                                >
+                                  Browse files
+                                </Button>
+                                <Button
                                   variant="default"
                                   size="sm"
                                   className="h-7 text-xs"
@@ -1767,6 +1942,15 @@ export const Dashboard: React.FC = () => {
         onSuccessWithPlan={handleWorktreeCreatedWithPlan}
       />
 
+      <CreateWorktreeFromRemoteDialog
+        open={showCreateFromRemoteDialog}
+        onOpenChange={setShowCreateFromRemoteDialog}
+        repoPath={repoPath}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["worktrees", repoPath] });
+        }}
+      />
+
       <MoveToWorktreeDialog
         open={moveDialogOpen}
         onOpenChange={setMoveDialogOpen}
@@ -1776,6 +1960,7 @@ export const Dashboard: React.FC = () => {
       />
 
       {commandPaletteElement}
+      {branchSwitcherElement}
     </div>
   );
 };

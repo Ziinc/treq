@@ -21,6 +21,8 @@ import {
   gitGetBranchDivergence,
   preloadWorktreeGitData,
   gitGetCurrentBranch,
+  getSessionModel,
+  setSessionModel,
 } from "../lib/api";
 import { PlanSection } from "../types/planning";
 import { createDebouncedParser } from "../lib/planParser";
@@ -46,6 +48,7 @@ import {
 import { PlanHistoryDialog } from "./PlanHistoryDialog";
 import { Loader2, RotateCw, X, GitBranch, Search, ChevronDown, ChevronUp, Pencil, Check, MoreVertical, GitMerge, Upload, AlertTriangle, FileText, ArrowDownToLine } from "lucide-react";
 import { PlanDisplayModal } from "./PlanDisplayModal";
+import { ModelSelector } from "./ModelSelector";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { cn } from "../lib/utils";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
@@ -112,6 +115,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
   const sessionNameInputRef = useRef<HTMLInputElement>(null);
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [terminalMinimized, setTerminalMinimized] = useState(false);
   const [isEditingSessionName, setIsEditingSessionName] = useState(false);
   const [editedSessionName, setEditedSessionName] = useState("");
   const [sessionDisplayName, setSessionDisplayName] = useState<string | null>(session?.name ?? null);
@@ -125,6 +129,9 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
   const [maintreeDivergence, setMaintreeDivergence] = useState<BranchDivergence | null>(null);
   const [showSwitchOverlay, setShowSwitchOverlay] = useState(false);
   const prevIsHiddenRef = useRef(isHidden);
+  const [sessionModel, setSessionModelState] = useState<string | null>(null);
+  const [isChangingModel, setIsChangingModel] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const hasImplementationPlan = planSections.some(
     section => section.type === 'implementation_plan'
@@ -256,6 +263,16 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
     },
     [searchQuery]
   );
+
+  const handleReviewSubmitted = useCallback(() => {
+    if (terminalMinimized) {
+      setTerminalMinimized(false);
+      // Focus terminal after maximizing
+      requestAnimationFrame(() => {
+        consolidatedTerminalRef.current?.focus();
+      });
+    }
+  }, [terminalMinimized]);
 
   useEffect(() => {
     if (!searchVisible) {
@@ -397,6 +414,11 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
   // Cmd+/: Focus commit message
   useKeyboardShortcut("/", true, () => {
     stagingDiffViewerRef.current?.focusCommitInput();
+  }, []);
+
+  // Cmd+J: Toggle terminal minimize
+  useKeyboardShortcut("j", true, () => {
+    setTerminalMinimized(prev => !prev);
   }, []);
 
   const handlePlanEdit = useCallback(async (planId: string, newContent: string) => {
@@ -545,6 +567,34 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
       setIsResetting(false);
     }
   }, [effectiveRepoPath, ptySessionId, addToast]);
+
+  const handleModelChange = useCallback(async (newModel: string) => {
+    if (!sessionId || !effectiveRepoPath) return;
+
+    setIsChangingModel(true);
+    try {
+      // Save the new model to the database
+      await setSessionModel(effectiveRepoPath, sessionId, newModel);
+      setSessionModelState(newModel);
+
+      // Reset the terminal to apply the new model
+      await handleReset();
+
+      addToast({
+        title: "Model Changed",
+        description: `Switched to ${newModel}`,
+        type: "success",
+      });
+    } catch (error) {
+      addToast({
+        title: "Failed to change model",
+        description: error instanceof Error ? error.message : String(error),
+        type: "error",
+      });
+    } finally {
+      setIsChangingModel(false);
+    }
+  }, [sessionId, effectiveRepoPath, handleReset, addToast]);
 
   const handleRetryTerminal = useCallback(() => {
     setTerminalError(null);
@@ -831,6 +881,22 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
 
   const prevInitialPromptRef = useRef<string | undefined>(undefined);
 
+  // Load session model on mount
+  useEffect(() => {
+    const loadSessionModel = async () => {
+      if (!sessionId || !effectiveRepoPath) return;
+
+      try {
+        const model = await getSessionModel(effectiveRepoPath, sessionId);
+        setSessionModelState(model);
+      } catch (error) {
+        console.error("Failed to load session model:", error);
+      }
+    };
+
+    loadSessionModel();
+  }, [sessionId, effectiveRepoPath]);
+
   useEffect(() => {
     const queue: string[] = [];
     const planPrompt = buildPlanPrompt();
@@ -878,6 +944,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
           refreshSignal={refreshSignal}
           initialSelectedFile={initialSelectedFile}
           terminalSessionId={ptySessionId}
+          onReviewSubmitted={handleReviewSubmitted}
         />
     </div>
   ) : (
@@ -930,6 +997,105 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
     return undefined;
   }, [handleRetryTerminal, isResetting, onClose, terminalError, showSwitchOverlay]);
 
+  const handleDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  const handleDragEnter = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    // Only hide if leaving the terminal container itself
+    if (event.currentTarget === event.target) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(async (event: React.DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+
+    try {
+      const { files, items } = event.dataTransfer;
+
+      // Check if there are files dropped
+      if (files.length > 0) {
+        const file = files[0];
+
+        // Try to get the file path (works in Tauri/Electron environments)
+        // @ts-ignore - path property is not standard but available in Tauri
+        const filePath = file.path;
+
+        if (filePath) {
+          // Insert file path into terminal
+          const escapedPath = filePath.includes(' ') ? `"${filePath}"` : filePath;
+          await ptyWrite(ptySessionId, escapedPath);
+          consolidatedTerminalRef.current?.focus();
+          return;
+        }
+      }
+
+      // Check if there's an image in the clipboard
+      if (items.length > 0) {
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+
+          // Check if it's an image
+          if (item.type.startsWith('image/')) {
+            // Trigger paste operation in the terminal
+            // Read the clipboard and write it to the terminal
+            try {
+              const text = await navigator.clipboard.readText();
+              if (text) {
+                await ptyWrite(ptySessionId, text);
+                consolidatedTerminalRef.current?.focus();
+                return;
+              }
+            } catch (clipboardError) {
+              console.warn('Clipboard read failed:', clipboardError);
+            }
+
+            // If clipboard text read fails, try to paste the image data
+            const blob = await new Promise<Blob | null>((resolve) => {
+              item.getAsString(() => resolve(null));
+              const file = item.getAsFile();
+              resolve(file);
+            });
+
+            if (blob) {
+              addToast({
+                title: "Image dropped",
+                description: "Image files cannot be pasted directly. Please save and drag the file instead.",
+                type: "info",
+              });
+            }
+            return;
+          }
+        }
+      }
+
+      addToast({
+        title: "Drop not supported",
+        description: "Please drop a file or copy an image to clipboard first.",
+        type: "info",
+      });
+    } catch (error) {
+      addToast({
+        title: "Drop failed",
+        description: error instanceof Error ? error.message : String(error),
+        type: "error",
+      });
+    }
+  }, [ptySessionId, addToast]);
+
   const getWorktreeTitle = (): string => {
     if (worktree?.metadata) {
       try {
@@ -951,7 +1117,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
 
   return (
     <div className="h-screen w-full flex flex-col bg-background">
-      <div className="border-b p-4 flex flex-col gap-2">
+      <div className="border-b p-2 flex flex-col gap-1">
         {/* Row 1: Session name */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 group">
@@ -1114,14 +1280,51 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
               </div>
             </div>
           )}
+
+          {terminalMinimized && (
+            <button
+              type="button"
+              onClick={() => setTerminalMinimized(false)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm font-medium border border-primary/20"
+              aria-label="Maximize terminal"
+            >
+              <ChevronUp className="w-3.5 h-3.5" />
+              <span>Show Terminal</span>
+            </button>
+          )}
         </div>
       </div>
 
       <div className="flex-1 flex overflow-hidden resize-container relative">
-        <div className="w-1/3 flex flex-col overflow-hidden relative">
+        <div
+          className={cn(
+            "flex flex-col overflow-hidden relative",
+            terminalMinimized ? "w-0" : "w-1/3"
+          )}
+          onDragOver={handleDragOver}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {/* Drag overlay */}
+          {isDragging && (
+            <div className="absolute inset-0 bg-primary/10 border-2 border-dashed border-primary z-30 flex items-center justify-center pointer-events-none">
+              <div className="bg-background/90 px-4 py-3 rounded-lg shadow-lg border border-primary">
+                <p className="text-sm font-medium text-primary">Drop file here</p>
+              </div>
+            </div>
+          )}
+
           {/* Floating refresh and search buttons */}
           {!searchVisible && (
             <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
+              {sessionId && (
+                <ModelSelector
+                  currentModel={sessionModel}
+                  onModelChange={handleModelChange}
+                  disabled={isChangingModel || isResetting}
+                />
+              )}
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -1140,6 +1343,21 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
                     </button>
                   </TooltipTrigger>
                   <TooltipContent>Reset</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => setTerminalMinimized(true)}
+                      className="h-6 w-6 rounded-md bg-background/90 border border-border/60 hover:bg-muted flex items-center justify-center transition-colors shadow-sm"
+                      aria-label="Minimize terminal"
+                    >
+                      <ChevronDown className="w-3 h-3" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Minimize (Cmd+J)</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
               <TooltipProvider>
@@ -1246,26 +1464,28 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
             </div>
           )}
 
-          <ConsolidatedTerminal
-            key={`${ptySessionId}-${terminalInstanceKey}`}
-            ref={consolidatedTerminalRef}
-            sessionId={ptySessionId}
-            workingDirectory={workingDirectory}
-            autoCommand="claude --permission-mode plan"
-            autoCommandDelay={300}
-            onAutoCommandComplete={() => setAutoCommandReady(true)}
-            onAutoCommandError={handleAutoCommandError}
-            onSessionError={handleSessionError}
-            onTerminalOutput={handleTerminalOutput}
-            onTerminalIdle={handleTerminalIdle}
-            rightPanel={null}
-            showDiffViewer={true}
-            containerClassName="flex-1 flex overflow-hidden"
-            terminalPaneClassName="w-full"
-            rightPaneClassName="hidden"
-            terminalOverlay={terminalOverlay}
-            isHidden={isHidden}
-          />
+          {!terminalMinimized && (
+            <ConsolidatedTerminal
+              key={`${ptySessionId}-${terminalInstanceKey}`}
+              ref={consolidatedTerminalRef}
+              sessionId={ptySessionId}
+              workingDirectory={workingDirectory}
+              autoCommand={sessionModel ? `claude --permission-mode plan --model ${sessionModel}` : "claude --permission-mode plan"}
+              autoCommandDelay={300}
+              onAutoCommandComplete={() => setAutoCommandReady(true)}
+              onAutoCommandError={handleAutoCommandError}
+              onSessionError={handleSessionError}
+              onTerminalOutput={handleTerminalOutput}
+              onTerminalIdle={handleTerminalIdle}
+              rightPanel={null}
+              showDiffViewer={true}
+              containerClassName="flex-1 flex overflow-hidden"
+              terminalPaneClassName="w-full"
+              rightPaneClassName="hidden"
+              terminalOverlay={terminalOverlay}
+              isHidden={isHidden}
+            />
+          )}
         </div>
 
         <div className="w-1 bg-border flex-shrink-0" />

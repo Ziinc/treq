@@ -11,6 +11,7 @@ export interface Worktree {
   branch_name: string;
   created_at: string;
   metadata?: string;
+  is_pinned: boolean;
 }
 
 export interface Session {
@@ -20,6 +21,7 @@ export interface Session {
   created_at: string;
   last_accessed: string;
   plan_title?: string;
+  model?: string | null;
 }
 
 export interface Command {
@@ -65,6 +67,12 @@ export interface GitDiffHunk {
   lines: string[];
   is_staged: boolean;
   patch: string;
+}
+
+export interface FileLines {
+  lines: string[];
+  start_line: number;
+  end_line: number;
 }
 
 export type DiffLineKind = "context" | "addition" | "deletion" | "meta";
@@ -137,6 +145,9 @@ export const addWorktreeToDb = (
 
 export const deleteWorktreeFromDb = (repo_path: string, id: number): Promise<void> =>
   invoke("delete_worktree_from_db", { repoPath: repo_path, id });
+
+export const toggleWorktreePin = (repo_path: string, id: number): Promise<boolean> =>
+  invoke("toggle_worktree_pin", { repoPath: repo_path, id });
 
 export const getCommands = (worktree_id: number): Promise<Command[]> =>
   invoke("get_commands", { worktreeId: worktree_id });
@@ -267,8 +278,40 @@ export const gitGetCommitsBetweenBranches = (
 export const gitGetFileHunks = (worktree_path: string, file_path: string): Promise<GitDiffHunk[]> =>
   invoke("git_get_file_hunks", { worktreePath: worktree_path, filePath: file_path });
 
+export const gitGetFileLines = (
+  worktreePath: string,
+  filePath: string,
+  isStaged: boolean,
+  startLine: number,
+  endLine: number
+): Promise<FileLines> =>
+  invoke("git_get_file_lines", {
+    worktreePath,
+    filePath,
+    isStaged,
+    startLine,
+    endLine,
+  });
+
+export interface BranchListItem {
+  name: string;
+  full_name: string;
+  is_remote: boolean;
+  is_current: boolean;
+}
+
 export const gitListBranches = (repo_path: string): Promise<string[]> =>
   invoke("git_list_branches", { repoPath: repo_path });
+
+export const gitListBranchesDetailed = (repo_path: string): Promise<BranchListItem[]> =>
+  invoke("git_list_branches_detailed", { repoPath: repo_path });
+
+export const gitCheckoutBranch = (
+  repo_path: string,
+  branch_name: string,
+  create_new: boolean = false
+): Promise<string> =>
+  invoke("git_checkout_branch", { repoPath: repo_path, branchName: branch_name, createNew: create_new });
 
 export const gitListGitignoredFiles = (repo_path: string): Promise<string[]> =>
   invoke("git_list_gitignored_files", { repoPath: repo_path });
@@ -288,6 +331,9 @@ export const gitMerge = (
 
 export const gitDiscardAllChanges = (worktree_path: string): Promise<string> =>
   invoke("git_discard_all_changes", { worktreePath: worktree_path });
+
+export const gitDiscardFiles = (worktree_path: string, file_paths: string[]): Promise<string> =>
+  invoke("git_discard_files", { worktreePath: worktree_path, filePaths: file_paths });
 
 export const gitHasUncommittedChanges = (worktree_path: string): Promise<boolean> =>
   invoke("git_has_uncommitted_changes", { worktreePath: worktree_path });
@@ -598,6 +644,12 @@ export const updateSessionName = (repo_path: string, id: number, name: string): 
 
 export const deleteSession = (repo_path: string, id: number): Promise<void> =>
   invoke("delete_session", { repoPath: repo_path, id });
+
+export const getSessionModel = (repo_path: string, id: number): Promise<string | null> =>
+  invoke("get_session_model", { repoPath: repo_path, id });
+
+export const setSessionModel = (repo_path: string, id: number, model: string | null): Promise<void> =>
+  invoke("set_session_model", { repoPath: repo_path, id, model });
 
 // File view tracking API
 export interface FileView {

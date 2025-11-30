@@ -7,7 +7,7 @@ mod pty;
 mod shell;
 
 use db::{Command as DbCommand, Database, FileView, GitCacheEntry, Session, Worktree};
-use git::{git_init, is_git_repository, *};
+use git::{git_init, is_git_repository, BranchListItem, *};
 use git_ops::{
     BranchCommitInfo, BranchDiffFileChange, BranchDiffFileDiff, DiffHunk, LineSelection,
     MergeStrategy,
@@ -47,6 +47,11 @@ fn add_worktree_to_db(
 fn delete_worktree_from_db(repo_path: String, id: i64) -> Result<(), String> {
     // Cascade delete sessions (handled by DB foreign key constraint)
     local_db::delete_worktree(&repo_path, id)
+}
+
+#[tauri::command]
+fn toggle_worktree_pin(repo_path: String, id: i64) -> Result<bool, String> {
+    local_db::toggle_worktree_pin(&repo_path, id)
 }
 
 #[tauri::command]
@@ -331,6 +336,20 @@ fn git_list_branches(repo_path: String) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
+fn git_list_branches_detailed(repo_path: String) -> Result<Vec<BranchListItem>, String> {
+    list_branches_detailed(&repo_path)
+}
+
+#[tauri::command]
+fn git_checkout_branch(
+    repo_path: String,
+    branch_name: String,
+    create_new: bool,
+) -> Result<String, String> {
+    checkout_branch(&repo_path, &branch_name, create_new)
+}
+
+#[tauri::command]
 fn git_is_repository(path: String) -> Result<bool, String> {
     is_git_repository(&path)
 }
@@ -368,6 +387,11 @@ fn git_merge(
 #[tauri::command]
 fn git_discard_all_changes(worktree_path: String) -> Result<String, String> {
     git_ops::git_discard_all_changes(&worktree_path)
+}
+
+#[tauri::command]
+fn git_discard_files(worktree_path: String, file_paths: Vec<String>) -> Result<String, String> {
+    git_ops::git_discard_files(&worktree_path, file_paths)
 }
 
 #[tauri::command]
@@ -606,6 +630,17 @@ fn git_get_file_hunks(worktree_path: String, file_path: String) -> Result<Vec<Di
 }
 
 #[tauri::command]
+fn git_get_file_lines(
+    worktree_path: String,
+    file_path: String,
+    is_staged: bool,
+    start_line: usize,
+    end_line: usize,
+) -> Result<git_ops::FileLines, String> {
+    git_ops::git_get_file_lines(&worktree_path, &file_path, is_staged, start_line, end_line)
+}
+
+#[tauri::command]
 fn git_stage_selected_lines(
     worktree_path: String,
     file_path: String,
@@ -774,14 +809,22 @@ fn update_session_access(repo_path: String, id: i64) -> Result<(), String> {
 
 #[tauri::command]
 fn update_session_name(repo_path: String, id: i64, name: String) -> Result<(), String> {
-    // This function doesn't exist in local_db yet, we'll need to add it if needed
-    // For now, return an error or implement it
-    Err("update_session_name not yet implemented for local_db".to_string())
+    local_db::update_session_name(&repo_path, id, name)
 }
 
 #[tauri::command]
 fn delete_session(repo_path: String, id: i64) -> Result<(), String> {
     local_db::delete_session(&repo_path, id)
+}
+
+#[tauri::command]
+fn get_session_model(repo_path: String, id: i64) -> Result<Option<String>, String> {
+    local_db::get_session_model(&repo_path, id)
+}
+
+#[tauri::command]
+fn set_session_model(repo_path: String, id: i64, model: Option<String>) -> Result<(), String> {
+    local_db::set_session_model(&repo_path, id, model)
 }
 
 // File view tracking commands
@@ -904,52 +947,147 @@ pub fn run() {
             app.manage(app_state);
 
             // Create menu
-            // File menu items
-            let open_item = MenuItemBuilder::with_id("open", "Open...")
-                .accelerator("CmdOrCtrl+O")
-                .build(app)?;
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::menu::{PredefinedMenuItem, Submenu};
 
-            let open_new_window_item =
-                MenuItemBuilder::with_id("open_new_window", "Open in New Window...")
-                    .accelerator("CmdOrCtrl+Shift+O")
+                // App menu (automatically gets app name on macOS)
+                let app_menu = SubmenuBuilder::new(app, "App")
+                    .item(&PredefinedMenuItem::hide(app, None)?)
+                    .item(&PredefinedMenuItem::hide_others(app, None)?)
+                    .item(&PredefinedMenuItem::show_all(app, None)?)
+                    .separator()
+                    .item(&PredefinedMenuItem::quit(app, None)?)
+                    .build()?;
+
+                // File menu items
+                let open_item = MenuItemBuilder::with_id("open", "Open...")
+                    .accelerator("CmdOrCtrl+O")
                     .build(app)?;
 
-            let file_menu = SubmenuBuilder::new(app, "File")
-                .item(&open_item)
-                .item(&open_new_window_item)
-                .build()?;
+                let open_new_window_item =
+                    MenuItemBuilder::with_id("open_new_window", "Open in New Window...")
+                        .accelerator("CmdOrCtrl+Shift+O")
+                        .build(app)?;
 
-            // Go menu items
-            let dashboard_item = MenuItemBuilder::with_id("dashboard", "Dashboard")
-                .accelerator("CmdOrCtrl+D")
-                .build(app)?;
+                let file_menu = SubmenuBuilder::new(app, "File")
+                    .item(&open_item)
+                    .item(&open_new_window_item)
+                    .build()?;
 
-            let settings_item = MenuItemBuilder::with_id("settings", "Settings")
-                .accelerator("CmdOrCtrl+,")
-                .build(app)?;
+                // Edit menu with native shortcuts
+                let edit_menu = SubmenuBuilder::new(app, "Edit")
+                    .item(&PredefinedMenuItem::undo(app, None)?)
+                    .item(&PredefinedMenuItem::redo(app, None)?)
+                    .separator()
+                    .item(&PredefinedMenuItem::cut(app, None)?)
+                    .item(&PredefinedMenuItem::copy(app, None)?)
+                    .item(&PredefinedMenuItem::paste(app, None)?)
+                    .item(&PredefinedMenuItem::select_all(app, None)?)
+                    .build()?;
 
-            let go_menu = SubmenuBuilder::new(app, "Go")
-                .item(&dashboard_item)
-                .item(&settings_item)
-                .build()?;
+                // View menu
+                let view_menu = SubmenuBuilder::new(app, "View")
+                    .item(&PredefinedMenuItem::fullscreen(app, None)?)
+                    .build()?;
 
-            let menu = MenuBuilder::new(app)
-                .item(&file_menu)
-                .item(&go_menu)
-                .build()?;
+                // Go menu items
+                let dashboard_item = MenuItemBuilder::with_id("dashboard", "Dashboard")
+                    .accelerator("CmdOrCtrl+D")
+                    .build(app)?;
 
-            app.set_menu(menu)?;
+                let settings_item = MenuItemBuilder::with_id("settings", "Settings")
+                    .accelerator("CmdOrCtrl+,")
+                    .build(app)?;
+
+                let go_menu = SubmenuBuilder::new(app, "Go")
+                    .item(&dashboard_item)
+                    .item(&settings_item)
+                    .build()?;
+
+                // Window menu
+                let window_menu = SubmenuBuilder::new(app, "Window")
+                    .item(&PredefinedMenuItem::minimize(app, None)?)
+                    .item(&PredefinedMenuItem::maximize(app, None)?)
+                    .separator()
+                    .item(&PredefinedMenuItem::close_window(app, None)?)
+                    .build()?;
+
+                // Help menu
+                let learn_more_item = MenuItemBuilder::with_id("learn_more", "Learn More")
+                    .build(app)?;
+
+                let help_menu = SubmenuBuilder::new(app, "Help")
+                    .item(&learn_more_item)
+                    .build()?;
+
+                let menu = MenuBuilder::new(app)
+                    .item(&app_menu)
+                    .item(&file_menu)
+                    .item(&edit_menu)
+                    .item(&view_menu)
+                    .item(&go_menu)
+                    .item(&window_menu)
+                    .item(&help_menu)
+                    .build()?;
+
+                app.set_menu(menu)?;
+            }
+
+            #[cfg(not(target_os = "macos"))]
+            {
+                // File menu items
+                let open_item = MenuItemBuilder::with_id("open", "Open...")
+                    .accelerator("CmdOrCtrl+O")
+                    .build(app)?;
+
+                let open_new_window_item =
+                    MenuItemBuilder::with_id("open_new_window", "Open in New Window...")
+                        .accelerator("CmdOrCtrl+Shift+O")
+                        .build(app)?;
+
+                let file_menu = SubmenuBuilder::new(app, "File")
+                    .item(&open_item)
+                    .item(&open_new_window_item)
+                    .build()?;
+
+                // Go menu items
+                let dashboard_item = MenuItemBuilder::with_id("dashboard", "Dashboard")
+                    .accelerator("CmdOrCtrl+D")
+                    .build(app)?;
+
+                let settings_item = MenuItemBuilder::with_id("settings", "Settings")
+                    .accelerator("CmdOrCtrl+,")
+                    .build(app)?;
+
+                let go_menu = SubmenuBuilder::new(app, "Go")
+                    .item(&dashboard_item)
+                    .item(&settings_item)
+                    .build()?;
+
+                let menu = MenuBuilder::new(app)
+                    .item(&file_menu)
+                    .item(&go_menu)
+                    .build()?;
+
+                app.set_menu(menu)?;
+            }
 
             // Handle menu events - emit only to focused window
             app.on_menu_event(move |app, event| {
-                if event.id() == "dashboard" {
-                    emit_to_focused(app, "navigate-to-dashboard", ());
-                } else if event.id() == "settings" {
-                    emit_to_focused(app, "navigate-to-settings", ());
-                } else if event.id() == "open" {
-                    emit_to_focused(app, "menu-open-repository", ());
-                } else if event.id() == "open_new_window" {
-                    emit_to_focused(app, "menu-open-in-new-window", ());
+                match event.id().as_ref() {
+                    "dashboard" => emit_to_focused(app, "navigate-to-dashboard", ()),
+                    "settings" => emit_to_focused(app, "navigate-to-settings", ()),
+                    "open" => emit_to_focused(app, "menu-open-repository", ()),
+                    "open_new_window" => emit_to_focused(app, "menu-open-in-new-window", ()),
+                    "learn_more" => {
+                        #[cfg(target_os = "macos")]
+                        {
+                            use tauri_plugin_opener::OpenerExt;
+                            let _ = app.opener().open_url("https://treq.dev", None::<&str>);
+                        }
+                    }
+                    _ => {}
                 }
             });
 
@@ -959,6 +1097,7 @@ pub fn run() {
             get_worktrees,
             add_worktree_to_db,
             delete_worktree_from_db,
+            toggle_worktree_pin,
             rebuild_worktrees,
             get_commands,
             add_command,
@@ -984,11 +1123,14 @@ pub fn run() {
             git_get_changed_files_between_branches,
             git_get_commits_between_branches,
             git_list_branches,
+            git_list_branches_detailed,
+            git_checkout_branch,
             git_is_repository,
             git_init_repo,
             git_list_gitignored_files,
             git_merge,
             git_discard_all_changes,
+            git_discard_files,
             git_has_uncommitted_changes,
             git_stash_push_files,
             git_stash_pop,
@@ -1007,6 +1149,7 @@ pub fn run() {
             git_unstage_hunk,
             git_get_changed_files,
             git_get_file_hunks,
+            git_get_file_lines,
             git_stage_selected_lines,
             git_unstage_selected_lines,
             pty_create_session,
@@ -1032,6 +1175,8 @@ pub fn run() {
             update_session_access,
             update_session_name,
             delete_session,
+            get_session_model,
+            set_session_model,
             mark_file_viewed,
             unmark_file_viewed,
             get_viewed_files,

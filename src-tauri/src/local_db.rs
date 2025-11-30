@@ -79,11 +79,18 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
             worktree_path TEXT NOT NULL UNIQUE,
             branch_name TEXT NOT NULL,
             created_at TEXT NOT NULL,
-            metadata TEXT
+            metadata TEXT,
+            is_pinned INTEGER DEFAULT 0
         )",
         [],
     )
     .map_err(|e| format!("Failed to create worktrees table: {}", e))?;
+
+    // Migration: Add is_pinned column if it doesn't exist
+    let _ = conn.execute(
+        "ALTER TABLE worktrees ADD COLUMN is_pinned INTEGER DEFAULT 0",
+        [],
+    );
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_worktrees_branch ON worktrees(branch_name)",
@@ -100,11 +107,18 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
             created_at TEXT NOT NULL,
             last_accessed TEXT NOT NULL,
             plan_title TEXT,
+            model TEXT,
             FOREIGN KEY (worktree_id) REFERENCES worktrees(id) ON DELETE CASCADE
         )",
         [],
     )
     .map_err(|e| format!("Failed to create sessions table: {}", e))?;
+
+    // Migration: Add model column if it doesn't exist
+    let _ = conn.execute(
+        "ALTER TABLE sessions ADD COLUMN model TEXT",
+        [],
+    );
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_sessions_worktree ON sessions(worktree_id)",
@@ -220,7 +234,7 @@ fn row_to_plan(row: &rusqlite::Row) -> rusqlite::Result<PlanHistoryEntry> {
 pub fn get_worktrees(repo_path: &str) -> Result<Vec<Worktree>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, worktree_path, branch_name, created_at, metadata FROM worktrees ORDER BY created_at DESC")
+        .prepare("SELECT id, worktree_path, branch_name, created_at, metadata, is_pinned FROM worktrees ORDER BY is_pinned DESC, branch_name COLLATE NOCASE ASC")
         .map_err(|e| format!("Failed to prepare worktrees query: {}", e))?;
 
     let worktrees = stmt
@@ -232,6 +246,7 @@ pub fn get_worktrees(repo_path: &str) -> Result<Vec<Worktree>, String> {
                 branch_name: row.get(2)?,
                 created_at: row.get(3)?,
                 metadata: row.get(4)?,
+                is_pinned: row.get::<_, i64>(5)? != 0,  // Convert INTEGER to bool
             })
         })
         .map_err(|e| format!("Failed to query worktrees: {}", e))?;
@@ -251,9 +266,9 @@ pub fn add_worktree(
     let created_at = Utc::now().to_rfc3339();
 
     conn.execute(
-        "INSERT INTO worktrees (worktree_path, branch_name, created_at, metadata)
-         VALUES (?1, ?2, ?3, ?4)",
-        params![worktree_path, branch_name, created_at, metadata],
+        "INSERT INTO worktrees (worktree_path, branch_name, created_at, metadata, is_pinned)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![worktree_path, branch_name, created_at, metadata, 0],
     )
     .map_err(|e| format!("Failed to insert worktree: {}", e))?;
 
@@ -265,6 +280,30 @@ pub fn delete_worktree(repo_path: &str, id: i64) -> Result<(), String> {
     conn.execute("DELETE FROM worktrees WHERE id = ?1", [id])
         .map_err(|e| format!("Failed to delete worktree: {}", e))?;
     Ok(())
+}
+
+pub fn toggle_worktree_pin(repo_path: &str, id: i64) -> Result<bool, String> {
+    let conn = get_connection(repo_path)?;
+
+    // Get current pin status
+    let mut stmt = conn
+        .prepare("SELECT is_pinned FROM worktrees WHERE id = ?1")
+        .map_err(|e| format!("Failed to prepare query: {}", e))?;
+
+    let current_pinned: i64 = stmt
+        .query_row([id], |row| row.get(0))
+        .map_err(|e| format!("Failed to get pin status: {}", e))?;
+
+    // Toggle it
+    let new_pinned = if current_pinned != 0 { 0 } else { 1 };
+
+    conn.execute(
+        "UPDATE worktrees SET is_pinned = ?1 WHERE id = ?2",
+        params![new_pinned, id],
+    )
+    .map_err(|e| format!("Failed to update pin status: {}", e))?;
+
+    Ok(new_pinned != 0)
 }
 
 pub fn rebuild_worktrees_from_filesystem(repo_path: &str) -> Result<Vec<Worktree>, String> {
@@ -323,6 +362,7 @@ pub fn rebuild_worktrees_from_filesystem(repo_path: &str) -> Result<Vec<Worktree
             branch_name,
             created_at: Utc::now().to_rfc3339(),
             metadata: None,
+            is_pinned: false,
         });
     }
 
@@ -336,7 +376,7 @@ pub fn rebuild_worktrees_from_filesystem(repo_path: &str) -> Result<Vec<Worktree
 pub fn get_sessions(repo_path: &str) -> Result<Vec<Session>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, worktree_id, name, created_at, last_accessed, plan_title FROM sessions ORDER BY created_at ASC")
+        .prepare("SELECT id, worktree_id, name, created_at, last_accessed, plan_title, model FROM sessions ORDER BY created_at ASC")
         .map_err(|e| format!("Failed to prepare sessions query: {}", e))?;
 
     let sessions = stmt
@@ -348,6 +388,7 @@ pub fn get_sessions(repo_path: &str) -> Result<Vec<Session>, String> {
                 created_at: row.get(3)?,
                 last_accessed: row.get(4)?,
                 plan_title: row.get(5)?,
+                model: row.get(6)?,
             })
         })
         .map_err(|e| format!("Failed to query sessions: {}", e))?;
@@ -367,9 +408,9 @@ pub fn add_session(
     let now = Utc::now().to_rfc3339();
 
     conn.execute(
-        "INSERT INTO sessions (worktree_id, name, created_at, last_accessed, plan_title)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![worktree_id, name, now, now, plan_title],
+        "INSERT INTO sessions (worktree_id, name, created_at, last_accessed, plan_title, model)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![worktree_id, name, now, now, plan_title, None::<String>],
     )
     .map_err(|e| format!("Failed to insert session: {}", e))?;
 
@@ -389,9 +430,44 @@ pub fn update_session_access(repo_path: &str, id: i64) -> Result<(), String> {
     Ok(())
 }
 
+pub fn update_session_name(repo_path: &str, id: i64, name: String) -> Result<(), String> {
+    let conn = get_connection(repo_path)?;
+    conn.execute(
+        "UPDATE sessions SET name = ?1 WHERE id = ?2",
+        params![name, id],
+    )
+    .map_err(|e| format!("Failed to update session name: {}", e))?;
+
+    Ok(())
+}
+
 pub fn delete_session(repo_path: &str, id: i64) -> Result<(), String> {
     let conn = get_connection(repo_path)?;
     conn.execute("DELETE FROM sessions WHERE id = ?1", [id])
         .map_err(|e| format!("Failed to delete session: {}", e))?;
+    Ok(())
+}
+
+pub fn get_session_model(repo_path: &str, id: i64) -> Result<Option<String>, String> {
+    let conn = get_connection(repo_path)?;
+    let mut stmt = conn
+        .prepare("SELECT model FROM sessions WHERE id = ?1")
+        .map_err(|e| format!("Failed to prepare query: {}", e))?;
+
+    let model: Option<String> = stmt
+        .query_row([id], |row| row.get(0))
+        .map_err(|e| format!("Failed to get session model: {}", e))?;
+
+    Ok(model)
+}
+
+pub fn set_session_model(repo_path: &str, id: i64, model: Option<String>) -> Result<(), String> {
+    let conn = get_connection(repo_path)?;
+    conn.execute(
+        "UPDATE sessions SET model = ?1 WHERE id = ?2",
+        params![model, id],
+    )
+    .map_err(|e| format!("Failed to update session model: {}", e))?;
+
     Ok(())
 }

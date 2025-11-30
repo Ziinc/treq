@@ -18,6 +18,7 @@ export const RepositorySettingsContent: React.FC<RepositorySettingsContentProps>
   const [branchNamePattern, setBranchNamePattern] = useState("treq/{name}");
   const [postCreateCommand, setPostCreateCommand] = useState("");
   const [includedFiles, setIncludedFiles] = useState("");
+  const [defaultModel, setDefaultModel] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,12 +35,14 @@ export const RepositorySettingsContent: React.FC<RepositorySettingsContentProps>
         getRepoSetting(repoPath, "branch_name_pattern"),
         getRepoSetting(repoPath, "post_create_command"),
         getRepoSetting(repoPath, "included_copy_files"),
+        getRepoSetting(repoPath, "default_model"),
         gitListGitignoredFiles(repoPath),
       ])
-        .then(([branchPattern, postCommand, includedPatterns, gitignored]) => {
+        .then(([branchPattern, postCommand, includedPatterns, model, gitignored]) => {
           setBranchNamePattern(branchPattern || "treq/{name}");
           setPostCreateCommand(postCommand || "");
           setIncludedFiles(includedPatterns || "");
+          setDefaultModel(model || "");
           setAvailableFiles(gitignored || []);
         })
         .catch((err) => {
@@ -47,6 +50,7 @@ export const RepositorySettingsContent: React.FC<RepositorySettingsContentProps>
           setBranchNamePattern("treq/{name}");
           setPostCreateCommand("");
           setIncludedFiles("");
+          setDefaultModel("");
           setAvailableFiles([]);
         })
         .finally(() => {
@@ -64,6 +68,7 @@ export const RepositorySettingsContent: React.FC<RepositorySettingsContentProps>
         setRepoSetting(repoPath, "branch_name_pattern", branchNamePattern),
         setRepoSetting(repoPath, "post_create_command", postCreateCommand),
         setRepoSetting(repoPath, "included_copy_files", includedFiles),
+        setRepoSetting(repoPath, "default_model", defaultModel),
       ]);
       addToast({
         title: "Settings saved",
@@ -172,6 +177,25 @@ export const RepositorySettingsContent: React.FC<RepositorySettingsContentProps>
             No .gitignored files found in repository root
           </p>
         )}
+      </div>
+
+      <div>
+        <Label htmlFor="repo-default-model">Claude Code Model</Label>
+        <select
+          id="repo-default-model"
+          value={defaultModel}
+          onChange={(e) => setDefaultModel(e.target.value)}
+          className="mt-2 w-full px-3 py-2 border rounded-md bg-background text-foreground"
+        >
+          <option value="">Use Application Default</option>
+          <option value="claude-sonnet-4-5-20250929">Sonnet 4.5</option>
+          <option value="claude-3-5-sonnet-20241022">Sonnet 3.5</option>
+          <option value="claude-opus-4-20250514">Opus 4</option>
+          <option value="claude-3-7-sonnet-20250219">Sonnet 3.7</option>
+        </select>
+        <p className="text-xs text-muted-foreground mt-1">
+          Default model for new Claude Code sessions in this repository (overrides application default)
+        </p>
       </div>
 
       {error && (

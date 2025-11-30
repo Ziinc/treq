@@ -20,6 +20,13 @@ pub struct DiffHunk {
     pub patch: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct FileLines {
+    pub lines: Vec<String>,
+    pub start_line: usize,
+    pub end_line: usize,
+}
+
 #[derive(Debug, Serialize, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum DiffLineKind {
@@ -192,6 +199,114 @@ pub fn git_discard_all_changes(worktree_path: &str) -> Result<String, String> {
     response.push_str(&String::from_utf8_lossy(&clean_output.stdout));
     if !clean_output.stderr.is_empty() {
         response.push_str(&String::from_utf8_lossy(&clean_output.stderr));
+    }
+
+    Ok(response)
+}
+
+pub fn git_discard_files(worktree_path: &str, file_paths: Vec<String>) -> Result<String, String> {
+    let mut response = String::new();
+
+    // Get status of all files to determine which are tracked/untracked
+    let status_output = Command::new("git")
+        .current_dir(worktree_path)
+        .args(["status", "--porcelain"])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !status_output.status.success() {
+        return Err(String::from_utf8_lossy(&status_output.stderr).to_string());
+    }
+
+    let status_str = String::from_utf8_lossy(&status_output.stdout);
+    let mut untracked_files = Vec::new();
+    let mut tracked_files = Vec::new();
+
+    // Parse status to categorize files
+    for file_path in &file_paths {
+        let mut is_untracked = false;
+        for line in status_str.lines() {
+            if line.len() < 4 {
+                continue;
+            }
+            let status_code = &line[0..2];
+            let file_in_status = line[3..].trim();
+
+            if file_in_status == file_path {
+                // Check if file is untracked (status code "??")
+                if status_code == "??" {
+                    is_untracked = true;
+                }
+                break;
+            }
+        }
+
+        if is_untracked {
+            untracked_files.push(file_path);
+        } else {
+            tracked_files.push(file_path);
+        }
+    }
+
+    // First, unstage any staged files (restore from HEAD to index)
+    if !file_paths.is_empty() {
+        let mut unstage_args = vec!["restore", "--staged"];
+        for file_path in &file_paths {
+            unstage_args.push(file_path);
+        }
+
+        let unstage_output = Command::new("git")
+            .current_dir(worktree_path)
+            .args(&unstage_args)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        // Unstaging untracked files will fail, but that's okay
+        if unstage_output.status.success() {
+            response.push_str(&String::from_utf8_lossy(&unstage_output.stdout));
+        }
+    }
+
+    // Discard tracked files (restore working tree from index)
+    if !tracked_files.is_empty() {
+        let mut restore_args = vec!["restore"];
+        for file_path in &tracked_files {
+            restore_args.push(file_path);
+        }
+
+        let restore_output = Command::new("git")
+            .current_dir(worktree_path)
+            .args(&restore_args)
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if !restore_output.status.success() {
+            return Err(String::from_utf8_lossy(&restore_output.stderr).to_string());
+        }
+
+        response.push_str(&String::from_utf8_lossy(&restore_output.stdout));
+        if !restore_output.stderr.is_empty() {
+            response.push_str(&String::from_utf8_lossy(&restore_output.stderr));
+        }
+    }
+
+    // Remove untracked files
+    for file_path in untracked_files {
+        let file_full_path = std::path::Path::new(worktree_path).join(file_path);
+        if file_full_path.exists() {
+            if file_full_path.is_dir() {
+                std::fs::remove_dir_all(&file_full_path)
+                    .map_err(|e| format!("Failed to remove directory {}: {}", file_path, e))?;
+            } else {
+                std::fs::remove_file(&file_full_path)
+                    .map_err(|e| format!("Failed to remove file {}: {}", file_path, e))?;
+            }
+            response.push_str(&format!("Removed untracked file: {}\n", file_path));
+        }
+    }
+
+    if response.is_empty() {
+        response = "Files discarded successfully".to_string();
     }
 
     Ok(response)
@@ -370,6 +485,25 @@ pub fn git_unstage_file(worktree_path: &str, file_path: &str) -> Result<String, 
     }
 }
 
+/// Check if a git status entry represents a directory
+/// Returns true if the entry is a directory based on:
+/// 1. Trailing slash in path (git's standard convention)
+/// 2. Filesystem verification (fallback for edge cases)
+fn is_directory_entry(worktree_path: &str, status_entry: &str) -> bool {
+    // Extract file path from porcelain format: "XY filename"
+    let path_start = if status_entry.len() > 3 { 3 } else { 0 };
+    let file_path = status_entry[path_start..].trim();
+
+    // Git status adds '/' suffix to untracked directories
+    if file_path.ends_with('/') {
+        return true;
+    }
+
+    // Fallback: check filesystem for edge cases
+    let full_path = std::path::Path::new(worktree_path).join(file_path);
+    full_path.is_dir()
+}
+
 /// Get list of modified/untracked files (excluding .gitignore)
 pub fn git_get_changed_files(worktree_path: &str) -> Result<Vec<String>, String> {
     let mut files: Vec<String> = Vec::new();
@@ -388,8 +522,11 @@ pub fn git_get_changed_files(worktree_path: &str) -> Result<Vec<String>, String>
     let status = String::from_utf8_lossy(&status_output.stdout);
     for line in status.lines() {
         if line.len() > 3 {
-            // Return full porcelain format: "XY filename"
-            files.push(line.to_string());
+            // Filter out directory entries - only include files
+            if !is_directory_entry(worktree_path, line) {
+                // Return full porcelain format: "XY filename"
+                files.push(line.to_string());
+            }
         }
     }
 
@@ -1172,4 +1309,56 @@ fn parse_hunk_header(header: &str) -> (usize, usize) {
             .unwrap_or(0);
     }
     (old_start, new_start)
+}
+
+/// Get specific lines from a file (for expanding context in diffs)
+pub fn git_get_file_lines(
+    worktree_path: &str,
+    file_path: &str,
+    is_staged: bool,
+    start_line: usize,
+    end_line: usize,
+) -> Result<FileLines, String> {
+    let lines = if is_staged {
+        // Get staged version using git show
+        let output = Command::new("git")
+            .current_dir(worktree_path)
+            .args(["show", &format!(":0:{}", file_path)])
+            .output()
+            .map_err(|e| format!("Failed to execute git show: {}", e))?;
+
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
+
+        String::from_utf8_lossy(&output.stdout).to_string()
+    } else {
+        // Get working directory version
+        let full_path = format!("{}/{}", worktree_path, file_path);
+        std::fs::read_to_string(&full_path)
+            .map_err(|e| format!("Failed to read file: {}", e))?
+    };
+
+    let all_lines: Vec<String> = lines.lines().map(|s| s.to_string()).collect();
+
+    // Extract requested range (1-indexed)
+    let start_idx = start_line.saturating_sub(1);
+    let end_idx = end_line.min(all_lines.len());
+
+    if start_idx >= all_lines.len() {
+        return Ok(FileLines {
+            lines: Vec::new(),
+            start_line,
+            end_line: start_line,
+        });
+    }
+
+    let extracted_lines = all_lines[start_idx..end_idx].to_vec();
+    let line_count = extracted_lines.len();
+
+    Ok(FileLines {
+        lines: extracted_lines,
+        start_line,
+        end_line: start_idx + line_count,
+    })
 }

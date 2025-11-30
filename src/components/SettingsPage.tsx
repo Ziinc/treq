@@ -40,6 +40,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 }) => {
   const [currentTab, setCurrentTab] = useState<TabValue>(initialTab);
   const [localRepoPath, setLocalRepoPath] = useState(repoPath);
+  const [defaultModel, setDefaultModel] = useState<string>("");
   const [showGitInitDialog, setShowGitInitDialog] = useState(false);
   const [pendingRepoPath, setPendingRepoPath] = useState("");
 
@@ -51,11 +52,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   // Load settings on mount
   useEffect(() => {
     setLocalRepoPath(repoPath);
+    getSetting("default_model").then((model) => {
+      if (model) setDefaultModel(model);
+    });
   }, [repoPath]);
 
   const handleSaveApplicationSettings = async () => {
     try {
       await setSetting("repo_path", localRepoPath);
+      await setSetting("default_model", defaultModel);
 
       onRepoPathChange(localRepoPath);
       onRefresh?.();
@@ -260,6 +265,25 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       />
                       <p className="text-xs text-muted-foreground mt-1">
                         Font size for code diff display (8-16, default: 11)
+                      </p>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="default-model">Claude Code Model</Label>
+                      <select
+                        id="default-model"
+                        value={defaultModel}
+                        onChange={(e) => setDefaultModel(e.target.value)}
+                        className="mt-2 w-full px-3 py-2 border rounded-md bg-background text-foreground"
+                      >
+                        <option value="">Default (Sonnet 4.5)</option>
+                        <option value="claude-sonnet-4-5-20250929">Sonnet 4.5</option>
+                        <option value="claude-3-5-sonnet-20241022">Sonnet 3.5</option>
+                        <option value="claude-opus-4-20250514">Opus 4</option>
+                        <option value="claude-3-7-sonnet-20250219">Sonnet 3.7</option>
+                      </select>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Default model for new Claude Code sessions
                       </p>
                     </div>
                   </div>

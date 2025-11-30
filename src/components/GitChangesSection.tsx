@@ -10,13 +10,11 @@ export interface GitChangesSectionProps {
   isStaged: boolean;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
-  selectedFile?: string | null;
   fileActionTarget?: string | null;
   readOnly?: boolean;
   selectedFiles?: Set<string>;
-  onFileSelect?: (path: string, shiftKey: boolean) => void;
+  onFileSelect?: (path: string, event: React.MouseEvent) => void;
   onMoveToWorktree?: () => void;
-  onFileClick?: (path: string) => void;
   onStage?: (path: string) => void;
   onUnstage?: (path: string) => void;
   onStageAll?: () => void;
@@ -30,13 +28,11 @@ export const GitChangesSection = memo<GitChangesSectionProps>(({
   isStaged,
   isCollapsed,
   onToggleCollapse,
-  selectedFile,
   fileActionTarget,
   readOnly = false,
   selectedFiles,
   onFileSelect,
   onMoveToWorktree,
-  onFileClick,
   onStage,
   onUnstage,
   onStageAll,
@@ -144,13 +140,10 @@ export const GitChangesSection = memo<GitChangesSectionProps>(({
               key={`${isStaged ? "staged" : "unstaged"}-${file.path}`}
               file={file}
               isStaged={isStaged}
-              isSelected={selectedFile === file.path}
+              isSelected={!isStaged && selectedFiles?.has(file.path) || false}
               isBusy={fileActionTarget === file.path}
               readOnly={readOnly}
-              showCheckbox={!isStaged && !!onFileSelect}
-              isChecked={selectedFiles?.has(file.path)}
-              onCheckChange={onFileSelect}
-              onFileClick={onFileClick}
+              onFileClick={onFileSelect}
               onStage={onStage}
               onUnstage={onUnstage}
             />

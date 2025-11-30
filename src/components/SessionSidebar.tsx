@@ -1,14 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Session, Worktree, GitStatus, BranchInfo, getSessions, getWorktrees, deleteSession, ptyClose, ptySessionExists, gitGetStatus, gitGetBranchInfo, calculateDirectorySize } from "../lib/api";
+import { Session, Worktree, GitStatus, BranchInfo, getSessions, getWorktrees, deleteSession, ptyClose, ptySessionExists, gitGetStatus, gitGetBranchInfo, calculateDirectorySize, toggleWorktreePin } from "../lib/api";
 import { useToast } from "./ui/toast";
-import { X, Plus, Pause, MoreVertical, MoreHorizontal, FolderOpen, Trash2, Terminal as TerminalIcon, HardDrive, Settings, Home, Search } from "lucide-react";
+import { X, Plus, Pause, MoreVertical, MoreHorizontal, FolderOpen, Trash2, Terminal as TerminalIcon, HardDrive, Settings, Home, Search, Pin, GitBranch } from "lucide-react";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
 } from "./ui/dropdown-menu";
 import {
   Popover,
@@ -28,6 +29,7 @@ interface SessionSidebarProps {
   currentBranch?: string | null;
   onDeleteWorktree?: (worktree: Worktree) => void;
   onCreateWorktree?: () => void;
+  onCreateWorktreeFromRemote?: () => void;
   onSessionActivityListenerChange?: (listener: ((sessionId: number) => void) | null) => void;
   openSettings?: (tab?: string) => void;
   navigateToDashboard?: () => void;
@@ -226,6 +228,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   currentBranch,
   onDeleteWorktree,
   onCreateWorktree,
+  onCreateWorktreeFromRemote,
   onSessionActivityListenerChange,
   openSettings,
   navigateToDashboard,
@@ -379,6 +382,78 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       deleteSessionMutation.mutate(session);
     },
     [deleteSessionMutation, activeSessionId, onCloseActiveSession]
+  );
+
+  const deleteAllWorktreeSessionsMutation = useMutation({
+    mutationFn: async (worktreeId: number) => {
+      const sessionsToDelete = sessions.filter(s => s.worktree_id === worktreeId);
+
+      // Close PTY and delete each session
+      for (const session of sessionsToDelete) {
+        await ptyClose(`session-${session.id}`);
+        await deleteSession(repoPath || "", session.id);
+      }
+
+      return { worktreeId, deletedCount: sessionsToDelete.length };
+    },
+    onSuccess: ({ worktreeId, deletedCount }) => {
+      // Clear PTY session tracking
+      setPtySessionsExist((prev) => {
+        const next = new Set(prev);
+        sessions
+          .filter(s => s.worktree_id === worktreeId)
+          .forEach(s => next.delete(s.id));
+        return next;
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      addToast({
+        title: "Sessions Deleted",
+        description: `${deletedCount} session(s) closed`,
+        type: "info",
+      });
+    },
+    onError: (error) => {
+      addToast({
+        title: "Error",
+        description: error instanceof Error ? error.message : String(error),
+        type: "error",
+      });
+    },
+  });
+
+  const togglePinMutation = useMutation({
+    mutationFn: async ({ worktreeId, repoPath }: { worktreeId: number; repoPath: string }) => {
+      return toggleWorktreePin(repoPath, worktreeId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["worktrees", repoPath] });
+    },
+  });
+
+  const handleDeleteAllWorktreeSessions = useCallback(
+    (worktreeId: number, worktreeName: string) => {
+      const sessionsToDelete = sessions.filter(s => s.worktree_id === worktreeId);
+
+      // Early return if no sessions
+      if (sessionsToDelete.length === 0) return;
+
+      // Show confirmation dialog
+      const confirmed = confirm(
+        `Delete all ${sessionsToDelete.length} session(s) for worktree "${worktreeName}"?`
+      );
+
+      if (!confirmed) return;
+
+      // Check if active session will be deleted
+      const activeSessionBeingDeleted = sessionsToDelete.some(s => s.id === activeSessionId);
+      if (activeSessionBeingDeleted && onCloseActiveSession) {
+        onCloseActiveSession();
+      }
+
+      deleteAllWorktreeSessionsMutation.mutate(worktreeId);
+    },
+    [deleteAllWorktreeSessionsMutation, sessions, activeSessionId, onCloseActiveSession]
   );
 
   const mainRepoSessions = sessions.filter((s) => s.worktree_id === null);
@@ -546,7 +621,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
             {currentBranch || "main"}
           </span>
           {repoPath && <StatusPill path={repoPath} />}
-          <div className="absolute right-2 flex items-center gap-1 pl-4 bg-gradient-to-l from-sidebar from-60% opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200">
+          <div className="absolute right-2 flex items-center gap-1 pl-4 bg-gradient-to-l from-sidebar from-60% transition-opacity duration-200">
             {onCreateSession && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -619,19 +694,34 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           <div className="flex items-center justify-between text-[12px] text-muted-foreground uppercase tracking-wide px-2 py-1">
             <span>Worktrees</span>
             {onCreateWorktree && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className="p-1 rounded hover:bg-muted"
-                    aria-label="New worktree"
-                    onClick={onCreateWorktree}
-                  >
-                    <Plus className="w-3 h-3" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">New worktree</TooltipContent>
-              </Tooltip>
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="p-1 rounded hover:bg-muted"
+                        aria-label="New worktree"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">New worktree</TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent align="end" sideOffset={4}>
+                  <DropdownMenuItem onSelect={onCreateWorktree}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create new worktree
+                  </DropdownMenuItem>
+                  {onCreateWorktreeFromRemote && (
+                    <DropdownMenuItem onSelect={onCreateWorktreeFromRemote}>
+                      <GitBranch className="w-4 h-4 mr-2" />
+                      Create from remote branch
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
           {worktrees.map((worktree) => {
@@ -645,7 +735,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                     </span>
                   </WorktreeInfoPopover>
                   <StatusPill path={worktree.worktree_path} />
-                  <div className="absolute right-2 flex items-center gap-1 pl-4 bg-gradient-to-l from-sidebar from-60% opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200">
+                  {worktree.is_pinned && (
+                    <Pin className="w-3 h-3 ml-1" />
+                  )}
+                  <div className="absolute right-2 flex items-center gap-1 pl-4 bg-gradient-to-l from-sidebar from-60% transition-opacity duration-200">
                     {onCreateSession && (
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -684,6 +777,20 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                             New Session
                           </DropdownMenuItem>
                         )}
+                        <DropdownMenuItem
+                          onSelect={(event) => {
+                            event.preventDefault();
+                            if (repoPath) {
+                              togglePinMutation.mutate({
+                                worktreeId: worktree.id,
+                                repoPath
+                              });
+                            }
+                          }}
+                        >
+                          <Pin className="w-4 h-4 mr-2" />
+                          {worktree.is_pinned ? "Unpin" : "Pin"} Worktree
+                        </DropdownMenuItem>
                         {worktree.worktree_path && (
                           <DropdownMenuItem
                             onSelect={(event) => {
@@ -695,6 +802,15 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                             Open in {fileManagerLabel}
                           </DropdownMenuItem>
                         )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onSelect={() => handleDeleteAllWorktreeSessions(worktree.id, getWorktreeTitle(worktree.id))}
+                          disabled={sessionsForWorktree.length === 0}
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete All Sessions
+                        </DropdownMenuItem>
                         {onDeleteWorktree && (
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive"

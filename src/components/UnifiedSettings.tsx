@@ -48,9 +48,10 @@ export const UnifiedSettings: React.FC<UnifiedSettingsProps> = ({
   const [currentTab, setCurrentTab] = useState<TabValue>(initialTab);
   const [localRepoPath, setLocalRepoPath] = useState(repoPath);
   const [defaultEditor, setDefaultEditor] = useState<string>("cursor");
+  const [defaultModel, setDefaultModel] = useState<string>("");
   const [showGitInitDialog, setShowGitInitDialog] = useState(false);
   const [pendingRepoPath, setPendingRepoPath] = useState("");
-  
+
   const { theme, setTheme } = useTheme();
   const { fontSize, setFontSize } = useTerminalSettings();
   const { fontSize: diffFontSize, setFontSize: setDiffFontSize } = useDiffSettings();
@@ -61,9 +62,13 @@ export const UnifiedSettings: React.FC<UnifiedSettingsProps> = ({
     if (open) {
       setCurrentTab(initialTab);
       setLocalRepoPath(repoPath);
-      
+
       getSetting("default_editor").then((editor) => {
         if (editor) setDefaultEditor(editor);
+      });
+
+      getSetting("default_model").then((model) => {
+        if (model) setDefaultModel(model);
       });
     }
   }, [open, repoPath, initialTab]);
@@ -72,16 +77,17 @@ export const UnifiedSettings: React.FC<UnifiedSettingsProps> = ({
     try {
       await setSetting("repo_path", localRepoPath);
       await setSetting("default_editor", defaultEditor);
-      
+      await setSetting("default_model", defaultModel);
+
       onRepoPathChange(localRepoPath);
       onRefresh?.();
-      
+
       addToast({
         title: "Settings Saved",
         description: "Application settings updated successfully",
         type: "success",
       });
-      
+
       onOpenChange(false);
     } catch (error) {
       addToast({
@@ -277,6 +283,25 @@ export const UnifiedSettings: React.FC<UnifiedSettingsProps> = ({
                     </select>
                     <p className="text-xs text-muted-foreground mt-1">
                       Default editor for opening worktrees
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="default-model">Claude Code Model</Label>
+                    <select
+                      id="default-model"
+                      value={defaultModel}
+                      onChange={(e) => setDefaultModel(e.target.value)}
+                      className="mt-2 w-full px-3 py-2 border rounded-md bg-background text-foreground"
+                    >
+                      <option value="">Default (Sonnet 4.5)</option>
+                      <option value="claude-sonnet-4-5-20250929">Sonnet 4.5</option>
+                      <option value="claude-3-5-sonnet-20241022">Sonnet 3.5</option>
+                      <option value="claude-opus-4-20250514">Opus 4</option>
+                      <option value="claude-3-7-sonnet-20250219">Sonnet 3.7</option>
+                    </select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Default model for new Claude Code sessions
                     </p>
                   </div>
 

@@ -12,6 +12,7 @@ pub struct Worktree {
     pub branch_name: String,
     pub created_at: String,
     pub metadata: Option<String>,
+    pub is_pinned: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -32,6 +33,7 @@ pub struct Session {
     pub created_at: String,
     pub last_accessed: String,
     pub plan_title: Option<String>,
+    pub model: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -106,6 +108,7 @@ impl Database {
                 created_at TEXT NOT NULL,
                 last_accessed TEXT NOT NULL,
                 plan_title TEXT,
+                model TEXT,
                 FOREIGN KEY (worktree_id) REFERENCES worktrees(id) ON DELETE CASCADE
             )",
             [],
@@ -115,6 +118,11 @@ impl Database {
         let _ = self
             .conn
             .execute("ALTER TABLE sessions ADD COLUMN plan_title TEXT", []);
+
+        // Migration: Add model column if it doesn't exist
+        let _ = self
+            .conn
+            .execute("ALTER TABLE sessions ADD COLUMN model TEXT", []);
 
         let _ = self.conn.execute(
             "DELETE FROM sessions WHERE type IS NULL OR type <> 'session'",
@@ -164,6 +172,7 @@ impl Database {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn add_worktree(&self, worktree: &Worktree) -> Result<i64> {
         self.conn.execute(
             "INSERT INTO worktrees (repo_path, worktree_path, branch_name, created_at, metadata)
@@ -179,10 +188,11 @@ impl Database {
         Ok(self.conn.last_insert_rowid())
     }
 
+    #[allow(dead_code)]
     pub fn get_worktrees(&self) -> Result<Vec<Worktree>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, repo_path, worktree_path, branch_name, created_at, metadata 
-             FROM worktrees ORDER BY created_at DESC",
+            "SELECT id, repo_path, worktree_path, branch_name, created_at, metadata, is_pinned
+             FROM worktrees ORDER BY is_pinned DESC, branch_name COLLATE NOCASE ASC",
         )?;
 
         let worktrees = stmt.query_map([], |row| {
@@ -193,12 +203,14 @@ impl Database {
                 branch_name: row.get(3)?,
                 created_at: row.get(4)?,
                 metadata: row.get(5)?,
+                is_pinned: row.get::<_, i64>(6)? != 0,
             })
         })?;
 
         worktrees.collect()
     }
 
+    #[allow(dead_code)]
     pub fn delete_worktree(&self, id: i64) -> Result<()> {
         self.conn
             .execute("DELETE FROM commands WHERE worktree_id = ?1", [id])?;
@@ -357,24 +369,27 @@ impl Database {
         rows.collect()
     }
 
+    #[allow(dead_code)]
     pub fn add_session(&self, session: &Session) -> Result<i64> {
         self.conn.execute(
-            "INSERT INTO sessions (worktree_id, type, name, created_at, last_accessed, plan_title)
-             VALUES (?1, 'session', ?2, ?3, ?4, ?5)",
+            "INSERT INTO sessions (worktree_id, type, name, created_at, last_accessed, plan_title, model)
+             VALUES (?1, 'session', ?2, ?3, ?4, ?5, ?6)",
             (
                 &session.worktree_id,
                 &session.name,
                 &session.created_at,
                 &session.last_accessed,
                 &session.plan_title,
+                &session.model,
             ),
         )?;
         Ok(self.conn.last_insert_rowid())
     }
 
+    #[allow(dead_code)]
     pub fn get_sessions(&self) -> Result<Vec<Session>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, worktree_id, name, created_at, last_accessed, plan_title 
+            "SELECT id, worktree_id, name, created_at, last_accessed, plan_title, model
              FROM sessions ORDER BY created_at ASC",
         )?;
 
@@ -386,15 +401,17 @@ impl Database {
                 created_at: row.get(3)?,
                 last_accessed: row.get(4)?,
                 plan_title: row.get(5)?,
+                model: row.get(6)?,
             })
         })?;
 
         sessions.collect()
     }
 
+    #[allow(dead_code)]
     pub fn get_sessions_by_worktree(&self, worktree_id: i64) -> Result<Vec<Session>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, worktree_id, name, created_at, last_accessed, plan_title 
+            "SELECT id, worktree_id, name, created_at, last_accessed, plan_title, model
              FROM sessions WHERE worktree_id = ?1 ORDER BY created_at ASC",
         )?;
 
@@ -406,15 +423,17 @@ impl Database {
                 created_at: row.get(3)?,
                 last_accessed: row.get(4)?,
                 plan_title: row.get(5)?,
+                model: row.get(6)?,
             })
         })?;
 
         sessions.collect()
     }
 
+    #[allow(dead_code)]
     pub fn get_main_repo_sessions(&self) -> Result<Vec<Session>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, worktree_id, name, created_at, last_accessed, plan_title 
+            "SELECT id, worktree_id, name, created_at, last_accessed, plan_title, model
              FROM sessions WHERE worktree_id IS NULL ORDER BY created_at ASC",
         )?;
 
@@ -426,12 +445,14 @@ impl Database {
                 created_at: row.get(3)?,
                 last_accessed: row.get(4)?,
                 plan_title: row.get(5)?,
+                model: row.get(6)?,
             })
         })?;
 
         sessions.collect()
     }
 
+    #[allow(dead_code)]
     pub fn update_session_access(&self, id: i64, last_accessed: &str) -> Result<()> {
         self.conn.execute(
             "UPDATE sessions SET last_accessed = ?1 WHERE id = ?2",
@@ -440,6 +461,7 @@ impl Database {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn update_session_name(&self, id: i64, name: &str) -> Result<()> {
         self.conn.execute(
             "UPDATE sessions SET name = ?1 WHERE id = ?2",
@@ -448,6 +470,7 @@ impl Database {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn delete_session(&self, id: i64) -> Result<()> {
         self.conn
             .execute("DELETE FROM sessions WHERE id = ?1", [id])?;

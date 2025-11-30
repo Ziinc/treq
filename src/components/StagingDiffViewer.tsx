@@ -6,6 +6,7 @@ import { List, type ListImperativeAPI, type RowComponentProps } from "react-wind
 import {
   gitGetChangedFiles,
   gitGetFileHunks,
+  gitGetFileLines,
   getGitCache,
   setGitCache,
   invalidateGitCache,
@@ -14,6 +15,7 @@ import {
   gitAddAll,
   gitUnstageAll,
   gitDiscardAllChanges,
+  gitDiscardFiles,
   gitCommit,
   gitCommitAmend,
   gitPush,
@@ -47,6 +49,7 @@ import {
   Loader2,
   Minus,
   Plus,
+  ChevronUp,
   ChevronDown,
   ChevronRight,
   MoreVertical,
@@ -74,6 +77,17 @@ import { useDiffSettings } from "../hooks/useDiffSettings";
 import { GitChangesSection } from "./GitChangesSection";
 import { MoveToWorktreeDialog } from "./MoveToWorktreeDialog";
 
+// Helper to compute hash of hunk content using native Web Crypto API
+const computeHunkHash = async (hunks: any[]): Promise<string> => {
+  const content = hunks.map(h => h.lines.join('\n')).join('\n');
+  const encoder = new TextEncoder();
+  const data = encoder.encode(content);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
+};
+
 interface StagingDiffViewerProps {
   worktreePath: string;
   readOnly?: boolean;
@@ -82,6 +96,7 @@ interface StagingDiffViewerProps {
   refreshSignal?: number;
   initialSelectedFile?: string;
   terminalSessionId?: string;
+  onReviewSubmitted?: () => void;
 }
 
 export interface StagingDiffViewerHandle {
@@ -115,6 +130,12 @@ interface FileHunksData {
   hunks: GitDiffHunk[];
   isLoading: boolean;
   error?: string;
+}
+
+interface ExpandedRange {
+  startLine: number;
+  endLine: number;
+  lines: string[];
 }
 
 // Helper to get line type styling (background only, text color handled by syntax highlighting)
@@ -186,12 +207,17 @@ const parseCachedHunks = (raw: string): GitDiffHunk[] | null => {
   return null;
 };
 
-// Parse hunk header to extract starting line numbers
-const parseHunkHeader = (header: string): { oldStart: number; newStart: number } => {
-  const match = header.match(/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+// Parse hunk header to extract starting line numbers and counts
+const parseHunkHeader = (header: string): { oldStart: number; newStart: number; oldCount: number; newCount: number } => {
+  const match = header.match(/@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+  if (!match) {
+    return { oldStart: 1, newStart: 1, oldCount: 1, newCount: 1 };
+  }
   return {
-    oldStart: match ? parseInt(match[1], 10) : 1,
-    newStart: match ? parseInt(match[2], 10) : 1,
+    oldStart: parseInt(match[1], 10),
+    oldCount: match[2] ? parseInt(match[2], 10) : 1,
+    newStart: parseInt(match[3], 10),
+    newCount: match[4] ? parseInt(match[4], 10) : 1,
   };
 };
 
@@ -424,13 +450,12 @@ const CommitInput = memo(forwardRef<CommitInputHandle, CommitInputProps>(({
         <div className="flex justify-end">
           <Button
             variant="ghost"
-            size="sm"
+            size="icon"
             onClick={onRefresh}
             disabled={disabled || pending}
-            className="h-7 text-xs"
+            className="h-7 w-7"
           >
-            <RefreshCw className="w-3 h-3 mr-1" />
-            Refresh
+            <RefreshCw className="w-3 h-3" />
           </Button>
         </div>
       )}
@@ -508,11 +533,11 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
   refreshSignal = 0,
   initialSelectedFile,
   terminalSessionId,
+  onReviewSubmitted,
 }, ref) => {
   const { addToast } = useToast();
   const { fontSize: diffFontSize } = useDiffSettings();
   const [files, setFiles] = useState<ParsedFileChange[]>([]);
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [allFileHunks, setAllFileHunks] = useState<Map<string, FileHunksData>>(new Map());
   const [loadingAllHunks, setLoadingAllHunks] = useState(false);
   const [manualRefreshKey, setManualRefreshKey] = useState(0);
@@ -555,6 +580,9 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     lineContent: string[];
   } | null>(null);
 
+  // Track content hash when comment input is shown
+  const commentInputFileHashRef = useRef<string | null>(null);
+
   // Viewed files state - maps file path to { viewed_at, content_hash }
   const [viewedFiles, setViewedFiles] = useState<Map<string, { viewedAt: string; contentHash: string }>>(new Map());
 
@@ -562,6 +590,12 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
   const [selectedUnstagedFiles, setSelectedUnstagedFiles] = useState<Set<string>>(new Set());
   const [lastSelectedFileIndex, setLastSelectedFileIndex] = useState<number | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+
+  // Expanded context lines state
+  const [expandedRanges, setExpandedRanges] = useState<
+    Map<string, { before: ExpandedRange[]; after: ExpandedRange[] }>
+  >(new Map());
+  const [loadingExpansions, setLoadingExpansions] = useState<Set<string>>(new Set());
 
   const stagedFiles = useMemo(() => filterStagedFiles(files), [files]);
   const unstagedFiles = useMemo(() => filterUnstagedFiles(files), [files]);
@@ -571,15 +605,11 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
       if (filesEqual(prev, parsed)) return prev; // Skip if unchanged
       return parsed;
     });
-    setSelectedFile((current) => {
-      if (initialSelectedFile && parsed.some((file) => file.path === initialSelectedFile)) {
-        return initialSelectedFile;
-      }
-      if (current && parsed.some((file) => file.path === current)) {
-        return current;
-      }
-      return parsed[0]?.path ?? null;
-    });
+
+    // Handle initial file selection
+    if (initialSelectedFile && parsed.some((file) => file.path === initialSelectedFile)) {
+      setSelectedUnstagedFiles(new Set([initialSelectedFile]));
+    }
 
     if (onStagedFilesChange) {
       const staged = parsed
@@ -599,6 +629,138 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
       console.debug("git cache invalidate failed", worktreePath, error);
     }
   }, [worktreePath]);
+
+  // Compute expandable lines for a hunk boundary
+  const computeExpandableLines = useCallback((
+    hunk: GitDiffHunk,
+    position: 'before' | 'after',
+    existingRanges: ExpandedRange[],
+    allHunks: GitDiffHunk[],
+    hunkIndex: number
+  ): { startLine: number; endLine: number; canExpand: boolean } | null => {
+    const { oldStart, oldCount } = parseHunkHeader(hunk.header);
+
+    if (position === 'before') {
+      // Find the lowest line we've already expanded to
+      const lowestExpanded = existingRanges.length > 0
+        ? Math.min(...existingRanges.map(r => r.startLine))
+        : oldStart;
+
+      // Can we expand 5 more lines?
+      const targetStart = Math.max(1, lowestExpanded - 5);
+      const targetEnd = lowestExpanded - 1;
+
+      if (targetStart > targetEnd) return null;
+
+      return {
+        startLine: targetStart,
+        endLine: targetEnd,
+        canExpand: true,
+      };
+    } else {
+      // After: expand down from last hunk line
+      const hunkEndLine = oldStart + oldCount - 1;
+      const highestExpanded = existingRanges.length > 0
+        ? Math.max(...existingRanges.map(r => r.endLine))
+        : hunkEndLine;
+
+      // Check if next hunk exists and calculate gap
+      const nextHunk = allHunks[hunkIndex + 1];
+      let maxLine: number;
+
+      if (nextHunk) {
+        const { oldStart: nextStart } = parseHunkHeader(nextHunk.header);
+        maxLine = nextStart - 1;
+      } else {
+        // Last hunk - allow expanding 5 lines (will be capped by file length)
+        maxLine = highestExpanded + 5;
+      }
+
+      const targetStart = highestExpanded + 1;
+      const targetEnd = Math.min(highestExpanded + 5, maxLine);
+
+      if (targetStart > targetEnd) return null;
+
+      return {
+        startLine: targetStart,
+        endLine: targetEnd,
+        canExpand: true,
+      };
+    }
+  }, []);
+
+  // Handle expanding context lines
+  const handleExpandLines = useCallback(async (
+    filePath: string,
+    hunk: GitDiffHunk,
+    hunkIndex: number,
+    position: 'before' | 'after'
+  ) => {
+    const fileData = allFileHunks.get(filePath);
+    if (!fileData) return;
+
+    const hunkRanges = expandedRanges.get(hunk.id) || { before: [], after: [] };
+    const existingRanges = position === 'before' ? hunkRanges.before : hunkRanges.after;
+
+    const expandInfo = computeExpandableLines(
+      hunk,
+      position,
+      existingRanges,
+      fileData.hunks,
+      hunkIndex
+    );
+
+    if (!expandInfo?.canExpand) return;
+
+    // Set loading state
+    const loadingKey = `${hunk.id}-${position}`;
+    setLoadingExpansions(prev => new Set(prev).add(loadingKey));
+
+    try {
+      const result = await gitGetFileLines(
+        worktreePath,
+        filePath,
+        hunk.is_staged,
+        expandInfo.startLine,
+        expandInfo.endLine
+      );
+
+      // Update expanded ranges
+      setExpandedRanges(prev => {
+        const next = new Map(prev);
+        const ranges = next.get(hunk.id) || { before: [], after: [] };
+
+        const newRange: ExpandedRange = {
+          startLine: result.start_line,
+          endLine: result.end_line,
+          lines: result.lines,
+        };
+
+        if (position === 'before') {
+          ranges.before = [...ranges.before, newRange].sort((a, b) => a.startLine - b.startLine);
+        } else {
+          ranges.after = [...ranges.after, newRange].sort((a, b) => a.startLine - b.startLine);
+        }
+
+        next.set(hunk.id, ranges);
+        return next;
+      });
+    } catch (error: any) {
+      console.error('Failed to expand context:', error);
+      addToast({
+        title: "Expansion failed",
+        description: error?.message || "Unknown error",
+        type: "error",
+      });
+    } finally {
+      // Clear loading state
+      setLoadingExpansions(prev => {
+        const next = new Set(prev);
+        next.delete(loadingKey);
+        return next;
+      });
+    }
+  }, [worktreePath, allFileHunks, expandedRanges, computeExpandableLines, addToast]);
 
   // Calculate height for a file section in the virtualized list
   const getFileHeight = useCallback((index: number): number => {
@@ -625,7 +787,29 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     // Calculate expanded height: header + hunks
     let height = FILE_HEADER_HEIGHT;
 
-    for (const hunk of fileData.hunks) {
+    for (let hunkIdx = 0; hunkIdx < fileData.hunks.length; hunkIdx++) {
+      const hunk = fileData.hunks[hunkIdx];
+      const hunkRanges = expandedRanges.get(hunk.id) || { before: [], after: [] };
+
+      // Check for expand button BEFORE
+      const beforeExpandInfo = computeExpandableLines(
+        hunk,
+        'before',
+        hunkRanges.before,
+        fileData.hunks,
+        hunkIdx
+      );
+      if (beforeExpandInfo) {
+        height += LINE_HEIGHT; // Button height
+      }
+
+      // Add height for expanded lines BEFORE
+      const beforeLineCount = hunkRanges.before.reduce(
+        (sum, range) => sum + range.lines.length,
+        0
+      );
+      height += beforeLineCount * LINE_HEIGHT;
+
       height += HUNK_HEADER_HEIGHT; // Hunk header
       height += hunk.lines.length * LINE_HEIGHT; // Lines in hunk
 
@@ -645,15 +829,33 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
           height += COMMENT_INPUT_HEIGHT;
         }
       }
+
+      // Add height for expanded lines AFTER
+      const afterLineCount = hunkRanges.after.reduce(
+        (sum, range) => sum + range.lines.length,
+        0
+      );
+      height += afterLineCount * LINE_HEIGHT;
+
+      // Check for expand button AFTER
+      const afterExpandInfo = computeExpandableLines(
+        hunk,
+        'after',
+        hunkRanges.after,
+        fileData.hunks,
+        hunkIdx
+      );
+      if (afterExpandInfo) {
+        height += LINE_HEIGHT; // Button height
+      }
     }
 
     return height + ROW_PADDING_BOTTOM;
-  }, [files, collapsedFiles, allFileHunks, comments, showCommentInput, pendingComment]);
+  }, [files, collapsedFiles, allFileHunks, comments, showCommentInput, pendingComment, expandedRanges, computeExpandableLines]);
 
   const loadChangedFiles = useCallback(async () => {
     if (!worktreePath) {
       setFiles([]);
-      setSelectedFile(null);
       return;
     }
 
@@ -727,6 +929,12 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     loadViewedFiles();
   }, [loadViewedFiles]);
 
+  // Reset expanded lines when files change
+  useEffect(() => {
+    setExpandedRanges(new Map());
+    setLoadingExpansions(new Set());
+  }, [files, manualRefreshKey]);
+
   // Auto-collapse binary files when files list changes
   useEffect(() => {
     if (files.length > 0) {
@@ -785,6 +993,46 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
       });
     }
   }, [files, allFileHunks, worktreePath]);
+
+  // Detect file content changes while comment input is open
+  useEffect(() => {
+    if (!showCommentInput || !pendingComment) {
+      commentInputFileHashRef.current = null;
+      return;
+    }
+
+    const fileData = allFileHunks.get(pendingComment.filePath);
+    if (!fileData?.hunks) {
+      // File was removed
+      addToast({
+        title: "File changed",
+        description: "The file has been modified or removed. Your comment input has been closed.",
+        type: "warning",
+      });
+      setShowCommentInput(false);
+      setPendingComment(null);
+      commentInputFileHashRef.current = null;
+      return;
+    }
+
+    // Compare hashes asynchronously
+    const previousHash = commentInputFileHashRef.current;
+    if (previousHash) {
+      computeHunkHash(fileData.hunks).then(currentHash => {
+        if (currentHash !== previousHash) {
+          // Content changed
+          addToast({
+            title: "File content changed",
+            description: "The file has been modified. Your comment input has been closed.",
+            type: "warning",
+          });
+          setShowCommentInput(false);
+          setPendingComment(null);
+          commentInputFileHashRef.current = null;
+        }
+      });
+    }
+  }, [showCommentInput, pendingComment, allFileHunks, addToast]);
 
   const handleMarkFileViewed = useCallback(
     async (filePath: string) => {
@@ -1056,33 +1304,118 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     }
   }, [worktreePath, readOnly, disableInteractions, refresh, addToast, invalidateCache]);
 
-  // File selection handler for move to worktree feature
-  const handleFileSelect = useCallback((path: string, shiftKey: boolean) => {
+  const handleDiscardFiles = useCallback(
+    async (filePath: string) => {
+      if (readOnly || disableInteractions || !filePath) {
+        return;
+      }
+
+      // If there are selected files and the clicked file is one of them, discard all selected files
+      // Otherwise, discard just the clicked file
+      const filesToDiscard = selectedUnstagedFiles.has(filePath) && selectedUnstagedFiles.size > 0
+        ? Array.from(selectedUnstagedFiles)
+        : [filePath];
+
+      setFileActionTarget(filePath);
+      try {
+        await gitDiscardFiles(worktreePath, filesToDiscard);
+        const count = filesToDiscard.length;
+        const description = count === 1
+          ? `${filesToDiscard[0]} discarded`
+          : `${count} files discarded`;
+        addToast({ title: "Discarded", description, type: "success" });
+
+        // Clear selection after discarding
+        setSelectedUnstagedFiles(new Set());
+
+        await invalidateCache();
+        refresh();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        addToast({ title: "Discard Failed", description: message, type: "error" });
+      } finally {
+        setFileActionTarget(null);
+      }
+    },
+    [worktreePath, readOnly, disableInteractions, selectedUnstagedFiles, refresh, addToast, invalidateCache]
+  );
+
+  // Smart scroll function - only scrolls if file not visible in viewport
+  const scrollToFileIfNeeded = useCallback((fileIndex: number) => {
+    const file = unstagedFiles[fileIndex];
+    if (!file) return;
+
+    const filePath = file.path;
+
+    // Expand the file first
+    setCollapsedFiles((prev) => {
+      const next = new Set(prev);
+      next.delete(filePath);
+      return next;
+    });
+
+    // Smart scroll - only scroll if element not currently visible
+    requestAnimationFrame(() => {
+      const fileId = `file-section-${filePath.replace(/[^a-zA-Z0-9]/g, "-")}`;
+      const element = document.getElementById(fileId);
+      if (!element) return;
+
+      const rect = element.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+
+      // Check if element is visible in viewport
+      const isVisible = rect.top >= 0 && rect.top < viewportHeight;
+
+      // Only scroll if not visible
+      if (!isVisible) {
+        element.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  }, [unstagedFiles]);
+
+  // File selection handler - VSCode-style click selection
+  const handleFileSelect = useCallback((path: string, event: React.MouseEvent) => {
     const fileIndex = unstagedFiles.findIndex(f => f.path === path);
+    if (fileIndex === -1) return;
+
+    const isMetaKey = event.metaKey || event.ctrlKey;
+    const isShiftKey = event.shiftKey;
 
     setSelectedUnstagedFiles(prev => {
       const next = new Set(prev);
 
-      if (shiftKey && lastSelectedFileIndex !== null) {
-        // Range selection
+      if (isShiftKey && lastSelectedFileIndex !== null) {
+        // Range selection - clear others and select range
+        next.clear();
         const start = Math.min(lastSelectedFileIndex, fileIndex);
         const end = Math.max(lastSelectedFileIndex, fileIndex);
         for (let i = start; i <= end; i++) {
           next.add(unstagedFiles[i].path);
         }
-      } else {
-        // Toggle single file
+      } else if (isMetaKey) {
+        // Cmd/Ctrl+click - toggle individual file
         if (next.has(path)) {
           next.delete(path);
         } else {
           next.add(path);
         }
+      } else {
+        // Single click - select only this file (unless already sole selection)
+        if (next.size === 1 && next.has(path)) {
+          // Already sole selection - keep it
+          return prev;
+        }
+        next.clear();
+        next.add(path);
       }
       return next;
     });
 
     setLastSelectedFileIndex(fileIndex);
-  }, [lastSelectedFileIndex, unstagedFiles]);
+
+    // Smart scroll to file
+    scrollToFileIfNeeded(fileIndex);
+  }, [lastSelectedFileIndex, unstagedFiles, scrollToFileIfNeeded]);
 
   // Handler for when files are successfully moved to worktree
   const handleMoveToWorktreeSuccess = useCallback((_worktreeInfo: {
@@ -1415,6 +1748,13 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     });
     setShowCommentInput(true);
     setContextMenuPosition(null);
+
+    // Set initial hash for change detection
+    if (fileData.hunks) {
+      computeHunkHash(fileData.hunks).then(hash => {
+        commentInputFileHashRef.current = hash;
+      });
+    }
   }, [diffLineSelection, allFileHunks]);
 
   const cancelComment = useCallback(() => {
@@ -1489,6 +1829,8 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
       setComments([]);
       setFinalReviewComment("");
       setReviewPopoverOpen(false);
+      // Notify parent that review was submitted
+      onReviewSubmitted?.();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       addToast({
@@ -1499,27 +1841,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     } finally {
       setSendingReview(false);
     }
-  }, [terminalSessionId, formatReviewMarkdown, addToast]);
-
-  const scrollToFile = useCallback((filePath: string) => {
-    setSelectedFile(filePath);
-
-    // Expand the file first
-    setCollapsedFiles((prev) => {
-      const next = new Set(prev);
-      next.delete(filePath);
-      return next;
-    });
-
-    // Scroll to the actual DOM element after render
-    requestAnimationFrame(() => {
-      const fileId = `file-section-${filePath.replace(/[^a-zA-Z0-9]/g, "-")}`;
-      const element = document.getElementById(fileId);
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    });
-  }, []);
+  }, [terminalSessionId, formatReviewMarkdown, addToast, onReviewSubmitted]);
 
   const extractCommitHash = useCallback((output: string) => {
     const bracketMatch = output.match(/\[.+? ([0-9a-f]{7,})\]/i);
@@ -1716,13 +2038,149 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     );
   }, [comments]);
 
+  // Expand button component
+  const ExpandButton = ({
+    direction,
+    lineCount,
+    onClick,
+    isLoading,
+  }: {
+    direction: 'up' | 'down';
+    lineCount: number;
+    onClick: () => void;
+    isLoading: boolean;
+  }) => {
+    const Icon = direction === 'up' ? ChevronUp : ChevronDown;
+
+    return (
+      <div
+        className="flex items-center bg-blue-500/5 hover:bg-blue-500/10 cursor-pointer transition-colors"
+        onClick={onClick}
+      >
+        {/* Line number column */}
+        <div className="w-16 flex-shrink-0 border-r border-border/40 flex items-center justify-center py-1">
+          <button
+            className="flex flex-col items-center justify-center text-blue-600 dark:text-blue-400 p-1 rounded hover:bg-blue-500/20"
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <>
+                {direction === 'up' && <Icon className="w-3 h-3" />}
+                <div className="flex gap-0.5">
+                  <div className="w-1 h-1 rounded-full bg-blue-600" />
+                  <div className="w-1 h-1 rounded-full bg-blue-600" />
+                  <div className="w-1 h-1 rounded-full bg-blue-600" />
+                </div>
+                {direction === 'down' && <Icon className="w-3 h-3" />}
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Comment button spacer */}
+        <div className="w-6 flex-shrink-0" />
+
+        {/* Line prefix spacer */}
+        <div className="w-5 flex-shrink-0" />
+
+        {/* Text */}
+        <div className="flex-1 px-2 py-1 text-sm text-blue-600 dark:text-blue-400 font-mono">
+          {isLoading ? 'Loading...' : `Show ${lineCount} more line${lineCount !== 1 ? 's' : ''}`}
+        </div>
+      </div>
+    );
+  };
+
+  // Expanded lines component
+  const ExpandedLines = ({
+    ranges,
+    language,
+  }: {
+    ranges: ExpandedRange[];
+    language: string | null;
+  }) => {
+    return (
+      <>
+        {ranges.flatMap(range =>
+          range.lines.map((line, idx) => {
+            const lineNum = range.startLine + idx;
+            return (
+              <div key={`expanded-${range.startLine}-${idx}`} className="flex items-stretch">
+                {/* Line numbers (both old and new) */}
+                <div className="w-16 flex-shrink-0 text-muted-foreground/60 select-none border-r border-border/40 flex items-center gap-1 px-1">
+                  <span className="w-6 text-right text-xs">{lineNum}</span>
+                  <span className="w-6 text-right text-xs">{lineNum}</span>
+                </div>
+
+                {/* Comment button spacer */}
+                <div className="w-6 flex-shrink-0" />
+
+                {/* Line prefix (context = space) */}
+                <div className="w-5 flex-shrink-0 text-center text-muted-foreground/40 select-none">
+                  {' '}
+                </div>
+
+                {/* Line content */}
+                <div className="flex-1 px-2 py-0.5 whitespace-pre-wrap break-all font-mono text-sm">
+                  <HighlightedLine content={line} language={language} />
+                </div>
+              </div>
+            );
+          })
+        )}
+      </>
+    );
+  };
+
   // Render diff lines for a hunk (no collapsible, just lines with selection support)
   const renderHunkLines = (hunk: GitDiffHunk, hunkIndex: number, filePath: string) => {
     const lineNumbers = computeHunkLineNumbers(hunk);
     const language = getLanguageFromPath(filePath);
 
+    const fileData = allFileHunks.get(filePath);
+    const hunkRanges = expandedRanges.get(hunk.id) || { before: [], after: [] };
+
+    // Check if we can expand more lines
+    const beforeExpandInfo = fileData ? computeExpandableLines(
+      hunk,
+      'before',
+      hunkRanges.before,
+      fileData.hunks,
+      hunkIndex
+    ) : null;
+    const afterExpandInfo = fileData ? computeExpandableLines(
+      hunk,
+      'after',
+      hunkRanges.after,
+      fileData.hunks,
+      hunkIndex
+    ) : null;
+
+    const isLoadingBefore = loadingExpansions.has(`${hunk.id}-before`);
+    const isLoadingAfter = loadingExpansions.has(`${hunk.id}-after`);
+
     return (
       <Fragment key={hunk.id}>
+        {/* Expand UP button */}
+        {beforeExpandInfo && (
+          <ExpandButton
+            direction="up"
+            lineCount={beforeExpandInfo.endLine - beforeExpandInfo.startLine + 1}
+            onClick={() => handleExpandLines(filePath, hunk, hunkIndex, 'before')}
+            isLoading={isLoadingBefore}
+          />
+        )}
+
+        {/* Expanded lines BEFORE hunk */}
+        {hunkRanges.before.length > 0 && (
+          <ExpandedLines
+            ranges={hunkRanges.before}
+            language={language}
+          />
+        )}
+
         {/* Hunk separator header */}
         <div
           className={cn(
@@ -1832,6 +2290,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
               {/* Comment input */}
               {showCommentInputHere && pendingComment && (
                 <CommentInput
+                  key={`comment-${pendingComment.filePath}-${pendingComment.hunkId}-${pendingComment.displayAtLineIndex}`}
                   onSubmit={addComment}
                   onCancel={cancelComment}
                   filePath={pendingComment.filePath}
@@ -1843,6 +2302,24 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
             </Fragment>
           );
         })}
+
+        {/* Expanded lines AFTER hunk */}
+        {hunkRanges.after.length > 0 && (
+          <ExpandedLines
+            ranges={hunkRanges.after}
+            language={language}
+          />
+        )}
+
+        {/* Expand DOWN button */}
+        {afterExpandInfo && (
+          <ExpandButton
+            direction="down"
+            lineCount={afterExpandInfo.endLine - afterExpandInfo.startLine + 1}
+            onClick={() => handleExpandLines(filePath, hunk, hunkIndex, 'after')}
+            isLoading={isLoadingAfter}
+          />
+        )}
       </Fragment>
     );
   };
@@ -1870,10 +2347,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
       <div key={filePath} id={fileId} className="border border-border rounded-lg overflow-hidden">
         {/* File Header */}
         <div
-          className={cn(
-            "flex items-center justify-between px-4 py-2 bg-muted/50 cursor-pointer hover:bg-muted/70",
-            selectedFile === filePath && "bg-accent/30"
-          )}
+          className="flex items-center justify-between px-4 py-2 bg-muted/50 cursor-pointer hover:bg-muted/70"
           onClick={() => toggleFileCollapse(filePath)}
         >
           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -1978,6 +2452,20 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
                       Unstage file
                     </DropdownMenuItem>
                   )}
+                  {(fileMeta?.worktreeStatus || fileMeta?.stagedStatus) && (
+                    <DropdownMenuItem
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        handleDiscardFiles(filePath);
+                      }}
+                      disabled={fileActionTarget === filePath}
+                      className="text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+                    >
+                      {selectedUnstagedFiles.has(filePath) && selectedUnstagedFiles.size > 1
+                        ? `Discard ${selectedUnstagedFiles.size} files`
+                        : "Discard file"}
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onSelect={async (e) => {
@@ -2061,10 +2549,8 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
                   isStaged={true}
                   isCollapsed={collapsedSections.has("staged")}
                   onToggleCollapse={() => toggleSectionCollapse("staged")}
-                  selectedFile={selectedFile}
                   fileActionTarget={fileActionTarget}
                   readOnly={readOnly || disableInteractions}
-                  onFileClick={scrollToFile}
                   onUnstage={handleUnstageFile}
                   onUnstageAll={handleUnstageAll}
                 />
@@ -2075,13 +2561,11 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
                 isStaged={false}
                 isCollapsed={collapsedSections.has("unstaged")}
                 onToggleCollapse={() => toggleSectionCollapse("unstaged")}
-                selectedFile={selectedFile}
                 fileActionTarget={fileActionTarget}
                 readOnly={readOnly || disableInteractions}
                 selectedFiles={selectedUnstagedFiles}
                 onFileSelect={handleFileSelect}
                 onMoveToWorktree={() => setMoveDialogOpen(true)}
-                onFileClick={scrollToFile}
                 onStage={handleStageFile}
                 onStageAll={handleStageAll}
                 onDiscardAll={handleDiscardAll}

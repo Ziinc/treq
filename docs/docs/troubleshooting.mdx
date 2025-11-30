@@ -1,0 +1,160 @@
+---
+sidebar_position: 10
+---
+
+# Troubleshooting
+
+Common issues and solutions when using Treq.
+
+## Performance Issues
+
+### Treq is slow with large repositories
+
+**Causes**: Large repo size, many files, or slow disk.
+
+**Solutions**:
+1. **Reduce repo size**:
+   ```bash
+   # Check size
+   du -sh .git
+
+   # Clean up
+   git gc --aggressive
+   ```
+
+2. **Ignore large folders**:
+   - Add to `.gitignore`: `node_modules/`, `dist/`, `build/`
+
+3. **Increase polling interval**:
+   - Settings → Performance → Polling Interval → 5000ms
+
+### Dashboard updates slowly
+
+**Cause**: Too many worktrees or expensive git operations.
+
+**Solutions**:
+- **Delete unused worktrees**: Keep only 5-10 active
+- **Disable auto-refresh**: Manual refresh only
+- **Clear cache**: Settings → Advanced → Clear Cache
+
+### Terminal is laggy
+
+**Cause**: High output volume or rendering issues.
+
+**Solutions**:
+- **Reduce scrollback**: Settings → Terminal → Scrollback Lines → 500
+- **Disable WebGL**: Settings → Terminal → Renderer → Canvas
+- **Limit output**: Commands with huge output may pause terminal
+
+## Worktree Issues
+
+### Worktrees not appearing in dashboard
+
+**Cause**: Database out of sync with filesystem.
+
+**Solution**:
+1. Settings → Repository → **"Rebuild Worktrees Database"**
+2. Or manually:
+   ```bash
+   git worktree list
+   # Note all worktrees
+   ```
+3. Delete `.treq/local.db`
+4. Reopen Treq (database rebuilds)
+
+### Can't delete worktree
+
+**Cause**: Uncommitted changes or processes using files.
+
+**Solutions**:
+- **Commit or discard changes** first
+- **Close terminals** in that worktree
+- **Force delete**:
+  ```bash
+  git worktree remove --force path/to/worktree
+  ```
+
+### "Branch already checked out"
+
+**Cause**: Trying to create worktree for branch already in another worktree.
+
+**Solution**:
+- Delete existing worktree for that branch
+- Or choose different branch name
+- Git limitation: one worktree per branch
+
+## Staging & Commit Issues
+
+### Can't stage files
+
+**Cause**: File in `.gitignore` or binary file.
+
+**Solutions**:
+- **Check .gitignore**:
+  ```bash
+  git check-ignore -v path/to/file
+  ```
+- **Force add** (if appropriate):
+  ```bash
+  git add -f path/to/file
+  ```
+
+## Merge Issues
+
+### Merge conflicts
+
+**Expected behavior**: Git can't automatically merge.
+
+**Solutions**:
+1. **View conflicted files**:
+   ```bash
+   git status
+   # Look for "both modified"
+   ```
+
+2. **Resolve conflicts**:
+   - Open file in editor
+   - Find conflict markers:
+     ```
+     <<<<<<< HEAD
+     version A
+     =======
+     version B
+     >>>>>>> branch
+     ```
+   - Choose or combine versions
+   - Remove markers
+
+3. **Complete merge**:
+   ```bash
+   git add resolved-file.js
+   git commit
+   ```
+
+### "Uncommitted changes" preventing merge
+
+**Cause**: Working tree not clean in target branch.
+
+**Solutions**:
+- **Commit changes** in target branch
+- **Stash changes**:
+  ```bash
+  git stash
+  # Merge
+  git stash pop
+  ```
+- **Discard changes** (careful!):
+  ```bash
+  git checkout -- .
+  ```
+
+### Merge failed, how to undo?
+
+**Solution**:
+```bash
+# Abort ongoing merge
+git merge --abort
+
+# Or if already committed
+git reset --hard HEAD~1  # Careful: loses changes
+```

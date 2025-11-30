@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Check, Loader2, Minus, Plus } from "lucide-react";
+import { Loader2, Minus, Plus } from "lucide-react";
 import { cn } from "../lib/utils";
 import { formatFileLabel, type ParsedFileChange } from "../lib/git-utils";
 
@@ -9,10 +9,7 @@ export interface GitFileRowProps {
   isSelected?: boolean;
   isBusy?: boolean;
   readOnly?: boolean;
-  showCheckbox?: boolean;
-  isChecked?: boolean;
-  onCheckChange?: (path: string, shiftKey: boolean) => void;
-  onFileClick?: (path: string) => void;
+  onFileClick?: (path: string, event: React.MouseEvent) => void;
   onStage?: (path: string) => void;
   onUnstage?: (path: string) => void;
 }
@@ -23,9 +20,6 @@ export const GitFileRow = memo<GitFileRowProps>(({
   isSelected = false,
   isBusy = false,
   readOnly = false,
-  showCheckbox = false,
-  isChecked = false,
-  onCheckChange,
   onFileClick,
   onStage,
   onUnstage,
@@ -40,33 +34,14 @@ export const GitFileRow = memo<GitFileRowProps>(({
     <div
       className={cn(
         "group/row relative pl-1 pr-3 py-1.5 text-xs flex items-center gap-1",
-        isSelected ? "bg-accent/40" : "hover:bg-accent/30",
-        isChecked && "bg-primary/10"
+        isSelected ? "bg-accent/40" : "hover:bg-accent/30"
       )}
     >
-      {showCheckbox ? (
-        <button
-          type="button"
-          className={cn(
-            "w-4 h-4 border rounded flex items-center justify-center flex-shrink-0 transition-colors",
-            isChecked
-              ? "bg-primary border-primary text-primary-foreground"
-              : "border-muted-foreground/50 hover:border-primary invisible group-hover/row:visible"
-          )}
-          onClick={(e) => {
-            e.stopPropagation();
-            onCheckChange?.(file.path, e.shiftKey);
-          }}
-        >
-          {isChecked && <Check className="w-3 h-3" />}
-        </button>
-      ) : (
-        <div className="w-4 flex-shrink-0" />
-      )}
+      <div className="w-4 flex-shrink-0" />
       <button
         type="button"
         className="flex-1 text-left flex items-center gap-2 min-w-0"
-        onClick={() => onFileClick?.(file.path)}
+        onClick={(e) => onFileClick?.(file.path, e)}
         title={file.path}
       >
         <span className="font-medium truncate flex-shrink-0">{label.name}</span>
