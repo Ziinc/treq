@@ -276,11 +276,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                         onChange={(e) => setDefaultModel(e.target.value)}
                         className="mt-2 w-full px-3 py-2 border rounded-md bg-background text-foreground"
                       >
-                        <option value="">Default (Sonnet 4.5)</option>
-                        <option value="claude-sonnet-4-5-20250929">Sonnet 4.5</option>
-                        <option value="claude-3-5-sonnet-20241022">Sonnet 3.5</option>
-                        <option value="claude-opus-4-20250514">Opus 4</option>
-                        <option value="claude-3-7-sonnet-20250219">Sonnet 3.7</option>
+                        <option value="">Default</option>
+                        <option value="sonnet">Sonnet</option>
+                        <option value="opus">Opus</option>
+                        <option value="haiku">Haiku</option>
+                        <option value="sonnet[1m]">Sonnet (1M)</option>
+                        <option value="opusplan">Opus Plan</option>
                       </select>
                       <p className="text-xs text-muted-foreground mt-1">
                         Default model for new Claude Code sessions
