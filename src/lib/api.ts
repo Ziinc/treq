@@ -224,8 +224,16 @@ export const gitCreateWorktree = (
 export const gitGetCurrentBranch = (repo_path: string): Promise<string> =>
   invoke("git_get_current_branch", { repoPath: repo_path });
 
-export const gitExecutePostCreateCommand = (worktree_path: string, command: string): Promise<string> =>
-  invoke("git_execute_post_create_command", { worktreePath: worktree_path, command });
+export const gitExecutePostCreateCommand = (
+  worktree_id: number,
+  worktree_path: string,
+  command: string
+): Promise<string> =>
+  invoke("git_execute_post_create_command", {
+    worktreeId: worktree_id,
+    worktreePath: worktree_path,
+    command,
+  });
 
 export const gitListWorktrees = (repo_path: string): Promise<WorktreeInfo[]> =>
   invoke("git_list_worktrees", { repoPath: repo_path });
