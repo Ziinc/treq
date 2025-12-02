@@ -9,7 +9,7 @@ import { useTheme } from "../hooks/useTheme";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import { useDiffSettings } from "../hooks/useDiffSettings";
 import { useToast } from "./ui/toast";
-import { setSetting, selectFolder, isGitRepository, gitInit, BranchInfo } from "../lib/api";
+import { getSetting, setSetting, selectFolder, isGitRepository, gitInit, BranchInfo } from "../lib/api";
 import { Settings, FolderGit2, FolderOpen, GitBranch, HardDrive } from "lucide-react";
 import { formatBytes } from "../lib/utils";
 
@@ -52,7 +52,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   // Load settings on mount
   useEffect(() => {
     setLocalRepoPath(repoPath);
-    getSetting("default_model").then((model) => {
+    getSetting("default_model").then((model: string | null) => {
       if (model) setDefaultModel(model);
     });
   }, [repoPath]);

@@ -46,7 +46,7 @@ import {
   DialogDescription,
 } from "./ui/dialog";
 import { PlanHistoryDialog } from "./PlanHistoryDialog";
-import { Loader2, RotateCw, X, GitBranch, Search, ChevronDown, ChevronUp, Pencil, Check, MoreVertical, GitMerge, Upload, AlertTriangle, FileText, ArrowDownToLine } from "lucide-react";
+import { Loader2, RotateCw, X, GitBranch, Search, ChevronDown, ChevronUp, Pencil, Check, MoreVertical, GitMerge, Upload, AlertTriangle, FileText, ArrowDownToLine, PanelLeftClose } from "lucide-react";
 import { PlanDisplayModal } from "./PlanDisplayModal";
 import { ModelSelector } from "./ModelSelector";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
@@ -1354,7 +1354,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
                       className="h-6 w-6 rounded-md bg-background/90 border border-border/60 hover:bg-muted flex items-center justify-center transition-colors shadow-sm"
                       aria-label="Minimize terminal"
                     >
-                      <ChevronDown className="w-3 h-3" />
+                      <PanelLeftClose className="w-3 h-3" />
                     </button>
                   </TooltipTrigger>
                   <TooltipContent>Minimize (Cmd+J)</TooltipContent>

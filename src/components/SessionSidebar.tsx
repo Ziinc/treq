@@ -34,6 +34,8 @@ interface SessionSidebarProps {
   openSettings?: (tab?: string) => void;
   navigateToDashboard?: () => void;
   onOpenCommandPalette?: () => void;
+  onBrowseFiles?: (worktree: Worktree | null) => void;
+  browsingWorktreeId?: number | null; // null = browsing main repo, number = browsing that worktree, undefined = not browsing
 }
 
 interface WorktreeInfoPopoverProps {
@@ -233,6 +235,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   openSettings,
   navigateToDashboard,
   onOpenCommandPalette,
+  onBrowseFiles,
+  browsingWorktreeId,
 }) => {
   const { addToast } = useToast();
   const queryClient = useQueryClient();
@@ -616,8 +620,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         <span className="text-[10px] text-muted-foreground/60 shrink-0">⌘K</span>
       </button>
       <div className="pl-1 pr-2 py-2 space-y-1 min-h-[120px] flex-1 overflow-y-auto">
-        <div className="relative flex items-center text-[12px] text-muted-foreground uppercase tracking-wide px-2 py-1">
-          <span className="truncate flex items-center" title={currentBranch || "Main"}>
+        <div className="relative flex items-center text-[12px] uppercase tracking-wide px-2 py-1">
+          <span className={`truncate flex items-center ${
+            browsingWorktreeId === null ? "text-primary" : "text-muted-foreground"
+          }`} title={currentBranch || "Main"}>
             {currentBranch || "main"}
           </span>
           {repoPath && <StatusPill path={repoPath} />}
@@ -659,6 +665,17 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       New Session
+                    </DropdownMenuItem>
+                  )}
+                  {onBrowseFiles && (
+                    <DropdownMenuItem
+                      onSelect={(event) => {
+                        event.preventDefault();
+                        onBrowseFiles(null);
+                      }}
+                    >
+                      <FolderOpen className="w-4 h-4 mr-2" />
+                      Browse files
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem
@@ -726,18 +743,21 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           </div>
           {worktrees.map((worktree) => {
             const sessionsForWorktree = sessionsByWorktree.get(worktree.id) || [];
+            const isBrowsingThisWorktree = browsingWorktreeId === worktree.id;
             return (
               <div key={worktree.id} className="space-y-1">
-                <div className="relative flex items-center text-[12px] text-muted-foreground uppercase tracking-wide px-2 pt-1">
+                <div className="relative flex items-center text-[12px] uppercase tracking-wide px-2 pt-1">
+                  {worktree.is_pinned && (
+                    <Pin className="w-3 h-3 mr-1 text-muted-foreground" />
+                  )}
                   <WorktreeInfoPopover worktree={worktree} title={getWorktreeTitle(worktree.id)}>
-                    <span className="truncate flex items-center cursor-pointer hover:text-foreground transition-colors" title={getWorktreeTitle(worktree.id)}>
+                    <span className={`truncate flex items-center cursor-pointer transition-colors ${
+                      isBrowsingThisWorktree ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                    }`} title={getWorktreeTitle(worktree.id)}>
                       {getWorktreeTitle(worktree.id)}
                     </span>
                   </WorktreeInfoPopover>
                   <StatusPill path={worktree.worktree_path} />
-                  {worktree.is_pinned && (
-                    <Pin className="w-3 h-3 ml-1" />
-                  )}
                   <div className="absolute right-2 flex items-center gap-1 pl-4 bg-gradient-to-l from-sidebar from-60% transition-opacity duration-200">
                     {onCreateSession && (
                       <Tooltip>
@@ -775,6 +795,17 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                           >
                             <Plus className="w-4 h-4 mr-2" />
                             New Session
+                          </DropdownMenuItem>
+                        )}
+                        {onBrowseFiles && (
+                          <DropdownMenuItem
+                            onSelect={(event) => {
+                              event.preventDefault();
+                              onBrowseFiles(worktree);
+                            }}
+                          >
+                            <FolderOpen className="w-4 h-4 mr-2" />
+                            Browse files
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuItem

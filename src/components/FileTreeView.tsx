@@ -58,11 +58,22 @@ const buildTree = (files: BranchDiffFileChange[]): TreeNode[] => {
   return root.children ?? [];
 };
 
-const statusClasses: Record<string, string> = {
-  A: "bg-green-500/20 text-green-600 dark:text-green-400",
-  M: "bg-yellow-500/20 text-yellow-600 dark:text-yellow-400",
-  D: "bg-red-500/20 text-red-600 dark:text-red-400",
-  R: "bg-blue-500/20 text-blue-600 dark:text-blue-400",
+const statusPipClasses: Record<string, string> = {
+  A: "bg-green-500",
+  M: "bg-yellow-500",
+  D: "bg-red-500",
+  R: "bg-blue-500",
+};
+
+// Check if a folder node has any changes in its children recursively
+const hasChangesInFolder = (node: TreeNode): boolean => {
+  if (node.type === "file") {
+    return !!node.status;
+  }
+  if (node.children) {
+    return node.children.some(child => hasChangesInFolder(child));
+  }
+  return false;
 };
 
 export const FileTreeView: React.FC<FileTreeViewProps> = ({
@@ -103,15 +114,22 @@ export const FileTreeView: React.FC<FileTreeViewProps> = ({
   const renderNode = (node: TreeNode) => {
     if (node.type === "folder") {
       const isOpen = expanded.has(node.path);
+      const hasChanges = hasChangesInFolder(node);
       return (
-        <div key={node.path} className="text-sm">
+        <div key={node.path} className="text-xs">
           <button
             type="button"
             className="flex items-center gap-2 w-full px-2 py-1 rounded-md hover:bg-muted/60"
             onClick={() => toggleNode(node.path)}
           >
-            {isOpen ? <FolderOpen className="w-4 h-4" /> : <Folder className="w-4 h-4" />}
+            {isOpen ? <FolderOpen className="w-3.5 h-3.5" /> : <Folder className="w-3.5 h-3.5" />}
             <span className="font-medium text-left">{node.name}</span>
+            {hasChanges && (
+              <span
+                className="w-2 h-2 rounded-full flex-shrink-0 bg-yellow-500 ml-auto"
+                title="Contains modified files"
+              />
+            )}
           </button>
           {isOpen && node.children && (
             <div className="pl-4 border-l border-border/50 ml-2">
@@ -128,21 +146,21 @@ export const FileTreeView: React.FC<FileTreeViewProps> = ({
         type="button"
         onClick={() => onSelect(node.path)}
         className={cn(
-          "w-full flex items-center justify-between px-2 py-1 rounded-md text-sm",
+          "w-full flex items-center justify-between px-2 py-1 rounded-md text-xs",
           "hover:bg-muted/60 transition",
-          selectedPath === node.path && "bg-primary/10 border border-primary/40"
+          selectedPath === node.path && "bg-primary/10"
         )}
       >
         <div className="flex items-center gap-2">
-          <FileText className="w-4 h-4 text-muted-foreground" />
+          <FileText className="w-3.5 h-3.5 text-muted-foreground" />
           <span className="truncate text-left">{node.name}</span>
+          {node.status && (
+            <span
+              className={cn("w-2 h-2 rounded-full flex-shrink-0", statusPipClasses[node.status] || "bg-muted")}
+              title={node.status === 'A' ? 'Added' : node.status === 'M' ? 'Modified' : node.status === 'D' ? 'Deleted' : 'Renamed'}
+            />
+          )}
         </div>
-        {node.status && (
-          <span className={cn("text-[10px] px-2 py-0.5 rounded-full", statusClasses[node.status] || "bg-muted")}
-          >
-            {node.status}
-          </span>
-        )}
       </button>
     );
   };

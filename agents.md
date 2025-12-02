@@ -94,6 +94,9 @@ Treq uses a dual-database architecture to separate local repository data from gl
 
 ## Important Implementation Notes
 
+### Dependencies
+- **react-window**: Always use v2 API (not v1). Use `List` component with `rowComponent`, `rowHeight`, `rowCount`, and `listRef` props. The v1 `VariableSizeList` API is deprecated.
+
 ### Git Operations
 - All git commands execute in main repository path or specific worktree path
 - Worktree creation uses `git worktree add` with `-b` flag for new branches

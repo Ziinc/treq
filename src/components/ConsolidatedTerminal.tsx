@@ -244,8 +244,14 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
       }
     }
 
-    // Fit after all addons are loaded
-    fitAddon.fit();
+    // Fit after all addons are loaded, but only if terminal is visible
+    if (!isHidden && terminalRef.current) {
+      try {
+        fitAddon.fit();
+      } catch (error) {
+        console.warn("Initial fit failed, will retry on visibility change", error);
+      }
+    }
 
     xtermRef.current = xterm;
     fitAddonRef.current = fitAddon;
@@ -316,16 +322,29 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
     let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const handleResize = () => {
-      fitAddon.fit();
-      const { rows, cols } = xterm;
-
-      // Store last valid dimensions
-      lastValidDimensionsRef.current = { rows, cols };
-
-      if (!isPtyReadyRef.current) {
+      // Skip resize if terminal container doesn't have valid dimensions
+      if (!terminalRef.current) {
         return;
       }
-      ptyResize(sessionId, rows, cols).catch(handleError);
+      const rect = terminalRef.current.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        return;
+      }
+
+      try {
+        fitAddon.fit();
+        const { rows, cols } = xterm;
+
+        // Store last valid dimensions
+        lastValidDimensionsRef.current = { rows, cols };
+
+        if (!isPtyReadyRef.current) {
+          return;
+        }
+        ptyResize(sessionId, rows, cols).catch(handleError);
+      } catch (error) {
+        console.warn("Resize failed", error);
+      }
     };
 
     // Store handleResize in ref for use by visibility effect
@@ -462,14 +481,21 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
       }
 
       // Trigger resize to restore proper dimensions
-      if (fitAddonRef.current && xtermRef.current && isPtyReady) {
-        fitAddonRef.current.fit();
-        const { rows, cols } = xtermRef.current;
-        lastValidDimensionsRef.current = { rows, cols };
-        ptyResize(sessionId, rows, cols).catch((error) => {
-          const message = error instanceof Error ? error.message : String(error);
-          console.error("Terminal error:", message);
-        });
+      if (fitAddonRef.current && xtermRef.current && isPtyReady && terminalRef.current) {
+        const rect = terminalRef.current.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          try {
+            fitAddonRef.current.fit();
+            const { rows, cols } = xtermRef.current;
+            lastValidDimensionsRef.current = { rows, cols };
+            ptyResize(sessionId, rows, cols).catch((error) => {
+              const message = error instanceof Error ? error.message : String(error);
+              console.error("Terminal error:", message);
+            });
+          } catch (error) {
+            console.warn("Resize on visibility change failed", error);
+          }
+        }
       }
     } else if (!wasHidden && isNowHidden) {
       // Terminal is transitioning from visible to hidden

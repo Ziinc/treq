@@ -73,7 +73,7 @@ import {
   invalidateGitCache,
 } from "../lib/api";
 import type { MergeStrategy } from "../lib/api";
-import { RefreshCw, GitBranch, Loader2, Pin, MoreVertical } from "lucide-react";
+import { RefreshCw, GitBranch, Loader2, Pin, MoreVertical, FolderOpen } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -1251,6 +1251,11 @@ export const Dashboard: React.FC = () => {
     setSelectedWorktree(null);
   }, []);
 
+  const handleBrowseFiles = useCallback((worktree: Worktree | null) => {
+    setFileBrowserWorktree(worktree);
+    setViewMode("file-browser");
+  }, []);
+
   // File click handler for main repo - opens diff viewer session
   const handleMainRepoFileClick = useCallback(
     async (file: ParsedFileChange) => {
@@ -1463,7 +1468,7 @@ export const Dashboard: React.FC = () => {
   ]);
 
   const isSessionView = viewMode === "session" || viewMode === "worktree-session";
-  const showSidebar = viewMode !== "merge-review" && viewMode !== "worktree-edit" && viewMode !== "file-browser";
+  const showSidebar = viewMode !== "merge-review" && viewMode !== "worktree-edit";
   const highlightedSessionId = isSessionView ? activeSessionId : null;
 
   return (
@@ -1484,6 +1489,8 @@ export const Dashboard: React.FC = () => {
           openSettings={openSettings}
           navigateToDashboard={handleReturnToDashboard}
           onOpenCommandPalette={() => setShowCommandPalette(true)}
+          onBrowseFiles={handleBrowseFiles}
+          browsingWorktreeId={viewMode === "file-browser" ? (fileBrowserWorktree?.id ?? null) : undefined}
         />
       )}
 
@@ -1566,14 +1573,16 @@ export const Dashboard: React.FC = () => {
           )}
 
           {/* File Browser View */}
-          {viewMode === "file-browser" && fileBrowserWorktree && (
+          {viewMode === "file-browser" && (
             <ErrorBoundary
               fallbackTitle="File browser error"
-              resetKeys={[fileBrowserWorktree.id]}
+              resetKeys={[fileBrowserWorktree?.id ?? repoPath]}
               onGoDashboard={handleReturnToDashboard}
             >
               <FileBrowser
-                worktree={fileBrowserWorktree}
+                worktree={fileBrowserWorktree ?? undefined}
+                repoPath={fileBrowserWorktree ? undefined : repoPath}
+                branchName={fileBrowserWorktree ? undefined : currentBranch ?? undefined}
                 onClose={() => {
                   setViewMode("dashboard");
                   setFileBrowserWorktree(null);
@@ -1633,6 +1642,27 @@ export const Dashboard: React.FC = () => {
                                   </TooltipTrigger>
                                   <TooltipContent side="bottom">
                                     {mainRepoSyncing ? "Syncing..." : "Sync with remote"}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="w-6 h-6"
+                                      onClick={() => {
+                                        setViewMode("file-browser");
+                                        setFileBrowserWorktree(null);
+                                      }}
+                                    >
+                                      <FolderOpen className="w-3 h-3" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="bottom">
+                                    Browse files
                                   </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>

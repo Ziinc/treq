@@ -2044,11 +2044,13 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     lineCount,
     onClick,
     isLoading,
+    fontSize,
   }: {
     direction: 'up' | 'down';
     lineCount: number;
     onClick: () => void;
     isLoading: boolean;
+    fontSize: number;
   }) => {
     const Icon = direction === 'up' ? ChevronUp : ChevronDown;
 
@@ -2058,7 +2060,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
         onClick={onClick}
       >
         {/* Line number column */}
-        <div className="w-16 flex-shrink-0 border-r border-border/40 flex items-center justify-center py-1">
+        <div className="w-16 flex-shrink-0 border-r border-border/40 flex items-center justify-center py-0.5">
           <button
             className="flex flex-col items-center justify-center text-blue-600 dark:text-blue-400 p-1 rounded hover:bg-blue-500/20"
             disabled={isLoading}
@@ -2086,7 +2088,10 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
         <div className="w-5 flex-shrink-0" />
 
         {/* Text */}
-        <div className="flex-1 px-2 py-1 text-sm text-blue-600 dark:text-blue-400 font-mono">
+        <div
+          className="flex-1 px-2 py-0.5 text-blue-600 dark:text-blue-400 font-mono"
+          style={{ fontSize: `${fontSize}px` }}
+        >
           {isLoading ? 'Loading...' : `Show ${lineCount} more line${lineCount !== 1 ? 's' : ''}`}
         </div>
       </div>
@@ -2097,10 +2102,14 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
   const ExpandedLines = ({
     ranges,
     language,
+    fontSize,
   }: {
     ranges: ExpandedRange[];
     language: string | null;
+    fontSize: number;
   }) => {
+    const lineNumberFontSize = Math.max(8, fontSize - 2);
+
     return (
       <>
         {ranges.flatMap(range =>
@@ -2110,8 +2119,8 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
               <div key={`expanded-${range.startLine}-${idx}`} className="flex items-stretch">
                 {/* Line numbers (both old and new) */}
                 <div className="w-16 flex-shrink-0 text-muted-foreground/60 select-none border-r border-border/40 flex items-center gap-1 px-1">
-                  <span className="w-6 text-right text-xs">{lineNum}</span>
-                  <span className="w-6 text-right text-xs">{lineNum}</span>
+                  <span className="w-6 text-right" style={{ fontSize: `${lineNumberFontSize}px` }}>{lineNum}</span>
+                  <span className="w-6 text-right" style={{ fontSize: `${lineNumberFontSize}px` }}>{lineNum}</span>
                 </div>
 
                 {/* Comment button spacer */}
@@ -2123,7 +2132,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
                 </div>
 
                 {/* Line content */}
-                <div className="flex-1 px-2 py-0.5 whitespace-pre-wrap break-all font-mono text-sm">
+                <div className="flex-1 px-2 py-0.5 whitespace-pre-wrap break-all font-mono" style={{ fontSize: `${fontSize}px` }}>
                   <HighlightedLine content={line} language={language} />
                 </div>
               </div>
@@ -2170,6 +2179,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
             lineCount={beforeExpandInfo.endLine - beforeExpandInfo.startLine + 1}
             onClick={() => handleExpandLines(filePath, hunk, hunkIndex, 'before')}
             isLoading={isLoadingBefore}
+            fontSize={diffFontSize}
           />
         )}
 
@@ -2178,6 +2188,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
           <ExpandedLines
             ranges={hunkRanges.before}
             language={language}
+            fontSize={diffFontSize}
           />
         )}
 
@@ -2308,6 +2319,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
           <ExpandedLines
             ranges={hunkRanges.after}
             language={language}
+            fontSize={diffFontSize}
           />
         )}
 
@@ -2318,6 +2330,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
             lineCount={afterExpandInfo.endLine - afterExpandInfo.startLine + 1}
             onClick={() => handleExpandLines(filePath, hunk, hunkIndex, 'after')}
             isLoading={isLoadingAfter}
+            fontSize={diffFontSize}
           />
         )}
       </Fragment>

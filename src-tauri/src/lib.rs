@@ -949,7 +949,7 @@ pub fn run() {
             // Create menu
             #[cfg(target_os = "macos")]
             {
-                use tauri::menu::{PredefinedMenuItem, Submenu};
+                use tauri::menu::PredefinedMenuItem;
 
                 // App menu (automatically gets app name on macOS)
                 let app_menu = SubmenuBuilder::new(app, "App")

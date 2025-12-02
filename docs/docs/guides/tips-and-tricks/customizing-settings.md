@@ -8,54 +8,41 @@ Personalize Treq to match your preferences and workflow
 
 To navigate to the application settings, click gear icon (⚙️) in sidebar. Alternatively, you can use the Command Palatte and use the "Open Settings" command.
 
+Setings are split into two categories:
+
+- Repository-level settings: Configuration that applies only to that specific Git repository that is open in the current window.
+- Application-level settings: Configuration that applies to all open windows.
+
+Both settings will persist after saving. If the `.treq` directory is deleted, all repository-level settings will be lost.
+
 ## Repository Settings
 
 Settings specific to current repository.
 
-### Branch Naming Pattern
+### Branch Naming
+Branch names can be constructed from special variables:
 
-**Default**: `treq/{name}`
+- `name`: Intent, derived from implementation plan
+- `user`: Git username
+- `date`: Date in `YYYY-MM-DD` format
 
-**Custom examples**:
-- `feature/{name}` - Feature branch convention
-- `{name}` - No prefix
-- `dev/{name}` - Development prefix
-- `bugfix/{name}` - For bug fixes
-
-**Pattern variables**:
-- `{name}` - Branch name you provide
-- `{date}` - Current date (YYYY-MM-DD)
-- `{user}` - Your git username
+```txt
+feature/{name} 
+dev/{user}      
+bugfix/{name}-{date}   
+```
 
 ### Post-Create Commands
 
-Commands to run after creating worktrees:
+Commands can be set to be run after creating worktrees. This can perform commands like setup, dependencies installation, or pre-compilation.
 
-**Node.js projects**:
 ```bash
-npm install
+npm ci
+npm ci && npm run build && npm run dev
 ```
 
-**Python projects**:
-```bash
-python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
-```
+If files or dependecies are already present in the repository, then you instad use the copy-files setting to copy specific files or directories that may be in `.gitignore`.
 
-**Multiple commands** (separated by `&&`):
-```bash
-npm install && npm run build && npm run dev &
-```
-
-**Disable per creation**: Uncheck in create dialog
-
-### Working Directory Pattern
-
-**Default**: `.treq/worktrees/{branch-name}`
-
-**Custom** (not recommended):
-- Breaks Treq's assumptions
-- Can cause path issues
-- Only change if necessary
 
 ## Terminal Settings
 
@@ -63,22 +50,12 @@ Customize terminal appearance and behavior.
 
 ### Font Settings
 
-**Font Family**:
-- Monospace fonts recommended
-- Popular choices:
-  - Fira Code (with ligatures)
-  - JetBrains Mono
-  - Source Code Pro
-  - Cascadia Code
-  - SF Mono (macOS)
-
 **Font Size**: 12-16px recommended
-
-**Line Height**: 1.2-1.5 for readability
 
 ### Shell Preferences
 
 **Default Shell**:
+
 - Auto-detect (recommended)
 - bash: `/bin/bash`
 - zsh: `/bin/zsh`
@@ -86,6 +63,7 @@ Customize terminal appearance and behavior.
 - Custom path: Any shell executable
 
 **Shell Arguments** (optional):
+
 ```bash
 --login  # Load profile
 -i       # Interactive
@@ -94,12 +72,14 @@ Customize terminal appearance and behavior.
 ### Terminal Behavior
 
 **Scrollback Buffer**: 1000-10000 lines
+
 - Higher = more history
 - Lower = less memory
 
 **Cursor Style**:
+
 - Block (█)
-- Underline (_)
+- Underline (\_)
 - Bar (|)
 
 **Cursor Blink**: On/Off
@@ -111,6 +91,7 @@ Customize terminal appearance and behavior.
 ### Theme
 
 **Options**:
+
 - Light mode
 - Dark mode
 - System (follows OS preference)
@@ -128,6 +109,7 @@ Customize terminal appearance and behavior.
 UI font size: 12-18px
 
 **Affects**:
+
 - Sidebar text
 - Button labels
 - Dialog text
@@ -145,6 +127,7 @@ UI font size: 12-18px
 ### Syntax Highlighting
 
 **Theme**:
+
 - GitHub Light/Dark
 - VS Code Light/Dark
 - Monokai
@@ -160,6 +143,7 @@ UI font size: 12-18px
 **Commit Message Template**: Pre-fill commit messages
 
 **Validation**:
+
 - Max length (50/72 rule)
 - Require conventional commits
 - Check for TODO/FIXME
@@ -175,6 +159,7 @@ UI font size: 12-18px
 See [Keyboard Shortcuts guide](/docs/keyboard-shortcuts) for details.
 
 **Customization**:
+
 1. Settings → Keyboard Shortcuts
 2. Find action to customize
 3. Click and press new key combination
@@ -187,6 +172,7 @@ See [Keyboard Shortcuts guide](/docs/keyboard-shortcuts) for details.
 ### File Watching
 
 **Ignored Patterns**:
+
 ```
 node_modules/
 .git/
@@ -196,6 +182,7 @@ build/
 ```
 
 **Polling Interval**: 100-1000ms
+
 - Lower = more responsive
 - Higher = less CPU usage
 
@@ -215,6 +202,7 @@ build/
 ### Telemetry
 
 **Anonymous Usage Data**:
+
 - Feature usage statistics
 - Error reports
 - Performance metrics
@@ -234,6 +222,7 @@ build/
 ### Developer Mode
 
 Enable for:
+
 - Debug logs
 - Developer tools
 - Experimental features
@@ -244,6 +233,7 @@ Enable for:
 
 **Auto-update**: Check automatically
 **Update Channel**:
+
 - Stable (recommended)
 - Beta (early features)
 - Nightly (latest, unstable)
@@ -270,6 +260,7 @@ Enable for:
 4. Apply
 
 **Use cases**:
+
 - Team standardization
 - New machine setup
 - Restore from backup
@@ -281,11 +272,13 @@ Enable for:
 Settings → Advanced → Reset to Defaults
 
 **What's reset**:
+
 - All preferences
 - Keyboard shortcuts
 - Theme and appearance
 
 **What's preserved**:
+
 - Repository data
 - Worktrees
 - Commit history
@@ -293,6 +286,7 @@ Settings → Advanced → Reset to Defaults
 ### Reset Category
 
 Reset only specific category:
+
 - Repository settings only
 - Terminal settings only
 - Appearance only
