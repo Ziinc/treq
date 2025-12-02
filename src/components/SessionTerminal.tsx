@@ -46,7 +46,7 @@ import {
   DialogDescription,
 } from "./ui/dialog";
 import { PlanHistoryDialog } from "./PlanHistoryDialog";
-import { Loader2, RotateCw, X, GitBranch, Search, ChevronDown, ChevronUp, Pencil, Check, MoreVertical, GitMerge, Upload, AlertTriangle, FileText, ArrowDownToLine, PanelLeftClose } from "lucide-react";
+import { Loader2, RotateCw, X, GitBranch, Search, ChevronDown, ChevronUp, Pencil, Check, MoreVertical, GitMerge, Upload, AlertTriangle, FileText, ArrowDownToLine, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { PlanDisplayModal } from "./PlanDisplayModal";
 import { ModelSelector } from "./ModelSelector";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
@@ -60,6 +60,7 @@ interface SessionTerminalProps {
   worktree?: Worktree;
   session?: Session | null;
   sessionId: number | null;
+  mainRepoBranch?: string | null;
   onClose: () => void;
   onExecutePlan?: (section: PlanSection) => void;
   onExecutePlanInWorktree?: (section: PlanSection, sourceBranch: string, currentSessionName?: string) => Promise<void>;
@@ -77,6 +78,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
   worktree,
   session,
   sessionId,
+  mainRepoBranch,
   onClose,
   onExecutePlan,
   onExecutePlanInWorktree,
@@ -131,6 +133,8 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
   const prevIsHiddenRef = useRef(isHidden);
   const [sessionModel, setSessionModelState] = useState<string | null>(null);
   const [isChangingModel, setIsChangingModel] = useState(false);
+  const [pendingModelReset, setPendingModelReset] = useState(false);
+  const [isModelLoaded, setIsModelLoaded] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
   const hasImplementationPlan = planSections.some(
@@ -575,26 +579,43 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
     try {
       // Save the new model to the database
       await setSessionModel(effectiveRepoPath, sessionId, newModel);
+
+      // Update the state
       setSessionModelState(newModel);
 
-      // Reset the terminal to apply the new model
-      await handleReset();
+      // Set flag to trigger reset after state updates
+      setPendingModelReset(true);
 
-      addToast({
-        title: "Model Changed",
-        description: `Switched to ${newModel}`,
-        type: "success",
-      });
+      // Success toast will be shown by the reset effect
     } catch (error) {
       addToast({
         title: "Failed to change model",
         description: error instanceof Error ? error.message : String(error),
         type: "error",
       });
-    } finally {
       setIsChangingModel(false);
     }
-  }, [sessionId, effectiveRepoPath, handleReset, addToast]);
+  }, [sessionId, effectiveRepoPath, addToast]);
+
+  // Reset terminal when model changes (after state has updated)
+  useEffect(() => {
+    if (!pendingModelReset) return;
+
+    const performReset = async () => {
+      await handleReset();
+
+      addToast({
+        title: "Model Changed",
+        description: `Switched to ${sessionModel || 'default'}`,
+        type: "success",
+      });
+
+      setPendingModelReset(false);
+      setIsChangingModel(false);
+    };
+
+    performReset();
+  }, [pendingModelReset, handleReset, sessionModel, addToast]);
 
   const handleRetryTerminal = useCallback(() => {
     setTerminalError(null);
@@ -726,7 +747,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
     return () => {
       isCancelled = true;
     };
-  }, [worktree?.worktree_path, mainTreePath, refreshSignal, isHidden]);
+  }, [worktree?.worktree_path, mainTreePath, refreshSignal, isHidden, mainRepoBranch]);
 
   const handleMergeIntoMaintree = useCallback(async () => {
     if (!mainTreePath || !worktree?.branch_name) {
@@ -884,14 +905,14 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
   // Load session model on mount
   useEffect(() => {
     const loadSessionModel = async () => {
-      if (!sessionId || !effectiveRepoPath) return;
-
-      try {
-        const model = await getSessionModel(effectiveRepoPath, sessionId);
-        setSessionModelState(model);
-      } catch (error) {
-        console.error("Failed to load session model:", error);
+      if (!sessionId || !effectiveRepoPath) {
+        setIsModelLoaded(true);
+        return;
       }
+
+      const model = await getSessionModel(effectiveRepoPath, sessionId);
+      setSessionModelState(model);
+      setIsModelLoaded(true);
     };
 
     loadSessionModel();
@@ -1354,7 +1375,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
                       className="h-6 w-6 rounded-md bg-background/90 border border-border/60 hover:bg-muted flex items-center justify-center transition-colors shadow-sm"
                       aria-label="Minimize terminal"
                     >
-                      <PanelLeftClose className="w-3 h-3" />
+                      <PanelLeftOpen className="w-3 h-3" />
                     </button>
                   </TooltipTrigger>
                   <TooltipContent>Minimize (Cmd+J)</TooltipContent>
@@ -1464,7 +1485,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
             </div>
           )}
 
-          {!terminalMinimized && (
+          {!terminalMinimized && isModelLoaded && (
             <ConsolidatedTerminal
               key={`${ptySessionId}-${terminalInstanceKey}`}
               ref={consolidatedTerminalRef}
@@ -1485,6 +1506,12 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
               terminalOverlay={terminalOverlay}
               isHidden={isHidden}
             />
+          )}
+
+          {!terminalMinimized && !isModelLoaded && (
+            <div className="flex-1 flex items-center justify-center text-muted-foreground">
+              Loading session configuration...
+            </div>
           )}
         </div>
 

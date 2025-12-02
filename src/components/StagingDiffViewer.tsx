@@ -259,7 +259,7 @@ const LINE_HEIGHT = 24;
 const LOADING_HEIGHT = 60;
 const COMMENT_INPUT_HEIGHT = 140;
 const COMMENT_DISPLAY_HEIGHT = 120;
-const ROW_PADDING_BOTTOM = 16; // pb-4 class = 1rem = 16px
+const ROW_PADDING_BOTTOM = 24; // pb-6 class = 1.5rem = 24px
 
 // Isolated comment input component to prevent parent re-renders during typing
 interface CommentInputProps {
@@ -2365,27 +2365,23 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
         >
           <div className="flex items-center gap-2 flex-1 min-w-0">
             {isCollapsed ? (
-              <ChevronRight className="w-4 h-4 flex-shrink-0" />
+              <ChevronRight className="w-3 h-3 flex-shrink-0" />
             ) : (
-              <ChevronDown className="w-4 h-4 flex-shrink-0" />
+              <ChevronDown className="w-3 h-3 flex-shrink-0" />
             )}
-            <FileText className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
-            <div className="min-w-0 flex-1">
-              <span className="font-medium text-sm truncate block">{label.name}</span>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-muted-foreground truncate">{filePath}</span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigator.clipboard.writeText(filePath);
-                    addToast({ title: "Copied", description: "File path copied to clipboard", type: "success" });
-                  }}
-                  className="text-muted-foreground hover:text-foreground flex-shrink-0"
-                  title="Copy file path"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
-              </div>
+            <div className="min-w-0 flex-1 flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground truncate">{filePath}</span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigator.clipboard.writeText(filePath);
+                  addToast({ title: "Copied", description: "File path copied to clipboard", type: "success" });
+                }}
+                className="text-muted-foreground hover:text-foreground flex-shrink-0"
+                title="Copy file path"
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -2425,21 +2421,11 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
                 <span className="text-red-600 dark:text-red-400">-{deletions}</span>
               </span>
             )}
-            {fileMeta?.stagedStatus && (
-              <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
-                {statusLabel(fileMeta.stagedStatus)}
-              </span>
-            )}
-            {fileMeta?.worktreeStatus && (
-              <span className="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400">
-                {statusLabel(fileMeta.worktreeStatus)}
-              </span>
-            )}
             {!readOnly && !disableInteractions && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                   <button className="p-1 rounded hover:bg-accent">
-                    <MoreVertical className="w-4 h-4" />
+                    <MoreVertical className="w-3 h-3" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" sideOffset={4}>
@@ -2672,7 +2658,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
                 const fileData = allFileHunks.get(file.path);
                 if (!fileData) return <div style={style} />;
                 return (
-                  <div style={style} className="px-4 pb-4">
+                  <div style={style} className="px-4 pb-6">
                     {renderFileDiffs(file.path, fileData, file)}
                   </div>
                 );

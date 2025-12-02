@@ -113,7 +113,12 @@ type SessionOpenOptions = {
 export const Dashboard: React.FC = () => {
   const [repoPath, setRepoPath] = useState("");
   const [repoName, setRepoName] = useState("");
-  const [currentBranch, setCurrentBranch] = useState<string | null>(null);
+  const { data: currentBranch = null } = useQuery({
+    queryKey: ["mainRepoBranch", repoPath],
+    queryFn: () => gitGetCurrentBranch(repoPath),
+    enabled: !!repoPath,
+    staleTime: 0, // Always consider stale to refetch on invalidation
+  });
   const [mainRepoStatus, setMainRepoStatus] = useState<GitStatus | null>(null);
   const [mainBranchInfo, setMainBranchInfo] = useState<BranchInfo | null>(null);
   const [mainRepoSize, setMainRepoSize] = useState<number | null>(null);
@@ -326,20 +331,14 @@ export const Dashboard: React.FC = () => {
     loadInitialRepo();
   }, []);
 
-  // Load repo name and current branch when repo path changes
+  // Load repo name when repo path changes
   useEffect(() => {
     if (repoPath) {
       // Extract repo name from path
       const name = repoPath.split('/').pop() || repoPath.split('\\').pop() || repoPath;
       setRepoName(name);
-
-      // Fetch current branch
-      gitGetCurrentBranch(repoPath)
-        .then(setCurrentBranch)
-        .catch(() => setCurrentBranch(null));
     } else {
       setRepoName("");
-      setCurrentBranch(null);
     }
   }, [repoPath]);
 
@@ -481,11 +480,8 @@ export const Dashboard: React.FC = () => {
 
     const handleFocus = async () => {
       try {
-        // Check if the current branch has changed
-        const branch = await gitGetCurrentBranch(repoPath);
-        if (branch !== currentBranch) {
-          setCurrentBranch(branch);
-        }
+        // Invalidate to trigger refetch
+        queryClient.invalidateQueries({ queryKey: ["mainRepoBranch", repoPath] });
         // Refresh main repo info
         refreshMainRepoInfo();
       } catch (error) {
@@ -502,7 +498,7 @@ export const Dashboard: React.FC = () => {
     return () => {
       unlistenFocus.then((fn) => fn());
     };
-  }, [repoPath, currentBranch, refreshMainRepoInfo]);
+  }, [repoPath, queryClient, refreshMainRepoInfo]);
 
   // Listen for "Open..." menu action
   useEffect(() => {
@@ -1434,6 +1430,7 @@ export const Dashboard: React.FC = () => {
               worktree={sessionWorktree || undefined}
               session={session}
               sessionId={session.id}
+              mainRepoBranch={currentBranch}
               onClose={handleCloseTerminal}
               onExecutePlan={handleExecutePlan}
               onExecutePlanInWorktree={handleExecutePlanInWorktree}
@@ -1456,6 +1453,7 @@ export const Dashboard: React.FC = () => {
     viewMode,
     worktrees,
     repoPath,
+    currentBranch,
     sessionPlanContent,
     sessionPlanTitle,
     sessionInitialPrompt,
