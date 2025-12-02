@@ -1119,7 +1119,7 @@ export const Dashboard: React.FC = () => {
       const postCreateCmd = await getRepoSetting(repoPath, "post_create_command");
       if (postCreateCmd && postCreateCmd.trim()) {
         try {
-          await gitExecutePostCreateCommand(worktreePath, postCreateCmd);
+          await gitExecutePostCreateCommand(worktreeId, worktreePath, postCreateCmd);
         } catch (cmdError) {
           console.error("Post-create command failed:", cmdError);
         }

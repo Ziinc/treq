@@ -1,3 +1,5 @@
+use crate::db::{Command as DbCommand, Database};
+use chrono::Utc;
 use globset::{Glob, GlobSetBuilder};
 use ignore::WalkBuilder;
 use serde::{Deserialize, Serialize};
@@ -575,7 +577,12 @@ pub fn sanitize_branch_name_for_path(branch: &str) -> String {
         .to_string()
 }
 
-pub fn execute_post_create_command(worktree_path: &str, command: &str) -> Result<String, String> {
+pub fn execute_post_create_command(
+    db: &Database,
+    worktree_id: i64,
+    worktree_path: &str,
+    command: &str,
+) -> Result<String, String> {
     // Split command into program and arguments
     // For simplicity, we'll use shell to execute the command
     // This allows complex commands with pipes, redirects, etc.
@@ -600,15 +607,35 @@ pub fn execute_post_create_command(worktree_path: &str, command: &str) -> Result
     // Combine stdout and stderr
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined_output = format!("{}{}", stdout, stderr);
+
+    // Persist command log to database
+    let status = if output.status.success() {
+        "success"
+    } else {
+        "failure"
+    };
+
+    let cmd = DbCommand {
+        id: 0,
+        worktree_id,
+        command: command.to_string(),
+        created_at: Utc::now().to_rfc3339(),
+        status: status.to_string(),
+        output: Some(combined_output.clone()),
+    };
+
+    if let Err(e) = db.add_command(&cmd) {
+        eprintln!("Warning: Failed to save command log: {}", e);
+    }
 
     if output.status.success() {
-        Ok(format!("{}{}", stdout, stderr))
+        Ok(combined_output)
     } else {
         Err(format!(
-            "Command failed with exit code {:?}\nOutput: {}{}",
+            "Command failed with exit code {:?}\nOutput: {}",
             output.status.code(),
-            stdout,
-            stderr
+            combined_output
         ))
     }
 }

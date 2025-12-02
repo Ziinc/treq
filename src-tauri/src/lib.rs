@@ -258,10 +258,13 @@ fn git_get_current_branch(
 
 #[tauri::command]
 fn git_execute_post_create_command(
+    state: State<AppState>,
+    worktree_id: i64,
     worktree_path: String,
     command: String,
 ) -> Result<String, String> {
-    git::execute_post_create_command(&worktree_path, &command)
+    let db = state.db.lock().unwrap();
+    git::execute_post_create_command(&db, worktree_id, &worktree_path, &command)
 }
 
 #[tauri::command]
