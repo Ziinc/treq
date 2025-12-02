@@ -567,7 +567,17 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
           terminalPaneClassName,
         )}
       >
-        <div ref={terminalRef} className="h-full w-full" />
+        <div
+          ref={terminalRef}
+          className={cn(
+            "h-full w-full",
+            // Visible scrollbar with transparent background
+            "[&_.xterm-viewport::-webkit-scrollbar]:w-2",
+            "[&_.xterm-viewport::-webkit-scrollbar-track]:bg-transparent",
+            "[&_.xterm-viewport::-webkit-scrollbar-thumb]:bg-border",
+            "[&_.xterm-viewport::-webkit-scrollbar-thumb]:rounded"
+          )}
+        />
         {!isPtyReady && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 text-sm text-muted-foreground z-10">
             <Loader2 className="w-5 h-5 animate-spin mb-2" />

@@ -8,13 +8,14 @@ const host = process.env.TAURI_DEV_HOST;
 // https://vitejs.dev/config/
 export default defineConfig(async () => ({
   plugins: [react()],
-  
+
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
   },
 
+  watch: false,
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent vite from obscuring rust errors
@@ -31,9 +32,10 @@ export default defineConfig(async () => ({
           port: 1421,
         }
       : undefined,
-    watch: {
-      // 3. tell vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
-    },
+    watch: null,
+    // watch: {
+    //   // 3. tell vite to ignore watching `src-tauri`
+    //   ignored: ["**/src-tauri/**"],
+    // },
   },
 }));
