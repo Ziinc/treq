@@ -15,6 +15,9 @@ export default defineConfig(async () => ({
     },
   },
 
+  build: {
+    watch: null,
+  },
   watch: false,
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

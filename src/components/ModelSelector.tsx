@@ -51,7 +51,7 @@ export function ModelSelector({ currentModel, onModelChange, disabled }: ModelSe
                 disabled={disabled}
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
-                className="h-6 rounded-md bg-background/90 border border-border/60 hover:bg-muted flex items-center justify-center transition-all duration-200 shadow-sm disabled:opacity-50 overflow-hidden"
+                className="h-6 rounded-md bg-background/90 border border-border/60 hover:bg-muted flex items-center justify-center transition-all duration-200 shadow-sm disabled:opacity-50 overflow-hidden text-foreground"
                 style={{
                   width: isHovered || isOpen ? '120px' : '24px',
                 }}

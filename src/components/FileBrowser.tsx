@@ -581,7 +581,7 @@ export function FileBrowser({ worktree, repoPath, branchName, onClose, onStartPl
                     </span>
                     {/* Code content */}
                     <code
-                      className={cn("flex-1", language ? `language-${language}` : '')}
+                      className={cn("flex-1 whitespace-pre", language ? `language-${language}` : '')}
                       dangerouslySetInnerHTML={{ __html: line || '&nbsp;' }}
                     />
                   </div>
