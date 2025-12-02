@@ -15,10 +15,12 @@ interface ModelSelectorProps {
 }
 
 const AVAILABLE_MODELS = [
-  { value: "claude-sonnet-4-5-20250929", label: "Sonnet 4.5" },
-  { value: "claude-3-5-sonnet-20241022", label: "Sonnet 3.5" },
-  { value: "claude-opus-4-20250514", label: "Opus 4" },
-  { value: "claude-3-7-sonnet-20250219", label: "Sonnet 3.7" },
+  { value: "default", label: "Default" },
+  { value: "sonnet", label: "Sonnet" },
+  { value: "opus", label: "Opus" },
+  { value: "haiku", label: "Haiku" },
+  { value: "sonnet[1m]", label: "Sonnet (1M)" },
+  { value: "opusplan", label: "Opus Plan" },
 ];
 
 export function ModelSelector({ currentModel, onModelChange, disabled }: ModelSelectorProps) {
