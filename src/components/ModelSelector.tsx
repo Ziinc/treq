@@ -57,7 +57,7 @@ export function ModelSelector({ currentModel, onModelChange, disabled }: ModelSe
                 }}
                 aria-label="Change model"
               >
-                <Sparkles className="w-3 h-3 flex-shrink-0" />
+                <Sparkles className="w-3 h-3 flex-shrink-0 text-muted-foreground" />
                 <span
                   className="text-xs ml-2 whitespace-nowrap transition-all duration-200"
                   style={{

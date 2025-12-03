@@ -1489,6 +1489,12 @@ export const Dashboard: React.FC = () => {
           onOpenCommandPalette={() => setShowCommandPalette(true)}
           onBrowseFiles={handleBrowseFiles}
           browsingWorktreeId={viewMode === "file-browser" ? (fileBrowserWorktree?.id ?? null) : undefined}
+          currentPage={
+            viewMode === "dashboard" ? "dashboard" :
+            viewMode === "settings" ? "settings" :
+            (viewMode === "session" || viewMode === "worktree-session") ? "session" :
+            null
+          }
         />
       )}
 

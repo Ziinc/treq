@@ -36,6 +36,7 @@ interface SessionSidebarProps {
   onOpenCommandPalette?: () => void;
   onBrowseFiles?: (worktree: Worktree | null) => void;
   browsingWorktreeId?: number | null; // null = browsing main repo, number = browsing that worktree, undefined = not browsing
+  currentPage?: 'dashboard' | 'settings' | 'session' | null;
 }
 
 interface WorktreeInfoPopoverProps {
@@ -237,6 +238,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   onOpenCommandPalette,
   onBrowseFiles,
   browsingWorktreeId,
+  currentPage,
 }) => {
   const { addToast } = useToast();
   const queryClient = useQueryClient();
@@ -486,9 +488,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     return groups;
   }, [worktreeSessions]);
 
-  const orphanSessions = worktreeSessions.filter(
-    (session) => session.worktree_id !== null && !worktreeMap.has(session.worktree_id)
-  );
 
   const getWorktreeTitle = useCallback(
     (worktreeId: number) => {
@@ -876,18 +875,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
               </div>
             );
           })}
-          {orphanSessions.length > 0 && (
-            <div className="space-y-1">
-              <div className="flex items-center justify-between text-[12px] text-muted-foreground uppercase tracking-wide px-2 pt-1">
-                <span className="truncate">Detached Sessions</span>
-              </div>
-              {orphanSessions.map((session) => (
-                <div key={session.id}>
-                  {renderSessionRow(session)}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </div>
       {/* Footer with actions */}
@@ -899,10 +886,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 <button
                   type="button"
                   onClick={navigateToDashboard}
-                  className="h-6 w-6 rounded-md hover:bg-muted flex items-center justify-center transition-colors"
+                  className={`h-6 w-6 rounded-md hover:bg-muted flex items-center justify-center transition-colors ${
+                    currentPage === 'dashboard' ? 'bg-primary/20' : ''
+                  }`}
                   aria-label="Dashboard"
                 >
-                  <Home className="w-3.5 h-3.5 text-muted-foreground" />
+                  <Home className={`w-3.5 h-3.5 ${
+                    currentPage === 'dashboard' ? 'text-primary' : 'text-muted-foreground'
+                  }`} />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top">Dashboard</TooltipContent>
@@ -914,10 +905,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 <button
                   type="button"
                   onClick={() => openSettings("application")}
-                  className="h-6 w-6 rounded-md hover:bg-muted flex items-center justify-center transition-colors"
+                  className={`h-6 w-6 rounded-md hover:bg-muted flex items-center justify-center transition-colors ${
+                    currentPage === 'settings' ? 'bg-primary/20' : ''
+                  }`}
                   aria-label="Settings"
                 >
-                  <Settings className="w-3.5 h-3.5 text-muted-foreground" />
+                  <Settings className={`w-3.5 h-3.5 ${
+                    currentPage === 'settings' ? 'text-primary' : 'text-muted-foreground'
+                  }`} />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top">Settings</TooltipContent>

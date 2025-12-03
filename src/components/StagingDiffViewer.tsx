@@ -76,6 +76,7 @@ import {
 import { useDiffSettings } from "../hooks/useDiffSettings";
 import { GitChangesSection } from "./GitChangesSection";
 import { MoveToWorktreeDialog } from "./MoveToWorktreeDialog";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "./ui/tooltip";
 
 // Helper to compute hash of hunk content using native Web Crypto API
 const computeHunkHash = async (hunks: any[]): Promise<string> => {
@@ -2038,63 +2039,45 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     );
   }, [comments]);
 
-  // Expand button component
-  const ExpandButton = ({
+  // Compact expand button component for inline use
+  const CompactExpandButton = ({
     direction,
-    lineCount,
     onClick,
     isLoading,
-    fontSize,
+    tooltip,
   }: {
     direction: 'up' | 'down';
-    lineCount: number;
     onClick: () => void;
     isLoading: boolean;
-    fontSize: number;
+    tooltip: string;
   }) => {
     const Icon = direction === 'up' ? ChevronUp : ChevronDown;
 
     return (
-      <div
-        className="flex items-center bg-blue-500/5 hover:bg-blue-500/10 cursor-pointer transition-colors"
-        onClick={onClick}
-      >
-        {/* Line number column */}
-        <div className="w-16 flex-shrink-0 border-r border-border/40 flex items-center justify-center py-0.5">
+      <Tooltip>
+        <TooltipTrigger asChild>
           <button
-            className="flex flex-col items-center justify-center text-blue-600 dark:text-blue-400 p-1 rounded hover:bg-blue-500/20"
+            className="w-full h-full flex flex-col items-center justify-center text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 transition-colors"
             disabled={isLoading}
+            onClick={onClick}
           >
             {isLoading ? (
-              <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
             ) : (
               <>
-                {direction === 'up' && <Icon className="w-3 h-3" />}
+                {direction === 'up' && <Icon className="w-2.5 h-2.5" />}
                 <div className="flex gap-0.5">
-                  <div className="w-1 h-1 rounded-full bg-blue-600" />
-                  <div className="w-1 h-1 rounded-full bg-blue-600" />
-                  <div className="w-1 h-1 rounded-full bg-blue-600" />
+                  <div className="w-0.5 h-0.5 rounded-full bg-blue-600 dark:bg-blue-400" />
+                  <div className="w-0.5 h-0.5 rounded-full bg-blue-600 dark:bg-blue-400" />
+                  <div className="w-0.5 h-0.5 rounded-full bg-blue-600 dark:bg-blue-400" />
                 </div>
-                {direction === 'down' && <Icon className="w-3 h-3" />}
+                {direction === 'down' && <Icon className="w-2.5 h-2.5" />}
               </>
             )}
           </button>
-        </div>
-
-        {/* Comment button spacer */}
-        <div className="w-6 flex-shrink-0" />
-
-        {/* Line prefix spacer */}
-        <div className="w-5 flex-shrink-0" />
-
-        {/* Text */}
-        <div
-          className="flex-1 px-2 py-0.5 text-blue-600 dark:text-blue-400 font-mono"
-          style={{ fontSize: `${fontSize}px` }}
-        >
-          {isLoading ? 'Loading...' : `Show ${lineCount} more line${lineCount !== 1 ? 's' : ''}`}
-        </div>
-      </div>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{tooltip}</TooltipContent>
+      </Tooltip>
     );
   };
 
@@ -2118,7 +2101,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
             return (
               <div key={`expanded-${range.startLine}-${idx}`} className="flex items-stretch">
                 {/* Line numbers (both old and new) */}
-                <div className="w-16 flex-shrink-0 text-muted-foreground/60 select-none border-r border-border/40 flex items-center gap-1 px-1">
+                <div className="w-16 flex-shrink-0 text-muted-foreground select-none border-r border-border/40 flex items-center gap-1 px-1">
                   <span className="w-6 text-right" style={{ fontSize: `${lineNumberFontSize}px` }}>{lineNum}</span>
                   <span className="w-6 text-right" style={{ fontSize: `${lineNumberFontSize}px` }}>{lineNum}</span>
                 </div>
@@ -2172,17 +2155,6 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
 
     return (
       <Fragment key={hunk.id}>
-        {/* Expand UP button */}
-        {beforeExpandInfo && (
-          <ExpandButton
-            direction="up"
-            lineCount={beforeExpandInfo.endLine - beforeExpandInfo.startLine + 1}
-            onClick={() => handleExpandLines(filePath, hunk, hunkIndex, 'before')}
-            isLoading={isLoadingBefore}
-            fontSize={diffFontSize}
-          />
-        )}
-
         {/* Expanded lines BEFORE hunk */}
         {hunkRanges.before.length > 0 && (
           <ExpandedLines
@@ -2192,19 +2164,42 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
           />
         )}
 
-        {/* Hunk separator header */}
+        {/* Hunk separator header with inline expand button */}
         <div
           className={cn(
-            "flex items-center px-3 py-1 font-mono",
+            "flex items-stretch font-mono",
             hunk.is_staged ? "bg-emerald-500/10" : "bg-muted/60"
           )}
         >
-          <span className="text-muted-foreground truncate">{hunk.header}</span>
-          {hunk.is_staged && (
-            <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
-              Staged
-            </span>
-          )}
+          {/* Line number column with expand button */}
+          <div className="w-16 flex-shrink-0 border-r border-border/40 flex items-center justify-center">
+            <TooltipProvider>
+              {beforeExpandInfo && (
+                <CompactExpandButton
+                  direction="up"
+                  onClick={() => handleExpandLines(filePath, hunk, hunkIndex, 'before')}
+                  isLoading={isLoadingBefore}
+                  tooltip="Expand up"
+                />
+              )}
+            </TooltipProvider>
+          </div>
+
+          {/* Comment button spacer */}
+          <div className="w-6 flex-shrink-0" />
+
+          {/* Line prefix spacer */}
+          <div className="w-5 flex-shrink-0" />
+
+          {/* Header text */}
+          <div className="flex-1 flex items-center px-2 py-1">
+            <span className="text-muted-foreground truncate">{hunk.header}</span>
+            {hunk.is_staged && (
+              <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                Staged
+              </span>
+            )}
+          </div>
         </div>
         {/* Hunk lines */}
         {hunk.lines.map((line, lineIndex) => {
@@ -2323,15 +2318,35 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
           />
         )}
 
-        {/* Expand DOWN button */}
+        {/* Expand DOWN button integrated in a row */}
         {afterExpandInfo && (
-          <ExpandButton
-            direction="down"
-            lineCount={afterExpandInfo.endLine - afterExpandInfo.startLine + 1}
-            onClick={() => handleExpandLines(filePath, hunk, hunkIndex, 'after')}
-            isLoading={isLoadingAfter}
-            fontSize={diffFontSize}
-          />
+          <div
+            className={cn(
+              "flex items-stretch font-mono",
+              hunk.is_staged ? "bg-emerald-500/10" : "bg-muted/60"
+            )}
+          >
+            {/* Line number column with expand button */}
+            <div className="w-16 flex-shrink-0 border-r border-border/40 flex items-center justify-center">
+              <TooltipProvider>
+                <CompactExpandButton
+                  direction="down"
+                  onClick={() => handleExpandLines(filePath, hunk, hunkIndex, 'after')}
+                  isLoading={isLoadingAfter}
+                  tooltip="Expand down"
+                />
+              </TooltipProvider>
+            </div>
+
+            {/* Comment button spacer */}
+            <div className="w-6 flex-shrink-0" />
+
+            {/* Line prefix spacer */}
+            <div className="w-5 flex-shrink-0" />
+
+            {/* Empty content area */}
+            <div className="flex-1 px-2 py-1" />
+          </div>
         )}
       </Fragment>
     );

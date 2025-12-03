@@ -14,7 +14,8 @@
       {
         "title": "Treq - Git Worktree Manager",
         "width": 1400,
-        "height": 900
+        "height": 900,
+        "dragDropEnabled": true
       }
     ],
     "security": {

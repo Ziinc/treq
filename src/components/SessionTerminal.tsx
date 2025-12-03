@@ -577,11 +577,14 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
 
     setIsChangingModel(true);
     try {
+      // Convert "default" selection to null (no explicit model)
+      const modelToSave = newModel === "default" ? null : newModel;
+
       // Save the new model to the database
-      await setSessionModel(effectiveRepoPath, sessionId, newModel);
+      await setSessionModel(effectiveRepoPath, sessionId, modelToSave);
 
       // Update the state
-      setSessionModelState(newModel);
+      setSessionModelState(modelToSave);
 
       // Set flag to trigger reset after state updates
       setPendingModelReset(true);
@@ -1253,6 +1256,17 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
         {/* Row 2: Worktree info */}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-col gap-1 items-start">
+            {terminalMinimized && (
+              <button
+                type="button"
+                onClick={() => setTerminalMinimized(false)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm font-medium border border-primary/20"
+                aria-label="Maximize terminal"
+              >
+                <PanelLeftOpen className="w-3.5 h-3.5" />
+                <span>Terminal</span>
+              </button>
+            )}
             {worktree && (
               <span className="text-xs text-muted-foreground font-mono">{getWorktreeTitle()}</span>
             )}
@@ -1300,18 +1314,6 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
                 <span className="text-[10px] uppercase tracking-wide">remote</span>
               </div>
             </div>
-          )}
-
-          {terminalMinimized && (
-            <button
-              type="button"
-              onClick={() => setTerminalMinimized(false)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm font-medium border border-primary/20"
-              aria-label="Maximize terminal"
-            >
-              <ChevronUp className="w-3.5 h-3.5" />
-              <span>Show Terminal</span>
-            </button>
           )}
         </div>
       </div>
@@ -1491,7 +1493,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
               ref={consolidatedTerminalRef}
               sessionId={ptySessionId}
               workingDirectory={workingDirectory}
-              autoCommand={sessionModel ? `claude --permission-mode plan --model ${sessionModel}` : "claude --permission-mode plan"}
+              autoCommand={sessionModel ? `claude --permission-mode plan --model="${sessionModel}"` : "claude --permission-mode plan"}
               autoCommandDelay={300}
               onAutoCommandComplete={() => setAutoCommandReady(true)}
               onAutoCommandError={handleAutoCommandError}
