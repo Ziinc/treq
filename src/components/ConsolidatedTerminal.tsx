@@ -172,11 +172,11 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
 
     const xterm = new XTerm({
       cursorBlink: true,
-      cursorStyle: "block",
+      cursorStyle: "bar",
       fontSize,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       theme: { background: "#1e1e1e" },
-      scrollback: 10000,
+      scrollback: 5000,
       allowProposedApi: true,
     });
 
