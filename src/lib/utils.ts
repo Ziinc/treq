@@ -44,12 +44,3 @@ export function applyBranchNamePattern(pattern: string, name: string): string {
   return pattern.replace(/\{name\}/g, sanitized);
 }
 
-/**
- * Sanitize a plan title to create a valid git branch name
- * Format: treq/{sanitized-title}
- * @deprecated Use applyBranchNamePattern with pattern from settings instead
- */
-export function sanitizePlanTitleToBranchName(title: string): string {
-  return applyBranchNamePattern("treq/{name}", title);
-}
-

@@ -4,110 +4,29 @@ sidebar_position: 3
 
 # Discarding Changes
 
-Learn how to safely discard unwanted changes in your worktrees.
+_How to safely discard unwanted changes._
 
-- Understanding discard vs unstage
-- Discarding file changes
-- Discarding all changes
-- Recovery options
-- Safety considerations
+**Unstaging** moves files from staged to unstaged—changes are preserved. **Discarding** permanently deletes changes and cannot be undone.
 
-## Discard vs Unstage
+## Discarding Files
 
-**Unstage**: Move from staged to unstaged (changes preserved)
-**Discard**: Permanently delete changes (⚠️ cannot undo!)
+In the diff viewer, right-click a file in the unstaged section and select **Discard Changes**, or select the file and press `Delete`. In the terminal, use `git checkout -- filename`. The file reverts to its last committed state.
 
-## Discarding Single File
+To discard all changes, click **Discard All** and confirm. In the terminal: `git checkout -- .`
 
-### In Diff Viewer
+## Partial Discards
 
-1. Right-click on file in unstaged section
-2. Select **"Discard Changes"**
-3. Confirm the action
+Treq doesn't support discarding specific lines directly. As a workaround: stage the lines you want to keep, discard unstaged changes, then unstage to continue working.
 
-**Keyboard**: Select file and press `Delete`
+## Recovery
 
-### In Terminal
+There's no direct undo for discarded changes. Check your editor's local history (VS Code, IntelliJ), look for auto-save copies, or check git reflog if changes were previously committed.
 
-```bash
-git checkout -- file.js
-```
-
-**What happens**: File reverts to last committed state
-
-## Discarding All Changes
-
-**In Treq**:
-1. Click **"Discard All"** button
-2. Review list of affected files
-3. Confirm (are you sure?)
-
-**In Terminal**:
-```bash
-git checkout -- .
-```
-
-## Discarding Specific Lines
-
-**Not directly supported** - must discard entire file
-
-**Workaround**:
-1. Stage lines you want to keep
-2. Discard unstaged changes
-3. Unstage to continue working
-
-## Partial Discard Strategy
-
-To keep some changes, discard others:
-
-1. **Stage what you want to keep**
-2. **Discard unstaged** (what you don't want)
-3. **Unstage** to continue editing
-
-## Safety Tips
-
-1. **Review First**: Check diff before discarding
-2. **Stage First**: Stage anything uncertain
-3. **Commit Often**: Committed work is safe
-4. **Use Stash**: `git stash` instead of discard if unsure
-
-## Recovery Options
-
-### If Just Discarded
-
-**No direct undo** - changes are lost
-
-**Possible recovery**:
-- Check editor's local history (VS Code, IntelliJ)
-- Look for auto-save copies
-- Git reflog (if changes were committed previously)
-
-### Before Discarding
-
-**Create safety net**:
-```bash
-# Stash instead
-git stash push -m "backup before discard"
-
-# Or commit to temp branch
-git checkout -b temp-backup
-git add .
-git commit -m "temp backup"
-git checkout original-branch
-```
+Before discarding uncertain changes, create a safety net with `git stash push -m "backup"` or commit to a temporary branch.
 
 ## Best Practices
 
-1. **Double-Check**: Always review what's being discarded
-2. **Stash Over Discard**: Safer for temporary removal
-3. **Small Discards**: Discard files individually when possible
-4. **Commit Often**: Makes discard less risky
-5. **Test First**: Ensure changes aren't needed
-
-## Troubleshooting
-
-**Can't discard**: File might be in use or have permissions issue
-**Changes remain**: Try `git clean -fd` for untracked files (⚠️ dangerous!)
+Review the diff before discarding. Prefer stashing over discarding when unsure—you can always drop the stash later. Discard files individually when possible rather than all at once. Commit often so discards are less risky.
 
 ## Next Steps
 

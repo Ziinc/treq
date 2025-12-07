@@ -1,8 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Session, Worktree, GitStatus, BranchInfo, getSessions, getWorktrees, deleteSession, ptyClose, ptySessionExists, gitGetStatus, gitGetBranchInfo, calculateDirectorySize, toggleWorktreePin } from "../lib/api";
+import { useCallback, useEffect, useMemo, memo, useState } from "react";
+import { Session, Worktree, getSessions, getWorktrees, deleteSession, ptyClose, ptySessionExists, toggleWorktreePin } from "../lib/api";
 import { useToast } from "./ui/toast";
-import { X, Plus, Pause, MoreVertical, MoreHorizontal, FolderOpen, Trash2, Terminal as TerminalIcon, HardDrive, Settings, Home, Search, Pin, GitBranch } from "lucide-react";
+import { X, Plus, Pause, MoreVertical, MoreHorizontal, FolderOpen, Trash2, Terminal as TerminalIcon, Settings, Home, Search, Pin, GitBranch } from "lucide-react";
+import { useWorktreeGitStatus } from "../hooks/useWorktreeGitStatus";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -11,14 +12,9 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "./ui/dropdown-menu";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "./ui/popover";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
-import { formatBytes } from "../lib/utils";
+import { getWorktreeTitle as getWorktreeTitleFromUtils } from "../lib/worktree-utils";
 
 interface SessionSidebarProps {
   activeSessionId: number | null;
@@ -39,165 +35,10 @@ interface SessionSidebarProps {
   currentPage?: 'dashboard' | 'settings' | 'session' | null;
 }
 
-interface WorktreeInfoPopoverProps {
-  worktree: Worktree;
-  title: string;
-  children: React.ReactNode;
-}
-
-const WorktreeInfoPopover: React.FC<WorktreeInfoPopoverProps> = ({ worktree, title, children }) => {
-  const [status, setStatus] = useState<GitStatus | null>(null);
-  const [branchInfo, setBranchInfo] = useState<BranchInfo | null>(null);
-  const [size, setSize] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchGitInfo = async () => {
-      try {
-        const [gitStatus, branchData, dirSize] = await Promise.all([
-          gitGetStatus(worktree.worktree_path),
-          gitGetBranchInfo(worktree.worktree_path),
-          calculateDirectorySize(worktree.worktree_path),
-        ]);
-        setStatus(gitStatus);
-        setBranchInfo(branchData);
-        setSize(dirSize);
-      } catch (err) {
-        console.error("Failed to fetch git info:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchGitInfo();
-    const interval = setInterval(fetchGitInfo, 30000);
-    return () => clearInterval(interval);
-  }, [worktree.worktree_path]);
-
-  const totalChanges = status
-    ? status.modified + status.added + status.deleted + status.untracked
-    : 0;
-
-  return (
-    <Popover>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            {children}
-          </PopoverTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">{title}</TooltipContent>
-      </Tooltip>
-      <PopoverContent align="start" className="w-80">
-        <div className="space-y-3">
-          <div>
-            <h4 className="font-semibold text-sm mb-1">{title}</h4>
-          </div>
-          <div className="space-y-2 text-sm">
-            <div>
-              <div className="text-xs text-muted-foreground mb-0.5">Branch</div>
-              <div className="font-mono text-xs break-all">{worktree.branch_name}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground mb-0.5">Path</div>
-              <div className="font-mono text-xs break-all">{worktree.worktree_path}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground mb-0.5">Created</div>
-              <div className="text-xs">{new Date(worktree.created_at).toLocaleString()}</div>
-            </div>
-            {size !== null && (
-              <div>
-                <div className="text-xs text-muted-foreground mb-0.5">Size</div>
-                <div className="text-xs flex items-center gap-1">
-                  <HardDrive className="w-3 h-3" />
-                  {formatBytes(size)}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Git Status */}
-          {loading ? (
-            <div className="text-xs text-muted-foreground">Loading git info...</div>
-          ) : (
-            <div className="space-y-2">
-              <div className="text-xs text-muted-foreground">Git Status</div>
-              {branchInfo && (
-                <div className="flex flex-wrap gap-1.5 text-xs">
-                  {branchInfo.ahead > 0 && (
-                    <div className="px-2 py-0.5 bg-green-500/10 text-green-600 dark:text-green-400 rounded-md">
-                      ↑ {branchInfo.ahead} ahead
-                    </div>
-                  )}
-                  {branchInfo.behind > 0 && (
-                    <div className="px-2 py-0.5 bg-orange-500/10 text-orange-600 dark:text-orange-400 rounded-md">
-                      ↓ {branchInfo.behind} behind
-                    </div>
-                  )}
-                  {branchInfo.ahead === 0 && branchInfo.behind === 0 && (
-                    <div className="px-2 py-0.5 bg-muted text-muted-foreground rounded-md">
-                      Up to date
-                    </div>
-                  )}
-                </div>
-              )}
-              {status && (
-                <div className="flex flex-wrap gap-1.5 text-xs">
-                  {totalChanges > 0 ? (
-                    <>
-                      {status.modified > 0 && (
-                        <div className="px-2 py-0.5 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 rounded-md">
-                          {status.modified} modified
-                        </div>
-                      )}
-                      {(status.added + status.untracked) > 0 && (
-                        <div className="px-2 py-0.5 bg-green-500/10 text-green-600 dark:text-green-400 rounded-md">
-                          {status.added} added | {status.untracked} untracked
-                        </div>
-                      )}
-                      {status.deleted > 0 && (
-                        <div className="px-2 py-0.5 bg-red-500/10 text-red-600 dark:text-red-400 rounded-md">
-                          {status.deleted} deleted
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="px-2 py-0.5 bg-muted text-muted-foreground rounded-md">
-                      No changes
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-};
-
-const StatusPill: React.FC<{ path: string }> = ({ path }) => {
-  const [status, setStatus] = useState<GitStatus | null>(null);
-  const [branchInfo, setBranchInfo] = useState<BranchInfo | null>(null);
-
-  useEffect(() => {
-    const fetchInfo = async () => {
-      try {
-        const [gitStatus, branch] = await Promise.all([
-          gitGetStatus(path),
-          gitGetBranchInfo(path),
-        ]);
-        setStatus(gitStatus);
-        setBranchInfo(branch);
-      } catch (err) {
-        console.error("Failed to fetch status:", err);
-      }
-    };
-    fetchInfo();
-    const interval = setInterval(fetchInfo, 30000);
-    return () => clearInterval(interval);
-  }, [path]);
+const StatusPill: React.FC<{ path: string }> = memo(({ path }) => {
+  const { status, branchInfo } = useWorktreeGitStatus(path, {
+    refetchInterval: 30000,
+  });
 
   const totalChanges = status
     ? status.modified + status.added + status.deleted + status.untracked
@@ -220,9 +61,9 @@ const StatusPill: React.FC<{ path: string }> = ({ path }) => {
   }
 
   return null;
-};
+});
 
-export const SessionSidebar: React.FC<SessionSidebarProps> = ({
+export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
   activeSessionId,
   onSessionClick,
   onCreateSession,
@@ -493,30 +334,22 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     (worktreeId: number) => {
       const worktree = worktreeMap.get(worktreeId);
       if (!worktree) return "Worktree";
-      if (worktree.metadata) {
-        try {
-          const metadata = JSON.parse(worktree.metadata);
-          return metadata.initial_plan_title || metadata.intent || worktree.branch_name;
-        } catch {
-          return worktree.branch_name;
-        }
-      }
-      return worktree.branch_name;
+      return getWorktreeTitleFromUtils(worktree);
     },
     [worktreeMap]
   );
 
-  const { fileManagerLabel, fileManagerCommand } = useMemo(() => {
+  const fileManagerLabel = useMemo(() => {
     if (typeof navigator !== "undefined") {
       const platform = navigator.userAgent || navigator.platform || "";
       if (/mac/i.test(platform)) {
-        return { fileManagerLabel: "Finder", fileManagerCommand: "open" };
+        return "Finder";
       }
       if (/win/i.test(platform)) {
-        return { fileManagerLabel: "Explorer", fileManagerCommand: "explorer" };
+        return "Explorer";
       }
     }
-    return { fileManagerLabel: "Explorer", fileManagerCommand: undefined };
+    return "Explorer";
   }, []);
 
   const repoName = useMemo(() => {
@@ -555,10 +388,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         });
       }
     },
-    [addToast, fileManagerCommand]
+    [addToast]
   );
 
-  const renderSessionIcon = (sessionId: number) => {
+  const renderSessionIcon = useCallback((sessionId: number) => {
     const hasPty = ptySessionsExist.has(sessionId);
     const lastActivity = sessionActivity.get(sessionId);
     const isActive = typeof lastActivity === "number" && Date.now() - lastActivity <= ACTIVITY_WINDOW_MS;
@@ -570,7 +403,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       return <TerminalIcon className="w-3.5 h-3.5 text-muted-foreground" />;
     }
     return <Pause className="w-3.5 h-3.5 text-muted-foreground" />;
-  };
+  }, [ptySessionsExist, sessionActivity]);
 
   const handleCreateSession = useCallback(
     (worktreeId: number | null) => {
@@ -579,7 +412,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     [onCreateSession]
   );
 
-  const renderSessionRow = (session: Session) => (
+  const renderSessionRow = useCallback((session: Session) => (
     <div
       key={session.id}
       onClick={() => onSessionClick(session)}
@@ -604,7 +437,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         <TooltipContent side="bottom">Delete session</TooltipContent>
       </Tooltip>
     </div>
-  );
+  ), [activeSessionId, onSessionClick, renderSessionIcon, handleDeleteSession]);
 
   return (
     <TooltipProvider delayDuration={200} skipDelayDuration={100}>
@@ -695,7 +528,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           mainRepoSessions.map(renderSessionRow)
         ) : (
           <Button
-            variant="secondary"
+            variant="ghost"
             size="sm"
             className="w-full justify-center text-xs text-muted-foreground !h-auto py-1.5"
             onClick={() => handleCreateSession(null)}
@@ -749,13 +582,15 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   {worktree.is_pinned && (
                     <Pin className="w-3 h-3 mr-1 text-muted-foreground" />
                   )}
-                  <WorktreeInfoPopover worktree={worktree} title={getWorktreeTitle(worktree.id)}>
-                    <span className={`truncate flex items-center cursor-pointer transition-colors ${
+                  <span
+                    className={`truncate flex items-center cursor-pointer transition-colors ${
                       isBrowsingThisWorktree ? "text-primary" : "text-muted-foreground hover:text-foreground"
-                    }`} title={getWorktreeTitle(worktree.id)}>
-                      {getWorktreeTitle(worktree.id)}
-                    </span>
-                  </WorktreeInfoPopover>
+                    }`}
+                    title={getWorktreeTitle(worktree.id)}
+                    onClick={() => onBrowseFiles?.(worktree)}
+                  >
+                    {getWorktreeTitle(worktree.id)}
+                  </span>
                   <StatusPill path={worktree.worktree_path} />
                   <div className="absolute right-2 flex items-center gap-1 pl-4 bg-gradient-to-l from-sidebar from-60% transition-opacity duration-200">
                     {onCreateSession && (
@@ -862,7 +697,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   ))
                 ) : (
                   <Button
-                    variant="secondary"
+                    variant="ghost"
                     size="sm"
                     className="w-full justify-center text-xs text-muted-foreground !h-auto py-1.5"
                     onClick={() => handleCreateSession(worktree.id)}
@@ -923,4 +758,4 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     </div>
     </TooltipProvider>
   );
-};
+});

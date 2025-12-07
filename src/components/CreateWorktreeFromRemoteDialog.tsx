@@ -135,8 +135,7 @@ export const CreateWorktreeFromRemoteDialog: React.FC<CreateWorktreeFromRemoteDi
             type: "info",
           });
 
-          const output = await gitExecutePostCreateCommand(worktreePath, postCreateCmd);
-          console.log("Post-create command output:", output);
+          await gitExecutePostCreateCommand(worktreePath, postCreateCmd);
 
           addToast({
             title: "Worktree created successfully",

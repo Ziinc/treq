@@ -41,12 +41,6 @@ const buildTree = (files: BranchDiffFileChange[]): TreeNode[] => {
           ...(isFile ? { status: file.status } : { children: [] }),
         };
         current.children.push(child);
-        current.children.sort((a, b) => {
-          if (a.type === b.type) {
-            return a.name.localeCompare(b.name);
-          }
-          return a.type === "folder" ? -1 : 1;
-        });
       }
 
       if (!isFile) {
@@ -58,6 +52,11 @@ const buildTree = (files: BranchDiffFileChange[]): TreeNode[] => {
   return root.children ?? [];
 };
 
+const sortTree = (nodes: TreeNode[]): TreeNode[] =>
+  nodes
+    .map((n) => (n.children ? { ...n, children: sortTree(n.children) } : n))
+    .sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === "folder" ? -1 : 1));
+
 const statusPipClasses: Record<string, string> = {
   A: "bg-green-500",
   M: "bg-yellow-500",
@@ -65,16 +64,23 @@ const statusPipClasses: Record<string, string> = {
   R: "bg-blue-500",
 };
 
-// Check if a folder node has any changes in its children recursively
-const hasChangesInFolder = (node: TreeNode): boolean => {
-  if (node.type === "file") {
-    return !!node.status;
-  }
-  if (node.children) {
-    return node.children.some(child => hasChangesInFolder(child));
-  }
-  return false;
+const statusTitles: Record<string, string> = {
+  A: "Added",
+  M: "Modified",
+  D: "Deleted",
+  R: "Renamed",
 };
+
+const StatusPip: React.FC<{ status?: string; className?: string }> = ({ status, className }) =>
+  status ? (
+    <span
+      className={cn("w-2 h-2 rounded-full flex-shrink-0", statusPipClasses[status] ?? "bg-muted", className)}
+      title={statusTitles[status]}
+    />
+  ) : null;
+
+const hasChangesInFolder = (node: TreeNode): boolean =>
+  node.type === "file" ? !!node.status : node.children?.some(hasChangesInFolder) ?? false;
 
 export const FileTreeView: React.FC<FileTreeViewProps> = ({
   files,
@@ -82,21 +88,15 @@ export const FileTreeView: React.FC<FileTreeViewProps> = ({
   onSelect,
   isLoading = false,
 }) => {
-  const tree = useMemo(() => buildTree(files), [files]);
+  const tree = useMemo(() => sortTree(buildTree(files)), [files]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["root"]));
 
   useEffect(() => {
     if (!selectedPath) return;
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      const parts = selectedPath.split("/");
-      let path = "";
-      parts.slice(0, -1).forEach((part) => {
-        path = path ? `${path}/${part}` : part;
-        next.add(path);
-      });
-      return next;
-    });
+    const parts = selectedPath.split("/").slice(0, -1);
+    const paths = parts.reduce<string[]>((acc, part) =>
+      [...acc, acc.length ? `${acc[acc.length - 1]}/${part}` : part], []);
+    setExpanded((prev) => new Set([...prev, ...paths]));
   }, [selectedPath]);
 
   const toggleNode = (path: string) => {
@@ -124,12 +124,7 @@ export const FileTreeView: React.FC<FileTreeViewProps> = ({
           >
             {isOpen ? <FolderOpen className="w-3.5 h-3.5" /> : <Folder className="w-3.5 h-3.5" />}
             <span className="font-medium text-left">{node.name}</span>
-            {hasChanges && (
-              <span
-                className="w-2 h-2 rounded-full flex-shrink-0 bg-yellow-500 ml-auto"
-                title="Contains modified files"
-              />
-            )}
+            {hasChanges && <StatusPip status="M" className="ml-auto" />}
           </button>
           {isOpen && node.children && (
             <div className="pl-4 border-l border-border/50 ml-2">
@@ -154,12 +149,7 @@ export const FileTreeView: React.FC<FileTreeViewProps> = ({
         <div className="flex items-center gap-2">
           <FileText className="w-3.5 h-3.5 text-muted-foreground" />
           <span className="truncate text-left">{node.name}</span>
-          {node.status && (
-            <span
-              className={cn("w-2 h-2 rounded-full flex-shrink-0", statusPipClasses[node.status] || "bg-muted")}
-              title={node.status === 'A' ? 'Added' : node.status === 'M' ? 'Modified' : node.status === 'D' ? 'Deleted' : 'Renamed'}
-            />
-          )}
+          <StatusPip status={node.status} />
         </div>
       </button>
     );

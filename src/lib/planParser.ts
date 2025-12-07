@@ -45,7 +45,7 @@ const isBoxBoundary = (line: string): boolean => {
 /**
  * Detects the plan type from a section header
  */
-export const detectPlanType = (header: string): PlanSection['type'] => {
+const detectPlanType = (header: string): PlanSection['type'] => {
   const normalized = header.toLowerCase().trim();
   
   if (normalized.includes('implementation plan')) {
@@ -65,7 +65,7 @@ export const detectPlanType = (header: string): PlanSection['type'] => {
  * Extracts Claude Code formatted plans from terminal output
  * Detects plans bounded by box drawing characters with "Here is Claude's plan:" header
  */
-export const extractClaudeCodePlans = (output: string): PlanSection[] => {
+const extractClaudeCodePlans = (output: string): PlanSection[] => {
   // Strip ANSI codes first for reliable pattern matching
   const cleanOutput = stripAnsiCodes(output);
   const lines = cleanOutput.split('\n');
@@ -248,7 +248,7 @@ const parseClaudeCodePlan = (lines: string[], _planStartIndex: number): PlanSect
 /**
  * Parses plan steps from content, extracting bullets, numbered lists, and task checkboxes
  */
-export const parsePlanSteps = (content: string): string[] => {
+const parsePlanSteps = (content: string): string[] => {
   const steps: string[] = [];
   const lines = content.split('\n');
   
@@ -293,7 +293,7 @@ export const parsePlanSteps = (content: string): string[] => {
  * Supports both legacy format and Claude Code format
  * Uses a state machine to track current section and build sections incrementally
  */
-export const extractPlanSections = (output: string): PlanSection[] => {
+const extractPlanSections = (output: string): PlanSection[] => {
   // First try to extract Claude Code formatted plans
   const claudePlans = extractClaudeCodePlans(output);
   if (claudePlans.length > 0) {

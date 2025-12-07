@@ -1,4 +1,4 @@
-import { ReactNode, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Terminal as XTerm, type IDisposable } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
@@ -11,6 +11,7 @@ import { ptyCreateSession, ptyListen, ptyResize, ptyWrite, ptySessionExists } fr
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import { cn } from "../lib/utils";
 import { Loader2 } from "lucide-react";
+import { Button } from "./ui/button";
 
 interface ConsolidatedTerminalProps {
   sessionId: string;
@@ -18,21 +19,17 @@ interface ConsolidatedTerminalProps {
   shell?: string;
   persistSession?: boolean;
   autoCommand?: string;
-  autoCommandDelay?: number;
-  onAutoCommandComplete?: () => void;
-  onAutoCommandError?: (message: string) => void;
   onSessionError?: (message: string) => void;
   onTerminalOutput?: (output: string) => void;
   onTerminalIdle?: () => void;
+  onClose?: () => void;
   idleTimeoutMs?: number;
-  rightPanel?: ReactNode;
   showDiffViewer?: boolean;
   showPlanDisplay?: boolean;
   containerClassName?: string;
   terminalPaneClassName?: string;
   rightPaneClassName?: string;
   terminalBackgroundClassName?: string;
-  terminalOverlay?: ReactNode;
   clipboardProvider?: IClipboardProvider;
   isHidden?: boolean;
 }
@@ -51,27 +48,28 @@ const normalizeCommand = (command: string) => {
   return `${command}\r\n`;
 };
 
-const createDefaultClipboardProvider = (): IClipboardProvider => ({
-  async readText() {
-    if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
-      try {
-        return await navigator.clipboard.readText();
-      } catch (error) {
-        console.warn("Clipboard read failed", error);
-      }
-    }
-    return "";
-  },
-  async writeText(_selection, data: string) {
-    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-      try {
-        await navigator.clipboard.writeText(data);
-      } catch (error) {
-        console.warn("Clipboard write failed", error);
-      }
-    }
-  },
-});
+// const createDefaultClipboardProvider = (): IClipboardProvider => ({
+//   async readText() {
+//     if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
+//       try {
+//         return await navigator.clipboard.readText();
+//       } catch (error) {
+//         console.warn("Clipboard read failed", error);
+//       }
+//     }
+//     return "";
+//   },
+//   async writeText(_selection, data: string) {
+//     if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+//       try {
+//         await navigator.clipboard.writeText(data);
+//       } catch (error) {
+//         console.warn("Clipboard write failed", error);
+//       }
+//     }
+//   },
+// });
+
 
 export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, ConsolidatedTerminalProps>(
 ({
@@ -80,21 +78,17 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
   shell,
   persistSession = true,
   autoCommand,
-  autoCommandDelay = 500,
-  onAutoCommandComplete,
-  onAutoCommandError,
   onSessionError,
   onTerminalOutput,
   onTerminalIdle,
+  onClose,
   idleTimeoutMs = 2000,
-  rightPanel,
   showDiffViewer,
   showPlanDisplay,
   containerClassName,
   terminalPaneClassName,
   rightPaneClassName,
   terminalBackgroundClassName,
-  terminalOverlay,
   clipboardProvider,
   isHidden = false,
 }, ref) => {
@@ -103,127 +97,112 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
   const fitAddonRef = useRef<FitAddon | null>(null);
   const searchAddonRef = useRef<SearchAddon | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
-  const handleResizeRef = useRef<(() => void) | null>(null);
   const webglAddonRef = useRef<WebglAddon | null>(null);
   const webglContextLossDisposeRef = useRef<IDisposable | null>(null);
   const clipboardAddonRef = useRef<ClipboardAddon | null>(null);
   const unlistenRef = useRef<(() => void) | null>(null);
   const outputRef = useRef("");
-  const autoCommandCompleteRef = useRef(onAutoCommandComplete);
-  const autoCommandErrorRef = useRef(onAutoCommandError);
-  const sessionErrorRef = useRef(onSessionError);
-  const terminalOutputRef = useRef(onTerminalOutput);
-  const terminalIdleRef = useRef(onTerminalIdle);
   const idleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isPtyReady, setIsPtyReady] = useState(false);
   const isPtyReadyRef = useRef(isPtyReady);
   const lastValidDimensionsRef = useRef<{ rows: number; cols: number } | null>(null);
-  const previousIsHiddenRef = useRef(isHidden);
   const autoCommandSentRef = useRef(false);
+  const [terminalError, setTerminalError] = useState<string | null>(null);
+  const [instanceKey, setInstanceKey] = useState(0);
+
+  // Store callbacks in refs to avoid effect re-runs
+  const onSessionErrorRef = useRef(onSessionError);
+  const onTerminalOutputRef = useRef(onTerminalOutput);
+  const onTerminalIdleRef = useRef(onTerminalIdle);
 
   const { fontSize } = useTerminalSettings();
-  const resolvedClipboardProvider = useMemo(
-    () => clipboardProvider ?? createDefaultClipboardProvider(),
-    [clipboardProvider]
-  );
 
-  useEffect(() => {
-    autoCommandCompleteRef.current = onAutoCommandComplete;
-  }, [onAutoCommandComplete]);
+  // const resolvedClipboardProvider = useMemo(
+  //   () => clipboardProvider ?? createDefaultClipboardProvider(),
+  //   [clipboardProvider]
+  // );
 
-  useEffect(() => {
-    autoCommandErrorRef.current = onAutoCommandError;
-  }, [onAutoCommandError]);
-
-  useEffect(() => {
-    sessionErrorRef.current = onSessionError;
-  }, [onSessionError]);
-
-  useEffect(() => {
-    terminalOutputRef.current = onTerminalOutput;
-  }, [onTerminalOutput]);
-
-  useEffect(() => {
-    terminalIdleRef.current = onTerminalIdle;
-  }, [onTerminalIdle]);
-
+  // Sync isPtyReady state with ref for use in callbacks
   useEffect(() => {
     isPtyReadyRef.current = isPtyReady;
   }, [isPtyReady]);
 
+  // Keep callback refs in sync
+  useEffect(() => {
+    onSessionErrorRef.current = onSessionError;
+  }, [onSessionError]);
+
+  useEffect(() => {
+    onTerminalOutputRef.current = onTerminalOutput;
+  }, [onTerminalOutput]);
+
+  useEffect(() => {
+    onTerminalIdleRef.current = onTerminalIdle;
+  }, [onTerminalIdle]);
+
+  // Reset output and error when session changes
   useEffect(() => {
     outputRef.current = "";
     autoCommandSentRef.current = false;
-  }, [sessionId]);
+    setTerminalError(null);
+  }, [sessionId, instanceKey]);
 
+  const handleRetryTerminal = useCallback(() => {
+    setTerminalError(null);
+    setInstanceKey((prev) => prev + 1);
+  }, []);
+
+  // Main terminal setup effect - all handlers are inlined to avoid stale closures
   useEffect(() => {
-    if (!terminalRef.current) {
-      return;
-    }
+    if (!terminalRef.current) return;
 
     setIsPtyReady(false);
     isPtyReadyRef.current = false;
+
+    // Local error handler
+    const localHandleError = (error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("Terminal error:", message);
+      const friendlyMessage = message.includes("Session not found")
+        ? "Terminal session is still initializing. Please wait a moment and try again."
+        : message;
+      setTerminalError(friendlyMessage);
+      onSessionErrorRef.current?.(friendlyMessage);
+    };
 
     const xterm = new XTerm({
       cursorBlink: true,
       cursorStyle: "block",
       fontSize,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      theme: {
-        background: "#1e1e1e",
-        foreground: "#d4d4d4",
-        cursor: "#d4d4d4",
-        cursorAccent: "#1e1e1e",
-        selectionBackground: "#264f78",
-        selectionForeground: "#ffffff",
-        // Standard ANSI colors
-        black: "#000000",
-        red: "#cd3131",
-        green: "#0dbc79",
-        yellow: "#e5e510",
-        blue: "#2472c8",
-        magenta: "#bc3fbc",
-        cyan: "#11a8cd",
-        white: "#e5e5e5",
-        // Bright ANSI colors
-        brightBlack: "#666666",
-        brightRed: "#f14c4c",
-        brightGreen: "#23d18b",
-        brightYellow: "#f5f543",
-        brightBlue: "#3b8eea",
-        brightMagenta: "#d670d6",
-        brightCyan: "#29b8db",
-        brightWhite: "#ffffff",
-      },
+      theme: { background: "#1e1e1e" },
       scrollback: 10000,
       allowProposedApi: true,
     });
 
     const fitAddon = new FitAddon();
-    const webLinksAddon = new WebLinksAddon();
-    const unicode11Addon = new Unicode11Addon();
-    const ligaturesAddon = new LigaturesAddon();
     const searchAddon = new SearchAddon();
-    const clipboardAddon = new ClipboardAddon(resolvedClipboardProvider);
+    const clipboardAddon = new ClipboardAddon(navigator.clipboard);
 
-    // Load addons that don't require the terminal to be opened first
+    // Load addons before opening
     xterm.loadAddon(fitAddon);
-    xterm.loadAddon(webLinksAddon);
-    xterm.loadAddon(unicode11Addon);
+    xterm.loadAddon(new WebLinksAddon());
+    xterm.loadAddon(new Unicode11Addon());
     xterm.loadAddon(searchAddon);
     xterm.loadAddon(clipboardAddon);
     xterm.unicode.activeVersion = "11";
+
     searchAddonRef.current = searchAddon;
     clipboardAddonRef.current = clipboardAddon;
 
-    // Open terminal in DOM first
+    // Open terminal in DOM
     xterm.open(terminalRef.current);
 
-    // Load LigaturesAddon AFTER opening (it requires the terminal to be in the DOM)
-    xterm.loadAddon(ligaturesAddon);
+    // Load LigaturesAddon after opening (requires DOM)
+    xterm.loadAddon(new LigaturesAddon());
 
-    // Load WebGL addon before initial fit to prevent renderer issues
-    if (typeof window !== "undefined" && "WebGLRenderingContext" in window) {
+    // Load WebGL addon
+    if (typeof window !== "undefined" && "WebGLRenderingContext" in window && xterm.element) {
       try {
         const webglAddon = new WebglAddon();
         webglAddon.onContextLoss(() => {
@@ -239,33 +218,36 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
         console.warn("Failed to enable WebGL renderer", error);
         webglAddonRef.current?.dispose();
         webglAddonRef.current = null;
-        webglContextLossDisposeRef.current?.dispose();
-        webglContextLossDisposeRef.current = null;
-      }
-    }
-
-    // Fit after all addons are loaded, but only if terminal is visible
-    if (!isHidden && terminalRef.current) {
-      try {
-        fitAddon.fit();
-      } catch (error) {
-        console.warn("Initial fit failed, will retry on visibility change", error);
       }
     }
 
     xtermRef.current = xterm;
     fitAddonRef.current = fitAddon;
 
-    const handleError = (error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error("Terminal error:", message);
-      if (sessionErrorRef.current) {
-        sessionErrorRef.current(message);
+    // Local resize handler
+    const localHandleResize = () => {
+      const terminal = terminalRef.current;
+      if (!terminal || !xterm || !fitAddon) return;
+
+      const rect = terminal.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      if (!('buffer' in xterm)) return;
+
+      try {
+        fitAddon.fit();
+        const { rows, cols } = xterm;
+        lastValidDimensionsRef.current = { rows, cols };
+
+        if (isPtyReadyRef.current) {
+          ptyResize(sessionId, rows, cols).catch(localHandleError);
+        }
+      } catch (error) {
+        console.warn("Resize failed", error);
       }
     };
 
-    xterm.attachCustomKeyEventHandler((event) => {
-      // Let browser handle events when input elements are focused (but not xterm's own textarea)
+    // Local key event handler
+    const localHandleKeyEvent = (event: KeyboardEvent): boolean => {
       const activeElement = document.activeElement as HTMLElement | null;
       const isWithinXterm = activeElement?.closest('.xterm') !== null;
       const isInputFocused =
@@ -276,89 +258,67 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
         );
 
       if (isInputFocused) {
-        return false; // Don't let xterm handle this event
+        return false;
       }
 
-      // Handle Shift+Enter for line continuation (backslash + newline)
+      // Handle Shift+Enter for line continuation
       if (event.key === "Enter" && event.shiftKey && event.type === "keydown") {
         if (isPtyReadyRef.current) {
-          ptyWrite(sessionId, "\\").catch(handleError);
+          ptyWrite(sessionId, "\\").catch(localHandleError);
         }
         return false;
       }
 
-      // Allow browser shortcuts (Cmd/Ctrl + key) to pass through to browser
-      // Except for terminal-specific ones like Ctrl+C (interrupt), Ctrl+D (EOF), Ctrl+Z (suspend)
-      const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
-      const isModifierPressed = isMac ? event.metaKey : event.ctrlKey;
-
-      if (isModifierPressed && event.type === "keydown") {
-        const key = event.key.toLowerCase();
-        // Terminal control characters that should be sent to PTY
-        const terminalControlKeys = ["c", "d", "z", "l", "u", "w", "r"];
-        // On Mac, Ctrl+key should go to terminal, Cmd+key should go to browser
-        // On other platforms, just check if it's a terminal control key
-        if (isMac && event.metaKey) {
-          // Cmd+key on Mac - let browser handle it (select all, copy, paste, find, etc.)
-          return false;
-        }
-        if (!isMac && event.ctrlKey && !terminalControlKeys.includes(key)) {
-          // Ctrl+key on non-Mac that's not a terminal control - let browser handle it
-          return false;
-        }
-      }
-
       return true;
-    });
-
-    xterm.onData((data) => {
-      if (!isPtyReadyRef.current) {
-        return;
-      }
-      ptyWrite(sessionId, data).catch(handleError);
-    });
-
-    let autoCommandTimeout: ReturnType<typeof setTimeout> | null = null;
-    let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
-
-    const handleResize = () => {
-      // Skip resize if terminal container doesn't have valid dimensions
-      if (!terminalRef.current) {
-        return;
-      }
-      const rect = terminalRef.current.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) {
-        return;
-      }
-
-      try {
-        fitAddon.fit();
-        const { rows, cols } = xterm;
-
-        // Store last valid dimensions
-        lastValidDimensionsRef.current = { rows, cols };
-
-        if (!isPtyReadyRef.current) {
-          return;
-        }
-        ptyResize(sessionId, rows, cols).catch(handleError);
-      } catch (error) {
-        console.warn("Resize failed", error);
-      }
     };
 
-    // Store handleResize in ref for use by visibility effect
-    handleResizeRef.current = handleResize;
+    // Local xterm data handler
+    const localHandleXtermData = (data: string) => {
+      if (!isPtyReadyRef.current) return;
+      ptyWrite(sessionId, data).catch(localHandleError);
+    };
 
-    // Only set up resize observers if not hidden
-    // Visibility effect will manage connection/disconnection
+    // Local PTY output handler
+    const localHandlePtyOutput = (chunk: string) => {
+      xterm.write(chunk);
+      outputRef.current += chunk;
+      onTerminalOutputRef.current?.(outputRef.current);
+
+      if (idleTimeoutRef.current) {
+        clearTimeout(idleTimeoutRef.current);
+      }
+      idleTimeoutRef.current = setTimeout(() => {
+        onTerminalIdleRef.current?.();
+      }, idleTimeoutMs);
+    };
+
+    xterm.attachCustomKeyEventHandler(localHandleKeyEvent);
+    xterm.onData(localHandleXtermData);
+
+    // Setup resize observers if visible
     if (!isHidden && terminalRef.current) {
-      window.addEventListener("resize", handleResize);
-      resizeObserverRef.current = new ResizeObserver(handleResize);
+      window.addEventListener("resize", localHandleResize);
+      resizeObserverRef.current = new ResizeObserver(localHandleResize);
       resizeObserverRef.current.observe(terminalRef.current);
     }
 
-    // Check if PTY session already exists, if not create it
+    // Initial fit if visible
+    if (!isHidden && terminalRef.current) {
+      requestAnimationFrame(() => {
+        if (!terminalRef.current || !xtermRef.current) return;
+        const rect = terminalRef.current.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        try {
+          fitAddon.fit();
+        } catch (error) {
+          console.warn("Initial fit failed", error);
+        }
+      });
+    }
+
+    let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    // Setup PTY
     const setupPty = async () => {
       try {
         const exists = await ptySessionExists(sessionId);
@@ -368,80 +328,38 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
           await ptyCreateSession(sessionId, workingDirectory, shell);
         }
 
-        const unlisten = await ptyListen(sessionId, (chunk) => {
-          xterm.write(chunk);
-          outputRef.current += chunk;
-          if (terminalOutputRef.current) {
-            terminalOutputRef.current(outputRef.current);
-          }
-          // Reset idle timeout on each output chunk
-          if (idleTimeoutRef.current) {
-            clearTimeout(idleTimeoutRef.current);
-          }
-          idleTimeoutRef.current = setTimeout(() => {
-            terminalIdleRef.current?.();
-          }, idleTimeoutMs);
-        });
+        const unlisten = await ptyListen(sessionId, localHandlePtyOutput);
         unlistenRef.current = unlisten;
         setIsPtyReady(true);
         isPtyReadyRef.current = true;
 
-        // Now that PTY is ready, perform initial resize
-        resizeTimeout = setTimeout(handleResize, 100);
+        resizeTimeout = setTimeout(localHandleResize, 100);
 
-        // Only run autoCommand for newly created sessions, not when reattaching
-        // Use ref guard to ensure command is only sent once per session
         if (autoCommand && isNewSession && !autoCommandSentRef.current) {
-          autoCommandTimeout = setTimeout(() => {
-            // Check again inside timeout in case effect re-ran
-            if (autoCommandSentRef.current) {
-              return;
-            }
-            autoCommandSentRef.current = true;
-            ptyWrite(sessionId, normalizeCommand(autoCommand))
-              .then(() => {
-                autoCommandCompleteRef.current?.();
-              })
-              .catch((error) => {
-                const message = error instanceof Error ? error.message : String(error);
-                if (autoCommandErrorRef.current) {
-                  autoCommandErrorRef.current(message);
-                } else {
-                  handleError(message);
-                }
-              });
-          }, autoCommandDelay);
+          autoCommandSentRef.current = true;
+          ptyWrite(sessionId, normalizeCommand(autoCommand)).catch(localHandleError);
         }
       } catch (error) {
-        handleError(error);
+        localHandleError(error);
       }
     };
 
     setupPty();
 
     return () => {
-      if (resizeTimeout) {
-        clearTimeout(resizeTimeout);
-      }
-      if (autoCommandTimeout) {
-        clearTimeout(autoCommandTimeout);
-      }
+      if (resizeTimeout) clearTimeout(resizeTimeout);
       if (idleTimeoutRef.current) {
         clearTimeout(idleTimeoutRef.current);
         idleTimeoutRef.current = null;
       }
-      if (handleResizeRef.current) {
-        window.removeEventListener("resize", handleResizeRef.current);
-      }
+
+      window.removeEventListener("resize", localHandleResize);
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;
-      handleResizeRef.current = null;
-      if (unlistenRef.current) {
-        unlistenRef.current();
-        unlistenRef.current = null;
-      }
-      // Keep PTY session alive in background (don't close on unmount)
-      // PTY will only be closed when session is explicitly deleted
+
+      unlistenRef.current?.();
+      unlistenRef.current = null;
+
       xterm.dispose();
       searchAddonRef.current = null;
       webglAddonRef.current?.dispose();
@@ -450,6 +368,7 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
       webglContextLossDisposeRef.current = null;
       clipboardAddonRef.current?.dispose();
       clipboardAddonRef.current = null;
+
       setIsPtyReady(false);
       isPtyReadyRef.current = false;
     };
@@ -459,68 +378,18 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
     shell,
     fontSize,
     autoCommand,
-    autoCommandDelay,
-    persistSession,
-    resolvedClipboardProvider,
+    instanceKey,
     idleTimeoutMs,
+    isHidden,
   ]);
-
-  // Handle visibility transitions and manage ResizeObserver
-  useEffect(() => {
-    const wasHidden = previousIsHiddenRef.current;
-    const isNowVisible = !isHidden;
-    const isNowHidden = isHidden;
-
-    if (wasHidden && isNowVisible) {
-      // Terminal is transitioning from hidden to visible
-      // Reconnect ResizeObserver and trigger resize
-      if (terminalRef.current && handleResizeRef.current) {
-        window.addEventListener("resize", handleResizeRef.current);
-        resizeObserverRef.current = new ResizeObserver(handleResizeRef.current);
-        resizeObserverRef.current.observe(terminalRef.current);
-      }
-
-      // Trigger resize to restore proper dimensions
-      if (fitAddonRef.current && xtermRef.current && isPtyReady && terminalRef.current) {
-        const rect = terminalRef.current.getBoundingClientRect();
-        if (rect.width > 0 && rect.height > 0) {
-          try {
-            fitAddonRef.current.fit();
-            const { rows, cols } = xtermRef.current;
-            lastValidDimensionsRef.current = { rows, cols };
-            ptyResize(sessionId, rows, cols).catch((error) => {
-              const message = error instanceof Error ? error.message : String(error);
-              console.error("Terminal error:", message);
-            });
-          } catch (error) {
-            console.warn("Resize on visibility change failed", error);
-          }
-        }
-      }
-    } else if (!wasHidden && isNowHidden) {
-      // Terminal is transitioning from visible to hidden
-      // Disconnect ResizeObserver to prevent unnecessary callbacks
-      if (handleResizeRef.current) {
-        window.removeEventListener("resize", handleResizeRef.current);
-      }
-      resizeObserverRef.current?.disconnect();
-      resizeObserverRef.current = null;
-    }
-
-    previousIsHiddenRef.current = isHidden;
-  }, [isHidden, isPtyReady, sessionId]);
 
   useImperativeHandle(ref, () => ({
     findNext: (term: string, options?: ISearchOptions) => {
-      if (!term || !searchAddonRef.current) {
-        return false;
-      }
+      if (!term || !searchAddonRef.current) return false;
       return searchAddonRef.current.findNext(term, options);
     },
     findPrevious: (term: string, options?: ISearchOptions) => {
-      if (!term || !searchAddonRef.current) {
-        return false;
-      }
+      if (!term || !searchAddonRef.current) return false;
       return searchAddonRef.current.findPrevious(term, options);
     },
     clearSearch: () => {
@@ -532,30 +401,9 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
   }));
 
   const terminalPaneWidthClass = useMemo(() => {
-    if (!rightPanel) {
-      return "flex-1";
-    }
-    if (showDiffViewer) {
-      return "w-1/3";
-    }
-    if (showPlanDisplay) {
-      return "flex-1";
-    }
+    if (showDiffViewer) return "w-2/5";
     return "flex-1";
-  }, [rightPanel, showDiffViewer, showPlanDisplay]);
-
-  const rightPaneWidthClass = useMemo(() => {
-    if (!rightPanel) {
-      return "";
-    }
-    if (showDiffViewer) {
-      return "w-2/3";
-    }
-    if (showPlanDisplay) {
-      return "w-1/2";
-    }
-    return "flex-1";
-  }, [rightPanel, showDiffViewer, showPlanDisplay]);
+  }, [showDiffViewer]);
 
   return (
     <div className={cn("flex-1 flex overflow-hidden w-full h-full", containerClassName)}>
@@ -571,26 +419,37 @@ export const ConsolidatedTerminal = forwardRef<ConsolidatedTerminalHandle, Conso
           ref={terminalRef}
           className={cn(
             "h-full w-full",
-            // Visible scrollbar with transparent background
             "[&_.xterm-viewport::-webkit-scrollbar]:w-2",
             "[&_.xterm-viewport::-webkit-scrollbar-track]:bg-transparent",
             "[&_.xterm-viewport::-webkit-scrollbar-thumb]:bg-border",
             "[&_.xterm-viewport::-webkit-scrollbar-thumb]:rounded"
           )}
         />
-        {!isPtyReady && (
+        {!isPtyReady && !terminalError && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 text-sm text-muted-foreground z-10">
             <Loader2 className="w-5 h-5 animate-spin mb-2" />
             <span>Preparing terminal...</span>
           </div>
         )}
-        {terminalOverlay ?? null}
+        {terminalError && (
+          <div className="absolute inset-0 bg-background/90 backdrop-blur-sm flex items-center justify-center z-20 p-6">
+            <div className="w-full max-w-sm rounded-lg border bg-card p-4 text-center shadow-lg">
+              <p className="text-sm font-semibold">Unable to start terminal</p>
+              <p className="text-xs text-muted-foreground mt-2 break-words">{terminalError}</p>
+              <div className="mt-4 flex flex-col gap-2">
+                <Button size="sm" onClick={handleRetryTerminal}>
+                  Try again
+                </Button>
+                {onClose && (
+                  <Button size="sm" variant="outline" onClick={onClose}>
+                    Close session
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-      {rightPanel ? (
-        <div className={cn("border-l border-border", rightPaneWidthClass, rightPaneClassName)}>
-          {rightPanel}
-        </div>
-      ) : null}
     </div>
   );
 });

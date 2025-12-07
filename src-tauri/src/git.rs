@@ -1,5 +1,3 @@
-use crate::db::{Command as DbCommand, Database};
-use chrono::Utc;
 use globset::{Glob, GlobSetBuilder};
 use ignore::WalkBuilder;
 use serde::{Deserialize, Serialize};
@@ -344,20 +342,6 @@ pub fn get_branch_divergence(
     Ok(BranchDivergence { ahead, behind })
 }
 
-pub fn get_file_diff(worktree_path: &str, file_path: &str) -> Result<String, String> {
-    let output = Command::new("git")
-        .current_dir(worktree_path)
-        .args(["diff", "HEAD", file_path])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
-}
-
 pub fn list_branches(repo_path: &str) -> Result<Vec<String>, String> {
     let output = Command::new("git")
         .current_dir(repo_path)
@@ -578,8 +562,6 @@ pub fn sanitize_branch_name_for_path(branch: &str) -> String {
 }
 
 pub fn execute_post_create_command(
-    db: &Database,
-    worktree_id: i64,
     worktree_path: &str,
     command: &str,
 ) -> Result<String, String> {
@@ -608,26 +590,6 @@ pub fn execute_post_create_command(
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     let combined_output = format!("{}{}", stdout, stderr);
-
-    // Persist command log to database
-    let status = if output.status.success() {
-        "success"
-    } else {
-        "failure"
-    };
-
-    let cmd = DbCommand {
-        id: 0,
-        worktree_id,
-        command: command.to_string(),
-        created_at: Utc::now().to_rfc3339(),
-        status: status.to_string(),
-        output: Some(combined_output.clone()),
-    };
-
-    if let Err(e) = db.add_command(&cmd) {
-        eprintln!("Warning: Failed to save command log: {}", e);
-    }
 
     if output.status.success() {
         Ok(combined_output)

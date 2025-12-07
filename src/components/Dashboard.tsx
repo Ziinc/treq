@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, Suspense, lazy } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -10,15 +10,18 @@ import { CreateWorktreeDialog } from "./CreateWorktreeDialog";
 import { CreateWorktreeFromRemoteDialog } from "./CreateWorktreeFromRemoteDialog";
 import { CommandPalette } from "./CommandPalette";
 import { BranchSwitcher } from "./BranchSwitcher";
-import { SettingsPage } from "./SettingsPage";
-import { SessionTerminal } from "./SessionTerminal";
 import { WorktreeEditSession } from "./WorktreeEditSession";
-import { MergeReviewPage } from "./MergeReviewPage";
 import { SessionSidebar } from "./SessionSidebar";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { GitChangesSection } from "./GitChangesSection";
 import { MoveToWorktreeDialog } from "./MoveToWorktreeDialog";
-import { FileBrowser } from "./FileBrowser";
+import { LineDiffStatsDisplay } from "./LineDiffStatsDisplay";
+
+// Lazy imports
+const SessionTerminal = lazy(() => import("./SessionTerminal").then(m => ({ default: m.SessionTerminal })));
+const SettingsPage = lazy(() => import("./SettingsPage").then(m => ({ default: m.SettingsPage })));
+const MergeReviewPage = lazy(() => import("./MergeReviewPage").then(m => ({ default: m.MergeReviewPage })));
+const FileBrowser = lazy(() => import("./FileBrowser").then(m => ({ default: m.FileBrowser })));
 import { PlanSection } from "../types/planning";
 import {
   parseChangedFiles,
@@ -28,9 +31,11 @@ import {
 } from "../lib/git-utils";
 import { applyBranchNamePattern } from "../lib/utils";
 import { buildPlanHistoryPayload } from "../lib/planHistory";
+import { getWorktreeTitle as getWorktreeTitleFromUtils } from "../lib/worktree-utils";
 import { useToast } from "./ui/toast";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { useGitCachePreloader } from "../hooks/useGitCachePreloader";
+import { useWorktreeGitStatus } from "../hooks/useWorktreeGitStatus";
 import {
   getWorktrees,
   rebuildWorktrees,
@@ -44,12 +49,11 @@ import {
   gitGetCurrentBranch,
   gitGetStatus,
   gitGetBranchInfo,
-  gitGetBranchDivergence,
-  calculateDirectorySize,
+  gitGetLineDiffStats,
   Worktree,
   GitStatus,
   BranchInfo,
-  BranchDivergence,
+  LineDiffStats,
   saveExecutedPlan,
   gitCreateWorktree,
   addWorktreeToDb,
@@ -74,6 +78,13 @@ import {
 } from "../lib/api";
 import type { MergeStrategy } from "../lib/api";
 import { RefreshCw, GitBranch, Loader2, Pin, MoreVertical, FolderOpen } from "lucide-react";
+
+// Loading spinner component for Suspense fallback
+const LoadingSpinner = () => (
+  <div className="flex items-center justify-center h-full w-full">
+    <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+  </div>
+);
 import {
   Card,
   CardContent,
@@ -110,6 +121,187 @@ type SessionOpenOptions = {
   selectedFilePath?: string;
 };
 
+// Worktree list item component that uses centralized git status hook
+const WorktreeListItem: React.FC<{
+  worktree: Worktree;
+  currentBranch: string | null;
+  isSelected: boolean;
+  onSelect: (id: number | null) => void;
+  onDoubleClick: () => void;
+  onPin: (worktreeId: number) => void;
+  onUpdateBranch: (worktree: Worktree) => void;
+  onMerge: (worktree: Worktree) => void;
+  onBrowseFiles: (worktree: Worktree) => void;
+  onOpenSession: (worktree: Worktree) => void;
+  updateBranchPending: boolean;
+  mergePending: boolean;
+}> = ({
+  worktree,
+  currentBranch,
+  isSelected,
+  onSelect,
+  onDoubleClick,
+  onPin,
+  onUpdateBranch,
+  onMerge,
+  onBrowseFiles,
+  onOpenSession,
+  updateBranchPending,
+  mergePending,
+}) => {
+  const { branchInfo, divergence, lineDiffStats } = useWorktreeGitStatus(worktree.worktree_path, {
+    refetchInterval: 30000,
+    baseBranch: currentBranch,
+  });
+  const title = getWorktreeTitleFromUtils(worktree);
+  const isBehindMain = divergence && divergence.behind > 0;
+
+  return (
+    <div
+      onClick={() => onSelect(isSelected ? null : worktree.id)}
+      onDoubleClick={onDoubleClick}
+      className={`group w-full text-left p-3 rounded-lg border transition-colors cursor-pointer ${
+        isSelected
+          ? "border-primary ring-2 ring-primary/20 bg-sidebar"
+          : "border-border bg-sidebar hover:bg-sidebar-accent"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          <span className="text-sm font-medium truncate">
+            {title}
+          </span>
+          {worktree.is_pinned && (
+            <Pin className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+          )}
+          <div className="ml-auto flex-shrink-0">
+            <LineDiffStatsDisplay stats={lineDiffStats} size="xs" />
+          </div>
+        </div>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="p-1 rounded hover:bg-muted transition-opacity opacity-0 group-hover:opacity-100"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MoreVertical className="w-3.5 h-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onSelect={(event) => {
+                event.preventDefault();
+                onPin(worktree.id);
+              }}
+            >
+              <Pin className="w-4 h-4 mr-2" />
+              {worktree.is_pinned ? "Unpin" : "Pin"} Worktree
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* Git indicators */}
+      <div className="flex flex-wrap gap-2 mt-2 text-xs">
+        {/* Remote ahead/behind */}
+        {branchInfo?.upstream && (branchInfo.ahead > 0 || branchInfo.behind > 0) && (
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <span className="opacity-60">remote:</span>
+            {branchInfo.behind > 0 && (
+              <span className="text-orange-600 dark:text-orange-400">
+                {branchInfo.behind}↓
+              </span>
+            )}
+            {branchInfo.ahead > 0 && (
+              <span className="text-green-600 dark:text-green-400">
+                {branchInfo.ahead}↑
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Divergence from main */}
+        {divergence && (divergence.ahead > 0 || divergence.behind > 0) && (
+          <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+            {divergence.ahead > 0 && (
+              <span className="text-green-600 dark:text-green-400">{divergence.ahead} ahead</span>
+            )}
+            {divergence.ahead > 0 && divergence.behind > 0 && <span>,</span>}
+            {divergence.behind > 0 && (
+              <span className="text-orange-600 dark:text-orange-400">{divergence.behind} behind</span>
+            )}
+            <span className="font-mono bg-muted px-1.5 py-0.5 rounded">{currentBranch}</span>
+          </div>
+        )}
+
+        {/* Show "up to date" if no divergence at all */}
+        {(!branchInfo?.upstream || (branchInfo.ahead === 0 && branchInfo.behind === 0)) &&
+         (!divergence || (divergence.ahead === 0 && divergence.behind === 0)) && (
+          <span className="text-muted-foreground opacity-60">up to date</span>
+        )}
+      </div>
+
+      {/* Action buttons when selected */}
+      {isSelected && (
+        <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-border">
+          {isBehindMain && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              disabled={updateBranchPending}
+              onClick={(e) => {
+                e.stopPropagation();
+                onUpdateBranch(worktree);
+              }}
+            >
+              {updateBranchPending ? (
+                <Loader2 className="w-3 h-3 animate-spin mr-1" />
+              ) : null}
+              Update branch
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            disabled={mergePending}
+            onClick={(e) => {
+              e.stopPropagation();
+              onMerge(worktree);
+            }}
+          >
+            Merge into {currentBranch || "main"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={(e) => {
+              e.stopPropagation();
+              onBrowseFiles(worktree);
+            }}
+          >
+            Browse files
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenSession(worktree);
+            }}
+          >
+            Open session
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const Dashboard: React.FC = () => {
   const [repoPath, setRepoPath] = useState("");
   const [repoName, setRepoName] = useState("");
@@ -121,7 +313,7 @@ export const Dashboard: React.FC = () => {
   });
   const [mainRepoStatus, setMainRepoStatus] = useState<GitStatus | null>(null);
   const [mainBranchInfo, setMainBranchInfo] = useState<BranchInfo | null>(null);
-  const [mainRepoSize, setMainRepoSize] = useState<number | null>(null);
+  const [mainRepoLineStats, setMainRepoLineStats] = useState<LineDiffStats | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showCreateFromRemoteDialog, setShowCreateFromRemoteDialog] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("dashboard");
@@ -165,10 +357,6 @@ export const Dashboard: React.FC = () => {
   const [lastSelectedFileIndex, setLastSelectedFileIndex] = useState<number | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
 
-  // Worktree git info state
-  const [worktreeBranchInfo, setWorktreeBranchInfo] = useState<Record<number, BranchInfo>>({});
-  const [worktreeDivergence, setWorktreeDivergence] = useState<Record<number, BranchDivergence>>({});
-
   const queryClient = useQueryClient();
   const { addToast } = useToast();
   const sessionActivityListenerRef = useRef<((sessionId: number) => void) | null>(null);
@@ -176,19 +364,6 @@ export const Dashboard: React.FC = () => {
   const mainRepoChangeCount = mainRepoStatus
     ? mainRepoStatus.modified + mainRepoStatus.added + mainRepoStatus.deleted + mainRepoStatus.untracked
     : 0;
-
-  // Helper to get worktree display title from metadata
-  const getWorktreeTitle = useCallback((worktree: Worktree): string => {
-    if (worktree.metadata) {
-      try {
-        const metadata = JSON.parse(worktree.metadata);
-        return metadata.initial_plan_title || metadata.intent || worktree.branch_name;
-      } catch {
-        return worktree.branch_name;
-      }
-    }
-    return worktree.branch_name;
-  }, []);
 
   const mainRepoStagedFiles = useMemo(() => filterStagedFiles(mainRepoChangedFiles), [mainRepoChangedFiles]);
   const mainRepoUnstagedFiles = useMemo(() => filterUnstagedFiles(mainRepoChangedFiles), [mainRepoChangedFiles]);
@@ -286,17 +461,6 @@ export const Dashboard: React.FC = () => {
     }
   });
 
-  useKeyboardShortcut("r", true, () => {
-    if (viewMode === "dashboard") {
-      refetch();
-      addToast({
-        title: "Refreshed",
-        description: "Worktree list updated",
-        type: "info",
-      });
-    }
-  });
-
   useKeyboardShortcut("k", true, () => {
     setShowCommandPalette(true);
   });
@@ -378,23 +542,43 @@ export const Dashboard: React.FC = () => {
     if (!repoPath) {
       setMainRepoStatus(null);
       setMainBranchInfo(null);
-      setMainRepoSize(null);
       setMainRepoChangedFiles([]);
       return;
     }
 
-    // Run all fetches in parallel
-    const [status, branchInfo, size, changedFiles] = await Promise.all([
+    // Immediate: critical API calls that block UI updates
+    const [status, branchInfo] = await Promise.all([
       gitGetStatus(repoPath).catch(() => null),
       gitGetBranchInfo(repoPath).catch(() => null),
-      calculateDirectorySize(repoPath).catch(() => null),
-      gitGetChangedFiles(repoPath).catch(() => [] as string[]),
     ]);
 
     setMainRepoStatus(status);
     setMainBranchInfo(branchInfo);
-    setMainRepoSize(size);
-    setMainRepoChangedFiles(parseChangedFiles(changedFiles));
+
+    // Deferred: non-critical API calls using requestIdleCallback
+    if (typeof requestIdleCallback !== 'undefined') {
+      requestIdleCallback(
+        async () => {
+          const [changedFiles, lineStats] = await Promise.all([
+            gitGetChangedFiles(repoPath).catch(() => [] as string[]),
+            gitGetLineDiffStats(repoPath, "HEAD").catch(() => null),
+          ]);
+          setMainRepoChangedFiles(parseChangedFiles(changedFiles));
+          setMainRepoLineStats(lineStats);
+        },
+        { timeout: 5000 } // Fallback after 5s if idle callback never fires
+      );
+    } else {
+      // Fallback for browsers without requestIdleCallback
+      setTimeout(async () => {
+        const [changedFiles, lineStats] = await Promise.all([
+          gitGetChangedFiles(repoPath).catch(() => [] as string[]),
+          gitGetLineDiffStats(repoPath, "HEAD").catch(() => null),
+        ]);
+        setMainRepoChangedFiles(parseChangedFiles(changedFiles));
+        setMainRepoLineStats(lineStats);
+      }, 0);
+    }
   }, [repoPath]);
 
   const handleMainRepoSync = useCallback(async () => {
@@ -537,10 +721,6 @@ export const Dashboard: React.FC = () => {
       setMoveDialogOpen(false);
       setSelectedWorktreeId(null);
 
-      // Reset worktree git info cache
-      setWorktreeBranchInfo({});
-      setWorktreeDivergence({});
-
       // Reset merge state
       resetMergeState();
 
@@ -622,11 +802,6 @@ export const Dashboard: React.FC = () => {
           const rebuilt = await rebuildWorktrees(repoPath);
           if (rebuilt.length > 0) {
             queryClient.invalidateQueries({ queryKey: ["worktrees", repoPath] });
-            addToast({
-              title: "Worktrees Restored",
-              description: `Found ${rebuilt.length} worktree(s) and added them to the database.`,
-              type: "success",
-            });
           }
         } catch (error) {
           console.error("Failed to rebuild worktrees:", error);
@@ -634,48 +809,10 @@ export const Dashboard: React.FC = () => {
       }
     };
     rebuildIfNeeded();
-  }, [repoPath, worktrees.length, queryClient, addToast]);
+  }, [repoPath, worktrees.length, queryClient]);
 
-  useGitCachePreloader(worktrees, repoPath || null);
-
-  // Fetch git info for each worktree (remote branch info + divergence from main)
-  useEffect(() => {
-    if (!currentBranch || worktrees.length === 0) return;
-
-    const fetchWorktreeGitInfo = async () => {
-      const branchInfoResults: Record<number, BranchInfo> = {};
-      const divergenceResults: Record<number, BranchDivergence> = {};
-
-      await Promise.all(
-        worktrees.map(async (worktree) => {
-          try {
-            // Fetch remote branch info (ahead/behind upstream)
-            const branchInfo = await gitGetBranchInfo(worktree.worktree_path);
-            branchInfoResults[worktree.id] = branchInfo;
-          } catch {
-            // Ignore errors for individual worktrees
-          }
-
-          try {
-            // Fetch divergence from main branch
-            const divergence = await gitGetBranchDivergence(worktree.worktree_path, currentBranch);
-            divergenceResults[worktree.id] = divergence;
-          } catch {
-            // Ignore errors for individual worktrees
-          }
-        })
-      );
-
-      setWorktreeBranchInfo(branchInfoResults);
-      setWorktreeDivergence(divergenceResults);
-    };
-
-    fetchWorktreeGitInfo();
-
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchWorktreeGitInfo, 30000);
-    return () => clearInterval(interval);
-  }, [worktrees, currentBranch]);
+  // Lazy preload: only preload selected worktree, not all worktrees
+  useGitCachePreloader(selectedWorktree?.worktree_path ?? null);
 
   // Track mounted session IDs to preserve terminal state
   useEffect(() => {
@@ -699,8 +836,8 @@ export const Dashboard: React.FC = () => {
       try {
         await invalidateGitCache(repoPath);
         refreshMainRepoInfo();
-      } catch (error) {
-        console.debug("Git polling failed", error);
+      } catch {
+        // Silently ignore polling failures
       }
     };
 
@@ -715,8 +852,8 @@ export const Dashboard: React.FC = () => {
     if (viewMode === "session" || viewMode === "worktree-session") {
       if (repoPath && activeSessionId) {
         // Invalidate cache and refresh on session focus change
-        invalidateGitCache(repoPath).catch((err) => {
-          console.debug("Failed to invalidate git cache on session focus", err);
+        invalidateGitCache(repoPath).catch(() => {
+          // Silently ignore cache invalidation failures
         });
         refreshMainRepoInfo();
       }
@@ -833,16 +970,9 @@ export const Dashboard: React.FC = () => {
         description: `Merged ${currentBranch} into ${worktree.branch_name}`,
         type: "success",
       });
-      // Refresh divergence info
-      queryClient.invalidateQueries({ queryKey: ["worktrees", worktree.repo_path] });
-      // Re-fetch git info for worktrees
-      if (currentBranch) {
-        gitGetBranchDivergence(worktree.worktree_path, currentBranch)
-          .then((divergence) => {
-            setWorktreeDivergence((prev) => ({ ...prev, [worktree.id]: divergence }));
-          })
-          .catch(() => {});
-      }
+      // Invalidate queries to trigger refetch of worktree git status
+      queryClient.invalidateQueries({ queryKey: ["worktree-divergence", worktree.worktree_path] });
+      queryClient.invalidateQueries({ queryKey: ["worktree-branch-info", worktree.worktree_path] });
     },
     onError: (error) => {
       const message = error instanceof Error ? error.message : String(error);
@@ -953,7 +1083,8 @@ export const Dashboard: React.FC = () => {
 
       // Focus terminal after session opens
       setTimeout(() => {
-        const terminalContainer = document.querySelector('.xterm');
+        // Try to find terminal container (ghostty-web or xterm)
+        const terminalContainer = document.querySelector('.xterm, [data-terminal]');
         if (terminalContainer) {
           const textarea = terminalContainer.querySelector('textarea');
           if (textarea instanceof HTMLTextAreaElement) {
@@ -1115,7 +1246,7 @@ export const Dashboard: React.FC = () => {
       const postCreateCmd = await getRepoSetting(repoPath, "post_create_command");
       if (postCreateCmd && postCreateCmd.trim()) {
         try {
-          await gitExecutePostCreateCommand(worktreeId, worktreePath, postCreateCmd);
+          await gitExecutePostCreateCommand(worktreePath, postCreateCmd);
         } catch (cmdError) {
           console.error("Post-create command failed:", cmdError);
         }
@@ -1425,23 +1556,25 @@ export const Dashboard: React.FC = () => {
             resetKeys={[session.id]}
             onGoDashboard={handleCloseTerminal}
           >
-            <SessionTerminal
-              repositoryPath={sessionWorktree ? undefined : repoPath}
-              worktree={sessionWorktree || undefined}
-              session={session}
-              sessionId={session.id}
-              mainRepoBranch={currentBranch}
-              onClose={handleCloseTerminal}
-              onExecutePlan={handleExecutePlan}
-              onExecutePlanInWorktree={handleExecutePlanInWorktree}
-              initialPlanContent={session.id === activeSessionId ? (sessionPlanContent || undefined) : undefined}
-              initialPlanTitle={session.id === activeSessionId ? (sessionPlanTitle || undefined) : undefined}
-              initialPrompt={session.id === activeSessionId ? (sessionInitialPrompt || undefined) : undefined}
-              initialPromptLabel={session.id === activeSessionId ? (sessionPromptLabel || undefined) : undefined}
-              initialSelectedFile={session.id === activeSessionId ? (sessionSelectedFile || undefined) : undefined}
-              onSessionActivity={handleSessionActivity}
-              isHidden={!isActive}
-            />
+            <Suspense fallback={<LoadingSpinner />}>
+              <SessionTerminal
+                repositoryPath={sessionWorktree ? undefined : repoPath}
+                worktree={sessionWorktree || undefined}
+                session={session}
+                sessionId={session.id}
+                mainRepoBranch={currentBranch}
+                onClose={handleCloseTerminal}
+                onExecutePlan={handleExecutePlan}
+                onExecutePlanInWorktree={handleExecutePlanInWorktree}
+                initialPlanContent={session.id === activeSessionId ? (sessionPlanContent || undefined) : undefined}
+                initialPlanTitle={session.id === activeSessionId ? (sessionPlanTitle || undefined) : undefined}
+                initialPrompt={session.id === activeSessionId ? (sessionInitialPrompt || undefined) : undefined}
+                initialPromptLabel={session.id === activeSessionId ? (sessionPromptLabel || undefined) : undefined}
+                initialSelectedFile={session.id === activeSessionId ? (sessionSelectedFile || undefined) : undefined}
+                onSessionActivity={handleSessionActivity}
+                isHidden={!isActive}
+              />
+            </Suspense>
           </ErrorBoundary>
         </div>
       );
@@ -1468,6 +1601,13 @@ export const Dashboard: React.FC = () => {
   const isSessionView = viewMode === "session" || viewMode === "worktree-session";
   const showSidebar = viewMode !== "merge-review" && viewMode !== "worktree-edit";
   const highlightedSessionId = isSessionView ? activeSessionId : null;
+
+  const mainContentStyle = useMemo(() => ({ width: showSidebar ? "calc(100vw - 240px)" : "100%" }), [showSidebar]);
+  const sessionLayerStyle = useMemo<React.CSSProperties>(() => ({
+    visibility: isSessionView ? 'visible' : 'hidden',
+    zIndex: isSessionView ? 10 : 0,
+    pointerEvents: isSessionView ? 'auto' : 'none',
+  }), [isSessionView]);
 
   return (
     <div className="flex h-screen bg-background">
@@ -1500,16 +1640,12 @@ export const Dashboard: React.FC = () => {
 
       <div
         className="flex-1 relative"
-        style={{ width: showSidebar ? "calc(100vw - 240px)" : "100%" }}
+        style={mainContentStyle}
       >
         {/* Sessions Layer - ALWAYS RENDERED ONCE */}
         <div
           className="absolute inset-0 flex flex-col"
-          style={{
-            visibility: isSessionView ? 'visible' : 'hidden',
-            zIndex: isSessionView ? 10 : 0,
-            pointerEvents: isSessionView ? 'auto' : 'none',
-          }}
+          style={sessionLayerStyle}
         >
           {memoizedSessionTerminals}
         </div>
@@ -1525,17 +1661,18 @@ export const Dashboard: React.FC = () => {
         >
           {/* Settings View */}
           {viewMode === "settings" && (
-            <SettingsPage
-              repoPath={repoPath}
-              onRepoPathChange={setRepoPath}
-              initialTab={initialSettingsTab}
-              onRefresh={refetch}
-              onClose={() => setViewMode("dashboard")}
-              repoName={repoName}
-              mainRepoSize={mainRepoSize}
-              currentBranch={currentBranch}
-              mainBranchInfo={mainBranchInfo}
-            />
+            <Suspense fallback={<LoadingSpinner />}>
+              <SettingsPage
+                repoPath={repoPath}
+                onRepoPathChange={setRepoPath}
+                initialTab={initialSettingsTab}
+                onRefresh={refetch}
+                onClose={() => setViewMode("dashboard")}
+                repoName={repoName}
+                currentBranch={currentBranch}
+                mainBranchInfo={mainBranchInfo}
+              />
+            </Suspense>
           )}
 
           {/* Merge Review View */}
@@ -1545,17 +1682,19 @@ export const Dashboard: React.FC = () => {
               resetKeys={[selectedWorktree.id, currentBranch ?? ""]}
               onGoDashboard={handleReturnToDashboard}
             >
-              <MergeReviewPage
-                repoPath={repoPath}
-                baseBranch={currentBranch}
-                worktree={selectedWorktree}
-                onClose={() => {
-                  setViewMode("dashboard");
-                  setSelectedWorktree(null);
-                }}
-                onStartMerge={openMergeDialogForWorktree}
-                onRequestChanges={(prompt) => openSessionWithPrompt(selectedWorktree, prompt, "Review response")}
-              />
+              <Suspense fallback={<LoadingSpinner />}>
+                <MergeReviewPage
+                  repoPath={repoPath}
+                  baseBranch={currentBranch}
+                  worktree={selectedWorktree}
+                  onClose={() => {
+                    setViewMode("dashboard");
+                    setSelectedWorktree(null);
+                  }}
+                  onStartMerge={openMergeDialogForWorktree}
+                  onRequestChanges={(prompt) => openSessionWithPrompt(selectedWorktree, prompt, "Review response")}
+                />
+              </Suspense>
             </ErrorBoundary>
           )}
 
@@ -1583,15 +1722,18 @@ export const Dashboard: React.FC = () => {
               resetKeys={[fileBrowserWorktree?.id ?? repoPath]}
               onGoDashboard={handleReturnToDashboard}
             >
-              <FileBrowser
-                worktree={fileBrowserWorktree ?? undefined}
-                repoPath={fileBrowserWorktree ? undefined : repoPath}
-                branchName={fileBrowserWorktree ? undefined : currentBranch ?? undefined}
-                onClose={() => {
-                  setViewMode("dashboard");
-                  setFileBrowserWorktree(null);
-                }}
-              />
+              <Suspense fallback={<LoadingSpinner />}>
+                <FileBrowser
+                  worktree={fileBrowserWorktree ?? undefined}
+                  repoPath={fileBrowserWorktree ? undefined : repoPath}
+                  branchName={fileBrowserWorktree ? undefined : currentBranch ?? undefined}
+                  mainBranch={currentBranch ?? undefined}
+                  onClose={() => {
+                    setViewMode("dashboard");
+                    setFileBrowserWorktree(null);
+                  }}
+                />
+              </Suspense>
             </ErrorBoundary>
           )}
 
@@ -1690,6 +1832,13 @@ export const Dashboard: React.FC = () => {
                       {/* Git Changes List */}
                       {mainRepoChangeCount > 0 && (
                         <div className="space-y-3 mt-4 pt-4 border-t border-border -mx-4 px-4">
+                          {/* Header with line stats */}
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground uppercase tracking-wide">
+                              Changes
+                            </span>
+                            <LineDiffStatsDisplay stats={mainRepoLineStats} size="xs" />
+                          </div>
                           {/* Commit Message Input */}
                           <div className="space-y-2">
                             <Input
@@ -1771,162 +1920,30 @@ export const Dashboard: React.FC = () => {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {worktrees.map((worktree) => {
-                        const branchInfo = worktreeBranchInfo[worktree.id];
-                        const divergence = worktreeDivergence[worktree.id];
-                        const title = getWorktreeTitle(worktree);
-                        const isSelected = selectedWorktreeId === worktree.id;
-                        const isBehindMain = divergence && divergence.behind > 0;
-
-                        return (
-                          <div
-                            key={worktree.id}
-                            onClick={() => setSelectedWorktreeId(isSelected ? null : worktree.id)}
-                            onDoubleClick={() => handleOpenSession(worktree)}
-                            className={`group w-full text-left p-3 rounded-lg border transition-colors cursor-pointer ${
-                              isSelected
-                                ? "border-primary ring-2 ring-primary/20 bg-sidebar"
-                                : "border-border bg-sidebar hover:bg-sidebar-accent"
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                                <span className="text-sm font-medium truncate">
-                                  {title}
-                                </span>
-                                {worktree.is_pinned && (
-                                  <Pin className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                                )}
-                              </div>
-
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <button
-                                    className="p-1 rounded hover:bg-muted transition-opacity opacity-0 group-hover:opacity-100"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <MoreVertical className="w-3.5 h-3.5" />
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem
-                                    onSelect={(event) => {
-                                      event.preventDefault();
-                                      if (repoPath) {
-                                        togglePinMutation.mutate({
-                                          worktreeId: worktree.id,
-                                          repoPath
-                                        });
-                                      }
-                                    }}
-                                  >
-                                    <Pin className="w-4 h-4 mr-2" />
-                                    {worktree.is_pinned ? "Unpin" : "Pin"} Worktree
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-
-                            {/* Git indicators */}
-                            <div className="flex flex-wrap gap-2 mt-2 text-xs">
-                              {/* Remote ahead/behind */}
-                              {branchInfo?.upstream && (branchInfo.ahead > 0 || branchInfo.behind > 0) && (
-                                <div className="flex items-center gap-1.5 text-muted-foreground">
-                                  <span className="opacity-60">remote:</span>
-                                  {branchInfo.behind > 0 && (
-                                    <span className="text-orange-600 dark:text-orange-400">
-                                      {branchInfo.behind}↓
-                                    </span>
-                                  )}
-                                  {branchInfo.ahead > 0 && (
-                                    <span className="text-green-600 dark:text-green-400">
-                                      {branchInfo.ahead}↑
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-
-                              {/* Divergence from main */}
-                              {divergence && (divergence.ahead > 0 || divergence.behind > 0) && (
-                                <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
-                                  {divergence.ahead > 0 && (
-                                    <span className="text-green-600 dark:text-green-400">{divergence.ahead} ahead</span>
-                                  )}
-                                  {divergence.ahead > 0 && divergence.behind > 0 && <span>,</span>}
-                                  {divergence.behind > 0 && (
-                                    <span className="text-orange-600 dark:text-orange-400">{divergence.behind} behind</span>
-                                  )}
-                                  <span className="font-mono bg-muted px-1.5 py-0.5 rounded">{currentBranch}</span>
-                                </div>
-                              )}
-
-                              {/* Show "up to date" if no divergence at all */}
-                              {(!branchInfo?.upstream || (branchInfo.ahead === 0 && branchInfo.behind === 0)) &&
-                               (!divergence || (divergence.ahead === 0 && divergence.behind === 0)) && (
-                                <span className="text-muted-foreground opacity-60">up to date</span>
-                              )}
-                            </div>
-
-                            {/* Action buttons when selected */}
-                            {isSelected && (
-                              <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-border">
-                                {isBehindMain && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 text-xs"
-                                    disabled={updateBranchMutation.isPending}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      updateBranchMutation.mutate(worktree);
-                                    }}
-                                  >
-                                    {updateBranchMutation.isPending ? (
-                                      <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                                    ) : null}
-                                    Update branch
-                                  </Button>
-                                )}
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-7 text-xs"
-                                  disabled={mergeMutation.isPending}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openMergeDialogForWorktree(worktree);
-                                  }}
-                                >
-                                  Merge into {currentBranch || "main"}
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-7 text-xs"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setFileBrowserWorktree(worktree);
-                                    setViewMode("file-browser");
-                                  }}
-                                >
-                                  Browse files
-                                </Button>
-                                <Button
-                                  variant="default"
-                                  size="sm"
-                                  className="h-7 text-xs"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleOpenSession(worktree);
-                                  }}
-                                >
-                                  Open session
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                      {worktrees.map((worktree) => (
+                        <WorktreeListItem
+                          key={worktree.id}
+                          worktree={worktree}
+                          currentBranch={currentBranch}
+                          isSelected={selectedWorktreeId === worktree.id}
+                          onSelect={setSelectedWorktreeId}
+                          onDoubleClick={() => handleOpenSession(worktree)}
+                          onPin={(worktreeId) => {
+                            if (repoPath) {
+                              togglePinMutation.mutate({ worktreeId, repoPath });
+                            }
+                          }}
+                          onUpdateBranch={(wt) => updateBranchMutation.mutate(wt)}
+                          onMerge={(wt) => openMergeDialogForWorktree(wt)}
+                          onBrowseFiles={(wt) => {
+                            setFileBrowserWorktree(wt);
+                            setViewMode("file-browser");
+                          }}
+                          onOpenSession={(wt) => handleOpenSession(wt)}
+                          updateBranchPending={updateBranchMutation.isPending}
+                          mergePending={mergeMutation.isPending}
+                        />
+                      ))}
                     </div>
                   )}
                 </div>

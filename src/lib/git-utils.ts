@@ -12,23 +12,6 @@ export const formatFileLabel = (path: string): { name: string; directory: string
   return { name, directory };
 };
 
-export const statusLabel = (code?: string | null): string => {
-  switch (code) {
-    case "M":
-      return "Modified";
-    case "A":
-      return "Added";
-    case "D":
-      return "Deleted";
-    case "R":
-      return "Renamed";
-    case "??":
-      return "Untracked";
-    default:
-      return "Changed";
-  }
-};
-
 export const parseChangedFiles = (changedFiles: string[]): ParsedFileChange[] => {
   return changedFiles.map((file) => {
     if (file.startsWith("?? ")) {

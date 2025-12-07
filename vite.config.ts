@@ -16,9 +16,25 @@ export default defineConfig(async () => ({
   },
 
   build: {
-    watch: null,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'monaco': ['monaco-editor', '@monaco-editor/react'],
+          'xterm': [
+            '@xterm/xterm',
+            '@xterm/addon-fit',
+            '@xterm/addon-search',
+            '@xterm/addon-web-links',
+            '@xterm/addon-webgl',
+            '@xterm/addon-ligatures',
+            '@xterm/addon-unicode11',
+            '@xterm/addon-clipboard',
+          ],
+          'vendor': ['react', 'react-dom', '@tanstack/react-query'],
+        },
+      },
+    },
   },
-  watch: false,
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent vite from obscuring rust errors
@@ -35,10 +51,9 @@ export default defineConfig(async () => ({
           port: 1421,
         }
       : undefined,
-    watch: null,
-    // watch: {
-    //   // 3. tell vite to ignore watching `src-tauri`
-    //   ignored: ["**/src-tauri/**"],
-    // },
+    watch: {
+      // 3. tell vite to ignore watching `src-tauri`
+      ignored: ["**/src-tauri/**"],
+    },
   },
 }));

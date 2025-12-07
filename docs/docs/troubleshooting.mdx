@@ -4,157 +4,44 @@ sidebar_position: 10
 
 # Troubleshooting
 
-Common issues and solutions when using Treq.
+_Common issues and solutions when using Treq._
 
-## Performance Issues
+## Performance
 
-### Treq is slow with large repositories
+**Slow with large repositories**: Run `git gc --aggressive` to clean up, add large folders (`node_modules/`, `dist/`) to `.gitignore`, or increase the polling interval in Settings → Performance.
 
-**Causes**: Large repo size, many files, or slow disk.
+**Dashboard updates slowly**: Delete unused worktrees (keep only 5-10 active), disable auto-refresh, or clear cache in Settings → Advanced.
 
-**Solutions**:
-1. **Reduce repo size**:
-   ```bash
-   # Check size
-   du -sh .git
+**Terminal laggy**: Reduce scrollback lines in Settings → Terminal, or switch renderer from WebGL to Canvas. Commands with huge output may pause temporarily.
 
-   # Clean up
-   git gc --aggressive
-   ```
+## Worktrees
 
-2. **Ignore large folders**:
-   - Add to `.gitignore`: `node_modules/`, `dist/`, `build/`
+**Not appearing in dashboard**: Delete the `.treq` folder and reopen Treq—data will rebuild from the filesystem.
 
-3. **Increase polling interval**:
-   - Settings → Performance → Polling Interval → 5000ms
+**Can't delete worktree**: Commit or discard changes first, close terminals using that worktree, or force delete with `git worktree remove --force path/to/worktree`.
 
-### Dashboard updates slowly
+**"Branch already checked out"**: Each branch can only have one worktree. Delete the existing worktree for that branch or choose a different branch name.
 
-**Cause**: Too many worktrees or expensive git operations.
+## Staging
 
-**Solutions**:
-- **Delete unused worktrees**: Keep only 5-10 active
-- **Disable auto-refresh**: Manual refresh only
-- **Clear cache**: Settings → Advanced → Clear Cache
+**Can't stage files**: Check if the file is in `.gitignore` with `git check-ignore -v path/to/file`. To force add an ignored file: `git add -f path/to/file`.
 
-### Terminal is laggy
+## Merging
 
-**Cause**: High output volume or rendering issues.
+**Merge conflicts**: View conflicted files with `git status`, open them in your editor, find the conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`), choose or combine versions, remove markers, then `git add` the resolved file and commit.
 
-**Solutions**:
-- **Reduce scrollback**: Settings → Terminal → Scrollback Lines → 500
-- **Disable WebGL**: Settings → Terminal → Renderer → Canvas
-- **Limit output**: Commands with huge output may pause terminal
+**"Uncommitted changes" preventing merge**: Commit changes in the target branch, or stash them with `git stash` (then `git stash pop` after merging), or discard with `git checkout -- .`
 
-## Worktree Issues
+**Undo a merge**: Abort an ongoing merge with `git merge --abort`. If already committed, use `git reset --hard HEAD~1` (warning: loses changes).
 
-### Worktrees not appearing in dashboard
+## General
 
-**Cause**: Database out of sync with filesystem.
+**"Git not found"**: Ensure Git is installed and in your PATH. On macOS, restart Terminal after installing. On Windows, reinstall Git with "Add to PATH" checked.
 
-**Solution**:
-1. Settings → Repository → **"Rebuild Worktrees Database"**
-2. Or manually:
-   ```bash
-   git worktree list
-   # Note all worktrees
-   ```
-3. Delete `.treq/local.db`
-4. Reopen Treq (database rebuilds)
+**"Invalid Git Repository"**: Select the folder containing `.git`, not a subdirectory. Initialize with `git init` if needed.
 
-### Can't delete worktree
+**App won't start**: Check platform-specific security settings (Gatekeeper on macOS, SmartScreen on Windows). On Linux, ensure FUSE is installed for AppImage.
 
-**Cause**: Uncommitted changes or processes using files.
+## Getting Help
 
-**Solutions**:
-- **Commit or discard changes** first
-- **Close terminals** in that worktree
-- **Force delete**:
-  ```bash
-  git worktree remove --force path/to/worktree
-  ```
-
-### "Branch already checked out"
-
-**Cause**: Trying to create worktree for branch already in another worktree.
-
-**Solution**:
-- Delete existing worktree for that branch
-- Or choose different branch name
-- Git limitation: one worktree per branch
-
-## Staging & Commit Issues
-
-### Can't stage files
-
-**Cause**: File in `.gitignore` or binary file.
-
-**Solutions**:
-- **Check .gitignore**:
-  ```bash
-  git check-ignore -v path/to/file
-  ```
-- **Force add** (if appropriate):
-  ```bash
-  git add -f path/to/file
-  ```
-
-## Merge Issues
-
-### Merge conflicts
-
-**Expected behavior**: Git can't automatically merge.
-
-**Solutions**:
-1. **View conflicted files**:
-   ```bash
-   git status
-   # Look for "both modified"
-   ```
-
-2. **Resolve conflicts**:
-   - Open file in editor
-   - Find conflict markers:
-     ```
-     <<<<<<< HEAD
-     version A
-     =======
-     version B
-     >>>>>>> branch
-     ```
-   - Choose or combine versions
-   - Remove markers
-
-3. **Complete merge**:
-   ```bash
-   git add resolved-file.js
-   git commit
-   ```
-
-### "Uncommitted changes" preventing merge
-
-**Cause**: Working tree not clean in target branch.
-
-**Solutions**:
-- **Commit changes** in target branch
-- **Stash changes**:
-  ```bash
-  git stash
-  # Merge
-  git stash pop
-  ```
-- **Discard changes** (careful!):
-  ```bash
-  git checkout -- .
-  ```
-
-### Merge failed, how to undo?
-
-**Solution**:
-```bash
-# Abort ongoing merge
-git merge --abort
-
-# Or if already committed
-git reset --hard HEAD~1  # Careful: loses changes
-```
+If you're stuck, check the [GitHub Issues](https://github.com/anthropics/treq/issues) for similar problems or open a new issue with reproduction steps.

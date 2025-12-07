@@ -1,4 +1,4 @@
-import { type KeyboardEvent as ReactKeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, memo, useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Worktree,
@@ -6,10 +6,10 @@ import {
   PlanMetadata,
   BranchInfo,
   BranchDivergence,
+  LineDiffStats,
   savePlanToFile,
   savePlanToRepo,
   loadPlanFromRepo,
-  clearSessionPlans,
   ptyWrite,
   ptyClose,
   updateSessionName,
@@ -19,6 +19,7 @@ import {
   getSetting,
   gitGetBranchInfo,
   gitGetBranchDivergence,
+  gitGetLineDiffStats,
   preloadWorktreeGitData,
   gitGetCurrentBranch,
   getSessionModel,
@@ -46,12 +47,14 @@ import {
   DialogDescription,
 } from "./ui/dialog";
 import { PlanHistoryDialog } from "./PlanHistoryDialog";
-import { Loader2, RotateCw, X, GitBranch, Search, ChevronDown, ChevronUp, Pencil, Check, MoreVertical, GitMerge, Upload, AlertTriangle, FileText, ArrowDownToLine, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Loader2, RotateCw, X, GitBranch, Search, ChevronDown, ChevronUp, Pencil, Check, MoreVertical, GitMerge, Upload, AlertTriangle, FileText, ArrowDownToLine, PanelLeftOpen } from "lucide-react";
 import { PlanDisplayModal } from "./PlanDisplayModal";
 import { ModelSelector } from "./ModelSelector";
+import { LineDiffStatsDisplay } from "./LineDiffStatsDisplay";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { cn } from "../lib/utils";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
+import { getWorktreeTitle as getWorktreeTitleFromUtils } from "../lib/worktree-utils";
 
 type SessionPanel = "planning" | "execution" | null;
 
@@ -102,12 +105,10 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
-  const [autoCommandReady, setAutoCommandReady] = useState(false);
   const debouncedParserRef = useRef(createDebouncedParser(1000));
 
   const [refreshSignal, setRefreshSignal] = useState(0);
   const [lastPromptLabel, setLastPromptLabel] = useState<string | null>(null);
-  const [terminalError, setTerminalError] = useState<string | null>(null);
   const [terminalInstanceKey, setTerminalInstanceKey] = useState(0);
 
   const queuedMessagesRef = useRef<string[]>([]);
@@ -129,6 +130,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
   const [remoteBranchInfo, setRemoteBranchInfo] = useState<BranchInfo | null>(null);
   const [maintreeBranchName, setMaintreeBranchName] = useState<string | null>(null);
   const [maintreeDivergence, setMaintreeDivergence] = useState<BranchDivergence | null>(null);
+  const [lineStats, setLineStats] = useState<LineDiffStats | null>(null);
   const [showSwitchOverlay, setShowSwitchOverlay] = useState(false);
   const prevIsHiddenRef = useRef(isHidden);
   const [sessionModel, setSessionModelState] = useState<string | null>(null);
@@ -141,28 +143,18 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
     section => section.type === 'implementation_plan'
   );
 
-  const handleTerminalOutput = useCallback((output: string) => {
-    setTerminalOutput(output);
-    if (sessionId && onSessionActivity) {
-      onSessionActivity(sessionId);
-    }
-  }, [sessionId, onSessionActivity]);
-
   useEffect(() => {
     setTerminalOutput("");
     setPlanSections([]);
     setActivePanel(null);
-    setAutoCommandReady(false);
     queuedMessagesRef.current = [];
     setSearchVisible(false);
     setSearchQuery("");
-    setTerminalError(null);
     consolidatedTerminalRef.current?.clearSearch();
   }, [ptySessionId, terminalInstanceKey]);
 
   useEffect(() => {
     setTerminalInstanceKey(0);
-    setTerminalError(null);
   }, [ptySessionId]);
 
   useEffect(() => {
@@ -176,8 +168,8 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
       return;
     }
 
-    preloadWorktreeGitData(normalized).catch((error) => {
-      console.debug("git cache preload failed", normalized, error);
+    preloadWorktreeGitData(normalized).catch(() => {
+      // Silently ignore preload failures
     });
   }, [workingDirectory, isHidden]);
 
@@ -213,8 +205,8 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
   }, []);
 
   useEffect(() => {
-    setActivePanel(detectPanelFromOutput(terminalOutput));
-  }, [terminalOutput, detectPanelFromOutput]);
+    setActivePanel(detectPanelFromOutput(""));
+  }, [ detectPanelFromOutput]);
 
   // Reset right panel when session becomes hidden to unmount PlanDisplay/StagingDiffViewer
   useEffect(() => {
@@ -376,7 +368,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
   useEffect(() => {
     const isWithinTerminal = (element: HTMLElement | null): boolean => {
       if (!element) return false;
-      return element.closest('.xterm') !== null;
+      return element.closest('.xterm, [data-terminal]') !== null;
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -538,19 +530,13 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
 
   const handleReset = useCallback(async () => {
     setIsResetting(true);
-    setTerminalError(null);
     try {
       // Close the existing PTY session to force a fresh Claude instance
       await ptyClose(ptySessionId).catch(console.error);
 
-      if (effectiveRepoPath) {
-        await clearSessionPlans(effectiveRepoPath, ptySessionId).catch(console.error);
-      }
-
       setPlanSections([]);
       setTerminalOutput("");
       setActivePanel(null);
-      setAutoCommandReady(false);
       queuedMessagesRef.current = [];
 
       // Increment instance key to remount ConsolidatedTerminal with a fresh PTY
@@ -620,30 +606,14 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
     performReset();
   }, [pendingModelReset, handleReset, sessionModel, addToast]);
 
-  const handleRetryTerminal = useCallback(() => {
-    setTerminalError(null);
-    setTerminalInstanceKey((prev) => prev + 1);
-  }, []);
-
   const handleSessionError = useCallback((message: string) => {
-    const friendlyMessage = message.includes("Session not found")
-      ? "Terminal session is still initializing. Please wait a moment and try again."
-      : message;
-    setTerminalError(friendlyMessage);
     addToast({
       title: "PTY Error",
-      description: friendlyMessage,
-      type: "error",
-    });
-  }, [addToast]);
-
-  const handleAutoCommandError = useCallback((message: string) => {
-    addToast({
-      title: "Command Error",
       description: message,
       type: "error",
     });
   }, [addToast]);
+
 
   const handleStagedFilesChange = useCallback((_files: string[]) => {
     // No-op: staged files tracking not currently used
@@ -653,12 +623,6 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
     setRefreshSignal((prev) => prev + 1);
   }, []);
 
-  const handleTerminalIdle = useCallback(() => {
-    // Refresh git status when terminal goes idle (after command output stops)
-    if (activePanel === "execution") {
-      triggerSidebarRefresh();
-    }
-  }, [activePanel, triggerSidebarRefresh]);
 
   // Load main tree path from settings
   useEffect(() => {
@@ -741,6 +705,17 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
       } catch {
         if (!isCancelled) {
           setMaintreeDivergence(null);
+        }
+      }
+
+      try {
+        const stats = await gitGetLineDiffStats(worktree.worktree_path, baseBranchName);
+        if (!isCancelled) {
+          setLineStats(stats);
+        }
+      } catch {
+        if (!isCancelled) {
+          setLineStats(null);
         }
       }
     };
@@ -899,10 +874,6 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
       });
   }, [ptySessionId, addToast]);
 
-  useEffect(() => {
-    setAutoCommandReady(false);
-  }, [ptySessionId]);
-
   const prevInitialPromptRef = useRef<string | undefined>(undefined);
 
   // Load session model on mount
@@ -939,15 +910,15 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
     const promptChanged = prevInitialPromptRef.current !== initialPrompt;
     prevInitialPromptRef.current = initialPrompt;
 
-    if (promptChanged && autoCommandReady && initialPrompt && initialPrompt.trim()) {
+    if (promptChanged && initialPrompt && initialPrompt.trim()) {
       setTimeout(() => {
         flushQueuedMessages();
       }, 500);
     }
-  }, [ptySessionId, buildPlanPrompt, initialPrompt, initialPromptLabel, autoCommandReady, flushQueuedMessages]);
+  }, [ptySessionId, buildPlanPrompt, initialPrompt, initialPromptLabel, flushQueuedMessages]);
 
   useEffect(() => {
-    if (!autoCommandReady) {
+    if (!ptySessionId) {
       return;
     }
 
@@ -956,7 +927,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
     }, 1500);
 
     return () => clearTimeout(timeout);
-  }, [autoCommandReady, flushQueuedMessages]);
+  }, [ptySessionId, flushQueuedMessages]);
 
   const executionPanel = workingDirectory ? (
     <div className="flex flex-col h-full">
@@ -976,50 +947,6 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
       Configure a worktree or repository path to manage commits.
     </div>
   );
-
-  const rightPanel = executionPanel;
-
-  const terminalOverlay = useMemo(() => {
-    if (terminalError) {
-      return (
-        <div className="absolute inset-0 bg-background/90 backdrop-blur-sm flex items-center justify-center z-20 p-6">
-          <div className="w-full max-w-sm rounded-lg border bg-card p-4 text-center shadow-lg">
-            <p className="text-sm font-semibold">Unable to start terminal</p>
-            <p className="text-xs text-muted-foreground mt-2 break-words">{terminalError}</p>
-            <div className="mt-4 flex flex-col gap-2">
-              <Button size="sm" onClick={handleRetryTerminal}>
-                Try again
-              </Button>
-              <Button size="sm" variant="outline" onClick={onClose}>
-                Close session
-              </Button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    if (isResetting) {
-      return (
-        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-20">
-          <div className="text-center">
-            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">Resetting terminal...</p>
-          </div>
-        </div>
-      );
-    }
-
-    if (showSwitchOverlay) {
-      return (
-        <div className="absolute inset-0 flex items-center justify-center bg-[#1e1e1e] z-20">
-          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-        </div>
-      );
-    }
-
-    return undefined;
-  }, [handleRetryTerminal, isResetting, onClose, terminalError, showSwitchOverlay]);
 
   const handleDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -1121,15 +1048,8 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
   }, [ptySessionId, addToast]);
 
   const getWorktreeTitle = (): string => {
-    if (worktree?.metadata) {
-      try {
-        const metadata = JSON.parse(worktree.metadata);
-        return metadata.initial_plan_title || metadata.intent || worktree.branch_name;
-      } catch {
-        return worktree.branch_name;
-      }
-    }
-    return worktree?.branch_name || "Main";
+    if (!worktree) return "Main";
+    return getWorktreeTitleFromUtils(worktree);
   };
 
   const sessionTitle =
@@ -1297,6 +1217,13 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
                     <span>{maintreeDivergence?.behind ?? 0}↓</span>
                   </span>
                   <span className="text-[10px] uppercase tracking-wide">maintree</span>
+                </div>
+              )}
+
+              {maintreeBranchName && lineStats && (lineStats.lines_added > 0 || lineStats.lines_deleted > 0) && (
+                <div className="flex flex-col items-center gap-1">
+                  <LineDiffStatsDisplay stats={lineStats} size="xs" className="rounded-full border border-border px-2 py-0.5" />
+                  <span className="text-[10px] uppercase tracking-wide">lines</span>
                 </div>
               )}
 
@@ -1494,18 +1421,13 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
               sessionId={ptySessionId}
               workingDirectory={workingDirectory}
               autoCommand={sessionModel ? `claude --permission-mode plan --model="${sessionModel}"` : "claude --permission-mode plan"}
-              autoCommandDelay={300}
-              onAutoCommandComplete={() => setAutoCommandReady(true)}
-              onAutoCommandError={handleAutoCommandError}
               onSessionError={handleSessionError}
-              onTerminalOutput={handleTerminalOutput}
-              onTerminalIdle={handleTerminalIdle}
-              rightPanel={null}
+              onTerminalIdle={triggerSidebarRefresh}
+              onClose={onClose}
               showDiffViewer={true}
               containerClassName="flex-1 flex overflow-hidden"
               terminalPaneClassName="w-full"
               rightPaneClassName="hidden"
-              terminalOverlay={terminalOverlay}
               isHidden={isHidden}
             />
           )}
@@ -1520,7 +1442,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(function SessionTermin
         <div className="w-1 bg-border flex-shrink-0" />
 
         <div className="w-2/3 flex flex-col overflow-hidden">
-          {rightPanel}
+          {executionPanel}
         </div>
       </div>
 

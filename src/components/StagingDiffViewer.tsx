@@ -66,8 +66,6 @@ import { cn } from "../lib/utils";
 import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
 import {
   parseChangedFiles,
-  formatFileLabel,
-  statusLabel,
   filterStagedFiles,
   filterUnstagedFiles,
   isBinaryFile,
@@ -190,8 +188,8 @@ const parseCachedStrings = (raw: string): string[] | null => {
     if (Array.isArray(parsed)) {
       return parsed as string[];
     }
-  } catch (error) {
-    console.debug("failed to parse cached string array", error);
+  } catch {
+    // Silently ignore parse failures
   }
   return null;
 };
@@ -202,8 +200,8 @@ const parseCachedHunks = (raw: string): GitDiffHunk[] | null => {
     if (Array.isArray(parsed)) {
       return parsed as GitDiffHunk[];
     }
-  } catch (error) {
-    console.debug("failed to parse cached hunks", error);
+  } catch {
+    // Silently ignore parse failures
   }
   return null;
 };
@@ -626,8 +624,8 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     }
     try {
       await invalidateGitCache(worktreePath);
-    } catch (error) {
-      console.debug("git cache invalidate failed", worktreePath, error);
+    } catch {
+      // Silently ignore cache invalidation failures
     }
   }, [worktreePath]);
 
@@ -872,8 +870,8 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
           applyChangedFiles(parsed);
         }
       }
-    } catch (error) {
-      console.debug("failed to get git cache", worktreePath, error);
+    } catch {
+      // Silently ignore cache retrieval failures
     }
 
     try {
@@ -882,8 +880,8 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
       if (!arraysEqual(cachedEntries, changedFiles)) {
         applyChangedFiles(parsed);
       }
-      setGitCache(worktreePath, "changed_files", changedFiles).catch((error) => {
-        console.debug("failed to cache changed files", worktreePath, error);
+      setGitCache(worktreePath, "changed_files", changedFiles).catch(() => {
+        // Silently ignore cache write failures
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -921,8 +919,8 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
         }
         return next;
       });
-    } catch (error) {
-      console.debug("Failed to load viewed files", error);
+    } catch {
+      // Silently ignore viewed files load failures
     }
   }, [worktreePath]);
 
@@ -989,8 +987,8 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
 
     // Remove stale entries from database
     for (const filePath of staleFiles) {
-      unmarkFileViewed(worktreePath, filePath).catch((err) => {
-        console.debug("Failed to unmark stale viewed file", filePath, err);
+      unmarkFileViewed(worktreePath, filePath).catch(() => {
+        // Silently ignore unmark failures
       });
     }
   }, [files, allFileHunks, worktreePath]);
@@ -1049,8 +1047,8 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
         setViewedFiles((prev) => new Map(prev).set(filePath, { viewedAt: now, contentHash }));
         // Collapse the file
         setCollapsedFiles((prev) => new Set(prev).add(filePath));
-      } catch (error) {
-        console.debug("Failed to mark file as viewed", filePath, error);
+      } catch {
+        // Silently ignore mark failures
       }
     },
     [worktreePath, allFileHunks]
@@ -1073,8 +1071,8 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
           next.delete(filePath);
           return next;
         });
-      } catch (error) {
-        console.debug("Failed to unmark file as viewed", filePath, error);
+      } catch {
+        // Silently ignore unmark failures
       }
     },
     [worktreePath]
@@ -1104,8 +1102,8 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
                 hunksMap.set(file.path, { filePath: file.path, hunks, isLoading: false });
               }
             }
-          } catch (error) {
-            console.debug("failed to read cached file hunks", file.path, error);
+          } catch {
+            // Silently ignore cache read failures
           }
         })
       );
@@ -1209,8 +1207,8 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
       try {
         await invalidateCache();
         setManualRefreshKey((prev) => prev + 1);
-      } catch (error) {
-        console.debug("Git polling failed", error);
+      } catch {
+        // Silently ignore polling failures
       }
     };
 
@@ -1341,7 +1339,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     [worktreePath, readOnly, disableInteractions, selectedUnstagedFiles, refresh, addToast, invalidateCache]
   );
 
-  // Smart scroll function - only scrolls if file not visible in viewport
+  // Scroll to file in the virtualized list
   const scrollToFileIfNeeded = useCallback((fileIndex: number) => {
     const file = unstagedFiles[fileIndex];
     if (!file) return;
@@ -1355,24 +1353,18 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
       return next;
     });
 
-    // Smart scroll - only scroll if element not currently visible
-    requestAnimationFrame(() => {
-      const fileId = `file-section-${filePath.replace(/[^a-zA-Z0-9]/g, "-")}`;
-      const element = document.getElementById(fileId);
-      if (!element) return;
+    // Find the index in the full files array (since the List renders all files, not just unstaged)
+    const fullFileIndex = files.findIndex(f => f.path === filePath);
+    if (fullFileIndex === -1) return;
 
-      const rect = element.getBoundingClientRect();
-      const viewportHeight = window.innerHeight;
-
-      // Check if element is visible in viewport
-      const isVisible = rect.top >= 0 && rect.top < viewportHeight;
-
-      // Only scroll if not visible
-      if (!isVisible) {
-        element.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
+    // Use react-window's scrollToRow API to scroll to the file
+    // This ensures the row is rendered (unlike document.getElementById which fails for virtualized items)
+    listRef.current?.scrollToRow({
+      index: fullFileIndex,
+      align: 'start',
+      behavior: 'smooth',
     });
-  }, [unstagedFiles]);
+  }, [unstagedFiles, files]);
 
   // File selection handler - VSCode-style click selection
   const handleFileSelect = useCallback((path: string, event: React.MouseEvent) => {
@@ -2357,7 +2349,6 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     const isCollapsed = collapsedFiles.has(filePath);
     const isViewed = viewedFiles.has(filePath);
     const fileId = `file-section-${filePath.replace(/[^a-zA-Z0-9]/g, "-")}`;
-    const label = formatFileLabel(filePath);
 
     // Compute line stats from hunks
     let additions = 0;

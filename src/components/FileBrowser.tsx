@@ -1,32 +1,25 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Folder, FolderOpen, FileText, X, Loader2, AlertCircle, Plus } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo, useRef, memo } from "react";
+import { Folder, FolderOpen, FileText, Loader2, AlertCircle, Plus } from "lucide-react";
 import { List, type ListImperativeAPI, type RowComponentProps } from "react-window";
 import type { Worktree, DirectoryEntry } from "../lib/api";
 import { listDirectory, readFile, gitGetChangedFiles, gitGetFileHunks } from "../lib/api";
 import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
-import { isBinaryFile } from "../lib/git-utils";
+import { isBinaryFile, parseChangedFiles, type ParsedFileChange } from "../lib/git-utils";
 import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
 import { useToast } from "./ui/toast";
-import { v4 as uuidv4 } from "uuid";
+import { useWorktreeGitStatus } from "../hooks/useWorktreeGitStatus";
+import { LineDiffStatsDisplay } from "./LineDiffStatsDisplay";
+import { getWorktreeTitle } from "../lib/worktree-utils";
+import { GitBranch, Pin } from "lucide-react";
 
 interface FileBrowserProps {
   worktree?: Worktree;
   repoPath?: string;
   branchName?: string;
-  onClose: () => void;
+  mainBranch?: string;
   onStartPlanSession?: (prompt: string, worktreePath: string) => void;
-}
-
-interface LineComment {
-  id: string;
-  filePath: string;
-  startLine: number;
-  endLine: number;
-  lineContent: string[];
-  text: string;
-  createdAt: string;
 }
 
 interface LineSelection {
@@ -46,10 +39,19 @@ function filterHiddenEntries(entries: DirectoryEntry[]): DirectoryEntry[] {
 const LINE_HEIGHT = 24;
 const COMMENT_INPUT_HEIGHT = 180;
 
-export function FileBrowser({ worktree, repoPath, branchName, onClose, onStartPlanSession }: FileBrowserProps) {
+export const FileBrowser = memo(function FileBrowser({ worktree, repoPath, branchName, mainBranch, onStartPlanSession }: FileBrowserProps) {
   // Determine the path and branch to use
   const basePath = worktree?.worktree_path ?? repoPath ?? "";
   const displayBranch = worktree?.branch_name ?? branchName ?? "main";
+
+  // Get git status for worktree
+  const { status, branchInfo, lineDiffStats } = useWorktreeGitStatus(
+    worktree?.worktree_path,
+    {
+      refetchInterval: 30000,
+      baseBranch: mainBranch,
+    }
+  );
 
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set([basePath]));
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -58,9 +60,9 @@ export function FileBrowser({ worktree, repoPath, branchName, onClose, onStartPl
   const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [isLoadingDir, setIsLoadingDir] = useState(false);
   const [rootEntries, setRootEntries] = useState<DirectoryEntry[]>([]);
-  const [changedFiles, setChangedFiles] = useState<Set<string>>(new Set());
+  const [changedFiles, setChangedFiles] = useState<Map<string, ParsedFileChange>>(new Map());
   const [fileHunks, setFileHunks] = useState<Map<number, 'add' | 'modify' | 'delete'>>(new Map());
-  const [_comments, _setComments] = useState<LineComment[]>([]);
+  const [deletionMarkers, setDeletionMarkers] = useState<Set<number>>(new Set());
   const [lineSelection, setLineSelection] = useState<LineSelection | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionAnchor, setSelectionAnchor] = useState<number | null>(null);
@@ -102,7 +104,12 @@ export function FileBrowser({ worktree, repoPath, branchName, onClose, onStartPl
       if (!basePath) return;
       try {
         const files = await gitGetChangedFiles(basePath);
-        setChangedFiles(new Set(files.map(f => `${basePath}/${f}`)));
+        const parsed = parseChangedFiles(files);
+        const fileMap = new Map<string, ParsedFileChange>();
+        for (const file of parsed) {
+          fileMap.set(`${basePath}/${file.path}`, file);
+        }
+        setChangedFiles(fileMap);
       } catch (error) {
         // Silently fail - git status is optional
         console.error("Failed to load git status:", error);
@@ -110,12 +117,6 @@ export function FileBrowser({ worktree, repoPath, branchName, onClose, onStartPl
     };
     loadChangedFiles();
   }, [basePath]);
-
-  // Reset list item size cache when comment input visibility changes
-  useEffect(() => {
-    // In react-window v2, row heights are recalculated automatically
-    // when the rowHeight function or its dependencies change
-  }, [showCommentInput, pendingComment]);
 
   const handleFileClick = useCallback(async (path: string) => {
     setSelectedFile(path);
@@ -150,6 +151,7 @@ export function FileBrowser({ worktree, repoPath, branchName, onClose, onStartPl
         try {
           const hunks = await gitGetFileHunks(basePath, path.replace(`${basePath}/`, ''));
           const lineMap = new Map<number, 'add' | 'modify' | 'delete'>();
+          const deletionSet = new Set<number>();
 
           hunks.forEach(hunk => {
             // Parse the hunk header to get starting line number
@@ -164,8 +166,11 @@ export function FileBrowser({ worktree, repoPath, branchName, onClose, onStartPl
                 lineMap.set(newLineNum, 'add');
                 newLineNum++;
               } else if (line.startsWith('-') && !line.startsWith('---')) {
-                // Deletions don't increment the new line number
-                // We'll mark the next line as modified
+                // Deletions don't have a line in the current file
+                // Mark the line before where deletion occurred (show marker between lines)
+                if (newLineNum > 1) {
+                  deletionSet.add(newLineNum - 1);
+                }
               } else if (line.startsWith(' ')) {
                 // Context line - just increment
                 newLineNum++;
@@ -174,12 +179,15 @@ export function FileBrowser({ worktree, repoPath, branchName, onClose, onStartPl
           });
 
           setFileHunks(lineMap);
+          setDeletionMarkers(deletionSet);
         } catch (error) {
           console.error("Failed to load git hunks:", error);
           setFileHunks(new Map());
+          setDeletionMarkers(new Set());
         }
       } else {
         setFileHunks(new Map());
+        setDeletionMarkers(new Set());
       }
     } catch (error) {
       addToast({
@@ -193,6 +201,16 @@ export function FileBrowser({ worktree, repoPath, branchName, onClose, onStartPl
       setIsLoadingFile(false);
     }
   }, [addToast, basePath, changedFiles]);
+
+  // Helper to determine text color based on git status
+  const getStatusTextColor = useCallback((file: ParsedFileChange | undefined): string => {
+    if (!file) return "";
+    if (file.isUntracked) return "text-green-500";
+    if (file.worktreeStatus === "M" || file.stagedStatus === "M") return "text-yellow-500";
+    if (file.worktreeStatus === "A" || file.stagedStatus === "A") return "text-green-500";
+    if (file.worktreeStatus === "D" || file.stagedStatus === "D") return "text-red-500";
+    return "text-yellow-500"; // default for any other change
+  }, []);
 
   // Line selection handlers
   const handleLineMouseDown = useCallback((e: React.MouseEvent, lineNum: number, _lineContent: string) => {
@@ -266,19 +284,6 @@ export function FileBrowser({ worktree, repoPath, branchName, onClose, onStartPl
       prompt += `"${text.trim()}"`;
 
       onStartPlanSession(prompt, basePath);
-    } else if (action === 'edit') {
-      // Add as a comment for later
-      const newComment: LineComment = {
-        id: uuidv4(),
-        filePath: selectedFile,
-        startLine: pendingComment.startLine,
-        endLine: pendingComment.endLine,
-        lineContent: pendingComment.lineContent,
-        text: text.trim(),
-        createdAt: new Date().toISOString(),
-      };
-
-      _setComments((prev: LineComment[]) => [...prev, newComment]);
     }
 
     setShowCommentInput(false);
@@ -331,12 +336,23 @@ export function FileBrowser({ worktree, repoPath, branchName, onClose, onStartPl
   }, [directoryCache, addToast]);
 
   const hasChangedFilesInDirectory = useCallback((dirPath: string): boolean => {
-    for (const changedFile of changedFiles) {
-      if (changedFile.startsWith(dirPath + '/')) {
+    for (const [path] of changedFiles) {
+      if (path.startsWith(dirPath + '/')) {
         return true;
       }
     }
     return false;
+  }, [changedFiles]);
+
+  const getDirectoryChangeStatus = useCallback((dirPath: string): ParsedFileChange | undefined => {
+    // Check if any files in this directory are changed
+    // Returns the first found change, or undefined if none
+    for (const [path, file] of changedFiles) {
+      if (path.startsWith(dirPath + '/')) {
+        return file;
+      }
+    }
+    return undefined;
   }, [changedFiles]);
 
   const handleDirectoryClick = async (path: string) => {
@@ -354,14 +370,14 @@ export function FileBrowser({ worktree, repoPath, branchName, onClose, onStartPl
     }
   };
 
-  const renderTreeNode = (entry: DirectoryEntry, depth: number = 0): JSX.Element => {
+  const renderTreeNode = useCallback((entry: DirectoryEntry, depth: number = 0): JSX.Element => {
     if (entry.is_directory) {
       const isExpanded = expandedDirs.has(entry.path);
       const children = directoryCache.get(entry.path) || [];
       const hasChanges = hasChangedFilesInDirectory(entry.path);
 
       return (
-        <div key={entry.path} className="text-sm">
+        <div key={entry.path} className="text-xs">
           <button
             type="button"
             className={cn(
@@ -376,7 +392,9 @@ export function FileBrowser({ worktree, repoPath, branchName, onClose, onStartPl
             ) : (
               <Folder className="w-4 h-4 flex-shrink-0" />
             )}
-            <span className="font-medium truncate">{entry.name}</span>
+            <span className={cn("font-medium truncate", getStatusTextColor(getDirectoryChangeStatus(entry.path)))}>
+              {entry.name}
+            </span>
             {hasChanges && (
               <span
                 className="w-2 h-2 rounded-full flex-shrink-0 bg-yellow-500 ml-auto"
@@ -410,21 +428,22 @@ export function FileBrowser({ worktree, repoPath, branchName, onClose, onStartPl
     }
 
     // File node
-    const isChanged = changedFiles.has(entry.path);
+    const fileStatus = changedFiles.get(entry.path);
+    const isChanged = fileStatus !== undefined;
     return (
       <button
         key={entry.path}
         type="button"
         onClick={() => handleFileClick(entry.path)}
         className={cn(
-          "w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm transition",
+          "w-full flex items-center gap-2 px-2 py-1 rounded-md text-xs transition",
           "hover:bg-muted/60 text-left",
           selectedFile === entry.path && "bg-primary/10"
         )}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
       >
         <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-        <span className="truncate">{entry.name}</span>
+        <span className={cn("truncate", getStatusTextColor(fileStatus))}>{entry.name}</span>
         {isChanged && (
           <span
             className="w-2 h-2 rounded-full flex-shrink-0 bg-yellow-500 ml-auto"
@@ -433,7 +452,7 @@ export function FileBrowser({ worktree, repoPath, branchName, onClose, onStartPl
         )}
       </button>
     );
-  };
+  }, [expandedDirs, directoryCache, hasChangedFilesInDirectory, handleDirectoryClick, changedFiles, handleFileClick, selectedFile]);
 
   // Calculate item height for virtualization
   const getItemHeight = useCallback((index: number) => {
@@ -505,7 +524,7 @@ export function FileBrowser({ worktree, repoPath, branchName, onClose, onStartPl
       <div className="h-full flex flex-col bg-background" onMouseUp={handleLineMouseUp}>
         <div className="px-4 pt-4 pb-2">
           <div className="mb-2 text-xs text-muted-foreground font-mono">
-            <span>{selectedFile}</span>
+            <span>{selectedFile.startsWith(basePath + '/') ? selectedFile.slice(basePath.length + 1) : selectedFile}</span>
           </div>
         </div>
         <div className="flex-1 overflow-hidden">
@@ -527,7 +546,8 @@ export function FileBrowser({ worktree, repoPath, branchName, onClose, onStartPl
                   <div
                     className={cn(
                       "flex group relative cursor-pointer hover:bg-muted/30 transition-colors text-xs font-mono leading-normal",
-                      isSelected && "bg-primary/10"
+                      isSelected && "bg-primary/10",
+                      gitStatus === 'add' && "bg-emerald-500/10"
                     )}
                     style={{ height: LINE_HEIGHT }}
                     onMouseDown={(e) => handleLineMouseDown(e, lineNum, rawLines[index])}
@@ -541,10 +561,21 @@ export function FileBrowser({ worktree, repoPath, branchName, onClose, onStartPl
                       <span
                         className={cn(
                           "absolute left-0 w-1 h-full",
-                          gitStatus === 'add' && "bg-green-500",
+                          gitStatus === 'add' && "bg-emerald-500",
                           gitStatus === 'modify' && "bg-yellow-500",
                           gitStatus === 'delete' && "bg-red-500"
                         )}
+                      />
+                    )}
+                    {/* Deletion marker - shown between lines where content was deleted */}
+                    {deletionMarkers.has(lineNum) && (
+                      <span
+                        className="absolute left-0 bottom-0 w-2 h-[3px] bg-red-500"
+                        style={{
+                          clipPath: 'polygon(0 0, 100% 50%, 0 100%)',
+                          transform: 'translateY(50%)'
+                        }}
+                        title="Lines deleted here"
                       />
                     )}
                     {/* Line number */}
@@ -653,23 +684,70 @@ export function FileBrowser({ worktree, repoPath, branchName, onClose, onStartPl
     );
   };
 
+  const totalChanges = status
+    ? status.modified + status.added + status.deleted + status.untracked
+    : 0;
+
+  const title = worktree ? getWorktreeTitle(worktree) : "File Browser";
+
   return (
     <div className="h-full flex flex-col bg-background">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b">
-        <div className="flex flex-col">
-          <h2 className="text-lg font-semibold">File Browser</h2>
-          <p className="text-sm text-muted-foreground">{displayBranch}</p>
+        <div className="flex flex-col gap-2 flex-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold">{title}</h2>
+            {worktree?.is_pinned && (
+              <Pin className="w-3.5 h-3.5 text-muted-foreground" />
+            )}
+            <LineDiffStatsDisplay stats={lineDiffStats} size="sm" />
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <GitBranch className="w-3 h-3" />
+            <span className="font-mono text-xs">{displayBranch}</span>
+            {branchInfo && (branchInfo.ahead > 0 || branchInfo.behind > 0) && (
+              <span className="text-xs">
+                {branchInfo.ahead > 0 && <span className="text-green-600 dark:text-green-400">{branchInfo.ahead}↑</span>}
+                {branchInfo.behind > 0 && <span className="text-orange-600 dark:text-orange-400 ml-1">{branchInfo.behind}↓</span>}
+              </span>
+            )}
+          </div>
+          {status && totalChanges > 0 && (
+            <div className="flex flex-wrap gap-1 text-xs">
+              {status.modified > 0 && (
+                <span className="px-1.5 py-0.5 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 rounded">
+                  {status.modified} modified
+                </span>
+              )}
+              {status.added > 0 && (
+                <span className="px-1.5 py-0.5 bg-green-500/10 text-green-600 dark:text-green-400 rounded">
+                  {status.added} added
+                </span>
+              )}
+              {status.deleted > 0 && (
+                <span className="px-1.5 py-0.5 bg-red-500/10 text-red-600 dark:text-red-400 rounded">
+                  {status.deleted} deleted
+                </span>
+              )}
+              {status.untracked > 0 && (
+                <span className="px-1.5 py-0.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded">
+                  {status.untracked} untracked
+                </span>
+              )}
+            </div>
+          )}
+          {worktree && (
+            <div className="text-xs text-muted-foreground">
+              <div>Created {new Date(worktree.created_at).toLocaleString()}</div>
+            </div>
+          )}
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose}>
-          <X className="w-4 h-4" />
-        </Button>
       </div>
 
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* File Tree */}
-        <div className="w-80 flex-shrink-0 border-r bg-sidebar overflow-auto">
+        <div className="w-[240px] flex-shrink-0 border-r bg-sidebar overflow-auto">
           {isLoadingDir && rootEntries.length === 0 ? (
             <div className="flex items-center justify-center p-4">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -696,4 +774,4 @@ export function FileBrowser({ worktree, repoPath, branchName, onClose, onStartPl
       </div>
     </div>
   );
-}
+});

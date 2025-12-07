@@ -25,8 +25,8 @@ Now, instead of a messy pile of AI output, you get a clean, organized workflow y
 
 ## Key Features
 
-- **🌳 Agent Isolation**: Coding agents work in isolation on dedicated Git worktrees, paralleized and isolated.
-- **💻 Integrated Terminal**: Use Claude Code in full inteactive mode, with seamless integeration with planning modes and Git worktree management
+- **🌳 Agent Isolation**: Coding agents work in isolation on dedicated Git worktrees, parallelized and isolated.
+- **💻 Integrated Terminal**: Use Claude Code in full interactive mode, with seamless integration with planning modes and Git worktree management
 - **🔍 Code Review**: Inspect and iterate on each change for a human-in-the-loop agentic workflow.
 
 ## Open-Sourced

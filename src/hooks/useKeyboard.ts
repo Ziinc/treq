@@ -4,7 +4,8 @@ type KeyboardHandler = (event: KeyboardEvent) => void;
 
 function isWithinTerminal(element: HTMLElement | null): boolean {
   if (!element) return false;
-  return element.closest('.xterm') !== null;
+  // Check for terminal containers (ghostty-web or xterm for backwards compatibility)
+  return element.closest('.xterm, [data-terminal]') !== null;
 }
 
 export function useKeyboardShortcut(
@@ -44,17 +45,5 @@ export function useKeyboardShortcut(
     window.addEventListener("keydown", handleKeyPress);
     return () => window.removeEventListener("keydown", handleKeyPress);
   }, [key, ctrlOrCmd, ...deps]);
-}
-
-export function useKeyboardShortcuts() {
-  const shortcuts = [
-    { key: "n", mod: true, action: "New Worktree", description: "Cmd/Ctrl + N" },
-    { key: "r", mod: true, action: "Refresh", description: "Cmd/Ctrl + R" },
-    { key: "f", mod: true, action: "Search", description: "Cmd/Ctrl + F" },
-    { key: ",", mod: true, action: "Settings", description: "Cmd/Ctrl + ," },
-    { key: "Escape", mod: false, action: "Close Dialog", description: "Esc" },
-  ];
-
-  return shortcuts;
 }
 

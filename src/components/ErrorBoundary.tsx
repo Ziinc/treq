@@ -1,4 +1,5 @@
 import React from "react";
+import { Clipboard } from "lucide-react";
 import { Button } from "./ui/button";
 
 export interface ErrorBoundaryProps {
@@ -6,7 +7,6 @@ export interface ErrorBoundaryProps {
   fallbackTitle?: string;
   resetKeys?: unknown[];
   onReset?: () => void;
-  onGoDashboard?: () => void;
 }
 
 interface ConsoleLog {
@@ -162,14 +162,6 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     }
   };
 
-  handleGoDashboard = () => {
-    if (this.props.onGoDashboard) {
-      this.props.onGoDashboard();
-    } else if (typeof window !== "undefined") {
-      window.location.reload();
-    }
-  };
-
   render() {
     if (this.state.hasError) {
       const isDev = import.meta.env.DEV;
@@ -186,60 +178,31 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             </p>
           </div>
 
-          <div className="flex flex-col gap-2 w-full max-w-xs">
-            <Button onClick={this.resetErrorBoundary}>Reset</Button>
-            <Button variant="outline" onClick={this.handleGoDashboard}>
-              Go to Dashboard
-            </Button>
-            {isDev && (
+          {isDev && (
+            <div className="flex gap-2">
+              <Button onClick={this.resetErrorBoundary}>Reset</Button>
               <Button variant="outline" onClick={this.copyErrorDetails}>
-                {copyStatus || "Copy Error Details"}
+                <Clipboard className="size-4" />
+                {copyStatus || "Copy Error"}
               </Button>
-            )}
-          </div>
+            </div>
+          )}
 
           {isDev && (
-            <div className="w-full max-w-4xl space-y-4">
-              {/* Error Stack */}
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold">Stack Trace:</h3>
-                <pre className="bg-muted p-4 rounded-md text-xs overflow-auto max-h-64 font-mono">
-                  {error?.stack || "No stack trace available"}
-                </pre>
-              </div>
-
-              {/* Component Stack */}
-              {componentStack && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold">Component Stack:</h3>
-                  <pre className="bg-muted p-4 rounded-md text-xs overflow-auto max-h-64 font-mono">
-                    {componentStack}
-                  </pre>
-                </div>
-              )}
-
-              {/* Console Logs */}
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold">
-                  Console Logs ({consoleLogs.length}):
-                </h3>
-                <textarea
-                  readOnly
-                  value={
-                    consoleLogs.length > 0
-                      ? consoleLogs
-                          .map(
-                            (log) =>
-                              `[${new Date(log.timestamp).toLocaleTimeString()}] [${log.type.toUpperCase()}] ${log.args.join(" ")}`
-                          )
-                          .join("\n")
-                      : "No console logs captured"
-                  }
-                  className="w-full bg-muted p-4 rounded-md text-xs font-mono resize-none overflow-auto"
-                  rows={12}
-                />
-              </div>
-            </div>
+            <pre className="w-full max-w-4xl bg-muted p-4 rounded-md text-xs overflow-auto max-h-96 font-mono whitespace-pre-wrap">
+              {[
+                "=== STACK TRACE ===",
+                error?.stack || "No stack trace available",
+                "",
+                componentStack && "=== COMPONENT STACK ===",
+                componentStack,
+                componentStack && "",
+                `=== CONSOLE LOGS (${consoleLogs.length}) ===`,
+                consoleLogs.length > 0
+                  ? consoleLogs.map((log) => `[${new Date(log.timestamp).toLocaleTimeString()}] [${log.type.toUpperCase()}] ${log.args.join(" ")}`).join("\n")
+                  : "No console logs captured",
+              ].filter(Boolean).join("\n")}
+            </pre>
           )}
         </div>
       );

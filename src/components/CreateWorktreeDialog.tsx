@@ -143,9 +143,8 @@ export const CreateWorktreeDialog: React.FC<CreateWorktreeDialogProps> = ({
             type: "info",
           });
 
-          const output = await gitExecutePostCreateCommand(worktreeId, worktreePath, postCreateCmd);
-          console.log("Post-create command output:", output);
-          
+          await gitExecutePostCreateCommand(worktreePath, postCreateCmd);
+
           addToast({
             title: "Worktree created successfully",
             description: "Post-create command executed successfully",

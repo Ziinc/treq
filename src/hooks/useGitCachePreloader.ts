@@ -1,5 +1,4 @@
-import { useEffect, useMemo } from "react";
-import type { Worktree } from "../lib/api";
+import { useEffect } from "react";
 import { preloadWorktreeGitData } from "../lib/api";
 
 const sanitizePath = (path?: string | null): string | null => {
@@ -8,47 +7,28 @@ const sanitizePath = (path?: string | null): string | null => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
-export const useGitCachePreloader = (worktrees: Worktree[] | undefined, repositoryPath?: string | null) => {
-  const pathsToPreload = useMemo(() => {
-    const unique = new Set<string>();
-    const repo = sanitizePath(repositoryPath ?? null);
-    if (repo) {
-      unique.add(repo);
-    }
-    (worktrees ?? []).forEach((tree) => {
-      const path = sanitizePath(tree.worktree_path);
-      if (path) {
-        unique.add(path);
-      }
-    });
-    return Array.from(unique);
-  }, [worktrees, repositoryPath]);
-
+/**
+ * Lazy git cache preloader - only preloads data for the selected worktree
+ * with debouncing to avoid rapid calls during navigation
+ */
+export const useGitCachePreloader = (
+  selectedWorktreePath: string | null | undefined
+) => {
   useEffect(() => {
-    if (pathsToPreload.length === 0) {
-      return;
-    }
+    const path = sanitizePath(selectedWorktreePath ?? null);
+    if (!path) return;
 
-    let cancelled = false;
-
-    const preload = async () => {
-      await Promise.allSettled(
-        pathsToPreload.map(async (path) => {
-          try {
-            await preloadWorktreeGitData(path);
-          } catch (error) {
-            if (!cancelled) {
-              console.debug("git cache preload failed", path, error);
-            }
-          }
-        })
-      );
-    };
-
-    preload();
+    // Debounce: wait 200ms before preloading to avoid rapid calls
+    const timeoutId = setTimeout(async () => {
+      try {
+        await preloadWorktreeGitData(path);
+      } catch {
+        // Silently ignore preload failures
+      }
+    }, 200);
 
     return () => {
-      cancelled = true;
+      clearTimeout(timeoutId);
     };
-  }, [pathsToPreload]);
+  }, [selectedWorktreePath]);
 };

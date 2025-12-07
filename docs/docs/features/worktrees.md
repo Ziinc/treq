@@ -49,7 +49,6 @@ Each worktree can have multiple terminal sessions with independent shell environ
 {repo}/
 ├── .git/                    # Shared git data
 ├── .treq/
-│   ├── local.db             # SQLite database
 │   ├── worktrees/
 │   │   └── {branch-name}/   # Worktree directories
 │   ├── plans/               # Implementation plans
@@ -58,34 +57,23 @@ Each worktree can have multiple terminal sessions with independent shell environ
 └── ...
 ```
 
-### Database Relationships
-
-```
-worktrees (1) ←→ (N) sessions
-worktrees (1) ←→ (N) plans
-worktrees (1) ←→ (N) file_views (for reviews)
-```
-
 ## Lifecycle Management
 
 ### Creation Flow
 
 1. User initiates creation (UI or CLI)
 2. Treq validates branch name and path
-3. Executes `git worktree add` command
-4. Creates database entry
-5. Runs post-create commands
-6. Opens terminal session (optional)
-7. Updates dashboard
+3. Creates the worktree
+4. Runs post-create commands
+5. Opens terminal session (optional)
+6. Updates dashboard
 
 ### Update Flow
 
-Treq polls for changes every 5 seconds:
-1. Runs `git status` in worktree
-2. Checks for uncommitted changes
-3. Calculates divergence from base
-4. Updates UI indicators
-5. Caches results in database
+Treq polls for changes:
+1. Checks for uncommitted changes
+2. Calculates divergence from base
+3. Updates UI indicators
 
 ### Deletion Flow
 
@@ -93,9 +81,8 @@ Treq polls for changes every 5 seconds:
 2. Treq checks for uncommitted changes
 3. Warns if work might be lost
 4. Removes worktree directory
-5. Deletes database entry
-6. Closes associated sessions
-7. Updates dashboard
+5. Closes associated sessions
+6. Updates dashboard
 
 ## Performance Optimizations
 
@@ -128,54 +115,11 @@ Long-running operations run in background:
 - Divergence calculation
 - Post-create commands
 
-## Git Integration Points
-
-### Status Monitoring
-
-Treq uses `git status --porcelain=v2`:
-
-```bash
-git status --porcelain=v2
-```
-
-**Parsed output**:
-- Modified files (M)
-- Added files (A)
-- Deleted files (D)
-- Renamed files (R)
-- Untracked files (??)
-
-### Branch Operations
-
-**Get current branch**:
-```bash
-git rev-parse --abbrev-ref HEAD
-```
-
-**Calculate divergence**:
-```bash
-git rev-list --left-right --count main...treq/feature
-```
-
-Output: `5\t3` (5 ahead, 3 behind)
-
-### Remote Tracking
-
-**Get upstream branch**:
-```bash
-git rev-parse --abbrev-ref @{u}
-```
-
-**Fetch status**:
-```bash
-git fetch --dry-run
-```
-
 ## Settings & Configuration
 
 ### Repository Settings
 
-Stored in database, scoped by repository path:
+Scoped by repository path:
 - Branch naming pattern
 - Post-create commands
 - Default base branch
@@ -183,7 +127,7 @@ Stored in database, scoped by repository path:
 
 ### Global Settings
 
-Stored in application preferences:
+Application preferences:
 - Terminal preferences
 - UI theme and layout
 - Keyboard shortcuts
@@ -207,7 +151,6 @@ Stored in application preferences:
 2. **Consistent naming**: Use branch patterns
 3. **Commit often**: Preserve work before operations
 4. **Monitor size**: Large repos = large worktrees
-5. **Backup database**: Export `.treq/local.db` periodically
 
 ## Learn More
 

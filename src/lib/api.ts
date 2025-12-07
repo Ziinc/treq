@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { openPath } from "@tauri-apps/plugin-opener";
 import type { PlanHistoryEntry, PlanHistoryPayload } from "../types/planHistory";
 
 export interface Worktree {
@@ -22,15 +21,6 @@ export interface Session {
   last_accessed: string;
   plan_title?: string;
   model?: string | null;
-}
-
-export interface Command {
-  id: number;
-  worktree_id: number;
-  command: string;
-  created_at: string;
-  status: string;
-  output?: string;
 }
 
 export interface GitCacheEntry {
@@ -59,6 +49,11 @@ export interface BranchInfo {
 export interface BranchDivergence {
   ahead: number;
   behind: number;
+}
+
+export interface LineDiffStats {
+  lines_added: number;
+  lines_deleted: number;
 }
 
 export interface GitDiffHunk {
@@ -149,17 +144,6 @@ export const deleteWorktreeFromDb = (repo_path: string, id: number): Promise<voi
 export const toggleWorktreePin = (repo_path: string, id: number): Promise<boolean> =>
   invoke("toggle_worktree_pin", { repoPath: repo_path, id });
 
-export const getCommands = (worktree_id: number): Promise<Command[]> =>
-  invoke("get_commands", { worktreeId: worktree_id });
-
-export const addCommand = (
-  worktree_id: number,
-  command: string,
-  status: string,
-  output?: string
-): Promise<number> =>
-  invoke("add_command", { worktreeId: worktree_id, command, status, output });
-
 export const getSetting = (key: string): Promise<string | null> =>
   invoke("get_setting", { key });
 
@@ -171,9 +155,6 @@ export const getRepoSetting = (repo_path: string, key: string): Promise<string |
 
 export const setRepoSetting = (repo_path: string, key: string, value: string): Promise<void> =>
   invoke("set_repo_setting", { repoPath: repo_path, key, value });
-
-export const deleteRepoSetting = (repo_path: string, key: string): Promise<void> =>
-  invoke("delete_repo_setting", { repoPath: repo_path, key });
 
 export const getGitCache = (
   worktree_path: string,
@@ -225,12 +206,10 @@ export const gitGetCurrentBranch = (repo_path: string): Promise<string> =>
   invoke("git_get_current_branch", { repoPath: repo_path });
 
 export const gitExecutePostCreateCommand = (
-  worktree_id: number,
   worktree_path: string,
   command: string
 ): Promise<string> =>
   invoke("git_execute_post_create_command", {
-    worktreeId: worktree_id,
     worktreePath: worktree_path,
     command,
   });
@@ -253,8 +232,11 @@ export const gitGetBranchDivergence = (
 ): Promise<BranchDivergence> =>
   invoke("git_get_branch_divergence", { worktreePath: worktree_path, baseBranch: base_branch });
 
-export const gitGetFileDiff = (worktree_path: string, file_path: string): Promise<string> =>
-  invoke("git_get_file_diff", { worktreePath: worktree_path, filePath: file_path });
+export const gitGetLineDiffStats = (
+  worktree_path: string,
+  base_branch: string
+): Promise<LineDiffStats> =>
+  invoke("git_get_line_diff_stats", { worktreePath: worktree_path, baseBranch: base_branch });
 
 export const gitGetDiffBetweenBranches = (
   repo_path: string,
@@ -307,9 +289,6 @@ export interface BranchListItem {
   is_remote: boolean;
   is_current: boolean;
 }
-
-export const gitListBranches = (repo_path: string): Promise<string[]> =>
-  invoke("git_list_branches", { repoPath: repo_path });
 
 export const gitListBranchesDetailed = (repo_path: string): Promise<BranchListItem[]> =>
   invoke("git_list_branches_detailed", { repoPath: repo_path });
@@ -387,24 +366,6 @@ export const readFile = (path: string): Promise<string> =>
 export const listDirectory = (path: string): Promise<DirectoryEntry[]> =>
   invoke("list_directory", { path });
 
-// Shell API
-export const shellExecute = (command: string, working_dir?: string): Promise<string> =>
-  invoke("shell_execute", { command, workingDir: working_dir });
-
-// Editor launching using CLI commands
-export type EditorType = "vscode" | "cursor" | "zed";
-
-export const openEditor = async (editor: EditorType, path: string): Promise<void> => {
-  const editorCommands: Record<EditorType, string> = {
-    vscode: "code",
-    cursor: "cursor",
-    zed: "zed",
-  };
-  
-  const editorCommand = editorCommands[editor];
-  await openPath(path, editorCommand);
-};
-
 // Git Operations API
 export const gitCommit = (worktree_path: string, message: string): Promise<string> =>
   invoke("git_commit", { worktreePath: worktree_path, message });
@@ -429,9 +390,6 @@ export const gitPull = (worktree_path: string): Promise<string> =>
 
 export const gitFetch = (worktree_path: string): Promise<string> =>
   invoke("git_fetch", { worktreePath: worktree_path });
-
-export const gitLog = (worktree_path: string, count: number): Promise<string[]> =>
-  invoke("git_log", { worktreePath: worktree_path, count });
 
 export const gitStageFile = (worktree_path: string, file_path: string): Promise<string> =>
   invoke("git_stage_file", { worktreePath: worktree_path, filePath: file_path });
@@ -484,10 +442,6 @@ export const gitUnstageSelectedLines = (
     metadataLines: metadata_lines,
     hunks,
   });
-
-// Calculate directory size (in bytes, excluding .git)
-export const calculateDirectorySize = (path: string): Promise<number> =>
-  invoke("calculate_directory_size", { path });
 
 // Folder picker and git validation
 export const selectFolder = async (): Promise<string | null> => {
@@ -549,17 +503,6 @@ export const loadPlanFromRepo = async (
     console.error('Failed to parse plan data:', error);
     return null;
   }
-};
-
-export const clearSessionPlans = async (
-  _repoPath: string,
-  _sessionId: string
-): Promise<void> => {
-  // Get all repo settings and filter for this session's plans
-  // Note: This requires backend support, but for now we'll delete known keys
-  // The backend would need to implement a listRepoSettings function for full cleanup
-  // For now, we'll rely on the session-scoped keys being automatically ignored
-  // when loading plans with a different sessionId
 };
 
 // Plan history (.treq/local.db)
@@ -637,12 +580,6 @@ export const createSession = (
 
 export const getSessions = (repo_path: string): Promise<Session[]> =>
   invoke("get_sessions", { repoPath: repo_path });
-
-export const getSessionsByWorktree = (repo_path: string, worktreeId: number): Promise<Session[]> =>
-  invoke("get_sessions_by_worktree", { repoPath: repo_path, worktreeId });
-
-export const getMainRepoSessions = (repo_path: string): Promise<Session[]> =>
-  invoke("get_main_repo_sessions", { repoPath: repo_path });
 
 export const updateSessionAccess = (repo_path: string, id: number): Promise<void> =>
   invoke("update_session_access", { repoPath: repo_path, id });

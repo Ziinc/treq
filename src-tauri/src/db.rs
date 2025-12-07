@@ -15,16 +15,6 @@ pub struct Worktree {
     pub is_pinned: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Command {
-    pub id: i64,
-    pub worktree_id: i64,
-    pub command: String,
-    pub created_at: String,
-    pub status: String,
-    pub output: Option<String>,
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Session {
     pub id: i64,
@@ -74,19 +64,6 @@ impl Database {
                 branch_name TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 metadata TEXT
-            )",
-            [],
-        )?;
-
-        self.conn.execute(
-            "CREATE TABLE IF NOT EXISTS commands (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                worktree_id INTEGER NOT NULL,
-                command TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                status TEXT NOT NULL,
-                output TEXT,
-                FOREIGN KEY (worktree_id) REFERENCES worktrees(id)
             )",
             [],
         )?;
@@ -213,47 +190,10 @@ impl Database {
     #[allow(dead_code)]
     pub fn delete_worktree(&self, id: i64) -> Result<()> {
         self.conn
-            .execute("DELETE FROM commands WHERE worktree_id = ?1", [id])?;
-        self.conn
             .execute("DELETE FROM sessions WHERE worktree_id = ?1", [id])?;
         self.conn
             .execute("DELETE FROM worktrees WHERE id = ?1", [id])?;
         Ok(())
-    }
-
-    pub fn add_command(&self, cmd: &Command) -> Result<i64> {
-        self.conn.execute(
-            "INSERT INTO commands (worktree_id, command, created_at, status, output)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            (
-                cmd.worktree_id,
-                &cmd.command,
-                &cmd.created_at,
-                &cmd.status,
-                &cmd.output,
-            ),
-        )?;
-        Ok(self.conn.last_insert_rowid())
-    }
-
-    pub fn get_commands(&self, worktree_id: i64) -> Result<Vec<Command>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, worktree_id, command, created_at, status, output 
-             FROM commands WHERE worktree_id = ?1 ORDER BY created_at DESC",
-        )?;
-
-        let commands = stmt.query_map([worktree_id], |row| {
-            Ok(Command {
-                id: row.get(0)?,
-                worktree_id: row.get(1)?,
-                command: row.get(2)?,
-                created_at: row.get(3)?,
-                status: row.get(4)?,
-                output: row.get(5)?,
-            })
-        })?;
-
-        commands.collect()
     }
 
     pub fn get_setting(&self, key: &str) -> Result<Option<String>> {
@@ -294,13 +234,6 @@ impl Database {
     pub fn set_repo_setting(&self, repo_path: &str, key: &str, value: &str) -> Result<()> {
         let composite_key = Self::make_repo_key(repo_path, key);
         self.set_setting(&composite_key, value)
-    }
-
-    pub fn delete_repo_setting(&self, repo_path: &str, key: &str) -> Result<()> {
-        let composite_key = Self::make_repo_key(repo_path, key);
-        self.conn
-            .execute("DELETE FROM settings WHERE key = ?1", [composite_key])?;
-        Ok(())
     }
 
     pub fn get_git_cache(

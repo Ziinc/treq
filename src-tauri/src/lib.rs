@@ -1,12 +1,12 @@
 mod db;
 mod git;
 mod git_ops;
+mod git2_ops;
 mod local_db;
 mod plan_storage;
 mod pty;
-mod shell;
 
-use db::{Command as DbCommand, Database, FileView, GitCacheEntry, Session, Worktree};
+use db::{Database, FileView, GitCacheEntry, Session, Worktree};
 use git::{git_init, is_git_repository, BranchListItem, *};
 use git_ops::{
     BranchCommitInfo, BranchDiffFileChange, BranchDiffFileDiff, DiffHunk, LineSelection,
@@ -16,7 +16,6 @@ use ignore::WalkBuilder;
 use local_db::{PlanHistoryEntry, PlanHistoryInput};
 use plan_storage::{PlanFile, PlanMetadata};
 use pty::PtyManager;
-use shell::execute_command;
 use std::collections::HashSet;
 use std::sync::Mutex;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
@@ -57,32 +56,6 @@ fn toggle_worktree_pin(repo_path: String, id: i64) -> Result<bool, String> {
 #[tauri::command]
 fn rebuild_worktrees(repo_path: String) -> Result<Vec<Worktree>, String> {
     local_db::rebuild_worktrees_from_filesystem(&repo_path)
-}
-
-#[tauri::command]
-fn get_commands(state: State<AppState>, worktree_id: i64) -> Result<Vec<DbCommand>, String> {
-    let db = state.db.lock().unwrap();
-    db.get_commands(worktree_id).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn add_command(
-    state: State<AppState>,
-    worktree_id: i64,
-    command: String,
-    status: String,
-    output: Option<String>,
-) -> Result<i64, String> {
-    let db = state.db.lock().unwrap();
-    let cmd = DbCommand {
-        id: 0,
-        worktree_id,
-        command,
-        created_at: chrono::Utc::now().to_rfc3339(),
-        status,
-        output,
-    };
-    db.add_command(&cmd).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -198,17 +171,6 @@ fn set_repo_setting(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-fn delete_repo_setting(
-    state: State<AppState>,
-    repo_path: String,
-    key: String,
-) -> Result<(), String> {
-    let db = state.db.lock().unwrap();
-    db.delete_repo_setting(&repo_path, &key)
-        .map_err(|e| e.to_string())
-}
-
 // Git commands
 #[tauri::command]
 fn git_create_worktree(
@@ -258,13 +220,10 @@ fn git_get_current_branch(
 
 #[tauri::command]
 fn git_execute_post_create_command(
-    state: State<AppState>,
-    worktree_id: i64,
     worktree_path: String,
     command: String,
 ) -> Result<String, String> {
-    let db = state.db.lock().unwrap();
-    git::execute_post_create_command(&db, worktree_id, &worktree_path, &command)
+    git::execute_post_create_command(&worktree_path, &command)
 }
 
 #[tauri::command]
@@ -284,12 +243,16 @@ fn git_remove_worktree(repo_path: String, worktree_path: String) -> Result<Strin
 
 #[tauri::command]
 fn git_get_status(worktree_path: String) -> Result<GitStatus, String> {
-    get_git_status(&worktree_path)
+    // Try git2 first (faster), fallback to subprocess if it fails
+    git2_ops::get_status_git2(&worktree_path)
+        .or_else(|_| get_git_status(&worktree_path))
 }
 
 #[tauri::command]
 fn git_get_branch_info(worktree_path: String) -> Result<BranchInfo, String> {
-    get_branch_info(&worktree_path)
+    // Try git2 first (faster), fallback to subprocess if it fails
+    git2_ops::get_branch_info_git2(&worktree_path)
+        .or_else(|_| get_branch_info(&worktree_path))
 }
 
 #[tauri::command]
@@ -297,12 +260,17 @@ fn git_get_branch_divergence(
     worktree_path: String,
     base_branch: String,
 ) -> Result<BranchDivergence, String> {
-    get_branch_divergence(&worktree_path, &base_branch)
+    // Try git2 first (faster), fallback to subprocess if it fails
+    git2_ops::get_divergence_git2(&worktree_path, &base_branch)
+        .or_else(|_| get_branch_divergence(&worktree_path, &base_branch))
 }
 
 #[tauri::command]
-fn git_get_file_diff(worktree_path: String, file_path: String) -> Result<String, String> {
-    get_file_diff(&worktree_path, &file_path)
+fn git_get_line_diff_stats(
+    worktree_path: String,
+    base_branch: String,
+) -> Result<git_ops::LineDiffStats, String> {
+    git_ops::git_get_line_diff_stats(&worktree_path, &base_branch)
 }
 
 #[tauri::command]
@@ -529,12 +497,6 @@ fn list_directory(path: String) -> Result<Vec<DirectoryEntry>, String> {
     Ok(files)
 }
 
-// Shell commands
-#[tauri::command]
-fn shell_execute(command: String, working_dir: Option<String>) -> Result<String, String> {
-    execute_command(&command, working_dir)
-}
-
 // Git operations
 #[tauri::command]
 fn git_commit(worktree_path: String, message: String) -> Result<String, String> {
@@ -574,11 +536,6 @@ fn git_pull(worktree_path: String) -> Result<String, String> {
 #[tauri::command]
 fn git_fetch(worktree_path: String) -> Result<String, String> {
     git_ops::git_fetch(&worktree_path)
-}
-
-#[tauri::command]
-fn git_log(worktree_path: String, count: usize) -> Result<Vec<String>, String> {
-    git_ops::git_log(&worktree_path, count)
 }
 
 #[tauri::command]
@@ -677,42 +634,6 @@ fn git_unstage_selected_lines(
     )
 }
 
-// Calculate directory size (excluding .git)
-#[tauri::command]
-fn calculate_directory_size(path: String) -> Result<u64, String> {
-    use std::fs;
-    use std::path::Path;
-
-    fn dir_size(path: &Path) -> std::io::Result<u64> {
-        let mut total = 0;
-
-        if path.is_dir() {
-            for entry in fs::read_dir(path)? {
-                let entry = entry?;
-                let path = entry.path();
-
-                // Skip .git and .treq directories
-                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                    if name == ".git" || name == ".treq" {
-                        continue;
-                    }
-                }
-
-                if path.is_dir() {
-                    total += dir_size(&path)?;
-                } else {
-                    total += entry.metadata()?.len();
-                }
-            }
-        }
-
-        Ok(total)
-    }
-
-    let path = Path::new(&path);
-    dir_size(path).map_err(|e| e.to_string())
-}
-
 // Plan history commands
 #[tauri::command]
 fn save_executed_plan_command(
@@ -780,29 +701,6 @@ fn create_session(
 #[tauri::command]
 fn get_sessions(repo_path: String) -> Result<Vec<Session>, String> {
     local_db::get_sessions(&repo_path)
-}
-
-#[tauri::command]
-fn get_sessions_by_worktree(
-    repo_path: String,
-    worktree_id: i64,
-) -> Result<Vec<Session>, String> {
-    // Filter sessions by worktree_id on the frontend after getting all sessions
-    let sessions = local_db::get_sessions(&repo_path)?;
-    Ok(sessions
-        .into_iter()
-        .filter(|s| s.worktree_id == Some(worktree_id))
-        .collect())
-}
-
-#[tauri::command]
-fn get_main_repo_sessions(repo_path: String) -> Result<Vec<Session>, String> {
-    // Get sessions without a worktree_id (main repo sessions)
-    let sessions = local_db::get_sessions(&repo_path)?;
-    Ok(sessions
-        .into_iter()
-        .filter(|s| s.worktree_id.is_none())
-        .collect())
 }
 
 #[tauri::command]
@@ -1102,13 +1000,10 @@ pub fn run() {
             delete_worktree_from_db,
             toggle_worktree_pin,
             rebuild_worktrees,
-            get_commands,
-            add_command,
             get_setting,
             set_setting,
             get_repo_setting,
             set_repo_setting,
-            delete_repo_setting,
             get_git_cache,
             set_git_cache,
             invalidate_git_cache,
@@ -1121,7 +1016,7 @@ pub fn run() {
             git_get_status,
             git_get_branch_info,
             git_get_branch_divergence,
-            git_get_file_diff,
+            git_get_line_diff_stats,
             git_get_diff_between_branches,
             git_get_changed_files_between_branches,
             git_get_commits_between_branches,
@@ -1145,7 +1040,6 @@ pub fn run() {
             git_push_force,
             git_pull,
             git_fetch,
-            git_log,
             git_stage_file,
             git_unstage_file,
             git_stage_hunk,
@@ -1162,8 +1056,6 @@ pub fn run() {
             pty_close,
             read_file,
             list_directory,
-            shell_execute,
-            calculate_directory_size,
             save_executed_plan_command,
             get_worktree_plans_command,
             get_all_worktree_plans_command,
@@ -1173,8 +1065,6 @@ pub fn run() {
             delete_plan_file,
             create_session,
             get_sessions,
-            get_sessions_by_worktree,
-            get_main_repo_sessions,
             update_session_access,
             update_session_name,
             delete_session,

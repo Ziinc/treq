@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Editor from '@monaco-editor/react';
 import { useTheme } from '../hooks/useTheme';
+import { initializeMonaco } from '../lib/monaco-lazy';
 
 interface PlanEditorProps {
   content: string;
@@ -17,6 +18,13 @@ export const PlanEditor: React.FC<PlanEditorProps> = ({
 }) => {
   const { actualTheme } = useTheme();
   const debounceTimeoutRef = useRef<NodeJS.Timeout>();
+  const [isMonacoReady, setIsMonacoReady] = useState(false);
+
+  useEffect(() => {
+    initializeMonaco().then(() => {
+      setIsMonacoReady(true);
+    });
+  }, []);
 
   const handleEditorChange = (value: string | undefined) => {
     if (!onChange || readOnly) return;
@@ -40,6 +48,14 @@ export const PlanEditor: React.FC<PlanEditorProps> = ({
       }
     };
   }, []);
+
+  if (!isMonacoReady) {
+    return (
+      <div className="border rounded-md overflow-hidden flex items-center justify-center" style={{ height }}>
+        <div className="text-sm text-muted-foreground">Loading editor...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="border rounded-md overflow-hidden">

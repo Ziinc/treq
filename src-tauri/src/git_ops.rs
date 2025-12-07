@@ -78,6 +78,12 @@ pub struct BranchCommitInfo {
     pub message: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct LineDiffStats {
+    pub lines_added: usize,
+    pub lines_deleted: usize,
+}
+
 /// Execute git commit with message
 pub fn git_commit(worktree_path: &str, message: &str) -> Result<String, String> {
     let output = Command::new("git")
@@ -435,26 +441,6 @@ pub fn git_fetch(worktree_path: &str) -> Result<String, String> {
     }
 }
 
-/// Get git log (last n commits)
-pub fn git_log(worktree_path: &str, count: usize) -> Result<Vec<String>, String> {
-    let output = Command::new("git")
-        .current_dir(worktree_path)
-        .args([
-            "log",
-            &format!("-{}", count),
-            "--pretty=format:%h - %s (%an, %ar)",
-        ])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if output.status.success() {
-        let log = String::from_utf8_lossy(&output.stdout);
-        Ok(log.lines().map(|s| s.to_string()).collect())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
-}
-
 /// Stage specific file(s)
 pub fn git_stage_file(worktree_path: &str, file_path: &str) -> Result<String, String> {
     let output = Command::new("git")
@@ -549,6 +535,45 @@ pub fn git_get_changed_files(worktree_path: &str) -> Result<Vec<String>, String>
     }
 
     Ok(files)
+}
+
+/// Get line-level diff statistics against a base branch
+pub fn git_get_line_diff_stats(
+    worktree_path: &str,
+    base_branch: &str,
+) -> Result<LineDiffStats, String> {
+    let range = format!("{}...HEAD", base_branch);
+    let output = Command::new("git")
+        .current_dir(worktree_path)
+        .args(["diff", "--numstat", &range])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut lines_added: usize = 0;
+    let mut lines_deleted: usize = 0;
+
+    for line in stdout.lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() >= 2 {
+            // Binary files show "-" instead of numbers
+            if parts[0] != "-" {
+                lines_added += parts[0].parse::<usize>().unwrap_or(0);
+            }
+            if parts[1] != "-" {
+                lines_deleted += parts[1].parse::<usize>().unwrap_or(0);
+            }
+        }
+    }
+
+    Ok(LineDiffStats {
+        lines_added,
+        lines_deleted,
+    })
 }
 
 pub fn git_get_changed_files_between_branches(

@@ -4,165 +4,45 @@ sidebar_position: 1
 
 # Installation
 
-Get Treq installed on your system and ready to use.
+_Get Treq installed and ready to use._
 
-Learn how to download, install, and set up Treq on macOS, Linux, or Windows.
-
-## Download Treq
-
-Download the latest version of Treq for your platform from the [GitHub Releases page](https://github.com/yourusername/treq/releases).
+Download the latest version for your platform from the [GitHub Releases page](https://github.com/anthropics/treq/releases).
 
 ## First Launch
 
-### macOS
+**macOS**: If Gatekeeper blocks the app, go to System Settings → Privacy & Security, find the Treq message, and click "Open Anyway." Alternatively, right-click Treq in Finder and select Open.
 
-When you first open Treq on macOS, you may see a security warning:
+**Linux**: No special steps. Launch from your application menu or run `treq` from the terminal. For AppImage, ensure it's executable (`chmod +x`).
 
-<!-- ![macOS security warning](./images/installation-macos-security.png) -->
-*macOS Gatekeeper may block apps from unidentified developers*
-
-**To allow Treq**:
-1. Go to **System Settings** → **Privacy & Security**
-2. Find the message about Treq being blocked
-3. Click **Open Anyway**
-4. Confirm by clicking **Open**
-
-Alternatively, right-click on Treq in Finder and select **Open**.
-
-### Linux
-
-No special steps required. Launch from your application menu or run `treq` from the terminal.
-
-### Windows
-
-If Windows SmartScreen blocks Treq:
-1. Click **More info**
-2. Click **Run anyway**
-
-Treq is code-signed, but newer applications may trigger SmartScreen until they build reputation.
+**Windows**: If SmartScreen blocks the app, click "More info" then "Run anyway." Treq is code-signed but newer applications may trigger SmartScreen until they build reputation.
 
 ## Initial Setup
 
-When you first launch Treq, you'll see the welcome screen:
+Click **Select Repository** or the folder icon, navigate to a Git repository, and select the folder containing `.git`. Treq verifies the repository, checks for existing worktrees, and initializes the `.treq` folder for metadata.
 
-<!-- ![Treq welcome screen](./images/installation-welcome-screen.png) -->
-*The welcome screen guides you through initial configuration*
+Optionally configure settings through the gear icon: branch naming pattern, post-create commands (like `npm install`), and terminal preferences. You can change these anytime.
 
-### Step 1: Select a Repository
+## Updating
 
-1. Click **Select Repository** or use the folder icon
-2. Navigate to an existing Git repository on your system
-3. Select the repository root folder (containing `.git`)
-4. Click **Open**
+Treq checks for updates automatically. Manual check: **Treq → Check for Updates** (macOS/Linux) or **Help → Check for Updates** (Windows).
 
-**What's happening?** Treq scans the repository to:
-- Verify it's a valid Git repository
-- Check for existing worktrees
-- Initialize the `.treq` folder for metadata storage
+## Troubleshooting
 
-### Step 2: Configure Settings (Optional)
+**"Git not found"**: Verify Git is installed (`git --version`). Ensure it's in your PATH—restart Terminal after installing Git on macOS, or reinstall Git with "Add to PATH" on Windows.
 
-You can customize Treq's behavior in Settings:
+**"Invalid Git Repository"**: Ensure the folder contains a `.git` subdirectory. Initialize with `git init` if needed, and select the repository root, not a subdirectory.
 
-1. Click the gear icon or press `Cmd+,` (macOS) / `Ctrl+,` (Windows/Linux)
-2. Configure:
-   - **Branch naming pattern**: Default is `treq/{name}`
-   - **Post-create commands**: Commands to run after creating worktrees (e.g., `npm install`)
-   - **Terminal settings**: Font, size, and shell preferences
+**App won't open**: See First Launch section for platform-specific security settings. On Linux, ensure FUSE is installed for AppImage.
 
-Don't worry - you can change these settings anytime!
+## Uninstalling
 
-## Verifying Installation
+**macOS**: Drag Treq from Applications to Trash. Remove config: `rm -rf ~/.treq`
 
-To confirm Treq is working correctly:
+**Linux**: Use your package manager (`dpkg -r treq`, `rpm -e treq`) or delete the AppImage. Remove config: `rm -rf ~/.config/treq`
 
-1. Open Treq
-2. Select a Git repository
-3. You should see:
-   - The dashboard with your main repository info
-   - A "New Worktree" button
-   - Any existing worktrees (if you already have some)
-
-<!-- ![Treq dashboard](./images/installation-dashboard-view.png) -->
-*The Treq dashboard shows your repository status*
-
-## Updating Treq
-
-Treq checks for updates automatically and will notify you when a new version is available.
-
-**Manual update check**:
-- macOS/Linux: **Treq** → **Check for Updates**
-- Windows: **Help** → **Check for Updates**
-
-## Troubleshooting Installation
-
-### "Git not found" Error
-
-**Cause**: Treq cannot find Git on your system PATH.
-
-**Solution**:
-1. Verify Git is installed: `git --version`
-2. If Git is installed but not in PATH:
-   - **macOS**: Restart Terminal after installing Git
-   - **Linux**: Ensure `/usr/bin/git` exists
-   - **Windows**: Reinstall Git and check "Add to PATH" during installation
-
-### "Invalid Git Repository" Error
-
-**Cause**: The selected folder is not a Git repository.
-
-**Solution**:
-1. Ensure the folder contains a `.git` subdirectory
-2. Or initialize a new repository: `git init`
-3. Select the repository root folder, not a subdirectory
-
-### Application Won't Open
-
-**macOS**: See the "First Launch" section above for security settings.
-
-**Linux**:
-- For AppImage: Ensure it's executable (`chmod +x`)
-- Check if FUSE is installed: `sudo apt-get install fuse` (Ubuntu/Debian)
-
-**Windows**:
-- Run as Administrator if you encounter permission issues
-- Check Windows Defender isn't blocking the application
-
-### Performance Issues
-
-If Treq feels slow on large repositories:
-1. Ensure your Git repository isn't too large (>10GB)
-2. Check that Git itself performs well: `time git status`
-3. Consider excluding large files with `.gitignore`
-
-## Uninstalling Treq
-
-### macOS
-- Drag Treq from Applications to Trash
-- Remove config: `rm -rf ~/.treq`
-- If installed via Homebrew: `brew uninstall --cask treq`
-
-### Linux
-- Debian/Ubuntu: `sudo dpkg -r treq`
-- Fedora/RHEL: `sudo rpm -e treq`
-- AppImage: Simply delete the file
-- Remove config: `rm -rf ~/.config/treq`
-
-### Windows
-- Use "Add or Remove Programs" in Windows Settings
-- Or run the uninstaller from the installation directory
-- Config stored in: `%APPDATA%\treq`
+**Windows**: Use "Add or Remove Programs" in Settings. Config is stored in `%APPDATA%\treq`
 
 ## Next Steps
 
-Now that Treq is installed, let's create your first worktree!
-
-- [**Your First Worktree**](your-first-worktree) - Step-by-step tutorial
-- [**Interface Overview**](interface-overview) - Learn the UI basics
-- [**Core Workflows**](../core-workflows/using-treq-with-git-repo) - Essential workflows
-
-## Getting Help
-
-- **Issues**: [GitHub Issues](https://github.com/yourusername/treq/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/treq/discussions)
-- **Documentation**: You're reading it! 📚
+- [Creating Worktrees](your-first-worktree) — Create your first worktree
+- [Interface Overview](interface-overview) — Learn the UI

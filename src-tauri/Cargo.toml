@@ -32,6 +32,7 @@ sha2 = "0.10"
 ignore = "0.4"
 walkdir = "2"
 globset = "0.4"
+git2 = { version = "0.20.2", features = ["https", "ssh"] }
 
 # =============================================================================
 # Profile Configuration

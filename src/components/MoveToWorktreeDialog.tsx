@@ -162,7 +162,7 @@ export const MoveToWorktreeDialog: React.FC<MoveToWorktreeDialogProps> = ({
             type: "info",
           });
 
-          await gitExecutePostCreateCommand(worktreeId, worktreePath, postCreateCmd);
+          await gitExecutePostCreateCommand(worktreePath, postCreateCmd);
 
           addToast({
             title: "Files moved successfully",

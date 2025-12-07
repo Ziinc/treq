@@ -247,3 +247,21 @@
   background-color: hsl(var(--border));
   border-radius: 0.25rem;
 }
+
+/* Override Prism theme backgrounds in file viewer */
+/* Remove background from inline code elements to avoid conflicts with line backgrounds */
+code[class*="language-"] {
+  background: none !important;
+}
+
+/* Ensure whitespace is preserved in code */
+code[class*="language-"] {
+  white-space: pre !important;
+  word-break: normal !important;
+  word-wrap: normal !important;
+}
+
+/* Remove backgrounds from Prism tokens to prevent conflicts with line backgrounds */
+code[class*="language-"] .token {
+  background: none !important;
+}

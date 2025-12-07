@@ -37,7 +37,7 @@ npm run tauri dev            # Run in dev mode (Rust + frontend dev server)
 **Core Components:**
 - **App.tsx** - Root with QueryClient provider, routing, and global state
 - **components/Dashboard.tsx** - Main UI controller (repository dashboard)
-- **components/SessionTerminal.tsx** - PTY terminal with xterm.js integration
+- **components/SessionTerminal.tsx** - PTY terminal with ghostty-web integration
 - **components/StagingDiffViewer.tsx** - Git staging area with file tree and diff view
 - **components/AnnotatableDiffViewer.tsx** - Diff viewer with annotation support
 - **components/ui/** - Shadcn-based UI primitives
@@ -83,7 +83,7 @@ Treq uses a dual-database architecture to separate local repository data from gl
 ### PTY/Terminal Pattern
 1. Frontend creates session: `ptyCreateSession(sessionId, workingDir, shell)`
 2. Backend spawns PTY, starts reader thread emitting to `pty-data-{sessionId}`
-3. Frontend listens to event, renders in xterm.js
+3. Frontend listens to event, renders in ghostty-web terminal
 4. User input → `ptyWrite(sessionId, data)` → written to PTY stdin
 5. Cleanup: `ptyClose(sessionId)` when component unmounts
 

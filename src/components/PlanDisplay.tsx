@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { PlanSection } from '../types/planning';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -112,7 +112,7 @@ const formatRelativeTime = (date: Date): string => {
   }
 };
 
-export const PlanDisplay: React.FC<PlanDisplayProps> = ({
+export const PlanDisplay: React.FC<PlanDisplayProps> = memo(({
   planSections,
   onPlanEdit,
   onExecutePlan,
@@ -373,5 +373,5 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
       ))}
     </div>
   );
-};
+});
 
