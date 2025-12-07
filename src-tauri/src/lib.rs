@@ -2,6 +2,7 @@ mod db;
 mod git;
 mod git_ops;
 mod git2_ops;
+mod jj;
 mod local_db;
 mod plan_storage;
 mod pty;
@@ -769,7 +770,21 @@ fn clear_all_viewed_files(state: State<AppState>, worktree_path: String) -> Resu
         .map_err(|e| e.to_string())
 }
 
+/// Check if a path has a jj workspace
+#[tauri::command]
+fn jj_is_workspace(repo_path: String) -> bool {
+    jj::is_jj_workspace(&repo_path)
+}
+
+/// Manually initialize jj for a repository
+#[tauri::command]
+fn jj_init(state: State<AppState>, repo_path: String) -> Result<bool, String> {
+    let db = state.db.lock().unwrap();
+    jj::ensure_jj_initialized(&db, &repo_path).map_err(|e| e.to_string())
+}
+
 /// Ensure repository is properly configured before operations
+/// This includes git config and jj initialization
 /// Emits event to frontend if initialization fails
 fn ensure_repo_ready(
     state: &State<AppState>,
@@ -781,30 +796,83 @@ fn ensure_repo_ready(
         return Ok(());
     }
 
-    // Get DB and check/initialize
-    let result = {
-        let db = state.db.lock().unwrap();
-        git::ensure_repo_configured(&db, repo_path)
-    };
+    #[derive(Clone, serde::Serialize)]
+    struct InitError {
+        repo_path: String,
+        error: String,
+        error_type: String,
+    }
 
-    // If initialization failed, emit event for frontend notification
-    if let Err(ref error) = result {
-        #[derive(Clone, serde::Serialize)]
-        struct InitError {
-            repo_path: String,
-            error: String,
-        }
-
+    // Ensure .jj and .treq are in .gitignore (runs on every repo open)
+    if let Err(ref error) = jj::ensure_gitignore_entries(repo_path) {
         let _ = app.emit(
-            "git-config-init-error",
+            "repo-init-error",
             InitError {
                 repo_path: repo_path.to_string(),
-                error: error.clone(),
+                error: error.to_string(),
+                error_type: "gitignore".to_string(),
             },
         );
     }
 
-    // Don't block operation even if config failed
+    // Get DB and check/initialize git config
+    let git_result = {
+        let db = state.db.lock().unwrap();
+        git::ensure_repo_configured(&db, repo_path)
+    };
+
+    // If git config failed, emit event for frontend notification
+    if let Err(ref error) = git_result {
+        let _ = app.emit(
+            "repo-init-error",
+            InitError {
+                repo_path: repo_path.to_string(),
+                error: error.clone(),
+                error_type: "git-config".to_string(),
+            },
+        );
+    }
+
+    // Initialize jj for git repository
+    let jj_result = {
+        let db = state.db.lock().unwrap();
+        jj::ensure_jj_initialized(&db, repo_path)
+    };
+
+    match jj_result {
+        Ok(true) => {
+            // jj was newly initialized - emit success event
+            #[derive(Clone, serde::Serialize)]
+            struct JjInitSuccess {
+                repo_path: String,
+            }
+            let _ = app.emit(
+                "jj-initialized",
+                JjInitSuccess {
+                    repo_path: repo_path.to_string(),
+                },
+            );
+        }
+        Ok(false) => {
+            // Already initialized, no action needed
+        }
+        Err(jj::JjError::AlreadyInitialized) | Err(jj::JjError::NotGitRepository) => {
+            // Not an error, just skip
+        }
+        Err(ref error) => {
+            // Other errors should be reported
+            let _ = app.emit(
+                "repo-init-error",
+                InitError {
+                    repo_path: repo_path.to_string(),
+                    error: error.to_string(),
+                    error_type: "jj-init".to_string(),
+                },
+            );
+        }
+    }
+
+    // Don't block operation even if init failed
     Ok(())
 }
 
@@ -1074,6 +1142,8 @@ pub fn run() {
             unmark_file_viewed,
             get_viewed_files,
             clear_all_viewed_files,
+            jj_is_workspace,
+            jj_init,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
