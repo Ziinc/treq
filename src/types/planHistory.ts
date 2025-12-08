@@ -2,7 +2,7 @@ export type PlanHistoryStatus = 'executed';
 
 export interface PlanHistoryEntry {
   id: number;
-  worktree_id: number;
+  workspace_id: number;
   title: string;
   type: string;
   content: any;

@@ -15,11 +15,11 @@ interface PlanDisplayModalProps {
   planSections: PlanSection[];
   onPlanEdit?: (planId: string, newContent: string) => void;
   onExecutePlan?: (section: PlanSection) => void;
-  onExecuteInWorktree?: (section: PlanSection) => void;
-  isExecutingInWorktree?: boolean;
+  onExecuteInWorkspace?: (section: PlanSection) => void;
+  isExecutingInWorkspace?: boolean;
   sessionId?: string;
   repoPath?: string;
-  worktreeId?: number;
+  workspaceId?: number;
 }
 
 export const PlanDisplayModal: React.FC<PlanDisplayModalProps> = ({
@@ -28,11 +28,11 @@ export const PlanDisplayModal: React.FC<PlanDisplayModalProps> = ({
   planSections,
   onPlanEdit,
   onExecutePlan,
-  onExecuteInWorktree,
-  isExecutingInWorktree,
+  onExecuteInWorkspace,
+  isExecutingInWorkspace,
   sessionId,
   repoPath,
-  worktreeId,
+  workspaceId,
 }) => {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -51,11 +51,11 @@ export const PlanDisplayModal: React.FC<PlanDisplayModalProps> = ({
             planSections={planSections}
             onPlanEdit={onPlanEdit}
             onExecutePlan={onExecutePlan}
-            onExecuteInWorktree={onExecuteInWorktree}
-            isExecutingInWorktree={isExecutingInWorktree}
+            onExecuteInWorkspace={onExecuteInWorkspace}
+            isExecutingInWorkspace={isExecutingInWorkspace}
             sessionId={sessionId}
             repoPath={repoPath}
-            worktreeId={worktreeId}
+            workspaceId={workspaceId}
           />
         </div>
       </DialogContent>

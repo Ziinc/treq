@@ -73,7 +73,7 @@ import {
 } from "../lib/git-utils";
 import { useDiffSettings } from "../hooks/useDiffSettings";
 import { GitChangesSection } from "./GitChangesSection";
-import { MoveToWorktreeDialog } from "./MoveToWorktreeDialog";
+import { MoveToWorkspaceDialog } from "./MoveToWorkspaceDialog";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "./ui/tooltip";
 
 // Helper to compute hash of hunk content using native Web Crypto API
@@ -88,7 +88,7 @@ const computeHunkHash = async (hunks: any[]): Promise<string> => {
 };
 
 interface StagingDiffViewerProps {
-  worktreePath: string;
+  workspacePath: string;
   readOnly?: boolean;
   disableInteractions?: boolean;
   onStagedFilesChange?: (files: string[]) => void;
@@ -174,7 +174,7 @@ const filesEqual = (a: ParsedFileChange[], b: ParsedFileChange[]): boolean => {
   for (let i = 0; i < a.length; i++) {
     if (a[i].path !== b[i].path ||
         a[i].stagedStatus !== b[i].stagedStatus ||
-        a[i].worktreeStatus !== b[i].worktreeStatus ||
+        a[i].workspaceStatus !== b[i].workspaceStatus ||
         a[i].isUntracked !== b[i].isUntracked) {
       return false;
     }
@@ -525,7 +525,7 @@ const HighlightedLine: React.FC<HighlightedLineProps> = memo(({ content, languag
 HighlightedLine.displayName = "HighlightedLine";
 
 export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, StagingDiffViewerProps>(({
-  worktreePath,
+  workspacePath,
   readOnly = false,
   disableInteractions = false,
   onStagedFilesChange,
@@ -585,7 +585,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
   // Viewed files state - maps file path to { viewed_at, content_hash }
   const [viewedFiles, setViewedFiles] = useState<Map<string, { viewedAt: string; contentHash: string }>>(new Map());
 
-  // File selection state for moving to worktree
+  // File selection state for moving to workspace
   const [selectedUnstagedFiles, setSelectedUnstagedFiles] = useState<Set<string>>(new Set());
   const [lastSelectedFileIndex, setLastSelectedFileIndex] = useState<number | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
@@ -619,15 +619,15 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
   }, [initialSelectedFile, onStagedFilesChange]);
 
   const invalidateCache = useCallback(async () => {
-    if (!worktreePath) {
+    if (!workspacePath) {
       return;
     }
     try {
-      await invalidateGitCache(worktreePath);
+      await invalidateGitCache(workspacePath);
     } catch {
       // Silently ignore cache invalidation failures
     }
-  }, [worktreePath]);
+  }, [workspacePath]);
 
   // Compute expandable lines for a hunk boundary
   const computeExpandableLines = useCallback((
@@ -717,7 +717,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
 
     try {
       const result = await gitGetFileLines(
-        worktreePath,
+        workspacePath,
         filePath,
         hunk.is_staged,
         expandInfo.startLine,
@@ -759,7 +759,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
         return next;
       });
     }
-  }, [worktreePath, allFileHunks, expandedRanges, computeExpandableLines, addToast]);
+  }, [workspacePath, allFileHunks, expandedRanges, computeExpandableLines, addToast]);
 
   // Calculate height for a file section in the virtualized list
   const getFileHeight = useCallback((index: number): number => {
@@ -853,7 +853,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
   }, [files, collapsedFiles, allFileHunks, comments, showCommentInput, pendingComment, expandedRanges, computeExpandableLines]);
 
   const loadChangedFiles = useCallback(async () => {
-    if (!worktreePath) {
+    if (!workspacePath) {
       setFiles([]);
       return;
     }
@@ -861,7 +861,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     let cachedEntries: string[] | null = null;
 
     try {
-      const cached = await getGitCache(worktreePath, "changed_files");
+      const cached = await getGitCache(workspacePath, "changed_files");
       if (cached?.data) {
         const parsedCache = parseCachedStrings(cached.data);
         if (parsedCache) {
@@ -875,19 +875,19 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     }
 
     try {
-      const changedFiles = await gitGetChangedFiles(worktreePath);
+      const changedFiles = await gitGetChangedFiles(workspacePath);
       const parsed = parseChangedFiles(changedFiles);
       if (!arraysEqual(cachedEntries, changedFiles)) {
         applyChangedFiles(parsed);
       }
-      setGitCache(worktreePath, "changed_files", changedFiles).catch(() => {
+      setGitCache(workspacePath, "changed_files", changedFiles).catch(() => {
         // Silently ignore cache write failures
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       addToast({ title: "Git Error", description: message, type: "error" });
     }
-  }, [worktreePath, addToast, applyChangedFiles]);
+  }, [workspacePath, addToast, applyChangedFiles]);
 
   useEffect(() => {
     loadChangedFiles();
@@ -895,13 +895,13 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
 
   // Load viewed files from database
   const loadViewedFiles = useCallback(async () => {
-    if (!worktreePath) {
+    if (!workspacePath) {
       setViewedFiles(new Map());
       return;
     }
 
     try {
-      const views = await getViewedFiles(worktreePath);
+      const views = await getViewedFiles(workspacePath);
       const viewsMap = new Map<string, { viewedAt: string; contentHash: string }>();
       for (const view of views) {
         viewsMap.set(view.file_path, {
@@ -922,7 +922,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     } catch {
       // Silently ignore viewed files load failures
     }
-  }, [worktreePath]);
+  }, [workspacePath]);
 
   useEffect(() => {
     loadViewedFiles();
@@ -987,11 +987,11 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
 
     // Remove stale entries from database
     for (const filePath of staleFiles) {
-      unmarkFileViewed(worktreePath, filePath).catch(() => {
+      unmarkFileViewed(workspacePath, filePath).catch(() => {
         // Silently ignore unmark failures
       });
     }
-  }, [files, allFileHunks, worktreePath]);
+  }, [files, allFileHunks, workspacePath]);
 
   // Detect file content changes while comment input is open
   useEffect(() => {
@@ -1035,14 +1035,14 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
 
   const handleMarkFileViewed = useCallback(
     async (filePath: string) => {
-      if (!worktreePath) return;
+      if (!workspacePath) return;
 
       // Compute hash from current hunks
       const fileData = allFileHunks.get(filePath);
       const contentHash = fileData?.hunks ? computeHunksHash(fileData.hunks) : "";
 
       try {
-        await markFileViewed(worktreePath, filePath, contentHash);
+        await markFileViewed(workspacePath, filePath, contentHash);
         const now = new Date().toISOString();
         setViewedFiles((prev) => new Map(prev).set(filePath, { viewedAt: now, contentHash }));
         // Collapse the file
@@ -1051,15 +1051,15 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
         // Silently ignore mark failures
       }
     },
-    [worktreePath, allFileHunks]
+    [workspacePath, allFileHunks]
   );
 
   const handleUnmarkFileViewed = useCallback(
     async (filePath: string) => {
-      if (!worktreePath) return;
+      if (!workspacePath) return;
 
       try {
-        await unmarkFileViewed(worktreePath, filePath);
+        await unmarkFileViewed(workspacePath, filePath);
         setViewedFiles((prev) => {
           const next = new Map(prev);
           next.delete(filePath);
@@ -1075,12 +1075,12 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
         // Silently ignore unmark failures
       }
     },
-    [worktreePath]
+    [workspacePath]
   );
 
   const loadAllFileHunks = useCallback(
     async (filesToLoad: ParsedFileChange[]) => {
-      if (!worktreePath || filesToLoad.length === 0) {
+      if (!workspacePath || filesToLoad.length === 0) {
         setAllFileHunks((prev) => prev.size === 0 ? prev : new Map());
         setLoadingAllHunks(false);
         return;
@@ -1094,7 +1094,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
       await Promise.all(
         filesToLoad.map(async (file) => {
           try {
-            const cache = await getGitCache(worktreePath, "file_hunks", file.path);
+            const cache = await getGitCache(workspacePath, "file_hunks", file.path);
             if (cache?.data) {
               const hunks = parseCachedHunks(cache.data);
               if (hunks) {
@@ -1137,7 +1137,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
         const results = await Promise.all(
           filesToLoad.map(async (file) => {
             try {
-              const hunks = await gitGetFileHunks(worktreePath, file.path);
+              const hunks = await gitGetFileHunks(workspacePath, file.path);
               return { filePath: file.path, hunks, error: null as string | null };
             } catch (error) {
               const message = error instanceof Error ? error.message : String(error);
@@ -1170,7 +1170,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
             // Cache result
             const cached = cachedHunks.get(result.filePath);
             if (!cached || !hunksEqual(cached, result.hunks)) {
-              setGitCache(worktreePath, "file_hunks", result.hunks, result.filePath).catch(console.debug);
+              setGitCache(workspacePath, "file_hunks", result.hunks, result.filePath).catch(console.debug);
             }
           }
 
@@ -1180,7 +1180,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
         setLoadingAllHunks(false);
       }
     },
-    [worktreePath]
+    [workspacePath]
   );
 
   useEffect(() => {
@@ -1199,7 +1199,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
 
   // Poll for git changes every 5 seconds when component is active
   useEffect(() => {
-    if (!worktreePath) {
+    if (!workspacePath) {
       return;
     }
 
@@ -1216,7 +1216,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     const interval = setInterval(pollGitChanges, 5000);
 
     return () => clearInterval(interval);
-  }, [worktreePath, invalidateCache]);
+  }, [workspacePath, invalidateCache]);
 
   const refresh = useCallback(() => {
     setManualRefreshKey((prev) => prev + 1);
@@ -1229,7 +1229,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
       }
       setFileActionTarget(filePath);
       try {
-        await gitStageFile(worktreePath, filePath);
+        await gitStageFile(workspacePath, filePath);
         addToast({ title: "Staged", description: `${filePath} staged`, type: "success" });
         await invalidateCache();
         refresh();
@@ -1240,7 +1240,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
         setFileActionTarget(null);
       }
     },
-    [worktreePath, readOnly, disableInteractions, refresh, addToast, invalidateCache]
+    [workspacePath, readOnly, disableInteractions, refresh, addToast, invalidateCache]
   );
 
   const handleUnstageFile = useCallback(
@@ -1250,7 +1250,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
       }
       setFileActionTarget(filePath);
       try {
-        await gitUnstageFile(worktreePath, filePath);
+        await gitUnstageFile(workspacePath, filePath);
         addToast({ title: "Unstaged", description: `${filePath} unstaged`, type: "success" });
         await invalidateCache();
         refresh();
@@ -1261,13 +1261,13 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
         setFileActionTarget(null);
       }
     },
-    [worktreePath, readOnly, disableInteractions, refresh, addToast, invalidateCache]
+    [workspacePath, readOnly, disableInteractions, refresh, addToast, invalidateCache]
   );
 
   const handleStageAll = useCallback(async () => {
     if (readOnly || disableInteractions) return;
     try {
-      await gitAddAll(worktreePath);
+      await gitAddAll(workspacePath);
       addToast({ title: "Staged", description: "All changes staged", type: "success" });
       await invalidateCache();
       refresh();
@@ -1275,12 +1275,12 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
       const message = error instanceof Error ? error.message : String(error);
       addToast({ title: "Stage All Failed", description: message, type: "error" });
     }
-  }, [worktreePath, readOnly, disableInteractions, refresh, addToast, invalidateCache]);
+  }, [workspacePath, readOnly, disableInteractions, refresh, addToast, invalidateCache]);
 
   const handleUnstageAll = useCallback(async () => {
     if (readOnly || disableInteractions) return;
     try {
-      await gitUnstageAll(worktreePath);
+      await gitUnstageAll(workspacePath);
       addToast({ title: "Unstaged", description: "All changes unstaged", type: "success" });
       await invalidateCache();
       refresh();
@@ -1288,12 +1288,12 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
       const message = error instanceof Error ? error.message : String(error);
       addToast({ title: "Unstage All Failed", description: message, type: "error" });
     }
-  }, [worktreePath, readOnly, disableInteractions, refresh, addToast, invalidateCache]);
+  }, [workspacePath, readOnly, disableInteractions, refresh, addToast, invalidateCache]);
 
   const handleDiscardAll = useCallback(async () => {
     if (readOnly || disableInteractions) return;
     try {
-      await gitDiscardAllChanges(worktreePath);
+      await gitDiscardAllChanges(workspacePath);
       addToast({ title: "Discarded", description: "All changes discarded", type: "success" });
       await invalidateCache();
       refresh();
@@ -1301,7 +1301,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
       const message = error instanceof Error ? error.message : String(error);
       addToast({ title: "Discard All Failed", description: message, type: "error" });
     }
-  }, [worktreePath, readOnly, disableInteractions, refresh, addToast, invalidateCache]);
+  }, [workspacePath, readOnly, disableInteractions, refresh, addToast, invalidateCache]);
 
   const handleDiscardFiles = useCallback(
     async (filePath: string) => {
@@ -1317,7 +1317,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
 
       setFileActionTarget(filePath);
       try {
-        await gitDiscardFiles(worktreePath, filesToDiscard);
+        await gitDiscardFiles(workspacePath, filesToDiscard);
         const count = filesToDiscard.length;
         const description = count === 1
           ? `${filesToDiscard[0]} discarded`
@@ -1336,7 +1336,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
         setFileActionTarget(null);
       }
     },
-    [worktreePath, readOnly, disableInteractions, selectedUnstagedFiles, refresh, addToast, invalidateCache]
+    [workspacePath, readOnly, disableInteractions, selectedUnstagedFiles, refresh, addToast, invalidateCache]
   );
 
   // Scroll to file in the virtualized list
@@ -1410,10 +1410,10 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     scrollToFileIfNeeded(fileIndex);
   }, [lastSelectedFileIndex, unstagedFiles, scrollToFileIfNeeded]);
 
-  // Handler for when files are successfully moved to worktree
-  const handleMoveToWorktreeSuccess = useCallback((_worktreeInfo: {
+  // Handler for when files are successfully moved to workspace
+  const handleMoveToWorkspaceSuccess = useCallback((_workspaceInfo: {
     id: number;
-    worktreePath: string;
+    workspacePath: string;
     branchName: string;
     metadata: string;
   }) => {
@@ -1421,7 +1421,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     setSelectedUnstagedFiles(new Set());
     setLastSelectedFileIndex(null);
     refresh();
-    // Note: Navigation to the new worktree session is handled by the parent component
+    // Note: Navigation to the new workspace session is handled by the parent component
     // when StagingDiffViewer is used within Dashboard. Here we just refresh.
   }, [refresh]);
 
@@ -1572,7 +1572,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
       }
 
       await gitStageSelectedLines(
-        worktreePath,
+        workspacePath,
         diffLineSelection.filePath,
         selections,
         metadataLines,
@@ -1594,7 +1594,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     } finally {
       setStagingLines(false);
     }
-  }, [diffLineSelection, readOnly, disableInteractions, allFileHunks, worktreePath, addToast, refresh, invalidateCache]);
+  }, [diffLineSelection, readOnly, disableInteractions, allFileHunks, workspacePath, addToast, refresh, invalidateCache]);
 
   const handleUnstageSelectedLines = useCallback(async () => {
     if (!diffLineSelection || diffLineSelection.lines.length === 0 || readOnly || disableInteractions) {
@@ -1634,7 +1634,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
       }
 
       await gitUnstageSelectedLines(
-        worktreePath,
+        workspacePath,
         diffLineSelection.filePath,
         selections,
         metadataLines,
@@ -1656,7 +1656,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     } finally {
       setStagingLines(false);
     }
-  }, [diffLineSelection, readOnly, disableInteractions, allFileHunks, worktreePath, addToast, refresh, invalidateCache]);
+  }, [diffLineSelection, readOnly, disableInteractions, allFileHunks, workspacePath, addToast, refresh, invalidateCache]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1846,10 +1846,10 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
   }, []);
 
   const handleCommit = useCallback(async (commitMsg: string) => {
-    if (!worktreePath) {
+    if (!workspacePath) {
       addToast({
-        title: "Missing Worktree",
-        description: "Select a worktree before committing.",
+        title: "Missing Workspace",
+        description: "Select a workspace before committing.",
         type: "error",
       });
       return;
@@ -1872,7 +1872,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
 
     setCommitPending(true);
     try {
-      const result = await gitCommit(worktreePath, commitMsg);
+      const result = await gitCommit(workspacePath, commitMsg);
       const hash = extractCommitHash(result);
       await invalidateCache();
       addToast({
@@ -1891,13 +1891,13 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     } finally {
       setCommitPending(false);
     }
-  }, [worktreePath, stagedFiles, addToast, extractCommitHash, refresh, invalidateCache]);
+  }, [workspacePath, stagedFiles, addToast, extractCommitHash, refresh, invalidateCache]);
 
   const handleCommitAmend = useCallback(async (commitMsg: string) => {
-    if (!worktreePath) {
+    if (!workspacePath) {
       addToast({
-        title: "Missing Worktree",
-        description: "Select a worktree before amending.",
+        title: "Missing Workspace",
+        description: "Select a workspace before amending.",
         type: "error",
       });
       return;
@@ -1910,7 +1910,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
 
     setActionPending('amend');
     try {
-      const result = await gitCommitAmend(worktreePath, commitMsg);
+      const result = await gitCommitAmend(workspacePath, commitMsg);
       const hash = extractCommitHash(result);
       await invalidateCache();
       addToast({
@@ -1929,7 +1929,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     } finally {
       setActionPending(null);
     }
-  }, [worktreePath, addToast, extractCommitHash, refresh, invalidateCache]);
+  }, [workspacePath, addToast, extractCommitHash, refresh, invalidateCache]);
 
   const handleCommitAndPush = useCallback(async (commitMsg: string) => {
     if (!commitMsg || stagedFiles.length === 0) return;
@@ -1937,7 +1937,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     setActionPending('push');
     try {
       // First commit
-      const commitResult = await gitCommit(worktreePath, commitMsg);
+      const commitResult = await gitCommit(workspacePath, commitMsg);
       const hash = extractCommitHash(commitResult);
       await invalidateCache();
       addToast({
@@ -1947,7 +1947,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
       });
 
       // Then push
-      await gitPush(worktreePath);
+      await gitPush(workspacePath);
       addToast({
         title: "Pushed",
         description: "Changes pushed to remote",
@@ -1965,7 +1965,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     } finally {
       setActionPending(null);
     }
-  }, [worktreePath, stagedFiles, addToast, extractCommitHash, refresh, invalidateCache]);
+  }, [workspacePath, stagedFiles, addToast, extractCommitHash, refresh, invalidateCache]);
 
   const handleCommitAndSync = useCallback(async (commitMsg: string) => {
     if (!commitMsg || stagedFiles.length === 0) return;
@@ -1973,7 +1973,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     setActionPending('sync');
     try {
       // First commit
-      const commitResult = await gitCommit(worktreePath, commitMsg);
+      const commitResult = await gitCommit(workspacePath, commitMsg);
       const hash = extractCommitHash(commitResult);
       await invalidateCache();
       addToast({
@@ -1983,7 +1983,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
       });
 
       // Then pull
-      await gitPull(worktreePath);
+      await gitPull(workspacePath);
       await invalidateCache();
       addToast({
         title: "Pulled",
@@ -1992,7 +1992,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
       });
 
       // Then push
-      await gitPush(worktreePath);
+      await gitPush(workspacePath);
       addToast({
         title: "Pushed",
         description: "Changes pushed to remote",
@@ -2010,7 +2010,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     } finally {
       setActionPending(null);
     }
-  }, [worktreePath, stagedFiles, addToast, extractCommitHash, refresh, invalidateCache]);
+  }, [workspacePath, stagedFiles, addToast, extractCommitHash, refresh, invalidateCache]);
 
   const toggleSectionCollapse = useCallback((sectionId: string) => {
     setCollapsedSections((prev) => {
@@ -2435,7 +2435,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" sideOffset={4}>
-                  {fileMeta?.worktreeStatus && (
+                  {fileMeta?.workspaceStatus && (
                     <DropdownMenuItem
                       onSelect={(e) => {
                         e.preventDefault();
@@ -2457,7 +2457,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
                       Unstage file
                     </DropdownMenuItem>
                   )}
-                  {(fileMeta?.worktreeStatus || fileMeta?.stagedStatus) && (
+                  {(fileMeta?.workspaceStatus || fileMeta?.stagedStatus) && (
                     <DropdownMenuItem
                       onSelect={(e) => {
                         e.preventDefault();
@@ -2476,7 +2476,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
                     onSelect={async (e) => {
                       e.preventDefault();
                       try {
-                        await openPath(`${worktreePath}/${filePath}`);
+                        await openPath(`${workspacePath}/${filePath}`);
                       } catch (err) {
                         const msg = err instanceof Error ? err.message : String(err);
                         addToast({ title: "Open Failed", description: msg, type: "error" });
@@ -2570,7 +2570,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
                 readOnly={readOnly || disableInteractions}
                 selectedFiles={selectedUnstagedFiles}
                 onFileSelect={handleFileSelect}
-                onMoveToWorktree={() => setMoveDialogOpen(true)}
+                onMoveToWorkspace={() => setMoveDialogOpen(true)}
                 onStage={handleStageFile}
                 onStageAll={handleStageAll}
                 onDiscardAll={handleDiscardAll}
@@ -2719,13 +2719,13 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
         </div>
       )}
 
-      {/* Move to Worktree Dialog */}
-      <MoveToWorktreeDialog
+      {/* Move to Workspace Dialog */}
+      <MoveToWorkspaceDialog
         open={moveDialogOpen}
         onOpenChange={setMoveDialogOpen}
-        repoPath={worktreePath}
+        repoPath={workspacePath}
         selectedFiles={Array.from(selectedUnstagedFiles)}
-        onSuccess={handleMoveToWorktreeSuccess}
+        onSuccess={handleMoveToWorkspaceSuccess}
       />
     </div>
   );

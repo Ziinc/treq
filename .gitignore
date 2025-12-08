@@ -29,3 +29,7 @@ Thumbs.db
 *.db-shm
 *.db-wal
 .treq
+
+# Added by Treq
+.jj/
+.treq/

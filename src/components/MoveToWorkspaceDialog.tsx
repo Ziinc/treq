@@ -13,29 +13,30 @@ import { Label } from "./ui/label";
 import { useToast } from "./ui/toast";
 import { applyBranchNamePattern, sanitizeForBranchName } from "../lib/utils";
 import {
-  gitCreateWorktree,
+  jjCreateWorkspace,
   gitStashPushFiles,
   gitStashPop,
-  addWorktreeToDb,
+  addWorkspaceToDb,
   getRepoSetting,
   gitExecutePostCreateCommand,
 } from "../lib/api";
 import { ChevronDown, ChevronRight, FileText } from "lucide-react";
 
-interface MoveToWorktreeDialogProps {
+interface MoveToWorkspaceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   repoPath: string;
   selectedFiles: string[];
-  onSuccess: (worktreeInfo: {
+  onSuccess: (workspaceInfo: {
     id: number;
-    worktreePath: string;
+    workspaceName: string;
+    workspacePath: string;
     branchName: string;
     metadata: string;
   }) => void;
 }
 
-export const MoveToWorktreeDialog: React.FC<MoveToWorktreeDialogProps> = ({
+export const MoveToWorkspaceDialog: React.FC<MoveToWorkspaceDialogProps> = ({
   open,
   onOpenChange,
   repoPath,
@@ -86,11 +87,11 @@ export const MoveToWorktreeDialog: React.FC<MoveToWorktreeDialogProps> = ({
     }
   }, [intent, branchPattern, isEditingBranch]);
 
-  // Get preview of worktree path
-  const getWorktreePath = (): string => {
-    if (!branchName.trim()) return `${repoPath}/.treq/worktrees/branch-name`;
+  // Get preview of workspace path
+  const getWorkspacePath = (): string => {
+    if (!branchName.trim()) return `${repoPath}/.treq/workspaces/branch-name`;
     const pathSafeName = sanitizeForBranchName(branchName.split("/").pop() || branchName);
-    return `${repoPath}/.treq/worktrees/${pathSafeName}`;
+    return `${repoPath}/.treq/workspaces/${pathSafeName}`;
   };
 
   const handleMove = async () => {
@@ -113,7 +114,7 @@ export const MoveToWorktreeDialog: React.FC<MoveToWorktreeDialogProps> = ({
     setError("");
 
     let stashCreated = false;
-    let worktreePath: string | null = null;
+    let workspacePath: string | null = null;
 
     try {
       // Step 1: Stash selected files in source repo
@@ -126,31 +127,31 @@ export const MoveToWorktreeDialog: React.FC<MoveToWorktreeDialogProps> = ({
       await gitStashPushFiles(repoPath, selectedFiles, `treq-move: ${intent.trim()}`);
       stashCreated = true;
 
-      // Step 2: Create new worktree
+      // Step 2: Create new jj workspace
       addToast({
-        title: "Creating worktree...",
+        title: "Creating workspace...",
         description: `Creating branch ${branchName}`,
         type: "info",
       });
 
-      worktreePath = await gitCreateWorktree(repoPath, branchName, true);
+      workspacePath = await jjCreateWorkspace(repoPath, branchName, branchName, true);
 
-      // Step 3: Pop stash in new worktree
+      // Step 3: Pop stash in new workspace
       addToast({
         title: "Moving files...",
-        description: "Applying changes to new worktree",
+        description: "Applying changes to new workspace",
         type: "info",
       });
 
-      await gitStashPop(worktreePath);
+      await gitStashPop(workspacePath);
 
-      // Step 4: Add worktree to database with metadata
+      // Step 4: Add workspace to database with metadata
       const metadata = JSON.stringify({
         intent: intent.trim(),
         movedFiles: selectedFiles,
       });
 
-      const worktreeId = await addWorktreeToDb(repoPath, worktreePath, branchName, metadata);
+      const workspaceId = await addWorkspaceToDb(repoPath, branchName, workspacePath, branchName, metadata);
 
       // Step 5: Execute post-create command if configured
       const postCreateCmd = await getRepoSetting(repoPath, "post_create_command");
@@ -158,11 +159,11 @@ export const MoveToWorktreeDialog: React.FC<MoveToWorktreeDialogProps> = ({
         try {
           addToast({
             title: "Running post-create command...",
-            description: "Executing setup command in worktree",
+            description: "Executing setup command in workspace",
             type: "info",
           });
 
-          await gitExecutePostCreateCommand(worktreePath, postCreateCmd);
+          await gitExecutePostCreateCommand(workspacePath, postCreateCmd);
 
           addToast({
             title: "Files moved successfully",
@@ -186,8 +187,9 @@ export const MoveToWorktreeDialog: React.FC<MoveToWorktreeDialogProps> = ({
       }
 
       onSuccess({
-        id: worktreeId,
-        worktreePath,
+        id: workspaceId,
+        workspaceName: branchName,
+        workspacePath,
         branchName,
         metadata,
       });
@@ -196,10 +198,10 @@ export const MoveToWorktreeDialog: React.FC<MoveToWorktreeDialogProps> = ({
       const errorMsg = err instanceof Error ? err.message : String(err);
       setError(errorMsg);
 
-      // Provide recovery information if stash was created but worktree failed
-      if (stashCreated && !worktreePath) {
+      // Provide recovery information if stash was created but workspace failed
+      if (stashCreated && !workspacePath) {
         addToast({
-          title: "Failed to create worktree",
+          title: "Failed to create workspace",
           description: `Your changes were stashed. Use 'git stash pop' to recover them.`,
           type: "error",
         });
@@ -222,9 +224,9 @@ export const MoveToWorktreeDialog: React.FC<MoveToWorktreeDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Move Files to New Worktree</DialogTitle>
+          <DialogTitle>Move Files to New Workspace</DialogTitle>
           <DialogDescription>
-            Move {selectedFiles.length} selected file(s) to a new worktree
+            Move {selectedFiles.length} selected file(s) to a new workspace
           </DialogDescription>
         </DialogHeader>
 
@@ -297,11 +299,11 @@ export const MoveToWorktreeDialog: React.FC<MoveToWorktreeDialogProps> = ({
             </p>
           </div>
 
-          {/* Worktree path preview */}
+          {/* Workspace path preview */}
           <div className="grid gap-2">
-            <Label>Worktree Path (preview)</Label>
+            <Label>Workspace Path (preview)</Label>
             <div className="bg-secondary p-3 rounded-md text-sm font-mono break-all text-muted-foreground">
-              {getWorktreePath()}
+              {getWorkspacePath()}
             </div>
           </div>
 
@@ -313,7 +315,7 @@ export const MoveToWorktreeDialog: React.FC<MoveToWorktreeDialogProps> = ({
             Cancel
           </Button>
           <Button onClick={handleMove} disabled={loading}>
-            {loading ? "Moving..." : "Move to Worktree"}
+            {loading ? "Moving..." : "Move to Workspace"}
           </Button>
         </div>
       </DialogContent>

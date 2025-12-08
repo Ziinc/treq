@@ -27,8 +27,8 @@ export const GitFileRow = memo<GitFileRowProps>(({
   const label = formatFileLabel(file.path);
   const showActionButton = !readOnly && (isStaged ? onUnstage : onStage);
   const status = isStaged
-    ? file.stagedStatus ?? file.worktreeStatus
-    : file.worktreeStatus ?? file.stagedStatus;
+    ? file.stagedStatus ?? file.workspaceStatus
+    : file.workspaceStatus ?? file.stagedStatus;
 
   return (
     <div

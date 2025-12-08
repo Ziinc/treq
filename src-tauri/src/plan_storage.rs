@@ -7,8 +7,8 @@ pub struct PlanMetadata {
     pub id: String,
     pub title: String,
     pub plan_type: String,
-    pub worktree_id: Option<i64>,
-    pub worktree_path: Option<String>,
+    pub workspace_id: Option<i64>,
+    pub workspace_path: Option<String>,
     pub branch_name: Option<String>,
     pub timestamp: String,
 }
@@ -20,8 +20,8 @@ pub struct PlanFile {
     #[serde(rename = "type")]
     pub plan_type: String,
     pub raw_markdown: String,
-    pub worktree_id: Option<i64>,
-    pub worktree_path: Option<String>,
+    pub workspace_id: Option<i64>,
+    pub workspace_path: Option<String>,
     pub branch_name: Option<String>,
     pub timestamp: String,
 }
@@ -54,8 +54,8 @@ pub fn save_plan_to_file(
         title: metadata.title,
         plan_type: metadata.plan_type,
         raw_markdown: content.to_string(),
-        worktree_id: metadata.worktree_id,
-        worktree_path: metadata.worktree_path,
+        workspace_id: metadata.workspace_id,
+        workspace_path: metadata.workspace_path,
         branch_name: metadata.branch_name,
         timestamp: metadata.timestamp,
     };

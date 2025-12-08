@@ -1,6 +1,7 @@
 use jj_lib::config::{ConfigLayer, ConfigSource, StackedConfig};
 use jj_lib::settings::UserSettings;
 use jj_lib::workspace::Workspace;
+use serde::{Deserialize, Serialize};
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
@@ -13,6 +14,19 @@ pub enum JjError {
     NotGitRepository,
     InitFailed(String),
     ConfigError(String),
+    WorkspaceExists(String),
+    WorkspaceNotFound(String),
+    GitWorkspaceError(String),
+    IoError(String),
+}
+
+/// Information about a jj workspace
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WorkspaceInfo {
+    pub name: String,
+    pub path: String,
+    pub branch: String,
+    pub is_colocated: bool,
 }
 
 impl std::fmt::Display for JjError {
@@ -22,6 +36,10 @@ impl std::fmt::Display for JjError {
             JjError::NotGitRepository => write!(f, "Not a git repository"),
             JjError::InitFailed(e) => write!(f, "Failed to initialize jj: {}", e),
             JjError::ConfigError(e) => write!(f, "Configuration error: {}", e),
+            JjError::WorkspaceExists(name) => write!(f, "Workspace '{}' already exists", name),
+            JjError::WorkspaceNotFound(name) => write!(f, "Workspace '{}' not found", name),
+            JjError::GitWorkspaceError(e) => write!(f, "Git workspace error: {}", e),
+            JjError::IoError(e) => write!(f, "IO error: {}", e),
         }
     }
 }
@@ -216,4 +234,210 @@ pub fn ensure_jj_initialized(
         .map_err(|e| JjError::ConfigError(format!("Failed to save flag: {}", e)))?;
 
     Ok(true)
+}
+
+/// Sanitize workspace name for filesystem use
+pub fn sanitize_workspace_name(name: &str) -> String {
+    name.replace('/', "-")
+        .replace('\\', "-")
+        .replace(['*', '?', '<', '>', '|', '"', ':'], "_")
+        .trim_matches('.')
+        .trim()
+        .to_string()
+}
+
+/// Create a colocated jj workspace
+///
+/// This creates:
+/// 1. A git workspace at the specified path
+/// 2. A jj workspace initialized on top of it
+///
+/// Returns the workspace path on success
+pub fn create_workspace(
+    repo_path: &str,
+    workspace_name: &str,
+    branch_name: &str,
+    new_branch: bool,
+    source_branch: Option<&str>,
+    inclusion_patterns: Option<Vec<String>>,
+) -> Result<String, JjError> {
+    let repo_path_buf = Path::new(repo_path);
+
+    // Validate main repo has jj initialized
+    if !is_jj_workspace(repo_path) {
+        return Err(JjError::NotGitRepository);
+    }
+
+    // Compute workspace path
+    let sanitized_name = sanitize_workspace_name(workspace_name);
+    let workspace_dir = repo_path_buf
+        .join(".treq")
+        .join("workspaces")
+        .join(&sanitized_name);
+
+    if workspace_dir.exists() {
+        return Err(JjError::WorkspaceExists(workspace_name.to_string()));
+    }
+
+    // Create the directory structure
+    if let Some(parent) = workspace_dir.parent() {
+        fs::create_dir_all(parent).map_err(|e| JjError::IoError(e.to_string()))?;
+    }
+
+    let workspace_path_str = workspace_dir.to_string_lossy().to_string();
+
+    // Create git workspace first
+    crate::git::create_workspace_at_path(
+        repo_path,
+        branch_name,
+        new_branch,
+        source_branch,
+        &workspace_path_str,
+    )
+    .map_err(JjError::GitWorkspaceError)?;
+
+    // Copy selected ignored files
+    if let Some(patterns) = inclusion_patterns {
+        if let Err(e) = crate::git::copy_ignored_files(repo_path, &workspace_path_str, patterns) {
+            eprintln!("Warning: Failed to copy ignored files: {}", e);
+        }
+    }
+
+    // Initialize jj for this workspace (colocated mode)
+    let settings = create_user_settings(repo_path)?;
+    let git_path = workspace_dir.join(".git");
+
+    let jj_result = Workspace::init_external_git(&settings, &workspace_dir, &git_path);
+
+    if let Err(e) = jj_result {
+        // Clean up: remove the git workspace we just created
+        let _ = crate::git::remove_workspace(repo_path, &workspace_path_str);
+        let _ = fs::remove_dir_all(&workspace_dir);
+        return Err(JjError::InitFailed(format!(
+            "Failed to init jj workspace: {}",
+            e
+        )));
+    }
+
+    Ok(workspace_path_str)
+}
+
+/// List all workspaces in a repository
+/// Returns workspaces found in .treq/workspaces/ directory
+pub fn list_workspaces(repo_path: &str) -> Result<Vec<WorkspaceInfo>, JjError> {
+    let workspaces_dir = Path::new(repo_path).join(".treq").join("workspaces");
+
+    if !workspaces_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut workspaces = Vec::new();
+
+    let entries =
+        fs::read_dir(&workspaces_dir).map_err(|e| JjError::IoError(e.to_string()))?;
+
+    for entry in entries.filter_map(|e| e.ok()) {
+        let entry_path = entry.path();
+
+        // Must be a directory
+        if !entry_path.is_dir() {
+            continue;
+        }
+
+        // Must have a .git file/dir (valid git workspace)
+        let git_path = entry_path.join(".git");
+        if !git_path.exists() {
+            continue;
+        }
+
+        let name = entry
+            .file_name()
+            .to_string_lossy()
+            .to_string();
+
+        let path = entry_path.to_string_lossy().to_string();
+
+        // Check if it's colocated (has .jj directory)
+        let is_colocated = entry_path.join(".jj").exists();
+
+        // Get branch name from git
+        let branch = get_workspace_branch(&path).unwrap_or_default();
+
+        workspaces.push(WorkspaceInfo {
+            name,
+            path,
+            branch,
+            is_colocated,
+        });
+    }
+
+    // Sort by name
+    workspaces.sort_by(|a, b| a.name.cmp(&b.name));
+
+    Ok(workspaces)
+}
+
+/// Get the current branch of a workspace
+fn get_workspace_branch(workspace_path: &str) -> Result<String, JjError> {
+    let output = Command::new("git")
+        .current_dir(workspace_path)
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        Err(JjError::GitWorkspaceError(
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        ))
+    }
+}
+
+/// Remove a workspace (jj + git workspace + files)
+pub fn remove_workspace(
+    repo_path: &str,
+    workspace_path: &str,
+) -> Result<(), JjError> {
+    let workspace_dir = Path::new(workspace_path);
+
+    // Check workspace exists
+    if !workspace_dir.exists() {
+        return Err(JjError::WorkspaceNotFound(workspace_path.to_string()));
+    }
+
+    // Remove git workspace first
+    crate::git::remove_workspace(repo_path, workspace_path)
+        .map_err(JjError::GitWorkspaceError)?;
+
+    // Remove directory if it still exists (git worktree remove command should handle this)
+    if workspace_dir.exists() {
+        fs::remove_dir_all(workspace_dir).map_err(|e| JjError::IoError(e.to_string()))?;
+    }
+
+    Ok(())
+}
+
+/// Get workspace info for a specific workspace path
+pub fn get_workspace_info(workspace_path: &str) -> Result<WorkspaceInfo, JjError> {
+    let workspace_dir = Path::new(workspace_path);
+
+    if !workspace_dir.exists() {
+        return Err(JjError::WorkspaceNotFound(workspace_path.to_string()));
+    }
+
+    let name = workspace_dir
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    let is_colocated = workspace_dir.join(".jj").exists();
+    let branch = get_workspace_branch(workspace_path).unwrap_or_default();
+
+    Ok(WorkspaceInfo {
+        name,
+        path: workspace_path.to_string(),
+        branch,
+        is_colocated,
+    })
 }

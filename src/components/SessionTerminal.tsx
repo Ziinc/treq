@@ -8,7 +8,7 @@ import {
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  Worktree,
+  Workspace,
   Session,
   PlanMetadata,
   BranchInfo,
@@ -27,7 +27,7 @@ import {
   gitGetBranchInfo,
   gitGetBranchDivergence,
   gitGetLineDiffStats,
-  preloadWorktreeGitData,
+  preloadWorkspaceGitData,
   gitGetCurrentBranch,
   getSessionModel,
   setSessionModel,
@@ -89,19 +89,19 @@ import {
 } from "./ui/tooltip";
 import { cn } from "../lib/utils";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
-import { getWorktreeTitle as getWorktreeTitleFromUtils } from "../lib/worktree-utils";
+import { getWorkspaceTitle as getWorkspaceTitleFromUtils } from "../lib/workspace-utils";
 
 type SessionPanel = "planning" | "execution" | null;
 
 interface SessionTerminalProps {
   repositoryPath?: string;
-  worktree?: Worktree;
+  workspace?: Workspace;
   session?: Session | null;
   sessionId: number | null;
   mainRepoBranch?: string | null;
   onClose: () => void;
   onExecutePlan?: (section: PlanSection) => void;
-  onExecutePlanInWorktree?: (
+  onExecutePlanInWorkspace?: (
     section: PlanSection,
     sourceBranch: string,
     currentSessionName?: string
@@ -118,13 +118,13 @@ interface SessionTerminalProps {
 export const SessionTerminal = memo<SessionTerminalProps>(
   function SessionTerminal({
     repositoryPath,
-    worktree,
+    workspace,
     session,
     sessionId,
     mainRepoBranch,
     onClose,
     onExecutePlan,
-    onExecutePlanInWorktree,
+    onExecutePlanInWorkspace,
     initialPlanContent,
     initialPlanTitle,
     initialPrompt,
@@ -132,8 +132,8 @@ export const SessionTerminal = memo<SessionTerminalProps>(
     initialSelectedFile,
     isHidden = false,
   }) {
-    const workingDirectory = worktree?.worktree_path || repositoryPath || "";
-    const effectiveRepoPath = worktree?.repo_path || repositoryPath || "";
+    const workingDirectory = workspace?.workspace_path || repositoryPath || "";
+    const effectiveRepoPath = workspace?.repo_path || repositoryPath || "";
     const ptySessionId = sessionId
       ? `session-${sessionId}`
       : `session-${crypto.randomUUID()}`;
@@ -172,7 +172,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(
       "push" | "merge" | "forcePush" | null
     >(null);
     const [showForcePushDialog, setShowForcePushDialog] = useState(false);
-    const [isExecutingInWorktree, setIsExecutingInWorktree] = useState(false);
+    const [isExecutingInWorkspace, setIsExecutingInWorkspace] = useState(false);
     const [mainTreePath, setMainTreePath] = useState<string | null>(null);
     const [remoteBranchInfo, setRemoteBranchInfo] = useState<BranchInfo | null>(
       null
@@ -220,7 +220,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(
         return;
       }
 
-      preloadWorktreeGitData(normalized).catch(() => {
+      preloadWorkspaceGitData(normalized).catch(() => {
         // Silently ignore preload failures
       });
     }, [workingDirectory, isHidden]);
@@ -380,7 +380,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(
 
       try {
         setIsRenamingSession(true);
-        const repoPath = worktree?.repo_path || repositoryPath || "";
+        const repoPath = workspace?.repo_path || repositoryPath || "";
         await updateSessionName(repoPath, session.id, trimmed);
         setSessionDisplayName(trimmed);
         setIsEditingSessionName(false);
@@ -508,9 +508,9 @@ export const SessionTerminal = memo<SessionTerminalProps>(
             id: planId,
             title: updatedSection?.title || "Untitled Plan",
             plan_type: updatedSection?.type || "implementation_plan",
-            worktree_id: worktree?.id,
-            worktree_path: worktree?.worktree_path,
-            branch_name: worktree?.branch_name,
+            workspace_id: workspace?.id,
+            workspace_path: workspace?.workspace_path,
+            branch_name: workspace?.branch_name,
             timestamp: new Date().toISOString(),
           };
 
@@ -530,7 +530,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(
           });
         }
       },
-      [effectiveRepoPath, worktree, planSections, ptySessionId, addToast]
+      [effectiveRepoPath, workspace, planSections, ptySessionId, addToast]
     );
 
     const handleExecuteSection = useCallback(
@@ -540,38 +540,38 @@ export const SessionTerminal = memo<SessionTerminalProps>(
       [onExecutePlan]
     );
 
-    const handleExecuteInWorktree = useCallback(
+    const handleExecuteInWorkspace = useCallback(
       async (section: PlanSection) => {
-        if (!onExecutePlanInWorktree) return;
+        if (!onExecutePlanInWorkspace) return;
 
         // Close modal immediately when user clicks execute
         setPlanModalOpen(false);
 
-        setIsExecutingInWorktree(true);
+        setIsExecutingInWorkspace(true);
         try {
           // Determine source branch
           let sourceBranch: string;
-          if (worktree) {
-            sourceBranch = worktree.branch_name;
+          if (workspace) {
+            sourceBranch = workspace.branch_name;
           } else if (effectiveRepoPath) {
             sourceBranch = await gitGetCurrentBranch(effectiveRepoPath);
           } else {
             throw new Error("No repository context available");
           }
 
-          // This will create worktree and navigate to it
-          await onExecutePlanInWorktree(section, sourceBranch, session?.name);
+          // This will create workspace and navigate to it
+          await onExecutePlanInWorkspace(section, sourceBranch, session?.name);
         } catch (error) {
           addToast({
-            title: "Failed to execute in worktree",
+            title: "Failed to execute in workspace",
             description: error instanceof Error ? error.message : String(error),
             type: "error",
           });
         } finally {
-          setIsExecutingInWorktree(false);
+          setIsExecutingInWorkspace(false);
         }
       },
-      [worktree, effectiveRepoPath, onExecutePlanInWorktree, addToast]
+      [workspace, effectiveRepoPath, onExecutePlanInWorkspace, addToast]
     );
 
     useEffect(() => {
@@ -739,7 +739,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(
       let isCancelled = false;
 
       const loadBranchComparisons = async () => {
-        if (!worktree?.worktree_path) {
+        if (!workspace?.workspace_path) {
           if (!isCancelled) {
             setRemoteBranchInfo(null);
             setMaintreeBranchName(null);
@@ -749,7 +749,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(
         }
 
         try {
-          const info = await gitGetBranchInfo(worktree.worktree_path);
+          const info = await gitGetBranchInfo(workspace.workspace_path);
           if (!isCancelled) {
             setRemoteBranchInfo(info);
           }
@@ -792,7 +792,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(
 
         try {
           const divergence = await gitGetBranchDivergence(
-            worktree.worktree_path,
+            workspace.workspace_path,
             baseBranchName
           );
           if (!isCancelled) {
@@ -806,7 +806,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(
 
         try {
           const stats = await gitGetLineDiffStats(
-            worktree.worktree_path,
+            workspace.workspace_path,
             baseBranchName
           );
           if (!isCancelled) {
@@ -825,7 +825,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(
         isCancelled = true;
       };
     }, [
-      worktree?.worktree_path,
+      workspace?.workspace_path,
       mainTreePath,
       refreshSignal,
       isHidden,
@@ -833,7 +833,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(
     ]);
 
     const handleMergeIntoMaintree = useCallback(async () => {
-      if (!mainTreePath || !worktree?.branch_name) {
+      if (!mainTreePath || !workspace?.branch_name) {
         addToast({
           title: "Cannot merge",
           description: "Main tree path or current branch not available",
@@ -844,10 +844,10 @@ export const SessionTerminal = memo<SessionTerminalProps>(
 
       setActionPending("merge");
       try {
-        await gitMerge(mainTreePath, worktree.branch_name, "regular");
+        await gitMerge(mainTreePath, workspace.branch_name, "regular");
         addToast({
           title: "Merged",
-          description: `Branch ${worktree.branch_name} merged into main tree`,
+          description: `Branch ${workspace.branch_name} merged into main tree`,
           type: "success",
         });
         triggerSidebarRefresh();
@@ -861,7 +861,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(
       } finally {
         setActionPending(null);
       }
-    }, [mainTreePath, worktree?.branch_name, addToast, triggerSidebarRefresh]);
+    }, [mainTreePath, workspace?.branch_name, addToast, triggerSidebarRefresh]);
 
     const handleUpdateFromMaintree = useCallback(async () => {
       if (!workingDirectory || !maintreeBranchName) {
@@ -1045,7 +1045,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(
       <div className="flex flex-col h-full">
         <StagingDiffViewer
           ref={stagingDiffViewerRef}
-          worktreePath={workingDirectory}
+          workspacePath={workingDirectory}
           disableInteractions={false}
           onStagedFilesChange={handleStagedFilesChange}
           refreshSignal={refreshSignal}
@@ -1056,7 +1056,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(
       </div>
     ) : (
       <div className="h-full flex items-center justify-center text-center p-6 text-sm text-muted-foreground">
-        Configure a worktree or repository path to manage commits.
+        Configure a workspace or repository path to manage commits.
       </div>
     );
 
@@ -1166,9 +1166,9 @@ export const SessionTerminal = memo<SessionTerminalProps>(
       [ptySessionId, addToast]
     );
 
-    const getWorktreeTitle = (): string => {
-      if (!worktree) return "Main";
-      return getWorktreeTitleFromUtils(worktree);
+    const getWorkspaceTitle = (): string => {
+      if (!workspace) return "Main";
+      return getWorkspaceTitleFromUtils(workspace);
     };
 
     const sessionTitle =
@@ -1264,7 +1264,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(
                       e.preventDefault();
                       handleMergeIntoMaintree();
                     }}
-                    disabled={!mainTreePath || !worktree?.branch_name}
+                    disabled={!mainTreePath || !workspace?.branch_name}
                   >
                     <GitMerge className="w-4 h-4 mr-2" />
                     Merge into maintree
@@ -1294,7 +1294,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(
             </div>
           </div>
 
-          {/* Row 2: Worktree info */}
+          {/* Row 2: Workspace info */}
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="flex flex-col gap-1 items-start">
               {!terminalMinimized && (
@@ -1340,9 +1340,9 @@ export const SessionTerminal = memo<SessionTerminalProps>(
                 //   <span>Terminal</span>
                 // </button>
               )}
-              {worktree && (
+              {workspace && (
                 <span className="text-xs text-muted-foreground font-mono">
-                  {getWorktreeTitle()}
+                  {getWorkspaceTitle()}
                 </span>
               )}
               {(initialPromptLabel || lastPromptLabel) && (
@@ -1353,15 +1353,15 @@ export const SessionTerminal = memo<SessionTerminalProps>(
               )}
             </div>
 
-            {worktree && (
+            {workspace && (
               <div className="flex items-start gap-3 text-xs text-muted-foreground">
                 <span className="inline-flex items-center gap-1 font-mono text-foreground">
                   <GitBranch className="w-3 h-3" />
                   <span
                     className="font-semibold block max-w-[160px] truncate"
-                    title={worktree.branch_name}
+                    title={workspace.branch_name}
                   >
-                    {worktree.branch_name}
+                    {workspace.branch_name}
                   </span>
                 </span>
 
@@ -1615,7 +1615,7 @@ export const SessionTerminal = memo<SessionTerminalProps>(
         <PlanHistoryDialog
           open={historyDialogOpen}
           onOpenChange={setHistoryDialogOpen}
-          worktree={worktree || null}
+          workspace={workspace || null}
         />
 
         <PlanDisplayModal
@@ -1624,11 +1624,11 @@ export const SessionTerminal = memo<SessionTerminalProps>(
           planSections={planSections}
           onPlanEdit={handlePlanEdit}
           onExecutePlan={handleExecuteSection}
-          onExecuteInWorktree={handleExecuteInWorktree}
-          isExecutingInWorktree={isExecutingInWorktree}
+          onExecuteInWorkspace={handleExecuteInWorkspace}
+          isExecutingInWorkspace={isExecutingInWorkspace}
           sessionId={ptySessionId}
           repoPath={effectiveRepoPath}
-          worktreeId={worktree?.id}
+          workspaceId={workspace?.id}
         />
 
         {/* Force Push Confirmation Dialog */}

@@ -1,9 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, memo, useState } from "react";
-import { Session, Worktree, getSessions, getWorktrees, deleteSession, ptyClose, ptySessionExists, toggleWorktreePin } from "../lib/api";
+import { Session, Workspace, getSessions, getWorkspaces, deleteSession, ptyClose, ptySessionExists, toggleWorkspacePin } from "../lib/api";
 import { useToast } from "./ui/toast";
 import { X, Plus, Pause, MoreVertical, MoreHorizontal, FolderOpen, Trash2, Terminal as TerminalIcon, Settings, Home, Search, Pin, GitBranch } from "lucide-react";
-import { useWorktreeGitStatus } from "../hooks/useWorktreeGitStatus";
+import { useWorkspaceGitStatus } from "../hooks/useWorkspaceGitStatus";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -14,29 +14,29 @@ import {
 } from "./ui/dropdown-menu";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
-import { getWorktreeTitle as getWorktreeTitleFromUtils } from "../lib/worktree-utils";
+import { getWorkspaceTitle as getWorkspaceTitleFromUtils } from "../lib/workspace-utils";
 
 interface SessionSidebarProps {
   activeSessionId: number | null;
   onSessionClick: (session: Session) => void;
-  onCreateSession?: (worktreeId: number | null) => void;
+  onCreateSession?: (workspaceId: number | null) => void;
   onCloseActiveSession?: () => void;
   repoPath?: string;
   currentBranch?: string | null;
-  onDeleteWorktree?: (worktree: Worktree) => void;
-  onCreateWorktree?: () => void;
-  onCreateWorktreeFromRemote?: () => void;
+  onDeleteWorkspace?: (workspace: Workspace) => void;
+  onCreateWorkspace?: () => void;
+  onCreateWorkspaceFromRemote?: () => void;
   onSessionActivityListenerChange?: (listener: ((sessionId: number) => void) | null) => void;
   openSettings?: (tab?: string) => void;
   navigateToDashboard?: () => void;
   onOpenCommandPalette?: () => void;
-  onBrowseFiles?: (worktree: Worktree | null) => void;
-  browsingWorktreeId?: number | null; // null = browsing main repo, number = browsing that worktree, undefined = not browsing
+  onBrowseFiles?: (workspace: Workspace | null) => void;
+  browsingWorkspaceId?: number | null; // null = browsing main repo, number = browsing that workspace, undefined = not browsing
   currentPage?: 'dashboard' | 'settings' | 'session' | null;
 }
 
 const StatusPill: React.FC<{ path: string }> = memo(({ path }) => {
-  const { status, branchInfo } = useWorktreeGitStatus(path, {
+  const { status, branchInfo } = useWorkspaceGitStatus(path, {
     refetchInterval: 30000,
   });
 
@@ -70,15 +70,15 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
   onCloseActiveSession,
   repoPath,
   currentBranch,
-  onDeleteWorktree,
-  onCreateWorktree,
-  onCreateWorktreeFromRemote,
+  onDeleteWorkspace,
+  onCreateWorkspace,
+  onCreateWorkspaceFromRemote,
   onSessionActivityListenerChange,
   openSettings,
   navigateToDashboard,
   onOpenCommandPalette,
   onBrowseFiles,
-  browsingWorktreeId,
+  browsingWorkspaceId,
   currentPage,
 }) => {
   const { addToast } = useToast();
@@ -123,9 +123,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
     enabled: !!repoPath,
   });
 
-  const { data: worktrees = [] } = useQuery({
-    queryKey: ["worktrees", repoPath],
-    queryFn: () => getWorktrees(repoPath || ""),
+  const { data: workspaces = [] } = useQuery({
+    queryKey: ["workspaces", repoPath],
+    queryFn: () => getWorkspaces(repoPath || ""),
     enabled: !!repoPath,
   });
 
@@ -231,9 +231,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
     [deleteSessionMutation, activeSessionId, onCloseActiveSession]
   );
 
-  const deleteAllWorktreeSessionsMutation = useMutation({
-    mutationFn: async (worktreeId: number) => {
-      const sessionsToDelete = sessions.filter(s => s.worktree_id === worktreeId);
+  const deleteAllWorkspaceSessionsMutation = useMutation({
+    mutationFn: async (workspaceId: number) => {
+      const sessionsToDelete = sessions.filter(s => s.workspace_id === workspaceId);
 
       // Close PTY and delete each session
       for (const session of sessionsToDelete) {
@@ -241,14 +241,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
         await deleteSession(repoPath || "", session.id);
       }
 
-      return { worktreeId, deletedCount: sessionsToDelete.length };
+      return { workspaceId, deletedCount: sessionsToDelete.length };
     },
-    onSuccess: ({ worktreeId, deletedCount }) => {
+    onSuccess: ({ workspaceId, deletedCount }) => {
       // Clear PTY session tracking
       setPtySessionsExist((prev) => {
         const next = new Set(prev);
         sessions
-          .filter(s => s.worktree_id === worktreeId)
+          .filter(s => s.workspace_id === workspaceId)
           .forEach(s => next.delete(s.id));
         return next;
       });
@@ -270,24 +270,24 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
   });
 
   const togglePinMutation = useMutation({
-    mutationFn: async ({ worktreeId, repoPath }: { worktreeId: number; repoPath: string }) => {
-      return toggleWorktreePin(repoPath, worktreeId);
+    mutationFn: async ({ workspaceId, repoPath }: { workspaceId: number; repoPath: string }) => {
+      return toggleWorkspacePin(repoPath, workspaceId);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["worktrees", repoPath] });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
     },
   });
 
-  const handleDeleteAllWorktreeSessions = useCallback(
-    (worktreeId: number, worktreeName: string) => {
-      const sessionsToDelete = sessions.filter(s => s.worktree_id === worktreeId);
+  const handleDeleteAllWorkspaceSessions = useCallback(
+    (workspaceId: number, workspaceName: string) => {
+      const sessionsToDelete = sessions.filter(s => s.workspace_id === workspaceId);
 
       // Early return if no sessions
       if (sessionsToDelete.length === 0) return;
 
       // Show confirmation dialog
       const confirmed = confirm(
-        `Delete all ${sessionsToDelete.length} session(s) for worktree "${worktreeName}"?`
+        `Delete all ${sessionsToDelete.length} session(s) for workspace "${workspaceName}"?`
       );
 
       if (!confirmed) return;
@@ -298,27 +298,27 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
         onCloseActiveSession();
       }
 
-      deleteAllWorktreeSessionsMutation.mutate(worktreeId);
+      deleteAllWorkspaceSessionsMutation.mutate(workspaceId);
     },
-    [deleteAllWorktreeSessionsMutation, sessions, activeSessionId, onCloseActiveSession]
+    [deleteAllWorkspaceSessionsMutation, sessions, activeSessionId, onCloseActiveSession]
   );
 
-  const mainRepoSessions = sessions.filter((s) => s.worktree_id === null);
-  const worktreeSessions = sessions.filter((s) => s.worktree_id !== null);
+  const mainRepoSessions = sessions.filter((s) => s.workspace_id === null);
+  const workspaceSessions = sessions.filter((s) => s.workspace_id !== null);
 
-  const worktreeMap = useMemo(() => {
-    const map = new Map<number, Worktree>();
-    worktrees.forEach((worktree) => map.set(worktree.id, worktree));
+  const workspaceMap = useMemo(() => {
+    const map = new Map<number, Workspace>();
+    workspaces.forEach((workspace) => map.set(workspace.id, workspace));
     return map;
-  }, [worktrees]);
+  }, [workspaces]);
 
-  const sessionsByWorktree = useMemo(() => {
+  const sessionsByWorkspace = useMemo(() => {
     const groups = new Map<number, Session[]>();
-    worktreeSessions.forEach((session) => {
-      if (session.worktree_id === null) return;
-      const current = groups.get(session.worktree_id) ?? [];
+    workspaceSessions.forEach((session) => {
+      if (session.workspace_id === null) return;
+      const current = groups.get(session.workspace_id) ?? [];
       current.push(session);
-      groups.set(session.worktree_id, current);
+      groups.set(session.workspace_id, current);
     });
 
     groups.forEach((list, key) => {
@@ -327,16 +327,16 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
     });
 
     return groups;
-  }, [worktreeSessions]);
+  }, [workspaceSessions]);
 
 
-  const getWorktreeTitle = useCallback(
-    (worktreeId: number) => {
-      const worktree = worktreeMap.get(worktreeId);
-      if (!worktree) return "Worktree";
-      return getWorktreeTitleFromUtils(worktree);
+  const getWorkspaceTitle = useCallback(
+    (workspaceId: number) => {
+      const workspace = workspaceMap.get(workspaceId);
+      if (!workspace) return "Workspace";
+      return getWorkspaceTitleFromUtils(workspace);
     },
-    [worktreeMap]
+    [workspaceMap]
   );
 
   const fileManagerLabel = useMemo(() => {
@@ -406,8 +406,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
   }, [ptySessionsExist, sessionActivity]);
 
   const handleCreateSession = useCallback(
-    (worktreeId: number | null) => {
-      onCreateSession?.(worktreeId);
+    (workspaceId: number | null) => {
+      onCreateSession?.(workspaceId);
     },
     [onCreateSession]
   );
@@ -454,7 +454,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
       <div className="pl-1 pr-2 py-2 space-y-1 min-h-[120px] flex-1 overflow-y-auto">
         <div className="relative flex items-center text-[12px] uppercase tracking-wide px-2 py-1">
           <span className={`truncate flex items-center ${
-            browsingWorktreeId === null ? "text-primary" : "text-muted-foreground"
+            browsingWorkspaceId === null ? "text-primary" : "text-muted-foreground"
           }`} title={currentBranch || "Main"}>
             {currentBranch || "main"}
           </span>
@@ -541,8 +541,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
 
         <div className="space-y-2 border-t border-border">
           <div className="flex items-center justify-between text-[12px] text-muted-foreground uppercase tracking-wide px-2 py-1">
-            <span>Worktrees</span>
-            {onCreateWorktree && (
+            <span>Workspaces</span>
+            {onCreateWorkspace && (
               <DropdownMenu>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -550,21 +550,21 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
                       <button
                         type="button"
                         className="p-1 rounded hover:bg-muted"
-                        aria-label="New worktree"
+                        aria-label="New workspace"
                       >
                         <Plus className="w-3 h-3" />
                       </button>
                     </DropdownMenuTrigger>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom">New worktree</TooltipContent>
+                  <TooltipContent side="bottom">New workspace</TooltipContent>
                 </Tooltip>
                 <DropdownMenuContent align="end" sideOffset={4}>
-                  <DropdownMenuItem onSelect={onCreateWorktree}>
+                  <DropdownMenuItem onSelect={onCreateWorkspace}>
                     <Plus className="w-4 h-4 mr-2" />
-                    Create new worktree
+                    Create new workspace
                   </DropdownMenuItem>
-                  {onCreateWorktreeFromRemote && (
-                    <DropdownMenuItem onSelect={onCreateWorktreeFromRemote}>
+                  {onCreateWorkspaceFromRemote && (
+                    <DropdownMenuItem onSelect={onCreateWorkspaceFromRemote}>
                       <GitBranch className="w-4 h-4 mr-2" />
                       Create from remote branch
                     </DropdownMenuItem>
@@ -573,25 +573,25 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
               </DropdownMenu>
             )}
           </div>
-          {worktrees.map((worktree) => {
-            const sessionsForWorktree = sessionsByWorktree.get(worktree.id) || [];
-            const isBrowsingThisWorktree = browsingWorktreeId === worktree.id;
+          {workspaces.map((workspace) => {
+            const sessionsForWorkspace = sessionsByWorkspace.get(workspace.id) || [];
+            const isBrowsingThisWorkspace = browsingWorkspaceId === workspace.id;
             return (
-              <div key={worktree.id} className="space-y-1">
+              <div key={workspace.id} className="space-y-1">
                 <div className="relative flex items-center text-[12px] uppercase tracking-wide px-2 pt-1">
-                  {worktree.is_pinned && (
+                  {workspace.is_pinned && (
                     <Pin className="w-3 h-3 mr-1 text-muted-foreground" />
                   )}
                   <span
                     className={`truncate flex items-center cursor-pointer transition-colors ${
-                      isBrowsingThisWorktree ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                      isBrowsingThisWorkspace ? "text-primary" : "text-muted-foreground hover:text-foreground"
                     }`}
-                    title={getWorktreeTitle(worktree.id)}
-                    onClick={() => onBrowseFiles?.(worktree)}
+                    title={getWorkspaceTitle(workspace.id)}
+                    onClick={() => onBrowseFiles?.(workspace)}
                   >
-                    {getWorktreeTitle(worktree.id)}
+                    {getWorkspaceTitle(workspace.id)}
                   </span>
-                  <StatusPill path={worktree.worktree_path} />
+                  <StatusPill path={workspace.workspace_path} />
                   <div className="absolute right-2 flex items-center gap-1 pl-4 bg-gradient-to-l from-sidebar from-60% transition-opacity duration-200">
                     {onCreateSession && (
                       <Tooltip>
@@ -599,20 +599,20 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
                           <button
                             type="button"
                             className="p-1 rounded hover:bg-muted"
-                            aria-label="New worktree session"
-                            onClick={() => handleCreateSession(worktree.id)}
+                            aria-label="New workspace session"
+                            onClick={() => handleCreateSession(workspace.id)}
                           >
                             <Plus className="w-3 h-3" />
                           </button>
                         </TooltipTrigger>
-                        <TooltipContent side="bottom">New worktree session</TooltipContent>
+                        <TooltipContent side="bottom">New workspace session</TooltipContent>
                       </Tooltip>
                     )}
                     <DropdownMenu>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <DropdownMenuTrigger asChild>
-                            <button className="transition-opacity p-1 rounded hover:bg-muted" aria-label="Worktree actions">
+                            <button className="transition-opacity p-1 rounded hover:bg-muted" aria-label="Workspace actions">
                               <MoreVertical className="w-3 h-3" />
                             </button>
                           </DropdownMenuTrigger>
@@ -624,7 +624,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
                           <DropdownMenuItem
                             onSelect={(event) => {
                               event.preventDefault();
-                              handleCreateSession(worktree.id);
+                              handleCreateSession(workspace.id);
                             }}
                           >
                             <Plus className="w-4 h-4 mr-2" />
@@ -635,7 +635,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
                           <DropdownMenuItem
                             onSelect={(event) => {
                               event.preventDefault();
-                              onBrowseFiles(worktree);
+                              onBrowseFiles(workspace);
                             }}
                           >
                             <FolderOpen className="w-4 h-4 mr-2" />
@@ -647,20 +647,20 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
                             event.preventDefault();
                             if (repoPath) {
                               togglePinMutation.mutate({
-                                worktreeId: worktree.id,
+                                workspaceId: workspace.id,
                                 repoPath
                               });
                             }
                           }}
                         >
                           <Pin className="w-4 h-4 mr-2" />
-                          {worktree.is_pinned ? "Unpin" : "Pin"} Worktree
+                          {workspace.is_pinned ? "Unpin" : "Pin"} Workspace
                         </DropdownMenuItem>
-                        {worktree.worktree_path && (
+                        {workspace.workspace_path && (
                           <DropdownMenuItem
                             onSelect={(event) => {
                               event.preventDefault();
-                              handleOpenInFileManager(worktree.worktree_path);
+                              handleOpenInFileManager(workspace.workspace_path);
                             }}
                           >
                             <FolderOpen className="w-4 h-4 mr-2" />
@@ -670,27 +670,27 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive"
-                          onSelect={() => handleDeleteAllWorktreeSessions(worktree.id, getWorktreeTitle(worktree.id))}
-                          disabled={sessionsForWorktree.length === 0}
+                          onSelect={() => handleDeleteAllWorkspaceSessions(workspace.id, getWorkspaceTitle(workspace.id))}
+                          disabled={sessionsForWorkspace.length === 0}
                         >
                           <Trash2 className="w-4 h-4 mr-2" />
                           Delete All Sessions
                         </DropdownMenuItem>
-                        {onDeleteWorktree && (
+                        {onDeleteWorkspace && (
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive"
-                            onSelect={() => onDeleteWorktree(worktree)}
+                            onSelect={() => onDeleteWorkspace(workspace)}
                           >
                             <Trash2 className="w-4 h-4 mr-2" />
-                            Delete Worktree
+                            Delete Workspace
                           </DropdownMenuItem>
                         )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
                 </div>
-                {sessionsForWorktree.length > 0 ? (
-                  sessionsForWorktree.map((session) => (
+                {sessionsForWorkspace.length > 0 ? (
+                  sessionsForWorkspace.map((session) => (
                     <div key={session.id}>
                       {renderSessionRow(session)}
                     </div>
@@ -700,7 +700,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
                     variant="ghost"
                     size="sm"
                     className="w-full justify-center text-xs text-muted-foreground !h-auto py-1.5"
-                    onClick={() => handleCreateSession(worktree.id)}
+                    onClick={() => handleCreateSession(workspace.id)}
                     disabled={!onCreateSession}
                   >
                     <TerminalIcon className="w-3 h-3 mr-2" />

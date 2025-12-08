@@ -9,16 +9,16 @@ import {
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
-import type { MergeStrategy, Worktree } from "../lib/api";
+import type { MergeStrategy, Workspace } from "../lib/api";
 import { ArrowRight, AlertTriangle } from "lucide-react";
 
 interface MergeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  worktree: Worktree | null;
+  workspace: Workspace | null;
   mainBranch: string | null;
   aheadCount: number;
-  hasWorktreeChanges: boolean;
+  hasWorkspaceChanges: boolean;
   changedFiles: string[];
   isLoadingDetails: boolean;
   isSubmitting: boolean;
@@ -35,10 +35,10 @@ const STRATEGY_OPTIONS: Array<{ value: MergeStrategy; label: string; description
 export const MergeDialog: React.FC<MergeDialogProps> = ({
   open,
   onOpenChange,
-  worktree,
+  workspace,
   mainBranch,
   aheadCount,
-  hasWorktreeChanges,
+  hasWorkspaceChanges,
   changedFiles,
   isLoadingDetails,
   isSubmitting,
@@ -49,32 +49,32 @@ export const MergeDialog: React.FC<MergeDialogProps> = ({
   const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   useEffect(() => {
-    if (open && worktree) {
+    if (open && workspace) {
       setStrategy("regular");
-      setCommitMessage(`Merge ${worktree.branch_name} into ${mainBranch || "main"}`);
+      setCommitMessage(`Merge ${workspace.branch_name} into ${mainBranch || "main"}`);
       setConfirmDiscard(false);
     }
-  }, [open, worktree, mainBranch]);
+  }, [open, workspace, mainBranch]);
 
   useEffect(() => {
-    if (!hasWorktreeChanges) {
+    if (!hasWorkspaceChanges) {
       setConfirmDiscard(false);
     }
-  }, [hasWorktreeChanges]);
+  }, [hasWorkspaceChanges]);
 
   const canConfirm = useMemo(() => {
-    if (!worktree || isLoadingDetails) return false;
-    if (hasWorktreeChanges && !confirmDiscard) return false;
+    if (!workspace || isLoadingDetails) return false;
+    if (hasWorkspaceChanges && !confirmDiscard) return false;
     if (strategy === "squash" && !commitMessage.trim()) return false;
     return !isSubmitting;
-  }, [worktree, isLoadingDetails, hasWorktreeChanges, confirmDiscard, strategy, commitMessage, isSubmitting]);
+  }, [workspace, isLoadingDetails, hasWorkspaceChanges, confirmDiscard, strategy, commitMessage, isSubmitting]);
 
   const handleConfirm = () => {
-    if (!worktree) return;
+    if (!workspace) return;
     onConfirm({
       strategy,
       commitMessage,
-      discardChanges: hasWorktreeChanges,
+      discardChanges: hasWorkspaceChanges,
     });
   };
 
@@ -82,14 +82,14 @@ export const MergeDialog: React.FC<MergeDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Merge Worktree</DialogTitle>
+          <DialogTitle>Merge Workspace</DialogTitle>
           <DialogDescription>
-            Merge changes from this worktree into the main repository branch.
+            Merge changes from this workspace into the main repository branch.
           </DialogDescription>
         </DialogHeader>
 
-        {!worktree ? (
-          <div className="text-sm text-muted-foreground">Select a worktree to merge.</div>
+        {!workspace ? (
+          <div className="text-sm text-muted-foreground">Select a workspace to merge.</div>
         ) : isLoadingDetails ? (
           <div className="py-8 text-center text-sm text-muted-foreground">
             Preparing merge details...
@@ -99,7 +99,7 @@ export const MergeDialog: React.FC<MergeDialogProps> = ({
             <div className="bg-muted/50 rounded-lg p-3">
               <div className="text-sm font-medium mb-1">Merge Direction</div>
               <div className="flex items-center gap-2 text-sm">
-                <span className="font-mono text-xs sm:text-sm">{worktree.branch_name}</span>
+                <span className="font-mono text-xs sm:text-sm">{workspace.branch_name}</span>
                 <ArrowRight className="w-4 h-4" />
                 <span className="font-mono text-xs sm:text-sm">{mainBranch || "Current"}</span>
               </div>
@@ -145,11 +145,11 @@ export const MergeDialog: React.FC<MergeDialogProps> = ({
               )}
             </div>
 
-            {hasWorktreeChanges && (
+            {hasWorkspaceChanges && (
               <div className="border border-yellow-500/50 bg-yellow-500/5 rounded-lg p-4 space-y-3">
                 <div className="flex items-center gap-2 text-yellow-600 dark:text-yellow-400">
                   <AlertTriangle className="w-4 h-4" />
-                  <span className="text-sm font-medium">Worktree has uncommitted changes</span>
+                  <span className="text-sm font-medium">Workspace has uncommitted changes</span>
                 </div>
                 <p className="text-xs text-yellow-700 dark:text-yellow-300">
                   These changes must be discarded before merging. Review the files below and confirm you want to proceed.

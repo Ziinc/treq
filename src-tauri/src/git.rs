@@ -29,13 +29,13 @@ pub struct BranchDivergence {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct WorktreeInfo {
+pub struct WorkspaceInfo {
     pub path: String,
     pub branch: String,
     pub commit: String,
 }
 
-pub fn create_worktree(
+pub fn create_workspace(
     repo_path: &str,
     branch: &str,
     new_branch: bool,
@@ -45,20 +45,20 @@ pub fn create_worktree(
     // Sanitize branch name for path
     let sanitized = sanitize_branch_name_for_path(branch);
 
-    // Generate worktree path: {repo_path}/.treq/worktrees/{sanitized_branch}
-    let worktree_path = format!("{}/.treq/worktrees/{}", repo_path, sanitized);
+    // Generate workspace path: {repo_path}/.treq/workspaces/{sanitized_branch}
+    let workspace_path = format!("{}/.treq/workspaces/{}", repo_path, sanitized);
 
-    // Create .treq/worktrees directory if it doesn't exist
-    let treq_dir = format!("{}/.treq/worktrees", repo_path);
+    // Create .treq/workspaces directory if it doesn't exist
+    let treq_dir = format!("{}/.treq/workspaces", repo_path);
     fs::create_dir_all(&treq_dir)
-        .map_err(|e| format!("Failed to create .treq/worktrees directory: {}", e))?;
+        .map_err(|e| format!("Failed to create .treq/workspaces directory: {}", e))?;
 
-    // Check if worktree already exists at this path
-    if Path::new(&worktree_path).exists() {
-        return Err(format!("Worktree already exists at {}", worktree_path));
+    // Check if workspace already exists at this path
+    if Path::new(&workspace_path).exists() {
+        return Err(format!("Workspace already exists at {}", workspace_path));
     }
 
-    // Execute git worktree add command
+    // Execute git worktree add command (internal Git operation - command name stays as-is)
     // When new_branch is true and source_branch is provided:
     //   git worktree add -b <new_branch> <path> <source_branch>
     // When new_branch is true and no source_branch:
@@ -73,7 +73,7 @@ pub fn create_worktree(
         cmd.arg("-b").arg(branch);
     }
 
-    cmd.arg(&worktree_path);
+    cmd.arg(&workspace_path);
 
     if new_branch {
         // If source_branch is provided, use it as the base for the new branch
@@ -87,20 +87,63 @@ pub fn create_worktree(
     let output = cmd.output().map_err(|e| e.to_string())?;
 
     if output.status.success() {
-        // Copy selected ignored files after successful worktree creation
-        if let Err(e) = copy_selected_ignored_files(repo_path, &worktree_path, inclusion_patterns) {
-            eprintln!("Warning: Failed to copy ignored files: {}", e);
-            // Don't fail the worktree creation, just log the warning
+        // Copy selected ignored files after successful workspace creation
+        if let Some(patterns) = inclusion_patterns {
+            if let Err(e) = copy_ignored_files(repo_path, &workspace_path, patterns) {
+                eprintln!("Warning: Failed to copy ignored files: {}", e);
+                // Don't fail the workspace creation, just log the warning
+            }
         }
 
-        // Return the worktree path instead of stdout
-        Ok(worktree_path)
+        // Return the workspace path instead of stdout
+        Ok(workspace_path)
     } else {
         Err(String::from_utf8_lossy(&output.stderr).to_string())
     }
 }
 
-pub fn list_worktrees(repo_path: &str) -> Result<Vec<WorktreeInfo>, String> {
+/// Create a git workspace at a specific path (used by jj workspace creation)
+pub fn create_workspace_at_path(
+    repo_path: &str,
+    branch: &str,
+    new_branch: bool,
+    source_branch: Option<&str>,
+    workspace_path: &str,
+) -> Result<String, String> {
+    // Check if workspace already exists at this path
+    if Path::new(workspace_path).exists() {
+        return Err(format!("Workspace already exists at {}", workspace_path));
+    }
+
+    // Execute git worktree add command (internal Git operation - command name stays as-is)
+    let mut cmd = Command::new("git");
+    cmd.current_dir(repo_path);
+    cmd.arg("worktree").arg("add");
+
+    if new_branch {
+        cmd.arg("-b").arg(branch);
+    }
+
+    cmd.arg(workspace_path);
+
+    if new_branch {
+        if let Some(source) = source_branch {
+            cmd.arg(source);
+        }
+    } else {
+        cmd.arg(branch);
+    }
+
+    let output = cmd.output().map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        Ok(workspace_path.to_string())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+pub fn list_workspaces(repo_path: &str) -> Result<Vec<WorkspaceInfo>, String> {
     let output = Command::new("git")
         .current_dir(repo_path)
         .args(["worktree", "list", "--porcelain"])
@@ -112,21 +155,22 @@ pub fn list_worktrees(repo_path: &str) -> Result<Vec<WorktreeInfo>, String> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut worktrees = Vec::new();
-    let mut current_worktree: Option<WorktreeInfo> = None;
+    let mut workspaces = Vec::new();
+    let mut current_workspace: Option<WorkspaceInfo> = None;
 
+    // Parse git's porcelain output format (lines like "worktree /path", "branch refs/heads/main", "HEAD abc123")
     for line in stdout.lines() {
         if line.starts_with("worktree ") {
-            if let Some(wt) = current_worktree.take() {
-                worktrees.push(wt);
+            if let Some(wt) = current_workspace.take() {
+                workspaces.push(wt);
             }
-            current_worktree = Some(WorktreeInfo {
+            current_workspace = Some(WorkspaceInfo {
                 path: line.strip_prefix("worktree ").unwrap_or("").to_string(),
                 branch: String::new(),
                 commit: String::new(),
             });
         } else if line.starts_with("branch ") {
-            if let Some(ref mut wt) = current_worktree {
+            if let Some(ref mut wt) = current_workspace {
                 wt.branch = line
                     .strip_prefix("branch refs/heads/")
                     .or_else(|| line.strip_prefix("branch "))
@@ -134,24 +178,24 @@ pub fn list_worktrees(repo_path: &str) -> Result<Vec<WorktreeInfo>, String> {
                     .to_string();
             }
         } else if line.starts_with("HEAD ") {
-            if let Some(ref mut wt) = current_worktree {
+            if let Some(ref mut wt) = current_workspace {
                 wt.commit = line.strip_prefix("HEAD ").unwrap_or("").to_string();
             }
         }
     }
 
-    if let Some(wt) = current_worktree {
-        worktrees.push(wt);
+    if let Some(wt) = current_workspace {
+        workspaces.push(wt);
     }
 
-    Ok(worktrees)
+    Ok(workspaces)
 }
 
-pub fn remove_worktree(repo_path: &str, worktree_path: &str) -> Result<String, String> {
+pub fn remove_workspace(repo_path: &str, workspace_path: &str) -> Result<String, String> {
     // Use --force because the UI already prompts the user for confirmation
     let output = Command::new("git")
         .current_dir(repo_path)
-        .args(["worktree", "remove", "--force", worktree_path])
+        .args(["worktree", "remove", "--force", workspace_path])
         .output()
         .map_err(|e| e.to_string())?;
 
@@ -162,10 +206,10 @@ pub fn remove_worktree(repo_path: &str, worktree_path: &str) -> Result<String, S
     }
 }
 
-pub fn get_git_status(worktree_path: &str) -> Result<GitStatus, String> {
+pub fn get_git_status(workspace_path: &str) -> Result<GitStatus, String> {
     // Get tracked file changes (modified, added, deleted, staged)
     let output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["status", "--porcelain"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -210,7 +254,7 @@ pub fn get_git_status(worktree_path: &str) -> Result<GitStatus, String> {
 
     // Get untracked files count (individual files, respecting .gitignore)
     let untracked_output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["ls-files", "--others", "--exclude-standard"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -226,10 +270,10 @@ pub fn get_git_status(worktree_path: &str) -> Result<GitStatus, String> {
     Ok(status)
 }
 
-pub fn get_branch_info(worktree_path: &str) -> Result<BranchInfo, String> {
+pub fn get_branch_info(workspace_path: &str) -> Result<BranchInfo, String> {
     // Get current branch name
     let branch_output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -240,7 +284,7 @@ pub fn get_branch_info(worktree_path: &str) -> Result<BranchInfo, String> {
 
     // Get upstream branch
     let upstream_output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["rev-parse", "--abbrev-ref", "@{upstream}"])
         .output()
         .ok();
@@ -256,7 +300,7 @@ pub fn get_branch_info(worktree_path: &str) -> Result<BranchInfo, String> {
     // Get ahead/behind counts
     let (ahead, behind) = if let Some(ref up) = upstream {
         let rev_output = Command::new("git")
-            .current_dir(worktree_path)
+            .current_dir(workspace_path)
             .args([
                 "rev-list",
                 "--left-right",
@@ -292,7 +336,7 @@ pub fn get_branch_info(worktree_path: &str) -> Result<BranchInfo, String> {
 }
 
 pub fn get_branch_divergence(
-    worktree_path: &str,
+    workspace_path: &str,
     base_branch: &str,
 ) -> Result<BranchDivergence, String> {
     if base_branch.trim().is_empty() {
@@ -300,7 +344,7 @@ pub fn get_branch_divergence(
     }
 
     let branch_output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -314,7 +358,7 @@ pub fn get_branch_divergence(
         .to_string();
 
     let rev_output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args([
             "rev-list",
             "--left-right",
@@ -562,7 +606,7 @@ pub fn sanitize_branch_name_for_path(branch: &str) -> String {
 }
 
 pub fn execute_post_create_command(
-    worktree_path: &str,
+    workspace_path: &str,
     command: &str,
 ) -> Result<String, String> {
     // Split command into program and arguments
@@ -582,7 +626,7 @@ pub fn execute_post_create_command(
     let output = Command::new(shell)
         .arg(shell_arg)
         .arg(command)
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .output()
         .map_err(|e| format!("Failed to execute command: {}", e))?;
 
@@ -602,43 +646,39 @@ pub fn execute_post_create_command(
     }
 }
 
-/// Copy selected ignored files from source repository to worktree
+/// Copy selected ignored files from source repository to workspace
 /// This function identifies files that are gitignored and copies only those matching inclusion patterns
-/// If inclusion_patterns is None or empty, no files are copied (secure by default)
-fn copy_selected_ignored_files(
+/// If inclusion_patterns is empty, no files are copied (secure by default)
+pub fn copy_ignored_files(
     source_repo: &str,
-    dest_worktree: &str,
-    inclusion_patterns: Option<Vec<String>>,
+    dest_workspace: &str,
+    inclusion_patterns: Vec<String>,
 ) -> Result<(), String> {
     let source_path = Path::new(source_repo);
-    let dest_path = Path::new(dest_worktree);
+    let dest_path = Path::new(dest_workspace);
 
     // Build glob set from inclusion patterns
-    let globset = if let Some(patterns) = inclusion_patterns {
-        if !patterns.is_empty() {
-            let mut builder = GlobSetBuilder::new();
-            for pattern in &patterns {
-                let pattern = pattern.trim();
-                if !pattern.is_empty() {
-                    match Glob::new(pattern) {
-                        Ok(glob) => {
-                            builder.add(glob);
-                        }
-                        Err(e) => {
-                            eprintln!("Warning: Invalid glob pattern '{}': {}", pattern, e);
-                        }
+    let globset = if !inclusion_patterns.is_empty() {
+        let mut builder = GlobSetBuilder::new();
+        for pattern in &inclusion_patterns {
+            let pattern = pattern.trim();
+            if !pattern.is_empty() {
+                match Glob::new(pattern) {
+                    Ok(glob) => {
+                        builder.add(glob);
+                    }
+                    Err(e) => {
+                        eprintln!("Warning: Invalid glob pattern '{}': {}", pattern, e);
                     }
                 }
             }
-            match builder.build() {
-                Ok(gs) => Some(gs),
-                Err(e) => {
-                    eprintln!("Warning: Failed to build glob set: {}", e);
-                    None
-                }
+        }
+        match builder.build() {
+            Ok(gs) => Some(gs),
+            Err(e) => {
+                eprintln!("Warning: Failed to build glob set: {}", e);
+                None
             }
-        } else {
-            None
         }
     } else {
         None
@@ -722,7 +762,7 @@ fn copy_selected_ignored_files(
 
     if copied_count > 0 {
         println!(
-            "Copied {} ignored files matching inclusion patterns to worktree",
+            "Copied {} ignored files matching inclusion patterns to workspace",
             copied_count
         );
     }
@@ -785,7 +825,7 @@ pub fn list_gitignored_files(repo_path: &str) -> Result<Vec<String>, String> {
 /// Stash specific files with a message
 /// Uses: git stash push -m "{message}" -- file1 file2 ...
 pub fn git_stash_push_files(
-    worktree_path: &str,
+    workspace_path: &str,
     file_paths: Vec<String>,
     message: &str,
 ) -> Result<String, String> {
@@ -794,7 +834,7 @@ pub fn git_stash_push_files(
     }
 
     let mut cmd = Command::new("git");
-    cmd.current_dir(worktree_path);
+    cmd.current_dir(workspace_path);
     cmd.args(["stash", "push", "-m", message, "--"]);
 
     for path in &file_paths {
@@ -812,9 +852,9 @@ pub fn git_stash_push_files(
 
 /// Pop the most recent stash
 /// Uses: git stash pop
-pub fn git_stash_pop(worktree_path: &str) -> Result<String, String> {
+pub fn git_stash_pop(workspace_path: &str) -> Result<String, String> {
     let output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["stash", "pop"])
         .output()
         .map_err(|e| e.to_string())?;

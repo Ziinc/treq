@@ -5,18 +5,18 @@ import { Button } from './ui/button';
 import { Copy, CheckCircle2, ListTodo, Lightbulb, FileText, Edit3, Play, ArrowRight, Loader2, GitBranch } from 'lucide-react';
 import { useToast } from './ui/toast';
 import { PlanEditor } from './PlanEditor';
-import { getWorktreePlans, ptyWrite } from '../lib/api';
+import { getWorkspacePlans, ptyWrite } from '../lib/api';
 import { PlanHistoryEntry } from '../types/planHistory';
 
 interface PlanDisplayProps {
   planSections: PlanSection[];
   onPlanEdit?: (planId: string, newContent: string) => void;
   onExecutePlan?: (section: PlanSection) => void;
-  onExecuteInWorktree?: (section: PlanSection) => void;
-  isExecutingInWorktree?: boolean;
+  onExecuteInWorkspace?: (section: PlanSection) => void;
+  isExecutingInWorkspace?: boolean;
   sessionId?: string;
   repoPath?: string;
-  worktreeId?: number;
+  workspaceId?: number;
 }
 
 const resolvePlanContent = (entry: PlanHistoryEntry): string => {
@@ -116,11 +116,11 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = memo(({
   planSections,
   onPlanEdit,
   onExecutePlan,
-  onExecuteInWorktree,
-  isExecutingInWorktree,
+  onExecuteInWorkspace,
+  isExecutingInWorkspace,
   sessionId,
   repoPath,
-  worktreeId,
+  workspaceId,
 }) => {
   const { addToast } = useToast();
   const [pastPlans, setPastPlans] = useState<PlanHistoryEntry[]>([]);
@@ -150,9 +150,9 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = memo(({
   };
 
   useEffect(() => {
-    if (planSections.length === 0 && repoPath && worktreeId) {
+    if (planSections.length === 0 && repoPath && workspaceId) {
       setIsLoadingPastPlans(true);
-      getWorktreePlans(repoPath, worktreeId, 3)
+      getWorkspacePlans(repoPath, workspaceId, 3)
         .then((plans) => {
           setPastPlans(plans);
         })
@@ -166,7 +166,7 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = memo(({
     } else {
       setPastPlans([]);
     }
-  }, [planSections.length, repoPath, worktreeId]);
+  }, [planSections.length, repoPath, workspaceId]);
 
   const handleInsertPlan = async (entry: PlanHistoryEntry) => {
     if (!sessionId) {
@@ -317,20 +317,20 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = memo(({
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {section.type === 'implementation_plan' && onExecuteInWorktree && (
+                {section.type === 'implementation_plan' && onExecuteInWorkspace && (
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => onExecuteInWorktree(section)}
-                    disabled={isExecutingInWorktree}
+                    onClick={() => onExecuteInWorkspace(section)}
+                    disabled={isExecutingInWorkspace}
                     className="h-8"
                   >
-                    {isExecutingInWorktree ? (
+                    {isExecutingInWorkspace ? (
                       <Loader2 className="w-3 h-3 mr-1 animate-spin" />
                     ) : (
                       <GitBranch className="w-3 h-3 mr-1" />
                     )}
-                    Execute in new worktree
+                    Execute in new workspace
                   </Button>
                 )}
                 {section.type === 'implementation_plan' && onExecutePlan && (

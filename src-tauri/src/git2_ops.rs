@@ -2,8 +2,8 @@ use git2::{Repository, StatusOptions, Status as Git2Status, BranchType};
 use crate::git::{GitStatus, BranchInfo, BranchDivergence};
 
 /// Get git status using libgit2 (no subprocess)
-pub fn get_status_git2(worktree_path: &str) -> Result<GitStatus, String> {
-    let repo = Repository::open(worktree_path)
+pub fn get_status_git2(workspace_path: &str) -> Result<GitStatus, String> {
+    let repo = Repository::open(workspace_path)
         .map_err(|e| format!("Failed to open repository: {}", e))?;
 
     let mut opts = StatusOptions::new();
@@ -51,8 +51,8 @@ pub fn get_status_git2(worktree_path: &str) -> Result<GitStatus, String> {
 }
 
 /// Get branch info using libgit2
-pub fn get_branch_info_git2(worktree_path: &str) -> Result<BranchInfo, String> {
-    let repo = Repository::open(worktree_path)
+pub fn get_branch_info_git2(workspace_path: &str) -> Result<BranchInfo, String> {
+    let repo = Repository::open(workspace_path)
         .map_err(|e| format!("Failed to open repository: {}", e))?;
 
     let head = repo.head()
@@ -124,10 +124,10 @@ fn get_upstream_info(repo: &Repository, head: &git2::Reference) -> (Option<Strin
 
 /// Get divergence from base branch using libgit2
 pub fn get_divergence_git2(
-    worktree_path: &str,
+    workspace_path: &str,
     base_branch: &str,
 ) -> Result<BranchDivergence, String> {
-    let repo = Repository::open(worktree_path)
+    let repo = Repository::open(workspace_path)
         .map_err(|e| format!("Failed to open repository: {}", e))?;
 
     let head = repo.head()

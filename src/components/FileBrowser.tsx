@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, memo } from "react";
 import { Folder, FolderOpen, FileText, Loader2, AlertCircle, Plus } from "lucide-react";
 import { List, type ListImperativeAPI, type RowComponentProps } from "react-window";
-import type { Worktree, DirectoryEntry } from "../lib/api";
+import type { Workspace, DirectoryEntry } from "../lib/api";
 import { listDirectory, readFile, gitGetChangedFiles, gitGetFileHunks } from "../lib/api";
 import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
@@ -9,17 +9,17 @@ import { Textarea } from "./ui/textarea";
 import { isBinaryFile, parseChangedFiles, type ParsedFileChange } from "../lib/git-utils";
 import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
 import { useToast } from "./ui/toast";
-import { useWorktreeGitStatus } from "../hooks/useWorktreeGitStatus";
+import { useWorkspaceGitStatus } from "../hooks/useWorkspaceGitStatus";
 import { LineDiffStatsDisplay } from "./LineDiffStatsDisplay";
-import { getWorktreeTitle } from "../lib/worktree-utils";
+import { getWorkspaceTitle } from "../lib/workspace-utils";
 import { GitBranch, Pin } from "lucide-react";
 
 interface FileBrowserProps {
-  worktree?: Worktree;
+  workspace?: Workspace;
   repoPath?: string;
   branchName?: string;
   mainBranch?: string;
-  onStartPlanSession?: (prompt: string, worktreePath: string) => void;
+  onStartPlanSession?: (prompt: string, workspacePath: string) => void;
 }
 
 interface LineSelection {
@@ -39,14 +39,14 @@ function filterHiddenEntries(entries: DirectoryEntry[]): DirectoryEntry[] {
 const LINE_HEIGHT = 24;
 const COMMENT_INPUT_HEIGHT = 180;
 
-export const FileBrowser = memo(function FileBrowser({ worktree, repoPath, branchName, mainBranch, onStartPlanSession }: FileBrowserProps) {
+export const FileBrowser = memo(function FileBrowser({ workspace, repoPath, branchName, mainBranch, onStartPlanSession }: FileBrowserProps) {
   // Determine the path and branch to use
-  const basePath = worktree?.worktree_path ?? repoPath ?? "";
-  const displayBranch = worktree?.branch_name ?? branchName ?? "main";
+  const basePath = workspace?.workspace_path ?? repoPath ?? "";
+  const displayBranch = workspace?.branch_name ?? branchName ?? "main";
 
-  // Get git status for worktree
-  const { status, branchInfo, lineDiffStats } = useWorktreeGitStatus(
-    worktree?.worktree_path,
+  // Get git status for workspace
+  const { status, branchInfo, lineDiffStats } = useWorkspaceGitStatus(
+    workspace?.workspace_path,
     {
       refetchInterval: 30000,
       baseBranch: mainBranch,
@@ -206,9 +206,9 @@ export const FileBrowser = memo(function FileBrowser({ worktree, repoPath, branc
   const getStatusTextColor = useCallback((file: ParsedFileChange | undefined): string => {
     if (!file) return "";
     if (file.isUntracked) return "text-green-500";
-    if (file.worktreeStatus === "M" || file.stagedStatus === "M") return "text-yellow-500";
-    if (file.worktreeStatus === "A" || file.stagedStatus === "A") return "text-green-500";
-    if (file.worktreeStatus === "D" || file.stagedStatus === "D") return "text-red-500";
+    if (file.workspaceStatus === "M" || file.stagedStatus === "M") return "text-yellow-500";
+    if (file.workspaceStatus === "A" || file.stagedStatus === "A") return "text-green-500";
+    if (file.workspaceStatus === "D" || file.stagedStatus === "D") return "text-red-500";
     return "text-yellow-500"; // default for any other change
   }, []);
 
@@ -296,7 +296,7 @@ export const FileBrowser = memo(function FileBrowser({ worktree, repoPath, branc
     setPendingComment(null);
   }, []);
 
-  // Auto-select README.md when rootEntries change (switching worktrees)
+  // Auto-select README.md when rootEntries change (switching workspaces)
   useEffect(() => {
     if (rootEntries.length === 0) return;
 
@@ -688,7 +688,7 @@ export const FileBrowser = memo(function FileBrowser({ worktree, repoPath, branc
     ? status.modified + status.added + status.deleted + status.untracked
     : 0;
 
-  const title = worktree ? getWorktreeTitle(worktree) : "File Browser";
+  const title = workspace ? getWorkspaceTitle(workspace) : "File Browser";
 
   return (
     <div className="h-full flex flex-col bg-background">
@@ -697,7 +697,7 @@ export const FileBrowser = memo(function FileBrowser({ worktree, repoPath, branc
         <div className="flex flex-col gap-2 flex-1">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold">{title}</h2>
-            {worktree?.is_pinned && (
+            {workspace?.is_pinned && (
               <Pin className="w-3.5 h-3.5 text-muted-foreground" />
             )}
             <LineDiffStatsDisplay stats={lineDiffStats} size="sm" />
@@ -736,9 +736,9 @@ export const FileBrowser = memo(function FileBrowser({ worktree, repoPath, branc
               )}
             </div>
           )}
-          {worktree && (
+          {workspace && (
             <div className="text-xs text-muted-foreground">
-              <div>Created {new Date(worktree.created_at).toLocaleString()}</div>
+              <div>Created {new Date(workspace.created_at).toLocaleString()}</div>
             </div>
           )}
         </div>

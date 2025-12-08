@@ -13,14 +13,14 @@ import { Label } from "./ui/label";
 import { useToast } from "./ui/toast";
 import { applyBranchNamePattern, sanitizeForBranchName } from "../lib/utils";
 import {
-  gitCreateWorktree,
-  addWorktreeToDb,
+  jjCreateWorkspace,
+  addWorkspaceToDb,
   getRepoSetting,
   gitExecutePostCreateCommand
 } from "../lib/api";
 import { PlanSection } from "../types/planning";
 
-interface CreateWorktreeDialogProps {
+interface CreateWorkspaceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   repoPath: string;
@@ -31,13 +31,13 @@ interface CreateWorktreeDialogProps {
   sourceBranch?: string;
   initialSessionName?: string;
   onSuccessWithPlan?: (
-    worktreeInfo: { id: number; worktreePath: string; branchName: string; metadata: string },
+    workspaceInfo: { id: number; workspaceName: string; workspacePath: string; branchName: string; metadata: string },
     planSection: PlanSection,
     sessionName?: string
   ) => void;
 }
 
-export const CreateWorktreeDialog: React.FC<CreateWorktreeDialogProps> = ({
+export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
   open,
   onOpenChange,
   repoPath,
@@ -89,11 +89,11 @@ export const CreateWorktreeDialog: React.FC<CreateWorktreeDialogProps> = ({
     }
   }, [intent, branchPattern, isEditingBranch]);
 
-  // Get preview of worktree path
-  const getWorktreePath = (): string => {
-    if (!branchName.trim()) return `${repoPath}/.treq/worktrees/branch-name`;
+  // Get preview of workspace path
+  const getWorkspacePath = (): string => {
+    if (!branchName.trim()) return `${repoPath}/.treq/workspaces/branch-name`;
     const pathSafeName = sanitizeForBranchName(branchName.split('/').pop() || branchName);
-    return `${repoPath}/.treq/worktrees/${pathSafeName}`;
+    return `${repoPath}/.treq/workspaces/${pathSafeName}`;
   };
 
   const handleCreate = async () => {
@@ -111,10 +111,11 @@ export const CreateWorktreeDialog: React.FC<CreateWorktreeDialogProps> = ({
     setError("");
 
     try {
-      // Create the worktree (auto-generates path)
-      // Pass source branch if executing from worktree
-      const worktreePath = await gitCreateWorktree(
+      // Create the jj workspace (creates git workspace + initializes jj)
+      // Pass source branch if executing from workspace
+      const workspacePath = await jjCreateWorkspace(
         repoPath,
+        branchName,
         branchName,
         true,
         sourceBranch || undefined
@@ -131,7 +132,7 @@ export const CreateWorktreeDialog: React.FC<CreateWorktreeDialogProps> = ({
       );
 
       // Add to database with metadata
-      const worktreeId = await addWorktreeToDb(repoPath, worktreePath, branchName, metadata);
+      const workspaceId = await addWorkspaceToDb(repoPath, branchName, workspacePath, branchName, metadata);
 
       // Get and execute post-create command if configured
       const postCreateCmd = await getRepoSetting(repoPath, "post_create_command");
@@ -139,29 +140,29 @@ export const CreateWorktreeDialog: React.FC<CreateWorktreeDialogProps> = ({
         try {
           addToast({
             title: "Running post-create command...",
-            description: "Executing setup command in worktree",
+            description: "Executing setup command in workspace",
             type: "info",
           });
 
-          await gitExecutePostCreateCommand(worktreePath, postCreateCmd);
+          await gitExecutePostCreateCommand(workspacePath, postCreateCmd);
 
           addToast({
-            title: "Worktree created successfully",
+            title: "Workspace created successfully",
             description: "Post-create command executed successfully",
             type: "success",
           });
         } catch (cmdError) {
           console.error("Post-create command failed:", cmdError);
           addToast({
-            title: "Worktree created",
+            title: "Workspace created",
             description: `Post-create command failed: ${cmdError}`,
             type: "warning",
           });
         }
       } else {
         addToast({
-          title: "Worktree created successfully",
-          description: `Created worktree for branch ${branchName}`,
+          title: "Workspace created successfully",
+          description: `Created workspace for branch ${branchName}`,
           type: "success",
         });
       }
@@ -174,7 +175,7 @@ export const CreateWorktreeDialog: React.FC<CreateWorktreeDialogProps> = ({
       // Call appropriate success callback based on mode
       if (isPlanExecution && onSuccessWithPlan && planSection) {
         await onSuccessWithPlan(
-          { id: worktreeId, worktreePath, branchName, metadata },
+          { id: workspaceId, workspaceName: branchName, workspacePath, branchName, metadata },
           planSection,
           initialSessionName
         );
@@ -186,7 +187,7 @@ export const CreateWorktreeDialog: React.FC<CreateWorktreeDialogProps> = ({
       const errorMsg = err instanceof Error ? err.message : String(err);
       setError(errorMsg);
       addToast({
-        title: "Failed to create worktree",
+        title: "Failed to create workspace",
         description: errorMsg,
         type: "error",
       });
@@ -199,12 +200,12 @@ export const CreateWorktreeDialog: React.FC<CreateWorktreeDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Create New Worktree</DialogTitle>
+          <DialogTitle>Create New Workspace</DialogTitle>
           <DialogDescription>
-            Create a new git worktree for parallel development
+            Create a new jj workspace for parallel development
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
             <Label htmlFor="intent">Intent / Description</Label>
@@ -217,7 +218,7 @@ export const CreateWorktreeDialog: React.FC<CreateWorktreeDialogProps> = ({
               className="resize-none"
             />
             <p className="text-xs text-muted-foreground">
-              Describe what you plan to implement in this worktree
+              Describe what you plan to implement in this workspace
             </p>
           </div>
 
@@ -237,13 +238,6 @@ export const CreateWorktreeDialog: React.FC<CreateWorktreeDialogProps> = ({
             </p>
           </div>
 
-          <div className="grid gap-2">
-            <Label>Worktree Path (preview)</Label>
-            <div className="bg-secondary p-3 rounded-md text-sm font-mono break-all text-muted-foreground">
-              {getWorktreePath()}
-            </div>
-          </div>
-
           {error && (
             <div className="text-sm text-destructive">
               {error}
@@ -260,11 +254,10 @@ export const CreateWorktreeDialog: React.FC<CreateWorktreeDialogProps> = ({
             Cancel
           </Button>
           <Button onClick={handleCreate} disabled={loading}>
-            {loading ? "Creating..." : "Create Worktree"}
+            {loading ? "Creating..." : "Create Workspace"}
           </Button>
         </div>
       </DialogContent>
     </Dialog>
   );
 };
-

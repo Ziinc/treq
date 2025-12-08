@@ -3,10 +3,10 @@ import { gitGetStatus, gitGetBranchInfo, gitGetBranchDivergence, gitGetLineDiffS
 import type { GitStatus, BranchInfo, BranchDivergence, LineDiffStats } from "../lib/api";
 
 /**
- * Centralized hook for git status per worktree
+ * Centralized hook for git status per workspace
  * Uses React Query to share data across components and avoid duplicate polling
  */
-export function useWorktreeGitStatus(worktreePath: string | null | undefined, options?: {
+export function useWorkspaceGitStatus(workspacePath: string | null | undefined, options?: {
   refetchInterval?: number;
   enabled?: boolean;
   baseBranch?: string | null;
@@ -19,14 +19,14 @@ export function useWorktreeGitStatus(worktreePath: string | null | undefined, op
   isError: boolean;
   error: Error | null;
 } {
-  const enabled = options?.enabled !== false && !!worktreePath;
+  const enabled = options?.enabled !== false && !!workspacePath;
   const refetchInterval = options?.refetchInterval ?? 30000; // Default 30s
 
   const statusQuery = useQuery({
-    queryKey: ["worktree-git-status", worktreePath],
+    queryKey: ["workspace-git-status", workspacePath],
     queryFn: async () => {
-      if (!worktreePath) return null;
-      return gitGetStatus(worktreePath);
+      if (!workspacePath) return null;
+      return gitGetStatus(workspacePath);
     },
     enabled,
     refetchInterval,
@@ -34,10 +34,10 @@ export function useWorktreeGitStatus(worktreePath: string | null | undefined, op
   });
 
   const branchInfoQuery = useQuery({
-    queryKey: ["worktree-branch-info", worktreePath],
+    queryKey: ["workspace-branch-info", workspacePath],
     queryFn: async () => {
-      if (!worktreePath) return null;
-      return gitGetBranchInfo(worktreePath);
+      if (!workspacePath) return null;
+      return gitGetBranchInfo(workspacePath);
     },
     enabled,
     refetchInterval,
@@ -45,10 +45,10 @@ export function useWorktreeGitStatus(worktreePath: string | null | undefined, op
   });
 
   const divergenceQuery = useQuery({
-    queryKey: ["worktree-divergence", worktreePath, options?.baseBranch],
+    queryKey: ["workspace-divergence", workspacePath, options?.baseBranch],
     queryFn: async () => {
-      if (!worktreePath || !options?.baseBranch) return null;
-      return gitGetBranchDivergence(worktreePath, options.baseBranch);
+      if (!workspacePath || !options?.baseBranch) return null;
+      return gitGetBranchDivergence(workspacePath, options.baseBranch);
     },
     enabled: enabled && !!options?.baseBranch,
     refetchInterval,
@@ -56,10 +56,10 @@ export function useWorktreeGitStatus(worktreePath: string | null | undefined, op
   });
 
   const lineDiffStatsQuery = useQuery({
-    queryKey: ["worktree-line-diff-stats", worktreePath, options?.baseBranch],
+    queryKey: ["workspace-line-diff-stats", workspacePath, options?.baseBranch],
     queryFn: async () => {
-      if (!worktreePath || !options?.baseBranch) return null;
-      return gitGetLineDiffStats(worktreePath, options.baseBranch);
+      if (!workspacePath || !options?.baseBranch) return null;
+      return gitGetLineDiffStats(workspacePath, options.baseBranch);
     },
     enabled: enabled && !!options?.baseBranch,
     refetchInterval,

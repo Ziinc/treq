@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Loader2, History } from "lucide-react";
-import { Worktree, getAllWorktreePlans } from "../lib/api";
+import { Workspace, getAllWorkspacePlans } from "../lib/api";
 import { PlanHistoryEntry } from "../types/planHistory";
 import { useToast } from "./ui/toast";
 
 interface PlanHistoryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  worktree: Worktree | null;
+  workspace: Workspace | null;
 }
 
 const formatTimestamp = (value: string) => {
@@ -49,7 +49,7 @@ const resolvePlanContent = (entry: PlanHistoryEntry): string => {
   }
 };
 
-export const PlanHistoryDialog: React.FC<PlanHistoryDialogProps> = ({ open, onOpenChange, worktree }) => {
+export const PlanHistoryDialog: React.FC<PlanHistoryDialogProps> = ({ open, onOpenChange, workspace }) => {
   const [plans, setPlans] = useState<PlanHistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { addToast } = useToast();
@@ -57,9 +57,9 @@ export const PlanHistoryDialog: React.FC<PlanHistoryDialogProps> = ({ open, onOp
   useEffect(() => {
     let cancelled = false;
 
-    if (open && worktree) {
+    if (open && workspace) {
       setIsLoading(true);
-      getAllWorktreePlans(worktree.repo_path, worktree.id)
+      getAllWorkspacePlans(workspace.repo_path, workspace.id)
         .then((data) => {
           if (!cancelled) {
             setPlans(data);
@@ -87,7 +87,7 @@ export const PlanHistoryDialog: React.FC<PlanHistoryDialogProps> = ({ open, onOp
     return () => {
       cancelled = true;
     };
-  }, [open, worktree, addToast]);
+  }, [open, workspace, addToast]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -95,15 +95,15 @@ export const PlanHistoryDialog: React.FC<PlanHistoryDialogProps> = ({ open, onOp
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <History className="w-4 h-4" />
-            Plan History {worktree ? `- ${worktree.branch_name}` : ""}
+            Plan History {workspace ? `- ${workspace.branch_name}` : ""}
           </DialogTitle>
           <DialogDescription>
-            Review the plans executed for this worktree. Entries are ordered by execution time.
+            Review the plans executed for this workspace. Entries are ordered by execution time.
           </DialogDescription>
         </DialogHeader>
 
-        {!worktree ? (
-          <p className="text-sm text-muted-foreground">Select a worktree to view its plans.</p>
+        {!workspace ? (
+          <p className="text-sm text-muted-foreground">Select a workspace to view its plans.</p>
         ) : isLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground py-8">
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -111,7 +111,7 @@ export const PlanHistoryDialog: React.FC<PlanHistoryDialogProps> = ({ open, onOp
           </div>
         ) : plans.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4">
-            This worktree does not have any recorded plan executions yet.
+            This workspace does not have any recorded plan executions yet.
           </p>
         ) : (
           <div className="max-h-[60vh] overflow-y-auto space-y-4 pr-1">

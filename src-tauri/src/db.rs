@@ -5,10 +5,11 @@ use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Worktree {
+pub struct Workspace {
     pub id: i64,
     pub repo_path: String,
-    pub worktree_path: String,
+    pub workspace_name: String,
+    pub workspace_path: String,
     pub branch_name: String,
     pub created_at: String,
     pub metadata: Option<String>,
@@ -18,7 +19,7 @@ pub struct Worktree {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Session {
     pub id: i64,
-    pub worktree_id: Option<i64>,
+    pub workspace_id: Option<i64>,
     pub name: String,
     pub created_at: String,
     pub last_accessed: String,
@@ -29,7 +30,7 @@ pub struct Session {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GitCacheEntry {
     pub id: i64,
-    pub worktree_path: String,
+    pub workspace_path: String,
     pub file_path: Option<String>,
     pub cache_type: String,
     pub data: String,
@@ -39,7 +40,7 @@ pub struct GitCacheEntry {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FileView {
     pub id: i64,
-    pub worktree_path: String,
+    pub workspace_path: String,
     pub file_path: String,
     pub viewed_at: String,
     pub content_hash: String,
@@ -57,18 +58,6 @@ impl Database {
 
     pub fn init(&self) -> Result<()> {
         self.conn.execute(
-            "CREATE TABLE IF NOT EXISTS worktrees (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                repo_path TEXT NOT NULL,
-                worktree_path TEXT NOT NULL,
-                branch_name TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                metadata TEXT
-            )",
-            [],
-        )?;
-
-        self.conn.execute(
             "CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
@@ -79,14 +68,14 @@ impl Database {
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                worktree_id INTEGER,
+                workspace_id INTEGER,
                 type TEXT NOT NULL,
                 name TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 last_accessed TEXT NOT NULL,
                 plan_title TEXT,
                 model TEXT,
-                FOREIGN KEY (worktree_id) REFERENCES worktrees(id) ON DELETE CASCADE
+                FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
             )",
             [],
         )?;
@@ -109,32 +98,115 @@ impl Database {
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS git_cache (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                worktree_path TEXT NOT NULL,
+                workspace_path TEXT NOT NULL,
                 file_path TEXT,
                 cache_type TEXT NOT NULL,
                 data TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
-                UNIQUE(worktree_path, file_path, cache_type)
+                UNIQUE(workspace_path, file_path, cache_type)
             )",
             [],
         )?;
 
+        // Migration: Rename worktree_path to workspace_path if needed
+        // First, check if the old column exists
+        let has_worktree_col: Result<i64, _> = self.conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('git_cache') WHERE name='worktree_path'",
+            [],
+            |row| row.get(0),
+        );
+
+        if let Ok(count) = has_worktree_col {
+            if count > 0 {
+                // Old schema exists, need to migrate
+                self.conn.execute(
+                    "CREATE TABLE git_cache_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        workspace_path TEXT NOT NULL,
+                        file_path TEXT,
+                        cache_type TEXT NOT NULL,
+                        data TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        UNIQUE(workspace_path, file_path, cache_type)
+                    )",
+                    [],
+                )?;
+
+                self.conn.execute(
+                    "INSERT INTO git_cache_new (id, workspace_path, file_path, cache_type, data, updated_at)
+                     SELECT id, worktree_path, file_path, cache_type, data, updated_at FROM git_cache",
+                    [],
+                )?;
+
+                self.conn.execute("DROP TABLE git_cache", [])?;
+                self.conn.execute("ALTER TABLE git_cache_new RENAME TO git_cache", [])?;
+            }
+        }
+
         self.conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_git_cache_worktree ON git_cache(worktree_path)",
+            "CREATE INDEX IF NOT EXISTS idx_git_cache_workspace ON git_cache(workspace_path)",
             [],
         )?;
 
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS file_views (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                worktree_path TEXT NOT NULL,
+                workspace_path TEXT NOT NULL,
                 file_path TEXT NOT NULL,
                 viewed_at TEXT NOT NULL,
                 content_hash TEXT NOT NULL DEFAULT '',
-                UNIQUE(worktree_path, file_path)
+                UNIQUE(workspace_path, file_path)
             )",
             [],
         )?;
+
+        // Migration: Rename worktree_path to workspace_path in file_views if needed
+        let has_worktree_col_fv: Result<i64, _> = self.conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('file_views') WHERE name='worktree_path'",
+            [],
+            |row| row.get(0),
+        );
+
+        if let Ok(count) = has_worktree_col_fv {
+            if count > 0 {
+                // Old schema exists, need to migrate
+                self.conn.execute(
+                    "CREATE TABLE file_views_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        workspace_path TEXT NOT NULL,
+                        file_path TEXT NOT NULL,
+                        viewed_at TEXT NOT NULL,
+                        content_hash TEXT NOT NULL DEFAULT '',
+                        UNIQUE(workspace_path, file_path)
+                    )",
+                    [],
+                )?;
+
+                // Check if content_hash exists in old table
+                let has_content_hash: Result<i64, _> = self.conn.query_row(
+                    "SELECT COUNT(*) FROM pragma_table_info('file_views') WHERE name='content_hash'",
+                    [],
+                    |row| row.get(0),
+                );
+
+                if let Ok(1) = has_content_hash {
+                    self.conn.execute(
+                        "INSERT INTO file_views_new (id, workspace_path, file_path, viewed_at, content_hash)
+                         SELECT id, worktree_path, file_path, viewed_at, content_hash FROM file_views",
+                        [],
+                    )?;
+                } else {
+                    self.conn.execute(
+                        "INSERT INTO file_views_new (id, workspace_path, file_path, viewed_at, content_hash)
+                         SELECT id, worktree_path, file_path, viewed_at, '' FROM file_views",
+                        [],
+                    )?;
+                }
+
+                self.conn.execute("DROP TABLE file_views", [])?;
+                self.conn.execute("ALTER TABLE file_views_new RENAME TO file_views", [])?;
+            }
+        }
 
         // Migration: Add content_hash column if it doesn't exist
         let _ = self
@@ -142,7 +214,7 @@ impl Database {
             .execute("ALTER TABLE file_views ADD COLUMN content_hash TEXT NOT NULL DEFAULT ''", []);
 
         self.conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_file_views_worktree ON file_views(worktree_path)",
+            "CREATE INDEX IF NOT EXISTS idx_file_views_workspace ON file_views(workspace_path)",
             [],
         )?;
 
@@ -150,49 +222,51 @@ impl Database {
     }
 
     #[allow(dead_code)]
-    pub fn add_worktree(&self, worktree: &Worktree) -> Result<i64> {
+    pub fn add_workspace(&self, workspace: &Workspace) -> Result<i64> {
         self.conn.execute(
-            "INSERT INTO worktrees (repo_path, worktree_path, branch_name, created_at, metadata)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO workspaces (repo_path, workspace_name, workspace_path, branch_name, created_at, metadata)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             (
-                &worktree.repo_path,
-                &worktree.worktree_path,
-                &worktree.branch_name,
-                &worktree.created_at,
-                &worktree.metadata,
+                &workspace.repo_path,
+                &workspace.workspace_name,
+                &workspace.workspace_path,
+                &workspace.branch_name,
+                &workspace.created_at,
+                &workspace.metadata,
             ),
         )?;
         Ok(self.conn.last_insert_rowid())
     }
 
     #[allow(dead_code)]
-    pub fn get_worktrees(&self) -> Result<Vec<Worktree>> {
+    pub fn get_workspaces(&self) -> Result<Vec<Workspace>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, repo_path, worktree_path, branch_name, created_at, metadata, is_pinned
-             FROM worktrees ORDER BY is_pinned DESC, branch_name COLLATE NOCASE ASC",
+            "SELECT id, repo_path, workspace_name, workspace_path, branch_name, created_at, metadata, is_pinned
+             FROM workspaces ORDER BY is_pinned DESC, branch_name COLLATE NOCASE ASC",
         )?;
 
-        let worktrees = stmt.query_map([], |row| {
-            Ok(Worktree {
+        let workspaces = stmt.query_map([], |row| {
+            Ok(Workspace {
                 id: row.get(0)?,
                 repo_path: row.get(1)?,
-                worktree_path: row.get(2)?,
-                branch_name: row.get(3)?,
-                created_at: row.get(4)?,
-                metadata: row.get(5)?,
-                is_pinned: row.get::<_, i64>(6)? != 0,
+                workspace_name: row.get(2)?,
+                workspace_path: row.get(3)?,
+                branch_name: row.get(4)?,
+                created_at: row.get(5)?,
+                metadata: row.get(6)?,
+                is_pinned: row.get::<_, i64>(7)? != 0,
             })
         })?;
 
-        worktrees.collect()
+        workspaces.collect()
     }
 
     #[allow(dead_code)]
-    pub fn delete_worktree(&self, id: i64) -> Result<()> {
+    pub fn delete_workspace(&self, id: i64) -> Result<()> {
         self.conn
-            .execute("DELETE FROM sessions WHERE worktree_id = ?1", [id])?;
+            .execute("DELETE FROM sessions WHERE workspace_id = ?1", [id])?;
         self.conn
-            .execute("DELETE FROM worktrees WHERE id = ?1", [id])?;
+            .execute("DELETE FROM workspaces WHERE id = ?1", [id])?;
         Ok(())
     }
 
@@ -238,25 +312,25 @@ impl Database {
 
     pub fn get_git_cache(
         &self,
-        worktree_path: &str,
+        workspace_path: &str,
         file_path: Option<&str>,
         cache_type: &str,
     ) -> Result<Option<GitCacheEntry>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, worktree_path, file_path, cache_type, data, updated_at
+            "SELECT id, workspace_path, file_path, cache_type, data, updated_at
              FROM git_cache
-             WHERE worktree_path = ?1
+             WHERE workspace_path = ?1
                AND cache_type = ?3
                AND ((?2 IS NULL AND file_path IS NULL) OR file_path = ?2)
              LIMIT 1",
         )?;
 
-        let mut rows = stmt.query(params![worktree_path, file_path, cache_type])?;
+        let mut rows = stmt.query(params![workspace_path, file_path, cache_type])?;
 
         if let Some(row) = rows.next()? {
             Ok(Some(GitCacheEntry {
                 id: row.get(0)?,
-                worktree_path: row.get(1)?,
+                workspace_path: row.get(1)?,
                 file_path: row.get(2)?,
                 cache_type: row.get(3)?,
                 data: row.get(4)?,
@@ -269,35 +343,35 @@ impl Database {
 
     pub fn set_git_cache(
         &self,
-        worktree_path: &str,
+        workspace_path: &str,
         file_path: Option<&str>,
         cache_type: &str,
         data: &str,
     ) -> Result<()> {
         let updated_at = Utc::now().to_rfc3339();
         self.conn.execute(
-            "INSERT INTO git_cache (worktree_path, file_path, cache_type, data, updated_at)
+            "INSERT INTO git_cache (workspace_path, file_path, cache_type, data, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5)
-             ON CONFLICT(worktree_path, file_path, cache_type)
+             ON CONFLICT(workspace_path, file_path, cache_type)
              DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at",
-            params![worktree_path, file_path, cache_type, data, updated_at],
+            params![workspace_path, file_path, cache_type, data, updated_at],
         )?;
         Ok(())
     }
 
-    pub fn invalidate_git_cache(&self, worktree_path: &str) -> Result<()> {
+    pub fn invalidate_git_cache(&self, workspace_path: &str) -> Result<()> {
         self.conn.execute(
-            "DELETE FROM git_cache WHERE worktree_path = ?1",
-            [worktree_path],
+            "DELETE FROM git_cache WHERE workspace_path = ?1",
+            [workspace_path],
         )?;
         Ok(())
     }
 
     #[allow(dead_code)]
-    pub fn get_all_cached_worktrees(&self) -> Result<Vec<String>> {
+    pub fn get_all_cached_workspaces(&self) -> Result<Vec<String>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT DISTINCT worktree_path FROM git_cache ORDER BY worktree_path")?;
+            .prepare("SELECT DISTINCT workspace_path FROM git_cache ORDER BY workspace_path")?;
         let rows = stmt.query_map([], |row| row.get(0))?;
         rows.collect()
     }
@@ -305,10 +379,10 @@ impl Database {
     #[allow(dead_code)]
     pub fn add_session(&self, session: &Session) -> Result<i64> {
         self.conn.execute(
-            "INSERT INTO sessions (worktree_id, type, name, created_at, last_accessed, plan_title, model)
+            "INSERT INTO sessions (workspace_id, type, name, created_at, last_accessed, plan_title, model)
              VALUES (?1, 'session', ?2, ?3, ?4, ?5, ?6)",
             (
-                &session.worktree_id,
+                &session.workspace_id,
                 &session.name,
                 &session.created_at,
                 &session.last_accessed,
@@ -322,14 +396,14 @@ impl Database {
     #[allow(dead_code)]
     pub fn get_sessions(&self) -> Result<Vec<Session>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, worktree_id, name, created_at, last_accessed, plan_title, model
+            "SELECT id, workspace_id, name, created_at, last_accessed, plan_title, model
              FROM sessions ORDER BY created_at ASC",
         )?;
 
         let sessions = stmt.query_map([], |row| {
             Ok(Session {
                 id: row.get(0)?,
-                worktree_id: row.get(1)?,
+                workspace_id: row.get(1)?,
                 name: row.get(2)?,
                 created_at: row.get(3)?,
                 last_accessed: row.get(4)?,
@@ -342,16 +416,16 @@ impl Database {
     }
 
     #[allow(dead_code)]
-    pub fn get_sessions_by_worktree(&self, worktree_id: i64) -> Result<Vec<Session>> {
+    pub fn get_sessions_by_workspace(&self, workspace_id: i64) -> Result<Vec<Session>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, worktree_id, name, created_at, last_accessed, plan_title, model
-             FROM sessions WHERE worktree_id = ?1 ORDER BY created_at ASC",
+            "SELECT id, workspace_id, name, created_at, last_accessed, plan_title, model
+             FROM sessions WHERE workspace_id = ?1 ORDER BY created_at ASC",
         )?;
 
-        let sessions = stmt.query_map([worktree_id], |row| {
+        let sessions = stmt.query_map([workspace_id], |row| {
             Ok(Session {
                 id: row.get(0)?,
-                worktree_id: row.get(1)?,
+                workspace_id: row.get(1)?,
                 name: row.get(2)?,
                 created_at: row.get(3)?,
                 last_accessed: row.get(4)?,
@@ -366,14 +440,14 @@ impl Database {
     #[allow(dead_code)]
     pub fn get_main_repo_sessions(&self) -> Result<Vec<Session>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, worktree_id, name, created_at, last_accessed, plan_title, model
-             FROM sessions WHERE worktree_id IS NULL ORDER BY created_at ASC",
+            "SELECT id, workspace_id, name, created_at, last_accessed, plan_title, model
+             FROM sessions WHERE workspace_id IS NULL ORDER BY created_at ASC",
         )?;
 
         let sessions = stmt.query_map([], |row| {
             Ok(Session {
                 id: row.get(0)?,
-                worktree_id: row.get(1)?,
+                workspace_id: row.get(1)?,
                 name: row.get(2)?,
                 created_at: row.get(3)?,
                 last_accessed: row.get(4)?,
@@ -413,41 +487,41 @@ impl Database {
     // File view tracking methods
     pub fn mark_file_viewed(
         &self,
-        worktree_path: &str,
+        workspace_path: &str,
         file_path: &str,
         content_hash: &str,
     ) -> Result<()> {
         let viewed_at = Utc::now().to_rfc3339();
         self.conn.execute(
-            "INSERT INTO file_views (worktree_path, file_path, viewed_at, content_hash)
+            "INSERT INTO file_views (workspace_path, file_path, viewed_at, content_hash)
              VALUES (?1, ?2, ?3, ?4)
-             ON CONFLICT(worktree_path, file_path)
+             ON CONFLICT(workspace_path, file_path)
              DO UPDATE SET viewed_at = excluded.viewed_at, content_hash = excluded.content_hash",
-            params![worktree_path, file_path, viewed_at, content_hash],
+            params![workspace_path, file_path, viewed_at, content_hash],
         )?;
         Ok(())
     }
 
-    pub fn unmark_file_viewed(&self, worktree_path: &str, file_path: &str) -> Result<()> {
+    pub fn unmark_file_viewed(&self, workspace_path: &str, file_path: &str) -> Result<()> {
         self.conn.execute(
-            "DELETE FROM file_views WHERE worktree_path = ?1 AND file_path = ?2",
-            params![worktree_path, file_path],
+            "DELETE FROM file_views WHERE workspace_path = ?1 AND file_path = ?2",
+            params![workspace_path, file_path],
         )?;
         Ok(())
     }
 
-    pub fn get_viewed_files(&self, worktree_path: &str) -> Result<Vec<FileView>> {
+    pub fn get_viewed_files(&self, workspace_path: &str) -> Result<Vec<FileView>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, worktree_path, file_path, viewed_at, content_hash
+            "SELECT id, workspace_path, file_path, viewed_at, content_hash
              FROM file_views
-             WHERE worktree_path = ?1
+             WHERE workspace_path = ?1
              ORDER BY viewed_at DESC",
         )?;
 
-        let views = stmt.query_map([worktree_path], |row| {
+        let views = stmt.query_map([workspace_path], |row| {
             Ok(FileView {
                 id: row.get(0)?,
-                worktree_path: row.get(1)?,
+                workspace_path: row.get(1)?,
                 file_path: row.get(2)?,
                 viewed_at: row.get(3)?,
                 content_hash: row.get(4)?,
@@ -457,10 +531,10 @@ impl Database {
         views.collect()
     }
 
-    pub fn clear_all_viewed_files(&self, worktree_path: &str) -> Result<()> {
+    pub fn clear_all_viewed_files(&self, workspace_path: &str) -> Result<()> {
         self.conn.execute(
-            "DELETE FROM file_views WHERE worktree_path = ?1",
-            [worktree_path],
+            "DELETE FROM file_views WHERE workspace_path = ?1",
+            [workspace_path],
         )?;
         Ok(())
     }

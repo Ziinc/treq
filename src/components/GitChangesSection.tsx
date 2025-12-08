@@ -14,7 +14,7 @@ export interface GitChangesSectionProps {
   readOnly?: boolean;
   selectedFiles?: Set<string>;
   onFileSelect?: (path: string, event: React.MouseEvent) => void;
-  onMoveToWorktree?: () => void;
+  onMoveToWorkspace?: () => void;
   onStage?: (path: string) => void;
   onUnstage?: (path: string) => void;
   onStageAll?: () => void;
@@ -32,7 +32,7 @@ export const GitChangesSection = memo<GitChangesSectionProps>(({
   readOnly = false,
   selectedFiles,
   onFileSelect,
-  onMoveToWorktree,
+  onMoveToWorkspace,
   onStage,
   onUnstage,
   onStageAll,
@@ -84,14 +84,14 @@ export const GitChangesSection = memo<GitChangesSectionProps>(({
                         className="p-1 hover:text-foreground hover:bg-primary/20 bg-primary/10 rounded transition-colors text-primary"
                         onClick={(e) => {
                           e.stopPropagation();
-                          onMoveToWorktree?.();
+                          onMoveToWorkspace?.();
                         }}
                       >
                         <ArrowRight className="w-3 h-3" />
                       </button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom">
-                      Move {selectedFiles?.size} file(s) to new worktree
+                      Move {selectedFiles?.size} file(s) to new workspace
                     </TooltipContent>
                   </Tooltip>
                 )}

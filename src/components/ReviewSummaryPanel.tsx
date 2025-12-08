@@ -5,7 +5,7 @@ import { MessageCircle, Trash2 } from "lucide-react";
 import { cn } from "../lib/utils";
 
 interface ReviewSummaryPanelProps {
-  worktreeBranch: string;
+  workspaceBranch: string;
   baseBranch: string;
   comments: ReviewComment[];
   selectedCommentId?: string | null;
@@ -20,7 +20,7 @@ interface ReviewSummaryPanelProps {
 }
 
 export const ReviewSummaryPanel: React.FC<ReviewSummaryPanelProps> = ({
-  worktreeBranch,
+  workspaceBranch,
   baseBranch,
   comments,
   selectedCommentId,
@@ -38,7 +38,7 @@ export const ReviewSummaryPanel: React.FC<ReviewSummaryPanelProps> = ({
       <div className="p-4 border-b space-y-2">
         <div>
           <p className="text-xs text-muted-foreground">Reviewing</p>
-          <p className="font-medium text-sm">{worktreeBranch} → {baseBranch}</p>
+          <p className="font-medium text-sm">{workspaceBranch} → {baseBranch}</p>
         </div>
         <div className="text-xs text-muted-foreground">
           {commitCount} commit{commitCount === 1 ? "" : "s"}

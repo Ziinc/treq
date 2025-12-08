@@ -136,7 +136,7 @@ export const RepositorySettingsContent: React.FC<RepositorySettingsContentProps>
           className="font-mono text-sm mt-2"
         />
         <p className="text-xs text-muted-foreground mt-1">
-          This command will run in each new worktree after creation. Leave empty to skip.
+          This command will run in each new workspace after creation. Leave empty to skip.
         </p>
       </div>
 
@@ -153,7 +153,7 @@ export const RepositorySettingsContent: React.FC<RepositorySettingsContentProps>
           className="font-mono text-sm mt-2"
         />
         <p className="text-xs text-muted-foreground mt-1">
-          Glob patterns for .gitignored files/directories to copy to new worktrees (opt-in).
+          Glob patterns for .gitignored files/directories to copy to new workspaces (opt-in).
           One pattern per line. Supports ** for recursive matching. Leave empty to copy nothing.
         </p>
         {availableFiles.length > 0 && (

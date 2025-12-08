@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { preloadWorktreeGitData } from "../lib/api";
+import { preloadWorkspaceGitData } from "../lib/api";
 
 const sanitizePath = (path?: string | null): string | null => {
   if (!path) return null;
@@ -8,20 +8,20 @@ const sanitizePath = (path?: string | null): string | null => {
 };
 
 /**
- * Lazy git cache preloader - only preloads data for the selected worktree
+ * Lazy git cache preloader - only preloads data for the selected workspace
  * with debouncing to avoid rapid calls during navigation
  */
 export const useGitCachePreloader = (
-  selectedWorktreePath: string | null | undefined
+  selectedWorkspacePath: string | null | undefined
 ) => {
   useEffect(() => {
-    const path = sanitizePath(selectedWorktreePath ?? null);
+    const path = sanitizePath(selectedWorkspacePath ?? null);
     if (!path) return;
 
     // Debounce: wait 200ms before preloading to avoid rapid calls
     const timeoutId = setTimeout(async () => {
       try {
-        await preloadWorktreeGitData(path);
+        await preloadWorkspaceGitData(path);
       } catch {
         // Silently ignore preload failures
       }
@@ -30,5 +30,5 @@ export const useGitCachePreloader = (
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [selectedWorktreePath]);
+  }, [selectedWorkspacePath]);
 };

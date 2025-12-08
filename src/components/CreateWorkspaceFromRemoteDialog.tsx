@@ -14,28 +14,28 @@ import { sanitizeForBranchName } from "../lib/utils";
 import {
   gitListBranchesDetailed,
   gitFetch,
-  gitCreateWorktree,
-  addWorktreeToDb,
+  jjCreateWorkspace,
+  addWorkspaceToDb,
   getRepoSetting,
   gitExecutePostCreateCommand,
   BranchListItem,
 } from "../lib/api";
 import { Loader2 } from "lucide-react";
 
-interface CreateWorktreeFromRemoteDialogProps {
+interface CreateWorkspaceFromRemoteDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   repoPath: string;
   onSuccess: () => void;
 }
 
-export const CreateWorktreeFromRemoteDialog: React.FC<CreateWorktreeFromRemoteDialogProps> = ({
+export const CreateWorkspaceFromRemoteDialog: React.FC<CreateWorkspaceFromRemoteDialogProps> = ({
   open,
   onOpenChange,
   repoPath,
   onSuccess,
 }) => {
-  const [worktreeTitle, setWorktreeTitle] = useState("");
+  const [workspaceTitle, setWorkspaceTitle] = useState("");
   const [selectedRemoteBranch, setSelectedRemoteBranch] = useState("");
   const [remoteBranches, setRemoteBranches] = useState<BranchListItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -77,16 +77,16 @@ export const CreateWorktreeFromRemoteDialog: React.FC<CreateWorktreeFromRemoteDi
     }
   };
 
-  // Get preview of worktree path
-  const getWorktreePath = (): string => {
-    if (!worktreeTitle.trim()) return `${repoPath}/.treq/worktrees/worktree-title`;
-    const pathSafeName = sanitizeForBranchName(worktreeTitle);
-    return `${repoPath}/.treq/worktrees/${pathSafeName}`;
+  // Get preview of workspace path
+  const getWorkspacePath = (): string => {
+    if (!workspaceTitle.trim()) return `${repoPath}/.treq/workspaces/workspace-title`;
+    const pathSafeName = sanitizeForBranchName(workspaceTitle);
+    return `${repoPath}/.treq/workspaces/${pathSafeName}`;
   };
 
   const handleCreate = async () => {
-    if (!worktreeTitle.trim()) {
-      setError("Worktree title is required");
+    if (!workspaceTitle.trim()) {
+      setError("Workspace title is required");
       return;
     }
 
@@ -103,24 +103,26 @@ export const CreateWorktreeFromRemoteDialog: React.FC<CreateWorktreeFromRemoteDi
       const branchParts = selectedRemoteBranch.split("/");
       const localBranchName = branchParts.slice(1).join("/"); // Handle branches with slashes
 
-      // Create the worktree from the remote branch
+      // Create the jj workspace from the remote branch
       // This will create a new local branch tracking the remote branch
-      const worktreePath = await gitCreateWorktree(
+      const workspacePath = await jjCreateWorkspace(
         repoPath,
+        workspaceTitle.trim(), // workspace name
         localBranchName,
         true, // create new branch
         selectedRemoteBranch // source branch (the remote branch)
       );
 
-      // Add metadata with worktree title
+      // Add metadata with workspace title
       const metadata = JSON.stringify({
-        intent: worktreeTitle.trim(),
+        intent: workspaceTitle.trim(),
       });
 
       // Add to database with metadata
-      await addWorktreeToDb(
+      await addWorkspaceToDb(
         repoPath,
-        worktreePath,
+        workspaceTitle.trim(),
+        workspacePath,
         localBranchName,
         metadata
       );
@@ -131,35 +133,35 @@ export const CreateWorktreeFromRemoteDialog: React.FC<CreateWorktreeFromRemoteDi
         try {
           addToast({
             title: "Running post-create command...",
-            description: "Executing setup command in worktree",
+            description: "Executing setup command in workspace",
             type: "info",
           });
 
-          await gitExecutePostCreateCommand(worktreePath, postCreateCmd);
+          await gitExecutePostCreateCommand(workspacePath, postCreateCmd);
 
           addToast({
-            title: "Worktree created successfully",
-            description: `Created worktree from ${selectedRemoteBranch}`,
+            title: "Workspace created successfully",
+            description: `Created workspace from ${selectedRemoteBranch}`,
             type: "success",
           });
         } catch (cmdError) {
           console.error("Post-create command failed:", cmdError);
           addToast({
-            title: "Worktree created",
+            title: "Workspace created",
             description: `Post-create command failed: ${cmdError}`,
             type: "warning",
           });
         }
       } else {
         addToast({
-          title: "Worktree created successfully",
-          description: `Created worktree from ${selectedRemoteBranch}`,
+          title: "Workspace created successfully",
+          description: `Created workspace from ${selectedRemoteBranch}`,
           type: "success",
         });
       }
 
       // Reset form
-      setWorktreeTitle("");
+      setWorkspaceTitle("");
       setSelectedRemoteBranch("");
 
       onSuccess();
@@ -168,7 +170,7 @@ export const CreateWorktreeFromRemoteDialog: React.FC<CreateWorktreeFromRemoteDi
       const errorMsg = err instanceof Error ? err.message : String(err);
       setError(errorMsg);
       addToast({
-        title: "Failed to create worktree",
+        title: "Failed to create workspace",
         description: errorMsg,
         type: "error",
       });
@@ -181,9 +183,9 @@ export const CreateWorktreeFromRemoteDialog: React.FC<CreateWorktreeFromRemoteDi
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Create Worktree from Remote Branch</DialogTitle>
+          <DialogTitle>Create Workspace from Remote Branch</DialogTitle>
           <DialogDescription>
-            Create a new worktree from an existing remote branch
+            Create a new workspace from an existing remote branch
           </DialogDescription>
         </DialogHeader>
 
@@ -216,27 +218,27 @@ export const CreateWorktreeFromRemoteDialog: React.FC<CreateWorktreeFromRemoteDi
               </p>
             )}
             <p className="text-xs text-muted-foreground">
-              Select the remote branch to create a worktree from
+              Select the remote branch to create a workspace from
             </p>
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="title">Worktree Title</Label>
+            <Label htmlFor="title">Workspace Title</Label>
             <Input
               id="title"
-              value={worktreeTitle}
-              onChange={(e) => setWorktreeTitle(e.target.value)}
+              value={workspaceTitle}
+              onChange={(e) => setWorkspaceTitle(e.target.value)}
               placeholder="e.g., Review feature implementation"
             />
             <p className="text-xs text-muted-foreground">
-              A descriptive title for this worktree
+              A descriptive title for this workspace
             </p>
           </div>
 
           <div className="grid gap-2">
-            <Label>Worktree Path (preview)</Label>
+            <Label>Workspace Path (preview)</Label>
             <div className="bg-secondary p-3 rounded-md text-sm font-mono break-all text-muted-foreground">
-              {getWorktreePath()}
+              {getWorkspacePath()}
             </div>
           </div>
 
@@ -262,7 +264,7 @@ export const CreateWorktreeFromRemoteDialog: React.FC<CreateWorktreeFromRemoteDi
                 Creating...
               </>
             ) : (
-              "Create Worktree"
+              "Create Workspace"
             )}
           </Button>
         </div>

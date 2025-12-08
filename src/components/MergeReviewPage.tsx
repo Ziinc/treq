@@ -5,7 +5,7 @@ import {
   type BranchDiffFileDiff,
   type BranchCommitInfo,
   type DiffLineKind,
-  type Worktree,
+  type Workspace,
   gitGetChangedFilesBetweenBranches,
   gitGetCommitsBetweenBranches,
   gitGetDiffBetweenBranches,
@@ -37,16 +37,16 @@ export interface ReviewComment {
 interface MergeReviewPageProps {
   repoPath: string;
   baseBranch: string | null;
-  worktree: Worktree;
+  workspace: Workspace;
   onClose: () => void;
-  onStartMerge: (worktree: Worktree) => void;
+  onStartMerge: (workspace: Workspace) => void;
   onRequestChanges: (prompt: string) => void;
 }
 
 export const MergeReviewPage: React.FC<MergeReviewPageProps> = ({
   repoPath,
   baseBranch,
-  worktree,
+  workspace,
   onClose,
   onStartMerge,
   onRequestChanges,
@@ -61,21 +61,21 @@ export const MergeReviewPage: React.FC<MergeReviewPageProps> = ({
   const branchesReady = Boolean(repoPath && baseBranch);
 
   const changesQuery = useQuery<BranchDiffFileChange[]>({
-    queryKey: ["merge-review-files", repoPath, baseBranch, worktree.branch_name],
+    queryKey: ["merge-review-files", repoPath, baseBranch, workspace.branch_name],
     queryFn: () =>
-      gitGetChangedFilesBetweenBranches(repoPath, baseBranch!, worktree.branch_name),
+      gitGetChangedFilesBetweenBranches(repoPath, baseBranch!, workspace.branch_name),
     enabled: branchesReady,
   });
 
   const diffQuery = useQuery<BranchDiffFileDiff[]>({
-    queryKey: ["merge-review-diffs", repoPath, baseBranch, worktree.branch_name],
-    queryFn: () => gitGetDiffBetweenBranches(repoPath, baseBranch!, worktree.branch_name),
+    queryKey: ["merge-review-diffs", repoPath, baseBranch, workspace.branch_name],
+    queryFn: () => gitGetDiffBetweenBranches(repoPath, baseBranch!, workspace.branch_name),
     enabled: branchesReady,
   });
 
   const commitsQuery = useQuery<BranchCommitInfo[]>({
-    queryKey: ["merge-review-commits", repoPath, baseBranch, worktree.branch_name],
-    queryFn: () => gitGetCommitsBetweenBranches(repoPath, baseBranch!, worktree.branch_name, 50),
+    queryKey: ["merge-review-commits", repoPath, baseBranch, workspace.branch_name],
+    queryFn: () => gitGetCommitsBetweenBranches(repoPath, baseBranch!, workspace.branch_name, 50),
     enabled: branchesReady,
   });
 
@@ -152,7 +152,7 @@ export const MergeReviewPage: React.FC<MergeReviewPageProps> = ({
 
     const lines: string[] = [];
     lines.push(`# Merge Review Feedback`);
-    lines.push(`Target: ${worktree.branch_name} → ${baseBranch}`);
+    lines.push(`Target: ${workspace.branch_name} → ${baseBranch}`);
     lines.push("");
 
     if (overallComment.trim()) {
@@ -174,7 +174,7 @@ export const MergeReviewPage: React.FC<MergeReviewPageProps> = ({
     });
 
     return lines.join("\n");
-  }, [overallComment, comments, worktree.branch_name, baseBranch]);
+  }, [overallComment, comments, workspace.branch_name, baseBranch]);
 
   const handleRequestChanges = useCallback(() => {
     if (!branchesReady) {
@@ -206,8 +206,8 @@ export const MergeReviewPage: React.FC<MergeReviewPageProps> = ({
   }, [handleRequestChanges]);
 
   const handleMerge = useCallback(() => {
-    onStartMerge(worktree);
-  }, [onStartMerge, worktree]);
+    onStartMerge(workspace);
+  }, [onStartMerge, workspace]);
 
   const handleRefresh = () => {
     changesQuery.refetch();
@@ -215,7 +215,7 @@ export const MergeReviewPage: React.FC<MergeReviewPageProps> = ({
     commitsQuery.refetch();
   };
 
-  const headerSubtitle = baseBranch ? `${worktree.branch_name} → ${baseBranch}` : "Select a base branch";
+  const headerSubtitle = baseBranch ? `${workspace.branch_name} → ${baseBranch}` : "Select a base branch";
 
   return (
     <div className="flex flex-col h-screen bg-background">
@@ -288,7 +288,7 @@ export const MergeReviewPage: React.FC<MergeReviewPageProps> = ({
 
         <div className="w-80">
           <ReviewSummaryPanel
-            worktreeBranch={worktree.branch_name}
+            workspaceBranch={workspace.branch_name}
             baseBranch={baseBranch || ""}
             comments={comments}
             selectedCommentId={selectedCommentId}

@@ -6,15 +6,15 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { MergeDialog } from "./MergeDialog";
-import { CreateWorktreeDialog } from "./CreateWorktreeDialog";
-import { CreateWorktreeFromRemoteDialog } from "./CreateWorktreeFromRemoteDialog";
+import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
+import { CreateWorkspaceFromRemoteDialog } from "./CreateWorkspaceFromRemoteDialog";
 import { CommandPalette } from "./CommandPalette";
 import { BranchSwitcher } from "./BranchSwitcher";
-import { WorktreeEditSession } from "./WorktreeEditSession";
+import { WorkspaceEditSession } from "./WorkspaceEditSession";
 import { SessionSidebar } from "./SessionSidebar";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { GitChangesSection } from "./GitChangesSection";
-import { MoveToWorktreeDialog } from "./MoveToWorktreeDialog";
+import { MoveToWorkspaceDialog } from "./MoveToWorkspaceDialog";
 import { LineDiffStatsDisplay } from "./LineDiffStatsDisplay";
 
 // Lazy imports
@@ -31,17 +31,17 @@ import {
 } from "../lib/git-utils";
 import { applyBranchNamePattern } from "../lib/utils";
 import { buildPlanHistoryPayload } from "../lib/planHistory";
-import { getWorktreeTitle as getWorktreeTitleFromUtils } from "../lib/worktree-utils";
+import { getWorkspaceTitle as getWorkspaceTitleFromUtils } from "../lib/workspace-utils";
 import { useToast } from "./ui/toast";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { useGitCachePreloader } from "../hooks/useGitCachePreloader";
-import { useWorktreeGitStatus } from "../hooks/useWorktreeGitStatus";
+import { useWorkspaceGitStatus } from "../hooks/useWorkspaceGitStatus";
 import {
-  getWorktrees,
-  rebuildWorktrees,
-  deleteWorktreeFromDb,
-  toggleWorktreePin,
-  gitRemoveWorktree,
+  getWorkspaces,
+  rebuildWorkspaces,
+  deleteWorkspaceFromDb,
+  toggleWorkspacePin,
+  jjRemoveWorkspace,
   getSetting,
   setSetting,
   selectFolder,
@@ -50,13 +50,13 @@ import {
   gitGetStatus,
   gitGetBranchInfo,
   gitGetLineDiffStats,
-  Worktree,
+  Workspace,
   GitStatus,
   BranchInfo,
   LineDiffStats,
   saveExecutedPlan,
-  gitCreateWorktree,
-  addWorktreeToDb,
+  jjCreateWorkspace,
+  addWorkspaceToDb,
   getRepoSetting,
   gitExecutePostCreateCommand,
   Session,
@@ -100,8 +100,8 @@ import {
 type ViewMode =
   | "dashboard"
   | "session"
-  | "worktree-edit"
-  | "worktree-session"
+  | "workspace-edit"
+  | "workspace-session"
   | "merge-review"
   | "file-browser"
   | "settings";
@@ -121,22 +121,22 @@ type SessionOpenOptions = {
   selectedFilePath?: string;
 };
 
-// Worktree list item component that uses centralized git status hook
-const WorktreeListItem: React.FC<{
-  worktree: Worktree;
+// Workspace list item component that uses centralized git status hook
+const WorkspaceListItem: React.FC<{
+  workspace: Workspace;
   currentBranch: string | null;
   isSelected: boolean;
   onSelect: (id: number | null) => void;
   onDoubleClick: () => void;
-  onPin: (worktreeId: number) => void;
-  onUpdateBranch: (worktree: Worktree) => void;
-  onMerge: (worktree: Worktree) => void;
-  onBrowseFiles: (worktree: Worktree) => void;
-  onOpenSession: (worktree: Worktree) => void;
+  onPin: (workspaceId: number) => void;
+  onUpdateBranch: (workspace: Workspace) => void;
+  onMerge: (workspace: Workspace) => void;
+  onBrowseFiles: (workspace: Workspace) => void;
+  onOpenSession: (workspace: Workspace) => void;
   updateBranchPending: boolean;
   mergePending: boolean;
 }> = ({
-  worktree,
+  workspace,
   currentBranch,
   isSelected,
   onSelect,
@@ -149,16 +149,16 @@ const WorktreeListItem: React.FC<{
   updateBranchPending,
   mergePending,
 }) => {
-  const { branchInfo, divergence, lineDiffStats } = useWorktreeGitStatus(worktree.worktree_path, {
+  const { branchInfo, divergence, lineDiffStats } = useWorkspaceGitStatus(workspace.workspace_path, {
     refetchInterval: 30000,
     baseBranch: currentBranch,
   });
-  const title = getWorktreeTitleFromUtils(worktree);
+  const title = getWorkspaceTitleFromUtils(workspace);
   const isBehindMain = divergence && divergence.behind > 0;
 
   return (
     <div
-      onClick={() => onSelect(isSelected ? null : worktree.id)}
+      onClick={() => onSelect(isSelected ? null : workspace.id)}
       onDoubleClick={onDoubleClick}
       className={`group w-full text-left p-3 rounded-lg border transition-colors cursor-pointer ${
         isSelected
@@ -171,7 +171,7 @@ const WorktreeListItem: React.FC<{
           <span className="text-sm font-medium truncate">
             {title}
           </span>
-          {worktree.is_pinned && (
+          {workspace.is_pinned && (
             <Pin className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
           )}
           <div className="ml-auto flex-shrink-0">
@@ -192,11 +192,11 @@ const WorktreeListItem: React.FC<{
             <DropdownMenuItem
               onSelect={(event) => {
                 event.preventDefault();
-                onPin(worktree.id);
+                onPin(workspace.id);
               }}
             >
               <Pin className="w-4 h-4 mr-2" />
-              {worktree.is_pinned ? "Unpin" : "Pin"} Worktree
+              {workspace.is_pinned ? "Unpin" : "Pin"} Workspace
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -253,7 +253,7 @@ const WorktreeListItem: React.FC<{
               disabled={updateBranchPending}
               onClick={(e) => {
                 e.stopPropagation();
-                onUpdateBranch(worktree);
+                onUpdateBranch(workspace);
               }}
             >
               {updateBranchPending ? (
@@ -269,7 +269,7 @@ const WorktreeListItem: React.FC<{
             disabled={mergePending}
             onClick={(e) => {
               e.stopPropagation();
-              onMerge(worktree);
+              onMerge(workspace);
             }}
           >
             Merge into {currentBranch || "main"}
@@ -280,7 +280,7 @@ const WorktreeListItem: React.FC<{
             className="h-7 text-xs"
             onClick={(e) => {
               e.stopPropagation();
-              onBrowseFiles(worktree);
+              onBrowseFiles(workspace);
             }}
           >
             Browse files
@@ -291,7 +291,7 @@ const WorktreeListItem: React.FC<{
             className="h-7 text-xs"
             onClick={(e) => {
               e.stopPropagation();
-              onOpenSession(worktree);
+              onOpenSession(workspace);
             }}
           >
             Open session
@@ -317,8 +317,8 @@ export const Dashboard: React.FC = () => {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showCreateFromRemoteDialog, setShowCreateFromRemoteDialog] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("dashboard");
-  const [selectedWorktree, setSelectedWorktree] = useState<Worktree | null>(null);
-  const [fileBrowserWorktree, setFileBrowserWorktree] = useState<Worktree | null>(null);
+  const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(null);
+  const [fileBrowserWorkspace, setFileBrowserWorkspace] = useState<Workspace | null>(null);
   const [initialSettingsTab, setInitialSettingsTab] = useState<"application" | "repository">("repository");
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
@@ -330,12 +330,12 @@ export const Dashboard: React.FC = () => {
   const [sessionSelectedFile, setSessionSelectedFile] = useState<string | null>(null);
   const [mainRepoSyncing, setMainRepoSyncing] = useState(false);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
-  const [mergeTargetWorktree, setMergeTargetWorktree] = useState<Worktree | null>(null);
+  const [mergeTargetWorkspace, setMergeTargetWorkspace] = useState<Workspace | null>(null);
   const [mergeAheadCount, setMergeAheadCount] = useState(0);
-  const [mergeWorktreeHasChanges, setMergeWorktreeHasChanges] = useState(false);
+  const [mergeWorkspaceHasChanges, setMergeWorkspaceHasChanges] = useState(false);
   const [mergeChangedFiles, setMergeChangedFiles] = useState<string[]>([]);
   const [mergeDetailsLoading, setMergeDetailsLoading] = useState(false);
-  const [selectedWorktreeId, setSelectedWorktreeId] = useState<number | null>(null);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<number | null>(null);
 
   // Plan execution pending state
   const [planExecutionPending, setPlanExecutionPending] = useState<{
@@ -352,7 +352,7 @@ export const Dashboard: React.FC = () => {
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [mountedSessionIds, setMountedSessionIds] = useState<Set<number>>(new Set());
 
-  // File selection state for moving to worktree
+  // File selection state for moving to workspace
   const [selectedUnstagedFiles, setSelectedUnstagedFiles] = useState<Set<string>>(new Set());
   const [lastSelectedFileIndex, setLastSelectedFileIndex] = useState<number | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
@@ -434,9 +434,9 @@ export const Dashboard: React.FC = () => {
 
   const resetMergeState = useCallback(() => {
     setMergeDialogOpen(false);
-    setMergeTargetWorktree(null);
+    setMergeTargetWorkspace(null);
     setMergeAheadCount(0);
-    setMergeWorktreeHasChanges(false);
+    setMergeWorkspaceHasChanges(false);
     setMergeChangedFiles([]);
     setMergeDetailsLoading(false);
   }, []);
@@ -511,7 +511,7 @@ export const Dashboard: React.FC = () => {
     if (repoName) {
       getCurrentWindow().setTitle(`Treq - ${repoName}`);
     } else {
-      getCurrentWindow().setTitle("Treq - Git Worktree Manager");
+      getCurrentWindow().setTitle("Treq - Git Workspace Manager");
     }
   }, [repoName]);
 
@@ -640,7 +640,7 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     const unlisten = listen("navigate-to-dashboard", () => {
       setViewMode("dashboard");
-      setSelectedWorktree(null);
+      setSelectedWorkspace(null);
     });
 
     return () => {
@@ -703,7 +703,7 @@ export const Dashboard: React.FC = () => {
       await setSetting("repo_path", selected);
       setRepoPath(selected);
       setViewMode("dashboard");
-      setSelectedWorktree(null);
+      setSelectedWorkspace(null);
 
       // Reset session state
       setActiveSessionId(null);
@@ -719,13 +719,13 @@ export const Dashboard: React.FC = () => {
       setSelectedUnstagedFiles(new Set());
       setLastSelectedFileIndex(null);
       setMoveDialogOpen(false);
-      setSelectedWorktreeId(null);
+      setSelectedWorkspaceId(null);
 
       // Reset merge state
       resetMergeState();
 
       // Invalidate queries to force immediate refresh
-      queryClient.invalidateQueries({ queryKey: ["worktrees"] });
+      queryClient.invalidateQueries({ queryKey: ["workspaces"] });
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
 
       addToast({
@@ -788,31 +788,31 @@ export const Dashboard: React.FC = () => {
     enabled: !!repoPath,
   });
 
-  const { data: worktrees = [], refetch } = useQuery({
-    queryKey: ["worktrees", repoPath],
-    queryFn: () => getWorktrees(repoPath),
+  const { data: workspaces = [], refetch } = useQuery({
+    queryKey: ["workspaces", repoPath],
+    queryFn: () => getWorkspaces(repoPath),
     enabled: !!repoPath,
   });
 
-  // Rebuild worktrees from filesystem if database is empty
+  // Rebuild workspaces from filesystem if database is empty
   useEffect(() => {
     const rebuildIfNeeded = async () => {
-      if (repoPath && worktrees.length === 0) {
+      if (repoPath && workspaces.length === 0) {
         try {
-          const rebuilt = await rebuildWorktrees(repoPath);
+          const rebuilt = await rebuildWorkspaces(repoPath);
           if (rebuilt.length > 0) {
-            queryClient.invalidateQueries({ queryKey: ["worktrees", repoPath] });
+            queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
           }
         } catch (error) {
-          console.error("Failed to rebuild worktrees:", error);
+          console.error("Failed to rebuild workspaces:", error);
         }
       }
     };
     rebuildIfNeeded();
-  }, [repoPath, worktrees.length, queryClient]);
+  }, [repoPath, workspaces.length, queryClient]);
 
-  // Lazy preload: only preload selected worktree, not all worktrees
-  useGitCachePreloader(selectedWorktree?.worktree_path ?? null);
+  // Lazy preload: only preload selected workspace, not all workspaces
+  useGitCachePreloader(selectedWorkspace?.workspace_path ?? null);
 
   // Track mounted session IDs to preserve terminal state
   useEffect(() => {
@@ -849,7 +849,7 @@ export const Dashboard: React.FC = () => {
 
   // Refresh git changes when session tab is focused
   useEffect(() => {
-    if (viewMode === "session" || viewMode === "worktree-session") {
+    if (viewMode === "session" || viewMode === "workspace-session") {
       if (repoPath && activeSessionId) {
         // Invalidate cache and refresh on session focus change
         invalidateGitCache(repoPath).catch(() => {
@@ -860,16 +860,16 @@ export const Dashboard: React.FC = () => {
     }
   }, [activeSessionId, viewMode, repoPath, refreshMainRepoInfo]);
 
-  const deleteWorktree = useMutation({
-    mutationFn: async (worktree: Worktree) => {
-      await gitRemoveWorktree(worktree.repo_path, worktree.worktree_path);
-      await deleteWorktreeFromDb(worktree.repo_path, worktree.id);
+  const deleteWorkspace = useMutation({
+    mutationFn: async (workspace: Workspace) => {
+      await jjRemoveWorkspace(workspace.repo_path, workspace.workspace_path);
+      await deleteWorkspaceFromDb(workspace.repo_path, workspace.id);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["worktrees", repoPath] });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
       addToast({
-        title: "Worktree Deleted",
-        description: "Worktree has been removed successfully",
+        title: "Workspace Deleted",
+        description: "Workspace has been removed successfully",
         type: "success",
       });
     },
@@ -883,11 +883,11 @@ export const Dashboard: React.FC = () => {
   });
 
   const togglePinMutation = useMutation({
-    mutationFn: async ({ worktreeId, repoPath }: { worktreeId: number; repoPath: string }) => {
-      return toggleWorktreePin(repoPath, worktreeId);
+    mutationFn: async ({ workspaceId, repoPath }: { workspaceId: number; repoPath: string }) => {
+      return toggleWorkspacePin(repoPath, workspaceId);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["worktrees", repoPath] });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
     },
   });
 
@@ -897,8 +897,8 @@ export const Dashboard: React.FC = () => {
         throw new Error("Repository path is not set");
       }
 
-      if (!mergeTargetWorktree) {
-        throw new Error("No worktree selected for merge");
+      if (!mergeTargetWorkspace) {
+        throw new Error("No workspace selected for merge");
       }
 
       const mainRepoDirty = await gitHasUncommittedChanges(repoPath);
@@ -906,30 +906,30 @@ export const Dashboard: React.FC = () => {
         throw new Error("Main repository has uncommitted changes. Please commit or stash them before merging.");
       }
 
-      const worktreeDirtyNow = await gitHasUncommittedChanges(mergeTargetWorktree.worktree_path);
-      if (worktreeDirtyNow) {
+      const workspaceDirtyNow = await gitHasUncommittedChanges(mergeTargetWorkspace.workspace_path);
+      if (workspaceDirtyNow) {
         if (payload.discardChanges) {
-          await gitDiscardAllChanges(mergeTargetWorktree.worktree_path);
+          await gitDiscardAllChanges(mergeTargetWorkspace.workspace_path);
         } else {
-          throw new Error("Worktree has uncommitted changes. Discard them before merging.");
+          throw new Error("Workspace has uncommitted changes. Discard them before merging.");
         }
       }
 
       return gitMerge(
         repoPath,
-        mergeTargetWorktree.branch_name,
+        mergeTargetWorkspace.branch_name,
         payload.strategy,
         payload.commitMessage
       );
     },
     onSuccess: () => {
-      const branchName = mergeTargetWorktree?.branch_name || "worktree";
+      const branchName = mergeTargetWorkspace?.branch_name || "workspace";
       addToast({
         title: "Merge complete",
         description: `Merged ${branchName} into ${currentBranch || "main"}`,
         type: "success",
       });
-      queryClient.invalidateQueries({ queryKey: ["worktrees", repoPath] });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
       refreshMainRepoInfo();
       resetMergeState();
     },
@@ -947,37 +947,37 @@ export const Dashboard: React.FC = () => {
   });
 
   const updateBranchMutation = useMutation({
-    mutationFn: async (worktree: Worktree) => {
+    mutationFn: async (workspace: Workspace) => {
       if (!currentBranch) {
         throw new Error("Current branch is not set");
       }
 
-      const worktreeDirty = await gitHasUncommittedChanges(worktree.worktree_path);
-      if (worktreeDirty) {
-        throw new Error("Worktree has uncommitted changes. Please commit or stash them before updating.");
+      const workspaceDirty = await gitHasUncommittedChanges(workspace.workspace_path);
+      if (workspaceDirty) {
+        throw new Error("Workspace has uncommitted changes. Please commit or stash them before updating.");
       }
 
       return gitMerge(
-        worktree.worktree_path,
+        workspace.workspace_path,
         currentBranch,
         "regular",
         undefined
       );
     },
-    onSuccess: (_result, worktree) => {
+    onSuccess: (_result, workspace) => {
       addToast({
         title: "Branch updated",
-        description: `Merged ${currentBranch} into ${worktree.branch_name}`,
+        description: `Merged ${currentBranch} into ${workspace.branch_name}`,
         type: "success",
       });
-      // Invalidate queries to trigger refetch of worktree git status
-      queryClient.invalidateQueries({ queryKey: ["worktree-divergence", worktree.worktree_path] });
-      queryClient.invalidateQueries({ queryKey: ["worktree-branch-info", worktree.worktree_path] });
+      // Invalidate queries to trigger refetch of workspace git status
+      queryClient.invalidateQueries({ queryKey: ["workspace-divergence", workspace.workspace_path] });
+      queryClient.invalidateQueries({ queryKey: ["workspace-branch-info", workspace.workspace_path] });
     },
     onError: (error) => {
       const message = error instanceof Error ? error.message : String(error);
       const description = message.includes("CONFLICT")
-        ? "Merge conflict detected. Resolve conflicts in the worktree and try again."
+        ? "Merge conflict detected. Resolve conflicts in the workspace and try again."
         : message;
       addToast({
         title: "Update failed",
@@ -990,17 +990,17 @@ export const Dashboard: React.FC = () => {
   // Helper to create or get session
   const getOrCreateSession = useCallback(
     async (
-      worktreeId: number | null,
+      workspaceId: number | null,
       options?: {
         planTitle?: string;
-        worktreeBranchName?: string;
+        workspaceBranchName?: string;
         forceNew?: boolean;
         name?: string;
       }
     ): Promise<number> => {
       const sessions = await getSessions(repoPath);
       if (!options?.forceNew) {
-        const existing = sessions.find((s) => s.worktree_id === worktreeId);
+        const existing = sessions.find((s) => s.workspace_id === workspaceId);
         if (existing) {
           await updateSessionAccess(repoPath, existing.id);
           return existing.id;
@@ -1008,11 +1008,11 @@ export const Dashboard: React.FC = () => {
       }
 
       let finalPlanTitle = options?.planTitle;
-      if (worktreeId !== null && !finalPlanTitle) {
-        const worktree = worktrees.find((w) => w.id === worktreeId);
-        if (worktree?.metadata) {
+      if (workspaceId !== null && !finalPlanTitle) {
+        const workspace = workspaces.find((w) => w.id === workspaceId);
+        if (workspace?.metadata) {
           try {
-            const metadata = JSON.parse(worktree.metadata);
+            const metadata = JSON.parse(workspace.metadata);
             finalPlanTitle = metadata.initial_plan_title;
           } catch {
             // Ignore parse errors
@@ -1020,15 +1020,15 @@ export const Dashboard: React.FC = () => {
         }
       }
 
-      const scopedSessions = sessions.filter((s) => s.worktree_id === worktreeId);
+      const scopedSessions = sessions.filter((s) => s.workspace_id === workspaceId);
       const index = scopedSessions.length + 1;
       let name = options?.name;
       if (!name) {
         name = `Session ${index}`;
       }
 
-      const finalPlanTitleForDb = worktreeId !== null ? finalPlanTitle : undefined;
-      const sessionId = await createSession(repoPath, worktreeId, name, finalPlanTitleForDb);
+      const finalPlanTitleForDb = workspaceId !== null ? finalPlanTitle : undefined;
+      const sessionId = await createSession(repoPath, workspaceId, name, finalPlanTitleForDb);
 
       // Apply default model from settings (repo-level overrides application-level)
       try {
@@ -1046,40 +1046,40 @@ export const Dashboard: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
       return sessionId;
     },
-    [queryClient, worktrees, repoPath]
+    [queryClient, workspaces, repoPath]
   );
 
   const handleOpenSession = useCallback(
-    async (worktree: Worktree | null, options?: SessionOpenOptions) => {
-      const sessionId = await getOrCreateSession(worktree?.id ?? null, {
+    async (workspace: Workspace | null, options?: SessionOpenOptions) => {
+      const sessionId = await getOrCreateSession(workspace?.id ?? null, {
         planTitle: options?.planTitle,
-        worktreeBranchName: worktree?.branch_name,
+        workspaceBranchName: workspace?.branch_name,
         forceNew: options?.forceNew,
         name: options?.sessionName,
       });
-      setSelectedWorktree(worktree);
+      setSelectedWorkspace(workspace);
       setSessionPlanContent(options?.planContent ?? null);
       setSessionPlanTitle(options?.planTitle ?? null);
       setSessionInitialPrompt(options?.initialPrompt ?? null);
       setSessionPromptLabel(options?.promptLabel ?? null);
       setSessionSelectedFile(options?.selectedFilePath ?? null);
       setActiveSessionId(sessionId);
-      setViewMode(worktree ? "worktree-session" : "session");
+      setViewMode(workspace ? "workspace-session" : "session");
     },
     [getOrCreateSession]
   );
 
   const handleCreateSessionFromSidebar = useCallback(
-    async (worktreeId: number | null) => {
-      const worktree = worktreeId ? worktrees.find((w) => w.id === worktreeId) ?? null : null;
-      await handleOpenSession(worktree, { forceNew: true });
+    async (workspaceId: number | null) => {
+      const workspace = workspaceId ? workspaces.find((w) => w.id === workspaceId) ?? null : null;
+      await handleOpenSession(workspace, { forceNew: true });
     },
-    [handleOpenSession, worktrees]
+    [handleOpenSession, workspaces]
   );
 
   const openSessionWithPrompt = useCallback(
-    async (worktree: Worktree, prompt: string, label = "Review response") => {
-      await handleOpenSession(worktree, { initialPrompt: prompt, promptLabel: label });
+    async (workspace: Workspace, prompt: string, label = "Review response") => {
+      await handleOpenSession(workspace, { initialPrompt: prompt, promptLabel: label });
 
       // Focus terminal after session opens
       setTimeout(() => {
@@ -1096,17 +1096,18 @@ export const Dashboard: React.FC = () => {
     [handleOpenSession]
   );
 
-  // Handler for when files are successfully moved to worktree
-  const handleMoveToWorktreeSuccess = useCallback(async (worktreeInfo: {
+  // Handler for when files are successfully moved to workspace
+  const handleMoveToWorkspaceSuccess = useCallback(async (workspaceInfo: {
     id: number;
-    worktreePath: string;
+    workspaceName: string;
+    workspacePath: string;
     branchName: string;
     metadata: string;
   }) => {
     setMoveDialogOpen(false);
     setSelectedUnstagedFiles(new Set());
     setLastSelectedFileIndex(null);
-    await queryClient.refetchQueries({ queryKey: ["worktrees", repoPath] });
+    await queryClient.refetchQueries({ queryKey: ["workspaces", repoPath] });
 
     // Refresh the changed files list
     if (repoPath) {
@@ -1118,18 +1119,19 @@ export const Dashboard: React.FC = () => {
       }
     }
 
-    // Construct worktree object and navigate to session
-    const newWorktree: Worktree = {
-      id: worktreeInfo.id,
+    // Construct workspace object and navigate to session
+    const newWorkspace: Workspace = {
+      id: workspaceInfo.id,
       repo_path: repoPath,
-      worktree_path: worktreeInfo.worktreePath,
-      branch_name: worktreeInfo.branchName,
+      workspace_name: workspaceInfo.workspaceName,
+      workspace_path: workspaceInfo.workspacePath,
+      branch_name: workspaceInfo.branchName,
       created_at: new Date().toISOString(),
-      metadata: worktreeInfo.metadata,
+      metadata: workspaceInfo.metadata,
       is_pinned: false,
     };
 
-    await handleOpenSession(newWorktree, { forceNew: true });
+    await handleOpenSession(newWorkspace, { forceNew: true });
   }, [queryClient, repoPath, handleOpenSession]);
 
   const handleSessionClick = async (session: Session) => {
@@ -1141,25 +1143,25 @@ export const Dashboard: React.FC = () => {
     setSessionPromptLabel(null);
     setSessionSelectedFile(null);
 
-    if (session.worktree_id) {
-      const worktree = worktrees.find((w) => w.id === session.worktree_id);
-      if (worktree) {
-        setSelectedWorktree(worktree);
-        setViewMode("worktree-session");
+    if (session.workspace_id) {
+      const workspace = workspaces.find((w) => w.id === session.workspace_id);
+      if (workspace) {
+        setSelectedWorkspace(workspace);
+        setViewMode("workspace-session");
       }
     } else {
-      setSelectedWorktree(null);
+      setSelectedWorkspace(null);
       setViewMode("session");
     }
   };
 
-  const handleDelete = (worktree: Worktree) => {
-    if (confirm(`Delete worktree ${worktree.branch_name}?`)) {
-      deleteWorktree.mutate(worktree);
+  const handleDelete = (workspace: Workspace) => {
+    if (confirm(`Delete workspace ${workspace.branch_name}?`)) {
+      deleteWorkspace.mutate(workspace);
     }
   };
 
-  const openMergeDialogForWorktree = async (worktree: Worktree) => {
+  const openMergeDialogForWorkspace = async (workspace: Workspace) => {
     if (!repoPath) {
       addToast({
         title: "Repository not set",
@@ -1169,10 +1171,10 @@ export const Dashboard: React.FC = () => {
       return;
     }
 
-    setMergeTargetWorktree(worktree);
+    setMergeTargetWorkspace(workspace);
     setMergeAheadCount(0);
     setMergeChangedFiles([]);
-    setMergeWorktreeHasChanges(false);
+    setMergeWorkspaceHasChanges(false);
     setMergeDetailsLoading(true);
 
     try {
@@ -1183,21 +1185,21 @@ export const Dashboard: React.FC = () => {
           description: "Please clean up or commit changes in the main repository before merging.",
           type: "error",
         });
-        setMergeTargetWorktree(null);
+        setMergeTargetWorkspace(null);
         return;
       }
 
       setMergeDialogOpen(true);
 
-      const branchInfo = await gitGetBranchInfo(worktree.worktree_path);
+      const branchInfo = await gitGetBranchInfo(workspace.workspace_path);
       setMergeAheadCount(branchInfo.ahead);
 
-      const worktreeDirty = await gitHasUncommittedChanges(worktree.worktree_path);
-      setMergeWorktreeHasChanges(worktreeDirty);
+      const workspaceDirty = await gitHasUncommittedChanges(workspace.workspace_path);
+      setMergeWorkspaceHasChanges(workspaceDirty);
 
-      if (worktreeDirty) {
+      if (workspaceDirty) {
         try {
-          const files = await gitGetChangedFiles(worktree.worktree_path);
+          const files = await gitGetChangedFiles(workspace.workspace_path);
           setMergeChangedFiles(files);
         } catch (fileError) {
           console.error("Failed to load changed files:", fileError);
@@ -1226,13 +1228,13 @@ export const Dashboard: React.FC = () => {
       const branchName = applyBranchNamePattern(branchPattern, section.title);
       
       addToast({
-        title: "Creating worktree...",
-        description: `Creating worktree for ${branchName}`,
+        title: "Creating workspace...",
+        description: `Creating workspace for ${branchName}`,
         type: "info",
       });
 
-      // Create the worktree
-      const worktreePath = await gitCreateWorktree(repoPath, branchName, true);
+      // Create the workspace
+      const workspacePath = await jjCreateWorkspace(repoPath, branchName, branchName, true);
 
       // Prepare metadata with plan title
       const metadata = JSON.stringify({
@@ -1240,13 +1242,13 @@ export const Dashboard: React.FC = () => {
       });
 
       // Add to database with metadata
-      const worktreeId = await addWorktreeToDb(repoPath, worktreePath, branchName, metadata);
+      const workspaceId = await addWorkspaceToDb(repoPath, branchName, workspacePath, branchName, metadata);
 
       // Execute post-create command if configured
       const postCreateCmd = await getRepoSetting(repoPath, "post_create_command");
       if (postCreateCmd && postCreateCmd.trim()) {
         try {
-          await gitExecutePostCreateCommand(worktreePath, postCreateCmd);
+          await gitExecutePostCreateCommand(workspacePath, postCreateCmd);
         } catch (cmdError) {
           console.error("Post-create command failed:", cmdError);
         }
@@ -1255,11 +1257,12 @@ export const Dashboard: React.FC = () => {
       // Get plan content (use edited version if available)
       const planContent = section.editedContent || section.rawMarkdown;
 
-      // Create worktree object and navigate to edit session
-      const newWorktree: Worktree = {
-        id: worktreeId,
+      // Create workspace object and navigate to edit session
+      const newWorkspace: Workspace = {
+        id: workspaceId,
         repo_path: repoPath,
-        worktree_path: worktreePath,
+        workspace_name: branchName,
+        workspace_path: workspacePath,
         branch_name: branchName,
         created_at: new Date().toISOString(),
         metadata,
@@ -1268,13 +1271,13 @@ export const Dashboard: React.FC = () => {
 
       try {
         const payload = buildPlanHistoryPayload(section);
-        await saveExecutedPlan(repoPath, worktreeId, payload);
+        await saveExecutedPlan(repoPath, workspaceId, payload);
       } catch (planError) {
         console.error("Failed to record plan execution:", planError);
       }
 
       // Create execution session with plan title
-      await handleOpenSession(newWorktree, {
+      await handleOpenSession(newWorkspace, {
         planTitle: section.title,
         planContent,
         forceNew: true,
@@ -1282,11 +1285,11 @@ export const Dashboard: React.FC = () => {
       
       addToast({
         title: "Ready to implement",
-        description: "Worktree created; opening session terminal",
+        description: "Workspace created; opening session terminal",
         type: "success",
       });
 
-      // Refresh worktree list
+      // Refresh workspace list
       refetch();
     } catch (error) {
       addToast({
@@ -1297,7 +1300,7 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const handleExecutePlanInWorktree = useCallback(async (
+  const handleExecutePlanInWorkspace = useCallback(async (
     section: PlanSection,
     sourceBranch: string,
     currentSessionName?: string
@@ -1311,8 +1314,8 @@ export const Dashboard: React.FC = () => {
     setShowCreateDialog(true);
   }, []);
 
-  const handleWorktreeCreatedWithPlan = useCallback(async (
-    worktreeInfo: { id: number; worktreePath: string; branchName: string; metadata: string },
+  const handleWorkspaceCreatedWithPlan = useCallback(async (
+    workspaceInfo: { id: number; workspaceName: string; workspacePath: string; branchName: string; metadata: string },
     planSection: PlanSection,
     sessionName?: string
   ) => {
@@ -1322,27 +1325,28 @@ export const Dashboard: React.FC = () => {
     // Get plan content
     const planContent = planSection.editedContent || planSection.rawMarkdown;
 
-    // Create worktree object
-    const newWorktree: Worktree = {
-      id: worktreeInfo.id,
+    // Create workspace object
+    const newWorkspace: Workspace = {
+      id: workspaceInfo.id,
       repo_path: repoPath,
-      worktree_path: worktreeInfo.worktreePath,
-      branch_name: worktreeInfo.branchName,
+      workspace_name: workspaceInfo.workspaceName,
+      workspace_path: workspaceInfo.workspacePath,
+      branch_name: workspaceInfo.branchName,
       created_at: new Date().toISOString(),
-      metadata: worktreeInfo.metadata,
+      metadata: workspaceInfo.metadata,
       is_pinned: false,
     };
 
     // Record plan execution
     try {
       const payload = buildPlanHistoryPayload(planSection);
-      await saveExecutedPlan(repoPath, worktreeInfo.id, payload);
+      await saveExecutedPlan(repoPath, workspaceInfo.id, payload);
     } catch (planError) {
       console.error("Failed to record plan execution:", planError);
     }
 
     // Open session with transferred name
-    await handleOpenSession(newWorktree, {
+    await handleOpenSession(newWorkspace, {
       planTitle: planSection.title,
       planContent,
       forceNew: true,
@@ -1351,20 +1355,20 @@ export const Dashboard: React.FC = () => {
 
     addToast({
       title: "Ready to implement",
-      description: "Worktree created; plan sent to Claude",
+      description: "Workspace created; plan sent to Claude",
       type: "success",
     });
 
     // Clear pending state
     setPlanExecutionPending(null);
 
-    // Refresh worktree list
+    // Refresh workspace list
     refetch();
   }, [repoPath, handleOpenSession, refetch, addToast]);
 
   const handleCloseTerminal = () => {
     setViewMode("dashboard");
-    setSelectedWorktree(null);
+    setSelectedWorkspace(null);
     setActiveSessionId(null);
     setSessionPlanContent(null);
     setSessionPlanTitle(null);
@@ -1375,11 +1379,11 @@ export const Dashboard: React.FC = () => {
 
   const handleReturnToDashboard = useCallback(() => {
     setViewMode("dashboard");
-    setSelectedWorktree(null);
+    setSelectedWorkspace(null);
   }, []);
 
-  const handleBrowseFiles = useCallback((worktree: Worktree | null) => {
-    setFileBrowserWorktree(worktree);
+  const handleBrowseFiles = useCallback((workspace: Workspace | null) => {
+    setFileBrowserWorkspace(workspace);
     setViewMode("file-browser");
   }, []);
 
@@ -1505,18 +1509,18 @@ export const Dashboard: React.FC = () => {
     <CommandPalette
       open={showCommandPalette}
       onOpenChange={setShowCommandPalette}
-      worktrees={worktrees}
+      workspaces={workspaces}
       sessions={sessions}
       onNavigateToDashboard={() => setViewMode("dashboard")}
       onNavigateToSettings={() => setViewMode("settings")}
-      onOpenWorktreeSession={(worktree) => {
-        handleOpenSession(worktree);
+      onOpenWorkspaceSession={(workspace) => {
+        handleOpenSession(workspace);
       }}
-      onOpenSession={(session, worktree) => {
+      onOpenSession={(session, workspace) => {
         setActiveSessionId(session.id);
-        if (worktree) {
-          setSelectedWorktree(worktree);
-          setViewMode("worktree-session");
+        if (workspace) {
+          setSelectedWorkspace(workspace);
+          setViewMode("workspace-session");
         } else {
           setViewMode("session");
         }
@@ -1542,8 +1546,8 @@ export const Dashboard: React.FC = () => {
     const sessionsToRender = sessions.filter(s => s.id === activeSessionId || mountedSessionIds.has(s.id));
 
     return sessionsToRender.map(session => {
-      const isActive = session.id === activeSessionId && (viewMode === "session" || viewMode === "worktree-session");
-      const sessionWorktree = session.worktree_id ? worktrees.find(w => w.id === session.worktree_id) : null;
+      const isActive = session.id === activeSessionId && (viewMode === "session" || viewMode === "workspace-session");
+      const sessionWorkspace = session.workspace_id ? workspaces.find(w => w.id === session.workspace_id) : null;
 
       return (
         <div
@@ -1552,20 +1556,20 @@ export const Dashboard: React.FC = () => {
           className="flex-1 h-full w-full"
         >
           <ErrorBoundary
-            fallbackTitle={sessionWorktree ? "Worktree terminal error" : "Session terminal error"}
+            fallbackTitle={sessionWorkspace ? "Workspace terminal error" : "Session terminal error"}
             resetKeys={[session.id]}
             onGoDashboard={handleCloseTerminal}
           >
             <Suspense fallback={<LoadingSpinner />}>
               <SessionTerminal
-                repositoryPath={sessionWorktree ? undefined : repoPath}
-                worktree={sessionWorktree || undefined}
+                repositoryPath={sessionWorkspace ? undefined : repoPath}
+                workspace={sessionWorkspace || undefined}
                 session={session}
                 sessionId={session.id}
                 mainRepoBranch={currentBranch}
                 onClose={handleCloseTerminal}
                 onExecutePlan={handleExecutePlan}
-                onExecutePlanInWorktree={handleExecutePlanInWorktree}
+                onExecutePlanInWorkspace={handleExecutePlanInWorkspace}
                 initialPlanContent={session.id === activeSessionId ? (sessionPlanContent || undefined) : undefined}
                 initialPlanTitle={session.id === activeSessionId ? (sessionPlanTitle || undefined) : undefined}
                 initialPrompt={session.id === activeSessionId ? (sessionInitialPrompt || undefined) : undefined}
@@ -1584,7 +1588,7 @@ export const Dashboard: React.FC = () => {
     activeSessionId,
     mountedSessionIds,
     viewMode,
-    worktrees,
+    workspaces,
     repoPath,
     currentBranch,
     sessionPlanContent,
@@ -1594,12 +1598,12 @@ export const Dashboard: React.FC = () => {
     sessionSelectedFile,
     handleCloseTerminal,
     handleExecutePlan,
-    handleExecutePlanInWorktree,
+    handleExecutePlanInWorkspace,
     handleSessionActivity,
   ]);
 
-  const isSessionView = viewMode === "session" || viewMode === "worktree-session";
-  const showSidebar = viewMode !== "merge-review" && viewMode !== "worktree-edit";
+  const isSessionView = viewMode === "session" || viewMode === "workspace-session";
+  const showSidebar = viewMode !== "merge-review" && viewMode !== "workspace-edit";
   const highlightedSessionId = isSessionView ? activeSessionId : null;
 
   const mainContentStyle = useMemo(() => ({ width: showSidebar ? "calc(100vw - 240px)" : "100%" }), [showSidebar]);
@@ -1620,19 +1624,19 @@ export const Dashboard: React.FC = () => {
           onCloseActiveSession={handleCloseTerminal}
           repoPath={repoPath}
           currentBranch={currentBranch}
-          onDeleteWorktree={handleDelete}
-          onCreateWorktree={() => setShowCreateDialog(true)}
-          onCreateWorktreeFromRemote={() => setShowCreateFromRemoteDialog(true)}
+          onDeleteWorkspace={handleDelete}
+          onCreateWorkspace={() => setShowCreateDialog(true)}
+          onCreateWorkspaceFromRemote={() => setShowCreateFromRemoteDialog(true)}
           onSessionActivityListenerChange={handleSessionActivityListenerChange}
           openSettings={openSettings}
           navigateToDashboard={handleReturnToDashboard}
           onOpenCommandPalette={() => setShowCommandPalette(true)}
           onBrowseFiles={handleBrowseFiles}
-          browsingWorktreeId={viewMode === "file-browser" ? (fileBrowserWorktree?.id ?? null) : undefined}
+          browsingWorkspaceId={viewMode === "file-browser" ? (fileBrowserWorkspace?.id ?? null) : undefined}
           currentPage={
             viewMode === "dashboard" ? "dashboard" :
             viewMode === "settings" ? "settings" :
-            (viewMode === "session" || viewMode === "worktree-session") ? "session" :
+            (viewMode === "session" || viewMode === "workspace-session") ? "session" :
             null
           }
         />
@@ -1650,7 +1654,7 @@ export const Dashboard: React.FC = () => {
           {memoizedSessionTerminals}
         </div>
 
-        {/* Content Layer - Dashboard, Settings, Merge-Review, Worktree-Edit */}
+        {/* Content Layer - Dashboard, Settings, Merge-Review, Workspace-Edit */}
         <div
           className="absolute inset-0 overflow-auto"
           style={{
@@ -1676,40 +1680,40 @@ export const Dashboard: React.FC = () => {
           )}
 
           {/* Merge Review View */}
-          {viewMode === "merge-review" && selectedWorktree && (
+          {viewMode === "merge-review" && selectedWorkspace && (
             <ErrorBoundary
               fallbackTitle="Merge review failed"
-              resetKeys={[selectedWorktree.id, currentBranch ?? ""]}
+              resetKeys={[selectedWorkspace.id, currentBranch ?? ""]}
               onGoDashboard={handleReturnToDashboard}
             >
               <Suspense fallback={<LoadingSpinner />}>
                 <MergeReviewPage
                   repoPath={repoPath}
                   baseBranch={currentBranch}
-                  worktree={selectedWorktree}
+                  workspace={selectedWorkspace}
                   onClose={() => {
                     setViewMode("dashboard");
-                    setSelectedWorktree(null);
+                    setSelectedWorkspace(null);
                   }}
-                  onStartMerge={openMergeDialogForWorktree}
-                  onRequestChanges={(prompt) => openSessionWithPrompt(selectedWorktree, prompt, "Review response")}
+                  onStartMerge={openMergeDialogForWorkspace}
+                  onRequestChanges={(prompt) => openSessionWithPrompt(selectedWorkspace, prompt, "Review response")}
                 />
               </Suspense>
             </ErrorBoundary>
           )}
 
-          {/* Worktree Edit View */}
-          {viewMode === "worktree-edit" && selectedWorktree && (
+          {/* Workspace Edit View */}
+          {viewMode === "workspace-edit" && selectedWorkspace && (
             <ErrorBoundary
-              fallbackTitle="Worktree edit failed"
-              resetKeys={[selectedWorktree.id]}
+              fallbackTitle="Workspace edit failed"
+              resetKeys={[selectedWorkspace.id]}
               onGoDashboard={handleReturnToDashboard}
             >
-              <WorktreeEditSession
-                worktree={selectedWorktree}
+              <WorkspaceEditSession
+                workspace={selectedWorkspace}
                 onClose={() => {
                   setViewMode("dashboard");
-                  setSelectedWorktree(null);
+                  setSelectedWorkspace(null);
                 }}
               />
             </ErrorBoundary>
@@ -1719,18 +1723,18 @@ export const Dashboard: React.FC = () => {
           {viewMode === "file-browser" && (
             <ErrorBoundary
               fallbackTitle="File browser error"
-              resetKeys={[fileBrowserWorktree?.id ?? repoPath]}
+              resetKeys={[fileBrowserWorkspace?.id ?? repoPath]}
               onGoDashboard={handleReturnToDashboard}
             >
               <Suspense fallback={<LoadingSpinner />}>
                 <FileBrowser
-                  worktree={fileBrowserWorktree ?? undefined}
-                  repoPath={fileBrowserWorktree ? undefined : repoPath}
-                  branchName={fileBrowserWorktree ? undefined : currentBranch ?? undefined}
+                  workspace={fileBrowserWorkspace ?? undefined}
+                  repoPath={fileBrowserWorkspace ? undefined : repoPath}
+                  branchName={fileBrowserWorkspace ? undefined : currentBranch ?? undefined}
                   mainBranch={currentBranch ?? undefined}
                   onClose={() => {
                     setViewMode("dashboard");
-                    setFileBrowserWorktree(null);
+                    setFileBrowserWorkspace(null);
                   }}
                 />
               </Suspense>
@@ -1741,7 +1745,7 @@ export const Dashboard: React.FC = () => {
           {viewMode === "dashboard" && (
             <ErrorBoundary
           fallbackTitle="Dashboard content error"
-          resetKeys={[repoPath, worktrees.length]}
+          resetKeys={[repoPath, workspaces.length]}
           onGoDashboard={handleReturnToDashboard}
         >
             <div className="container mx-auto p-8">
@@ -1757,7 +1761,7 @@ export const Dashboard: React.FC = () => {
               </div>
             )}
 
-            {/* Split Layout: Main Tree | Worktrees */}
+            {/* Split Layout: Main Tree | Workspaces */}
             {repoPath && (
               <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-6">
                 {/* Main Tree Section */}
@@ -1801,7 +1805,7 @@ export const Dashboard: React.FC = () => {
                                       className="w-6 h-6"
                                       onClick={() => {
                                         setViewMode("file-browser");
-                                        setFileBrowserWorktree(null);
+                                        setFileBrowserWorkspace(null);
                                       }}
                                     >
                                       <FolderOpen className="w-3 h-3" />
@@ -1894,7 +1898,7 @@ export const Dashboard: React.FC = () => {
                               readOnly={mainRepoCommitPending}
                               selectedFiles={selectedUnstagedFiles}
                               onFileSelect={handleFileSelect}
-                              onMoveToWorktree={() => setMoveDialogOpen(true)}
+                              onMoveToWorkspace={() => setMoveDialogOpen(true)}
                               onStage={handleMainRepoStageFile}
                               onStageAll={handleMainRepoStageAll}
                             />
@@ -1906,37 +1910,37 @@ export const Dashboard: React.FC = () => {
                   </Card>
                 </div>
 
-                {/* Worktrees Section */}
+                {/* Workspaces Section */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h2 className="text-sm font-medium text-muted-foreground">
-                      Worktrees {worktrees.length > 0 && <span className="text-xs">({worktrees.length})</span>}
+                      Workspaces {workspaces.length > 0 && <span className="text-xs">({workspaces.length})</span>}
                     </h2>
                   </div>
 
-                  {worktrees.length === 0 ? (
+                  {workspaces.length === 0 ? (
                     <div className="text-sm text-muted-foreground py-4 text-center">
-                      No worktrees yet
+                      No workspaces yet
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {worktrees.map((worktree) => (
-                        <WorktreeListItem
-                          key={worktree.id}
-                          worktree={worktree}
+                      {workspaces.map((workspace) => (
+                        <WorkspaceListItem
+                          key={workspace.id}
+                          workspace={workspace}
                           currentBranch={currentBranch}
-                          isSelected={selectedWorktreeId === worktree.id}
-                          onSelect={setSelectedWorktreeId}
-                          onDoubleClick={() => handleOpenSession(worktree)}
-                          onPin={(worktreeId) => {
+                          isSelected={selectedWorkspaceId === workspace.id}
+                          onSelect={setSelectedWorkspaceId}
+                          onDoubleClick={() => handleOpenSession(workspace)}
+                          onPin={(workspaceId) => {
                             if (repoPath) {
-                              togglePinMutation.mutate({ worktreeId, repoPath });
+                              togglePinMutation.mutate({ workspaceId, repoPath });
                             }
                           }}
                           onUpdateBranch={(wt) => updateBranchMutation.mutate(wt)}
-                          onMerge={(wt) => openMergeDialogForWorktree(wt)}
+                          onMerge={(wt) => openMergeDialogForWorkspace(wt)}
                           onBrowseFiles={(wt) => {
-                            setFileBrowserWorktree(wt);
+                            setFileBrowserWorkspace(wt);
                             setViewMode("file-browser");
                           }}
                           onOpenSession={(wt) => handleOpenSession(wt)}
@@ -1965,17 +1969,17 @@ export const Dashboard: React.FC = () => {
             resetMergeState();
           }
         }}
-        worktree={mergeTargetWorktree}
+        workspace={mergeTargetWorkspace}
         mainBranch={currentBranch}
         aheadCount={mergeAheadCount}
-        hasWorktreeChanges={mergeWorktreeHasChanges}
+        hasWorkspaceChanges={mergeWorkspaceHasChanges}
         changedFiles={mergeChangedFiles}
         isLoadingDetails={mergeDetailsLoading}
         isSubmitting={mergeMutation.isPending}
         onConfirm={(options) => mergeMutation.mutate(options)}
       />
 
-      <CreateWorktreeDialog
+      <CreateWorkspaceDialog
         open={showCreateDialog}
         onOpenChange={(open) => {
           setShowCreateDialog(open);
@@ -1985,29 +1989,29 @@ export const Dashboard: React.FC = () => {
         }}
         repoPath={repoPath}
         onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ["worktrees", repoPath] });
+          queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
         }}
         planSection={planExecutionPending?.section}
         sourceBranch={planExecutionPending?.sourceBranch}
         initialSessionName={planExecutionPending?.sessionName}
-        onSuccessWithPlan={handleWorktreeCreatedWithPlan}
+        onSuccessWithPlan={handleWorkspaceCreatedWithPlan}
       />
 
-      <CreateWorktreeFromRemoteDialog
+      <CreateWorkspaceFromRemoteDialog
         open={showCreateFromRemoteDialog}
         onOpenChange={setShowCreateFromRemoteDialog}
         repoPath={repoPath}
         onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ["worktrees", repoPath] });
+          queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
         }}
       />
 
-      <MoveToWorktreeDialog
+      <MoveToWorkspaceDialog
         open={moveDialogOpen}
         onOpenChange={setMoveDialogOpen}
         repoPath={repoPath}
         selectedFiles={Array.from(selectedUnstagedFiles)}
-        onSuccess={handleMoveToWorktreeSuccess}
+        onSuccess={handleMoveToWorkspaceSuccess}
       />
 
       {commandPaletteElement}

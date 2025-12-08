@@ -85,9 +85,9 @@ pub struct LineDiffStats {
 }
 
 /// Execute git commit with message
-pub fn git_commit(worktree_path: &str, message: &str) -> Result<String, String> {
+pub fn git_commit(workspace_path: &str, message: &str) -> Result<String, String> {
     let output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["commit", "-m", message])
         .output()
         .map_err(|e| e.to_string())?;
@@ -176,9 +176,9 @@ pub fn git_merge(
     Ok(response)
 }
 
-pub fn git_discard_all_changes(worktree_path: &str) -> Result<String, String> {
+pub fn git_discard_all_changes(workspace_path: &str) -> Result<String, String> {
     let reset_output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["reset", "--hard"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -188,7 +188,7 @@ pub fn git_discard_all_changes(worktree_path: &str) -> Result<String, String> {
     }
 
     let clean_output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["clean", "-fd"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -210,12 +210,12 @@ pub fn git_discard_all_changes(worktree_path: &str) -> Result<String, String> {
     Ok(response)
 }
 
-pub fn git_discard_files(worktree_path: &str, file_paths: Vec<String>) -> Result<String, String> {
+pub fn git_discard_files(workspace_path: &str, file_paths: Vec<String>) -> Result<String, String> {
     let mut response = String::new();
 
     // Get status of all files to determine which are tracked/untracked
     let status_output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["status", "--porcelain"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -262,7 +262,7 @@ pub fn git_discard_files(worktree_path: &str, file_paths: Vec<String>) -> Result
         }
 
         let unstage_output = Command::new("git")
-            .current_dir(worktree_path)
+            .current_dir(workspace_path)
             .args(&unstage_args)
             .output()
             .map_err(|e| e.to_string())?;
@@ -281,7 +281,7 @@ pub fn git_discard_files(worktree_path: &str, file_paths: Vec<String>) -> Result
         }
 
         let restore_output = Command::new("git")
-            .current_dir(worktree_path)
+            .current_dir(workspace_path)
             .args(&restore_args)
             .output()
             .map_err(|e| e.to_string())?;
@@ -298,7 +298,7 @@ pub fn git_discard_files(worktree_path: &str, file_paths: Vec<String>) -> Result
 
     // Remove untracked files
     for file_path in untracked_files {
-        let file_full_path = std::path::Path::new(worktree_path).join(file_path);
+        let file_full_path = std::path::Path::new(workspace_path).join(file_path);
         if file_full_path.exists() {
             if file_full_path.is_dir() {
                 std::fs::remove_dir_all(&file_full_path)
@@ -318,9 +318,9 @@ pub fn git_discard_files(worktree_path: &str, file_paths: Vec<String>) -> Result
     Ok(response)
 }
 
-pub fn has_uncommitted_changes(worktree_path: &str) -> Result<bool, String> {
+pub fn has_uncommitted_changes(workspace_path: &str) -> Result<bool, String> {
     let output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["status", "--porcelain"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -333,9 +333,9 @@ pub fn has_uncommitted_changes(worktree_path: &str) -> Result<bool, String> {
 }
 
 /// Stage all changes
-pub fn git_add_all(worktree_path: &str) -> Result<String, String> {
+pub fn git_add_all(workspace_path: &str) -> Result<String, String> {
     let output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["add", "."])
         .output()
         .map_err(|e| e.to_string())?;
@@ -348,9 +348,9 @@ pub fn git_add_all(worktree_path: &str) -> Result<String, String> {
 }
 
 /// Unstage all staged changes
-pub fn git_unstage_all(worktree_path: &str) -> Result<String, String> {
+pub fn git_unstage_all(workspace_path: &str) -> Result<String, String> {
     let output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["reset", "HEAD"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -363,9 +363,9 @@ pub fn git_unstage_all(worktree_path: &str) -> Result<String, String> {
 }
 
 /// Push changes to remote
-pub fn git_push(worktree_path: &str) -> Result<String, String> {
+pub fn git_push(workspace_path: &str) -> Result<String, String> {
     let output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["push"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -380,9 +380,9 @@ pub fn git_push(worktree_path: &str) -> Result<String, String> {
 }
 
 /// Force push changes to remote (use with caution)
-pub fn git_push_force(worktree_path: &str) -> Result<String, String> {
+pub fn git_push_force(workspace_path: &str) -> Result<String, String> {
     let output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["push", "--force"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -397,9 +397,9 @@ pub fn git_push_force(worktree_path: &str) -> Result<String, String> {
 }
 
 /// Amend the last commit with a new message
-pub fn git_commit_amend(worktree_path: &str, message: &str) -> Result<String, String> {
+pub fn git_commit_amend(workspace_path: &str, message: &str) -> Result<String, String> {
     let output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["commit", "--amend", "-m", message])
         .output()
         .map_err(|e| e.to_string())?;
@@ -412,9 +412,9 @@ pub fn git_commit_amend(worktree_path: &str, message: &str) -> Result<String, St
 }
 
 /// Pull changes from remote
-pub fn git_pull(worktree_path: &str) -> Result<String, String> {
+pub fn git_pull(workspace_path: &str) -> Result<String, String> {
     let output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["pull"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -427,9 +427,9 @@ pub fn git_pull(worktree_path: &str) -> Result<String, String> {
 }
 
 /// Fetch from remote
-pub fn git_fetch(worktree_path: &str) -> Result<String, String> {
+pub fn git_fetch(workspace_path: &str) -> Result<String, String> {
     let output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["fetch"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -442,9 +442,9 @@ pub fn git_fetch(worktree_path: &str) -> Result<String, String> {
 }
 
 /// Stage specific file(s)
-pub fn git_stage_file(worktree_path: &str, file_path: &str) -> Result<String, String> {
+pub fn git_stage_file(workspace_path: &str, file_path: &str) -> Result<String, String> {
     let output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["add", file_path])
         .output()
         .map_err(|e| e.to_string())?;
@@ -457,9 +457,9 @@ pub fn git_stage_file(worktree_path: &str, file_path: &str) -> Result<String, St
 }
 
 /// Unstage specific file(s)
-pub fn git_unstage_file(worktree_path: &str, file_path: &str) -> Result<String, String> {
+pub fn git_unstage_file(workspace_path: &str, file_path: &str) -> Result<String, String> {
     let output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["reset", "HEAD", file_path])
         .output()
         .map_err(|e| e.to_string())?;
@@ -475,7 +475,7 @@ pub fn git_unstage_file(worktree_path: &str, file_path: &str) -> Result<String, 
 /// Returns true if the entry is a directory based on:
 /// 1. Trailing slash in path (git's standard convention)
 /// 2. Filesystem verification (fallback for edge cases)
-fn is_directory_entry(worktree_path: &str, status_entry: &str) -> bool {
+fn is_directory_entry(workspace_path: &str, status_entry: &str) -> bool {
     // Extract file path from porcelain format: "XY filename"
     let path_start = if status_entry.len() > 3 { 3 } else { 0 };
     let file_path = status_entry[path_start..].trim();
@@ -486,17 +486,17 @@ fn is_directory_entry(worktree_path: &str, status_entry: &str) -> bool {
     }
 
     // Fallback: check filesystem for edge cases
-    let full_path = std::path::Path::new(worktree_path).join(file_path);
+    let full_path = std::path::Path::new(workspace_path).join(file_path);
     full_path.is_dir()
 }
 
 /// Get list of modified/untracked files (excluding .gitignore)
-pub fn git_get_changed_files(worktree_path: &str) -> Result<Vec<String>, String> {
+pub fn git_get_changed_files(workspace_path: &str) -> Result<Vec<String>, String> {
     let mut files: Vec<String> = Vec::new();
 
     // Get tracked changes (modified, added, deleted, staged)
     let status_output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["status", "--porcelain"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -509,7 +509,7 @@ pub fn git_get_changed_files(worktree_path: &str) -> Result<Vec<String>, String>
     for line in status.lines() {
         if line.len() > 3 {
             // Filter out directory entries - only include files
-            if !is_directory_entry(worktree_path, line) {
+            if !is_directory_entry(workspace_path, line) {
                 // Return full porcelain format: "XY filename"
                 files.push(line.to_string());
             }
@@ -519,7 +519,7 @@ pub fn git_get_changed_files(worktree_path: &str) -> Result<Vec<String>, String>
     // Get untracked files (individual files, respecting .gitignore)
     // Prefix with "?? " to match porcelain format
     let untracked_output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["ls-files", "--others", "--exclude-standard"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -539,12 +539,12 @@ pub fn git_get_changed_files(worktree_path: &str) -> Result<Vec<String>, String>
 
 /// Get line-level diff statistics against a base branch
 pub fn git_get_line_diff_stats(
-    worktree_path: &str,
+    workspace_path: &str,
     base_branch: &str,
 ) -> Result<LineDiffStats, String> {
     let range = format!("{}...HEAD", base_branch);
     let output = Command::new("git")
-        .current_dir(worktree_path)
+        .current_dir(workspace_path)
         .args(["diff", "--numstat", &range])
         .output()
         .map_err(|e| e.to_string())?;
@@ -717,12 +717,12 @@ pub fn git_get_commits_between_branches(
     Ok(commits)
 }
 
-pub fn git_stage_hunk(worktree_path: &str, patch: &str) -> Result<String, String> {
-    apply_patch(worktree_path, patch, false)
+pub fn git_stage_hunk(workspace_path: &str, patch: &str) -> Result<String, String> {
+    apply_patch(workspace_path, patch, false)
 }
 
-pub fn git_unstage_hunk(worktree_path: &str, patch: &str) -> Result<String, String> {
-    apply_patch(worktree_path, patch, true)
+pub fn git_unstage_hunk(workspace_path: &str, patch: &str) -> Result<String, String> {
+    apply_patch(workspace_path, patch, true)
 }
 
 /// Represents a line selection for staging
@@ -740,26 +740,26 @@ pub struct LineSelection {
 /// Stage selected lines from multiple hunks
 /// This builds a custom patch containing only the selected changed lines with proper context
 pub fn git_stage_selected_lines(
-    worktree_path: &str,
+    workspace_path: &str,
     file_path: &str,
     selections: Vec<LineSelection>,
     metadata_lines: Vec<String>,
     hunks: Vec<(String, Vec<String>)>, // (header, lines) for each hunk
 ) -> Result<String, String> {
     let patch = build_selected_lines_patch(file_path, &metadata_lines, &hunks, &selections, false)?;
-    apply_patch(worktree_path, &patch, false)
+    apply_patch(workspace_path, &patch, false)
 }
 
 /// Unstage selected lines
 pub fn git_unstage_selected_lines(
-    worktree_path: &str,
+    workspace_path: &str,
     file_path: &str,
     selections: Vec<LineSelection>,
     metadata_lines: Vec<String>,
     hunks: Vec<(String, Vec<String>)>,
 ) -> Result<String, String> {
     let patch = build_selected_lines_patch(file_path, &metadata_lines, &hunks, &selections, true)?;
-    apply_patch(worktree_path, &patch, true)
+    apply_patch(workspace_path, &patch, true)
 }
 
 /// Build a patch containing only the selected changed lines with proper context
@@ -896,9 +896,9 @@ fn build_selected_lines_patch(
     Ok(patch_parts.join("\n"))
 }
 
-pub fn git_get_file_hunks(worktree_path: &str, file_path: &str) -> Result<Vec<DiffHunk>, String> {
-    let staged_diff = git_diff_for_file(worktree_path, file_path, true)?;
-    let unstaged_diff = git_diff_for_file(worktree_path, file_path, false)?;
+pub fn git_get_file_hunks(workspace_path: &str, file_path: &str) -> Result<Vec<DiffHunk>, String> {
+    let staged_diff = git_diff_for_file(workspace_path, file_path, true)?;
+    let unstaged_diff = git_diff_for_file(workspace_path, file_path, false)?;
 
     let mut hunks = Vec::new();
     hunks.extend(parse_diff_hunks(&staged_diff, file_path, true, "staged", 0));
@@ -914,9 +914,9 @@ pub fn git_get_file_hunks(worktree_path: &str, file_path: &str) -> Result<Vec<Di
     Ok(hunks)
 }
 
-fn git_diff_for_file(worktree_path: &str, file_path: &str, staged: bool) -> Result<String, String> {
+fn git_diff_for_file(workspace_path: &str, file_path: &str, staged: bool) -> Result<String, String> {
     let mut cmd = Command::new("git");
-    cmd.current_dir(worktree_path)
+    cmd.current_dir(workspace_path)
         .arg("diff")
         .arg("--unified=3");
 
@@ -1071,9 +1071,9 @@ fn build_patch(file_path: &str, metadata_lines: &[String], hunk_lines: &[String]
     patch_parts.join("\n")
 }
 
-fn apply_patch(worktree_path: &str, patch: &str, reverse: bool) -> Result<String, String> {
+fn apply_patch(workspace_path: &str, patch: &str, reverse: bool) -> Result<String, String> {
     let mut cmd = Command::new("git");
-    cmd.current_dir(worktree_path).arg("apply").arg("--cached");
+    cmd.current_dir(workspace_path).arg("apply").arg("--cached");
 
     if reverse {
         cmd.arg("--reverse");
@@ -1338,7 +1338,7 @@ fn parse_hunk_header(header: &str) -> (usize, usize) {
 
 /// Get specific lines from a file (for expanding context in diffs)
 pub fn git_get_file_lines(
-    worktree_path: &str,
+    workspace_path: &str,
     file_path: &str,
     is_staged: bool,
     start_line: usize,
@@ -1347,7 +1347,7 @@ pub fn git_get_file_lines(
     let lines = if is_staged {
         // Get staged version using git show
         let output = Command::new("git")
-            .current_dir(worktree_path)
+            .current_dir(workspace_path)
             .args(["show", &format!(":0:{}", file_path)])
             .output()
             .map_err(|e| format!("Failed to execute git show: {}", e))?;
@@ -1359,7 +1359,7 @@ pub fn git_get_file_lines(
         String::from_utf8_lossy(&output.stdout).to_string()
     } else {
         // Get working directory version
-        let full_path = format!("{}/{}", worktree_path, file_path);
+        let full_path = format!("{}/{}", workspace_path, file_path);
         std::fs::read_to_string(&full_path)
             .map_err(|e| format!("Failed to read file: {}", e))?
     };

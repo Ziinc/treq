@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Command } from "cmdk";
-import { Worktree, Session } from "../lib/api";
+import { Workspace, Session } from "../lib/api";
 import {
   Home,
   Settings,
@@ -11,7 +11,7 @@ import {
 
 interface CommandItem {
   id: string;
-  type: "action" | "worktree" | "session";
+  type: "action" | "workspace" | "session";
   label: string;
   description?: string;
   icon: React.ReactNode;
@@ -21,12 +21,12 @@ interface CommandItem {
 interface CommandPaletteProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  worktrees: Worktree[];
+  workspaces: Workspace[];
   sessions: Session[];
   onNavigateToDashboard: () => void;
   onNavigateToSettings: () => void;
-  onOpenWorktreeSession: (worktree: Worktree) => void;
-  onOpenSession: (session: Session, worktree?: Worktree) => void;
+  onOpenWorkspaceSession: (workspace: Workspace) => void;
+  onOpenSession: (session: Session, workspace?: Workspace) => void;
   onOpenBranchSwitcher?: () => void;
   repoPath?: string;
 }
@@ -34,11 +34,11 @@ interface CommandPaletteProps {
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
   open,
   onOpenChange,
-  worktrees,
+  workspaces,
   sessions,
   onNavigateToDashboard,
   onNavigateToSettings,
-  onOpenWorktreeSession,
+  onOpenWorkspaceSession,
   onOpenSession,
   onOpenBranchSwitcher,
   repoPath,
@@ -85,17 +85,17 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       });
     }
 
-    // Worktrees
-    for (const worktree of worktrees) {
-      const worktreeSessions = sessions.filter(s => s.worktree_id === worktree.id);
+    // Workspaces
+    for (const workspace of workspaces) {
+      const workspaceSessions = sessions.filter(s => s.workspace_id === workspace.id);
       result.push({
-        id: `worktree-${worktree.id}`,
-        type: "worktree",
-        label: worktree.branch_name,
-        description: `${worktreeSessions.length} session${worktreeSessions.length !== 1 ? 's' : ''}`,
+        id: `workspace-${workspace.id}`,
+        type: "workspace",
+        label: workspace.branch_name,
+        description: `${workspaceSessions.length} session${workspaceSessions.length !== 1 ? 's' : ''}`,
         icon: <GitBranch className="w-4 h-4" />,
         onSelect: () => {
-          onOpenWorktreeSession(worktree);
+          onOpenWorkspaceSession(workspace);
           onOpenChange(false);
         },
       });
@@ -103,27 +103,27 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
     // Sessions
     for (const session of sessions) {
-      const worktree = worktrees.find(w => w.id === session.worktree_id);
+      const workspace = workspaces.find(w => w.id === session.workspace_id);
       result.push({
         id: `session-${session.id}`,
         type: "session",
         label: session.name,
-        description: worktree ? worktree.branch_name : "Main repo",
+        description: workspace ? workspace.branch_name : "Main repo",
         icon: <Terminal className="w-4 h-4" />,
         onSelect: () => {
-          onOpenSession(session, worktree);
+          onOpenSession(session, workspace);
           onOpenChange(false);
         },
       });
     }
 
     return result;
-  }, [worktrees, sessions, onNavigateToDashboard, onNavigateToSettings, onOpenWorktreeSession, onOpenSession, onOpenBranchSwitcher, onOpenChange, repoPath]);
+  }, [workspaces, sessions, onNavigateToDashboard, onNavigateToSettings, onOpenWorkspaceSession, onOpenSession, onOpenBranchSwitcher, onOpenChange, repoPath]);
 
   // Group items by type
   const groupedByType = useMemo(() => ({
     actions: items.filter(i => i.type === "action"),
-    worktrees: items.filter(i => i.type === "worktree"),
+    workspaces: items.filter(i => i.type === "workspace"),
     sessions: items.filter(i => i.type === "session")
   }), [items]);
 
@@ -178,10 +178,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             </Command.Group>
           )}
 
-          {/* Worktrees Group */}
-          {groupedByType.worktrees.length > 0 && (
-            <Command.Group heading="Worktrees">
-              {groupedByType.worktrees.map(renderItem)}
+          {/* Workspaces Group */}
+          {groupedByType.workspaces.length > 0 && (
+            <Command.Group heading="Workspaces">
+              {groupedByType.workspaces.map(renderItem)}
             </Command.Group>
           )}
 

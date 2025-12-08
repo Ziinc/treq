@@ -7,7 +7,7 @@ mod local_db;
 mod plan_storage;
 mod pty;
 
-use db::{Database, FileView, GitCacheEntry, Session, Worktree};
+use db::{Database, FileView, GitCacheEntry, Session, Workspace};
 use git::{git_init, is_git_repository, BranchListItem, *};
 use git_ops::{
     BranchCommitInfo, BranchDiffFileChange, BranchDiffFileDiff, DiffHunk, LineSelection,
@@ -29,76 +29,77 @@ struct AppState {
 
 // Database commands
 #[tauri::command]
-fn get_worktrees(repo_path: String) -> Result<Vec<Worktree>, String> {
-    local_db::get_worktrees(&repo_path)
+fn get_workspaces(repo_path: String) -> Result<Vec<Workspace>, String> {
+    local_db::get_workspaces(&repo_path)
 }
 
 #[tauri::command]
-fn add_worktree_to_db(
+fn add_workspace_to_db(
     repo_path: String,
-    worktree_path: String,
+    workspace_name: String,
+    workspace_path: String,
     branch_name: String,
     metadata: Option<String>,
 ) -> Result<i64, String> {
-    local_db::add_worktree(&repo_path, worktree_path, branch_name, metadata)
+    local_db::add_workspace(&repo_path, workspace_name, workspace_path, branch_name, metadata)
 }
 
 #[tauri::command]
-fn delete_worktree_from_db(repo_path: String, id: i64) -> Result<(), String> {
+fn delete_workspace_from_db(repo_path: String, id: i64) -> Result<(), String> {
     // Cascade delete sessions (handled by DB foreign key constraint)
-    local_db::delete_worktree(&repo_path, id)
+    local_db::delete_workspace(&repo_path, id)
 }
 
 #[tauri::command]
-fn toggle_worktree_pin(repo_path: String, id: i64) -> Result<bool, String> {
-    local_db::toggle_worktree_pin(&repo_path, id)
+fn toggle_workspace_pin(repo_path: String, id: i64) -> Result<bool, String> {
+    local_db::toggle_workspace_pin(&repo_path, id)
 }
 
 #[tauri::command]
-fn rebuild_worktrees(repo_path: String) -> Result<Vec<Worktree>, String> {
-    local_db::rebuild_worktrees_from_filesystem(&repo_path)
+fn rebuild_workspaces(repo_path: String) -> Result<Vec<Workspace>, String> {
+    local_db::rebuild_workspaces_from_filesystem(&repo_path)
 }
 
 #[tauri::command]
 fn get_git_cache(
     state: State<AppState>,
-    worktree_path: String,
+    workspace_path: String,
     file_path: Option<String>,
     cache_type: String,
 ) -> Result<Option<GitCacheEntry>, String> {
     let db = state.db.lock().unwrap();
-    db.get_git_cache(&worktree_path, file_path.as_deref(), &cache_type)
+    db.get_git_cache(&workspace_path, file_path.as_deref(), &cache_type)
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn set_git_cache(
     state: State<AppState>,
-    worktree_path: String,
+    workspace_path: String,
     file_path: Option<String>,
     cache_type: String,
     data: String,
 ) -> Result<(), String> {
     let db = state.db.lock().unwrap();
-    db.set_git_cache(&worktree_path, file_path.as_deref(), &cache_type, &data)
+    db.set_git_cache(&workspace_path, file_path.as_deref(), &cache_type, &data)
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn invalidate_git_cache(state: State<AppState>, worktree_path: String) -> Result<(), String> {
+fn invalidate_git_cache(state: State<AppState>, workspace_path: String) -> Result<(), String> {
     let db = state.db.lock().unwrap();
-    db.invalidate_git_cache(&worktree_path)
+    db.invalidate_git_cache(&workspace_path)
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn preload_worktree_git_data(state: State<AppState>, worktree_path: String) -> Result<(), String> {
-    let changed_files = git_ops::git_get_changed_files(&worktree_path)?;
+fn preload_workspace_git_data(state: State<AppState>, workspace_path: String) -> Result<(), String> {
+    let changed_files = git_ops::git_get_changed_files(&workspace_path)?;
     let serialized_changes = serde_json::to_string(&changed_files).map_err(|e| e.to_string())?;
 
     {
         let db = state.db.lock().unwrap();
-        db.set_git_cache(&worktree_path, None, "changed_files", &serialized_changes)
+        db.set_git_cache(&workspace_path, None, "changed_files", &serialized_changes)
             .map_err(|e| e.to_string())?;
     }
 
@@ -108,13 +109,13 @@ fn preload_worktree_git_data(state: State<AppState>, worktree_path: String) -> R
         .collect();
 
     for path in file_paths {
-        match git_ops::git_get_file_hunks(&worktree_path, &path) {
+        match git_ops::git_get_file_hunks(&workspace_path, &path) {
             Ok(hunks) => match serde_json::to_string(&hunks) {
                 Ok(serialized_hunks) => {
                     let cache_result = {
                         let db = state.db.lock().unwrap();
                         db.set_git_cache(
-                            &worktree_path,
+                            &workspace_path,
                             Some(&path),
                             "file_hunks",
                             &serialized_hunks,
@@ -172,12 +173,13 @@ fn set_repo_setting(
         .map_err(|e| e.to_string())
 }
 
-// Git commands
+// JJ Workspace commands
 #[tauri::command]
-fn git_create_worktree(
+fn jj_create_workspace(
     state: State<AppState>,
     app: AppHandle,
     repo_path: String,
+    workspace_name: String,
     branch: String,
     new_branch: bool,
     source_branch: Option<String>,
@@ -200,13 +202,35 @@ fn git_create_worktree(
             })
     };
 
-    create_worktree(
+    jj::create_workspace(
         &repo_path,
+        &workspace_name,
         &branch,
         new_branch,
         source_branch.as_deref(),
         inclusion_patterns,
     )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn jj_list_workspaces(
+    state: State<AppState>,
+    app: AppHandle,
+    repo_path: String,
+) -> Result<Vec<jj::WorkspaceInfo>, String> {
+    ensure_repo_ready(&state, &app, &repo_path)?;
+    jj::list_workspaces(&repo_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn jj_remove_workspace(repo_path: String, workspace_path: String) -> Result<(), String> {
+    jj::remove_workspace(&repo_path, &workspace_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn jj_get_workspace_info(workspace_path: String) -> Result<jj::WorkspaceInfo, String> {
+    jj::get_workspace_info(&workspace_path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -221,57 +245,42 @@ fn git_get_current_branch(
 
 #[tauri::command]
 fn git_execute_post_create_command(
-    worktree_path: String,
+    workspace_path: String,
     command: String,
 ) -> Result<String, String> {
-    git::execute_post_create_command(&worktree_path, &command)
+    git::execute_post_create_command(&workspace_path, &command)
 }
 
 #[tauri::command]
-fn git_list_worktrees(
-    state: State<AppState>,
-    app: AppHandle,
-    repo_path: String,
-) -> Result<Vec<WorktreeInfo>, String> {
-    ensure_repo_ready(&state, &app, &repo_path)?;
-    list_worktrees(&repo_path)
-}
-
-#[tauri::command]
-fn git_remove_worktree(repo_path: String, worktree_path: String) -> Result<String, String> {
-    remove_worktree(&repo_path, &worktree_path)
-}
-
-#[tauri::command]
-fn git_get_status(worktree_path: String) -> Result<GitStatus, String> {
+fn git_get_status(workspace_path: String) -> Result<GitStatus, String> {
     // Try git2 first (faster), fallback to subprocess if it fails
-    git2_ops::get_status_git2(&worktree_path)
-        .or_else(|_| get_git_status(&worktree_path))
+    git2_ops::get_status_git2(&workspace_path)
+        .or_else(|_| get_git_status(&workspace_path))
 }
 
 #[tauri::command]
-fn git_get_branch_info(worktree_path: String) -> Result<BranchInfo, String> {
+fn git_get_branch_info(workspace_path: String) -> Result<BranchInfo, String> {
     // Try git2 first (faster), fallback to subprocess if it fails
-    git2_ops::get_branch_info_git2(&worktree_path)
-        .or_else(|_| get_branch_info(&worktree_path))
+    git2_ops::get_branch_info_git2(&workspace_path)
+        .or_else(|_| get_branch_info(&workspace_path))
 }
 
 #[tauri::command]
 fn git_get_branch_divergence(
-    worktree_path: String,
+    workspace_path: String,
     base_branch: String,
 ) -> Result<BranchDivergence, String> {
     // Try git2 first (faster), fallback to subprocess if it fails
-    git2_ops::get_divergence_git2(&worktree_path, &base_branch)
-        .or_else(|_| get_branch_divergence(&worktree_path, &base_branch))
+    git2_ops::get_divergence_git2(&workspace_path, &base_branch)
+        .or_else(|_| get_branch_divergence(&workspace_path, &base_branch))
 }
 
 #[tauri::command]
 fn git_get_line_diff_stats(
-    worktree_path: String,
+    workspace_path: String,
     base_branch: String,
 ) -> Result<git_ops::LineDiffStats, String> {
-    git_ops::git_get_line_diff_stats(&worktree_path, &base_branch)
+    git_ops::git_get_line_diff_stats(&workspace_path, &base_branch)
 }
 
 #[tauri::command]
@@ -357,32 +366,32 @@ fn git_merge(
 }
 
 #[tauri::command]
-fn git_discard_all_changes(worktree_path: String) -> Result<String, String> {
-    git_ops::git_discard_all_changes(&worktree_path)
+fn git_discard_all_changes(workspace_path: String) -> Result<String, String> {
+    git_ops::git_discard_all_changes(&workspace_path)
 }
 
 #[tauri::command]
-fn git_discard_files(worktree_path: String, file_paths: Vec<String>) -> Result<String, String> {
-    git_ops::git_discard_files(&worktree_path, file_paths)
+fn git_discard_files(workspace_path: String, file_paths: Vec<String>) -> Result<String, String> {
+    git_ops::git_discard_files(&workspace_path, file_paths)
 }
 
 #[tauri::command]
-fn git_has_uncommitted_changes(worktree_path: String) -> Result<bool, String> {
-    git_ops::has_uncommitted_changes(&worktree_path)
+fn git_has_uncommitted_changes(workspace_path: String) -> Result<bool, String> {
+    git_ops::has_uncommitted_changes(&workspace_path)
 }
 
 #[tauri::command]
 fn git_stash_push_files(
-    worktree_path: String,
+    workspace_path: String,
     file_paths: Vec<String>,
     message: String,
 ) -> Result<String, String> {
-    git::git_stash_push_files(&worktree_path, file_paths, &message)
+    git::git_stash_push_files(&workspace_path, file_paths, &message)
 }
 
 #[tauri::command]
-fn git_stash_pop(worktree_path: String) -> Result<String, String> {
-    git::git_stash_pop(&worktree_path)
+fn git_stash_pop(workspace_path: String) -> Result<String, String> {
+    git::git_stash_pop(&workspace_path)
 }
 
 // PTY commands
@@ -500,58 +509,58 @@ fn list_directory(path: String) -> Result<Vec<DirectoryEntry>, String> {
 
 // Git operations
 #[tauri::command]
-fn git_commit(worktree_path: String, message: String) -> Result<String, String> {
-    git_ops::git_commit(&worktree_path, &message)
+fn git_commit(workspace_path: String, message: String) -> Result<String, String> {
+    git_ops::git_commit(&workspace_path, &message)
 }
 
 #[tauri::command]
-fn git_add_all(worktree_path: String) -> Result<String, String> {
-    git_ops::git_add_all(&worktree_path)
+fn git_add_all(workspace_path: String) -> Result<String, String> {
+    git_ops::git_add_all(&workspace_path)
 }
 
 #[tauri::command]
-fn git_unstage_all(worktree_path: String) -> Result<String, String> {
-    git_ops::git_unstage_all(&worktree_path)
+fn git_unstage_all(workspace_path: String) -> Result<String, String> {
+    git_ops::git_unstage_all(&workspace_path)
 }
 
 #[tauri::command]
-fn git_push(worktree_path: String) -> Result<String, String> {
-    git_ops::git_push(&worktree_path)
+fn git_push(workspace_path: String) -> Result<String, String> {
+    git_ops::git_push(&workspace_path)
 }
 
 #[tauri::command]
-fn git_push_force(worktree_path: String) -> Result<String, String> {
-    git_ops::git_push_force(&worktree_path)
+fn git_push_force(workspace_path: String) -> Result<String, String> {
+    git_ops::git_push_force(&workspace_path)
 }
 
 #[tauri::command]
-fn git_commit_amend(worktree_path: String, message: String) -> Result<String, String> {
-    git_ops::git_commit_amend(&worktree_path, &message)
+fn git_commit_amend(workspace_path: String, message: String) -> Result<String, String> {
+    git_ops::git_commit_amend(&workspace_path, &message)
 }
 
 #[tauri::command]
-fn git_pull(worktree_path: String) -> Result<String, String> {
-    git_ops::git_pull(&worktree_path)
+fn git_pull(workspace_path: String) -> Result<String, String> {
+    git_ops::git_pull(&workspace_path)
 }
 
 #[tauri::command]
-fn git_fetch(worktree_path: String) -> Result<String, String> {
-    git_ops::git_fetch(&worktree_path)
+fn git_fetch(workspace_path: String) -> Result<String, String> {
+    git_ops::git_fetch(&workspace_path)
 }
 
 #[tauri::command]
-fn git_stage_file(worktree_path: String, file_path: String) -> Result<String, String> {
-    git_ops::git_stage_file(&worktree_path, &file_path)
+fn git_stage_file(workspace_path: String, file_path: String) -> Result<String, String> {
+    git_ops::git_stage_file(&workspace_path, &file_path)
 }
 
 #[tauri::command]
-fn git_unstage_file(worktree_path: String, file_path: String) -> Result<String, String> {
-    git_ops::git_unstage_file(&worktree_path, &file_path)
+fn git_unstage_file(workspace_path: String, file_path: String) -> Result<String, String> {
+    git_ops::git_unstage_file(&workspace_path, &file_path)
 }
 
 #[tauri::command]
-fn git_get_changed_files(worktree_path: String) -> Result<Vec<String>, String> {
-    git_ops::git_get_changed_files(&worktree_path)
+fn git_get_changed_files(workspace_path: String) -> Result<Vec<String>, String> {
+    git_ops::git_get_changed_files(&workspace_path)
 }
 
 fn extract_path_from_status_entry(entry: &str) -> Option<String> {
@@ -576,41 +585,41 @@ fn extract_path_from_status_entry(entry: &str) -> Option<String> {
 }
 
 #[tauri::command]
-fn git_stage_hunk(worktree_path: String, patch: String) -> Result<String, String> {
-    git_ops::git_stage_hunk(&worktree_path, &patch)
+fn git_stage_hunk(workspace_path: String, patch: String) -> Result<String, String> {
+    git_ops::git_stage_hunk(&workspace_path, &patch)
 }
 
 #[tauri::command]
-fn git_unstage_hunk(worktree_path: String, patch: String) -> Result<String, String> {
-    git_ops::git_unstage_hunk(&worktree_path, &patch)
+fn git_unstage_hunk(workspace_path: String, patch: String) -> Result<String, String> {
+    git_ops::git_unstage_hunk(&workspace_path, &patch)
 }
 
 #[tauri::command]
-fn git_get_file_hunks(worktree_path: String, file_path: String) -> Result<Vec<DiffHunk>, String> {
-    git_ops::git_get_file_hunks(&worktree_path, &file_path)
+fn git_get_file_hunks(workspace_path: String, file_path: String) -> Result<Vec<DiffHunk>, String> {
+    git_ops::git_get_file_hunks(&workspace_path, &file_path)
 }
 
 #[tauri::command]
 fn git_get_file_lines(
-    worktree_path: String,
+    workspace_path: String,
     file_path: String,
     is_staged: bool,
     start_line: usize,
     end_line: usize,
 ) -> Result<git_ops::FileLines, String> {
-    git_ops::git_get_file_lines(&worktree_path, &file_path, is_staged, start_line, end_line)
+    git_ops::git_get_file_lines(&workspace_path, &file_path, is_staged, start_line, end_line)
 }
 
 #[tauri::command]
 fn git_stage_selected_lines(
-    worktree_path: String,
+    workspace_path: String,
     file_path: String,
     selections: Vec<LineSelection>,
     metadata_lines: Vec<String>,
     hunks: Vec<(String, Vec<String>)>,
 ) -> Result<String, String> {
     git_ops::git_stage_selected_lines(
-        &worktree_path,
+        &workspace_path,
         &file_path,
         selections,
         metadata_lines,
@@ -620,14 +629,14 @@ fn git_stage_selected_lines(
 
 #[tauri::command]
 fn git_unstage_selected_lines(
-    worktree_path: String,
+    workspace_path: String,
     file_path: String,
     selections: Vec<LineSelection>,
     metadata_lines: Vec<String>,
     hunks: Vec<(String, Vec<String>)>,
 ) -> Result<String, String> {
     git_ops::git_unstage_selected_lines(
-        &worktree_path,
+        &workspace_path,
         &file_path,
         selections,
         metadata_lines,
@@ -639,27 +648,27 @@ fn git_unstage_selected_lines(
 #[tauri::command]
 fn save_executed_plan_command(
     repo_path: String,
-    worktree_id: i64,
+    workspace_id: i64,
     plan_data: PlanHistoryInput,
 ) -> Result<i64, String> {
-    local_db::save_executed_plan(&repo_path, worktree_id, plan_data)
+    local_db::save_executed_plan(&repo_path, workspace_id, plan_data)
 }
 
 #[tauri::command]
-fn get_worktree_plans_command(
+fn get_workspace_plans_command(
     repo_path: String,
-    worktree_id: i64,
+    workspace_id: i64,
     limit: Option<i64>,
 ) -> Result<Vec<PlanHistoryEntry>, String> {
-    local_db::get_worktree_plans(&repo_path, worktree_id, limit)
+    local_db::get_workspace_plans(&repo_path, workspace_id, limit)
 }
 
 #[tauri::command]
-fn get_all_worktree_plans_command(
+fn get_all_workspace_plans_command(
     repo_path: String,
-    worktree_id: i64,
+    workspace_id: i64,
 ) -> Result<Vec<PlanHistoryEntry>, String> {
-    local_db::get_all_worktree_plans(&repo_path, worktree_id)
+    local_db::get_all_workspace_plans(&repo_path, workspace_id)
 }
 
 // Plan storage commands
@@ -692,11 +701,11 @@ fn delete_plan_file(repo_path: String, plan_id: String) -> Result<(), String> {
 #[tauri::command]
 fn create_session(
     repo_path: String,
-    worktree_id: Option<i64>,
+    workspace_id: Option<i64>,
     name: String,
     plan_title: Option<String>,
 ) -> Result<i64, String> {
-    local_db::add_session(&repo_path, worktree_id, name, plan_title)
+    local_db::add_session(&repo_path, workspace_id, name, plan_title)
 }
 
 #[tauri::command]
@@ -733,40 +742,40 @@ fn set_session_model(repo_path: String, id: i64, model: Option<String>) -> Resul
 #[tauri::command]
 fn mark_file_viewed(
     state: State<AppState>,
-    worktree_path: String,
+    workspace_path: String,
     file_path: String,
     content_hash: String,
 ) -> Result<(), String> {
     let db = state.db.lock().unwrap();
-    db.mark_file_viewed(&worktree_path, &file_path, &content_hash)
+    db.mark_file_viewed(&workspace_path, &file_path, &content_hash)
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn unmark_file_viewed(
     state: State<AppState>,
-    worktree_path: String,
+    workspace_path: String,
     file_path: String,
 ) -> Result<(), String> {
     let db = state.db.lock().unwrap();
-    db.unmark_file_viewed(&worktree_path, &file_path)
+    db.unmark_file_viewed(&workspace_path, &file_path)
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn get_viewed_files(
     state: State<AppState>,
-    worktree_path: String,
+    workspace_path: String,
 ) -> Result<Vec<FileView>, String> {
     let db = state.db.lock().unwrap();
-    db.get_viewed_files(&worktree_path)
+    db.get_viewed_files(&workspace_path)
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn clear_all_viewed_files(state: State<AppState>, worktree_path: String) -> Result<(), String> {
+fn clear_all_viewed_files(state: State<AppState>, workspace_path: String) -> Result<(), String> {
     let db = state.db.lock().unwrap();
-    db.clear_all_viewed_files(&worktree_path)
+    db.clear_all_viewed_files(&workspace_path)
         .map_err(|e| e.to_string())
 }
 
@@ -1063,11 +1072,11 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            get_worktrees,
-            add_worktree_to_db,
-            delete_worktree_from_db,
-            toggle_worktree_pin,
-            rebuild_worktrees,
+            get_workspaces,
+            add_workspace_to_db,
+            delete_workspace_from_db,
+            toggle_workspace_pin,
+            rebuild_workspaces,
             get_setting,
             set_setting,
             get_repo_setting,
@@ -1075,12 +1084,15 @@ pub fn run() {
             get_git_cache,
             set_git_cache,
             invalidate_git_cache,
-            preload_worktree_git_data,
-            git_create_worktree,
+            preload_workspace_git_data,
+            jj_create_workspace,
+            jj_list_workspaces,
+            jj_remove_workspace,
+            jj_get_workspace_info,
+            jj_is_workspace,
+            jj_init,
             git_get_current_branch,
             git_execute_post_create_command,
-            git_list_worktrees,
-            git_remove_worktree,
             git_get_status,
             git_get_branch_info,
             git_get_branch_divergence,
@@ -1125,8 +1137,8 @@ pub fn run() {
             read_file,
             list_directory,
             save_executed_plan_command,
-            get_worktree_plans_command,
-            get_all_worktree_plans_command,
+            get_workspace_plans_command,
+            get_all_workspace_plans_command,
             save_plan_to_file,
             load_plans_from_files,
             get_plan_file,

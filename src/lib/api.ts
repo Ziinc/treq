@@ -3,10 +3,11 @@ import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { PlanHistoryEntry, PlanHistoryPayload } from "../types/planHistory";
 
-export interface Worktree {
+export interface Workspace {
   id: number;
   repo_path: string;
-  worktree_path: string;
+  workspace_name: string;
+  workspace_path: string;
   branch_name: string;
   created_at: string;
   metadata?: string;
@@ -15,7 +16,7 @@ export interface Worktree {
 
 export interface Session {
   id: number;
-  worktree_id: number | null;
+  workspace_id: number | null;
   name: string;
   created_at: string;
   last_accessed: string;
@@ -25,11 +26,18 @@ export interface Session {
 
 export interface GitCacheEntry {
   id: number;
-  worktree_path: string;
+  workspace_path: string;
   file_path: string | null;
   cache_type: string;
   data: string;
   updated_at: string;
+}
+
+export interface WorkspaceInfo {
+  name: string;
+  path: string;
+  branch: string;
+  is_colocated: boolean;
 }
 
 export interface GitStatus {
@@ -111,12 +119,6 @@ export interface BranchCommitInfo {
 
 export type MergeStrategy = "regular" | "squash" | "no_ff" | "ff_only";
 
-export interface WorktreeInfo {
-  path: string;
-  branch: string;
-  commit: string;
-}
-
 export interface DirectoryEntry {
   name: string;
   path: string;
@@ -124,25 +126,26 @@ export interface DirectoryEntry {
 }
 
 // Database API
-export const getWorktrees = (repo_path: string): Promise<Worktree[]> =>
-  invoke("get_worktrees", { repoPath: repo_path });
+export const getWorkspaces = (repo_path: string): Promise<Workspace[]> =>
+  invoke("get_workspaces", { repoPath: repo_path });
 
-export const rebuildWorktrees = (repo_path: string): Promise<Worktree[]> =>
-  invoke("rebuild_worktrees", { repoPath: repo_path });
+export const rebuildWorkspaces = (repo_path: string): Promise<Workspace[]> =>
+  invoke("rebuild_workspaces", { repoPath: repo_path });
 
-export const addWorktreeToDb = (
+export const addWorkspaceToDb = (
   repo_path: string,
-  worktree_path: string,
+  workspace_name: string,
+  workspace_path: string,
   branch_name: string,
   metadata?: string
 ): Promise<number> =>
-  invoke("add_worktree_to_db", { repoPath: repo_path, worktreePath: worktree_path, branchName: branch_name, metadata });
+  invoke("add_workspace_to_db", { repoPath: repo_path, workspaceName: workspace_name, workspacePath: workspace_path, branchName: branch_name, metadata });
 
-export const deleteWorktreeFromDb = (repo_path: string, id: number): Promise<void> =>
-  invoke("delete_worktree_from_db", { repoPath: repo_path, id });
+export const deleteWorkspaceFromDb = (repo_path: string, id: number): Promise<void> =>
+  invoke("delete_workspace_from_db", { repoPath: repo_path, id });
 
-export const toggleWorktreePin = (repo_path: string, id: number): Promise<boolean> =>
-  invoke("toggle_worktree_pin", { repoPath: repo_path, id });
+export const toggleWorkspacePin = (repo_path: string, id: number): Promise<boolean> =>
+  invoke("toggle_workspace_pin", { repoPath: repo_path, id });
 
 export const getSetting = (key: string): Promise<string | null> =>
   invoke("get_setting", { key });
@@ -157,86 +160,95 @@ export const setRepoSetting = (repo_path: string, key: string, value: string): P
   invoke("set_repo_setting", { repoPath: repo_path, key, value });
 
 export const getGitCache = (
-  worktree_path: string,
+  workspace_path: string,
   cache_type: "changed_files" | "file_hunks",
   file_path?: string
 ): Promise<GitCacheEntry | null> =>
   invoke("get_git_cache", {
-    worktreePath: worktree_path,
+    workspacePath: workspace_path,
     cacheType: cache_type,
     ...(file_path ? { filePath: file_path } : {}),
   });
 
 export const setGitCache = (
-  worktree_path: string,
+  workspace_path: string,
   cache_type: "changed_files" | "file_hunks",
   data: unknown,
   file_path?: string
 ): Promise<void> => {
   const serialized = typeof data === "string" ? data : JSON.stringify(data);
   return invoke("set_git_cache", {
-    worktreePath: worktree_path,
+    workspacePath: workspace_path,
     cacheType: cache_type,
     data: serialized,
     ...(file_path ? { filePath: file_path } : {}),
   });
 };
 
-export const invalidateGitCache = (worktree_path: string): Promise<void> =>
-  invoke("invalidate_git_cache", { worktreePath: worktree_path });
+export const invalidateGitCache = (workspace_path: string): Promise<void> =>
+  invoke("invalidate_git_cache", { workspacePath: workspace_path });
 
-export const preloadWorktreeGitData = (worktree_path: string): Promise<void> =>
-  invoke("preload_worktree_git_data", { worktreePath: worktree_path });
+export const preloadWorkspaceGitData = (workspace_path: string): Promise<void> =>
+  invoke("preload_workspace_git_data", { workspacePath: workspace_path });
 
-// Git API
-export const gitCreateWorktree = (
+// JJ Workspace API
+export const jjCreateWorkspace = (
   repo_path: string,
+  workspace_name: string,
   branch: string,
   new_branch: boolean,
   source_branch?: string
 ): Promise<string> =>
-  invoke("git_create_worktree", {
+  invoke("jj_create_workspace", {
     repoPath: repo_path,
+    workspaceName: workspace_name,
     branch,
     newBranch: new_branch,
     sourceBranch: source_branch ?? null,
   });
 
+export const jjListWorkspaces = (repo_path: string): Promise<WorkspaceInfo[]> =>
+  invoke("jj_list_workspaces", { repoPath: repo_path });
+
+export const jjRemoveWorkspace = (repo_path: string, workspace_path: string): Promise<void> =>
+  invoke("jj_remove_workspace", { repoPath: repo_path, workspacePath: workspace_path });
+
+export const jjGetWorkspaceInfo = (workspace_path: string): Promise<WorkspaceInfo> =>
+  invoke("jj_get_workspace_info", { workspacePath: workspace_path });
+
+export const jjIsWorkspace = (repo_path: string): Promise<boolean> =>
+  invoke("jj_is_workspace", { repoPath: repo_path });
+
+// Git API
 export const gitGetCurrentBranch = (repo_path: string): Promise<string> =>
   invoke("git_get_current_branch", { repoPath: repo_path });
 
 export const gitExecutePostCreateCommand = (
-  worktree_path: string,
+  workspace_path: string,
   command: string
 ): Promise<string> =>
   invoke("git_execute_post_create_command", {
-    worktreePath: worktree_path,
+    workspacePath: workspace_path,
     command,
   });
 
-export const gitListWorktrees = (repo_path: string): Promise<WorktreeInfo[]> =>
-  invoke("git_list_worktrees", { repoPath: repo_path });
+export const gitGetStatus = (workspace_path: string): Promise<GitStatus> =>
+  invoke("git_get_status", { workspacePath: workspace_path });
 
-export const gitRemoveWorktree = (repo_path: string, worktree_path: string): Promise<string> =>
-  invoke("git_remove_worktree", { repoPath: repo_path, worktreePath: worktree_path });
-
-export const gitGetStatus = (worktree_path: string): Promise<GitStatus> =>
-  invoke("git_get_status", { worktreePath: worktree_path });
-
-export const gitGetBranchInfo = (worktree_path: string): Promise<BranchInfo> =>
-  invoke("git_get_branch_info", { worktreePath: worktree_path });
+export const gitGetBranchInfo = (workspace_path: string): Promise<BranchInfo> =>
+  invoke("git_get_branch_info", { workspacePath: workspace_path });
 
 export const gitGetBranchDivergence = (
-  worktree_path: string,
+  workspace_path: string,
   base_branch: string
 ): Promise<BranchDivergence> =>
-  invoke("git_get_branch_divergence", { worktreePath: worktree_path, baseBranch: base_branch });
+  invoke("git_get_branch_divergence", { workspacePath: workspace_path, baseBranch: base_branch });
 
 export const gitGetLineDiffStats = (
-  worktree_path: string,
+  workspace_path: string,
   base_branch: string
 ): Promise<LineDiffStats> =>
-  invoke("git_get_line_diff_stats", { worktreePath: worktree_path, baseBranch: base_branch });
+  invoke("git_get_line_diff_stats", { workspacePath: workspace_path, baseBranch: base_branch });
 
 export const gitGetDiffBetweenBranches = (
   repo_path: string,
@@ -265,18 +277,18 @@ export const gitGetCommitsBetweenBranches = (
     ...(typeof limit === "number" ? { limit } : {}),
   });
 
-export const gitGetFileHunks = (worktree_path: string, file_path: string): Promise<GitDiffHunk[]> =>
-  invoke("git_get_file_hunks", { worktreePath: worktree_path, filePath: file_path });
+export const gitGetFileHunks = (workspace_path: string, file_path: string): Promise<GitDiffHunk[]> =>
+  invoke("git_get_file_hunks", { workspacePath: workspace_path, filePath: file_path });
 
 export const gitGetFileLines = (
-  worktreePath: string,
+  workspacePath: string,
   filePath: string,
   isStaged: boolean,
   startLine: number,
   endLine: number
 ): Promise<FileLines> =>
   invoke("git_get_file_lines", {
-    worktreePath,
+    workspacePath,
     filePath,
     isStaged,
     startLine,
@@ -316,24 +328,24 @@ export const gitMerge = (
     commitMessage: commitMessage && commitMessage.trim() ? commitMessage : undefined,
   });
 
-export const gitDiscardAllChanges = (worktree_path: string): Promise<string> =>
-  invoke("git_discard_all_changes", { worktreePath: worktree_path });
+export const gitDiscardAllChanges = (workspace_path: string): Promise<string> =>
+  invoke("git_discard_all_changes", { workspacePath: workspace_path });
 
-export const gitDiscardFiles = (worktree_path: string, file_paths: string[]): Promise<string> =>
-  invoke("git_discard_files", { worktreePath: worktree_path, filePaths: file_paths });
+export const gitDiscardFiles = (workspace_path: string, file_paths: string[]): Promise<string> =>
+  invoke("git_discard_files", { workspacePath: workspace_path, filePaths: file_paths });
 
-export const gitHasUncommittedChanges = (worktree_path: string): Promise<boolean> =>
-  invoke("git_has_uncommitted_changes", { worktreePath: worktree_path });
+export const gitHasUncommittedChanges = (workspace_path: string): Promise<boolean> =>
+  invoke("git_has_uncommitted_changes", { workspacePath: workspace_path });
 
 export const gitStashPushFiles = (
-  worktree_path: string,
+  workspace_path: string,
   file_paths: string[],
   message: string
 ): Promise<string> =>
-  invoke("git_stash_push_files", { worktreePath: worktree_path, filePaths: file_paths, message });
+  invoke("git_stash_push_files", { workspacePath: workspace_path, filePaths: file_paths, message });
 
-export const gitStashPop = (worktree_path: string): Promise<string> =>
-  invoke("git_stash_pop", { worktreePath: worktree_path });
+export const gitStashPop = (workspace_path: string): Promise<string> =>
+  invoke("git_stash_pop", { workspacePath: workspace_path });
 
 // PTY API
 export const ptyCreateSession = (
@@ -367,44 +379,44 @@ export const listDirectory = (path: string): Promise<DirectoryEntry[]> =>
   invoke("list_directory", { path });
 
 // Git Operations API
-export const gitCommit = (worktree_path: string, message: string): Promise<string> =>
-  invoke("git_commit", { worktreePath: worktree_path, message });
+export const gitCommit = (workspace_path: string, message: string): Promise<string> =>
+  invoke("git_commit", { workspacePath: workspace_path, message });
 
-export const gitCommitAmend = (worktree_path: string, message: string): Promise<string> =>
-  invoke("git_commit_amend", { worktreePath: worktree_path, message });
+export const gitCommitAmend = (workspace_path: string, message: string): Promise<string> =>
+  invoke("git_commit_amend", { workspacePath: workspace_path, message });
 
-export const gitAddAll = (worktree_path: string): Promise<string> =>
-  invoke("git_add_all", { worktreePath: worktree_path });
+export const gitAddAll = (workspace_path: string): Promise<string> =>
+  invoke("git_add_all", { workspacePath: workspace_path });
 
-export const gitUnstageAll = (worktree_path: string): Promise<string> =>
-  invoke("git_unstage_all", { worktreePath: worktree_path });
+export const gitUnstageAll = (workspace_path: string): Promise<string> =>
+  invoke("git_unstage_all", { workspacePath: workspace_path });
 
-export const gitPush = (worktree_path: string): Promise<string> =>
-  invoke("git_push", { worktreePath: worktree_path });
+export const gitPush = (workspace_path: string): Promise<string> =>
+  invoke("git_push", { workspacePath: workspace_path });
 
-export const gitPushForce = (worktree_path: string): Promise<string> =>
-  invoke("git_push_force", { worktreePath: worktree_path });
+export const gitPushForce = (workspace_path: string): Promise<string> =>
+  invoke("git_push_force", { workspacePath: workspace_path });
 
-export const gitPull = (worktree_path: string): Promise<string> =>
-  invoke("git_pull", { worktreePath: worktree_path });
+export const gitPull = (workspace_path: string): Promise<string> =>
+  invoke("git_pull", { workspacePath: workspace_path });
 
-export const gitFetch = (worktree_path: string): Promise<string> =>
-  invoke("git_fetch", { worktreePath: worktree_path });
+export const gitFetch = (workspace_path: string): Promise<string> =>
+  invoke("git_fetch", { workspacePath: workspace_path });
 
-export const gitStageFile = (worktree_path: string, file_path: string): Promise<string> =>
-  invoke("git_stage_file", { worktreePath: worktree_path, filePath: file_path });
+export const gitStageFile = (workspace_path: string, file_path: string): Promise<string> =>
+  invoke("git_stage_file", { workspacePath: workspace_path, filePath: file_path });
 
-export const gitUnstageFile = (worktree_path: string, file_path: string): Promise<string> =>
-  invoke("git_unstage_file", { worktreePath: worktree_path, filePath: file_path });
+export const gitUnstageFile = (workspace_path: string, file_path: string): Promise<string> =>
+  invoke("git_unstage_file", { workspacePath: workspace_path, filePath: file_path });
 
-export const gitStageHunk = (worktree_path: string, patch: string): Promise<string> =>
-  invoke("git_stage_hunk", { worktreePath: worktree_path, patch });
+export const gitStageHunk = (workspace_path: string, patch: string): Promise<string> =>
+  invoke("git_stage_hunk", { workspacePath: workspace_path, patch });
 
-export const gitUnstageHunk = (worktree_path: string, patch: string): Promise<string> =>
-  invoke("git_unstage_hunk", { worktreePath: worktree_path, patch });
+export const gitUnstageHunk = (workspace_path: string, patch: string): Promise<string> =>
+  invoke("git_unstage_hunk", { workspacePath: workspace_path, patch });
 
-export const gitGetChangedFiles = (worktree_path: string): Promise<string[]> =>
-  invoke("git_get_changed_files", { worktreePath: worktree_path });
+export const gitGetChangedFiles = (workspace_path: string): Promise<string[]> =>
+  invoke("git_get_changed_files", { workspacePath: workspace_path });
 
 // Line selection type for staging individual lines
 export interface LineSelectionPayload {
@@ -414,14 +426,14 @@ export interface LineSelectionPayload {
 }
 
 export const gitStageSelectedLines = (
-  worktree_path: string,
+  workspace_path: string,
   file_path: string,
   selections: LineSelectionPayload[],
   metadata_lines: string[],
   hunks: [string, string[]][]
 ): Promise<string> =>
   invoke("git_stage_selected_lines", {
-    worktreePath: worktree_path,
+    workspacePath: workspace_path,
     filePath: file_path,
     selections,
     metadataLines: metadata_lines,
@@ -429,14 +441,14 @@ export const gitStageSelectedLines = (
   });
 
 export const gitUnstageSelectedLines = (
-  worktree_path: string,
+  workspace_path: string,
   file_path: string,
   selections: LineSelectionPayload[],
   metadata_lines: string[],
   hunks: [string, string[]][]
 ): Promise<string> =>
   invoke("git_unstage_selected_lines", {
-    worktreePath: worktree_path,
+    workspacePath: workspace_path,
     filePath: file_path,
     selections,
     metadataLines: metadata_lines,
@@ -508,35 +520,35 @@ export const loadPlanFromRepo = async (
 // Plan history (.treq/local.db)
 export const saveExecutedPlan = (
   repoPath: string,
-  worktreeId: number,
+  workspaceId: number,
   planData: PlanHistoryPayload
 ): Promise<number> =>
-  invoke("save_executed_plan_command", { repoPath, worktreeId, planData });
+  invoke("save_executed_plan_command", { repoPath, workspaceId, planData });
 
-export const getWorktreePlans = (
+export const getWorkspacePlans = (
   repoPath: string,
-  worktreeId: number,
+  workspaceId: number,
   limit?: number
 ): Promise<PlanHistoryEntry[]> =>
-  invoke("get_worktree_plans_command", {
+  invoke("get_workspace_plans_command", {
     repoPath,
-    worktreeId,
+    workspaceId,
     ...(typeof limit === "number" ? { limit } : {}),
   });
 
-export const getAllWorktreePlans = (
+export const getAllWorkspacePlans = (
   repoPath: string,
-  worktreeId: number
+  workspaceId: number
 ): Promise<PlanHistoryEntry[]> =>
-  invoke("get_all_worktree_plans_command", { repoPath, worktreeId });
+  invoke("get_all_workspace_plans_command", { repoPath, workspaceId });
 
 // File-based plan storage (.treq/plans/*)
 export interface PlanMetadata {
   id: string;
   title: string;
   plan_type: string;
-  worktree_id?: number;
-  worktree_path?: string;
+  workspace_id?: number;
+  workspace_path?: string;
   branch_name?: string;
   timestamp: string;
 }
@@ -546,8 +558,8 @@ export interface PlanFile {
   title: string;
   type: string;
   raw_markdown: string;
-  worktree_id?: number;
-  worktree_path?: string;
+  workspace_id?: number;
+  workspace_path?: string;
   branch_name?: string;
   timestamp: string;
 }
@@ -572,11 +584,11 @@ export const deletePlanFile = (repoPath: string, planId: string): Promise<void> 
 // Session management API
 export const createSession = (
   repo_path: string,
-  worktreeId: number | null,
+  workspaceId: number | null,
   name: string,
   planTitle?: string
 ): Promise<number> =>
-  invoke("create_session", { repoPath: repo_path, worktreeId, name, planTitle });
+  invoke("create_session", { repoPath: repo_path, workspaceId, name, planTitle });
 
 export const getSessions = (repo_path: string): Promise<Session[]> =>
   invoke("get_sessions", { repoPath: repo_path });
@@ -599,27 +611,27 @@ export const setSessionModel = (repo_path: string, id: number, model: string | n
 // File view tracking API
 export interface FileView {
   id: number;
-  worktree_path: string;
+  workspace_path: string;
   file_path: string;
   viewed_at: string;
   content_hash: string;
 }
 
 export const markFileViewed = (
-  worktreePath: string,
+  workspacePath: string,
   filePath: string,
   contentHash: string
 ): Promise<void> =>
-  invoke("mark_file_viewed", { worktreePath, filePath, contentHash });
+  invoke("mark_file_viewed", { workspacePath, filePath, contentHash });
 
 export const unmarkFileViewed = (
-  worktreePath: string,
+  workspacePath: string,
   filePath: string
 ): Promise<void> =>
-  invoke("unmark_file_viewed", { worktreePath, filePath });
+  invoke("unmark_file_viewed", { workspacePath, filePath });
 
-export const getViewedFiles = (worktreePath: string): Promise<FileView[]> =>
-  invoke("get_viewed_files", { worktreePath });
+export const getViewedFiles = (workspacePath: string): Promise<FileView[]> =>
+  invoke("get_viewed_files", { workspacePath });
 
-export const clearAllViewedFiles = (worktreePath: string): Promise<void> =>
-  invoke("clear_all_viewed_files", { worktreePath });
+export const clearAllViewedFiles = (workspacePath: string): Promise<void> =>
+  invoke("clear_all_viewed_files", { workspacePath });

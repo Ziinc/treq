@@ -1,7 +1,7 @@
 export interface ParsedFileChange {
   path: string;
   stagedStatus?: string | null;
-  worktreeStatus?: string | null;
+  workspaceStatus?: string | null;
   isUntracked: boolean;
 }
 
@@ -18,7 +18,7 @@ export const parseChangedFiles = (changedFiles: string[]): ParsedFileChange[] =>
       return {
         path: file.substring(3).trim(),
         stagedStatus: null,
-        worktreeStatus: "??",
+        workspaceStatus: "??",
         isUntracked: true,
       };
     }
@@ -27,20 +27,20 @@ export const parseChangedFiles = (changedFiles: string[]): ParsedFileChange[] =>
       return {
         path: file.trim(),
         stagedStatus: null,
-        worktreeStatus: null,
+        workspaceStatus: null,
         isUntracked: false,
       };
     }
 
     const stagedStatus = file[0] !== " " ? file[0] : null;
-    const worktreeStatus = file[1] !== " " ? file[1] : null;
+    const workspaceStatus = file[1] !== " " ? file[1] : null;
     const rawPath = file.substring(3).trim();
     const path = rawPath.includes(" -> ") ? rawPath.split(" -> ").pop() || rawPath : rawPath;
 
     return {
       path,
       stagedStatus,
-      worktreeStatus,
+      workspaceStatus,
       isUntracked: false,
     };
   });
@@ -52,7 +52,7 @@ export const filterStagedFiles = (files: ParsedFileChange[]): ParsedFileChange[]
 
 export const filterUnstagedFiles = (files: ParsedFileChange[]): ParsedFileChange[] => {
   return files.filter(
-    (file) => (file.worktreeStatus && file.worktreeStatus !== " ") || file.isUntracked
+    (file) => (file.workspaceStatus && file.workspaceStatus !== " ") || file.isUntracked
   );
 };
 
