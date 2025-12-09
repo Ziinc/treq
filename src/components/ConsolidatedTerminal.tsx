@@ -283,27 +283,6 @@ export const ConsolidatedTerminal = forwardRef<
       xterm.attachCustomKeyEventHandler(localHandleKeyEvent);
       xterm.onData(localHandleXtermData);
 
-      // Setup resize observers if visible
-      if (!isHidden && terminalRef.current) {
-        window.addEventListener("resize", localHandleResize);
-        resizeObserverRef.current = new ResizeObserver(localHandleResize);
-        resizeObserverRef.current.observe(terminalRef.current);
-      }
-
-      // Initial fit if visible
-      if (!isHidden && terminalRef.current) {
-        requestAnimationFrame(() => {
-          if (!terminalRef.current || !xtermRef.current) return;
-          const rect = terminalRef.current.getBoundingClientRect();
-          if (rect.width === 0 || rect.height === 0) return;
-          try {
-            fitAddon.fit();
-          } catch (error) {
-            console.warn("Initial fit failed", error);
-          }
-        });
-      }
-
       let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
 
       // Setup PTY
@@ -343,10 +322,6 @@ export const ConsolidatedTerminal = forwardRef<
           idleTimeoutRef.current = null;
         }
 
-        window.removeEventListener("resize", localHandleResize);
-        resizeObserverRef.current?.disconnect();
-        resizeObserverRef.current = null;
-
         unlistenRef.current?.();
         unlistenRef.current = null;
 
@@ -368,8 +343,69 @@ export const ConsolidatedTerminal = forwardRef<
       autoCommand,
       instanceKey,
       idleTimeoutMs,
-      isHidden,
     ]);
+
+    // Separate effect to handle resize observer based on visibility
+    useEffect(() => {
+      if (!terminalRef.current || !xtermRef.current || !fitAddonRef.current) return;
+
+      const xterm = xtermRef.current;
+      const fitAddon = fitAddonRef.current;
+      const terminal = terminalRef.current;
+
+      const handleResize = () => {
+        if (!terminal || !xterm || !fitAddon) return;
+
+        const rect = terminal.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        if (!("buffer" in xterm)) return;
+
+        try {
+          fitAddon.fit();
+          const { rows, cols } = xterm;
+          lastValidDimensionsRef.current = { rows, cols };
+
+          if (isPtyReadyRef.current) {
+            ptyResize(sessionId, rows, cols).catch((error) => {
+              console.error("Resize error:", error);
+            });
+          }
+        } catch (error) {
+          console.warn("Resize failed", error);
+        }
+      };
+
+      if (isHidden) {
+        // Clean up resize observers when hidden
+        window.removeEventListener("resize", handleResize);
+        resizeObserverRef.current?.disconnect();
+        resizeObserverRef.current = null;
+        return;
+      }
+
+      // Set up resize observers when visible
+      window.addEventListener("resize", handleResize);
+      resizeObserverRef.current = new ResizeObserver(handleResize);
+      resizeObserverRef.current.observe(terminal);
+
+      // Initial fit when becoming visible
+      requestAnimationFrame(() => {
+        if (!terminal) return;
+        const rect = terminal.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        try {
+          fitAddon.fit();
+        } catch (error) {
+          console.warn("Initial fit failed", error);
+        }
+      });
+
+      return () => {
+        window.removeEventListener("resize", handleResize);
+        resizeObserverRef.current?.disconnect();
+        resizeObserverRef.current = null;
+      };
+    }, [isHidden, sessionId]);
 
     useImperativeHandle(ref, () => ({
       findNext: (term: string, options?: ISearchOptions) => {
