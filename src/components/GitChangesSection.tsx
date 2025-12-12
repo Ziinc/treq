@@ -12,6 +12,7 @@ export interface GitChangesSectionProps {
   onToggleCollapse: () => void;
   fileActionTarget?: string | null;
   readOnly?: boolean;
+  activeFilePath?: string | null;
   selectedFiles?: Set<string>;
   onFileSelect?: (path: string, event: React.MouseEvent) => void;
   onMoveToWorkspace?: () => void;
@@ -30,6 +31,7 @@ export const GitChangesSection = memo<GitChangesSectionProps>(({
   onToggleCollapse,
   fileActionTarget,
   readOnly = false,
+  activeFilePath,
   selectedFiles,
   onFileSelect,
   onMoveToWorkspace,
@@ -141,6 +143,7 @@ export const GitChangesSection = memo<GitChangesSectionProps>(({
               file={file}
               isStaged={isStaged}
               isSelected={!isStaged && selectedFiles?.has(file.path) || false}
+              isActive={activeFilePath === file.path}
               isBusy={fileActionTarget === file.path}
               readOnly={readOnly}
               onFileClick={onFileSelect}

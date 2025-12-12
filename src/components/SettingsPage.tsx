@@ -335,7 +335,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                     </div>
                   ) : (
                     <div className="text-center py-8 text-muted-foreground">
-                      Please configure a repository path in the Application tab first.
+                      Set repository in Application tab
                     </div>
                   )}
                 </TabsContent>

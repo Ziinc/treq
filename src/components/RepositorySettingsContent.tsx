@@ -119,7 +119,7 @@ export const RepositorySettingsContent: React.FC<RepositorySettingsContentProps>
           className="mt-2"
         />
         <p className="text-xs text-muted-foreground mt-1">
-          Pattern for auto-generating branch names. Use {"{name}"} as placeholder for the sanitized intent/title. Example: "treq/{"{name}"}" → "treq/add-dark-mode"
+          treq/{"{name}"} → treq/add-dark-mode
         </p>
       </div>
 
@@ -153,8 +153,7 @@ export const RepositorySettingsContent: React.FC<RepositorySettingsContentProps>
           className="font-mono text-sm mt-2"
         />
         <p className="text-xs text-muted-foreground mt-1">
-          Glob patterns for .gitignored files/directories to copy to new workspaces (opt-in).
-          One pattern per line. Supports ** for recursive matching. Leave empty to copy nothing.
+          Patterns to copy (e.g., node_modules, .env*)
         </p>
         {availableFiles.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2">

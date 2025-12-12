@@ -30,8 +30,6 @@ interface SessionSidebarProps {
   openSettings?: (tab?: string) => void;
   navigateToDashboard?: () => void;
   onOpenCommandPalette?: () => void;
-  onBrowseFiles?: (workspace: Workspace | null) => void;
-  browsingWorkspaceId?: number | null; // null = browsing main repo, number = browsing that workspace, undefined = not browsing
   currentPage?: 'dashboard' | 'settings' | 'session' | null;
 }
 
@@ -77,8 +75,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
   openSettings,
   navigateToDashboard,
   onOpenCommandPalette,
-  onBrowseFiles,
-  browsingWorkspaceId,
   currentPage,
 }) => {
   const { addToast } = useToast();
@@ -418,7 +414,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
       onClick={() => onSessionClick(session)}
       className={`group relative flex items-center gap-2 px-2 py-1.5 rounded text-xs cursor-pointer transition-colors ${
         activeSessionId === session.id
-          ? "bg-primary/20 text-primary"
+          ? "bg-primary/30 text-primary font-medium border-l-2 border-primary"
           : "hover:bg-muted text-muted-foreground"
       }`}
     >
@@ -453,13 +449,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
       </button>
       <div className="pl-1 pr-2 py-2 space-y-1 min-h-[120px] flex-1 overflow-y-auto">
         <div className="relative flex items-center text-[12px] uppercase tracking-wide px-2 py-1">
-          <span className={`truncate flex items-center ${
-            browsingWorkspaceId === null ? "text-primary" : "text-muted-foreground"
-          }`} title={currentBranch || "Main"}>
+          <span className="truncate flex items-center text-muted-foreground" title={currentBranch || "Main"}>
             {currentBranch || "main"}
           </span>
           {repoPath && <StatusPill path={repoPath} />}
-          <div className="absolute right-2 flex items-center gap-1 pl-4 bg-gradient-to-l from-sidebar from-60% transition-opacity duration-200">
+          <div className="absolute right-2 flex items-center gap-1 pl-4 bg-gradient-to-l from-sidebar from-60% opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200">
             {onCreateSession && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -480,7 +474,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <DropdownMenuTrigger asChild>
-                      <button className="transition-opacity p-1 rounded hover:bg-muted" aria-label={`Open repository in ${fileManagerLabel}`}>
+                      <button className="p-1 rounded hover:bg-muted" aria-label={`Open repository in ${fileManagerLabel}`}>
                         <MoreVertical className="w-3 h-3" />
                       </button>
                     </DropdownMenuTrigger>
@@ -497,17 +491,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       New Session
-                    </DropdownMenuItem>
-                  )}
-                  {onBrowseFiles && (
-                    <DropdownMenuItem
-                      onSelect={(event) => {
-                        event.preventDefault();
-                        onBrowseFiles(null);
-                      }}
-                    >
-                      <FolderOpen className="w-4 h-4 mr-2" />
-                      Browse files
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem
@@ -549,7 +532,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
                     <DropdownMenuTrigger asChild>
                       <button
                         type="button"
-                        className="p-1 rounded hover:bg-muted"
+                        className="p-1 rounded hover:bg-muted opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200"
                         aria-label="New workspace"
                       >
                         <Plus className="w-3 h-3" />
@@ -575,7 +558,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
           </div>
           {workspaces.map((workspace) => {
             const sessionsForWorkspace = sessionsByWorkspace.get(workspace.id) || [];
-            const isBrowsingThisWorkspace = browsingWorkspaceId === workspace.id;
             return (
               <div key={workspace.id} className="space-y-1">
                 <div className="relative flex items-center text-[12px] uppercase tracking-wide px-2 pt-1">
@@ -583,16 +565,13 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
                     <Pin className="w-3 h-3 mr-1 text-muted-foreground" />
                   )}
                   <span
-                    className={`truncate flex items-center cursor-pointer transition-colors ${
-                      isBrowsingThisWorkspace ? "text-primary" : "text-muted-foreground hover:text-foreground"
-                    }`}
+                    className="truncate flex items-center text-muted-foreground"
                     title={getWorkspaceTitle(workspace.id)}
-                    onClick={() => onBrowseFiles?.(workspace)}
                   >
                     {getWorkspaceTitle(workspace.id)}
                   </span>
                   <StatusPill path={workspace.workspace_path} />
-                  <div className="absolute right-2 flex items-center gap-1 pl-4 bg-gradient-to-l from-sidebar from-60% transition-opacity duration-200">
+                  <div className="absolute right-2 flex items-center gap-1 pl-4 bg-gradient-to-l from-sidebar from-60% opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200">
                     {onCreateSession && (
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -612,7 +591,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <DropdownMenuTrigger asChild>
-                            <button className="transition-opacity p-1 rounded hover:bg-muted" aria-label="Workspace actions">
+                            <button className="p-1 rounded hover:bg-muted" aria-label="Workspace actions">
                               <MoreVertical className="w-3 h-3" />
                             </button>
                           </DropdownMenuTrigger>
@@ -629,17 +608,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = memo(({
                           >
                             <Plus className="w-4 h-4 mr-2" />
                             New Session
-                          </DropdownMenuItem>
-                        )}
-                        {onBrowseFiles && (
-                          <DropdownMenuItem
-                            onSelect={(event) => {
-                              event.preventDefault();
-                              onBrowseFiles(workspace);
-                            }}
-                          >
-                            <FolderOpen className="w-4 h-4 mr-2" />
-                            Browse files
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuItem

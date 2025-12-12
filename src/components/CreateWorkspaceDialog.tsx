@@ -202,7 +202,7 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
         <DialogHeader>
           <DialogTitle>Create New Workspace</DialogTitle>
           <DialogDescription>
-            Create a new jj workspace for parallel development
+            Create a new workspace for parallel development
           </DialogDescription>
         </DialogHeader>
 
@@ -213,7 +213,7 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
               id="intent"
               value={intent}
               onChange={(e) => setIntent(e.target.value)}
-              placeholder="What do you want to work on? (e.g., Add dark mode toggle to settings)"
+              placeholder="e.g., Add dark mode to settings"
               rows={3}
               className="resize-none"
             />

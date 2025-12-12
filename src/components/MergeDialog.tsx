@@ -140,7 +140,7 @@ export const MergeDialog: React.FC<MergeDialogProps> = ({
               />
               {strategy === "ff_only" && (
                 <p className="text-xs text-muted-foreground">
-                  Fast-forward merges do not create a commit message but we keep this field for other strategies.
+                  Optional for fast-forward
                 </p>
               )}
             </div>

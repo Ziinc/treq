@@ -213,10 +213,9 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = memo(({
         <div className="flex items-center justify-center min-h-[200px] text-center">
           <div className="max-w-md">
             <Lightbulb className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-            <h3 className="text-lg font-semibold mb-2">No plans detected yet</h3>
+            <h3 className="text-lg font-semibold mb-2">No plans yet</h3>
             <p className="text-sm text-muted-foreground">
-              Start planning in the terminal. Plans will appear here automatically
-              when detected in the output.
+              Plans appear here when detected
             </p>
           </div>
         </div>
