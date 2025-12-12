@@ -16,12 +16,12 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { GitChangesSection } from "./GitChangesSection";
 import { MoveToWorkspaceDialog } from "./MoveToWorkspaceDialog";
 import { LineDiffStatsDisplay } from "./LineDiffStatsDisplay";
+import { WorkspaceTerminalPane, type ClaudeSessionData } from "./WorkspaceTerminalPane";
 
 // Lazy imports
 const SessionTerminal = lazy(() => import("./SessionTerminal").then(m => ({ default: m.SessionTerminal })));
 const SettingsPage = lazy(() => import("./SettingsPage").then(m => ({ default: m.SettingsPage })));
 const MergeReviewPage = lazy(() => import("./MergeReviewPage").then(m => ({ default: m.MergeReviewPage })));
-const FileBrowser = lazy(() => import("./FileBrowser").then(m => ({ default: m.FileBrowser })));
 import { PlanSection } from "../types/planning";
 import {
   parseChangedFiles,
@@ -62,6 +62,7 @@ import {
   Session,
   createSession,
   updateSessionAccess,
+  updateSessionName,
   getSessions,
   setSessionModel,
   gitGetChangedFiles,
@@ -103,7 +104,6 @@ type ViewMode =
   | "workspace-edit"
   | "workspace-session"
   | "merge-review"
-  | "file-browser"
   | "settings";
 type MergeConfirmPayload = {
   strategy: MergeStrategy;
@@ -131,7 +131,6 @@ const WorkspaceListItem: React.FC<{
   onPin: (workspaceId: number) => void;
   onUpdateBranch: (workspace: Workspace) => void;
   onMerge: (workspace: Workspace) => void;
-  onBrowseFiles: (workspace: Workspace) => void;
   onOpenSession: (workspace: Workspace) => void;
   updateBranchPending: boolean;
   mergePending: boolean;
@@ -144,7 +143,6 @@ const WorkspaceListItem: React.FC<{
   onPin,
   onUpdateBranch,
   onMerge,
-  onBrowseFiles,
   onOpenSession,
   updateBranchPending,
   mergePending,
@@ -275,17 +273,6 @@ const WorkspaceListItem: React.FC<{
             Merge into {currentBranch || "main"}
           </Button>
           <Button
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs"
-            onClick={(e) => {
-              e.stopPropagation();
-              onBrowseFiles(workspace);
-            }}
-          >
-            Browse files
-          </Button>
-          <Button
             variant="default"
             size="sm"
             className="h-7 text-xs"
@@ -318,7 +305,6 @@ export const Dashboard: React.FC = () => {
   const [showCreateFromRemoteDialog, setShowCreateFromRemoteDialog] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("dashboard");
   const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(null);
-  const [fileBrowserWorkspace, setFileBrowserWorkspace] = useState<Workspace | null>(null);
   const [initialSettingsTab, setInitialSettingsTab] = useState<"application" | "repository">("repository");
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
@@ -1382,17 +1368,12 @@ export const Dashboard: React.FC = () => {
     setSelectedWorkspace(null);
   }, []);
 
-  const handleBrowseFiles = useCallback((workspace: Workspace | null) => {
-    setFileBrowserWorkspace(workspace);
-    setViewMode("file-browser");
-  }, []);
-
   // File click handler for main repo - opens diff viewer session
   const handleMainRepoFileClick = useCallback(
     async (file: ParsedFileChange) => {
       await handleOpenSession(null, {
         forceNew: false,
-        initialPrompt: "/edits on",
+        initialPrompt: "",
         promptLabel: "Opening diff viewer",
         selectedFilePath: file.path,
       });
@@ -1553,7 +1534,7 @@ export const Dashboard: React.FC = () => {
         <div
           key={session.id}
           style={{ display: isActive ? 'flex' : 'none' }}
-          className="flex-1 h-full w-full"
+          className="absolute inset-0"
         >
           <ErrorBoundary
             fallbackTitle={sessionWorkspace ? "Workspace terminal error" : "Session terminal error"}
@@ -1606,6 +1587,24 @@ export const Dashboard: React.FC = () => {
   const showSidebar = viewMode !== "merge-review" && viewMode !== "workspace-edit";
   const highlightedSessionId = isSessionView ? activeSessionId : null;
 
+  // Build Claude sessions data for the terminal pane
+  const claudeSessionsForPane = useMemo((): ClaudeSessionData[] => {
+    return sessions
+      .filter((s) => mountedSessionIds.has(s.id) || s.id === activeSessionId)
+      .map((session) => {
+        const sessionWorkspace = session.workspace_id
+          ? workspaces.find((w) => w.id === session.workspace_id)
+          : null;
+        return {
+          sessionId: session.id,
+          sessionName: session.name,
+          ptySessionId: `session-${session.id}`,
+          workspacePath: sessionWorkspace?.workspace_path ?? null,
+          repoPath: sessionWorkspace?.repo_path ?? repoPath,
+        };
+      });
+  }, [sessions, mountedSessionIds, activeSessionId, workspaces, repoPath]);
+
   const mainContentStyle = useMemo(() => ({ width: showSidebar ? "calc(100vw - 240px)" : "100%" }), [showSidebar]);
   const sessionLayerStyle = useMemo<React.CSSProperties>(() => ({
     visibility: isSessionView ? 'visible' : 'hidden',
@@ -1631,8 +1630,6 @@ export const Dashboard: React.FC = () => {
           openSettings={openSettings}
           navigateToDashboard={handleReturnToDashboard}
           onOpenCommandPalette={() => setShowCommandPalette(true)}
-          onBrowseFiles={handleBrowseFiles}
-          browsingWorkspaceId={viewMode === "file-browser" ? (fileBrowserWorkspace?.id ?? null) : undefined}
           currentPage={
             viewMode === "dashboard" ? "dashboard" :
             viewMode === "settings" ? "settings" :
@@ -1648,10 +1645,50 @@ export const Dashboard: React.FC = () => {
       >
         {/* Sessions Layer - ALWAYS RENDERED ONCE */}
         <div
-          className="absolute inset-0 flex flex-col"
+          className="absolute inset-0 flex flex-col workspace-terminal-container overflow-hidden"
           style={sessionLayerStyle}
         >
-          {memoizedSessionTerminals}
+          {/* Session terminals take up remaining space */}
+          <div className="flex-1 min-h-0 overflow-hidden relative">
+            {memoizedSessionTerminals}
+          </div>
+          {/* Shared workspace terminal pane - always rendered to preserve state */}
+          <WorkspaceTerminalPane
+            key={repoPath}
+            workingDirectory={selectedWorkspace?.workspace_path || repoPath}
+            isHidden={!isSessionView}
+            claudeSessions={claudeSessionsForPane}
+            activeClaudeSessionId={isSessionView ? activeSessionId : null}
+            onActiveSessionChange={(sessionId) => {
+              if (sessionId !== null) {
+                setActiveSessionId(sessionId);
+                // Find the session to determine view mode
+                const session = sessions.find((s) => s.id === sessionId);
+                if (session) {
+                  setViewMode(session.workspace_id ? "workspace-session" : "session");
+                  if (session.workspace_id) {
+                    const ws = workspaces.find((w) => w.id === session.workspace_id);
+                    if (ws) setSelectedWorkspace(ws);
+                  }
+                }
+              }
+            }}
+            onCreateNewSession={() => {
+              handleCreateSessionFromSidebar(selectedWorkspace?.id ?? null);
+            }}
+            onRenameSession={async (sessionId, newName) => {
+              try {
+                await updateSessionName(repoPath, sessionId, newName);
+                queryClient.invalidateQueries({ queryKey: ["sessions", repoPath] });
+              } catch (error) {
+                addToast({
+                  title: "Failed to rename session",
+                  description: error instanceof Error ? error.message : String(error),
+                  type: "error",
+                });
+              }
+            }}
+          />
         </div>
 
         {/* Content Layer - Dashboard, Settings, Merge-Review, Workspace-Edit */}
@@ -1702,45 +1739,6 @@ export const Dashboard: React.FC = () => {
             </ErrorBoundary>
           )}
 
-          {/* Workspace Edit View */}
-          {viewMode === "workspace-edit" && selectedWorkspace && (
-            <ErrorBoundary
-              fallbackTitle="Workspace edit failed"
-              resetKeys={[selectedWorkspace.id]}
-              onGoDashboard={handleReturnToDashboard}
-            >
-              <WorkspaceEditSession
-                workspace={selectedWorkspace}
-                onClose={() => {
-                  setViewMode("dashboard");
-                  setSelectedWorkspace(null);
-                }}
-              />
-            </ErrorBoundary>
-          )}
-
-          {/* File Browser View */}
-          {viewMode === "file-browser" && (
-            <ErrorBoundary
-              fallbackTitle="File browser error"
-              resetKeys={[fileBrowserWorkspace?.id ?? repoPath]}
-              onGoDashboard={handleReturnToDashboard}
-            >
-              <Suspense fallback={<LoadingSpinner />}>
-                <FileBrowser
-                  workspace={fileBrowserWorkspace ?? undefined}
-                  repoPath={fileBrowserWorkspace ? undefined : repoPath}
-                  branchName={fileBrowserWorkspace ? undefined : currentBranch ?? undefined}
-                  mainBranch={currentBranch ?? undefined}
-                  onClose={() => {
-                    setViewMode("dashboard");
-                    setFileBrowserWorkspace(null);
-                  }}
-                />
-              </Suspense>
-            </ErrorBoundary>
-          )}
-
           {/* Dashboard View */}
           {viewMode === "dashboard" && (
             <ErrorBoundary
@@ -1753,7 +1751,7 @@ export const Dashboard: React.FC = () => {
             {!repoPath && (
               <div className="mb-6 p-4 border rounded-lg bg-muted">
                 <p className="text-sm text-muted-foreground mb-2">
-                  Please set your repository path to get started
+                  Set repository path
                 </p>
                 <Button variant="outline" onClick={() => openSettings("application")}>
                   Configure Repository
@@ -1792,27 +1790,6 @@ export const Dashboard: React.FC = () => {
                                   </TooltipTrigger>
                                   <TooltipContent side="bottom">
                                     {mainRepoSyncing ? "Syncing..." : "Sync with remote"}
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="w-6 h-6"
-                                      onClick={() => {
-                                        setViewMode("file-browser");
-                                        setFileBrowserWorkspace(null);
-                                      }}
-                                    >
-                                      <FolderOpen className="w-3 h-3" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="bottom">
-                                    Browse files
                                   </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
@@ -1920,7 +1897,7 @@ export const Dashboard: React.FC = () => {
 
                   {workspaces.length === 0 ? (
                     <div className="text-sm text-muted-foreground py-4 text-center">
-                      No workspaces yet
+                      No workspaces yet. Create one with ⌘N
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -1939,10 +1916,6 @@ export const Dashboard: React.FC = () => {
                           }}
                           onUpdateBranch={(wt) => updateBranchMutation.mutate(wt)}
                           onMerge={(wt) => openMergeDialogForWorkspace(wt)}
-                          onBrowseFiles={(wt) => {
-                            setFileBrowserWorkspace(wt);
-                            setViewMode("file-browser");
-                          }}
                           onOpenSession={(wt) => handleOpenSession(wt)}
                           updateBranchPending={updateBranchMutation.isPending}
                           mergePending={mergeMutation.isPending}

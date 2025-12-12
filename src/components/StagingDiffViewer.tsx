@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, Fragment, forw
 import { type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { v4 as uuidv4 } from "uuid";
-import { List, type ListImperativeAPI, type RowComponentProps } from "react-window";
+import { List } from "react-window";
 import {
   gitGetChangedFiles,
   gitGetFileHunks,
@@ -45,6 +45,7 @@ import {
   DropdownMenuSeparator,
 } from "./ui/dropdown-menu";
 import {
+  AlertTriangle,
   FileText,
   Loader2,
   Minus,
@@ -75,17 +76,6 @@ import { useDiffSettings } from "../hooks/useDiffSettings";
 import { GitChangesSection } from "./GitChangesSection";
 import { MoveToWorkspaceDialog } from "./MoveToWorkspaceDialog";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "./ui/tooltip";
-
-// Helper to compute hash of hunk content using native Web Crypto API
-const computeHunkHash = async (hunks: any[]): Promise<string> => {
-  const content = hunks.map(h => h.lines.join('\n')).join('\n');
-  const encoder = new TextEncoder();
-  const data = encoder.encode(content);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return hashHex;
-};
 
 interface StagingDiffViewerProps {
   workspacePath: string;
@@ -251,15 +241,6 @@ const computeHunksHash = (hunks: GitDiffHunk[]): string => {
   return hash.toString(16);
 };
 
-// Virtualization height constants
-const FILE_HEADER_HEIGHT = 48;
-const HUNK_HEADER_HEIGHT = 28;
-const LINE_HEIGHT = 24;
-const LOADING_HEIGHT = 60;
-const COMMENT_INPUT_HEIGHT = 140;
-const COMMENT_DISPLAY_HEIGHT = 120;
-const ROW_PADDING_BOTTOM = 24; // pb-6 class = 1.5rem = 24px
-
 // Isolated comment input component to prevent parent re-renders during typing
 interface CommentInputProps {
   onSubmit: (text: string) => void;
@@ -267,7 +248,6 @@ interface CommentInputProps {
   filePath?: string;
   startLine?: number;
   endLine?: number;
-  lineContents?: string[];
 }
 
 const CommentInput: React.FC<CommentInputProps> = memo(({
@@ -276,7 +256,6 @@ const CommentInput: React.FC<CommentInputProps> = memo(({
   filePath,
   startLine,
   endLine,
-  lineContents,
 }) => {
   const [text, setText] = useState("");
 
@@ -308,24 +287,17 @@ const CommentInput: React.FC<CommentInputProps> = memo(({
     : null;
 
   return (
-    <div className="bg-muted/60 border-y border-border/40 px-4 py-3">
-      {(lineLabel || lineContents) && (
+    <div className="bg-muted/60 border-y border-border/40 px-4 py-3 font-sans">
+      {filePath && lineLabel && (
         <div className="mb-2 text-xs text-muted-foreground">
-          {filePath && lineLabel && (
-            <span className="font-mono">{filePath}:{lineLabel}</span>
-          )}
-          {lineContents && lineContents.length > 0 && (
-            <div className="mt-1 bg-background/50 rounded border border-border/40 p-2 max-h-[100px] overflow-auto">
-              <pre className="font-mono text-[11px] whitespace-pre-wrap">{lineContents.join('\n')}</pre>
-            </div>
-          )}
+          {filePath}:{lineLabel}
         </div>
       )}
       <Textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder="Add a comment..."
-        className="mb-2 text-sm"
+        className="mb-2 text-sm font-sans"
         autoFocus
         onKeyDown={handleKeyDown}
       />
@@ -553,8 +525,8 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
   const [commitPending, setCommitPending] = useState(false);
   const [actionPending, setActionPending] = useState<'commit' | 'amend' | 'push' | 'sync' | null>(null);
   const commitInputRef = useRef<CommitInputHandle>(null);
-  const listRef = useRef<ListImperativeAPI | null>(null);
   const prevFilePathsRef = useRef<string[]>([]);
+  const diffContainerRef = useRef<HTMLDivElement>(null);
 
   // Expose focusCommitInput method via ref
   useImperativeHandle(ref, () => ({
@@ -568,6 +540,16 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [reviewPopoverOpen, setReviewPopoverOpen] = useState(false);
   const [finalReviewComment, setFinalReviewComment] = useState("");
+
+  // Track if user is in review mode (has comments or is typing)
+  const isInReviewMode = useMemo(() => {
+    return comments.length > 0 || showCommentInput || reviewPopoverOpen || finalReviewComment.trim().length > 0;
+  }, [comments.length, showCommentInput, reviewPopoverOpen, finalReviewComment]);
+
+  // Track stale files that changed while user is in review mode
+  const [staleFiles, setStaleFiles] = useState<Set<string>>(new Set());
+  const [pendingFilesData, setPendingFilesData] = useState<ParsedFileChange[] | null>(null);
+  const [pendingHunksData, setPendingHunksData] = useState<Map<string, FileHunksData> | null>(null);
   const [sendingReview, setSendingReview] = useState(false);
   // Pending comment data (used for both single and multi-line)
   const [pendingComment, setPendingComment] = useState<{
@@ -579,9 +561,6 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     lineContent: string[];
   } | null>(null);
 
-  // Track content hash when comment input is shown
-  const commentInputFileHashRef = useRef<string | null>(null);
-
   // Viewed files state - maps file path to { viewed_at, content_hash }
   const [viewedFiles, setViewedFiles] = useState<Map<string, { viewedAt: string; contentHash: string }>>(new Map());
 
@@ -589,6 +568,9 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
   const [selectedUnstagedFiles, setSelectedUnstagedFiles] = useState<Set<string>>(new Set());
   const [lastSelectedFileIndex, setLastSelectedFileIndex] = useState<number | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+
+  // Active file tracking (for sidebar highlighting)
+  const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
 
   // Expanded context lines state
   const [expandedRanges, setExpandedRanges] = useState<
@@ -599,11 +581,59 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
   const stagedFiles = useMemo(() => filterStagedFiles(files), [files]);
   const unstagedFiles = useMemo(() => filterUnstagedFiles(files), [files]);
 
-  const applyChangedFiles = useCallback((parsed: ParsedFileChange[]) => {
+  const applyChangedFiles = useCallback((parsed: ParsedFileChange[], forceApply = false) => {
+    // If in review mode and not forcing, store as pending and mark stale files
+    if (isInReviewMode && !forceApply) {
+      setFiles((prev) => {
+        if (filesEqual(prev, parsed)) return prev; // No changes, no need to mark stale
+
+        // Find which files changed
+        const prevPaths = new Set(prev.map(f => f.path));
+        const newPaths = new Set(parsed.map(f => f.path));
+        const changedFiles = new Set<string>();
+
+        // Files that were added or removed
+        for (const p of newPaths) {
+          if (!prevPaths.has(p)) changedFiles.add(p);
+        }
+        for (const p of prevPaths) {
+          if (!newPaths.has(p)) changedFiles.add(p);
+        }
+
+        // Files with changed status
+        for (const newFile of parsed) {
+          const oldFile = prev.find(f => f.path === newFile.path);
+          if (oldFile && (
+            oldFile.stagedStatus !== newFile.stagedStatus ||
+            oldFile.workspaceStatus !== newFile.workspaceStatus
+          )) {
+            changedFiles.add(newFile.path);
+          }
+        }
+
+        if (changedFiles.size > 0) {
+          setStaleFiles(prevStale => {
+            const next = new Set(prevStale);
+            changedFiles.forEach(f => next.add(f));
+            return next;
+          });
+          setPendingFilesData(parsed);
+        }
+
+        return prev; // Don't update files during review mode
+      });
+      return;
+    }
+
     setFiles((prev) => {
       if (filesEqual(prev, parsed)) return prev; // Skip if unchanged
       return parsed;
     });
+
+    // Clear stale state when applying
+    setStaleFiles(new Set());
+    setPendingFilesData(null);
+    setPendingHunksData(null);
 
     // Handle initial file selection
     if (initialSelectedFile && parsed.some((file) => file.path === initialSelectedFile)) {
@@ -616,7 +646,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
         .map((file) => file.path);
       onStagedFilesChange(Array.from(new Set(staged)));
     }
-  }, [initialSelectedFile, onStagedFilesChange]);
+  }, [initialSelectedFile, onStagedFilesChange, isInReviewMode]);
 
   const invalidateCache = useCallback(async () => {
     if (!workspacePath) {
@@ -645,8 +675,8 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
         ? Math.min(...existingRanges.map(r => r.startLine))
         : oldStart;
 
-      // Can we expand 5 more lines?
-      const targetStart = Math.max(1, lowestExpanded - 5);
+      // Can we expand 25 more lines?
+      const targetStart = Math.max(1, lowestExpanded - 25);
       const targetEnd = lowestExpanded - 1;
 
       if (targetStart > targetEnd) return null;
@@ -671,12 +701,12 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
         const { oldStart: nextStart } = parseHunkHeader(nextHunk.header);
         maxLine = nextStart - 1;
       } else {
-        // Last hunk - allow expanding 5 lines (will be capped by file length)
-        maxLine = highestExpanded + 5;
+        // Last hunk - allow expanding 25 lines (will be capped by file length)
+        maxLine = highestExpanded + 25;
       }
 
       const targetStart = highestExpanded + 1;
-      const targetEnd = Math.min(highestExpanded + 5, maxLine);
+      const targetEnd = Math.min(highestExpanded + 25, maxLine);
 
       if (targetStart > targetEnd) return null;
 
@@ -761,97 +791,6 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     }
   }, [workspacePath, allFileHunks, expandedRanges, computeExpandableLines, addToast]);
 
-  // Calculate height for a file section in the virtualized list
-  const getFileHeight = useCallback((index: number): number => {
-    const file = files[index];
-    if (!file) return FILE_HEADER_HEIGHT + ROW_PADDING_BOTTOM;
-
-    // If file is collapsed, just return header height
-    if (collapsedFiles.has(file.path)) {
-      return FILE_HEADER_HEIGHT + ROW_PADDING_BOTTOM;
-    }
-
-    const fileData = allFileHunks.get(file.path);
-
-    // If loading or no data, return header + loading indicator
-    if (!fileData || fileData.isLoading) {
-      return FILE_HEADER_HEIGHT + LOADING_HEIGHT + ROW_PADDING_BOTTOM;
-    }
-
-    // If error or no hunks, return header + empty state
-    if (fileData.error || fileData.hunks.length === 0) {
-      return FILE_HEADER_HEIGHT + 60 + ROW_PADDING_BOTTOM;
-    }
-
-    // Calculate expanded height: header + hunks
-    let height = FILE_HEADER_HEIGHT;
-
-    for (let hunkIdx = 0; hunkIdx < fileData.hunks.length; hunkIdx++) {
-      const hunk = fileData.hunks[hunkIdx];
-      const hunkRanges = expandedRanges.get(hunk.id) || { before: [], after: [] };
-
-      // Check for expand button BEFORE
-      const beforeExpandInfo = computeExpandableLines(
-        hunk,
-        'before',
-        hunkRanges.before,
-        fileData.hunks,
-        hunkIdx
-      );
-      if (beforeExpandInfo) {
-        height += LINE_HEIGHT; // Button height
-      }
-
-      // Add height for expanded lines BEFORE
-      const beforeLineCount = hunkRanges.before.reduce(
-        (sum, range) => sum + range.lines.length,
-        0
-      );
-      height += beforeLineCount * LINE_HEIGHT;
-
-      height += HUNK_HEADER_HEIGHT; // Hunk header
-      height += hunk.lines.length * LINE_HEIGHT; // Lines in hunk
-
-      // Check for comments on lines in this hunk
-      for (let lineIndex = 0; lineIndex < hunk.lines.length; lineIndex++) {
-        const lineComments = comments.filter(
-          c => c.filePath === file.path && c.hunkId === hunk.id &&
-               lineIndex >= c.startLine && lineIndex <= c.endLine
-        );
-        if (lineComments.length > 0 && lineIndex === lineComments[0].endLine) {
-          height += COMMENT_DISPLAY_HEIGHT * lineComments.length;
-        }
-
-        // Check for comment input
-        if (showCommentInput && pendingComment?.filePath === file.path &&
-            pendingComment?.hunkId === hunk.id && lineIndex === pendingComment.displayAtLineIndex) {
-          height += COMMENT_INPUT_HEIGHT;
-        }
-      }
-
-      // Add height for expanded lines AFTER
-      const afterLineCount = hunkRanges.after.reduce(
-        (sum, range) => sum + range.lines.length,
-        0
-      );
-      height += afterLineCount * LINE_HEIGHT;
-
-      // Check for expand button AFTER
-      const afterExpandInfo = computeExpandableLines(
-        hunk,
-        'after',
-        hunkRanges.after,
-        fileData.hunks,
-        hunkIdx
-      );
-      if (afterExpandInfo) {
-        height += LINE_HEIGHT; // Button height
-      }
-    }
-
-    return height + ROW_PADDING_BOTTOM;
-  }, [files, collapsedFiles, allFileHunks, comments, showCommentInput, pendingComment, expandedRanges, computeExpandableLines]);
-
   const loadChangedFiles = useCallback(async () => {
     if (!workspacePath) {
       setFiles([]);
@@ -934,6 +873,150 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     setLoadingExpansions(new Set());
   }, [files, manualRefreshKey]);
 
+  // Auto-expand 10 lines of context before and after each hunk
+  const autoExpandedHunksRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    // Reset auto-expanded tracking when files change
+    autoExpandedHunksRef.current = new Set();
+  }, [files, manualRefreshKey]);
+
+  useEffect(() => {
+    if (loadingAllHunks) return;
+
+    const expandContextForHunks = async () => {
+      const hunksToExpand: Array<{
+        filePath: string;
+        hunk: GitDiffHunk;
+        hunkIndex: number;
+        allHunks: GitDiffHunk[];
+      }> = [];
+
+      // Collect all hunks that need auto-expansion
+      for (const [filePath, fileData] of allFileHunks) {
+        if (fileData.isLoading || fileData.error || fileData.hunks.length === 0) continue;
+
+        for (let hunkIndex = 0; hunkIndex < fileData.hunks.length; hunkIndex++) {
+          const hunk = fileData.hunks[hunkIndex];
+          const hunkKey = `${filePath}:${hunk.id}`;
+
+          // Skip if already auto-expanded
+          if (autoExpandedHunksRef.current.has(hunkKey)) continue;
+
+          // Mark as being processed
+          autoExpandedHunksRef.current.add(hunkKey);
+
+          hunksToExpand.push({
+            filePath,
+            hunk,
+            hunkIndex,
+            allHunks: fileData.hunks,
+          });
+        }
+      }
+
+      if (hunksToExpand.length === 0) return;
+
+      // Expand context for each hunk (10 lines before and after)
+      const CONTEXT_LINES = 10;
+
+      for (const { filePath, hunk, hunkIndex, allHunks } of hunksToExpand) {
+        const { oldStart, oldCount } = parseHunkHeader(hunk.header);
+
+        // Calculate lines to fetch BEFORE the hunk
+        const beforeStart = Math.max(1, oldStart - CONTEXT_LINES);
+        const beforeEnd = oldStart - 1;
+
+        // Calculate lines to fetch AFTER the hunk
+        const hunkEndLine = oldStart + oldCount - 1;
+        const nextHunk = allHunks[hunkIndex + 1];
+        let afterEnd: number;
+
+        if (nextHunk) {
+          const { oldStart: nextStart } = parseHunkHeader(nextHunk.header);
+          afterEnd = Math.min(hunkEndLine + CONTEXT_LINES, nextStart - 1);
+        } else {
+          afterEnd = hunkEndLine + CONTEXT_LINES;
+        }
+        const afterStart = hunkEndLine + 1;
+
+        // Fetch before context
+        if (beforeStart <= beforeEnd) {
+          try {
+            const result = await gitGetFileLines(
+              workspacePath,
+              filePath,
+              hunk.is_staged,
+              beforeStart,
+              beforeEnd
+            );
+
+            if (result.lines.length > 0) {
+              setExpandedRanges(prev => {
+                const next = new Map(prev);
+                const ranges = next.get(hunk.id) || { before: [], after: [] };
+
+                const newRange: ExpandedRange = {
+                  startLine: result.start_line,
+                  endLine: result.end_line,
+                  lines: result.lines,
+                };
+
+                // Only add if not already present
+                if (!ranges.before.some(r => r.startLine === newRange.startLine)) {
+                  ranges.before = [...ranges.before, newRange].sort((a, b) => a.startLine - b.startLine);
+                  next.set(hunk.id, ranges);
+                }
+
+                return next;
+              });
+            }
+          } catch {
+            // Silently ignore - context expansion is optional
+          }
+        }
+
+        // Fetch after context
+        if (afterStart <= afterEnd) {
+          try {
+            const result = await gitGetFileLines(
+              workspacePath,
+              filePath,
+              hunk.is_staged,
+              afterStart,
+              afterEnd
+            );
+
+            if (result.lines.length > 0) {
+              setExpandedRanges(prev => {
+                const next = new Map(prev);
+                const ranges = next.get(hunk.id) || { before: [], after: [] };
+
+                const newRange: ExpandedRange = {
+                  startLine: result.start_line,
+                  endLine: result.end_line,
+                  lines: result.lines,
+                };
+
+                // Only add if not already present
+                if (!ranges.after.some(r => r.startLine === newRange.startLine)) {
+                  ranges.after = [...ranges.after, newRange].sort((a, b) => a.startLine - b.startLine);
+                  next.set(hunk.id, ranges);
+                }
+
+                return next;
+              });
+            }
+          } catch {
+            // Silently ignore - context expansion is optional
+          }
+        }
+      }
+    };
+
+    expandContextForHunks();
+  }, [allFileHunks, loadingAllHunks, workspacePath]);
+
   // Auto-collapse binary files when files list changes
   useEffect(() => {
     if (files.length > 0) {
@@ -993,45 +1076,9 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     }
   }, [files, allFileHunks, workspacePath]);
 
-  // Detect file content changes while comment input is open
-  useEffect(() => {
-    if (!showCommentInput || !pendingComment) {
-      commentInputFileHashRef.current = null;
-      return;
-    }
-
-    const fileData = allFileHunks.get(pendingComment.filePath);
-    if (!fileData?.hunks) {
-      // File was removed
-      addToast({
-        title: "File changed",
-        description: "The file has been modified or removed. Your comment input has been closed.",
-        type: "warning",
-      });
-      setShowCommentInput(false);
-      setPendingComment(null);
-      commentInputFileHashRef.current = null;
-      return;
-    }
-
-    // Compare hashes asynchronously
-    const previousHash = commentInputFileHashRef.current;
-    if (previousHash) {
-      computeHunkHash(fileData.hunks).then(currentHash => {
-        if (currentHash !== previousHash) {
-          // Content changed
-          addToast({
-            title: "File content changed",
-            description: "The file has been modified. Your comment input has been closed.",
-            type: "warning",
-          });
-          setShowCommentInput(false);
-          setPendingComment(null);
-          commentInputFileHashRef.current = null;
-        }
-      });
-    }
-  }, [showCommentInput, pendingComment, allFileHunks, addToast]);
+  // Note: We no longer auto-close comment input when file changes.
+  // Instead, stale files are tracked and the user is shown a reload banner.
+  // The comment input hash tracking is kept for potential future use.
 
   const handleMarkFileViewed = useCallback(
     async (filePath: string) => {
@@ -1079,9 +1126,11 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
   );
 
   const loadAllFileHunks = useCallback(
-    async (filesToLoad: ParsedFileChange[]) => {
+    async (filesToLoad: ParsedFileChange[], forceApply = false) => {
       if (!workspacePath || filesToLoad.length === 0) {
-        setAllFileHunks((prev) => prev.size === 0 ? prev : new Map());
+        if (!isInReviewMode || forceApply) {
+          setAllFileHunks((prev) => prev.size === 0 ? prev : new Map());
+        }
         setLoadingAllHunks(false);
         return;
       }
@@ -1115,8 +1164,8 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
         }
       });
 
-      // Update with cached data (only if needed)
-      if (cachedHunks.size > 0) {
+      // Update with cached data (only if needed and not in review mode)
+      if (cachedHunks.size > 0 && (!isInReviewMode || forceApply)) {
         setAllFileHunks((prev) => {
           let needsUpdate = prev.size !== hunksMap.size;
           if (!needsUpdate) {
@@ -1145,6 +1194,38 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
             }
           })
         );
+
+        // If in review mode and not forcing, check for changes and store as pending
+        if (isInReviewMode && !forceApply) {
+          const newHunksMap = new Map<string, FileHunksData>();
+          const changedFiles = new Set<string>();
+
+          for (const result of results) {
+            const existing = allFileHunks.get(result.filePath);
+            const newData: FileHunksData = result.error
+              ? { filePath: result.filePath, hunks: [], isLoading: false, error: result.error }
+              : { filePath: result.filePath, hunks: result.hunks, isLoading: false };
+
+            newHunksMap.set(result.filePath, newData);
+
+            // Check if hunks changed
+            if (!existing || !hunksEqual(existing.hunks, result.hunks)) {
+              changedFiles.add(result.filePath);
+            }
+          }
+
+          if (changedFiles.size > 0) {
+            setStaleFiles(prev => {
+              const next = new Set(prev);
+              changedFiles.forEach(f => next.add(f));
+              return next;
+            });
+            setPendingHunksData(newHunksMap);
+          }
+
+          setLoadingAllHunks(false);
+          return;
+        }
 
         // Incremental update - only change what's different
         setAllFileHunks((prev) => {
@@ -1180,7 +1261,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
         setLoadingAllHunks(false);
       }
     },
-    [workspacePath]
+    [workspacePath, isInReviewMode, allFileHunks]
   );
 
   useEffect(() => {
@@ -1218,9 +1299,117 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     return () => clearInterval(interval);
   }, [workspacePath, invalidateCache]);
 
+  // Track active file for sidebar highlighting
+  useEffect(() => {
+    const container = diffContainerRef.current;
+    if (!container || files.length === 0) {
+      setActiveFilePath(null);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Find all visible entries and pick the topmost one
+        const visible = entries
+          .filter(e => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+
+        if (visible.length > 0) {
+          const filePath = visible[0].target.getAttribute('data-file-path');
+          setActiveFilePath(filePath);
+        }
+      },
+      {
+        root: container,
+        threshold: 0,
+        rootMargin: '-10px 0px -80% 0px' // Top 20% of container
+      }
+    );
+
+    // Observe all file sections
+    const fileSections = container.querySelectorAll('[data-file-path]');
+    fileSections.forEach(el => observer.observe(el));
+
+    return () => observer.disconnect();
+  }, [files, allFileHunks]);
+
   const refresh = useCallback(() => {
     setManualRefreshKey((prev) => prev + 1);
   }, []);
+
+  // Reload with pending data, preserving comments and moving orphaned ones to general comment
+  const handleReloadWithPendingChanges = useCallback(() => {
+    // If we have pending data, apply it now
+    if (pendingFilesData) {
+      // Find orphaned comments (comments on files/hunks that no longer exist or changed)
+      const orphanedComments: LineComment[] = [];
+      const validComments: LineComment[] = [];
+
+      for (const comment of comments) {
+        const newFileData = pendingHunksData?.get(comment.filePath);
+        const fileStillExists = pendingFilesData.some(f => f.path === comment.filePath);
+
+        if (!fileStillExists || !newFileData) {
+          // File was removed or has no hunks data - comment is orphaned
+          orphanedComments.push(comment);
+          continue;
+        }
+
+        // Check if the hunk still exists
+        const hunkStillExists = newFileData.hunks.some(h => h.id === comment.hunkId);
+        if (!hunkStillExists) {
+          // Hunk was removed - comment is orphaned
+          orphanedComments.push(comment);
+          continue;
+        }
+
+        // Comment is still valid
+        validComments.push(comment);
+      }
+
+      // If there are orphaned comments, add them to the final review comment
+      if (orphanedComments.length > 0) {
+        const orphanedText = orphanedComments.map(c => {
+          const lineRef = c.startLine === c.endLine
+            ? `${c.filePath}:${c.startLine}`
+            : `${c.filePath}:${c.startLine}-${c.endLine}`;
+          const codeBlock = c.lineContent.length > 0
+            ? `\n\`\`\`\n${c.lineContent.join('\n')}\n\`\`\`\n`
+            : '';
+          return `**${lineRef}** (outdated)${codeBlock}${c.text}`;
+        }).join('\n\n');
+
+        setFinalReviewComment(prev => {
+          if (prev.trim()) {
+            return `${prev}\n\n---\n**Outdated comments:**\n\n${orphanedText}`;
+          }
+          return `**Outdated comments:**\n\n${orphanedText}`;
+        });
+
+        addToast({
+          title: "Comments moved",
+          description: `${orphanedComments.length} comment${orphanedComments.length > 1 ? 's' : ''} moved to summary (lines changed)`,
+          type: "info",
+        });
+      }
+
+      // Update comments to only valid ones
+      setComments(validComments);
+
+      // Apply the pending files data
+      applyChangedFiles(pendingFilesData, true);
+    }
+
+    // Apply pending hunks data
+    if (pendingHunksData) {
+      setAllFileHunks(pendingHunksData);
+      setPendingHunksData(null);
+    }
+
+    // Clear stale state
+    setStaleFiles(new Set());
+    setPendingFilesData(null);
+  }, [pendingFilesData, pendingHunksData, comments, applyChangedFiles, addToast]);
 
   const handleStageFile = useCallback(
     async (filePath: string) => {
@@ -1339,7 +1528,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     [workspacePath, readOnly, disableInteractions, selectedUnstagedFiles, refresh, addToast, invalidateCache]
   );
 
-  // Scroll to file in the virtualized list
+  // Scroll to file in the diff container
   const scrollToFileIfNeeded = useCallback((fileIndex: number) => {
     const file = unstagedFiles[fileIndex];
     if (!file) return;
@@ -1353,18 +1542,21 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
       return next;
     });
 
-    // Find the index in the full files array (since the List renders all files, not just unstaged)
-    const fullFileIndex = files.findIndex(f => f.path === filePath);
-    if (fullFileIndex === -1) return;
-
-    // Use react-window's scrollToRow API to scroll to the file
-    // This ensures the row is rendered (unlike document.getElementById which fails for virtualized items)
-    listRef.current?.scrollToRow({
-      index: fullFileIndex,
-      align: 'start',
-      behavior: 'smooth',
-    });
-  }, [unstagedFiles, files]);
+    // Find the element by ID and scroll to it within the container
+    // Use setTimeout to wait for React to re-render after expanding
+    const fileId = `file-section-${filePath.replace(/[^a-zA-Z0-9]/g, "-")}`;
+    setTimeout(() => {
+      const element = document.getElementById(fileId);
+      const container = diffContainerRef.current;
+      if (element && container) {
+        // Calculate the element's position relative to the container
+        const containerRect = container.getBoundingClientRect();
+        const elementRect = element.getBoundingClientRect();
+        const scrollTop = container.scrollTop + (elementRect.top - containerRect.top);
+        container.scrollTo({ top: scrollTop, behavior: 'smooth' });
+      }
+    }, 50);
+  }, [unstagedFiles]);
 
   // File selection handler - VSCode-style click selection
   const handleFileSelect = useCallback((path: string, event: React.MouseEvent) => {
@@ -1513,7 +1705,9 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
   }, []);
 
   const handleContainerClick = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('[data-diff-line]')) {
+    // Don't clear selection if clicking on a diff line or the comment button
+    if ((e.target as HTMLElement).closest('[data-diff-line]') ||
+        (e.target as HTMLElement).closest('[data-comment-button]')) {
       return;
     }
     setDiffLineSelection(null);
@@ -1741,13 +1935,6 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     });
     setShowCommentInput(true);
     setContextMenuPosition(null);
-
-    // Set initial hash for change detection
-    if (fileData.hunks) {
-      computeHunkHash(fileData.hunks).then(hash => {
-        commentInputFileHashRef.current = hash;
-      });
-    }
   }, [diffLineSelection, allFileHunks]);
 
   const cancelComment = useCallback(() => {
@@ -2083,8 +2270,6 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     language: string | null;
     fontSize: number;
   }) => {
-    const lineNumberFontSize = Math.max(8, fontSize - 2);
-
     return (
       <>
         {ranges.flatMap(range =>
@@ -2094,8 +2279,8 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
               <div key={`expanded-${range.startLine}-${idx}`} className="flex items-stretch">
                 {/* Line numbers (both old and new) */}
                 <div className="w-16 flex-shrink-0 text-muted-foreground select-none border-r border-border/40 flex items-center gap-1 px-1">
-                  <span className="w-6 text-right" style={{ fontSize: `${lineNumberFontSize}px` }}>{lineNum}</span>
-                  <span className="w-6 text-right" style={{ fontSize: `${lineNumberFontSize}px` }}>{lineNum}</span>
+                  <span className="w-6 text-right" style={{ fontSize: `${fontSize}px` }}>{lineNum}</span>
+                  <span className="w-6 text-right" style={{ fontSize: `${fontSize}px` }}>{lineNum}</span>
                 </div>
 
                 {/* Comment button spacer */}
@@ -2225,13 +2410,17 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
                   {lineComments.length > 0 && (
                     <MessageSquare className="w-3 h-3 text-primary ml-1" />
                   )}
-                  <span className="w-6 text-right" style={{ fontSize: `${Math.max(8, diffFontSize - 2)}px` }}>{lineNum?.old ?? ''}</span>
-                  <span className="w-6 text-right" style={{ fontSize: `${Math.max(8, diffFontSize - 2)}px` }}>{lineNum?.new ?? ''}</span>
+                  <span className="w-6 text-right" style={{ fontSize: `${diffFontSize}px` }}>{lineNum?.old ?? ''}</span>
+                  <span className="w-6 text-right" style={{ fontSize: `${diffFontSize}px` }}>{lineNum?.new ?? ''}</span>
                 </div>
-                {/* Add comment button - shows on hover */}
+                {/* Add comment button - shows on hover or when line is selected */}
                 <div className="w-6 flex-shrink-0 flex items-center justify-center select-none">
                   <button
-                    className="invisible group-hover:visible p-0.5 rounded bg-primary text-primary-foreground hover:bg-primary/90"
+                    data-comment-button
+                    className={cn(
+                      "p-0.5 rounded bg-primary text-primary-foreground hover:bg-primary/90",
+                      selected ? "visible" : "invisible group-hover:visible"
+                    )}
                     onMouseDown={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -2250,7 +2439,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
                         setShowCommentInput(true);
                       }
                     }}
-                    title="Add comment"
+                    title={diffLineSelection && diffLineSelection.lines.length > 1 ? "Add comment to selected lines" : "Add comment"}
                   >
                     <Plus className="w-3 h-3" />
                   </button>
@@ -2294,7 +2483,6 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
                   filePath={pendingComment.filePath}
                   startLine={pendingComment.startLine}
                   endLine={pendingComment.endLine}
-                  lineContents={pendingComment.lineContent}
                 />
               )}
             </Fragment>
@@ -2363,10 +2551,10 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
     }
 
     return (
-      <div key={filePath} id={fileId} className="border border-border rounded-lg overflow-hidden">
+      <div key={filePath} id={fileId} data-file-path={filePath} className="border border-border rounded-lg overflow-hidden">
         {/* File Header */}
         <div
-          className="flex items-center justify-between px-4 py-2 bg-muted/50 cursor-pointer hover:bg-muted/70"
+          className="sticky top-0 z-10 flex items-center justify-between px-4 py-2 bg-muted cursor-pointer hover:bg-muted/80 border-b border-border"
           onClick={() => toggleFileCollapse(filePath)}
         >
           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -2515,7 +2703,31 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
               <div className="text-sm text-muted-foreground px-3 py-6 text-center">
                 No diff hunks available
               </div>
+            ) : fileData.hunks.length > 10 ? (
+              // Virtualize for files with many hunks
+              <List
+                style={{ height: Math.min(fileData.hunks.length * 150, 2000), width: "100%" }}
+                rowCount={fileData.hunks.length}
+                rowHeight={(index: number) => {
+                  const hunk = fileData.hunks[index];
+                  const expandedBefore = expandedRanges.get(hunk.id)?.before || [];
+                  const expandedAfter = expandedRanges.get(hunk.id)?.after || [];
+                  const totalLines = hunk.lines.length +
+                    expandedBefore.reduce((sum, r) => sum + r.lines.length, 0) +
+                    expandedAfter.reduce((sum, r) => sum + r.lines.length, 0);
+                  // Estimate: line height ~24px, hunk header ~32px, expand buttons ~28px each
+                  const lineHeight = diffFontSize + 8;
+                  return (totalLines * lineHeight) + 32 + 56; // header + 2 expand buttons
+                }}
+                rowComponent={({ index, style }: { index: number; style: React.CSSProperties }) => (
+                  <div key={fileData.hunks[index].id} style={style}>
+                    {renderHunkLines(fileData.hunks[index], index, filePath)}
+                  </div>
+                )}
+                rowProps={{}}
+              />
             ) : (
+              // Render directly for files with few hunks
               fileData.hunks.map((hunk, hunkIndex) => renderHunkLines(hunk, hunkIndex, filePath))
             )}
           </div>
@@ -2556,6 +2768,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
                   onToggleCollapse={() => toggleSectionCollapse("staged")}
                   fileActionTarget={fileActionTarget}
                   readOnly={readOnly || disableInteractions}
+                  activeFilePath={activeFilePath}
                   onUnstage={handleUnstageFile}
                   onUnstageAll={handleUnstageAll}
                 />
@@ -2568,6 +2781,7 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
                 onToggleCollapse={() => toggleSectionCollapse("unstaged")}
                 fileActionTarget={fileActionTarget}
                 readOnly={readOnly || disableInteractions}
+                activeFilePath={activeFilePath}
                 selectedFiles={selectedUnstagedFiles}
                 onFileSelect={handleFileSelect}
                 onMoveToWorkspace={() => setMoveDialogOpen(true)}
@@ -2639,6 +2853,30 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
           </div>
         )}
 
+        {/* Stale Files Warning Banner - shown when files changed during review */}
+        {staleFiles.size > 0 && (
+          <div className="flex items-center justify-between px-4 py-2 bg-amber-500/10 border-b border-amber-500/30">
+            <div className="flex items-center gap-2 text-sm">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              <span className="text-amber-700 dark:text-amber-300">
+                {staleFiles.size} file{staleFiles.size !== 1 ? "s" : ""} changed since you started reviewing
+              </span>
+              <span className="text-xs text-amber-600/70 dark:text-amber-400/70">
+                ({Array.from(staleFiles).slice(0, 3).join(", ")}{staleFiles.size > 3 ? ` +${staleFiles.size - 3} more` : ""})
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 border-amber-500/50 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
+              onClick={handleReloadWithPendingChanges}
+            >
+              <RefreshCw className="w-3 h-3" />
+              Reload
+            </Button>
+          </div>
+        )}
+
         {/* All Files Diffs - Virtualized */}
         <div className="flex-1 overflow-hidden">
           {loadingAllHunks ? (
@@ -2652,24 +2890,17 @@ export const StagingDiffViewer = memo(forwardRef<StagingDiffViewerHandle, Stagin
               <p className="text-sm">No changes to review</p>
             </div>
           ) : (
-            <List
-              listRef={(ref) => { listRef.current = ref; }}
-              rowCount={files.length}
-              rowHeight={getFileHeight}
-              rowProps={{}}
-              className="p-4"
-              style={{ height: "100%" }}
-              rowComponent={({ index, style }: RowComponentProps) => {
-                const file = files[index];
+            <div ref={diffContainerRef} className="h-full overflow-y-auto p-4 space-y-6">
+              {files.map((file) => {
                 const fileData = allFileHunks.get(file.path);
-                if (!fileData) return <div style={style} />;
+                if (!fileData) return null;
                 return (
-                  <div style={style} className="px-4 pb-6">
+                  <div key={file.path}>
                     {renderFileDiffs(file.path, fileData, file)}
                   </div>
                 );
-              }}
-            />
+              })}
+            </div>
           )}
         </div>
       </div>

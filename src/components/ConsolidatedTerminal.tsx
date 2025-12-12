@@ -40,6 +40,8 @@ interface ConsolidatedTerminalProps {
   terminalPaneClassName?: string;
   terminalBackgroundClassName?: string;
   isHidden?: boolean;
+  /** Skip loading state - useful for split terminals where seamless appearance is preferred */
+  skipLoadingState?: boolean;
 }
 
 export interface ConsolidatedTerminalHandle {
@@ -75,6 +77,7 @@ export const ConsolidatedTerminal = forwardRef<
       terminalPaneClassName,
       terminalBackgroundClassName,
       isHidden = false,
+      skipLoadingState = false,
     },
     ref
   ) => {
@@ -448,7 +451,7 @@ export const ConsolidatedTerminal = forwardRef<
               "[&_.xterm-viewport::-webkit-scrollbar-thumb]:rounded"
             )}
           />
-          {!isPtyReady && !terminalError && (
+          {!isPtyReady && !terminalError && !skipLoadingState && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 text-sm text-muted-foreground z-10">
               <Loader2 className="w-5 h-5 animate-spin mb-2" />
               <span>Preparing terminal...</span>

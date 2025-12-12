@@ -98,7 +98,7 @@ export const PlanHistoryDialog: React.FC<PlanHistoryDialogProps> = ({ open, onOp
             Plan History {workspace ? `- ${workspace.branch_name}` : ""}
           </DialogTitle>
           <DialogDescription>
-            Review the plans executed for this workspace. Entries are ordered by execution time.
+            Past plans for this workspace
           </DialogDescription>
         </DialogHeader>
 

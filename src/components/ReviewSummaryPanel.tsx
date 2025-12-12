@@ -109,7 +109,7 @@ export const ReviewSummaryPanel: React.FC<ReviewSummaryPanelProps> = ({
 
       <div className="border-t p-4 space-y-3">
         <p className="text-xs text-muted-foreground">
-          Finish review by merging directly or sending the feedback to the execution terminal.
+          Merge or send feedback to terminal
         </p>
         <div className="flex flex-col gap-2">
           <Button onClick={onMerge}>

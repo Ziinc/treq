@@ -191,9 +191,9 @@ export const WorkspaceEditSession: React.FC<WorkspaceEditSessionProps> = ({
         </div>
 
         {/* Right panel - Staging Diff Viewer */}
-        <div className="flex-1 min-w-0">
+        {/* <div className="flex-1 min-w-0">
           <StagingDiffViewer workspacePath={workspace.workspace_path} />
-        </div>
+        </div> */}
       </div>
     </div>
   );

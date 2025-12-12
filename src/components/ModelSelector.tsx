@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { Sparkles } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import {
@@ -24,9 +24,6 @@ const AVAILABLE_MODELS = [
 ];
 
 export function ModelSelector({ currentModel, onModelChange, disabled }: ModelSelectorProps) {
-  const [isHovered, setIsHovered] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
-
   const getCurrentModelLabel = useCallback(() => {
     if (currentModel) {
       const model = AVAILABLE_MODELS.find(m => m.value === currentModel);
@@ -36,12 +33,16 @@ export function ModelSelector({ currentModel, onModelChange, disabled }: ModelSe
   }, [currentModel]);
 
   const handleModelSelect = useCallback(async (modelValue: string) => {
-    setIsOpen(false);
     await onModelChange(modelValue);
   }, [onModelChange]);
 
+  const isSelected = (modelValue: string) => {
+    if (currentModel === null && modelValue === "default") return true;
+    return currentModel === modelValue;
+  };
+
   return (
-    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+    <DropdownMenu>
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -49,28 +50,14 @@ export function ModelSelector({ currentModel, onModelChange, disabled }: ModelSe
               <button
                 type="button"
                 disabled={disabled}
-                onMouseEnter={() => setIsHovered(true)}
-                onMouseLeave={() => setIsHovered(false)}
-                className="h-6 rounded-md bg-background/90 border border-border/60 hover:bg-muted flex items-center justify-center transition-all duration-200 shadow-sm disabled:opacity-50 overflow-hidden text-foreground"
-                style={{
-                  width: isHovered || isOpen ? '120px' : '24px',
-                }}
-                aria-label="Change model"
+                className="h-5 w-5 rounded-sm hover:bg-muted flex items-center justify-center opacity-60 hover:opacity-100 transition-opacity disabled:opacity-30"
+                aria-label={`Model: ${getCurrentModelLabel()}`}
               >
-                <Sparkles className="w-3 h-3 flex-shrink-0 text-muted-foreground" />
-                <span
-                  className="text-xs ml-2 whitespace-nowrap transition-all duration-200"
-                  style={{
-                    opacity: isHovered || isOpen ? 1 : 0,
-                    transform: isHovered || isOpen ? 'translateX(0)' : 'translateX(-10px)',
-                  }}
-                >
-                  {getCurrentModelLabel()}
-                </span>
+                <Sparkles className="w-3 h-3 text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent>Change Model</TooltipContent>
+          <TooltipContent>{getCurrentModelLabel()}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
       <DropdownMenuContent align="end" sideOffset={4}>
@@ -78,7 +65,7 @@ export function ModelSelector({ currentModel, onModelChange, disabled }: ModelSe
           <DropdownMenuItem
             key={model.value}
             onSelect={() => handleModelSelect(model.value)}
-            className={currentModel === model.value ? "bg-accent" : ""}
+            className={isSelected(model.value) ? "bg-primary/15 text-primary font-medium" : ""}
           >
             {model.label}
           </DropdownMenuItem>

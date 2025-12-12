@@ -7,6 +7,7 @@ export interface GitFileRowProps {
   file: ParsedFileChange;
   isStaged: boolean;
   isSelected?: boolean;
+  isActive?: boolean;
   isBusy?: boolean;
   readOnly?: boolean;
   onFileClick?: (path: string, event: React.MouseEvent) => void;
@@ -18,6 +19,7 @@ export const GitFileRow = memo<GitFileRowProps>(({
   file,
   isStaged,
   isSelected = false,
+  isActive = false,
   isBusy = false,
   readOnly = false,
   onFileClick,
@@ -33,22 +35,25 @@ export const GitFileRow = memo<GitFileRowProps>(({
   return (
     <div
       className={cn(
-        "group/row relative pl-1 pr-3 py-1.5 text-xs flex items-center gap-1",
+        "group/row relative pl-1 pr-3 py-1.5 text-xs flex items-center gap-1 cursor-pointer",
         isSelected ? "bg-accent/40" : "hover:bg-accent/30"
       )}
+      onClick={(e) => {
+        // Don't trigger if clicking on action buttons
+        if ((e.target as HTMLElement).closest('button[title="Stage file"], button[title="Unstage file"]')) {
+          return;
+        }
+        onFileClick?.(file.path, e);
+      }}
+      title={file.path}
     >
       <div className="w-4 flex-shrink-0" />
-      <button
-        type="button"
-        className="flex-1 text-left flex items-center gap-2 min-w-0"
-        onClick={(e) => onFileClick?.(file.path, e)}
-        title={file.path}
-      >
-        <span className="font-medium truncate flex-shrink-0">{label.name}</span>
+      <div className="flex-1 flex items-center gap-2 min-w-0">
+        <span className={cn("font-medium truncate flex-shrink-0", isActive && "text-blue-500")}>{label.name}</span>
         {label.directory && (
-          <span className="text-muted-foreground truncate">{label.directory}</span>
+          <span className={cn("text-muted-foreground truncate", isActive && "text-blue-400")}>{label.directory}</span>
         )}
-      </button>
+      </div>
       <div className="flex items-center gap-1.5 flex-shrink-0">
         {showActionButton && (
           <button
