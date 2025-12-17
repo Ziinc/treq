@@ -28,80 +28,6 @@ pub struct BranchDivergence {
     pub behind: usize,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct WorkspaceInfo {
-    pub path: String,
-    pub branch: String,
-    pub commit: String,
-}
-
-pub fn create_workspace(
-    repo_path: &str,
-    branch: &str,
-    new_branch: bool,
-    source_branch: Option<&str>,
-    inclusion_patterns: Option<Vec<String>>,
-) -> Result<String, String> {
-    // Sanitize branch name for path
-    let sanitized = sanitize_branch_name_for_path(branch);
-
-    // Generate workspace path: {repo_path}/.treq/workspaces/{sanitized_branch}
-    let workspace_path = format!("{}/.treq/workspaces/{}", repo_path, sanitized);
-
-    // Create .treq/workspaces directory if it doesn't exist
-    let treq_dir = format!("{}/.treq/workspaces", repo_path);
-    fs::create_dir_all(&treq_dir)
-        .map_err(|e| format!("Failed to create .treq/workspaces directory: {}", e))?;
-
-    // Check if workspace already exists at this path
-    if Path::new(&workspace_path).exists() {
-        return Err(format!("Workspace already exists at {}", workspace_path));
-    }
-
-    // Execute git worktree add command (internal Git operation - command name stays as-is)
-    // When new_branch is true and source_branch is provided:
-    //   git worktree add -b <new_branch> <path> <source_branch>
-    // When new_branch is true and no source_branch:
-    //   git worktree add -b <new_branch> <path>
-    // When new_branch is false:
-    //   git worktree add <path> <branch>
-    let mut cmd = Command::new("git");
-    cmd.current_dir(repo_path);
-    cmd.arg("worktree").arg("add");
-
-    if new_branch {
-        cmd.arg("-b").arg(branch);
-    }
-
-    cmd.arg(&workspace_path);
-
-    if new_branch {
-        // If source_branch is provided, use it as the base for the new branch
-        if let Some(source) = source_branch {
-            cmd.arg(source);
-        }
-    } else {
-        cmd.arg(branch);
-    }
-
-    let output = cmd.output().map_err(|e| e.to_string())?;
-
-    if output.status.success() {
-        // Copy selected ignored files after successful workspace creation
-        if let Some(patterns) = inclusion_patterns {
-            if let Err(e) = copy_ignored_files(repo_path, &workspace_path, patterns) {
-                eprintln!("Warning: Failed to copy ignored files: {}", e);
-                // Don't fail the workspace creation, just log the warning
-            }
-        }
-
-        // Return the workspace path instead of stdout
-        Ok(workspace_path)
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
-}
-
 /// Create a git workspace at a specific path (used by jj workspace creation)
 pub fn create_workspace_at_path(
     repo_path: &str,
@@ -141,54 +67,6 @@ pub fn create_workspace_at_path(
     } else {
         Err(String::from_utf8_lossy(&output.stderr).to_string())
     }
-}
-
-pub fn list_workspaces(repo_path: &str) -> Result<Vec<WorkspaceInfo>, String> {
-    let output = Command::new("git")
-        .current_dir(repo_path)
-        .args(["worktree", "list", "--porcelain"])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut workspaces = Vec::new();
-    let mut current_workspace: Option<WorkspaceInfo> = None;
-
-    // Parse git's porcelain output format (lines like "worktree /path", "branch refs/heads/main", "HEAD abc123")
-    for line in stdout.lines() {
-        if line.starts_with("worktree ") {
-            if let Some(wt) = current_workspace.take() {
-                workspaces.push(wt);
-            }
-            current_workspace = Some(WorkspaceInfo {
-                path: line.strip_prefix("worktree ").unwrap_or("").to_string(),
-                branch: String::new(),
-                commit: String::new(),
-            });
-        } else if line.starts_with("branch ") {
-            if let Some(ref mut wt) = current_workspace {
-                wt.branch = line
-                    .strip_prefix("branch refs/heads/")
-                    .or_else(|| line.strip_prefix("branch "))
-                    .unwrap_or("")
-                    .to_string();
-            }
-        } else if line.starts_with("HEAD ") {
-            if let Some(ref mut wt) = current_workspace {
-                wt.commit = line.strip_prefix("HEAD ").unwrap_or("").to_string();
-            }
-        }
-    }
-
-    if let Some(wt) = current_workspace {
-        workspaces.push(wt);
-    }
-
-    Ok(workspaces)
 }
 
 pub fn remove_workspace(repo_path: &str, workspace_path: &str) -> Result<String, String> {
@@ -589,22 +467,6 @@ pub fn ensure_repo_configured(
     Ok(())
 }
 
-pub fn sanitize_branch_name_for_path(branch: &str) -> String {
-    branch
-        .replace('/', "-")
-        .replace('\\', "-")
-        .replace('*', "_")
-        .replace('?', "_")
-        .replace('<', "_")
-        .replace('>', "_")
-        .replace('|', "_")
-        .replace('"', "_")
-        .replace(':', "_")
-        .trim_matches('.')
-        .trim()
-        .to_string()
-}
-
 pub fn execute_post_create_command(
     workspace_path: &str,
     command: &str,
@@ -824,6 +686,7 @@ pub fn list_gitignored_files(repo_path: &str) -> Result<Vec<String>, String> {
 
 /// Stash specific files with a message
 /// Uses: git stash push -m "{message}" -- file1 file2 ...
+/// Note: Automatically stages untracked files before stashing
 pub fn git_stash_push_files(
     workspace_path: &str,
     file_paths: Vec<String>,
@@ -833,6 +696,53 @@ pub fn git_stash_push_files(
         return Err("No files specified for stashing".to_string());
     }
 
+    // First, check git status to identify untracked files
+    let status_output = Command::new("git")
+        .current_dir(workspace_path)
+        .args(["status", "--porcelain"])
+        .output()
+        .map_err(|e| format!("Failed to check git status: {}", e))?;
+
+    if !status_output.status.success() {
+        return Err(String::from_utf8_lossy(&status_output.stderr).to_string());
+    }
+
+    let status_lines = String::from_utf8_lossy(&status_output.stdout);
+    let mut untracked_files = Vec::new();
+
+    // Parse status output to find untracked files in our file list
+    // Format: "?? path/to/file" for untracked files
+    for line in status_lines.lines() {
+        if line.starts_with("??") {
+            let file_path = line[3..].trim();
+            if file_paths.iter().any(|p| p == file_path) {
+                untracked_files.push(file_path.to_string());
+            }
+        }
+    }
+
+    // If there are untracked files, add them to the index first
+    if !untracked_files.is_empty() {
+        let mut add_cmd = Command::new("git");
+        add_cmd.current_dir(workspace_path);
+        add_cmd.arg("add");
+        add_cmd.arg("--");
+
+        for file in &untracked_files {
+            add_cmd.arg(file);
+        }
+
+        let add_output = add_cmd.output().map_err(|e| e.to_string())?;
+
+        if !add_output.status.success() {
+            return Err(format!(
+                "Failed to add untracked files: {}",
+                String::from_utf8_lossy(&add_output.stderr)
+            ));
+        }
+    }
+
+    // Now stash all the files
     let mut cmd = Command::new("git");
     cmd.current_dir(workspace_path);
     cmd.args(["stash", "push", "-m", message, "--"]);

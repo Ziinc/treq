@@ -2,12 +2,6 @@
 
 Treq transforms AI-generated code into local isolated pull requests.
 
-> **🚀 One-Shot at Speed 🚀**
->
-> _Ship quality code to production without the AI slop_
-
----
-
 ## What is Treq?
 
 AI agents can create results fast, but they don’t organize anything. Their outputs stack on top of each other, overwrite previous work, and make it hard to see what changed or what should happen next.
@@ -18,11 +12,25 @@ It gives each agent result its own space, shows it clearly to the developer for 
 
 Now, instead of a messy pile of AI output, you get a clean, organized workflow you can control.
 
-## Key Features
+## Features
 
-- **🌳 Agent Isolation**: Coding agents work in isolation on dedicated Git worktrees, paralleized and isolated.
-- **💻 Integrated Terminal**: Use Claude Code in full inteactive mode, with seamless integeration with planning modes and Git worktree management
-- **🔍 Code Review**: Inspect and iterate on each change for a human-in-the-loop agentic workflow.
+### Code Reviews
+
+Inspect and iterate on each change for a human-in-the-loop agentic workflow.
+
+<!-- insert gif of a review -->
+
+- Review the code diffs just like a familiar Github PR, annotate and comment on code, and then send it to an agent for changes.
+- Spotted an issue when browsing files? Send it to an agent for adjustments in the background.
+
+### Isolated Workspaces
+
+Coding agents work in isolated copies of the codebase, ensuring changes are independent from each other while keeping your current repository clean for planning.
+
+<!-- insert gif of worktree creation -->
+
+- Workspaces are isolated but interlinked - move changes around workspaces, or split and stack workspaces as needed.
+- Got a code conflict? No problem! Let the agent handle it the grunt work.
 
 ## License
 

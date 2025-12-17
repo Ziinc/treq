@@ -14,8 +14,7 @@ import { useToast } from "./ui/toast";
 import { applyBranchNamePattern, sanitizeForBranchName } from "../lib/utils";
 import {
   jjCreateWorkspace,
-  gitStashPushFiles,
-  gitStashPop,
+  jjSquashToWorkspace,
   addWorkspaceToDb,
   getRepoSetting,
   gitExecutePostCreateCommand,
@@ -113,21 +112,10 @@ export const MoveToWorkspaceDialog: React.FC<MoveToWorkspaceDialogProps> = ({
     setLoading(true);
     setError("");
 
-    let stashCreated = false;
     let workspacePath: string | null = null;
 
     try {
-      // Step 1: Stash selected files in source repo
-      addToast({
-        title: "Stashing files...",
-        description: `Stashing ${selectedFiles.length} file(s)`,
-        type: "info",
-      });
-
-      await gitStashPushFiles(repoPath, selectedFiles, `treq-move: ${intent.trim()}`);
-      stashCreated = true;
-
-      // Step 2: Create new jj workspace
+      // Step 1: Create new jj workspace
       addToast({
         title: "Creating workspace...",
         description: `Creating branch ${branchName}`,
@@ -136,14 +124,17 @@ export const MoveToWorkspaceDialog: React.FC<MoveToWorkspaceDialogProps> = ({
 
       workspacePath = await jjCreateWorkspace(repoPath, branchName, branchName, true);
 
-      // Step 3: Pop stash in new workspace
+      // Step 2: Get the workspace name from the path (last component)
+      const workspaceName = workspacePath.split("/").pop() || branchName;
+
+      // Step 3: Move changes using jj squash
       addToast({
         title: "Moving files...",
-        description: "Applying changes to new workspace",
+        description: "Squashing changes to new workspace",
         type: "info",
       });
 
-      await gitStashPop(workspacePath);
+      await jjSquashToWorkspace(repoPath, workspaceName, selectedFiles);
 
       // Step 4: Add workspace to database with metadata
       const metadata = JSON.stringify({
@@ -198,20 +189,11 @@ export const MoveToWorkspaceDialog: React.FC<MoveToWorkspaceDialogProps> = ({
       const errorMsg = err instanceof Error ? err.message : String(err);
       setError(errorMsg);
 
-      // Provide recovery information if stash was created but workspace failed
-      if (stashCreated && !workspacePath) {
-        addToast({
-          title: "Failed to create workspace",
-          description: `Your changes were stashed. Use 'git stash pop' to recover them.`,
-          type: "error",
-        });
-      } else {
-        addToast({
-          title: "Failed to move files",
-          description: errorMsg,
-          type: "error",
-        });
-      }
+      addToast({
+        title: "Failed to move files",
+        description: errorMsg,
+        type: "error",
+      });
     } finally {
       setLoading(false);
     }

@@ -1,35 +1,47 @@
 use chrono::Utc;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 // Re-export types from db module
 use crate::db::{Session, Workspace};
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PlanHistoryEntry {
+// ============================================================================
+// Database Initialization Tracker
+// ============================================================================
+
+/// Track which local databases have been initialized to avoid repeated schema checks
+static INITIALIZED_DBS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+
+// ============================================================================
+// Git Cache Types
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CachedFileChange {
     pub id: i64,
-    pub workspace_id: i64,
-    pub title: String,
-    #[serde(rename = "type")]
-    pub plan_type: String,
-    pub content: Value,
-    pub created_at: String,
-    pub executed_at: String,
-    pub status: String,
+    pub workspace_id: Option<i64>,
+    pub file_path: String,
+    pub staged_status: Option<String>,
+    pub workspace_status: Option<String>,
+    pub is_untracked: bool,
+    pub hunks_json: Option<String>,
+    pub updated_at: String,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct PlanHistoryInput {
-    pub title: String,
-    #[serde(rename = "type")]
-    pub plan_type: String,
-    pub content: Value,
-    pub created_at: Option<String>,
-    pub executed_at: Option<String>,
-    pub status: Option<String>,
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CachedWorkspaceFile {
+    pub id: i64,
+    pub workspace_id: Option<i64>,
+    pub file_path: String,
+    pub relative_path: String,
+    pub is_directory: bool,
+    pub parent_path: Option<String>,
+    pub cached_at: String,
+    pub mtime: Option<i64>, // File modification time (unix timestamp)
 }
 
 pub fn get_local_db_path(repo_path: &str) -> PathBuf {
@@ -45,72 +57,6 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
 
     let conn = Connection::open(db_path).map_err(|e| format!("Failed to open local db: {}", e))?;
 
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS plans (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            workspace_id INTEGER NOT NULL,
-            title TEXT NOT NULL,
-            type TEXT NOT NULL,
-            content TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            executed_at TEXT NOT NULL,
-            status TEXT NOT NULL
-        )",
-        [],
-    )
-    .map_err(|e| format!("Failed to create plans table: {}", e))?;
-
-    // Migration: Rename worktree_id to workspace_id in plans table
-    let has_worktree_col: Result<i64, _> = conn.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('plans') WHERE name='worktree_id'",
-        [],
-        |row| row.get(0),
-    );
-
-    if let Ok(count) = has_worktree_col {
-        if count > 0 {
-            // SQLite doesn't support RENAME COLUMN in older versions, so recreate the table
-            conn.execute(
-                "CREATE TABLE plans_new (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    workspace_id INTEGER NOT NULL,
-                    title TEXT NOT NULL,
-                    type TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    executed_at TEXT NOT NULL,
-                    status TEXT NOT NULL
-                )",
-                [],
-            )
-            .map_err(|e| format!("Failed to create plans_new table: {}", e))?;
-
-            conn.execute(
-                "INSERT INTO plans_new SELECT id, worktree_id, title, type, content, created_at, executed_at, status FROM plans",
-                [],
-            )
-            .map_err(|e| format!("Failed to migrate plans data: {}", e))?;
-
-            conn.execute("DROP TABLE plans", [])
-                .map_err(|e| format!("Failed to drop old plans table: {}", e))?;
-
-            conn.execute("ALTER TABLE plans_new RENAME TO plans", [])
-                .map_err(|e| format!("Failed to rename plans_new to plans: {}", e))?;
-        }
-    }
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_plans_workspace_id ON plans(workspace_id)",
-        [],
-    )
-    .map_err(|e| format!("Failed to create workspace index: {}", e))?;
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_plans_executed_at ON plans(executed_at)",
-        [],
-    )
-    .map_err(|e| format!("Failed to create executed_at index: {}", e))?;
-
     // Create workspaces table
     conn.execute(
         "CREATE TABLE IF NOT EXISTS workspaces (
@@ -119,8 +65,7 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
             workspace_path TEXT NOT NULL UNIQUE,
             branch_name TEXT NOT NULL,
             created_at TEXT NOT NULL,
-            metadata TEXT,
-            is_pinned INTEGER DEFAULT 0
+            metadata TEXT
         )",
         [],
     )
@@ -140,7 +85,6 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
             name TEXT NOT NULL,
             created_at TEXT NOT NULL,
             last_accessed TEXT NOT NULL,
-            plan_title TEXT,
             model TEXT,
             FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
         )",
@@ -165,7 +109,6 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
                     name TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     last_accessed TEXT NOT NULL,
-                    plan_title TEXT,
                     model TEXT,
                     FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
                 )",
@@ -174,7 +117,7 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
             .map_err(|e| format!("Failed to create sessions_new table: {}", e))?;
 
             conn.execute(
-                "INSERT INTO sessions_new SELECT id, worktree_id, name, created_at, last_accessed, plan_title, model FROM sessions",
+                "INSERT INTO sessions_new SELECT id, worktree_id, name, created_at, last_accessed, model FROM sessions",
                 [],
             )
             .map_err(|e| format!("Failed to migrate sessions data: {}", e))?;
@@ -199,105 +142,91 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
     )
     .map_err(|e| format!("Failed to create sessions workspace index: {}", e))?;
 
+    // Migration: Drop old tables if they exist
+    let _ = conn.execute("DROP TABLE IF EXISTS git_file_hunks", []);
+    let _ = conn.execute("DROP TABLE IF EXISTS git_changed_files", []);
+    let _ = conn.execute("DROP INDEX IF EXISTS idx_git_file_hunks_workspace", []);
+    let _ = conn.execute("DROP INDEX IF EXISTS idx_git_changed_files_workspace", []);
+
+    // Create consolidated changes cache table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS changed_files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            workspace_id INTEGER,
+            file_path TEXT NOT NULL,
+            staged_status TEXT,
+            workspace_status TEXT,
+            is_untracked INTEGER NOT NULL DEFAULT 0,
+            hunks_json TEXT,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+            UNIQUE(workspace_id, file_path)
+        )",
+        [],
+    )
+    .map_err(|e| format!("Failed to create changed_files table: {}", e))?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_changed_files_workspace ON changed_files(workspace_id)",
+        [],
+    )
+    .map_err(|e| format!("Failed to create changed_files workspace index: {}", e))?;
+
+    // Create workspace files cache table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS workspace_files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            workspace_id INTEGER,
+            file_path TEXT NOT NULL,
+            relative_path TEXT NOT NULL,
+            is_directory INTEGER NOT NULL DEFAULT 0,
+            parent_path TEXT,
+            cached_at TEXT NOT NULL,
+            mtime INTEGER,
+            FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+            UNIQUE(workspace_id, file_path)
+        )",
+        [],
+    )
+    .map_err(|e| format!("Failed to create workspace_files table: {}", e))?;
+
+    // Migration: Add mtime column if it doesn't exist
+    let _ = conn.execute(
+        "ALTER TABLE workspace_files ADD COLUMN mtime INTEGER",
+        [],
+    );
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_workspace_files_workspace ON workspace_files(workspace_id)",
+        [],
+    )
+    .map_err(|e| format!("Failed to create workspace_files workspace index: {}", e))?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_workspace_files_parent ON workspace_files(workspace_id, parent_path)",
+        [],
+    )
+    .map_err(|e| format!("Failed to create workspace_files parent index: {}", e))?;
+
     Ok(())
 }
 
 fn get_connection(repo_path: &str) -> Result<Connection, String> {
-    init_local_db(repo_path)?;
-    let db_path = get_local_db_path(repo_path);
-    Connection::open(db_path).map_err(|e| format!("Failed to open local db: {}", e))
-}
+    // Check if this database has already been initialized
+    let initialized = INITIALIZED_DBS.get_or_init(|| Mutex::new(HashSet::new()));
+    let db_key = repo_path.to_string();
 
-pub fn save_executed_plan(
-    repo_path: &str,
-    workspace_id: i64,
-    plan_data: PlanHistoryInput,
-) -> Result<i64, String> {
-    let conn = get_connection(repo_path)?;
-    let created_at = plan_data
-        .created_at
-        .unwrap_or_else(|| Utc::now().to_rfc3339());
-    let executed_at = plan_data
-        .executed_at
-        .unwrap_or_else(|| Utc::now().to_rfc3339());
-    let status = plan_data.status.unwrap_or_else(|| "executed".to_string());
-    let content = serde_json::to_string(&plan_data.content)
-        .map_err(|e| format!("Failed to serialize plan content: {}", e))?;
-
-    conn.execute(
-        "INSERT INTO plans (workspace_id, title, type, content, created_at, executed_at, status)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        params![
-            workspace_id,
-            plan_data.title,
-            plan_data.plan_type,
-            content,
-            created_at,
-            executed_at,
-            status,
-        ],
-    )
-    .map_err(|e| format!("Failed to insert plan history: {}", e))?;
-
-    Ok(conn.last_insert_rowid())
-}
-
-pub fn get_workspace_plans(
-    repo_path: &str,
-    workspace_id: i64,
-    limit: Option<i64>,
-) -> Result<Vec<PlanHistoryEntry>, String> {
-    let conn = get_connection(repo_path)?;
-    let mut query = String::from(
-        "SELECT id, workspace_id, title, type, content, created_at, executed_at, status
-         FROM plans WHERE workspace_id = ?1
-         ORDER BY datetime(executed_at) DESC, id DESC",
-    );
-
-    if let Some(limit) = limit {
-        query.push_str(" LIMIT ?2");
-        let mut stmt = conn
-            .prepare(&query)
-            .map_err(|e| format!("Failed to prepare plan query: {}", e))?;
-        let rows = stmt
-            .query_map(params![workspace_id, limit], |row| row_to_plan(row))
-            .map_err(|e| format!("Failed to query plans: {}", e))?;
-        return rows
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string());
+    {
+        let guard = initialized.lock().unwrap();
+        if !guard.contains(&db_key) {
+            drop(guard); // Release lock before calling init
+            init_local_db(repo_path)?;
+            initialized.lock().unwrap().insert(db_key);
+        }
     }
 
-    let mut stmt = conn
-        .prepare(&query)
-        .map_err(|e| format!("Failed to prepare plan query: {}", e))?;
-    let rows = stmt
-        .query_map(params![workspace_id], |row| row_to_plan(row))
-        .map_err(|e| format!("Failed to query plans: {}", e))?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())
-}
-
-pub fn get_all_workspace_plans(
-    repo_path: &str,
-    workspace_id: i64,
-) -> Result<Vec<PlanHistoryEntry>, String> {
-    get_workspace_plans(repo_path, workspace_id, None)
-}
-
-fn row_to_plan(row: &rusqlite::Row) -> rusqlite::Result<PlanHistoryEntry> {
-    let content: String = row.get(4)?;
-    let content_value = serde_json::from_str(&content).unwrap_or(Value::Null);
-
-    Ok(PlanHistoryEntry {
-        id: row.get(0)?,
-        workspace_id: row.get(1)?,
-        title: row.get(2)?,
-        plan_type: row.get(3)?,
-        content: content_value,
-        created_at: row.get(5)?,
-        executed_at: row.get(6)?,
-        status: row.get(7)?,
-    })
+    let db_path = get_local_db_path(repo_path);
+    Connection::open(db_path).map_err(|e| format!("Failed to open local db: {}", e))
 }
 
 // ============================================================================
@@ -307,7 +236,7 @@ fn row_to_plan(row: &rusqlite::Row) -> rusqlite::Result<PlanHistoryEntry> {
 pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, metadata, is_pinned FROM workspaces ORDER BY is_pinned DESC, branch_name COLLATE NOCASE ASC")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, metadata FROM workspaces ORDER BY branch_name COLLATE NOCASE ASC")
         .map_err(|e| format!("Failed to prepare workspaces query: {}", e))?;
 
     let workspaces = stmt
@@ -320,7 +249,6 @@ pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
                 branch_name: row.get(3)?,
                 created_at: row.get(4)?,
                 metadata: row.get(5)?,
-                is_pinned: row.get::<_, i64>(6)? != 0,
             })
         })
         .map_err(|e| format!("Failed to query workspaces: {}", e))?;
@@ -341,9 +269,9 @@ pub fn add_workspace(
     let created_at = Utc::now().to_rfc3339();
 
     conn.execute(
-        "INSERT INTO workspaces (workspace_name, workspace_path, branch_name, created_at, metadata, is_pinned)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![workspace_name, workspace_path, branch_name, created_at, metadata, 0],
+        "INSERT INTO workspaces (workspace_name, workspace_path, branch_name, created_at, metadata)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![workspace_name, workspace_path, branch_name, created_at, metadata],
     )
     .map_err(|e| format!("Failed to insert workspace: {}", e))?;
 
@@ -357,28 +285,18 @@ pub fn delete_workspace(repo_path: &str, id: i64) -> Result<(), String> {
     Ok(())
 }
 
-pub fn toggle_workspace_pin(repo_path: &str, id: i64) -> Result<bool, String> {
+pub fn update_workspace_metadata(
+    repo_path: &str,
+    id: i64,
+    metadata: &str,
+) -> Result<(), String> {
     let conn = get_connection(repo_path)?;
-
-    // Get current pin status
-    let mut stmt = conn
-        .prepare("SELECT is_pinned FROM workspaces WHERE id = ?1")
-        .map_err(|e| format!("Failed to prepare query: {}", e))?;
-
-    let current_pinned: i64 = stmt
-        .query_row([id], |row| row.get(0))
-        .map_err(|e| format!("Failed to get pin status: {}", e))?;
-
-    // Toggle it
-    let new_pinned = if current_pinned != 0 { 0 } else { 1 };
-
     conn.execute(
-        "UPDATE workspaces SET is_pinned = ?1 WHERE id = ?2",
-        params![new_pinned, id],
+        "UPDATE workspaces SET metadata = ?1 WHERE id = ?2",
+        params![metadata, id],
     )
-    .map_err(|e| format!("Failed to update pin status: {}", e))?;
-
-    Ok(new_pinned != 0)
+    .map_err(|e| format!("Failed to update workspace metadata: {}", e))?;
+    Ok(())
 }
 
 pub fn rebuild_workspaces_from_filesystem(repo_path: &str) -> Result<Vec<Workspace>, String> {
@@ -441,7 +359,6 @@ pub fn rebuild_workspaces_from_filesystem(repo_path: &str) -> Result<Vec<Workspa
             branch_name,
             created_at: Utc::now().to_rfc3339(),
             metadata: None,
-            is_pinned: false,
         });
     }
 
@@ -472,7 +389,7 @@ fn get_workspace_branch(workspace_path: &str) -> Result<String, String> {
 pub fn get_sessions(repo_path: &str) -> Result<Vec<Session>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_id, name, created_at, last_accessed, plan_title, model FROM sessions ORDER BY created_at ASC")
+        .prepare("SELECT id, workspace_id, name, created_at, last_accessed, model FROM sessions ORDER BY created_at ASC")
         .map_err(|e| format!("Failed to prepare sessions query: {}", e))?;
 
     let sessions = stmt
@@ -483,8 +400,7 @@ pub fn get_sessions(repo_path: &str) -> Result<Vec<Session>, String> {
                 name: row.get(2)?,
                 created_at: row.get(3)?,
                 last_accessed: row.get(4)?,
-                plan_title: row.get(5)?,
-                model: row.get(6)?,
+                model: row.get(5)?,
             })
         })
         .map_err(|e| format!("Failed to query sessions: {}", e))?;
@@ -498,15 +414,14 @@ pub fn add_session(
     repo_path: &str,
     workspace_id: Option<i64>,
     name: String,
-    plan_title: Option<String>,
 ) -> Result<i64, String> {
     let conn = get_connection(repo_path)?;
     let now = Utc::now().to_rfc3339();
 
     conn.execute(
-        "INSERT INTO sessions (workspace_id, name, created_at, last_accessed, plan_title, model)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![workspace_id, name, now, now, plan_title, None::<String>],
+        "INSERT INTO sessions (workspace_id, name, created_at, last_accessed, model)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![workspace_id, name, now, now, None::<String>],
     )
     .map_err(|e| format!("Failed to insert session: {}", e))?;
 
@@ -565,5 +480,246 @@ pub fn set_session_model(repo_path: &str, id: i64, model: Option<String>) -> Res
     )
     .map_err(|e| format!("Failed to update session model: {}", e))?;
 
+    Ok(())
+}
+
+// ============================================================================
+// Git Cache Functions
+// ============================================================================
+
+/// Get all cached changed files for a workspace
+pub fn get_cached_changes(
+    repo_path: &str,
+    workspace_id: Option<i64>,
+) -> Result<Vec<CachedFileChange>, String> {
+    let conn = get_connection(repo_path)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, workspace_id, file_path, staged_status, workspace_status, is_untracked, hunks_json, updated_at
+             FROM changed_files
+             WHERE workspace_id IS ?1
+             ORDER BY file_path",
+        )
+        .map_err(|e| format!("Failed to prepare query: {}", e))?;
+
+    let changes = stmt
+        .query_map([workspace_id], |row| {
+            Ok(CachedFileChange {
+                id: row.get(0)?,
+                workspace_id: row.get(1)?,
+                file_path: row.get(2)?,
+                staged_status: row.get(3)?,
+                workspace_status: row.get(4)?,
+                is_untracked: row.get::<_, i64>(5)? != 0,
+                hunks_json: row.get(6)?,
+                updated_at: row.get(7)?,
+            })
+        })
+        .map_err(|e| format!("Failed to query cached changes: {}", e))?;
+
+    changes
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+/// Batch update all changed files for a workspace (replaces all)
+pub fn sync_workspace_changes(
+    repo_path: &str,
+    workspace_id: Option<i64>,
+    changes: Vec<CachedFileChange>,
+) -> Result<(), String> {
+    let mut conn = get_connection(repo_path)?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| format!("Failed to start transaction: {}", e))?;
+
+    // Delete existing entries for this workspace
+    tx.execute(
+        "DELETE FROM changed_files WHERE workspace_id IS ?1",
+        params![workspace_id],
+    )
+    .map_err(|e| format!("Failed to delete existing changes: {}", e))?;
+
+    // Insert new entries
+    for change in &changes {
+        tx.execute(
+            "INSERT INTO changed_files
+             (workspace_id, file_path, staged_status, workspace_status, is_untracked, hunks_json, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                workspace_id,
+                &change.file_path,
+                &change.staged_status,
+                &change.workspace_status,
+                if change.is_untracked { 1 } else { 0 },
+                &change.hunks_json,
+                &change.updated_at,
+            ],
+        )
+        .map_err(|e| format!("Failed to insert change: {}", e))?;
+    }
+
+    tx.commit()
+        .map_err(|e| format!("Failed to commit transaction: {}", e))?;
+
+    Ok(())
+}
+
+// ============================================================================
+// Workspace Files Cache Functions
+// ============================================================================
+
+/// Get cached directory listing for a specific parent path
+pub fn get_cached_directory_listing(
+    repo_path: &str,
+    workspace_id: Option<i64>,
+    parent_path: &str,
+) -> Result<Vec<CachedWorkspaceFile>, String> {
+    let conn = get_connection(repo_path)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, workspace_id, file_path, relative_path, is_directory, parent_path, cached_at, mtime
+             FROM workspace_files
+             WHERE workspace_id IS ?1 AND parent_path IS ?2
+             ORDER BY is_directory DESC, relative_path",
+        )
+        .map_err(|e| format!("Failed to prepare query: {}", e))?;
+
+    let files = stmt
+        .query_map(params![workspace_id, parent_path], |row| {
+            Ok(CachedWorkspaceFile {
+                id: row.get(0)?,
+                workspace_id: row.get(1)?,
+                file_path: row.get(2)?,
+                relative_path: row.get(3)?,
+                is_directory: row.get::<_, i64>(4)? != 0,
+                parent_path: row.get(5)?,
+                cached_at: row.get(6)?,
+                mtime: row.get(7)?,
+            })
+        })
+        .map_err(|e| format!("Failed to query cached files: {}", e))?;
+
+    files
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+/// Batch update all cached files for a workspace (replaces all)
+pub fn sync_workspace_files(
+    repo_path: &str,
+    workspace_id: Option<i64>,
+    files: Vec<CachedWorkspaceFile>,
+) -> Result<(), String> {
+    let mut conn = get_connection(repo_path)?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| format!("Failed to start transaction: {}", e))?;
+
+    // Delete existing entries for this workspace
+    tx.execute(
+        "DELETE FROM workspace_files WHERE workspace_id IS ?1",
+        params![workspace_id],
+    )
+    .map_err(|e| format!("Failed to delete existing files: {}", e))?;
+
+    // Insert new entries
+    for file in &files {
+        tx.execute(
+            "INSERT INTO workspace_files
+             (workspace_id, file_path, relative_path, is_directory, parent_path, cached_at, mtime)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                workspace_id,
+                &file.file_path,
+                &file.relative_path,
+                if file.is_directory { 1 } else { 0 },
+                &file.parent_path,
+                &file.cached_at,
+                &file.mtime,
+            ],
+        )
+        .map_err(|e| format!("Failed to insert file: {}", e))?;
+    }
+
+    tx.commit()
+        .map_err(|e| format!("Failed to commit transaction: {}", e))?;
+
+    Ok(())
+}
+
+/// Upsert a single workspace file (for incremental updates)
+pub fn upsert_workspace_file(
+    repo_path: &str,
+    workspace_id: Option<i64>,
+    file_path: &str,
+    relative_path: &str,
+    is_directory: bool,
+    parent_path: Option<&str>,
+    mtime: Option<i64>,
+) -> Result<(), String> {
+    let conn = get_connection(repo_path)?;
+    let cached_at = Utc::now().to_rfc3339();
+
+    conn.execute(
+        "INSERT INTO workspace_files (workspace_id, file_path, relative_path, is_directory, parent_path, cached_at, mtime)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         ON CONFLICT(workspace_id, file_path)
+         DO UPDATE SET relative_path = ?3, is_directory = ?4, parent_path = ?5, cached_at = ?6, mtime = ?7",
+        params![
+            workspace_id,
+            file_path,
+            relative_path,
+            if is_directory { 1 } else { 0 },
+            parent_path,
+            cached_at,
+            mtime,
+        ],
+    )
+    .map_err(|e| format!("Failed to upsert workspace file: {}", e))?;
+
+    Ok(())
+}
+
+/// Delete specific workspace files by paths (for incremental updates when files are deleted)
+pub fn delete_workspace_files(
+    repo_path: &str,
+    workspace_id: Option<i64>,
+    file_paths: Vec<String>,
+) -> Result<(), String> {
+    if file_paths.is_empty() {
+        return Ok(());
+    }
+
+    let mut conn = get_connection(repo_path)?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| format!("Failed to start transaction: {}", e))?;
+
+    for file_path in &file_paths {
+        tx.execute(
+            "DELETE FROM workspace_files WHERE workspace_id IS ?1 AND file_path = ?2",
+            params![workspace_id, file_path],
+        )
+        .map_err(|e| format!("Failed to delete file: {}", e))?;
+    }
+
+    tx.commit()
+        .map_err(|e| format!("Failed to commit transaction: {}", e))?;
+
+    Ok(())
+}
+
+/// Invalidate (clear) all cached files for a workspace
+pub fn invalidate_workspace_files(
+    repo_path: &str,
+    workspace_id: Option<i64>,
+) -> Result<(), String> {
+    let conn = get_connection(repo_path)?;
+    conn.execute(
+        "DELETE FROM workspace_files WHERE workspace_id IS ?1",
+        params![workspace_id],
+    )
+    .map_err(|e| format!("Failed to invalidate workspace files: {}", e))?;
     Ok(())
 }

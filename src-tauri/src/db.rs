@@ -13,7 +13,6 @@ pub struct Workspace {
     pub branch_name: String,
     pub created_at: String,
     pub metadata: Option<String>,
-    pub is_pinned: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -23,7 +22,6 @@ pub struct Session {
     pub name: String,
     pub created_at: String,
     pub last_accessed: String,
-    pub plan_title: Option<String>,
     pub model: Option<String>,
 }
 
@@ -48,12 +46,17 @@ pub struct FileView {
 
 pub struct Database {
     conn: Connection,
+    db_path: PathBuf,
 }
 
 impl Database {
     pub fn new(db_path: PathBuf) -> Result<Self> {
-        let conn = Connection::open(db_path)?;
-        Ok(Database { conn })
+        let conn = Connection::open(&db_path)?;
+        Ok(Database { conn, db_path })
+    }
+
+    pub fn db_path(&self) -> &PathBuf {
+        &self.db_path
     }
 
     pub fn init(&self) -> Result<()> {
@@ -73,17 +76,11 @@ impl Database {
                 name TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 last_accessed TEXT NOT NULL,
-                plan_title TEXT,
                 model TEXT,
                 FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
             )",
             [],
         )?;
-
-        // Migration: Add plan_title column if it doesn't exist
-        let _ = self
-            .conn
-            .execute("ALTER TABLE sessions ADD COLUMN plan_title TEXT", []);
 
         // Migration: Add model column if it doesn't exist
         let _ = self
@@ -221,55 +218,6 @@ impl Database {
         Ok(())
     }
 
-    #[allow(dead_code)]
-    pub fn add_workspace(&self, workspace: &Workspace) -> Result<i64> {
-        self.conn.execute(
-            "INSERT INTO workspaces (repo_path, workspace_name, workspace_path, branch_name, created_at, metadata)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            (
-                &workspace.repo_path,
-                &workspace.workspace_name,
-                &workspace.workspace_path,
-                &workspace.branch_name,
-                &workspace.created_at,
-                &workspace.metadata,
-            ),
-        )?;
-        Ok(self.conn.last_insert_rowid())
-    }
-
-    #[allow(dead_code)]
-    pub fn get_workspaces(&self) -> Result<Vec<Workspace>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, repo_path, workspace_name, workspace_path, branch_name, created_at, metadata, is_pinned
-             FROM workspaces ORDER BY is_pinned DESC, branch_name COLLATE NOCASE ASC",
-        )?;
-
-        let workspaces = stmt.query_map([], |row| {
-            Ok(Workspace {
-                id: row.get(0)?,
-                repo_path: row.get(1)?,
-                workspace_name: row.get(2)?,
-                workspace_path: row.get(3)?,
-                branch_name: row.get(4)?,
-                created_at: row.get(5)?,
-                metadata: row.get(6)?,
-                is_pinned: row.get::<_, i64>(7)? != 0,
-            })
-        })?;
-
-        workspaces.collect()
-    }
-
-    #[allow(dead_code)]
-    pub fn delete_workspace(&self, id: i64) -> Result<()> {
-        self.conn
-            .execute("DELETE FROM sessions WHERE workspace_id = ?1", [id])?;
-        self.conn
-            .execute("DELETE FROM workspaces WHERE id = ?1", [id])?;
-        Ok(())
-    }
-
     pub fn get_setting(&self, key: &str) -> Result<Option<String>> {
         let mut stmt = self
             .conn
@@ -289,6 +237,38 @@ impl Database {
             [key, value],
         )?;
         Ok(())
+    }
+
+    pub fn get_settings_batch(&self, keys: &[String]) -> Result<std::collections::HashMap<String, Option<String>>> {
+        use std::collections::HashMap;
+
+        let mut result = HashMap::new();
+
+        if keys.is_empty() {
+            return Ok(result);
+        }
+
+        // Build placeholders for IN clause
+        let placeholders = keys.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+        let query = format!("SELECT key, value FROM settings WHERE key IN ({})", placeholders);
+
+        let mut stmt = self.conn.prepare(&query)?;
+        let params: Vec<&dyn rusqlite::ToSql> = keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
+        let mut rows = stmt.query(&params[..])?;
+
+        // First, initialize all keys with None
+        for key in keys {
+            result.insert(key.clone(), None);
+        }
+
+        // Then populate with actual values
+        while let Some(row) = rows.next()? {
+            let key: String = row.get(0)?;
+            let value: String = row.get(1)?;
+            result.insert(key, Some(value));
+        }
+
+        Ok(result)
     }
 
     // Helper function to create composite key for repo-specific settings
@@ -368,25 +348,15 @@ impl Database {
     }
 
     #[allow(dead_code)]
-    pub fn get_all_cached_workspaces(&self) -> Result<Vec<String>> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT DISTINCT workspace_path FROM git_cache ORDER BY workspace_path")?;
-        let rows = stmt.query_map([], |row| row.get(0))?;
-        rows.collect()
-    }
-
-    #[allow(dead_code)]
     pub fn add_session(&self, session: &Session) -> Result<i64> {
         self.conn.execute(
-            "INSERT INTO sessions (workspace_id, type, name, created_at, last_accessed, plan_title, model)
-             VALUES (?1, 'session', ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO sessions (workspace_id, type, name, created_at, last_accessed, model)
+             VALUES (?1, 'session', ?2, ?3, ?4, ?5)",
             (
                 &session.workspace_id,
                 &session.name,
                 &session.created_at,
                 &session.last_accessed,
-                &session.plan_title,
                 &session.model,
             ),
         )?;
@@ -396,7 +366,7 @@ impl Database {
     #[allow(dead_code)]
     pub fn get_sessions(&self) -> Result<Vec<Session>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, workspace_id, name, created_at, last_accessed, plan_title, model
+            "SELECT id, workspace_id, name, created_at, last_accessed, model
              FROM sessions ORDER BY created_at ASC",
         )?;
 
@@ -407,52 +377,7 @@ impl Database {
                 name: row.get(2)?,
                 created_at: row.get(3)?,
                 last_accessed: row.get(4)?,
-                plan_title: row.get(5)?,
-                model: row.get(6)?,
-            })
-        })?;
-
-        sessions.collect()
-    }
-
-    #[allow(dead_code)]
-    pub fn get_sessions_by_workspace(&self, workspace_id: i64) -> Result<Vec<Session>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, workspace_id, name, created_at, last_accessed, plan_title, model
-             FROM sessions WHERE workspace_id = ?1 ORDER BY created_at ASC",
-        )?;
-
-        let sessions = stmt.query_map([workspace_id], |row| {
-            Ok(Session {
-                id: row.get(0)?,
-                workspace_id: row.get(1)?,
-                name: row.get(2)?,
-                created_at: row.get(3)?,
-                last_accessed: row.get(4)?,
-                plan_title: row.get(5)?,
-                model: row.get(6)?,
-            })
-        })?;
-
-        sessions.collect()
-    }
-
-    #[allow(dead_code)]
-    pub fn get_main_repo_sessions(&self) -> Result<Vec<Session>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, workspace_id, name, created_at, last_accessed, plan_title, model
-             FROM sessions WHERE workspace_id IS NULL ORDER BY created_at ASC",
-        )?;
-
-        let sessions = stmt.query_map([], |row| {
-            Ok(Session {
-                id: row.get(0)?,
-                workspace_id: row.get(1)?,
-                name: row.get(2)?,
-                created_at: row.get(3)?,
-                last_accessed: row.get(4)?,
-                plan_title: row.get(5)?,
-                model: row.get(6)?,
+                model: row.get(5)?,
             })
         })?;
 

@@ -29,6 +29,40 @@ pub struct WorkspaceInfo {
     pub is_colocated: bool,
 }
 
+/// A diff hunk from jj diff output
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct JjDiffHunk {
+    pub id: String,
+    pub header: String,
+    pub lines: Vec<String>,
+    pub patch: String,
+}
+
+/// File change status in JJ working copy
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct JjFileChange {
+    pub path: String,
+    pub status: String,
+    pub previous_path: Option<String>,
+}
+
+/// File content lines for context expansion
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct JjFileLines {
+    pub lines: Vec<String>,
+    pub start_line: usize,
+    pub end_line: usize,
+}
+
+/// Result of a rebase operation
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct JjRebaseResult {
+    pub success: bool,
+    pub message: String,
+    pub has_conflicts: bool,
+    pub conflicted_files: Vec<String>,
+}
+
 impl std::fmt::Display for JjError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -319,6 +353,12 @@ pub fn create_workspace(
         )));
     }
 
+    // Create initial bookmark pointing at current working copy
+    if let Err(e) = jj_set_bookmark(&workspace_path_str, branch_name, "@") {
+        eprintln!("Warning: Failed to create initial bookmark '{}': {}", branch_name, e);
+        // Don't fail workspace creation for bookmark errors
+    }
+
     Ok(workspace_path_str)
 }
 
@@ -440,4 +480,419 @@ pub fn get_workspace_info(workspace_path: &str) -> Result<WorkspaceInfo, JjError
         branch,
         is_colocated,
     })
+}
+
+/// Move changes from one workspace to another using jj squash
+/// This moves changes from the current workspace (@) to the target workspace's working copy
+/// Uses: jj squash --from @ --into <target-workspace-name>@
+pub fn squash_to_workspace(
+    source_workspace_path: &str,
+    target_workspace_name: &str,
+    file_paths: Option<Vec<String>>,
+) -> Result<String, JjError> {
+    // Construct the target revision reference: workspace-name@
+    let target_ref = format!("{}@", target_workspace_name);
+
+    // Build the jj squash command
+    let mut cmd = Command::new("jj");
+    cmd.current_dir(source_workspace_path);
+    cmd.args(["squash", "--from", "@", "--into", &target_ref]);
+
+    // If specific file paths are provided, add them
+    if let Some(paths) = file_paths {
+        if !paths.is_empty() {
+            for path in paths {
+                cmd.arg(path);
+            }
+        }
+    }
+
+    let output = cmd.output().map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        Err(JjError::InitFailed(format!(
+            "Failed to squash changes: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )))
+    }
+}
+
+// ============================================================================
+// Diff Operations using hybrid CLI approach
+// Uses jj CLI for file listing (faster) and git CLI for diffs (reliable)
+// ============================================================================
+
+/// Get list of changed files in working copy using jj status
+/// This is faster than git status for large repos
+pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, JjError> {
+    let output = Command::new("jj")
+        .current_dir(workspace_path)
+        .args(["status", "--no-pager"])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !output.status.success() {
+        return Err(JjError::IoError(
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        ));
+    }
+
+    let status_output = String::from_utf8_lossy(&output.stdout);
+    parse_jj_status(&status_output)
+}
+
+/// Parse jj status output into file changes
+fn parse_jj_status(status: &str) -> Result<Vec<JjFileChange>, JjError> {
+    let mut changes = Vec::new();
+
+    for line in status.lines() {
+        let line = line.trim();
+
+        // Skip empty lines and section headers
+        if line.is_empty() || line.starts_with("Working copy") || line.starts_with("Parent commit") {
+            continue;
+        }
+
+        // Parse lines like "M file.txt" or "A new.txt" or "D removed.txt"
+        if let Some((status_char, rest)) = line.split_once(' ') {
+            let status = match status_char {
+                "M" => "M", // Modified
+                "A" => "A", // Added
+                "D" => "D", // Deleted
+                "R" => "M", // Renamed (treat as modified for now)
+                _ => continue,
+            };
+
+            let path = rest.trim().to_string();
+            changes.push(JjFileChange {
+                path,
+                status: status.to_string(),
+                previous_path: None,
+            });
+        }
+    }
+
+    Ok(changes)
+}
+
+/// Get diff hunks for a specific file
+/// Uses git diff CLI for now as it's simpler and reliable
+/// The main performance win comes from using jj-lib for file list iteration
+pub fn jj_get_file_hunks(workspace_path: &str, file_path: &str) -> Result<Vec<JjDiffHunk>, JjError> {
+    // Use git diff to get hunks (simpler and more reliable than reimplementing unified diff)
+    let output = Command::new("git")
+        .current_dir(workspace_path)
+        .args(["diff", "HEAD", "--", file_path])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !output.status.success() {
+        return Err(JjError::IoError(
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        ));
+    }
+
+    let diff_output = String::from_utf8_lossy(&output.stdout);
+    parse_git_diff_hunks(&diff_output)
+}
+
+/// Parse git diff output into hunks
+fn parse_git_diff_hunks(diff: &str) -> Result<Vec<JjDiffHunk>, JjError> {
+    let mut hunks = Vec::new();
+    let mut current_hunk: Option<(String, Vec<String>)> = None;
+    let mut hunk_index = 0;
+
+    for line in diff.lines() {
+        if line.starts_with("@@") {
+            // Save previous hunk if exists
+            if let Some((header, lines)) = current_hunk.take() {
+                hunks.push(JjDiffHunk {
+                    id: format!("hunk-{}", hunk_index),
+                    header: header.clone(),
+                    lines: lines.clone(),
+                    patch: format!("{}\n{}", header, lines.join("\n")),
+                });
+                hunk_index += 1;
+            }
+
+            // Start new hunk
+            current_hunk = Some((line.to_string(), Vec::new()));
+        } else if let Some((_, ref mut lines)) = current_hunk {
+            // Skip diff metadata lines
+            if !line.starts_with("diff") && !line.starts_with("index") && !line.starts_with("---") && !line.starts_with("+++") {
+                lines.push(line.to_string());
+            }
+        }
+    }
+
+    // Save last hunk
+    if let Some((header, lines)) = current_hunk {
+        hunks.push(JjDiffHunk {
+            id: format!("hunk-{}", hunk_index),
+            header: header.clone(),
+            lines: lines.clone(),
+            patch: format!("{}\n{}", header, lines.join("\n")),
+        });
+    }
+
+    Ok(hunks)
+}
+
+/// Get file content at specific lines for context expansion
+pub fn jj_get_file_lines(
+    workspace_path: &str,
+    file_path: &str,
+    from_parent: bool,
+    start_line: usize,
+    end_line: usize,
+) -> Result<JjFileLines, JjError> {
+    let content = if from_parent {
+        // Get file from parent commit using git show
+        let output = Command::new("git")
+            .current_dir(workspace_path)
+            .args(["show", &format!("HEAD:{}", file_path)])
+            .output()
+            .map_err(|e| JjError::IoError(e.to_string()))?;
+
+        if !output.status.success() {
+            return Err(JjError::IoError(
+                String::from_utf8_lossy(&output.stderr).to_string(),
+            ));
+        }
+
+        String::from_utf8_lossy(&output.stdout).to_string()
+    } else {
+        // Read file from working directory
+        let full_path = Path::new(workspace_path).join(file_path);
+        fs::read_to_string(&full_path)
+            .map_err(|e| JjError::IoError(format!("Failed to read file: {}", e)))?
+    };
+
+    let all_lines: Vec<&str> = content.lines().collect();
+    let start_idx = start_line.saturating_sub(1).min(all_lines.len());
+    let end_idx = end_line.min(all_lines.len());
+
+    let lines: Vec<String> = all_lines[start_idx..end_idx]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+
+    Ok(JjFileLines {
+        lines,
+        start_line: start_idx + 1,
+        end_line: end_idx,
+    })
+}
+
+// ============================================================================
+// Mutation Operations (CLI fallbacks)
+// ============================================================================
+
+/// Restore a file to parent state (discard changes)
+/// Uses CLI as jj-lib mutation APIs are complex
+pub fn jj_restore_file(workspace_path: &str, file_path: &str) -> Result<String, JjError> {
+    let output = Command::new("jj")
+        .current_dir(workspace_path)
+        .args(["restore", file_path])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !output.status.success() {
+        return Err(JjError::IoError(
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        ));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+/// Restore all changes
+pub fn jj_restore_all(workspace_path: &str) -> Result<String, JjError> {
+    let output = Command::new("jj")
+        .current_dir(workspace_path)
+        .args(["restore"])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !output.status.success() {
+        return Err(JjError::IoError(
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        ));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+/// Set (or create) a jj bookmark to point at a specific revision
+/// Uses: jj bookmark set <name> -r <revision>
+pub fn jj_set_bookmark(workspace_path: &str, bookmark_name: &str, revision: &str) -> Result<(), JjError> {
+    let output = Command::new("jj")
+        .current_dir(workspace_path)
+        .args(["bookmark", "set", bookmark_name, "-r", revision])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !output.status.success() {
+        return Err(JjError::IoError(
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+/// Describe and create new commit
+pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError> {
+    // First describe
+    let describe = Command::new("jj")
+        .current_dir(workspace_path)
+        .args(["describe", "-m", message])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !describe.status.success() {
+        return Err(JjError::IoError(
+            String::from_utf8_lossy(&describe.stderr).to_string(),
+        ));
+    }
+
+    // Then create new empty commit
+    let new_commit = Command::new("jj")
+        .current_dir(workspace_path)
+        .args(["new"])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !new_commit.status.success() {
+        return Err(JjError::IoError(
+            String::from_utf8_lossy(&new_commit.stderr).to_string(),
+        ));
+    }
+
+    // Advance the bookmark to the new commit (@- is the parent, which has the content)
+    // Get the branch name from git (this is the bookmark name)
+    if let Ok(branch_name) = get_workspace_branch(workspace_path) {
+        if !branch_name.is_empty() && branch_name != "HEAD" {
+            // Set the bookmark to point at @- (the commit with the actual content)
+            if let Err(e) = jj_set_bookmark(workspace_path, &branch_name, "@-") {
+                eprintln!("Warning: Failed to advance bookmark '{}': {}", branch_name, e);
+                // Don't fail the commit for bookmark errors
+            }
+        }
+    }
+
+    Ok("Committed successfully".to_string())
+}
+
+/// Rebase the current workspace onto a target branch
+/// Uses: jj rebase -d <target_branch>
+pub fn jj_rebase_onto(
+    workspace_path: &str,
+    target_branch: &str,
+) -> Result<JjRebaseResult, JjError> {
+    let output = Command::new("jj")
+        .current_dir(workspace_path)
+        .args(["rebase", "-d", target_branch])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined_message = format!("{}{}", stdout, stderr);
+
+    // Check for conflicts in output
+    let has_conflicts = combined_message.to_lowercase().contains("conflict");
+
+    // Get conflicted files if there are conflicts
+    let conflicted_files = if has_conflicts {
+        get_conflicted_files(workspace_path).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    Ok(JjRebaseResult {
+        success: output.status.success(),
+        message: combined_message,
+        has_conflicts,
+        conflicted_files,
+    })
+}
+
+/// Get list of conflicted files from jj status
+pub fn get_conflicted_files(workspace_path: &str) -> Result<Vec<String>, JjError> {
+    let output = Command::new("jj")
+        .current_dir(workspace_path)
+        .args(["status", "--no-pager"])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !output.status.success() {
+        return Ok(Vec::new());
+    }
+
+    let status = String::from_utf8_lossy(&output.stdout);
+    parse_conflicted_files(&status)
+}
+
+/// Parse jj status output to extract conflicted files
+/// JJ shows conflicts with "C" prefix in status output
+fn parse_conflicted_files(status: &str) -> Result<Vec<String>, JjError> {
+    let mut conflicts = Vec::new();
+
+    for line in status.lines() {
+        let trimmed = line.trim();
+
+        // Look for lines that start with "C " indicating conflicts
+        if let Some(rest) = trimmed.strip_prefix("C ") {
+            conflicts.push(rest.trim().to_string());
+        }
+        // Also check for explicit conflict messages
+        else if trimmed.contains("conflict") && trimmed.contains(":") {
+            if let Some(file_path) = trimmed.split(':').next() {
+                let clean_path = file_path.trim();
+                if !clean_path.is_empty() && !conflicts.contains(&clean_path.to_string()) {
+                    conflicts.push(clean_path.to_string());
+                }
+            }
+        }
+    }
+
+    Ok(conflicts)
+}
+
+/// Get the default branch of the repository (main/master)
+/// Checks git symbolic-ref for origin/HEAD, falls back to checking for main/master
+pub fn get_default_branch(repo_path: &str) -> Result<String, JjError> {
+    // Try origin/HEAD first
+    let output = Command::new("git")
+        .current_dir(repo_path)
+        .args(["symbolic-ref", "refs/remotes/origin/HEAD"])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if output.status.success() {
+        let branch = String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .strip_prefix("refs/remotes/origin/")
+            .unwrap_or("main")
+            .to_string();
+        return Ok(branch);
+    }
+
+    // Fallback: check for main or master branches
+    for branch in &["main", "master"] {
+        let check = Command::new("git")
+            .current_dir(repo_path)
+            .args(["rev-parse", "--verify", branch])
+            .output();
+
+        if check.map(|o| o.status.success()).unwrap_or(false) {
+            return Ok(branch.to_string());
+        }
+    }
+
+    // Default fallback
+    Ok("main".to_string())
 }

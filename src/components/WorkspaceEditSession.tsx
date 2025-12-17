@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Terminal } from "./Terminal";
-import { StagingDiffViewer } from "./StagingDiffViewer";
 import { Button } from "./ui/button";
 import { X, GitBranch } from "lucide-react";
 import { Workspace, BranchInfo, BranchDivergence, gitGetBranchInfo, gitGetBranchDivergence, getSetting } from "../lib/api";
@@ -190,9 +189,9 @@ export const WorkspaceEditSession: React.FC<WorkspaceEditSessionProps> = ({
           />
         </div>
 
-        {/* Right panel - Staging Diff Viewer */}
+        {/* Right panel - Changes Diff Viewer */}
         {/* <div className="flex-1 min-w-0">
-          <StagingDiffViewer workspacePath={workspace.workspace_path} />
+          <ChangesDiffViewer workspacePath={workspace.workspace_path} />
         </div> */}
       </div>
     </div>

@@ -156,7 +156,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       await navigator.clipboard.writeText(errorDetails);
       this.setState({ copyStatus: "Copied to clipboard!" });
       setTimeout(() => this.setState({ copyStatus: null }), 3000);
-    } catch (err) {
+    } catch {
       this.setState({ copyStatus: "Failed to copy" });
       setTimeout(() => this.setState({ copyStatus: null }), 3000);
     }

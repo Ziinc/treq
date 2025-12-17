@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { PlanHistoryEntry, PlanHistoryPayload } from "../types/planHistory";
 
 export interface Workspace {
   id: number;
@@ -11,7 +10,6 @@ export interface Workspace {
   branch_name: string;
   created_at: string;
   metadata?: string;
-  is_pinned: boolean;
 }
 
 export interface Session {
@@ -20,7 +18,6 @@ export interface Session {
   name: string;
   created_at: string;
   last_accessed: string;
-  plan_title?: string;
   model?: string | null;
 }
 
@@ -78,6 +75,51 @@ export interface FileLines {
   end_line: number;
 }
 
+// Cached git changes types
+export interface CachedFileChange {
+  id: number;
+  workspace_id: number | null;
+  file_path: string;
+  staged_status: string | null;
+  workspace_status: string | null;
+  is_untracked: boolean;
+  hunks_json: string | null;
+  updated_at: string;
+}
+
+export interface WorkspaceChangesPayload {
+  workspace_path: string;
+  workspace_id: number | null;
+}
+
+// JJ Diff Types (no staging concept - working copy only)
+export interface JjDiffHunk {
+  id: string;
+  header: string;
+  lines: string[];
+  patch: string;
+  is_staged?: boolean; // Always false/undefined for JJ (for compatibility with existing code)
+}
+
+export interface JjFileChange {
+  path: string;
+  status: string;
+  previous_path?: string | null;
+}
+
+export interface JjFileLines {
+  lines: string[];
+  start_line: number;
+  end_line: number;
+}
+
+export interface JjRebaseResult {
+  success: boolean;
+  message: string;
+  has_conflicts: boolean;
+  conflicted_files: string[];
+}
+
 export type DiffLineKind = "context" | "addition" | "deletion" | "meta";
 
 export interface BranchDiffLine {
@@ -125,6 +167,13 @@ export interface DirectoryEntry {
   is_directory: boolean;
 }
 
+export interface CachedDirectoryEntry {
+  name: string;
+  path: string;
+  is_directory: boolean;
+  relative_path: string;
+}
+
 // Database API
 export const getWorkspaces = (repo_path: string): Promise<Workspace[]> =>
   invoke("get_workspaces", { repoPath: repo_path });
@@ -144,11 +193,22 @@ export const addWorkspaceToDb = (
 export const deleteWorkspaceFromDb = (repo_path: string, id: number): Promise<void> =>
   invoke("delete_workspace_from_db", { repoPath: repo_path, id });
 
-export const toggleWorkspacePin = (repo_path: string, id: number): Promise<boolean> =>
-  invoke("toggle_workspace_pin", { repoPath: repo_path, id });
+export const ensureWorkspaceIndexed = (
+  repo_path: string,
+  workspace_id: number | null,
+  workspace_path: string
+): Promise<boolean> =>
+  invoke("ensure_workspace_indexed", {
+    repoPath: repo_path,
+    workspaceId: workspace_id,
+    workspacePath: workspace_path,
+  });
 
 export const getSetting = (key: string): Promise<string | null> =>
   invoke("get_setting", { key });
+
+export const getSettingsBatch = (keys: string[]): Promise<Record<string, string | null>> =>
+  invoke("get_settings_batch", { keys });
 
 export const setSetting = (key: string, value: string): Promise<void> =>
   invoke("set_setting", { key, value });
@@ -207,17 +267,99 @@ export const jjCreateWorkspace = (
     sourceBranch: source_branch ?? null,
   });
 
-export const jjListWorkspaces = (repo_path: string): Promise<WorkspaceInfo[]> =>
-  invoke("jj_list_workspaces", { repoPath: repo_path });
-
 export const jjRemoveWorkspace = (repo_path: string, workspace_path: string): Promise<void> =>
   invoke("jj_remove_workspace", { repoPath: repo_path, workspacePath: workspace_path });
 
-export const jjGetWorkspaceInfo = (workspace_path: string): Promise<WorkspaceInfo> =>
-  invoke("jj_get_workspace_info", { workspacePath: workspace_path });
+export const jjSquashToWorkspace = (
+  source_workspace_path: string,
+  target_workspace_name: string,
+  file_paths?: string[]
+): Promise<string> =>
+  invoke("jj_squash_to_workspace", {
+    sourceWorkspacePath: source_workspace_path,
+    targetWorkspaceName: target_workspace_name,
+    filePaths: file_paths || null,
+  });
+
+// JJ Diff API
+export const jjGetChangedFiles = (workspace_path: string): Promise<JjFileChange[]> =>
+  invoke("jj_get_changed_files", { workspacePath: workspace_path });
+
+export const jjGetFileHunks = (
+  workspace_path: string,
+  file_path: string
+): Promise<JjDiffHunk[]> =>
+  invoke("jj_get_file_hunks", {
+    workspacePath: workspace_path,
+    filePath: file_path,
+  });
+
+export const jjGetFileLines = (
+  workspacePath: string,
+  filePath: string,
+  fromParent: boolean,
+  startLine: number,
+  endLine: number
+): Promise<JjFileLines> =>
+  invoke("jj_get_file_lines", {
+    workspacePath,
+    filePath,
+    fromParent,
+    startLine,
+    endLine,
+  });
+
+export const jjRestoreFile = (
+  workspace_path: string,
+  file_path: string
+): Promise<string> =>
+  invoke("jj_restore_file", {
+    workspacePath: workspace_path,
+    filePath: file_path,
+  });
+
+export const jjRestoreAll = (workspace_path: string): Promise<string> =>
+  invoke("jj_restore_all", { workspacePath: workspace_path });
 
 export const jjIsWorkspace = (repo_path: string): Promise<boolean> =>
   invoke("jj_is_workspace", { repoPath: repo_path });
+
+export const jjCommit = (
+  workspace_path: string,
+  message: string
+): Promise<string> =>
+  invoke("jj_commit", {
+    workspacePath: workspace_path,
+    message,
+  });
+
+export const jjRebaseOnto = (
+  workspace_path: string,
+  target_branch: string
+): Promise<JjRebaseResult> =>
+  invoke("jj_rebase_onto", {
+    workspacePath: workspace_path,
+    targetBranch: target_branch,
+  });
+
+export const jjGetConflictedFiles = (
+  workspace_path: string
+): Promise<string[]> =>
+  invoke("jj_get_conflicted_files", { workspacePath: workspace_path });
+
+export const jjGetDefaultBranch = (repo_path: string): Promise<string> =>
+  invoke("jj_get_default_branch", { repoPath: repo_path });
+
+export const updateWorkspaceMetadata = (
+  repo_path: string,
+  id: number,
+  metadata: string
+): Promise<void> =>
+  invoke("update_workspace_metadata", {
+    repoPath: repo_path,
+    id,
+    metadata,
+  });
 
 // Git API
 export const gitGetCurrentBranch = (repo_path: string): Promise<string> =>
@@ -249,6 +391,19 @@ export const gitGetLineDiffStats = (
   base_branch: string
 ): Promise<LineDiffStats> =>
   invoke("git_get_line_diff_stats", { workspacePath: workspace_path, baseBranch: base_branch });
+
+export interface WorkspaceGitInfo {
+  status: GitStatus;
+  branch_info: BranchInfo;
+  divergence: BranchDivergence | null;
+  line_diff_stats: LineDiffStats | null;
+}
+
+export const gitGetWorkspaceInfo = (
+  workspace_path: string,
+  base_branch?: string | null
+): Promise<WorkspaceGitInfo> =>
+  invoke("git_get_workspace_info", { workspacePath: workspace_path, baseBranch: base_branch });
 
 export const gitGetDiffBetweenBranches = (
   repo_path: string,
@@ -337,16 +492,6 @@ export const gitDiscardFiles = (workspace_path: string, file_paths: string[]): P
 export const gitHasUncommittedChanges = (workspace_path: string): Promise<boolean> =>
   invoke("git_has_uncommitted_changes", { workspacePath: workspace_path });
 
-export const gitStashPushFiles = (
-  workspace_path: string,
-  file_paths: string[],
-  message: string
-): Promise<string> =>
-  invoke("git_stash_push_files", { workspacePath: workspace_path, filePaths: file_paths, message });
-
-export const gitStashPop = (workspace_path: string): Promise<string> =>
-  invoke("git_stash_pop", { workspacePath: workspace_path });
-
 // PTY API
 export const ptyCreateSession = (
   session_id: string,
@@ -378,12 +523,20 @@ export const readFile = (path: string): Promise<string> =>
 export const listDirectory = (path: string): Promise<DirectoryEntry[]> =>
   invoke("list_directory", { path });
 
+export const listDirectoryCached = (
+  repoPath: string,
+  workspaceId: number | null,
+  parentPath: string
+): Promise<CachedDirectoryEntry[]> =>
+  invoke("list_directory_cached", {
+    repoPath,
+    workspaceId,
+    parentPath,
+  });
+
 // Git Operations API
 export const gitCommit = (workspace_path: string, message: string): Promise<string> =>
   invoke("git_commit", { workspacePath: workspace_path, message });
-
-export const gitCommitAmend = (workspace_path: string, message: string): Promise<string> =>
-  invoke("git_commit_amend", { workspacePath: workspace_path, message });
 
 export const gitAddAll = (workspace_path: string): Promise<string> =>
   invoke("git_add_all", { workspacePath: workspace_path });
@@ -402,6 +555,9 @@ export const gitPull = (workspace_path: string): Promise<string> =>
 
 export const gitFetch = (workspace_path: string): Promise<string> =>
   invoke("git_fetch", { workspacePath: workspace_path });
+
+export const gitListRemotes = (workspace_path: string): Promise<string[]> =>
+  invoke("git_list_remotes", { workspacePath: workspace_path });
 
 export const gitStageFile = (workspace_path: string, file_path: string): Promise<string> =>
   invoke("git_stage_file", { workspacePath: workspace_path, filePath: file_path });
@@ -455,6 +611,29 @@ export const gitUnstageSelectedLines = (
     hunks,
   });
 
+// Cached git changes API
+export const getCachedGitChanges = (
+  repo_path: string,
+  workspace_id: number | null
+): Promise<CachedFileChange[]> =>
+  invoke("get_cached_git_changes", { repoPath: repo_path, workspaceId: workspace_id });
+
+export const startGitWatcher = (repo_path: string): Promise<void> =>
+  invoke("start_git_watcher", { repoPath: repo_path });
+
+export const stopGitWatcher = (repo_path: string): Promise<void> =>
+  invoke("stop_git_watcher", { repoPath: repo_path });
+
+export const triggerWorkspaceScan = (
+  repo_path: string,
+  workspace_id: number | null
+): Promise<void> =>
+  invoke("trigger_workspace_scan", { repoPath: repo_path, workspaceId: workspace_id });
+
+export const listenWorkspaceChanges = (
+  callback: (payload: WorkspaceChangesPayload) => void
+) => listen<WorkspaceChangesPayload>("workspace-changes-updated", (event) => callback(event.payload));
+
 // Folder picker and git validation
 export const selectFolder = async (): Promise<string | null> => {
   const selected = await open({
@@ -471,124 +650,13 @@ export const isGitRepository = (path: string): Promise<boolean> =>
 export const gitInit = (path: string): Promise<string> =>
   invoke("git_init_repo", { path });
 
-// Plan persistence (legacy - database-based)
-export const savePlanToRepo = async (
-  repoPath: string,
-  planId: string,
-  content: string,
-  sessionId?: string
-): Promise<void> => {
-  const data = JSON.stringify({
-    content,
-    editedAt: new Date().toISOString(),
-    sessionId: sessionId || null,
-  });
-  // Include sessionId in the key for session scoping
-  const key = sessionId ? `plan_${sessionId}_${planId}` : `plan_${planId}`;
-  return setRepoSetting(repoPath, key, data);
-};
-
-export const loadPlanFromRepo = async (
-  repoPath: string,
-  planId: string,
-  sessionId?: string
-): Promise<{ content: string; editedAt: string; sessionId?: string } | null> => {
-  // Try session-scoped key first, then fallback to legacy key
-  const sessionKey = sessionId ? `plan_${sessionId}_${planId}` : null;
-  const legacyKey = `plan_${planId}`;
-  
-  let data: string | null = null;
-  if (sessionKey) {
-    data = await getRepoSetting(repoPath, sessionKey);
-  }
-  
-  // Fallback to legacy key if session-scoped key not found
-  if (!data) {
-    data = await getRepoSetting(repoPath, legacyKey);
-  }
-  
-  if (!data) return null;
-  
-  try {
-    return JSON.parse(data);
-  } catch (error) {
-    console.error('Failed to parse plan data:', error);
-    return null;
-  }
-};
-
-// Plan history (.treq/local.db)
-export const saveExecutedPlan = (
-  repoPath: string,
-  workspaceId: number,
-  planData: PlanHistoryPayload
-): Promise<number> =>
-  invoke("save_executed_plan_command", { repoPath, workspaceId, planData });
-
-export const getWorkspacePlans = (
-  repoPath: string,
-  workspaceId: number,
-  limit?: number
-): Promise<PlanHistoryEntry[]> =>
-  invoke("get_workspace_plans_command", {
-    repoPath,
-    workspaceId,
-    ...(typeof limit === "number" ? { limit } : {}),
-  });
-
-export const getAllWorkspacePlans = (
-  repoPath: string,
-  workspaceId: number
-): Promise<PlanHistoryEntry[]> =>
-  invoke("get_all_workspace_plans_command", { repoPath, workspaceId });
-
-// File-based plan storage (.treq/plans/*)
-export interface PlanMetadata {
-  id: string;
-  title: string;
-  plan_type: string;
-  workspace_id?: number;
-  workspace_path?: string;
-  branch_name?: string;
-  timestamp: string;
-}
-
-export interface PlanFile {
-  id: string;
-  title: string;
-  type: string;
-  raw_markdown: string;
-  workspace_id?: number;
-  workspace_path?: string;
-  branch_name?: string;
-  timestamp: string;
-}
-
-export const savePlanToFile = (
-  repoPath: string,
-  planId: string,
-  content: string,
-  metadata: PlanMetadata
-): Promise<void> =>
-  invoke("save_plan_to_file", { repoPath, planId, content, metadata });
-
-export const loadPlansFromFiles = (repoPath: string): Promise<PlanFile[]> =>
-  invoke("load_plans_from_files", { repoPath });
-
-export const getPlanFile = (repoPath: string, planId: string): Promise<PlanFile> =>
-  invoke("get_plan_file", { repoPath, planId });
-
-export const deletePlanFile = (repoPath: string, planId: string): Promise<void> =>
-  invoke("delete_plan_file", { repoPath, planId });
-
 // Session management API
 export const createSession = (
   repo_path: string,
   workspaceId: number | null,
-  name: string,
-  planTitle?: string
+  name: string
 ): Promise<number> =>
-  invoke("create_session", { repoPath: repo_path, workspaceId, name, planTitle });
+  invoke("create_session", { repoPath: repo_path, workspaceId, name });
 
 export const getSessions = (repo_path: string): Promise<Session[]> =>
   invoke("get_sessions", { repoPath: repo_path });

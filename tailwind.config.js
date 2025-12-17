@@ -76,7 +76,102 @@ export default {
         '18': '4.5rem',    // 72px
         '88': '22rem',     // 352px
       },
+      typography: {
+        DEFAULT: {
+          css: {
+            maxWidth: 'none',
+            color: 'hsl(var(--foreground))',
+            a: {
+              color: 'hsl(var(--primary))',
+              textDecoration: 'underline',
+              fontWeight: '500',
+            },
+            strong: {
+              color: 'hsl(var(--foreground))',
+              fontWeight: '600',
+            },
+            h1: {
+              color: 'hsl(var(--foreground))',
+              fontWeight: '600',
+              fontSize: '2em',
+              marginTop: '0',
+              marginBottom: '0.8em',
+            },
+            h2: {
+              color: 'hsl(var(--foreground))',
+              fontWeight: '600',
+              fontSize: '1.5em',
+              marginTop: '1.6em',
+              marginBottom: '0.8em',
+            },
+            h3: {
+              color: 'hsl(var(--foreground))',
+              fontWeight: '600',
+              fontSize: '1.25em',
+              marginTop: '1.4em',
+              marginBottom: '0.6em',
+            },
+            code: {
+              color: 'hsl(var(--foreground))',
+              backgroundColor: 'hsl(var(--muted))',
+              padding: '0.2em 0.4em',
+              borderRadius: '0.25rem',
+              fontWeight: '400',
+              fontSize: '0.875em',
+            },
+            'code::before': {
+              content: '""',
+            },
+            'code::after': {
+              content: '""',
+            },
+            pre: {
+              backgroundColor: 'hsl(var(--muted))',
+              color: 'hsl(var(--foreground))',
+              padding: '1em',
+              borderRadius: '0.5rem',
+              overflowX: 'auto',
+            },
+            'pre code': {
+              backgroundColor: 'transparent',
+              padding: '0',
+            },
+            blockquote: {
+              color: 'hsl(var(--muted-foreground))',
+              borderLeftColor: 'hsl(var(--border))',
+              borderLeftWidth: '4px',
+              paddingLeft: '1em',
+              fontStyle: 'normal',
+            },
+            hr: {
+              borderColor: 'hsl(var(--border))',
+              marginTop: '2em',
+              marginBottom: '2em',
+            },
+            ul: {
+              listStyleType: 'disc',
+              paddingLeft: '1.5em',
+            },
+            ol: {
+              listStyleType: 'decimal',
+              paddingLeft: '1.5em',
+            },
+            li: {
+              marginTop: '0.5em',
+              marginBottom: '0.5em',
+            },
+            'ul > li': {
+              paddingLeft: '0.25em',
+            },
+            'ol > li': {
+              paddingLeft: '0.25em',
+            },
+          },
+        },
+      },
     },
   },
-  plugins: [],
+  plugins: [
+    require('@tailwindcss/typography'),
+  ],
 }
