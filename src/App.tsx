@@ -4,6 +4,7 @@ import { ToastProvider } from "./components/ui/toast";
 import { ThemeProvider } from "./hooks/useTheme";
 import { TerminalSettingsProvider } from "./hooks/useTerminalSettings";
 import { DiffSettingsProvider } from "./hooks/useDiffSettings";
+import { useSettingsPreloader } from "./hooks/useSettingsPreloader";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./index.css";
 
@@ -16,6 +17,26 @@ const queryClient = new QueryClient({
   },
 });
 
+function AppContent() {
+  // Pre-load all settings in a single batch request
+  useSettingsPreloader();
+
+  return (
+    <div className="flex h-screen">
+      <ErrorBoundary
+        fallbackTitle="Dashboard crashed"
+        onReset={() => {
+          if (typeof window !== "undefined") {
+            window.location.reload();
+          }
+        }}
+      >
+        <Dashboard />
+      </ErrorBoundary>
+    </div>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -23,18 +44,7 @@ function App() {
         <TerminalSettingsProvider>
           <DiffSettingsProvider>
             <ToastProvider>
-            <div className="flex h-screen">
-              <ErrorBoundary
-                fallbackTitle="Dashboard crashed"
-                onGoDashboard={() => {
-                  if (typeof window !== "undefined") {
-                    window.location.reload();
-                  }
-                }}
-              >
-                <Dashboard />
-              </ErrorBoundary>
-            </div>
+              <AppContent />
             </ToastProvider>
           </DiffSettingsProvider>
         </TerminalSettingsProvider>

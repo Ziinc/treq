@@ -7,7 +7,7 @@ export function getWorkspaceTitle(workspace: Workspace | { metadata?: string; br
   if (workspace.metadata) {
     try {
       const metadata = JSON.parse(workspace.metadata);
-      return metadata.initial_plan_title || metadata.intent || workspace.branch_name;
+      return metadata.intent || workspace.branch_name;
     } catch {
       return workspace.branch_name;
     }

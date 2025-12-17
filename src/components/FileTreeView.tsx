@@ -82,6 +82,19 @@ const StatusPip: React.FC<{ status?: string; className?: string }> = ({ status, 
 const hasChangesInFolder = (node: TreeNode): boolean =>
   node.type === "file" ? !!node.status : node.children?.some(hasChangesInFolder) ?? false;
 
+// Collect all folder paths that have changes (for auto-expanding)
+const collectFoldersWithChanges = (nodes: TreeNode[], paths: string[] = []): string[] => {
+  for (const node of nodes) {
+    if (node.type === "folder" && hasChangesInFolder(node)) {
+      paths.push(node.path);
+      if (node.children) {
+        collectFoldersWithChanges(node.children, paths);
+      }
+    }
+  }
+  return paths;
+};
+
 export const FileTreeView: React.FC<FileTreeViewProps> = ({
   files,
   selectedPath,
@@ -89,7 +102,27 @@ export const FileTreeView: React.FC<FileTreeViewProps> = ({
   isLoading = false,
 }) => {
   const tree = useMemo(() => sortTree(buildTree(files)), [files]);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(["root"]));
+
+  // Collect all folder paths that have changes (for auto-expanding)
+  const foldersWithChanges = useMemo(() => collectFoldersWithChanges(tree), [tree]);
+
+  // Use a stable string key for dependency tracking
+  const foldersKey = foldersWithChanges.join(',');
+
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(foldersWithChanges));
+
+  // Update expanded state when folders with changes update
+  useEffect(() => {
+    if (foldersWithChanges.length > 0) {
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        for (const folder of foldersWithChanges) {
+          next.add(folder);
+        }
+        return next;
+      });
+    }
+  }, [foldersKey]);
 
   useEffect(() => {
     if (!selectedPath) return;

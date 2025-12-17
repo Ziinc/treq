@@ -37,7 +37,7 @@ npm run tauri dev            # Run in dev mode (Rust + frontend dev server)
 **Core Components:**
 - **App.tsx** - Root with QueryClient provider, routing, and global state
 - **components/Dashboard.tsx** - Main UI controller (repository dashboard)
-- **components/SessionTerminal.tsx** - PTY terminal with ghostty-web integration
+- **components/ShowWorkspace.tsx** - Workspace viewer with overview, changes, and files tabs
 - **components/StagingDiffViewer.tsx** - Git staging area with file tree and diff view
 - **components/AnnotatableDiffViewer.tsx** - Diff viewer with annotation support
 - **components/ui/** - Shadcn-based UI primitives

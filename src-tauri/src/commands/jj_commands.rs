@@ -1,0 +1,148 @@
+use crate::jj;
+use crate::AppState;
+use tauri::{AppHandle, State};
+
+// JJ Workspace commands
+
+#[tauri::command]
+pub fn jj_create_workspace(
+    state: State<AppState>,
+    app: AppHandle,
+    repo_path: String,
+    workspace_name: String,
+    branch: String,
+    new_branch: bool,
+    source_branch: Option<String>,
+) -> Result<String, String> {
+    // Ensure repo is properly configured
+    crate::ensure_repo_ready(&state, &app, &repo_path)?;
+
+    // Load inclusion patterns from database
+    let inclusion_patterns = {
+        let db = state.db.lock().unwrap();
+        db.get_repo_setting(&repo_path, "included_copy_files")
+            .ok()
+            .flatten()
+            .map(|patterns_str| {
+                patterns_str
+                    .lines()
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect::<Vec<String>>()
+            })
+    };
+
+    jj::create_workspace(
+        &repo_path,
+        &workspace_name,
+        &branch,
+        new_branch,
+        source_branch.as_deref(),
+        inclusion_patterns,
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn jj_list_workspaces(
+    state: State<AppState>,
+    app: AppHandle,
+    repo_path: String,
+) -> Result<Vec<jj::WorkspaceInfo>, String> {
+    crate::ensure_repo_ready(&state, &app, &repo_path)?;
+    jj::list_workspaces(&repo_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn jj_remove_workspace(repo_path: String, workspace_path: String) -> Result<(), String> {
+    jj::remove_workspace(&repo_path, &workspace_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn jj_get_workspace_info(workspace_path: String) -> Result<jj::WorkspaceInfo, String> {
+    jj::get_workspace_info(&workspace_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn jj_squash_to_workspace(
+    source_workspace_path: String,
+    target_workspace_name: String,
+    file_paths: Option<Vec<String>>,
+) -> Result<String, String> {
+    jj::squash_to_workspace(&source_workspace_path, &target_workspace_name, file_paths)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn jj_get_changed_files(workspace_path: String) -> Result<Vec<jj::JjFileChange>, String> {
+    jj::jj_get_changed_files(&workspace_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn jj_get_file_hunks(
+    workspace_path: String,
+    file_path: String,
+) -> Result<Vec<jj::JjDiffHunk>, String> {
+    jj::jj_get_file_hunks(&workspace_path, &file_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn jj_get_file_lines(
+    workspace_path: String,
+    file_path: String,
+    from_parent: bool,
+    start_line: usize,
+    end_line: usize,
+) -> Result<jj::JjFileLines, String> {
+    jj::jj_get_file_lines(&workspace_path, &file_path, from_parent, start_line, end_line)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn jj_restore_file(workspace_path: String, file_path: String) -> Result<String, String> {
+    jj::jj_restore_file(&workspace_path, &file_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn jj_restore_all(workspace_path: String) -> Result<String, String> {
+    jj::jj_restore_all(&workspace_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn jj_commit(workspace_path: String, message: String) -> Result<String, String> {
+    jj::jj_commit(&workspace_path, &message).map_err(|e| e.to_string())
+}
+
+/// Check if a path has a jj workspace
+#[tauri::command]
+pub fn jj_is_workspace(repo_path: String) -> bool {
+    jj::is_jj_workspace(&repo_path)
+}
+
+/// Manually initialize jj for a repository
+#[tauri::command]
+pub fn jj_init(state: State<AppState>, repo_path: String) -> Result<bool, String> {
+    let db = state.db.lock().unwrap();
+    jj::ensure_jj_initialized(&db, &repo_path).map_err(|e| e.to_string())
+}
+
+/// Rebase workspace onto a target branch
+#[tauri::command]
+pub fn jj_rebase_onto(
+    workspace_path: String,
+    target_branch: String,
+) -> Result<jj::JjRebaseResult, String> {
+    jj::jj_rebase_onto(&workspace_path, &target_branch).map_err(|e| e.to_string())
+}
+
+/// Get list of conflicted files in workspace
+#[tauri::command]
+pub fn jj_get_conflicted_files(workspace_path: String) -> Result<Vec<String>, String> {
+    jj::get_conflicted_files(&workspace_path).map_err(|e| e.to_string())
+}
+
+/// Get the default branch of the repository (main/master)
+#[tauri::command]
+pub fn jj_get_default_branch(repo_path: String) -> Result<String, String> {
+    jj::get_default_branch(&repo_path).map_err(|e| e.to_string())
+}

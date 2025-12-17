@@ -161,27 +161,41 @@ const AnnotatableDiffViewerComponent: React.FC<AnnotatableDiffViewerProps> = ({
     }
   }, [diff, selectedCommentId, fileComments]);
 
-  const buildContext = (
-    lines: BranchDiffHunk["lines"],
-    index: number,
-    radius: number
-  ) => {
-    const before: string[] = [];
-    const after: string[] = [];
-    for (let offset = radius; offset > 0; offset -= 1) {
-      const line = lines[index - offset];
-      if (line) {
-        before.push(`${lineKindPrefix[line.kind]}${line.content}`);
+  // Pre-compute context for all lines to avoid expensive buildContext calls on every render
+  const linesWithContext = useMemo(() => {
+    if (!diff) return [];
+
+    const buildContext = (
+      lines: BranchDiffHunk["lines"],
+      index: number,
+      radius: number
+    ) => {
+      const before: string[] = [];
+      const after: string[] = [];
+      for (let offset = radius; offset > 0; offset -= 1) {
+        const line = lines[index - offset];
+        if (line) {
+          before.push(`${lineKindPrefix[line.kind]}${line.content}`);
+        }
       }
-    }
-    for (let offset = 1; offset <= radius; offset += 1) {
-      const line = lines[index + offset];
-      if (line) {
-        after.push(`${lineKindPrefix[line.kind]}${line.content}`);
+      for (let offset = 1; offset <= radius; offset += 1) {
+        const line = lines[index + offset];
+        if (line) {
+          after.push(`${lineKindPrefix[line.kind]}${line.content}`);
+        }
       }
-    }
-    return { before, after };
-  };
+      return { before, after };
+    };
+
+    return diff.hunks.flatMap((hunk, hunkIndex) =>
+      hunk.lines.map((line, lineIndex) => ({
+        hunkIndex,
+        lineIndex,
+        line,
+        context: buildContext(hunk.lines, lineIndex, 3),
+      }))
+    );
+  }, [diff]);
 
   const renderLineNumbers = (
     lineKey: string,
@@ -257,13 +271,15 @@ const AnnotatableDiffViewerComponent: React.FC<AnnotatableDiffViewerProps> = ({
         )}
       </div>
       <div className="flex-1 overflow-auto font-mono text-xs">
-        {diff.hunks.map((hunk, hunkIndex) => (
+        {diff.hunks.map((hunk, hunkIndex) => {
+          const hunkLines = linesWithContext.filter(item => item.hunkIndex === hunkIndex);
+          return (
           <div key={`${diff.path}-hunk-${hunkIndex}`} className="border-b border-border/60">
             <div className="bg-muted/60 px-4 py-1 text-[11px]">{hunk.header}</div>
-            {hunk.lines.map((line, lineIndex) => {
+            {hunkLines.map((item) => {
+              const { line, lineIndex, context } = item;
               const lineKey = `${diff.path}:${hunkIndex}:${lineIndex}`;
               const lineLabel = formatLineLabel(line.old_line, line.new_line);
-              const { before, after } = buildContext(hunk.lines, lineIndex, 3);
               const location: DraftState = {
                 lineKey,
                 lineLabel,
@@ -271,8 +287,8 @@ const AnnotatableDiffViewerComponent: React.FC<AnnotatableDiffViewerProps> = ({
                 oldLine: line.old_line,
                 newLine: line.new_line,
                 lineText: line.content,
-                contextBefore: before,
-                contextAfter: after,
+                contextBefore: context.before,
+                contextAfter: context.after,
               };
 
               return (
@@ -372,7 +388,8 @@ const AnnotatableDiffViewerComponent: React.FC<AnnotatableDiffViewerProps> = ({
               );
             })}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

@@ -8,7 +8,6 @@ import Heading from '@theme/Heading';
 import styles from './index.module.css';
 
 function HomepageHeader() {
-  const {siteConfig} = useDocusaurusContext();
   return (
     <header className={styles.heroBanner}>
       <div className={styles.heroGlow}></div>
@@ -162,9 +161,9 @@ function ProblemSection(): ReactNode {
         </p>
 
         <div className={styles.problemList}>
-          <div className={styles.problemListTitle}>
-            Today's AI development workflow is basically:
-          </div>
+            <div className={styles.problemListTitle}>
+              Today&rsquo;s AI development workflow is basically:
+            </div>
           <div className={styles.problemItem}>
             copy/paste patches into editors
           </div>
@@ -180,7 +179,7 @@ function ProblemSection(): ReactNode {
         </div>
 
         <p className={styles.problemConclusion}>
-          It's chaos disguised as productivity.
+          It&rsquo;s chaos disguised as productivity.
         </p>
       </div>
     </section>
@@ -265,9 +264,9 @@ function FeaturesSection(): ReactNode {
             <div className={styles.solutionItem}>
               Claude Code–ready terminal per branch
             </div>
-            <div className={styles.solutionItem}>
-              Iterate patches safely until they're right
-            </div>
+                <div className={styles.solutionItem}>
+                  Iterate patches safely until they&rsquo;re right
+                </div>
             <div className={styles.solutionItem}>
               Merge only when approved
             </div>

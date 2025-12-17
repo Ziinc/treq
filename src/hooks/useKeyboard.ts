@@ -12,7 +12,7 @@ export function useKeyboardShortcut(
   key: string,
   ctrlOrCmd: boolean,
   handler: () => void,
-  deps: any[] = []
+  deps: unknown[] = []
 ) {
   useEffect(() => {
     const handleKeyPress: KeyboardHandler = (event) => {

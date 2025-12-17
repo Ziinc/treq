@@ -3,6 +3,36 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::process::{Command, Stdio};
 
+/// Helper function to execute git commands with consistent error handling
+///
+/// # Arguments
+/// * `workspace_path` - The directory where git command should be executed
+/// * `args` - Command arguments to pass to git
+/// * `include_stderr_on_success` - If true, append stderr to stdout on success (useful for push/pull)
+fn execute_git(
+    workspace_path: &str,
+    args: &[&str],
+    include_stderr_on_success: bool,
+) -> Result<String, String> {
+    let output = Command::new("git")
+        .current_dir(workspace_path)
+        .args(args)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        if include_stderr_on_success && !output.stderr.is_empty() {
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            Ok(format!("{}{}", stdout, stderr))
+        } else {
+            Ok(stdout)
+        }
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MergeStrategy {
     Regular,
@@ -86,17 +116,7 @@ pub struct LineDiffStats {
 
 /// Execute git commit with message
 pub fn git_commit(workspace_path: &str, message: &str) -> Result<String, String> {
-    let output = Command::new("git")
-        .current_dir(workspace_path)
-        .args(["commit", "-m", message])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
+    execute_git(workspace_path, &["commit", "-m", message], false)
 }
 
 pub fn git_merge(
@@ -319,156 +339,53 @@ pub fn git_discard_files(workspace_path: &str, file_paths: Vec<String>) -> Resul
 }
 
 pub fn has_uncommitted_changes(workspace_path: &str) -> Result<bool, String> {
-    let output = Command::new("git")
-        .current_dir(workspace_path)
-        .args(["status", "--porcelain"])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if output.status.success() {
-        Ok(!output.stdout.is_empty())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
+    let output = execute_git(workspace_path, &["status", "--porcelain"], false)?;
+    Ok(!output.is_empty())
 }
 
 /// Stage all changes
 pub fn git_add_all(workspace_path: &str) -> Result<String, String> {
-    let output = Command::new("git")
-        .current_dir(workspace_path)
-        .args(["add", "."])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
+    execute_git(workspace_path, &["add", "."], false)
 }
 
 /// Unstage all staged changes
 pub fn git_unstage_all(workspace_path: &str) -> Result<String, String> {
-    let output = Command::new("git")
-        .current_dir(workspace_path)
-        .args(["reset", "HEAD"])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
+    execute_git(workspace_path, &["reset", "HEAD"], false)
 }
 
 /// Push changes to remote
 pub fn git_push(workspace_path: &str) -> Result<String, String> {
-    let output = Command::new("git")
-        .current_dir(workspace_path)
-        .args(["push"])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        Ok(format!("{}{}", stdout, stderr))
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
+    execute_git(workspace_path, &["push"], true)
 }
 
 /// Force push changes to remote (use with caution)
 pub fn git_push_force(workspace_path: &str) -> Result<String, String> {
-    let output = Command::new("git")
-        .current_dir(workspace_path)
-        .args(["push", "--force"])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        Ok(format!("{}{}", stdout, stderr))
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
+    execute_git(workspace_path, &["push", "--force"], true)
 }
 
 /// Amend the last commit with a new message
 pub fn git_commit_amend(workspace_path: &str, message: &str) -> Result<String, String> {
-    let output = Command::new("git")
-        .current_dir(workspace_path)
-        .args(["commit", "--amend", "-m", message])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
+    execute_git(workspace_path, &["commit", "--amend", "-m", message], false)
 }
 
 /// Pull changes from remote
 pub fn git_pull(workspace_path: &str) -> Result<String, String> {
-    let output = Command::new("git")
-        .current_dir(workspace_path)
-        .args(["pull"])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
+    execute_git(workspace_path, &["pull"], false)
 }
 
 /// Fetch from remote
 pub fn git_fetch(workspace_path: &str) -> Result<String, String> {
-    let output = Command::new("git")
-        .current_dir(workspace_path)
-        .args(["fetch"])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
+    execute_git(workspace_path, &["fetch"], false)
 }
 
 /// Stage specific file(s)
 pub fn git_stage_file(workspace_path: &str, file_path: &str) -> Result<String, String> {
-    let output = Command::new("git")
-        .current_dir(workspace_path)
-        .args(["add", file_path])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
+    execute_git(workspace_path, &["add", file_path], false)
 }
 
 /// Unstage specific file(s)
 pub fn git_unstage_file(workspace_path: &str, file_path: &str) -> Result<String, String> {
-    let output = Command::new("git")
-        .current_dir(workspace_path)
-        .args(["reset", "HEAD", file_path])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
+    execute_git(workspace_path, &["reset", "HEAD", file_path], false)
 }
 
 /// Check if a git status entry represents a directory
@@ -915,26 +832,13 @@ pub fn git_get_file_hunks(workspace_path: &str, file_path: &str) -> Result<Vec<D
 }
 
 fn git_diff_for_file(workspace_path: &str, file_path: &str, staged: bool) -> Result<String, String> {
-    let mut cmd = Command::new("git");
-    cmd.current_dir(workspace_path)
-        .arg("diff")
-        .arg("--unified=3");
-
+    let mut args = vec!["diff", "--unified=3"];
     if staged {
-        cmd.arg("--cached");
+        args.push("--cached");
     }
-
-    let output = cmd
-        .arg("--")
-        .arg(file_path)
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
+    args.push("--");
+    args.push(file_path);
+    execute_git(workspace_path, &args, false)
 }
 
 fn parse_diff_hunks(
@@ -1386,4 +1290,126 @@ pub fn git_get_file_lines(
         start_line,
         end_line: start_idx + line_count,
     })
+}
+
+/// Get quick change stats without full diff
+/// Returns file count and line stats for a workspace
+#[derive(Debug, Serialize)]
+pub struct ChangeStats {
+    pub file_count: usize,
+    pub lines_added: usize,
+    pub lines_deleted: usize,
+}
+
+pub fn get_change_stats(workspace_path: &str) -> Result<ChangeStats, String> {
+    // Get staged and unstaged stats
+    let staged_output = execute_git(
+        workspace_path,
+        &["diff", "--cached", "--numstat"],
+        false,
+    )?;
+    let unstaged_output = execute_git(
+        workspace_path,
+        &["diff", "--numstat"],
+        false,
+    )?;
+
+    let mut file_count = 0;
+    let mut lines_added = 0;
+    let mut lines_deleted = 0;
+
+    // Parse numstat output (format: <added>\t<deleted>\t<filename>)
+    for line in staged_output.lines().chain(unstaged_output.lines()) {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() >= 3 {
+            file_count += 1;
+            if let Ok(added) = parts[0].parse::<usize>() {
+                lines_added += added;
+            }
+            if let Ok(deleted) = parts[1].parse::<usize>() {
+                lines_deleted += deleted;
+            }
+        }
+    }
+
+    Ok(ChangeStats {
+        file_count,
+        lines_added,
+        lines_deleted,
+    })
+}
+
+/// Get set of changed file paths for a workspace
+/// Combines staged and unstaged changes
+pub fn get_changed_paths_set(workspace_path: &str) -> Result<std::collections::HashSet<String>, String> {
+    use std::collections::HashSet;
+
+    let output = execute_git(
+        workspace_path,
+        &["status", "--porcelain"],
+        false,
+    )?;
+
+    let mut paths = HashSet::new();
+
+    for line in output.lines() {
+        if line.len() < 4 {
+            continue;
+        }
+
+        // Parse porcelain format: "XY filename"
+        let file_path = line[3..].trim();
+
+        // Handle renames (format: "old -> new")
+        if let Some(arrow_pos) = file_path.find(" -> ") {
+            // Add the new path
+            paths.insert(file_path[arrow_pos + 4..].to_string());
+        } else {
+            paths.insert(file_path.to_string());
+        }
+    }
+
+    Ok(paths)
+}
+
+/// Get set of directories that contain changed files
+/// Includes all parent directories of changed files
+pub fn get_directories_with_changes(workspace_path: &str) -> Result<std::collections::HashSet<String>, String> {
+    use std::collections::HashSet;
+    use std::path::Path;
+
+    let changed_files = get_changed_paths_set(workspace_path)?;
+    let mut directories = HashSet::new();
+
+    // For each changed file, add all parent directories
+    for file_path in changed_files {
+        let path = Path::new(&file_path);
+
+        // Add all parent directories
+        if let Some(parent) = path.parent() {
+            let parent_str = parent.to_string_lossy().to_string();
+            if !parent_str.is_empty() {
+                directories.insert(parent_str.clone());
+
+                // Add all ancestor directories
+                let mut current = parent;
+                while let Some(ancestor) = current.parent() {
+                    let ancestor_str = ancestor.to_string_lossy().to_string();
+                    if ancestor_str.is_empty() {
+                        break;
+                    }
+                    directories.insert(ancestor_str);
+                    current = ancestor;
+                }
+            }
+        }
+    }
+
+    Ok(directories)
+}
+
+/// List all git remotes
+pub fn git_list_remotes(workspace_path: &str) -> Result<Vec<String>, String> {
+    let output = execute_git(workspace_path, &["remote"], false)?;
+    Ok(output.lines().map(|s| s.to_string()).collect())
 }

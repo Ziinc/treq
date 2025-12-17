@@ -4,7 +4,6 @@ import React, {
   useEffect,
   useRef,
   useState,
-  type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import {
   ConsolidatedTerminal,
@@ -17,31 +16,27 @@ import {
   TooltipTrigger,
 } from "./ui/tooltip";
 import { cn } from "../lib/utils";
-import { ptyClose, setSessionModel, getSessionModel, updateSessionName } from "../lib/api";
+import { ptyClose } from "../lib/api";
 import {
   ChevronDown,
   ChevronUp,
-  X,
-  Search,
-  RotateCw,
-  Loader2,
   Bot,
   Terminal,
   Plus,
+  X,
 } from "lucide-react";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
-import { ModelSelector } from "./ModelSelector";
-import { Input } from "./ui/input";
-import { useToast } from "./ui/toast";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-
-// Minimum width for each terminal panel (used when multiple terminals)
-const MIN_TERMINAL_WIDTH = 300;
+import {
+  ClaudeTerminalPanel
+} from "./terminal/ClaudeTerminalPanel";
+import { MIN_TERMINAL_WIDTH } from "./terminal/types";
+import { type ClaudeSessionData } from "./terminal/types";
 
 // Resize divider between terminal panels
 interface ResizeDividerProps {
@@ -108,15 +103,6 @@ const ResizeDivider = memo<ResizeDividerProps>(function ResizeDivider({
     </div>
   );
 });
-
-// Claude session data passed from Dashboard
-export interface ClaudeSessionData {
-  sessionId: number;
-  sessionName: string;
-  ptySessionId: string;
-  workspacePath: string | null;
-  repoPath: string;
-}
 
 // Shell terminal data
 interface ShellTerminalData {
@@ -224,413 +210,6 @@ const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
     );
   }
 );
-
-// Claude terminal panel with header
-interface ClaudeTerminalPanelProps {
-  sessionData: ClaudeSessionData;
-  collapsed: boolean;
-  onClose?: () => void;
-  onRename?: (newName: string) => void;
-  onSessionError?: (message: string) => void;
-  onTerminalOutput?: (output: string) => void;
-  onTerminalIdle?: () => void;
-  terminalRefs: React.MutableRefObject<
-    Map<string, ConsolidatedTerminalHandle | null>
-  >;
-  width?: number | null;
-}
-
-const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
-  function ClaudeTerminalPanel({
-    sessionData,
-    collapsed,
-    onClose,
-    onRename,
-    onSessionError,
-    onTerminalOutput,
-    onTerminalIdle,
-    terminalRefs,
-    width,
-  }) {
-    const { addToast } = useToast();
-    const searchInputRef = useRef<HTMLInputElement>(null);
-    const nameInputRef = useRef<HTMLInputElement>(null);
-    const [searchVisible, setSearchVisible] = useState(false);
-    const [searchQuery, setSearchQuery] = useState("");
-    const [isResetting, setIsResetting] = useState(false);
-    const [sessionModel, setSessionModelState] = useState<string | null>(null);
-    const [isChangingModel, setIsChangingModel] = useState(false);
-    const [isModelLoaded, setIsModelLoaded] = useState(false);
-    const [terminalInstanceKey, setTerminalInstanceKey] = useState(0);
-    const [pendingModelReset, setPendingModelReset] = useState(false);
-    const [isEditingName, setIsEditingName] = useState(false);
-    const [editNameValue, setEditNameValue] = useState(sessionData.sessionName);
-
-    const terminalId = `claude-${sessionData.sessionId}`;
-    const isHidden = collapsed;
-
-    // Load session model on mount
-    useEffect(() => {
-      const loadModel = async () => {
-        try {
-          const model = await getSessionModel(
-            sessionData.repoPath,
-            sessionData.sessionId
-          );
-          setSessionModelState(model);
-        } catch (error) {
-          console.error("Failed to load session model:", error);
-        } finally {
-          setIsModelLoaded(true);
-        }
-      };
-      loadModel();
-    }, [sessionData.repoPath, sessionData.sessionId]);
-
-    // Search handlers
-    const openSearchPanel = useCallback(() => {
-      setSearchVisible(true);
-      requestAnimationFrame(() => {
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
-      });
-    }, []);
-
-    const closeSearchPanel = useCallback(() => {
-      setSearchVisible(false);
-      setSearchQuery("");
-      terminalRefs.current.get(terminalId)?.clearSearch();
-    }, [terminalRefs, terminalId]);
-
-    // Inline name editing handlers
-    const startEditingName = useCallback(() => {
-      setEditNameValue(sessionData.sessionName);
-      setIsEditingName(true);
-      requestAnimationFrame(() => {
-        nameInputRef.current?.focus();
-        nameInputRef.current?.select();
-      });
-    }, [sessionData.sessionName]);
-
-    const cancelEditingName = useCallback(() => {
-      setIsEditingName(false);
-      setEditNameValue(sessionData.sessionName);
-    }, [sessionData.sessionName]);
-
-    const saveEditedName = useCallback(() => {
-      const trimmed = editNameValue.trim();
-      if (trimmed && trimmed !== sessionData.sessionName) {
-        onRename?.(trimmed);
-      }
-      setIsEditingName(false);
-    }, [editNameValue, sessionData.sessionName, onRename]);
-
-    const handleNameKeyDown = useCallback(
-      (e: ReactKeyboardEvent<HTMLInputElement>) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          saveEditedName();
-        } else if (e.key === "Escape") {
-          e.preventDefault();
-          cancelEditingName();
-        }
-      },
-      [saveEditedName, cancelEditingName]
-    );
-
-    const runSearch = useCallback(
-      (direction: "next" | "previous") => {
-        if (!searchQuery.trim()) return;
-        const terminal = terminalRefs.current.get(terminalId);
-        if (!terminal) return;
-        if (direction === "next") {
-          terminal.findNext(searchQuery);
-        } else {
-          terminal.findPrevious(searchQuery);
-        }
-      },
-      [searchQuery, terminalRefs, terminalId]
-    );
-
-    const handleSearchKeyDown = useCallback(
-      (e: ReactKeyboardEvent<HTMLInputElement>) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          if (e.shiftKey) {
-            runSearch("previous");
-          } else {
-            runSearch("next");
-          }
-        } else if (e.key === "Escape") {
-          closeSearchPanel();
-        }
-      },
-      [runSearch, closeSearchPanel]
-    );
-
-    // Reset handler
-    const handleReset = useCallback(async () => {
-      setIsResetting(true);
-      try {
-        await ptyClose(sessionData.ptySessionId).catch(console.error);
-        setTerminalInstanceKey((prev) => prev + 1);
-        addToast({
-          title: "Terminal Reset",
-          description: "Starting new Claude session",
-          type: "info",
-        });
-      } catch (error) {
-        addToast({
-          title: "Reset Failed",
-          description: error instanceof Error ? error.message : String(error),
-          type: "error",
-        });
-      } finally {
-        setIsResetting(false);
-      }
-    }, [sessionData.ptySessionId, addToast]);
-
-    // Model change handler
-    const handleModelChange = useCallback(
-      async (newModel: string) => {
-        setIsChangingModel(true);
-        try {
-          const modelToSave = newModel === "default" ? null : newModel;
-          await setSessionModel(
-            sessionData.repoPath,
-            sessionData.sessionId,
-            modelToSave
-          );
-          setSessionModelState(modelToSave);
-          setPendingModelReset(true);
-        } catch (error) {
-          addToast({
-            title: "Failed to change model",
-            description: error instanceof Error ? error.message : String(error),
-            type: "error",
-          });
-          setIsChangingModel(false);
-        }
-      },
-      [sessionData.repoPath, sessionData.sessionId, addToast]
-    );
-
-    // Reset terminal when model changes
-    useEffect(() => {
-      if (!pendingModelReset) return;
-      const performReset = async () => {
-        await handleReset();
-        addToast({
-          title: "Model Changed",
-          description: `Switched to ${sessionModel || "default"}`,
-          type: "success",
-        });
-        setIsChangingModel(false);
-        setPendingModelReset(false);
-      };
-      performReset();
-    }, [pendingModelReset, handleReset, sessionModel, addToast]);
-
-    const autoCommand = sessionModel
-      ? `claude --permission-mode plan --model="${sessionModel}"`
-      : "claude --permission-mode plan";
-
-    return (
-      <div
-        data-terminal-id={terminalId}
-        className={cn(
-          "flex flex-col min-h-0 overflow-hidden flex-shrink-0",
-          width == null && "flex-1"
-        )}
-        style={{
-          minWidth: MIN_TERMINAL_WIDTH,
-          width: width != null ? width : undefined,
-        }}
-      >
-        {/* Header */}
-        <div className="h-7 min-h-[28px] flex items-center justify-between px-2 bg-background border-b border-r border-border flex-shrink-0">
-          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground min-w-0">
-            <Bot className="w-3 h-3 flex-shrink-0" />
-            {isEditingName ? (
-              <input
-                ref={nameInputRef}
-                type="text"
-                value={editNameValue}
-                onChange={(e) => setEditNameValue(e.target.value)}
-                onKeyDown={handleNameKeyDown}
-                onBlur={saveEditedName}
-                className="bg-muted border border-border rounded px-1 py-0 text-xs font-medium text-foreground w-full max-w-[150px] outline-none focus:ring-1 focus:ring-primary"
-              />
-            ) : (
-              <span
-                className="truncate cursor-pointer hover:text-foreground transition-colors"
-                onDoubleClick={startEditingName}
-                title="Double-click to rename"
-              >
-                {sessionData.sessionName}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-0.5">
-            {/* Model selector */}
-            <ModelSelector
-              currentModel={sessionModel}
-              onModelChange={handleModelChange}
-              disabled={isChangingModel || isResetting}
-            />
-            {/* Reset button */}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={handleReset}
-                    disabled={isResetting}
-                    className="h-5 w-5 rounded-sm hover:bg-muted flex items-center justify-center opacity-60 hover:opacity-100 transition-opacity disabled:opacity-30"
-                    aria-label="Reset terminal"
-                  >
-                    {isResetting ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : (
-                      <RotateCw className="w-3 h-3" />
-                    )}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>Reset</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            {/* Search button */}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={openSearchPanel}
-                    className="h-5 w-5 rounded-sm hover:bg-muted flex items-center justify-center opacity-60 hover:opacity-100 transition-opacity"
-                    aria-label="Search"
-                  >
-                    <Search className="w-3 h-3" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>Search (⌘+F)</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            {/* Close button */}
-            {onClose && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={onClose}
-                      className="h-5 w-5 rounded-sm hover:bg-muted flex items-center justify-center opacity-60 hover:opacity-100 transition-opacity"
-                      aria-label="Close session"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>Close</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-          </div>
-        </div>
-
-        {/* Terminal with search overlay */}
-        <div className="flex-1 min-h-0 overflow-hidden relative border-r border-border" style={{ backgroundColor: "#1e1e1e" }}>
-          {/* Search overlay */}
-          {searchVisible && !collapsed && (
-            <div className="absolute top-2 right-2 z-20 bg-background border border-border rounded-md shadow-lg p-0.5 flex items-center gap-0.5">
-              <Input
-                ref={searchInputRef}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Find"
-                onKeyDown={handleSearchKeyDown}
-                className="h-6 w-48 text-sm !outline-none !ring-0"
-              />
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      className="h-5 w-5 rounded-sm bg-background text-muted-foreground flex items-center justify-center transition-colors hover:text-foreground hover:bg-muted disabled:opacity-50 disabled:pointer-events-none"
-                      onClick={() => runSearch("previous")}
-                      disabled={!searchQuery.trim()}
-                      aria-label="Find previous"
-                    >
-                      <ChevronUp className="w-3.5 h-3.5" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>Previous (Shift+Enter)</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      className="h-5 w-5 rounded-sm bg-background text-muted-foreground flex items-center justify-center transition-colors hover:text-foreground hover:bg-muted disabled:opacity-50 disabled:pointer-events-none"
-                      onClick={() => runSearch("next")}
-                      disabled={!searchQuery.trim()}
-                      aria-label="Find next"
-                    >
-                      <ChevronDown className="w-3.5 h-3.5" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>Next (Enter)</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      className="h-5 w-5 rounded-sm bg-background text-muted-foreground flex items-center justify-center transition-colors hover:text-foreground hover:bg-muted"
-                      onClick={closeSearchPanel}
-                      aria-label="Close search"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>Close (Esc)</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-          )}
-
-          {/* Terminal */}
-          {isModelLoaded ? (
-            <ConsolidatedTerminal
-              key={`${sessionData.ptySessionId}-${terminalInstanceKey}`}
-              ref={(el) => {
-                if (el) {
-                  terminalRefs.current.set(terminalId, el);
-                } else {
-                  terminalRefs.current.delete(terminalId);
-                }
-              }}
-              sessionId={sessionData.ptySessionId}
-              workingDirectory={sessionData.workspacePath || sessionData.repoPath}
-              autoCommand={autoCommand}
-              onSessionError={onSessionError}
-              onTerminalOutput={onTerminalOutput}
-              onTerminalIdle={onTerminalIdle}
-              containerClassName="h-full w-full overflow-hidden"
-              terminalPaneClassName="w-full h-full"
-              isHidden={isHidden}
-            />
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-              Loading...
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-);
-
 
 export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
   function WorkspaceTerminalPane({

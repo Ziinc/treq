@@ -1,13 +1,12 @@
 import { memo } from "react";
-import { ArrowRight, ChevronDown, ChevronRight, Plus, Minus, Undo2 } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, Undo2 } from "lucide-react";
 import { GitFileRow } from "./GitFileRow";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "./ui/tooltip";
 import type { ParsedFileChange } from "../lib/git-utils";
 
-export interface GitChangesSectionProps {
+export interface ChangesSectionProps {
   title: string;
   files: ParsedFileChange[];
-  isStaged: boolean;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   fileActionTarget?: string | null;
@@ -16,17 +15,12 @@ export interface GitChangesSectionProps {
   selectedFiles?: Set<string>;
   onFileSelect?: (path: string, event: React.MouseEvent) => void;
   onMoveToWorkspace?: () => void;
-  onStage?: (path: string) => void;
-  onUnstage?: (path: string) => void;
-  onStageAll?: () => void;
-  onUnstageAll?: () => void;
   onDiscardAll?: () => void;
 }
 
-export const GitChangesSection = memo<GitChangesSectionProps>(({
+export const ChangesSection = memo<ChangesSectionProps>(({
   title,
   files,
-  isStaged,
   isCollapsed,
   onToggleCollapse,
   fileActionTarget,
@@ -35,10 +29,6 @@ export const GitChangesSection = memo<GitChangesSectionProps>(({
   selectedFiles,
   onFileSelect,
   onMoveToWorkspace,
-  onStage,
-  onUnstage,
-  onStageAll,
-  onUnstageAll,
   onDiscardAll,
 }) => {
   const hasFiles = files.length > 0;
@@ -61,7 +51,7 @@ export const GitChangesSection = memo<GitChangesSectionProps>(({
         </button>
         <TooltipProvider>
           <div className="flex items-center gap-1">
-            {!readOnly && hasFiles && !isStaged && (
+            {!readOnly && hasFiles && (
               <>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -97,39 +87,7 @@ export const GitChangesSection = memo<GitChangesSectionProps>(({
                     </TooltipContent>
                   </Tooltip>
                 )}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      className="p-1 hover:text-foreground hover:bg-muted rounded transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onStageAll?.();
-                      }}
-                    >
-                      <Plus className="w-3 h-3" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Stage all changes</TooltipContent>
-                </Tooltip>
               </>
-            )}
-            {!readOnly && hasFiles && isStaged && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className="p-1 hover:text-foreground hover:bg-muted rounded transition-colors"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onUnstageAll?.();
-                    }}
-                  >
-                    <Minus className="w-3 h-3" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Unstage all changes</TooltipContent>
-              </Tooltip>
             )}
             <span className="ml-1">{files.length}</span>
           </div>
@@ -139,16 +97,14 @@ export const GitChangesSection = memo<GitChangesSectionProps>(({
         <div className="mt-2 overflow-hidden">
           {files.map((file) => (
             <GitFileRow
-              key={`${isStaged ? "staged" : "unstaged"}-${file.path}`}
+              key={file.path}
               file={file}
-              isStaged={isStaged}
-              isSelected={!isStaged && selectedFiles?.has(file.path) || false}
+              isStaged={false}
+              isSelected={selectedFiles?.has(file.path) || false}
               isActive={activeFilePath === file.path}
               isBusy={fileActionTarget === file.path}
               readOnly={readOnly}
               onFileClick={onFileSelect}
-              onStage={onStage}
-              onUnstage={onUnstage}
             />
           ))}
         </div>
@@ -157,4 +113,4 @@ export const GitChangesSection = memo<GitChangesSectionProps>(({
   );
 });
 
-GitChangesSection.displayName = "GitChangesSection";
+ChangesSection.displayName = "ChangesSection";

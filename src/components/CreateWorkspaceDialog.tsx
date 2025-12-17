@@ -11,30 +11,20 @@ import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Label } from "./ui/label";
 import { useToast } from "./ui/toast";
-import { applyBranchNamePattern, sanitizeForBranchName } from "../lib/utils";
+import { applyBranchNamePattern } from "../lib/utils";
 import {
   jjCreateWorkspace,
   addWorkspaceToDb,
   getRepoSetting,
   gitExecutePostCreateCommand
 } from "../lib/api";
-import { PlanSection } from "../types/planning";
 
 interface CreateWorkspaceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   repoPath: string;
   onSuccess: () => void;
-
-  // Plan execution mode props
-  planSection?: PlanSection;
   sourceBranch?: string;
-  initialSessionName?: string;
-  onSuccessWithPlan?: (
-    workspaceInfo: { id: number; workspaceName: string; workspacePath: string; branchName: string; metadata: string },
-    planSection: PlanSection,
-    sessionName?: string
-  ) => void;
 }
 
 export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
@@ -42,10 +32,7 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
   onOpenChange,
   repoPath,
   onSuccess,
-  planSection,
   sourceBranch,
-  initialSessionName,
-  onSuccessWithPlan,
 }) => {
   const [intent, setIntent] = useState("");
   const [branchName, setBranchName] = useState("");
@@ -54,16 +41,6 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const { addToast } = useToast();
-
-  // Plan execution mode detection
-  const isPlanExecution = !!planSection;
-
-  // Pre-populate intent from plan title when in plan execution mode
-  useEffect(() => {
-    if (open && planSection) {
-      setIntent(planSection.title);
-    }
-  }, [open, planSection]);
 
   // Load branch pattern from repository settings
   useEffect(() => {
@@ -88,13 +65,6 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
       setBranchName("");
     }
   }, [intent, branchPattern, isEditingBranch]);
-
-  // Get preview of workspace path
-  const getWorkspacePath = (): string => {
-    if (!branchName.trim()) return `${repoPath}/.treq/workspaces/branch-name`;
-    const pathSafeName = sanitizeForBranchName(branchName.split('/').pop() || branchName);
-    return `${repoPath}/.treq/workspaces/${pathSafeName}`;
-  };
 
   const handleCreate = async () => {
     if (!intent.trim()) {
@@ -121,18 +91,11 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
         sourceBranch || undefined
       );
 
-      // Prepare metadata based on execution mode
-      const metadata = JSON.stringify(
-        isPlanExecution && planSection
-          ? {
-              initial_plan_title: planSection.title,
-              source_branch: sourceBranch,
-            }
-          : { intent: intent.trim() }
-      );
+      // Prepare metadata
+      const metadata = JSON.stringify({ intent: intent.trim() });
 
       // Add to database with metadata
-      const workspaceId = await addWorkspaceToDb(repoPath, branchName, workspacePath, branchName, metadata);
+      await addWorkspaceToDb(repoPath, branchName, workspacePath, branchName, metadata);
 
       // Get and execute post-create command if configured
       const postCreateCmd = await getRepoSetting(repoPath, "post_create_command");
@@ -172,16 +135,8 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
       setBranchName("");
       setIsEditingBranch(false);
 
-      // Call appropriate success callback based on mode
-      if (isPlanExecution && onSuccessWithPlan && planSection) {
-        await onSuccessWithPlan(
-          { id: workspaceId, workspaceName: branchName, workspacePath, branchName, metadata },
-          planSection,
-          initialSessionName
-        );
-      } else {
-        onSuccess();
-      }
+      // Call success callback
+      onSuccess();
       onOpenChange(false);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);

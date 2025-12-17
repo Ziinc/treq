@@ -5,32 +5,29 @@ import {
   useRef,
   useState,
 } from "react";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   Workspace,
-  Session,
-  PlanMetadata,
-  BranchInfo,
-  BranchDivergence,
-  LineDiffStats,
-  savePlanToFile,
-  savePlanToRepo,
   gitPush,
   gitPushForce,
   gitMerge,
-  getSetting,
-  gitGetBranchInfo,
-  gitGetBranchDivergence,
-  gitGetLineDiffStats,
   preloadWorkspaceGitData,
-  gitGetCurrentBranch,
+  listDirectory,
+  readFile,
+  DirectoryEntry,
+  jjGetDefaultBranch,
+  jjGetConflictedFiles,
 } from "../lib/api";
-import { PlanSection } from "../types/planning";
+import { getStatusBgColor } from "../lib/git-status-colors";
+import { useCachedWorkspaceChanges } from "../hooks/useCachedWorkspaceChanges";
+import { useSessionGitInfo } from "../hooks/useSessionGitInfo";
 import {
-  StagingDiffViewer,
-  type StagingDiffViewerHandle,
-} from "./StagingDiffViewer";
+  ChangesDiffViewer,
+  type ChangesDiffViewerHandle,
+} from "./ChangesDiffViewer";
 import { FileBrowser } from "./FileBrowser";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import { Button } from "./ui/button";
 import { useToast } from "./ui/toast";
 import {
@@ -47,7 +44,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "./ui/dialog";
-import { PlanHistoryDialog } from "./PlanHistoryDialog";
 import {
   Loader2,
   GitBranch,
@@ -56,94 +52,77 @@ import {
   Upload,
   AlertTriangle,
   ArrowDownToLine,
+  File,
+  Folder,
 } from "lucide-react";
-import { PlanDisplayModal } from "./PlanDisplayModal";
 import { LineDiffStatsDisplay } from "./LineDiffStatsDisplay";
+import { TargetBranchSelector } from "./TargetBranchSelector";
 import { cn } from "../lib/utils";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
-import { getWorkspaceTitle as getWorkspaceTitleFromUtils } from "../lib/workspace-utils";
 
-interface SessionTerminalProps {
+interface ShowWorkspaceProps {
   repositoryPath?: string;
-  workspace?: Workspace;
-  session?: Session | null;
+  workspace: Workspace | null;
   sessionId: number | null;
   mainRepoBranch?: string | null;
   onClose: () => void;
-  onExecutePlan?: (section: PlanSection) => void;
-  onExecutePlanInWorkspace?: (
-    section: PlanSection,
-    sourceBranch: string,
-    currentSessionName?: string
-  ) => Promise<void>;
-  initialPlanContent?: string;
-  initialPlanTitle?: string;
-  initialPrompt?: string;
-  initialPromptLabel?: string;
-  initialSelectedFile?: string;
+  initialSelectedFile: string | null;
   onSessionActivity?: (sessionId: number) => void;
   isHidden?: boolean;
+  onActiveTabChange?: (tab: string) => void;
+  forceOverviewTab?: number; // Signal to force Overview tab
 }
 
-export const SessionTerminal = memo<SessionTerminalProps>(
-  function SessionTerminal({
+export const ShowWorkspace = memo<ShowWorkspaceProps>(
+  function ShowWorkspace({
     repositoryPath,
     workspace,
-    session,
-    sessionId,
+    sessionId: _sessionId,
     mainRepoBranch,
     onClose: _onClose,
-    onExecutePlan,
-    onExecutePlanInWorkspace,
-    initialPlanContent: _initialPlanContent,
-    initialPlanTitle: _initialPlanTitle,
-    initialPrompt: _initialPrompt,
-    initialPromptLabel,
     initialSelectedFile,
     isHidden = false,
+    onActiveTabChange,
+    forceOverviewTab,
   }) {
     const workingDirectory = workspace?.workspace_path || repositoryPath || "";
     const effectiveRepoPath = workspace?.repo_path || repositoryPath || "";
-    // Use a stable session ID - only generate UUID once if sessionId is null
-    const stableSessionIdRef = useRef<string | null>(null);
-    if (stableSessionIdRef.current === null) {
-      stableSessionIdRef.current = sessionId
-        ? `session-${sessionId}`
-        : `session-${crypto.randomUUID()}`;
-    }
-    const ptySessionId = sessionId
-      ? `session-${sessionId}`
-      : stableSessionIdRef.current;
 
     const { addToast } = useToast();
-    const [planSections, setPlanSections] = useState<PlanSection[]>([]);
-    const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
-    const [planModalOpen, setPlanModalOpen] = useState(false);
 
     const [refreshSignal, setRefreshSignal] = useState(0);
-    const [lastPromptLabel] = useState<string | null>(null);
+    const [readmeContent, setReadmeContent] = useState<string | null>(null);
+    const [rootEntries, setRootEntries] = useState<DirectoryEntry[]>([]);
+    const { filesMap: changedFiles } = useCachedWorkspaceChanges(workingDirectory, {
+      enabled: !isHidden,
+      repoPath: effectiveRepoPath,
+      workspaceId: workspace?.id ?? null,
+    });
+    const [initialSelectedFileForBrowser, setInitialSelectedFileForBrowser] = useState<string | null>(null);
+    const [initialExpandedDir, setInitialExpandedDir] = useState<string | null>(null);
 
-    const stagingDiffViewerRef = useRef<StagingDiffViewerHandle>(null);
+    const changesDiffViewerRef = useRef<ChangesDiffViewerHandle>(null);
     const [actionPending, setActionPending] = useState<
       "push" | "merge" | "forcePush" | null
     >(null);
     const [showForcePushDialog, setShowForcePushDialog] = useState(false);
-    const [isExecutingInWorkspace, setIsExecutingInWorkspace] = useState(false);
-    const [mainTreePath, setMainTreePath] = useState<string | null>(null);
-    const [remoteBranchInfo, setRemoteBranchInfo] = useState<BranchInfo | null>(
-      null
-    );
-    const [maintreeBranchName, setMaintreeBranchName] = useState<string | null>(
-      null
-    );
-    const [maintreeDivergence, setMaintreeDivergence] =
-      useState<BranchDivergence | null>(null);
-    const [lineStats, setLineStats] = useState<LineDiffStats | null>(null);
-    const [activeTab, setActiveTab] = useState("changes");
 
-    useEffect(() => {
-      setPlanSections([]);
-    }, [ptySessionId]);
+    // Target branch and conflicts state
+    const [targetBranch, setTargetBranch] = useState<string | null>(null);
+    const [defaultBranch, setDefaultBranch] = useState<string>("main");
+    const [conflictedFiles, setConflictedFiles] = useState<string[]>([]);
+
+    // Load git info for the workspace
+    const {
+      mainTreePath,
+      remoteBranchInfo,
+      maintreeBranchName,
+      maintreeDivergence,
+      lineStats,
+    } = useSessionGitInfo(workspace, refreshSignal, isHidden, mainRepoBranch ?? null);
+
+    // Show overview tab by default for main repo, changes tab for workspaces
+    const [activeTab, setActiveTab] = useState(workspace ? "changes" : "overview");
 
     useEffect(() => {
       // Skip git preload when hidden to avoid unnecessary work
@@ -161,104 +140,83 @@ export const SessionTerminal = memo<SessionTerminalProps>(
       });
     }, [workingDirectory, isHidden]);
 
+    // Force Overview tab when requested (for home navigation)
+    useEffect(() => {
+      if (forceOverviewTab && !workspace) {
+        setActiveTab("overview");
+      }
+    }, [forceOverviewTab, workspace]);
+
+    // Report active tab changes to parent (only when visible)
+    useEffect(() => {
+      if (!isHidden && onActiveTabChange) {
+        onActiveTabChange(activeTab);
+      }
+    }, [activeTab, isHidden, onActiveTabChange]);
+
+    // Fetch README and directory listing for Overview tab
+    useEffect(() => {
+      if (!workingDirectory) return;
+
+      // Fetch root directory listing
+      listDirectory(workingDirectory)
+        .then(setRootEntries)
+        .catch(() => setRootEntries([]));
+
+      // Fetch README.md
+      readFile(`${workingDirectory}/README.md`)
+        .then(setReadmeContent)
+        .catch(() => setReadmeContent(null));
+    }, [workingDirectory]);
+
+    // Clear initial file/dir state when navigating away from files tab
+    useEffect(() => {
+      if (activeTab !== "files") {
+        setInitialSelectedFileForBrowser(null);
+        setInitialExpandedDir(null);
+      }
+    }, [activeTab]);
+
+    // Load default branch on mount
+    useEffect(() => {
+      if (effectiveRepoPath) {
+        jjGetDefaultBranch(effectiveRepoPath)
+          .then(setDefaultBranch)
+          .catch(() => setDefaultBranch("main"));
+      }
+    }, [effectiveRepoPath]);
+
+    // Load target branch from workspace metadata
+    useEffect(() => {
+      if (workspace?.metadata) {
+        try {
+          const meta = JSON.parse(workspace.metadata);
+          setTargetBranch(meta.target_branch || defaultBranch);
+        } catch {
+          setTargetBranch(defaultBranch);
+        }
+      } else {
+        setTargetBranch(defaultBranch);
+      }
+    }, [workspace?.metadata, defaultBranch]);
+
+    // Check for conflicts on load and after refresh
+    useEffect(() => {
+      if (workingDirectory) {
+        jjGetConflictedFiles(workingDirectory)
+          .then(setConflictedFiles)
+          .catch(() => setConflictedFiles([]));
+      }
+    }, [workingDirectory, refreshSignal]);
+
     // Cmd+/: Focus commit message
     useKeyboardShortcut(
       "/",
       true,
       () => {
-        stagingDiffViewerRef.current?.focusCommitInput();
+        changesDiffViewerRef.current?.focusCommitInput();
       },
       []
-    );
-
-    const handlePlanEdit = useCallback(
-      async (planId: string, newContent: string) => {
-        if (!effectiveRepoPath) return;
-        try {
-          const updatedSection = planSections.find(
-            (section) => section.id === planId
-          );
-          setPlanSections((prev) =>
-            prev.map((section) =>
-              section.id === planId
-                ? {
-                    ...section,
-                    editedContent: newContent,
-                    isEdited: true,
-                    editedAt: new Date(),
-                  }
-                : section
-            )
-          );
-
-          const metadata: PlanMetadata = {
-            id: planId,
-            title: updatedSection?.title || "Untitled Plan",
-            plan_type: updatedSection?.type || "implementation_plan",
-            workspace_id: workspace?.id,
-            workspace_path: workspace?.workspace_path,
-            branch_name: workspace?.branch_name,
-            timestamp: new Date().toISOString(),
-          };
-
-          await savePlanToFile(effectiveRepoPath, planId, newContent, metadata);
-          await savePlanToRepo(
-            effectiveRepoPath,
-            planId,
-            newContent,
-            ptySessionId
-          );
-        } catch (error) {
-          console.error("Failed to save plan:", error);
-          addToast({
-            title: "Save Failed",
-            description: error instanceof Error ? error.message : String(error),
-            type: "error",
-          });
-        }
-      },
-      [effectiveRepoPath, workspace, planSections, ptySessionId, addToast]
-    );
-
-    const handleExecuteSection = useCallback(
-      (section: PlanSection) => {
-        onExecutePlan?.(section);
-      },
-      [onExecutePlan]
-    );
-
-    const handleExecuteInWorkspace = useCallback(
-      async (section: PlanSection) => {
-        if (!onExecutePlanInWorkspace) return;
-
-        // Close modal immediately when user clicks execute
-        setPlanModalOpen(false);
-
-        setIsExecutingInWorkspace(true);
-        try {
-          // Determine source branch
-          let sourceBranch: string;
-          if (workspace) {
-            sourceBranch = workspace.branch_name;
-          } else if (effectiveRepoPath) {
-            sourceBranch = await gitGetCurrentBranch(effectiveRepoPath);
-          } else {
-            throw new Error("No repository context available");
-          }
-
-          // This will create workspace and navigate to it
-          await onExecutePlanInWorkspace(section, sourceBranch, session?.name);
-        } catch (error) {
-          addToast({
-            title: "Failed to execute in workspace",
-            description: error instanceof Error ? error.message : String(error),
-            type: "error",
-          });
-        } finally {
-          setIsExecutingInWorkspace(false);
-        }
-      },
-      [workspace, effectiveRepoPath, onExecutePlanInWorkspace, addToast]
     );
 
     const handleStagedFilesChange = useCallback((_files: string[]) => {
@@ -269,120 +227,36 @@ export const SessionTerminal = memo<SessionTerminalProps>(
       setRefreshSignal((prev) => prev + 1);
     }, []);
 
-    // Load main tree path from settings
-    useEffect(() => {
-      const loadMainTreePath = async () => {
-        try {
-          const repoPath = await getSetting("repo_path");
-          setMainTreePath(repoPath || null);
-        } catch {
-          setMainTreePath(null);
-        }
-      };
-      loadMainTreePath();
-    }, []);
-
-    useEffect(() => {
-      // Skip expensive git operations when hidden
-      if (isHidden) {
-        return;
+    // Helper to get status for a directory entry
+    const getEntryStatus = useCallback((entry: DirectoryEntry): string | undefined => {
+      const fullPath = `${workingDirectory}/${entry.name}`;
+      if (!entry.is_directory) {
+        const file = changedFiles.get(fullPath);
+        if (!file) return undefined;
+        // Prefer workspaceStatus (unstaged) over stagedStatus
+        return file.workspaceStatus || file.stagedStatus || undefined;
       }
-
-      let isCancelled = false;
-
-      const loadBranchComparisons = async () => {
-        if (!workspace?.workspace_path) {
-          if (!isCancelled) {
-            setRemoteBranchInfo(null);
-            setMaintreeBranchName(null);
-            setMaintreeDivergence(null);
-          }
-          return;
+      // For directories, check if any child has changes
+      for (const [path] of changedFiles) {
+        if (path.startsWith(fullPath + '/')) {
+          return 'M'; // Show modified indicator if any child changed
         }
+      }
+      return undefined;
+    }, [workingDirectory, changedFiles]);
 
-        try {
-          const info = await gitGetBranchInfo(workspace.workspace_path);
-          if (!isCancelled) {
-            setRemoteBranchInfo(info);
-          }
-        } catch {
-          if (!isCancelled) {
-            setRemoteBranchInfo(null);
-          }
-        }
-
-        if (!mainTreePath) {
-          if (!isCancelled) {
-            setMaintreeBranchName(null);
-            setMaintreeDivergence(null);
-          }
-          return;
-        }
-
-        let baseBranchName = "";
-        try {
-          const baseInfo = await gitGetBranchInfo(mainTreePath);
-          if (isCancelled) {
-            return;
-          }
-          baseBranchName = baseInfo.name.trim();
-          setMaintreeBranchName(baseInfo.name);
-        } catch {
-          if (!isCancelled) {
-            setMaintreeBranchName(null);
-            setMaintreeDivergence(null);
-          }
-          return;
-        }
-
-        if (!baseBranchName) {
-          if (!isCancelled) {
-            setMaintreeDivergence(null);
-          }
-          return;
-        }
-
-        try {
-          const divergence = await gitGetBranchDivergence(
-            workspace.workspace_path,
-            baseBranchName
-          );
-          if (!isCancelled) {
-            setMaintreeDivergence(divergence);
-          }
-        } catch {
-          if (!isCancelled) {
-            setMaintreeDivergence(null);
-          }
-        }
-
-        try {
-          const stats = await gitGetLineDiffStats(
-            workspace.workspace_path,
-            baseBranchName
-          );
-          if (!isCancelled) {
-            setLineStats(stats);
-          }
-        } catch {
-          if (!isCancelled) {
-            setLineStats(null);
-          }
-        }
-      };
-
-      loadBranchComparisons();
-
-      return () => {
-        isCancelled = true;
-      };
-    }, [
-      workspace?.workspace_path,
-      mainTreePath,
-      refreshSignal,
-      isHidden,
-      mainRepoBranch,
-    ]);
+    // Handler for clicking on Overview entries
+    const handleOverviewEntryClick = useCallback((entry: DirectoryEntry) => {
+      const fullPath = `${workingDirectory}/${entry.name}`;
+      if (entry.is_directory) {
+        setInitialExpandedDir(fullPath);
+        setInitialSelectedFileForBrowser(null); // Will select README in browser
+      } else {
+        setInitialSelectedFileForBrowser(fullPath);
+        setInitialExpandedDir(null);
+      }
+      setActiveTab("files");
+    }, [workingDirectory]);
 
     const handleMergeIntoMaintree = useCallback(async () => {
       if (!mainTreePath || !workspace?.branch_name) {
@@ -495,6 +369,14 @@ export const SessionTerminal = memo<SessionTerminalProps>(
       }
     }, [workingDirectory, addToast, triggerSidebarRefresh]);
 
+    // Status pip component for file/directory indicators
+    const StatusPip = ({ status }: { status?: string }) =>
+      status ? (
+        <span
+          className={cn("w-2 h-2 rounded-full flex-shrink-0", getStatusBgColor(status))}
+        />
+      ) : null;
+
     const executionPanel = workingDirectory ? (
       <div className="flex flex-col h-full">
         <div className="flex-shrink-0 border-b bg-background">
@@ -503,28 +385,107 @@ export const SessionTerminal = memo<SessionTerminalProps>(
             onValueChange={setActiveTab}
           >
             <TabsList className="px-4 py-2">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="changes">Changes</TabsTrigger>
               <TabsTrigger value="files">Files</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
         <div className="flex-1 overflow-auto">
-          {activeTab === "changes" ? (
-            <StagingDiffViewer
-              ref={stagingDiffViewerRef}
+          {activeTab === "overview" ? (
+            <div className="p-4 space-y-6">
+              {/* Target Branch Selector for workspaces */}
+              {workspace && workspace.branch_name !== defaultBranch && (
+                <TargetBranchSelector
+                  repoPath={effectiveRepoPath}
+                  workspacePath={workingDirectory}
+                  workspaceId={workspace.id}
+                  currentBranch={workspace.branch_name}
+                  targetBranch={targetBranch}
+                  onTargetChange={(branch) => {
+                    setTargetBranch(branch);
+                    triggerSidebarRefresh();
+                  }}
+                />
+              )}
+              {/* File Listing */}
+              <div className="border rounded-lg divide-y divide-border">
+                {rootEntries.map((entry) => (
+                  <button
+                    key={entry.path}
+                    type="button"
+                    onClick={() => handleOverviewEntryClick(entry)}
+                    className="flex items-center gap-3 px-4 py-2 text-sm w-full hover:bg-muted/60 transition text-left"
+                  >
+                    {entry.is_directory ? (
+                      <Folder className="w-4 h-4 text-blue-500" />
+                    ) : (
+                      <File className="w-4 h-4 text-muted-foreground" />
+                    )}
+                    <span className="flex-1">{entry.name}</span>
+                    <StatusPip status={getEntryStatus(entry)} />
+                  </button>
+                ))}
+                {rootEntries.length === 0 && (
+                  <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    No files found
+                  </div>
+                )}
+              </div>
+
+              {/* README Section */}
+              <div className="border rounded-lg p-6">
+                {readmeContent ? (
+                  <div className="prose dark:prose-invert max-w-none prose-headings:font-semibold prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl prose-a:text-blue-500 prose-a:no-underline hover:prose-a:underline prose-strong:font-semibold prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-[''] prose-code:after:content-[''] prose-pre:bg-muted prose-pre:border prose-pre:border-border">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        h1: ({node: _node, ...props}) => <h1 className="text-3xl font-semibold mb-4 mt-0" {...props} />,
+                        h2: ({node: _node, ...props}) => <h2 className="text-2xl font-semibold mb-3 mt-6" {...props} />,
+                        h3: ({node: _node, ...props}) => <h3 className="text-xl font-semibold mb-2 mt-4" {...props} />,
+                        p: ({node: _node, ...props}) => <p className="mb-4" {...props} />,
+                        strong: ({node: _node, ...props}) => <strong className="font-semibold" {...props} />,
+                        a: ({node: _node, ...props}) => <a className="text-blue-500 hover:underline" {...props} />,
+                        ul: ({node: _node, ...props}) => <ul className="list-disc pl-6 mb-4 space-y-2" {...props} />,
+                        ol: ({node: _node, ...props}) => <ol className="list-decimal pl-6 mb-4 space-y-2" {...props} />,
+                        li: ({node: _node, ...props}) => <li className="mb-1" {...props} />,
+                        code: ({node: _node, className, children, ...props}: { node?: unknown; className?: string; children?: React.ReactNode } & React.HTMLAttributes<HTMLElement>) => {
+                          const isInline = !className?.includes('language-');
+                          return isInline ?
+                            <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono" {...props}>{children}</code> :
+                            <code className="block bg-muted p-4 rounded border border-border overflow-x-auto font-mono text-sm" {...props}>{children}</code>;
+                        },
+                        pre: ({node: _node, ...props}) => <pre className="mb-4" {...props} />,
+                        blockquote: ({node: _node, ...props}) => <blockquote className="border-l-4 border-border pl-4 italic text-muted-foreground my-4" {...props} />,
+                      }}
+                    >
+                      {readmeContent}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <div className="text-muted-foreground text-sm text-center py-4">
+                    No README.md found
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : activeTab === "changes" ? (
+            <ChangesDiffViewer
+              ref={changesDiffViewerRef}
               workspacePath={workingDirectory}
               disableInteractions={false}
               onStagedFilesChange={handleStagedFilesChange}
               refreshSignal={refreshSignal}
               initialSelectedFile={initialSelectedFile}
-              terminalSessionId={ptySessionId}
+              conflictedFiles={conflictedFiles}
             />
           ) : (
             <FileBrowser
               workspace={workspace}
               repoPath={effectiveRepoPath}
-              branchName={workspace?.branch_name}
               mainBranch={maintreeBranchName || mainRepoBranch || undefined}
+              initialSelectedFile={initialSelectedFileForBrowser || undefined}
+              initialExpandedDir={initialExpandedDir || undefined}
             />
           )}
         </div>
@@ -535,23 +496,17 @@ export const SessionTerminal = memo<SessionTerminalProps>(
       </div>
     );
 
-    const getWorkspaceTitle = (): string => {
-      if (!workspace) return "Main";
-      return getWorkspaceTitleFromUtils(workspace);
-    };
-
-    const sessionTitle =
-      session?.name && session.name.trim().length > 0
-        ? session.name.trim()
-        : "Session Terminal";
+    // Display branch name as title: workspace branch if available, otherwise main repo branch
+    const branchTitle = workspace?.branch_name || mainRepoBranch || "main";
 
     return (
       <div className="h-full w-full flex flex-col bg-background">
         <div className="border-b p-2 flex flex-col gap-1 flex-shrink-0">
-          {/* Row 1: Session name */}
+          {/* Row 1: Branch name */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold">{sessionTitle}</h2>
+              <GitBranch className="w-4 h-4 text-muted-foreground" />
+              <h2 className="text-lg font-semibold font-mono">{branchTitle}</h2>
             </div>
             <div className="flex items-center gap-2">
               <DropdownMenu>
@@ -611,34 +566,10 @@ export const SessionTerminal = memo<SessionTerminalProps>(
             </div>
           </div>
 
-          {/* Row 2: Workspace info */}
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="flex flex-col gap-1 items-start">
-              {workspace && (
-                <span className="text-xs text-muted-foreground font-mono">
-                  {getWorkspaceTitle()}
-                </span>
-              )}
-              {(initialPromptLabel || lastPromptLabel) && (
-                <span className="text-[10px] inline-flex items-center gap-1 text-primary">
-                  <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                  {initialPromptLabel || lastPromptLabel}
-                </span>
-              )}
-            </div>
-
-            {workspace && (
+          {/* Row 2: Git status info (workspaces only) */}
+          {workspace && (
+            <div className="flex flex-wrap items-start justify-end gap-4">
               <div className="flex items-start gap-3 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1 font-mono text-foreground">
-                  <GitBranch className="w-3 h-3" />
-                  <span
-                    className="font-semibold block max-w-[160px] truncate"
-                    title={workspace.branch_name}
-                  >
-                    {workspace.branch_name}
-                  </span>
-                </span>
-
                 {maintreeBranchName && (
                   <div className="flex flex-col items-center gap-1">
                     <span
@@ -690,8 +621,8 @@ export const SessionTerminal = memo<SessionTerminalProps>(
                   </span>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         <div className="flex-1 flex overflow-hidden min-h-0">
@@ -699,25 +630,6 @@ export const SessionTerminal = memo<SessionTerminalProps>(
             {executionPanel}
           </div>
         </div>
-
-        <PlanHistoryDialog
-          open={historyDialogOpen}
-          onOpenChange={setHistoryDialogOpen}
-          workspace={workspace || null}
-        />
-
-        <PlanDisplayModal
-          open={planModalOpen}
-          onOpenChange={setPlanModalOpen}
-          planSections={planSections}
-          onPlanEdit={handlePlanEdit}
-          onExecutePlan={handleExecuteSection}
-          onExecuteInWorkspace={handleExecuteInWorkspace}
-          isExecutingInWorkspace={isExecutingInWorkspace}
-          sessionId={ptySessionId}
-          repoPath={effectiveRepoPath}
-          workspaceId={workspace?.id}
-        />
 
         {/* Force Push Confirmation Dialog */}
         <Dialog

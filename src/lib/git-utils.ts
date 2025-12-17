@@ -5,14 +5,21 @@ export interface ParsedFileChange {
   isUntracked: boolean;
 }
 
-export const formatFileLabel = (path: string): { name: string; directory: string } => {
+export const formatFileLabel = (
+  path: string
+): { name: string; directory: string } => {
+  if (!path) {
+    return { name: "", directory: "" };
+  }
   const parts = path.split("/").filter(Boolean);
   const name = parts.pop() || path;
   const directory = parts.length > 0 ? parts.join("/") : "";
   return { name, directory };
 };
 
-export const parseChangedFiles = (changedFiles: string[]): ParsedFileChange[] => {
+export const parseChangedFiles = (
+  changedFiles: string[]
+): ParsedFileChange[] => {
   return changedFiles.map((file) => {
     if (file.startsWith("?? ")) {
       return {
@@ -35,7 +42,9 @@ export const parseChangedFiles = (changedFiles: string[]): ParsedFileChange[] =>
     const stagedStatus = file[0] !== " " ? file[0] : null;
     const workspaceStatus = file[1] !== " " ? file[1] : null;
     const rawPath = file.substring(3).trim();
-    const path = rawPath.includes(" -> ") ? rawPath.split(" -> ").pop() || rawPath : rawPath;
+    const path = rawPath.includes(" -> ")
+      ? rawPath.split(" -> ").pop() || rawPath
+      : rawPath;
 
     return {
       path,
@@ -46,36 +55,86 @@ export const parseChangedFiles = (changedFiles: string[]): ParsedFileChange[] =>
   });
 };
 
-export const filterStagedFiles = (files: ParsedFileChange[]): ParsedFileChange[] => {
-  return files.filter((file) => file.stagedStatus && file.stagedStatus !== " ");
-};
-
-export const filterUnstagedFiles = (files: ParsedFileChange[]): ParsedFileChange[] => {
-  return files.filter(
-    (file) => (file.workspaceStatus && file.workspaceStatus !== " ") || file.isUntracked
-  );
+// Parse JJ file changes from JjFileChange[] to ParsedFileChange[]
+// This maps JJ's model to the UI's expected format (all changes are "unstaged")
+export const parseJjChangedFiles = (
+  jjFiles: Array<{
+    path: string;
+    status: string;
+    previous_path?: string | null;
+  }>
+): ParsedFileChange[] => {
+  return jjFiles.map((file) => ({
+    path: file.path,
+    stagedStatus: null, // JJ has no staging
+    workspaceStatus: file.status, // M, A, D
+    isUntracked: file.status === "A", // Treat additions as untracked
+  }));
 };
 
 const BINARY_EXTENSIONS = new Set([
   // Images
-  '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.webp', '.svg', '.tiff', '.avif', '.heic',
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".bmp",
+  ".ico",
+  ".webp",
+  ".svg",
+  ".tiff",
+  ".avif",
+  ".heic",
   // Documents
-  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+  ".pdf",
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".ppt",
+  ".pptx",
   // Archives
-  '.zip', '.tar', '.gz', '.rar', '.7z', '.bz2', '.xz',
+  ".zip",
+  ".tar",
+  ".gz",
+  ".rar",
+  ".7z",
+  ".bz2",
+  ".xz",
   // Media
-  '.mp3', '.mp4', '.wav', '.avi', '.mov', '.mkv', '.flac', '.ogg', '.webm',
+  ".mp3",
+  ".mp4",
+  ".wav",
+  ".avi",
+  ".mov",
+  ".mkv",
+  ".flac",
+  ".ogg",
+  ".webm",
   // Binaries
-  '.exe', '.dll', '.so', '.dylib', '.wasm', '.o', '.a',
+  ".exe",
+  ".dll",
+  ".so",
+  ".dylib",
+  ".wasm",
+  ".o",
+  ".a",
   // Fonts
-  '.ttf', '.otf', '.woff', '.woff2', '.eot',
+  ".ttf",
+  ".otf",
+  ".woff",
+  ".woff2",
+  ".eot",
   // Other
-  '.bin', '.dat', '.db', '.sqlite', '.sqlite3',
+  ".bin",
+  ".dat",
+  ".db",
+  ".sqlite",
+  ".sqlite3",
 ]);
 
 export const isBinaryFile = (filePath: string): boolean => {
-  const lastDot = filePath.lastIndexOf('.');
-  if (lastDot === -1) return false;
-  const ext = filePath.substring(lastDot).toLowerCase();
-  return BINARY_EXTENSIONS.has(ext);
+  return [...BINARY_EXTENSIONS]
+    .map((ext) => filePath.endsWith(ext))
+    .some(Boolean);
 };

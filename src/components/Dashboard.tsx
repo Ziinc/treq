@@ -1,46 +1,42 @@
-import { useState, useEffect, useRef, useCallback, useMemo, Suspense, lazy } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  Suspense,
+  lazy,
+} from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
 import { MergeDialog } from "./MergeDialog";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
 import { CreateWorkspaceFromRemoteDialog } from "./CreateWorkspaceFromRemoteDialog";
 import { CommandPalette } from "./CommandPalette";
 import { BranchSwitcher } from "./BranchSwitcher";
-import { WorkspaceEditSession } from "./WorkspaceEditSession";
-import { SessionSidebar } from "./SessionSidebar";
+import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { ErrorBoundary } from "./ErrorBoundary";
-import { GitChangesSection } from "./GitChangesSection";
-import { MoveToWorkspaceDialog } from "./MoveToWorkspaceDialog";
-import { LineDiffStatsDisplay } from "./LineDiffStatsDisplay";
-import { WorkspaceTerminalPane, type ClaudeSessionData } from "./WorkspaceTerminalPane";
+import { WorkspaceTerminalPane } from "./WorkspaceTerminalPane";
+import type { ClaudeSessionData } from "./terminal/types";
 
 // Lazy imports
-const SessionTerminal = lazy(() => import("./SessionTerminal").then(m => ({ default: m.SessionTerminal })));
-const SettingsPage = lazy(() => import("./SettingsPage").then(m => ({ default: m.SettingsPage })));
-const MergeReviewPage = lazy(() => import("./MergeReviewPage").then(m => ({ default: m.MergeReviewPage })));
-import { PlanSection } from "../types/planning";
-import {
-  parseChangedFiles,
-  filterStagedFiles,
-  filterUnstagedFiles,
-  type ParsedFileChange,
-} from "../lib/git-utils";
-import { applyBranchNamePattern } from "../lib/utils";
-import { buildPlanHistoryPayload } from "../lib/planHistory";
-import { getWorkspaceTitle as getWorkspaceTitleFromUtils } from "../lib/workspace-utils";
+const ShowWorkspace = lazy(() =>
+  import("./ShowWorkspace").then((m) => ({ default: m.ShowWorkspace }))
+);
+const SettingsPage = lazy(() =>
+  import("./SettingsPage").then((m) => ({ default: m.SettingsPage }))
+);
+const MergeReviewPage = lazy(() =>
+  import("./MergeReviewPage").then((m) => ({ default: m.MergeReviewPage }))
+);
 import { useToast } from "./ui/toast";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { useGitCachePreloader } from "../hooks/useGitCachePreloader";
-import { useWorkspaceGitStatus } from "../hooks/useWorkspaceGitStatus";
 import {
   getWorkspaces,
   rebuildWorkspaces,
   deleteWorkspaceFromDb,
-  toggleWorkspacePin,
   jjRemoveWorkspace,
   getSetting,
   setSetting,
@@ -49,17 +45,9 @@ import {
   gitGetCurrentBranch,
   gitGetStatus,
   gitGetBranchInfo,
-  gitGetLineDiffStats,
-  Workspace,
-  GitStatus,
-  BranchInfo,
-  LineDiffStats,
-  saveExecutedPlan,
-  jjCreateWorkspace,
-  addWorkspaceToDb,
   getRepoSetting,
-  gitExecutePostCreateCommand,
-  Session,
+  Workspace,
+  BranchInfo,
   createSession,
   updateSessionAccess,
   updateSessionName,
@@ -69,16 +57,12 @@ import {
   gitMerge,
   gitDiscardAllChanges,
   gitHasUncommittedChanges,
-  gitPull,
-  gitPush,
-  gitStageFile,
-  gitUnstageFile,
-  gitAddAll,
-  gitCommit,
   invalidateGitCache,
+  startGitWatcher,
+  stopGitWatcher,
 } from "../lib/api";
 import type { MergeStrategy } from "../lib/api";
-import { RefreshCw, GitBranch, Loader2, Pin, MoreVertical, FolderOpen } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 // Loading spinner component for Suspense fallback
 const LoadingSpinner = () => (
@@ -86,20 +70,8 @@ const LoadingSpinner = () => (
     <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
   </div>
 );
-import {
-  Card,
-  CardContent,
-} from "./ui/card";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "./ui/dropdown-menu";
 
 type ViewMode =
-  | "dashboard"
   | "session"
   | "workspace-edit"
   | "workspace-session"
@@ -112,8 +84,6 @@ type MergeConfirmPayload = {
 };
 
 type SessionOpenOptions = {
-  planTitle?: string;
-  planContent?: string;
   initialPrompt?: string;
   promptLabel?: string;
   forceNew?: boolean;
@@ -121,302 +91,53 @@ type SessionOpenOptions = {
   selectedFilePath?: string;
 };
 
-// Workspace list item component that uses centralized git status hook
-const WorkspaceListItem: React.FC<{
-  workspace: Workspace;
-  currentBranch: string | null;
-  isSelected: boolean;
-  onSelect: (id: number | null) => void;
-  onDoubleClick: () => void;
-  onPin: (workspaceId: number) => void;
-  onUpdateBranch: (workspace: Workspace) => void;
-  onMerge: (workspace: Workspace) => void;
-  onOpenSession: (workspace: Workspace) => void;
-  updateBranchPending: boolean;
-  mergePending: boolean;
-}> = ({
-  workspace,
-  currentBranch,
-  isSelected,
-  onSelect,
-  onDoubleClick,
-  onPin,
-  onUpdateBranch,
-  onMerge,
-  onOpenSession,
-  updateBranchPending,
-  mergePending,
-}) => {
-  const { branchInfo, divergence, lineDiffStats } = useWorkspaceGitStatus(workspace.workspace_path, {
-    refetchInterval: 30000,
-    baseBranch: currentBranch,
-  });
-  const title = getWorkspaceTitleFromUtils(workspace);
-  const isBehindMain = divergence && divergence.behind > 0;
-
-  return (
-    <div
-      onClick={() => onSelect(isSelected ? null : workspace.id)}
-      onDoubleClick={onDoubleClick}
-      className={`group w-full text-left p-3 rounded-lg border transition-colors cursor-pointer ${
-        isSelected
-          ? "border-primary ring-2 ring-primary/20 bg-sidebar"
-          : "border-border bg-sidebar hover:bg-sidebar-accent"
-      }`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-1.5 flex-1 min-w-0">
-          <span className="text-sm font-medium truncate">
-            {title}
-          </span>
-          {workspace.is_pinned && (
-            <Pin className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-          )}
-          <div className="ml-auto flex-shrink-0">
-            <LineDiffStatsDisplay stats={lineDiffStats} size="xs" />
-          </div>
-        </div>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className="p-1 rounded hover:bg-muted transition-opacity opacity-0 group-hover:opacity-100"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <MoreVertical className="w-3.5 h-3.5" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onSelect={(event) => {
-                event.preventDefault();
-                onPin(workspace.id);
-              }}
-            >
-              <Pin className="w-4 h-4 mr-2" />
-              {workspace.is_pinned ? "Unpin" : "Pin"} Workspace
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {/* Git indicators */}
-      <div className="flex flex-wrap gap-2 mt-2 text-xs">
-        {/* Remote ahead/behind */}
-        {branchInfo?.upstream && (branchInfo.ahead > 0 || branchInfo.behind > 0) && (
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="opacity-60">remote:</span>
-            {branchInfo.behind > 0 && (
-              <span className="text-orange-600 dark:text-orange-400">
-                {branchInfo.behind}↓
-              </span>
-            )}
-            {branchInfo.ahead > 0 && (
-              <span className="text-green-600 dark:text-green-400">
-                {branchInfo.ahead}↑
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Divergence from main */}
-        {divergence && (divergence.ahead > 0 || divergence.behind > 0) && (
-          <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
-            {divergence.ahead > 0 && (
-              <span className="text-green-600 dark:text-green-400">{divergence.ahead} ahead</span>
-            )}
-            {divergence.ahead > 0 && divergence.behind > 0 && <span>,</span>}
-            {divergence.behind > 0 && (
-              <span className="text-orange-600 dark:text-orange-400">{divergence.behind} behind</span>
-            )}
-            <span className="font-mono bg-muted px-1.5 py-0.5 rounded">{currentBranch}</span>
-          </div>
-        )}
-
-        {/* Show "up to date" if no divergence at all */}
-        {(!branchInfo?.upstream || (branchInfo.ahead === 0 && branchInfo.behind === 0)) &&
-         (!divergence || (divergence.ahead === 0 && divergence.behind === 0)) && (
-          <span className="text-muted-foreground opacity-60">up to date</span>
-        )}
-      </div>
-
-      {/* Action buttons when selected */}
-      {isSelected && (
-        <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-border">
-          {isBehindMain && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              disabled={updateBranchPending}
-              onClick={(e) => {
-                e.stopPropagation();
-                onUpdateBranch(workspace);
-              }}
-            >
-              {updateBranchPending ? (
-                <Loader2 className="w-3 h-3 animate-spin mr-1" />
-              ) : null}
-              Update branch
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs"
-            disabled={mergePending}
-            onClick={(e) => {
-              e.stopPropagation();
-              onMerge(workspace);
-            }}
-          >
-            Merge into {currentBranch || "main"}
-          </Button>
-          <Button
-            variant="default"
-            size="sm"
-            className="h-7 text-xs"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenSession(workspace);
-            }}
-          >
-            Open session
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-};
-
 export const Dashboard: React.FC = () => {
   const [repoPath, setRepoPath] = useState("");
-  const [repoName, setRepoName] = useState("");
   const { data: currentBranch = null } = useQuery({
     queryKey: ["mainRepoBranch", repoPath],
     queryFn: () => gitGetCurrentBranch(repoPath),
     enabled: !!repoPath,
     staleTime: 0, // Always consider stale to refetch on invalidation
   });
-  const [mainRepoStatus, setMainRepoStatus] = useState<GitStatus | null>(null);
   const [mainBranchInfo, setMainBranchInfo] = useState<BranchInfo | null>(null);
-  const [mainRepoLineStats, setMainRepoLineStats] = useState<LineDiffStats | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [showCreateFromRemoteDialog, setShowCreateFromRemoteDialog] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("dashboard");
-  const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(null);
-  const [initialSettingsTab, setInitialSettingsTab] = useState<"application" | "repository">("repository");
+  const [showCreateFromRemoteDialog, setShowCreateFromRemoteDialog] =
+    useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("session");
+  const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(
+    null
+  );
+  const [changesTabActive, setChangesTabActive] = useState(false);
+  const [initialSettingsTab, setInitialSettingsTab] = useState<
+    "application" | "repository"
+  >("repository");
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
-  const [sessionPlanContent, setSessionPlanContent] = useState<string | null>(null);
-  const [sessionPlanTitle, setSessionPlanTitle] = useState<string | null>(null);
-  const [sessionInitialPrompt, setSessionInitialPrompt] = useState<string | null>(null);
-  const [sessionPromptLabel, setSessionPromptLabel] = useState<string | null>(null);
-  const [sessionSelectedFile, setSessionSelectedFile] = useState<string | null>(null);
-  const [mainRepoSyncing, setMainRepoSyncing] = useState(false);
+  const [sessionSelectedFile, setSessionSelectedFile] = useState<string | null>(
+    null
+  );
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
-  const [mergeTargetWorkspace, setMergeTargetWorkspace] = useState<Workspace | null>(null);
+  const [mergeTargetWorkspace, setMergeTargetWorkspace] =
+    useState<Workspace | null>(null);
   const [mergeAheadCount, setMergeAheadCount] = useState(0);
-  const [mergeWorkspaceHasChanges, setMergeWorkspaceHasChanges] = useState(false);
+  const [mergeWorkspaceHasChanges, setMergeWorkspaceHasChanges] =
+    useState(false);
   const [mergeChangedFiles, setMergeChangedFiles] = useState<string[]>([]);
   const [mergeDetailsLoading, setMergeDetailsLoading] = useState(false);
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<number | null>(null);
-
-  // Plan execution pending state
-  const [planExecutionPending, setPlanExecutionPending] = useState<{
-    section: PlanSection;
-    sourceBranch: string;
-    sessionName?: string;
-  } | null>(null);
-
-  // Main repo git changes state
-  const [mainRepoChangedFiles, setMainRepoChangedFiles] = useState<ParsedFileChange[]>([]);
-  const [mainRepoCommitMessage, setMainRepoCommitMessage] = useState("");
-  const [mainRepoCommitPending, setMainRepoCommitPending] = useState(false);
-  const [mainRepoFileActionTarget, setMainRepoFileActionTarget] = useState<string | null>(null);
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
-  const [mountedSessionIds, setMountedSessionIds] = useState<Set<number>>(new Set());
-
-  // File selection state for moving to workspace
-  const [selectedUnstagedFiles, setSelectedUnstagedFiles] = useState<Set<string>>(new Set());
-  const [lastSelectedFileIndex, setLastSelectedFileIndex] = useState<number | null>(null);
-  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [forceMainRepoOverview, setForceMainRepoOverview] = useState(0);
 
   const queryClient = useQueryClient();
   const { addToast } = useToast();
-  const sessionActivityListenerRef = useRef<((sessionId: number) => void) | null>(null);
 
-  const mainRepoChangeCount = mainRepoStatus
-    ? mainRepoStatus.modified + mainRepoStatus.added + mainRepoStatus.deleted + mainRepoStatus.untracked
-    : 0;
-
-  const mainRepoStagedFiles = useMemo(() => filterStagedFiles(mainRepoChangedFiles), [mainRepoChangedFiles]);
-  const mainRepoUnstagedFiles = useMemo(() => filterUnstagedFiles(mainRepoChangedFiles), [mainRepoChangedFiles]);
-
-  const toggleSectionCollapse = useCallback((sectionId: string) => {
-    setCollapsedSections((prev) => {
-      const next = new Set(prev);
-      if (next.has(sectionId)) {
-        next.delete(sectionId);
-      } else {
-        next.add(sectionId);
-      }
-      return next;
-    });
+  const handleReturnToDashboard = useCallback(() => {
+    // Navigate to main repo ShowWorkspace > Overview
+    setSelectedWorkspace(null);
+    setActiveSessionId(null);
+    setViewMode("session");
+    // Signal ShowWorkspace to switch to Overview tab
+    setForceMainRepoOverview((prev) => prev + 1);
   }, []);
-
-  // Forward declaration reference - will be defined after handleOpenSession
-  const handleMainRepoFileClickRef = useRef<((file: ParsedFileChange) => Promise<void>) | null>(null);
-
-  // File selection handler - VSCode-style click selection
-  const handleFileSelect = useCallback((path: string, event: React.MouseEvent) => {
-    const fileIndex = mainRepoUnstagedFiles.findIndex(f => f.path === path);
-    if (fileIndex === -1) return;
-
-    const isMetaKey = event.metaKey || event.ctrlKey;
-    const isShiftKey = event.shiftKey;
-
-    setSelectedUnstagedFiles(prev => {
-      const next = new Set(prev);
-
-      if (isShiftKey && lastSelectedFileIndex !== null) {
-        // Range selection - clear others and select range
-        next.clear();
-        const start = Math.min(lastSelectedFileIndex, fileIndex);
-        const end = Math.max(lastSelectedFileIndex, fileIndex);
-        for (let i = start; i <= end; i++) {
-          next.add(mainRepoUnstagedFiles[i].path);
-        }
-      } else if (isMetaKey) {
-        // Cmd/Ctrl+click - toggle individual file
-        if (next.has(path)) {
-          next.delete(path);
-        } else {
-          next.add(path);
-        }
-      } else {
-        // Single click - select only this file (unless already sole selection)
-        if (next.size === 1 && next.has(path)) {
-          // Already sole selection - keep it
-          return prev;
-        }
-        next.clear();
-        next.add(path);
-      }
-      return next;
-    });
-
-    setLastSelectedFileIndex(fileIndex);
-
-    // Trigger file click handler only for plain single clicks (no modifiers)
-    if (!isMetaKey && !isShiftKey) {
-      const file = mainRepoUnstagedFiles.find((f) => f.path === path);
-      if (file && handleMainRepoFileClickRef.current) {
-        handleMainRepoFileClickRef.current(file);
-      }
-    }
-  }, [lastSelectedFileIndex, mainRepoUnstagedFiles]);
 
   const resetMergeState = useCallback(() => {
     setMergeDialogOpen(false);
@@ -428,21 +149,25 @@ export const Dashboard: React.FC = () => {
   }, []);
 
   const openSettings = useCallback((tab?: string) => {
-    setInitialSettingsTab((tab as "application" | "repository") || "repository");
+    setInitialSettingsTab(
+      (tab as "application" | "repository") || "repository"
+    );
     setViewMode("settings");
   }, []);
 
-  const handleSessionActivityListenerChange = useCallback((listener: ((sessionId: number) => void) | null) => {
-    sessionActivityListenerRef.current = listener;
+  const handleActiveTabChange = useCallback((tab: string) => {
+    setChangesTabActive(tab === "changes");
   }, []);
 
-  const handleSessionActivity = useCallback((sessionId: number) => {
-    sessionActivityListenerRef.current?.(sessionId);
+  const handleCloseTerminal = useCallback(() => {
+    // Keep showing current workspace, just close the active terminal session
+    setActiveSessionId(null);
+    setSessionSelectedFile(null);
   }, []);
 
   // Keyboard shortcuts
   useKeyboardShortcut("n", true, () => {
-    if (repoPath && viewMode === "dashboard") {
+    if (repoPath && viewMode === "session" && !selectedWorkspace) {
       setShowCreateDialog(true);
     }
   });
@@ -481,16 +206,14 @@ export const Dashboard: React.FC = () => {
     loadInitialRepo();
   }, []);
 
-  // Load repo name when repo path changes
-  useEffect(() => {
-    if (repoPath) {
-      // Extract repo name from path
-      const name = repoPath.split('/').pop() || repoPath.split('\\').pop() || repoPath;
-      setRepoName(name);
-    } else {
-      setRepoName("");
-    }
-  }, [repoPath]);
+  // Derive repo name from repo path
+  const repoName = useMemo(
+    () =>
+      repoPath
+        ? repoPath.split("/").pop() || repoPath.split("\\").pop() || repoPath
+        : "",
+    [repoPath]
+  );
 
   // Update window title when repo changes
   useEffect(() => {
@@ -501,148 +224,153 @@ export const Dashboard: React.FC = () => {
     }
   }, [repoName]);
 
-  // Listen for git config initialization errors
+  // Start git watcher when repo opens and Changes tab is active
   useEffect(() => {
-    const unlisten = listen<{ repo_path: string; error: string }>(
-      "git-config-init-error",
-      (event) => {
-        const { repo_path, error } = event.payload;
+    if (repoPath && changesTabActive) {
+      startGitWatcher(repoPath).catch((err) => {
+        console.error("Failed to start git watcher:", err);
+      });
 
-        // Only show toast if error is for current repo
-        if (repoPath && repo_path === repoPath) {
-          addToast({
-            title: "Git configuration warning",
-            description: `Could not configure automatic remote tracking: ${error}`,
-            type: "warning",
-          });
-        }
-      }
-    );
-
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, [repoPath, addToast]);
+      return () => {
+        stopGitWatcher(repoPath).catch((err) => {
+          console.error("Failed to stop git watcher:", err);
+        });
+      };
+    }
+  }, [repoPath, changesTabActive]);
 
   const refreshMainRepoInfo = useCallback(async () => {
     if (!repoPath) {
-      setMainRepoStatus(null);
       setMainBranchInfo(null);
-      setMainRepoChangedFiles([]);
       return;
     }
 
-    // Immediate: critical API calls that block UI updates
-    const [status, branchInfo] = await Promise.all([
+    const [_status, branchInfo] = await Promise.all([
       gitGetStatus(repoPath).catch(() => null),
       gitGetBranchInfo(repoPath).catch(() => null),
     ]);
 
-    setMainRepoStatus(status);
     setMainBranchInfo(branchInfo);
-
-    // Deferred: non-critical API calls using requestIdleCallback
-    if (typeof requestIdleCallback !== 'undefined') {
-      requestIdleCallback(
-        async () => {
-          const [changedFiles, lineStats] = await Promise.all([
-            gitGetChangedFiles(repoPath).catch(() => [] as string[]),
-            gitGetLineDiffStats(repoPath, "HEAD").catch(() => null),
-          ]);
-          setMainRepoChangedFiles(parseChangedFiles(changedFiles));
-          setMainRepoLineStats(lineStats);
-        },
-        { timeout: 5000 } // Fallback after 5s if idle callback never fires
-      );
-    } else {
-      // Fallback for browsers without requestIdleCallback
-      setTimeout(async () => {
-        const [changedFiles, lineStats] = await Promise.all([
-          gitGetChangedFiles(repoPath).catch(() => [] as string[]),
-          gitGetLineDiffStats(repoPath, "HEAD").catch(() => null),
-        ]);
-        setMainRepoChangedFiles(parseChangedFiles(changedFiles));
-        setMainRepoLineStats(lineStats);
-      }, 0);
-    }
   }, [repoPath]);
-
-  const handleMainRepoSync = useCallback(async () => {
-    if (!repoPath) {
-      addToast({
-        title: "Repository not set",
-        description: "Configure a repository path before syncing.",
-        type: "error",
-      });
-      return;
-    }
-
-    addToast({
-      title: "Syncing repository",
-      description: "Pulling latest changes and pushing local commits...",
-      type: "info",
-    });
-
-    setMainRepoSyncing(true);
-    try {
-      try {
-        const pullResult = await gitPull(repoPath);
-        addToast({
-          title: "Pulled latest",
-          description: pullResult.trim() || "Repository is up to date.",
-          type: "success",
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        addToast({ title: "Pull failed", description: message, type: "error" });
-        return;
-      }
-
-      try {
-        const pushResult = await gitPush(repoPath);
-        addToast({
-          title: "Push complete",
-          description: pushResult.trim() || "Local changes pushed.",
-          type: "success",
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        addToast({ title: "Push failed", description: message, type: "error" });
-        return;
-      }
-
-      refreshMainRepoInfo();
-    } finally {
-      setMainRepoSyncing(false);
-    }
-  }, [repoPath, addToast, refreshMainRepoInfo]);
 
   // Fetch main repository git status and branch info
   useEffect(() => {
     refreshMainRepoInfo();
   }, [refreshMainRepoInfo]);
 
-  // Listen for menu navigation events
+  // Consolidate all Tauri event listeners
   useEffect(() => {
-    const unlisten = listen("navigate-to-dashboard", () => {
-      setViewMode("dashboard");
-      setSelectedWorkspace(null);
-    });
+    const listeners = [
+      // Git config init error handler
+      listen<{ repo_path: string; error: string }>(
+        "git-config-init-error",
+        (event) => {
+          const { repo_path, error } = event.payload;
+          if (repoPath && repo_path === repoPath) {
+            addToast({
+              title: "Git configuration warning",
+              description: `Could not configure automatic remote tracking: ${error}`,
+              type: "warning",
+            });
+          }
+        }
+      ),
+      // Navigate to settings
+      listen("navigate-to-settings", () => {
+        setViewMode("settings");
+      }),
+      // Menu open repository
+      listen("menu-open-repository", async () => {
+        const selected = await selectFolder();
+        if (!selected) return;
+
+        const isRepo = await isGitRepository(selected);
+        if (!isRepo) {
+          addToast({
+            title: "Not a Git Repository",
+            description:
+              "Please select a folder that contains a git repository.",
+            type: "error",
+          });
+          return;
+        }
+
+        await setSetting("repo_path", selected);
+        setRepoPath(selected);
+        setViewMode("session");
+        setSelectedWorkspace(null);
+
+        // Reset session state
+        setActiveSessionId(null);
+        setSessionSelectedFile(null);
+
+        // Reset merge state
+        resetMergeState();
+
+        // Invalidate queries to force immediate refresh
+        queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+        queryClient.invalidateQueries({ queryKey: ["sessions"] });
+
+        addToast({
+          title: "Repository Opened",
+          description: `Now viewing ${selected.split("/").pop() || selected}`,
+          type: "success",
+        });
+      }),
+      // Menu open in new window
+      listen("menu-open-in-new-window", async () => {
+        const selected = await selectFolder();
+        if (!selected) return;
+
+        const isRepo = await isGitRepository(selected);
+        if (!isRepo) {
+          addToast({
+            title: "Not a Git Repository",
+            description:
+              "Please select a folder that contains a git repository.",
+            type: "error",
+          });
+          return;
+        }
+
+        const windowLabel = `treq-${Date.now()}`;
+        const newRepoName =
+          selected.split("/").pop() || selected.split("\\").pop() || selected;
+
+        const webview = new WebviewWindow(windowLabel, {
+          url: `index.html?repo=${encodeURIComponent(selected)}`,
+          title: `Treq - ${newRepoName}`,
+          width: 1400,
+          height: 900,
+        });
+
+        webview.once("tauri://error", (e) => {
+          console.error("Failed to create window:", e);
+          addToast({
+            title: "Failed to open window",
+            description: "Could not create new window",
+            type: "error",
+          });
+        });
+      }),
+      // Navigate to dashboard
+      listen("navigate-to-dashboard", () => {
+        handleReturnToDashboard();
+      }),
+    ];
 
     return () => {
-      unlisten.then((fn) => fn());
+      Promise.all(listeners).then((unlistenFns) => {
+        unlistenFns.forEach((fn) => fn());
+      });
     };
-  }, []);
-
-  useEffect(() => {
-    const unlisten = listen("navigate-to-settings", () => {
-      setViewMode("settings");
-    });
-
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, []);
+  }, [
+    repoPath,
+    addToast,
+    queryClient,
+    resetMergeState,
+    handleReturnToDashboard,
+  ]);
 
   // Listen for window focus to refresh git status
   useEffect(() => {
@@ -651,7 +379,9 @@ export const Dashboard: React.FC = () => {
     const handleFocus = async () => {
       try {
         // Invalidate to trigger refetch
-        queryClient.invalidateQueries({ queryKey: ["mainRepoBranch", repoPath] });
+        queryClient.invalidateQueries({
+          queryKey: ["mainRepoBranch", repoPath],
+        });
         // Refresh main repo info
         refreshMainRepoInfo();
       } catch (error) {
@@ -659,120 +389,32 @@ export const Dashboard: React.FC = () => {
       }
     };
 
-    const unlistenFocus = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-      if (focused) {
-        handleFocus();
+    const unlistenFocus = getCurrentWindow().onFocusChanged(
+      ({ payload: focused }) => {
+        if (focused) {
+          handleFocus();
+        }
       }
-    });
+    );
 
     return () => {
       unlistenFocus.then((fn) => fn());
     };
   }, [repoPath, queryClient, refreshMainRepoInfo]);
 
-  // Listen for "Open..." menu action
-  useEffect(() => {
-    const unlisten = listen("menu-open-repository", async () => {
-      const selected = await selectFolder();
-      if (!selected) return;
-
-      const isRepo = await isGitRepository(selected);
-      if (!isRepo) {
-        addToast({
-          title: "Not a Git Repository",
-          description: "Please select a folder that contains a git repository.",
-          type: "error",
-        });
-        return;
-      }
-
-      await setSetting("repo_path", selected);
-      setRepoPath(selected);
-      setViewMode("dashboard");
-      setSelectedWorkspace(null);
-
-      // Reset session state
-      setActiveSessionId(null);
-      setMountedSessionIds(new Set());
-      setSessionPlanContent(null);
-      setSessionPlanTitle(null);
-      setSessionInitialPrompt(null);
-      setSessionPromptLabel(null);
-      setSessionSelectedFile(null);
-
-      // Reset UI state
-      setCollapsedSections(new Set());
-      setSelectedUnstagedFiles(new Set());
-      setLastSelectedFileIndex(null);
-      setMoveDialogOpen(false);
-      setSelectedWorkspaceId(null);
-
-      // Reset merge state
-      resetMergeState();
-
-      // Invalidate queries to force immediate refresh
-      queryClient.invalidateQueries({ queryKey: ["workspaces"] });
-      queryClient.invalidateQueries({ queryKey: ["sessions"] });
-
-      addToast({
-        title: "Repository Opened",
-        description: `Now viewing ${selected.split("/").pop() || selected}`,
-        type: "success",
-      });
-    });
-
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, [queryClient, addToast, resetMergeState]);
-
-  // Listen for "Open in New Window..." menu action
-  useEffect(() => {
-    const unlisten = listen("menu-open-in-new-window", async () => {
-      const selected = await selectFolder();
-      if (!selected) return;
-
-      const isRepo = await isGitRepository(selected);
-      if (!isRepo) {
-        addToast({
-          title: "Not a Git Repository",
-          description: "Please select a folder that contains a git repository.",
-          type: "error",
-        });
-        return;
-      }
-
-      const windowLabel = `treq-${Date.now()}`;
-      const repoName = selected.split("/").pop() || selected.split("\\").pop() || selected;
-
-      const webview = new WebviewWindow(windowLabel, {
-        url: `index.html?repo=${encodeURIComponent(selected)}`,
-        title: `Treq - ${repoName}`,
-        width: 1400,
-        height: 900,
-      });
-
-      webview.once("tauri://error", (e) => {
-        console.error("Failed to create window:", e);
-        addToast({
-          title: "Failed to open window",
-          description: "Could not create new window",
-          type: "error",
-        });
-      });
-    });
-
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, [addToast]);
-
   const { data: sessions = [] } = useQuery({
     queryKey: ["sessions", repoPath],
     queryFn: () => getSessions(repoPath),
-    refetchInterval: 5000,
+    refetchInterval: 30000,
     enabled: !!repoPath,
   });
+
+  // Compute the active workspace ID from the active session
+  const activeWorkspaceId = useMemo(() => {
+    if (activeSessionId === null) return null;
+    const session = sessions.find((s) => s.id === activeSessionId);
+    return session?.workspace_id ?? null;
+  }, [activeSessionId, sessions]);
 
   const { data: workspaces = [], refetch } = useQuery({
     queryKey: ["workspaces", repoPath],
@@ -787,7 +429,9 @@ export const Dashboard: React.FC = () => {
         try {
           const rebuilt = await rebuildWorkspaces(repoPath);
           if (rebuilt.length > 0) {
-            queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+            queryClient.invalidateQueries({
+              queryKey: ["workspaces", repoPath],
+            });
           }
         } catch (error) {
           console.error("Failed to rebuild workspaces:", error);
@@ -799,52 +443,6 @@ export const Dashboard: React.FC = () => {
 
   // Lazy preload: only preload selected workspace, not all workspaces
   useGitCachePreloader(selectedWorkspace?.workspace_path ?? null);
-
-  // Track mounted session IDs to preserve terminal state
-  useEffect(() => {
-    if (activeSessionId !== null) {
-      setMountedSessionIds(prev => {
-        if (prev.has(activeSessionId)) return prev;
-        const next = new Set(prev);
-        next.add(activeSessionId);
-        return next;
-      });
-    }
-  }, [activeSessionId]);
-
-  // Poll for git changes when dashboard view is active
-  useEffect(() => {
-    if (viewMode !== "dashboard" || !repoPath) {
-      return;
-    }
-
-    const pollGitChanges = async () => {
-      try {
-        await invalidateGitCache(repoPath);
-        refreshMainRepoInfo();
-      } catch {
-        // Silently ignore polling failures
-      }
-    };
-
-    // Poll every 5 seconds
-    const interval = setInterval(pollGitChanges, 5000);
-
-    return () => clearInterval(interval);
-  }, [viewMode, repoPath, refreshMainRepoInfo]);
-
-  // Refresh git changes when session tab is focused
-  useEffect(() => {
-    if (viewMode === "session" || viewMode === "workspace-session") {
-      if (repoPath && activeSessionId) {
-        // Invalidate cache and refresh on session focus change
-        invalidateGitCache(repoPath).catch(() => {
-          // Silently ignore cache invalidation failures
-        });
-        refreshMainRepoInfo();
-      }
-    }
-  }, [activeSessionId, viewMode, repoPath, refreshMainRepoInfo]);
 
   const deleteWorkspace = useMutation({
     mutationFn: async (workspace: Workspace) => {
@@ -868,15 +466,6 @@ export const Dashboard: React.FC = () => {
     },
   });
 
-  const togglePinMutation = useMutation({
-    mutationFn: async ({ workspaceId, repoPath }: { workspaceId: number; repoPath: string }) => {
-      return toggleWorkspacePin(repoPath, workspaceId);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
-    },
-  });
-
   const mergeMutation = useMutation({
     mutationFn: async (payload: MergeConfirmPayload) => {
       if (!repoPath) {
@@ -889,15 +478,21 @@ export const Dashboard: React.FC = () => {
 
       const mainRepoDirty = await gitHasUncommittedChanges(repoPath);
       if (mainRepoDirty) {
-        throw new Error("Main repository has uncommitted changes. Please commit or stash them before merging.");
+        throw new Error(
+          "Main repository has uncommitted changes. Please commit or stash them before merging."
+        );
       }
 
-      const workspaceDirtyNow = await gitHasUncommittedChanges(mergeTargetWorkspace.workspace_path);
+      const workspaceDirtyNow = await gitHasUncommittedChanges(
+        mergeTargetWorkspace.workspace_path
+      );
       if (workspaceDirtyNow) {
         if (payload.discardChanges) {
           await gitDiscardAllChanges(mergeTargetWorkspace.workspace_path);
         } else {
-          throw new Error("Workspace has uncommitted changes. Discard them before merging.");
+          throw new Error(
+            "Workspace has uncommitted changes. Discard them before merging."
+          );
         }
       }
 
@@ -932,53 +527,11 @@ export const Dashboard: React.FC = () => {
     },
   });
 
-  const updateBranchMutation = useMutation({
-    mutationFn: async (workspace: Workspace) => {
-      if (!currentBranch) {
-        throw new Error("Current branch is not set");
-      }
-
-      const workspaceDirty = await gitHasUncommittedChanges(workspace.workspace_path);
-      if (workspaceDirty) {
-        throw new Error("Workspace has uncommitted changes. Please commit or stash them before updating.");
-      }
-
-      return gitMerge(
-        workspace.workspace_path,
-        currentBranch,
-        "regular",
-        undefined
-      );
-    },
-    onSuccess: (_result, workspace) => {
-      addToast({
-        title: "Branch updated",
-        description: `Merged ${currentBranch} into ${workspace.branch_name}`,
-        type: "success",
-      });
-      // Invalidate queries to trigger refetch of workspace git status
-      queryClient.invalidateQueries({ queryKey: ["workspace-divergence", workspace.workspace_path] });
-      queryClient.invalidateQueries({ queryKey: ["workspace-branch-info", workspace.workspace_path] });
-    },
-    onError: (error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      const description = message.includes("CONFLICT")
-        ? "Merge conflict detected. Resolve conflicts in the workspace and try again."
-        : message;
-      addToast({
-        title: "Update failed",
-        description,
-        type: "error",
-      });
-    },
-  });
-
   // Helper to create or get session
   const getOrCreateSession = useCallback(
     async (
       workspaceId: number | null,
       options?: {
-        planTitle?: string;
         workspaceBranchName?: string;
         forceNew?: boolean;
         name?: string;
@@ -993,32 +546,23 @@ export const Dashboard: React.FC = () => {
         }
       }
 
-      let finalPlanTitle = options?.planTitle;
-      if (workspaceId !== null && !finalPlanTitle) {
-        const workspace = workspaces.find((w) => w.id === workspaceId);
-        if (workspace?.metadata) {
-          try {
-            const metadata = JSON.parse(workspace.metadata);
-            finalPlanTitle = metadata.initial_plan_title;
-          } catch {
-            // Ignore parse errors
-          }
-        }
-      }
-
-      const scopedSessions = sessions.filter((s) => s.workspace_id === workspaceId);
+      const scopedSessions = sessions.filter(
+        (s) => s.workspace_id === workspaceId
+      );
       const index = scopedSessions.length + 1;
       let name = options?.name;
       if (!name) {
         name = `Session ${index}`;
       }
 
-      const finalPlanTitleForDb = workspaceId !== null ? finalPlanTitle : undefined;
-      const sessionId = await createSession(repoPath, workspaceId, name, finalPlanTitleForDb);
+      const sessionId = await createSession(repoPath, workspaceId, name);
 
       // Apply default model from settings (repo-level overrides application-level)
       try {
-        const repoDefaultModel = await getRepoSetting(repoPath, "default_model");
+        const repoDefaultModel = await getRepoSetting(
+          repoPath,
+          "default_model"
+        );
         const appDefaultModel = await getSetting("default_model");
         const defaultModel = repoDefaultModel || appDefaultModel;
 
@@ -1038,16 +582,11 @@ export const Dashboard: React.FC = () => {
   const handleOpenSession = useCallback(
     async (workspace: Workspace | null, options?: SessionOpenOptions) => {
       const sessionId = await getOrCreateSession(workspace?.id ?? null, {
-        planTitle: options?.planTitle,
         workspaceBranchName: workspace?.branch_name,
         forceNew: options?.forceNew,
         name: options?.sessionName,
       });
       setSelectedWorkspace(workspace);
-      setSessionPlanContent(options?.planContent ?? null);
-      setSessionPlanTitle(options?.planTitle ?? null);
-      setSessionInitialPrompt(options?.initialPrompt ?? null);
-      setSessionPromptLabel(options?.promptLabel ?? null);
       setSessionSelectedFile(options?.selectedFilePath ?? null);
       setActiveSessionId(sessionId);
       setViewMode(workspace ? "workspace-session" : "session");
@@ -1057,7 +596,9 @@ export const Dashboard: React.FC = () => {
 
   const handleCreateSessionFromSidebar = useCallback(
     async (workspaceId: number | null) => {
-      const workspace = workspaceId ? workspaces.find((w) => w.id === workspaceId) ?? null : null;
+      const workspace = workspaceId
+        ? workspaces.find((w) => w.id === workspaceId) ?? null
+        : null;
       await handleOpenSession(workspace, { forceNew: true });
     },
     [handleOpenSession, workspaces]
@@ -1065,14 +606,19 @@ export const Dashboard: React.FC = () => {
 
   const openSessionWithPrompt = useCallback(
     async (workspace: Workspace, prompt: string, label = "Review response") => {
-      await handleOpenSession(workspace, { initialPrompt: prompt, promptLabel: label });
+      await handleOpenSession(workspace, {
+        initialPrompt: prompt,
+        promptLabel: label,
+      });
 
       // Focus terminal after session opens
       setTimeout(() => {
         // Try to find terminal container (ghostty-web or xterm)
-        const terminalContainer = document.querySelector('.xterm, [data-terminal]');
+        const terminalContainer = document.querySelector(
+          ".xterm, [data-terminal]"
+        );
         if (terminalContainer) {
-          const textarea = terminalContainer.querySelector('textarea');
+          const textarea = terminalContainer.querySelector("textarea");
           if (textarea instanceof HTMLTextAreaElement) {
             textarea.focus();
           }
@@ -1081,65 +627,6 @@ export const Dashboard: React.FC = () => {
     },
     [handleOpenSession]
   );
-
-  // Handler for when files are successfully moved to workspace
-  const handleMoveToWorkspaceSuccess = useCallback(async (workspaceInfo: {
-    id: number;
-    workspaceName: string;
-    workspacePath: string;
-    branchName: string;
-    metadata: string;
-  }) => {
-    setMoveDialogOpen(false);
-    setSelectedUnstagedFiles(new Set());
-    setLastSelectedFileIndex(null);
-    await queryClient.refetchQueries({ queryKey: ["workspaces", repoPath] });
-
-    // Refresh the changed files list
-    if (repoPath) {
-      try {
-        const files = await gitGetChangedFiles(repoPath);
-        setMainRepoChangedFiles(parseChangedFiles(files));
-      } catch {
-        setMainRepoChangedFiles([]);
-      }
-    }
-
-    // Construct workspace object and navigate to session
-    const newWorkspace: Workspace = {
-      id: workspaceInfo.id,
-      repo_path: repoPath,
-      workspace_name: workspaceInfo.workspaceName,
-      workspace_path: workspaceInfo.workspacePath,
-      branch_name: workspaceInfo.branchName,
-      created_at: new Date().toISOString(),
-      metadata: workspaceInfo.metadata,
-      is_pinned: false,
-    };
-
-    await handleOpenSession(newWorkspace, { forceNew: true });
-  }, [queryClient, repoPath, handleOpenSession]);
-
-  const handleSessionClick = async (session: Session) => {
-    await updateSessionAccess(repoPath, session.id);
-    setActiveSessionId(session.id);
-    setSessionPlanContent(null);
-    setSessionPlanTitle(null);
-    setSessionInitialPrompt(null);
-    setSessionPromptLabel(null);
-    setSessionSelectedFile(null);
-
-    if (session.workspace_id) {
-      const workspace = workspaces.find((w) => w.id === session.workspace_id);
-      if (workspace) {
-        setSelectedWorkspace(workspace);
-        setViewMode("workspace-session");
-      }
-    } else {
-      setSelectedWorkspace(null);
-      setViewMode("session");
-    }
-  };
 
   const handleDelete = (workspace: Workspace) => {
     if (confirm(`Delete workspace ${workspace.branch_name}?`)) {
@@ -1168,7 +655,8 @@ export const Dashboard: React.FC = () => {
       if (mainRepoDirty) {
         addToast({
           title: "Main repository has uncommitted changes",
-          description: "Please clean up or commit changes in the main repository before merging.",
+          description:
+            "Please clean up or commit changes in the main repository before merging.",
           type: "error",
         });
         setMergeTargetWorkspace(null);
@@ -1180,7 +668,9 @@ export const Dashboard: React.FC = () => {
       const branchInfo = await gitGetBranchInfo(workspace.workspace_path);
       setMergeAheadCount(branchInfo.ahead);
 
-      const workspaceDirty = await gitHasUncommittedChanges(workspace.workspace_path);
+      const workspaceDirty = await gitHasUncommittedChanges(
+        workspace.workspace_path
+      );
       setMergeWorkspaceHasChanges(workspaceDirty);
 
       if (workspaceDirty) {
@@ -1205,283 +695,14 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const handleExecutePlan = async (section: PlanSection) => {
-    try {
-      // Get branch name pattern from settings
-      const branchPattern = await getRepoSetting(repoPath, "branch_name_pattern") || "treq/{name}";
-      
-      // Generate branch name from plan title using pattern
-      const branchName = applyBranchNamePattern(branchPattern, section.title);
-      
-      addToast({
-        title: "Creating workspace...",
-        description: `Creating workspace for ${branchName}`,
-        type: "info",
-      });
-
-      // Create the workspace
-      const workspacePath = await jjCreateWorkspace(repoPath, branchName, branchName, true);
-
-      // Prepare metadata with plan title
-      const metadata = JSON.stringify({
-        initial_plan_title: section.title
-      });
-
-      // Add to database with metadata
-      const workspaceId = await addWorkspaceToDb(repoPath, branchName, workspacePath, branchName, metadata);
-
-      // Execute post-create command if configured
-      const postCreateCmd = await getRepoSetting(repoPath, "post_create_command");
-      if (postCreateCmd && postCreateCmd.trim()) {
-        try {
-          await gitExecutePostCreateCommand(workspacePath, postCreateCmd);
-        } catch (cmdError) {
-          console.error("Post-create command failed:", cmdError);
-        }
-      }
-
-      // Get plan content (use edited version if available)
-      const planContent = section.editedContent || section.rawMarkdown;
-
-      // Create workspace object and navigate to edit session
-      const newWorkspace: Workspace = {
-        id: workspaceId,
-        repo_path: repoPath,
-        workspace_name: branchName,
-        workspace_path: workspacePath,
-        branch_name: branchName,
-        created_at: new Date().toISOString(),
-        metadata,
-        is_pinned: false,
-      };
-
-      try {
-        const payload = buildPlanHistoryPayload(section);
-        await saveExecutedPlan(repoPath, workspaceId, payload);
-      } catch (planError) {
-        console.error("Failed to record plan execution:", planError);
-      }
-
-      // Create execution session with plan title
-      await handleOpenSession(newWorkspace, {
-        planTitle: section.title,
-        planContent,
-        forceNew: true,
-      });
-      
-      addToast({
-        title: "Ready to implement",
-        description: "Workspace created; opening session terminal",
-        type: "success",
-      });
-
-      // Refresh workspace list
-      refetch();
-    } catch (error) {
-      addToast({
-        title: "Execution Failed",
-        description: error instanceof Error ? error.message : String(error),
-        type: "error",
-      });
-    }
-  };
-
-  const handleExecutePlanInWorkspace = useCallback(async (
-    section: PlanSection,
-    sourceBranch: string,
-    currentSessionName?: string
-  ) => {
-    // Instead of creating immediately, open the modal with context
-    setPlanExecutionPending({
-      section,
-      sourceBranch,
-      sessionName: currentSessionName,
-    });
-    setShowCreateDialog(true);
-  }, []);
-
-  const handleWorkspaceCreatedWithPlan = useCallback(async (
-    workspaceInfo: { id: number; workspaceName: string; workspacePath: string; branchName: string; metadata: string },
-    planSection: PlanSection,
-    sessionName?: string
-  ) => {
-    // Close modal
-    setShowCreateDialog(false);
-
-    // Get plan content
-    const planContent = planSection.editedContent || planSection.rawMarkdown;
-
-    // Create workspace object
-    const newWorkspace: Workspace = {
-      id: workspaceInfo.id,
-      repo_path: repoPath,
-      workspace_name: workspaceInfo.workspaceName,
-      workspace_path: workspaceInfo.workspacePath,
-      branch_name: workspaceInfo.branchName,
-      created_at: new Date().toISOString(),
-      metadata: workspaceInfo.metadata,
-      is_pinned: false,
-    };
-
-    // Record plan execution
-    try {
-      const payload = buildPlanHistoryPayload(planSection);
-      await saveExecutedPlan(repoPath, workspaceInfo.id, payload);
-    } catch (planError) {
-      console.error("Failed to record plan execution:", planError);
-    }
-
-    // Open session with transferred name
-    await handleOpenSession(newWorkspace, {
-      planTitle: planSection.title,
-      planContent,
-      forceNew: true,
-      sessionName: sessionName, // Transfer session name
-    });
-
-    addToast({
-      title: "Ready to implement",
-      description: "Workspace created; plan sent to Claude",
-      type: "success",
-    });
-
-    // Clear pending state
-    setPlanExecutionPending(null);
-
-    // Refresh workspace list
-    refetch();
-  }, [repoPath, handleOpenSession, refetch, addToast]);
-
-  const handleCloseTerminal = () => {
-    setViewMode("dashboard");
-    setSelectedWorkspace(null);
-    setActiveSessionId(null);
-    setSessionPlanContent(null);
-    setSessionPlanTitle(null);
-    setSessionInitialPrompt(null);
-    setSessionPromptLabel(null);
-    setSessionSelectedFile(null);
-  };
-
-  const handleReturnToDashboard = useCallback(() => {
-    setViewMode("dashboard");
-    setSelectedWorkspace(null);
-  }, []);
-
-  // File click handler for main repo - opens diff viewer session
-  const handleMainRepoFileClick = useCallback(
-    async (file: ParsedFileChange) => {
-      await handleOpenSession(null, {
-        forceNew: false,
-        initialPrompt: "",
-        promptLabel: "Opening diff viewer",
-        selectedFilePath: file.path,
-      });
-    },
-    [handleOpenSession]
-  );
-
-  // Update the ref so handleFileSelect can use it
-  useEffect(() => {
-    handleMainRepoFileClickRef.current = handleMainRepoFileClick;
-  }, [handleMainRepoFileClick]);
-
-  const handleMainRepoStageFile = useCallback(
-    async (filePath: string) => {
-      if (!repoPath) return;
-      setMainRepoFileActionTarget(filePath);
-      try {
-        await gitStageFile(repoPath, filePath);
-        addToast({ title: "Staged", description: `${filePath} staged`, type: "success" });
-        refreshMainRepoInfo();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        addToast({ title: "Stage Failed", description: message, type: "error" });
-      } finally {
-        setMainRepoFileActionTarget(null);
-      }
-    },
-    [repoPath, addToast, refreshMainRepoInfo]
-  );
-
-  const handleMainRepoUnstageFile = useCallback(
-    async (filePath: string) => {
-      if (!repoPath) return;
-      setMainRepoFileActionTarget(filePath);
-      try {
-        await gitUnstageFile(repoPath, filePath);
-        addToast({ title: "Unstaged", description: `${filePath} unstaged`, type: "success" });
-        refreshMainRepoInfo();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        addToast({ title: "Unstage Failed", description: message, type: "error" });
-      } finally {
-        setMainRepoFileActionTarget(null);
-      }
-    },
-    [repoPath, addToast, refreshMainRepoInfo]
-  );
-
-  const handleMainRepoStageAll = useCallback(async () => {
-    if (!repoPath) return;
-    try {
-      await gitAddAll(repoPath);
-      addToast({ title: "Staged", description: "All changes staged", type: "success" });
-      refreshMainRepoInfo();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      addToast({ title: "Stage All Failed", description: message, type: "error" });
-    }
-  }, [repoPath, addToast, refreshMainRepoInfo]);
-
-  const handleMainRepoCommit = useCallback(async () => {
-    if (!repoPath) {
-      addToast({ title: "Repository not set", description: "Configure a repository path before committing.", type: "error" });
-      return;
-    }
-
-    const trimmed = mainRepoCommitMessage.trim();
-    if (!trimmed) {
-      addToast({ title: "Commit message", description: "Enter a commit message.", type: "error" });
-      return;
-    }
-
-    if (trimmed.length > 500) {
-      addToast({ title: "Commit message", description: "Please keep the message under 500 characters.", type: "error" });
-      return;
-    }
-
-    if (mainRepoStagedFiles.length === 0) {
-      addToast({ title: "No staged files", description: "Stage changes before committing.", type: "error" });
-      return;
-    }
-
-    setMainRepoCommitPending(true);
-    try {
-      const result = await gitCommit(repoPath, trimmed);
-      const hashMatch = result.match(/\[.+? ([0-9a-f]{7,})\]/i);
-      const hash = hashMatch ? hashMatch[1] : null;
-      addToast({
-        title: "Commit created",
-        description: hash ? `Created ${hash}` : result.trim() || "Commit successful",
-        type: "success",
-      });
-      setMainRepoCommitMessage("");
-      refreshMainRepoInfo();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      addToast({ title: "Commit failed", description: message, type: "error" });
-    } finally {
-      setMainRepoCommitPending(false);
-    }
-  }, [repoPath, mainRepoCommitMessage, mainRepoStagedFiles, addToast, refreshMainRepoInfo]);
-
   // Handle branch change after switching
   const handleBranchChanged = useCallback(() => {
     // Refresh main repo info
     queryClient.invalidateQueries({ queryKey: ["mainRepoBranch", repoPath] });
     queryClient.invalidateQueries({ queryKey: ["mainRepoStatus", repoPath] });
-    queryClient.invalidateQueries({ queryKey: ["mainRepoChangedFiles", repoPath] });
+    queryClient.invalidateQueries({
+      queryKey: ["mainRepoChangedFiles", repoPath],
+    });
     addToast({ title: "Branch switched successfully", type: "success" });
   }, [repoPath, queryClient, addToast]);
 
@@ -1492,7 +713,7 @@ export const Dashboard: React.FC = () => {
       onOpenChange={setShowCommandPalette}
       workspaces={workspaces}
       sessions={sessions}
-      onNavigateToDashboard={() => setViewMode("dashboard")}
+      onNavigateToDashboard={handleReturnToDashboard}
       onNavigateToSettings={() => setViewMode("settings")}
       onOpenWorkspaceSession={(workspace) => {
         handleOpenSession(workspace);
@@ -1521,76 +742,15 @@ export const Dashboard: React.FC = () => {
     />
   ) : null;
 
-  // Memoized session terminals - keep them mounted but hidden for state preservation
-  const memoizedSessionTerminals = useMemo(() => {
-    // Get unique sessions that have been visited (have an activeSessionId match or are currently active)
-    const sessionsToRender = sessions.filter(s => s.id === activeSessionId || mountedSessionIds.has(s.id));
-
-    return sessionsToRender.map(session => {
-      const isActive = session.id === activeSessionId && (viewMode === "session" || viewMode === "workspace-session");
-      const sessionWorkspace = session.workspace_id ? workspaces.find(w => w.id === session.workspace_id) : null;
-
-      return (
-        <div
-          key={session.id}
-          style={{ display: isActive ? 'flex' : 'none' }}
-          className="absolute inset-0"
-        >
-          <ErrorBoundary
-            fallbackTitle={sessionWorkspace ? "Workspace terminal error" : "Session terminal error"}
-            resetKeys={[session.id]}
-            onGoDashboard={handleCloseTerminal}
-          >
-            <Suspense fallback={<LoadingSpinner />}>
-              <SessionTerminal
-                repositoryPath={sessionWorkspace ? undefined : repoPath}
-                workspace={sessionWorkspace || undefined}
-                session={session}
-                sessionId={session.id}
-                mainRepoBranch={currentBranch}
-                onClose={handleCloseTerminal}
-                onExecutePlan={handleExecutePlan}
-                onExecutePlanInWorkspace={handleExecutePlanInWorkspace}
-                initialPlanContent={session.id === activeSessionId ? (sessionPlanContent || undefined) : undefined}
-                initialPlanTitle={session.id === activeSessionId ? (sessionPlanTitle || undefined) : undefined}
-                initialPrompt={session.id === activeSessionId ? (sessionInitialPrompt || undefined) : undefined}
-                initialPromptLabel={session.id === activeSessionId ? (sessionPromptLabel || undefined) : undefined}
-                initialSelectedFile={session.id === activeSessionId ? (sessionSelectedFile || undefined) : undefined}
-                onSessionActivity={handleSessionActivity}
-                isHidden={!isActive}
-              />
-            </Suspense>
-          </ErrorBoundary>
-        </div>
-      );
-    });
-  }, [
-    sessions,
-    activeSessionId,
-    mountedSessionIds,
-    viewMode,
-    workspaces,
-    repoPath,
-    currentBranch,
-    sessionPlanContent,
-    sessionPlanTitle,
-    sessionInitialPrompt,
-    sessionPromptLabel,
-    sessionSelectedFile,
-    handleCloseTerminal,
-    handleExecutePlan,
-    handleExecutePlanInWorkspace,
-    handleSessionActivity,
-  ]);
-
-  const isSessionView = viewMode === "session" || viewMode === "workspace-session";
-  const showSidebar = viewMode !== "merge-review" && viewMode !== "workspace-edit";
-  const highlightedSessionId = isSessionView ? activeSessionId : null;
+  const isSessionView =
+    viewMode === "session" || viewMode === "workspace-session";
+  const showSidebar =
+    viewMode !== "merge-review" && viewMode !== "workspace-edit";
 
   // Build Claude sessions data for the terminal pane
   const claudeSessionsForPane = useMemo((): ClaudeSessionData[] => {
     return sessions
-      .filter((s) => mountedSessionIds.has(s.id) || s.id === activeSessionId)
+      .filter((s) => s.id === activeSessionId)
       .map((session) => {
         const sessionWorkspace = session.workspace_id
           ? workspaces.find((w) => w.id === session.workspace_id)
@@ -1603,55 +763,75 @@ export const Dashboard: React.FC = () => {
           repoPath: sessionWorkspace?.repo_path ?? repoPath,
         };
       });
-  }, [sessions, mountedSessionIds, activeSessionId, workspaces, repoPath]);
+  }, [sessions, activeSessionId, workspaces, repoPath]);
 
-  const mainContentStyle = useMemo(() => ({ width: showSidebar ? "calc(100vw - 240px)" : "100%" }), [showSidebar]);
-  const sessionLayerStyle = useMemo<React.CSSProperties>(() => ({
-    visibility: isSessionView ? 'visible' : 'hidden',
-    zIndex: isSessionView ? 10 : 0,
-    pointerEvents: isSessionView ? 'auto' : 'none',
-  }), [isSessionView]);
+  const mainContentStyle = useMemo(
+    () => ({ width: showSidebar ? "calc(100vw - 240px)" : "100%" }),
+    [showSidebar]
+  );
+  const sessionLayerStyle = useMemo<React.CSSProperties>(
+    () => ({
+      visibility: isSessionView ? "visible" : "hidden",
+      zIndex: isSessionView ? 10 : 0,
+      pointerEvents: isSessionView ? "auto" : "none",
+    }),
+    [isSessionView]
+  );
 
   return (
     <div className="flex h-screen bg-background">
-      {/* SessionSidebar - shown in session, settings, dashboard views */}
+      {/* WorkspaceSidebar - shown in session and settings views */}
       {showSidebar && (
-        <SessionSidebar
-          activeSessionId={highlightedSessionId}
-          onSessionClick={handleSessionClick}
-          onCreateSession={handleCreateSessionFromSidebar}
-          onCloseActiveSession={handleCloseTerminal}
+        <WorkspaceSidebar
           repoPath={repoPath}
           currentBranch={currentBranch}
+          selectedWorkspaceId={selectedWorkspace?.id ?? null}
+          onWorkspaceClick={(workspace) => handleOpenSession(workspace)}
           onDeleteWorkspace={handleDelete}
           onCreateWorkspace={() => setShowCreateDialog(true)}
-          onCreateWorkspaceFromRemote={() => setShowCreateFromRemoteDialog(true)}
-          onSessionActivityListenerChange={handleSessionActivityListenerChange}
+          onCreateWorkspaceFromRemote={() =>
+            setShowCreateFromRemoteDialog(true)
+          }
           openSettings={openSettings}
           navigateToDashboard={handleReturnToDashboard}
           onOpenCommandPalette={() => setShowCommandPalette(true)}
           currentPage={
-            viewMode === "dashboard" ? "dashboard" :
-            viewMode === "settings" ? "settings" :
-            (viewMode === "session" || viewMode === "workspace-session") ? "session" :
-            null
+            viewMode === "settings"
+              ? "settings"
+              : viewMode === "session" || viewMode === "workspace-session"
+              ? "session"
+              : null
           }
         />
       )}
 
-      <div
-        className="flex-1 relative"
-        style={mainContentStyle}
-      >
+      <div className="flex-1 relative" style={mainContentStyle}>
         {/* Sessions Layer - ALWAYS RENDERED ONCE */}
         <div
           className="absolute inset-0 flex flex-col workspace-terminal-container overflow-hidden"
           style={sessionLayerStyle}
         >
-          {/* Session terminals take up remaining space */}
-          <div className="flex-1 min-h-0 overflow-hidden relative">
-            {memoizedSessionTerminals}
-          </div>
+          {/* Show workspace views take up remaining space */}
+          {repoPath && (
+            <div className="flex-1 min-h-0 overflow-hidden relative">
+              <ErrorBoundary
+                fallbackTitle="Workspace error"
+                resetKeys={[selectedWorkspace?.id]}
+                onReset={handleReturnToDashboard}
+              >
+                <Suspense fallback={<LoadingSpinner />}>
+                  <ShowWorkspace
+                    repositoryPath={repoPath}
+                    workspace={selectedWorkspace}
+                    sessionId={activeSessionId}
+                    mainRepoBranch={currentBranch}
+                    onClose={handleReturnToDashboard}
+                    initialSelectedFile={sessionSelectedFile}
+                  />
+                </Suspense>
+              </ErrorBoundary>
+            </div>
+          )}
           {/* Shared workspace terminal pane - always rendered to preserve state */}
           <WorkspaceTerminalPane
             key={repoPath}
@@ -1665,9 +845,13 @@ export const Dashboard: React.FC = () => {
                 // Find the session to determine view mode
                 const session = sessions.find((s) => s.id === sessionId);
                 if (session) {
-                  setViewMode(session.workspace_id ? "workspace-session" : "session");
+                  setViewMode(
+                    session.workspace_id ? "workspace-session" : "session"
+                  );
                   if (session.workspace_id) {
-                    const ws = workspaces.find((w) => w.id === session.workspace_id);
+                    const ws = workspaces.find(
+                      (w) => w.id === session.workspace_id
+                    );
                     if (ws) setSelectedWorkspace(ws);
                   }
                 }
@@ -1679,11 +863,14 @@ export const Dashboard: React.FC = () => {
             onRenameSession={async (sessionId, newName) => {
               try {
                 await updateSessionName(repoPath, sessionId, newName);
-                queryClient.invalidateQueries({ queryKey: ["sessions", repoPath] });
+                queryClient.invalidateQueries({
+                  queryKey: ["sessions", repoPath],
+                });
               } catch (error) {
                 addToast({
                   title: "Failed to rename session",
-                  description: error instanceof Error ? error.message : String(error),
+                  description:
+                    error instanceof Error ? error.message : String(error),
                   type: "error",
                 });
               }
@@ -1695,9 +882,9 @@ export const Dashboard: React.FC = () => {
         <div
           className="absolute inset-0 overflow-auto"
           style={{
-            visibility: !isSessionView ? 'visible' : 'hidden',
+            visibility: !isSessionView ? "visible" : "hidden",
             zIndex: !isSessionView ? 10 : 0,
-            pointerEvents: !isSessionView ? 'auto' : 'none',
+            pointerEvents: !isSessionView ? "auto" : "none",
           }}
         >
           {/* Settings View */}
@@ -1708,7 +895,7 @@ export const Dashboard: React.FC = () => {
                 onRepoPathChange={setRepoPath}
                 initialTab={initialSettingsTab}
                 onRefresh={refetch}
-                onClose={() => setViewMode("dashboard")}
+                onClose={handleReturnToDashboard}
                 repoName={repoName}
                 currentBranch={currentBranch}
                 mainBranchInfo={mainBranchInfo}
@@ -1721,214 +908,24 @@ export const Dashboard: React.FC = () => {
             <ErrorBoundary
               fallbackTitle="Merge review failed"
               resetKeys={[selectedWorkspace.id, currentBranch ?? ""]}
-              onGoDashboard={handleReturnToDashboard}
+              onReset={handleReturnToDashboard}
             >
               <Suspense fallback={<LoadingSpinner />}>
                 <MergeReviewPage
                   repoPath={repoPath}
                   baseBranch={currentBranch}
                   workspace={selectedWorkspace}
-                  onClose={() => {
-                    setViewMode("dashboard");
-                    setSelectedWorkspace(null);
-                  }}
+                  onClose={handleReturnToDashboard}
                   onStartMerge={openMergeDialogForWorkspace}
-                  onRequestChanges={(prompt) => openSessionWithPrompt(selectedWorkspace, prompt, "Review response")}
+                  onRequestChanges={(prompt) =>
+                    openSessionWithPrompt(
+                      selectedWorkspace,
+                      prompt,
+                      "Review response"
+                    )
+                  }
                 />
               </Suspense>
-            </ErrorBoundary>
-          )}
-
-          {/* Dashboard View */}
-          {viewMode === "dashboard" && (
-            <ErrorBoundary
-          fallbackTitle="Dashboard content error"
-          resetKeys={[repoPath, workspaces.length]}
-          onGoDashboard={handleReturnToDashboard}
-        >
-            <div className="container mx-auto p-8">
-            {/* Initial Setup Message */}
-            {!repoPath && (
-              <div className="mb-6 p-4 border rounded-lg bg-muted">
-                <p className="text-sm text-muted-foreground mb-2">
-                  Set repository path
-                </p>
-                <Button variant="outline" onClick={() => openSettings("application")}>
-                  Configure Repository
-                </Button>
-              </div>
-            )}
-
-            {/* Split Layout: Main Tree | Workspaces */}
-            {repoPath && (
-              <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-6">
-                {/* Main Tree Section */}
-                <div className="lg:sticky lg:top-6 lg:self-start">
-                  <Card className="bg-sidebar">
-                    <CardContent className="p-4 space-y-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 space-y-3 text-sm">
-                          {currentBranch && (
-                            <div className="flex items-center gap-2">
-                              <div className="flex items-center gap-1 min-w-0 flex-1">
-                                <GitBranch className="w-4 h-4 shrink-0" />
-                                <code className="text-xs truncate" title={currentBranch}>{currentBranch}</code>
-                              </div>
-
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="w-6 h-6"
-                                      onClick={handleMainRepoSync}
-                                      disabled={mainRepoSyncing}
-                                    >
-                                      <RefreshCw className={`w-3 h-3 ${mainRepoSyncing ? "animate-spin" : ""}`} />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="bottom">
-                                    {mainRepoSyncing ? "Syncing..." : "Sync with remote"}
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-
-                              {mainBranchInfo?.upstream && (
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                  {mainBranchInfo.behind > 0 && (
-                                    <span>{mainBranchInfo.behind}↓</span>
-                                  )}
-                                  {mainBranchInfo.ahead > 0 && (
-                                    <span>{mainBranchInfo.ahead}↑</span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                        </div>
-                      </div>
-
-                      {/* Git Changes List */}
-                      {mainRepoChangeCount > 0 && (
-                        <div className="space-y-3 mt-4 pt-4 border-t border-border -mx-4 px-4">
-                          {/* Header with line stats */}
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-muted-foreground uppercase tracking-wide">
-                              Changes
-                            </span>
-                            <LineDiffStatsDisplay stats={mainRepoLineStats} size="xs" />
-                          </div>
-                          {/* Commit Message Input */}
-                          <div className="space-y-2">
-                            <Input
-                              placeholder="Commit message (⌘ ↵ to commit)"
-                              value={mainRepoCommitMessage}
-                              onChange={(e) => setMainRepoCommitMessage(e.target.value)}
-                              onKeyDown={(e) => {
-                                if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && mainRepoStagedFiles.length > 0 && mainRepoCommitMessage.trim()) {
-                                  e.preventDefault();
-                                  handleMainRepoCommit();
-                                }
-                              }}
-                              disabled={mainRepoCommitPending}
-                              className="text-sm"
-                            />
-                            <Button
-                              className="w-full h-8 text-xs"
-                              size="sm"
-                              disabled={mainRepoStagedFiles.length === 0 || !mainRepoCommitMessage.trim() || mainRepoCommitPending}
-                              onClick={handleMainRepoCommit}
-                            >
-                              {mainRepoCommitPending ? (
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                              ) : (
-                                <>Commit ({mainRepoStagedFiles.length})</>
-                              )}
-                            </Button>
-                          </div>
-
-                          {/* Staged Changes */}
-                          {mainRepoStagedFiles.length > 0 && (
-                            <GitChangesSection
-                              title="Staged Changes"
-                              files={mainRepoStagedFiles}
-                              isStaged={true}
-                              isCollapsed={collapsedSections.has("staged")}
-                              onToggleCollapse={() => toggleSectionCollapse("staged")}
-                              fileActionTarget={mainRepoFileActionTarget}
-                              readOnly={mainRepoCommitPending}
-                              onUnstage={handleMainRepoUnstageFile}
-                            />
-                          )}
-
-                          {/* Unstaged Changes */}
-                          {mainRepoUnstagedFiles.length > 0 && (
-                            <GitChangesSection
-                              title="Changes"
-                              files={mainRepoUnstagedFiles}
-                              isStaged={false}
-                              isCollapsed={collapsedSections.has("unstaged")}
-                              onToggleCollapse={() => toggleSectionCollapse("unstaged")}
-                              fileActionTarget={mainRepoFileActionTarget}
-                              readOnly={mainRepoCommitPending}
-                              selectedFiles={selectedUnstagedFiles}
-                              onFileSelect={handleFileSelect}
-                              onMoveToWorkspace={() => setMoveDialogOpen(true)}
-                              onStage={handleMainRepoStageFile}
-                              onStageAll={handleMainRepoStageAll}
-                            />
-                          )}
-                        </div>
-                      )}
-
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Workspaces Section */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-sm font-medium text-muted-foreground">
-                      Workspaces {workspaces.length > 0 && <span className="text-xs">({workspaces.length})</span>}
-                    </h2>
-                  </div>
-
-                  {workspaces.length === 0 ? (
-                    <div className="text-sm text-muted-foreground py-4 text-center">
-                      No workspaces yet. Create one with ⌘N
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {workspaces.map((workspace) => (
-                        <WorkspaceListItem
-                          key={workspace.id}
-                          workspace={workspace}
-                          currentBranch={currentBranch}
-                          isSelected={selectedWorkspaceId === workspace.id}
-                          onSelect={setSelectedWorkspaceId}
-                          onDoubleClick={() => handleOpenSession(workspace)}
-                          onPin={(workspaceId) => {
-                            if (repoPath) {
-                              togglePinMutation.mutate({ workspaceId, repoPath });
-                            }
-                          }}
-                          onUpdateBranch={(wt) => updateBranchMutation.mutate(wt)}
-                          onMerge={(wt) => openMergeDialogForWorkspace(wt)}
-                          onOpenSession={(wt) => handleOpenSession(wt)}
-                          updateBranchPending={updateBranchMutation.isPending}
-                          mergePending={mergeMutation.isPending}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-              </div>
-            )}
-
-          </div>
             </ErrorBoundary>
           )}
         </div>
@@ -1954,20 +951,11 @@ export const Dashboard: React.FC = () => {
 
       <CreateWorkspaceDialog
         open={showCreateDialog}
-        onOpenChange={(open) => {
-          setShowCreateDialog(open);
-          if (!open) {
-            setPlanExecutionPending(null); // Clear on close
-          }
-        }}
+        onOpenChange={setShowCreateDialog}
         repoPath={repoPath}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
         }}
-        planSection={planExecutionPending?.section}
-        sourceBranch={planExecutionPending?.sourceBranch}
-        initialSessionName={planExecutionPending?.sessionName}
-        onSuccessWithPlan={handleWorkspaceCreatedWithPlan}
       />
 
       <CreateWorkspaceFromRemoteDialog
@@ -1977,14 +965,6 @@ export const Dashboard: React.FC = () => {
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
         }}
-      />
-
-      <MoveToWorkspaceDialog
-        open={moveDialogOpen}
-        onOpenChange={setMoveDialogOpen}
-        repoPath={repoPath}
-        selectedFiles={Array.from(selectedUnstagedFiles)}
-        onSuccess={handleMoveToWorkspaceSuccess}
       />
 
       {commandPaletteElement}

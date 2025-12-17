@@ -12,13 +12,11 @@ import { Label } from "./ui/label";
 import { useToast } from "./ui/toast";
 import { sanitizeForBranchName } from "../lib/utils";
 import {
-  gitListBranchesDetailed,
-  gitFetch,
+  gitListRemotes,
   jjCreateWorkspace,
   addWorkspaceToDb,
   getRepoSetting,
   gitExecutePostCreateCommand,
-  BranchListItem,
 } from "../lib/api";
 import { Loader2 } from "lucide-react";
 
@@ -35,63 +33,50 @@ export const CreateWorkspaceFromRemoteDialog: React.FC<CreateWorkspaceFromRemote
   repoPath,
   onSuccess,
 }) => {
-  const [workspaceTitle, setWorkspaceTitle] = useState("");
-  const [selectedRemoteBranch, setSelectedRemoteBranch] = useState("");
-  const [remoteBranches, setRemoteBranches] = useState<BranchListItem[]>([]);
+  const [branchName, setBranchName] = useState("");
+  const [selectedRemote, setSelectedRemote] = useState("");
+  const [remotes, setRemotes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [fetchingBranches, setFetchingBranches] = useState(false);
+  const [loadingRemotes, setLoadingRemotes] = useState(false);
   const [error, setError] = useState("");
   const { addToast } = useToast();
 
-  // Load remote branches when dialog opens
+  // Load remotes when dialog opens
   useEffect(() => {
     if (open && repoPath) {
-      loadRemoteBranches();
+      loadRemotes();
     }
   }, [open, repoPath]);
 
-  const loadRemoteBranches = async () => {
-    setFetchingBranches(true);
+  const loadRemotes = async () => {
+    setLoadingRemotes(true);
     try {
-      // Fetch from remote first to get latest branches
-      await gitFetch(repoPath);
-
-      // Get all branches
-      const branches = await gitListBranchesDetailed(repoPath);
-
-      // Filter to only remote branches (excluding HEAD)
-      const remoteBranches = branches.filter(
-        (b) => b.is_remote && !b.name.includes("HEAD")
-      );
-
-      setRemoteBranches(remoteBranches);
+      const remotesList = await gitListRemotes(repoPath);
+      setRemotes(remotesList);
+      // Default to first remote (usually 'origin')
+      if (remotesList.length > 0) {
+        setSelectedRemote(remotesList[0]);
+      }
     } catch (err) {
-      console.error("Failed to load remote branches:", err);
+      console.error("Failed to load remotes:", err);
       addToast({
-        title: "Failed to load remote branches",
+        title: "Failed to load remotes",
         description: err instanceof Error ? err.message : String(err),
         type: "error",
       });
     } finally {
-      setFetchingBranches(false);
+      setLoadingRemotes(false);
     }
-  };
-
-  // Get preview of workspace path
-  const getWorkspacePath = (): string => {
-    if (!workspaceTitle.trim()) return `${repoPath}/.treq/workspaces/workspace-title`;
-    const pathSafeName = sanitizeForBranchName(workspaceTitle);
-    return `${repoPath}/.treq/workspaces/${pathSafeName}`;
   };
 
   const handleCreate = async () => {
-    if (!workspaceTitle.trim()) {
-      setError("Workspace title is required");
+    if (!branchName.trim()) {
+      setError("Branch name is required");
       return;
     }
 
-    if (!selectedRemoteBranch) {
-      setError("Please select a remote branch");
+    if (!selectedRemote) {
+      setError("No remote available");
       return;
     }
 
@@ -99,29 +84,31 @@ export const CreateWorkspaceFromRemoteDialog: React.FC<CreateWorkspaceFromRemote
     setError("");
 
     try {
-      // Extract the branch name from the remote branch (e.g., "origin/feature" -> "feature")
-      const branchParts = selectedRemoteBranch.split("/");
-      const localBranchName = branchParts.slice(1).join("/"); // Handle branches with slashes
+      // Construct full remote branch reference
+      const remoteBranchRef = `${selectedRemote}/${branchName.trim()}`;
+
+      // Use sanitized branch name for local branch and workspace name
+      const localBranchName = branchName.trim();
+      const workspaceName = sanitizeForBranchName(localBranchName);
 
       // Create the jj workspace from the remote branch
-      // This will create a new local branch tracking the remote branch
       const workspacePath = await jjCreateWorkspace(
         repoPath,
-        workspaceTitle.trim(), // workspace name
+        workspaceName, // workspace name derived from branch
         localBranchName,
         true, // create new branch
-        selectedRemoteBranch // source branch (the remote branch)
+        remoteBranchRef // source branch (full remote/branch reference)
       );
 
-      // Add metadata with workspace title
+      // Add metadata with branch name as intent
       const metadata = JSON.stringify({
-        intent: workspaceTitle.trim(),
+        intent: localBranchName,
       });
 
       // Add to database with metadata
       await addWorkspaceToDb(
         repoPath,
-        workspaceTitle.trim(),
+        workspaceName,
         workspacePath,
         localBranchName,
         metadata
@@ -141,7 +128,7 @@ export const CreateWorkspaceFromRemoteDialog: React.FC<CreateWorkspaceFromRemote
 
           addToast({
             title: "Workspace created successfully",
-            description: `Created workspace from ${selectedRemoteBranch}`,
+            description: `Created workspace from ${remoteBranchRef}`,
             type: "success",
           });
         } catch (cmdError) {
@@ -155,14 +142,13 @@ export const CreateWorkspaceFromRemoteDialog: React.FC<CreateWorkspaceFromRemote
       } else {
         addToast({
           title: "Workspace created successfully",
-          description: `Created workspace from ${selectedRemoteBranch}`,
+          description: `Created workspace from ${remoteBranchRef}`,
           type: "success",
         });
       }
 
       // Reset form
-      setWorkspaceTitle("");
-      setSelectedRemoteBranch("");
+      setBranchName("");
 
       onSuccess();
       onOpenChange(false);
@@ -190,56 +176,40 @@ export const CreateWorkspaceFromRemoteDialog: React.FC<CreateWorkspaceFromRemote
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label htmlFor="remote-branch">Remote Branch</Label>
-            {fetchingBranches ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Fetching remote branches...
-              </div>
-            ) : (
+          {remotes.length > 1 && (
+            <div className="grid gap-2">
+              <Label htmlFor="remote">Remote</Label>
               <select
-                id="remote-branch"
-                value={selectedRemoteBranch}
-                onChange={(e) => setSelectedRemoteBranch(e.target.value)}
+                id="remote"
+                value={selectedRemote}
+                onChange={(e) => setSelectedRemote(e.target.value)}
+                disabled={loadingRemotes}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <option value="">Select a remote branch</option>
-                {remoteBranches.map((branch) => (
-                  <option key={branch.full_name} value={branch.name}>
-                    {branch.name}
+                {remotes.map((remote) => (
+                  <option key={remote} value={remote}>
+                    {remote}
                   </option>
                 ))}
               </select>
-            )}
-            {!fetchingBranches && remoteBranches.length === 0 && (
-              <p className="text-xs text-destructive">
-                No remote branches found. Make sure you have a remote configured.
+              <p className="text-xs text-muted-foreground">
+                Select the remote to fetch the branch from
               </p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Select the remote branch to create a workspace from
-            </p>
-          </div>
+            </div>
+          )}
 
           <div className="grid gap-2">
-            <Label htmlFor="title">Workspace Title</Label>
+            <Label htmlFor="branch-name">Branch Name</Label>
             <Input
-              id="title"
-              value={workspaceTitle}
-              onChange={(e) => setWorkspaceTitle(e.target.value)}
-              placeholder="e.g., Review feature implementation"
+              id="branch-name"
+              value={branchName}
+              onChange={(e) => setBranchName(e.target.value)}
+              placeholder="e.g., feature/my-branch"
+              disabled={loadingRemotes}
             />
             <p className="text-xs text-muted-foreground">
-              A descriptive title for this workspace
+              Enter the name of the remote branch (without remote prefix)
             </p>
-          </div>
-
-          <div className="grid gap-2">
-            <Label>Workspace Path (preview)</Label>
-            <div className="bg-secondary p-3 rounded-md text-sm font-mono break-all text-muted-foreground">
-              {getWorkspacePath()}
-            </div>
           </div>
 
           {error && (
@@ -257,7 +227,7 @@ export const CreateWorkspaceFromRemoteDialog: React.FC<CreateWorkspaceFromRemote
           >
             Cancel
           </Button>
-          <Button onClick={handleCreate} disabled={loading || fetchingBranches}>
+          <Button onClick={handleCreate} disabled={loading || loadingRemotes}>
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />

@@ -133,11 +133,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       key={item.id}
       value={item.label}
       onSelect={item.onSelect}
-      className="px-3 py-2 flex items-center gap-3 cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground data-[disabled]:opacity-50 data-[disabled]:pointer-events-none"
+      className="px-3 py-2 mx-2 rounded-md flex items-center gap-3 cursor-pointer text-foreground aria-selected:bg-accent/50 aria-selected:text-foreground data-[disabled]:opacity-50 data-[disabled]:pointer-events-none hover:bg-accent/30 transition-colors"
     >
       <span className="text-muted-foreground">{item.icon}</span>
       <div className="flex-1 min-w-0">
-        <div className="truncate text-sm">{item.label}</div>
+        <div className="truncate text-sm font-medium">{item.label}</div>
         {item.description && (
           <div className="truncate text-xs text-muted-foreground">
             {item.description}
@@ -152,14 +152,15 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       open={open}
       onOpenChange={onOpenChange}
       label="Command Menu"
+      className="[&_[cmdk-root]]:bg-background [&_[cmdk-root]]:text-foreground"
     >
-      <div className="bg-popover text-popover-foreground rounded-xl border border-border/50 shadow-2xl w-[40vw] max-w-none overflow-hidden">
+      <div className="bg-background text-foreground rounded-xl border border-border shadow-2xl w-[40vw] max-w-none overflow-hidden">
         {/* Search Input */}
-        <div className="flex items-center border-b border-border px-3">
+        <div className="flex items-center border-b border-border px-3 bg-background">
           <ArrowRight className="w-4 h-4 text-muted-foreground mr-2" />
           <Command.Input
             placeholder="Type a command or search..."
-            className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 h-12 flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
+            className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 h-12 flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground text-foreground"
           />
         </div>
 

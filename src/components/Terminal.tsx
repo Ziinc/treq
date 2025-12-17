@@ -12,7 +12,6 @@ export const Terminal: React.FC<TerminalProps> = ({ sessionId, workingDir, shell
       sessionId={sessionId}
       workingDirectory={workingDir}
       shell={shell}
-      persistSession={false}
       containerClassName="h-full w-full"
     />
   );
