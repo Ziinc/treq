@@ -7,6 +7,8 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::Command;
 
+use crate::local_db;
+
 /// Error type for jj operations
 #[derive(Debug)]
 pub enum JjError {
@@ -766,6 +768,28 @@ pub fn jj_set_bookmark(workspace_path: &str, bookmark_name: &str, revision: &str
     Ok(())
 }
 
+/// Derive repo_path from workspace_path
+/// Workspace paths are: {repo_path}/.treq/workspaces/{workspace_name}
+fn derive_repo_path_from_workspace(workspace_path: &str) -> Option<String> {
+    let path = Path::new(workspace_path);
+
+    // Look for .treq/workspaces pattern in the path
+    let mut current = path;
+    while let Some(parent) = current.parent() {
+        if current.file_name() == Some(std::ffi::OsStr::new("workspaces")) {
+            if let Some(grandparent) = parent.parent() {
+                if parent.file_name() == Some(std::ffi::OsStr::new(".treq")) {
+                    // Found the pattern - grandparent is repo_path
+                    return Some(grandparent.to_string_lossy().to_string());
+                }
+            }
+        }
+        current = parent;
+    }
+
+    None
+}
+
 /// Describe and create new commit
 pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError> {
     // First describe
@@ -795,14 +819,30 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     }
 
     // Advance the bookmark to the new commit (@- is the parent, which has the content)
-    // Get the branch name from git (this is the bookmark name)
-    if let Ok(branch_name) = get_workspace_branch(workspace_path) {
-        if !branch_name.is_empty() && branch_name != "HEAD" {
-            // Set the bookmark to point at @- (the commit with the actual content)
-            if let Err(e) = jj_set_bookmark(workspace_path, &branch_name, "@-") {
-                eprintln!("Warning: Failed to advance bookmark '{}': {}", branch_name, e);
-                // Don't fail the commit for bookmark errors
+    // Try to get branch name from database first
+    let mut branch_name: Option<String> = None;
+
+    if let Some(repo_path) = derive_repo_path_from_workspace(workspace_path) {
+        if let Ok(db_branch) = local_db::get_workspace_branch_name(&repo_path, workspace_path) {
+            branch_name = db_branch;
+        }
+    }
+
+    // Fallback to git detection if database lookup failed
+    if branch_name.is_none() {
+        if let Ok(git_branch) = get_workspace_branch(workspace_path) {
+            if !git_branch.is_empty() && git_branch != "HEAD" {
+                branch_name = Some(git_branch);
             }
+        }
+    }
+
+    // Advance the bookmark if we found a valid branch name
+    if let Some(ref branch) = branch_name {
+        // Set the bookmark to point at @- (the commit with the actual content)
+        if let Err(e) = jj_set_bookmark(workspace_path, branch, "@-") {
+            eprintln!("Warning: Failed to advance bookmark '{}': {}", branch, e);
+            // Don't fail the commit for bookmark errors
         }
     }
 
