@@ -18,10 +18,13 @@ Now, instead of a messy pile of AI output, you get a clean, organized workflow y
 
 Inspect and iterate on each change for a human-in-the-loop agentic workflow.
 
-<!-- insert gif of a review -->
 
 - Review the code diffs just like a familiar Github PR, annotate and comment on code, and then send it to an agent for changes.
+
+<!-- insert gif of a review -->
+
 - Spotted an issue when browsing files? Send it to an agent for adjustments in the background.
+<!-- insert gif of file browser code comment flow -->
 
 ### Isolated Workspaces
 
