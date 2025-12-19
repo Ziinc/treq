@@ -104,6 +104,17 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
       });
 
       setCollapsed(false);
+
+      // Scroll to the new terminal after it's rendered
+      // Use double requestAnimationFrame to ensure DOM updates and layout are complete
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollLeft =
+              scrollContainerRef.current.scrollWidth;
+          }
+        });
+      });
     }, [activeClaudeSessionId]);
 
     // Scroll to the right when new terminal is added
@@ -281,9 +292,9 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
       []
     );
 
-    // Cmd+`: Toggle bottom terminal pane
+    // Cmd+J: Toggle bottom terminal pane
     useKeyboardShortcut(
-      "`",
+      "j",
       true,
       () => {
         if (isHidden) return;
@@ -463,7 +474,7 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    {collapsed ? "Expand (⌘+`)" : "Collapse (⌘+`)"}
+                    {collapsed ? "Expand (⌘+J)" : "Collapse (⌘+J)"}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
