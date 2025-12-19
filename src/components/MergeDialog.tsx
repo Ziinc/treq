@@ -9,8 +9,11 @@ import {
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
-import type { MergeStrategy, Workspace } from "../lib/api";
+import type { Workspace } from "../lib/api";
 import { ArrowRight, AlertTriangle } from "lucide-react";
+
+// Define MergeStrategy locally since git API was removed
+export type MergeStrategy = "regular" | "squash" | "no_ff" | "ff_only";
 
 interface MergeDialogProps {
   open: boolean;
@@ -99,11 +102,11 @@ export const MergeDialog: React.FC<MergeDialogProps> = ({
             <div className="bg-muted/50 rounded-lg p-3">
               <div className="text-sm font-medium mb-1">Merge Direction</div>
               <div className="flex items-center gap-2 text-sm">
-                <span className="font-mono text-xs sm:text-sm">{workspace.branch_name}</span>
+                <span className="font-mono text-sm sm:text-sm">{workspace.branch_name}</span>
                 <ArrowRight className="w-4 h-4" />
-                <span className="font-mono text-xs sm:text-sm">{mainBranch || "Current"}</span>
+                <span className="font-mono text-sm sm:text-sm">{mainBranch || "Current"}</span>
               </div>
-              <div className="text-xs text-muted-foreground mt-2">
+              <div className="text-sm text-muted-foreground mt-2">
                 {aheadCount > 0 ? `${aheadCount} commits ahead of ${mainBranch || "main"}` : "No new commits to merge"}
               </div>
             </div>
@@ -123,7 +126,7 @@ export const MergeDialog: React.FC<MergeDialogProps> = ({
                     </option>
                   ))}
                 </select>
-                <div className="px-3 py-2 text-xs text-muted-foreground border-t">
+                <div className="px-3 py-2 text-sm text-muted-foreground border-t">
                   {STRATEGY_OPTIONS.find((opt) => opt.value === strategy)?.description}
                 </div>
               </div>
@@ -139,7 +142,7 @@ export const MergeDialog: React.FC<MergeDialogProps> = ({
                 placeholder="Enter a commit message"
               />
               {strategy === "ff_only" && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   Optional for fast-forward
                 </p>
               )}
@@ -151,11 +154,11 @@ export const MergeDialog: React.FC<MergeDialogProps> = ({
                   <AlertTriangle className="w-4 h-4" />
                   <span className="text-sm font-medium">Workspace has uncommitted changes</span>
                 </div>
-                <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                <p className="text-sm text-yellow-700 dark:text-yellow-300">
                   These changes must be discarded before merging. Review the files below and confirm you want to proceed.
                 </p>
                 {changedFiles.length > 0 && (
-                  <div className="max-h-32 overflow-auto rounded bg-background/60 border text-xs">
+                  <div className="max-h-32 overflow-auto rounded bg-background/60 border text-sm">
                     <ul className="divide-y">
                       {changedFiles.map((file) => (
                         <li key={file} className="px-3 py-1 font-mono text-[11px]">
@@ -165,7 +168,7 @@ export const MergeDialog: React.FC<MergeDialogProps> = ({
                     </ul>
                   </div>
                 )}
-                <label className="flex items-start gap-2 text-xs text-yellow-700 dark:text-yellow-300">
+                <label className="flex items-start gap-2 text-sm text-yellow-700 dark:text-yellow-300">
                   <input
                     type="checkbox"
                     className="mt-0.5"

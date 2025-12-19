@@ -320,21 +320,33 @@ pub fn create_workspace(
 
     let workspace_path_str = workspace_dir.to_string_lossy().to_string();
 
-    // Create git workspace first
-    crate::git::create_workspace_at_path(
-        repo_path,
-        branch_name,
-        new_branch,
-        source_branch,
-        &workspace_path_str,
-    )
-    .map_err(JjError::GitWorkspaceError)?;
+    // Create git workspace first using git worktree command
+    let mut git_cmd = std::process::Command::new("git");
+    git_cmd.current_dir(repo_path)
+        .arg("worktree")
+        .arg("add");
 
-    // Copy selected ignored files
-    if let Some(patterns) = inclusion_patterns {
-        if let Err(e) = crate::git::copy_ignored_files(repo_path, &workspace_path_str, patterns) {
-            eprintln!("Warning: Failed to copy ignored files: {}", e);
-        }
+    if new_branch {
+        git_cmd.arg("-b").arg(branch_name);
+    } else {
+        git_cmd.arg("--no-track");
+    }
+
+    git_cmd.arg(&workspace_path_str);
+
+    if let Some(source) = source_branch {
+        git_cmd.arg(source);
+    } else if !new_branch {
+        git_cmd.arg(branch_name);
+    }
+
+    let output = git_cmd.output()
+        .map_err(|e| JjError::GitWorkspaceError(format!("Failed to execute git worktree: {}", e)))?;
+
+    if !output.status.success() {
+        return Err(JjError::GitWorkspaceError(
+            String::from_utf8_lossy(&output.stderr).to_string()
+        ));
     }
 
     // Initialize jj for this workspace (colocated mode)
@@ -345,7 +357,10 @@ pub fn create_workspace(
 
     if let Err(e) = jj_result {
         // Clean up: remove the git workspace we just created
-        let _ = crate::git::remove_workspace(repo_path, &workspace_path_str);
+        let _ = std::process::Command::new("git")
+            .current_dir(repo_path)
+            .args(&["worktree", "remove", "--force", &workspace_path_str])
+            .output();
         let _ = fs::remove_dir_all(&workspace_dir);
         return Err(JjError::InitFailed(format!(
             "Failed to init jj workspace: {}",
@@ -446,9 +461,18 @@ pub fn remove_workspace(
         return Err(JjError::WorkspaceNotFound(workspace_path.to_string()));
     }
 
-    // Remove git workspace first
-    crate::git::remove_workspace(repo_path, workspace_path)
-        .map_err(JjError::GitWorkspaceError)?;
+    // Remove git workspace first using git worktree command
+    let output = std::process::Command::new("git")
+        .current_dir(repo_path)
+        .args(&["worktree", "remove", "--force", workspace_path])
+        .output()
+        .map_err(|e| JjError::GitWorkspaceError(format!("Failed to execute git worktree remove: {}", e)))?;
+
+    if !output.status.success() {
+        return Err(JjError::GitWorkspaceError(
+            String::from_utf8_lossy(&output.stderr).to_string()
+        ));
+    }
 
     // Remove directory if it still exists (git worktree remove command should handle this)
     if workspace_dir.exists() {
@@ -578,13 +602,12 @@ fn parse_jj_status(status: &str) -> Result<Vec<JjFileChange>, JjError> {
 }
 
 /// Get diff hunks for a specific file
-/// Uses git diff CLI for now as it's simpler and reliable
-/// The main performance win comes from using jj-lib for file list iteration
+/// Uses jj diff CLI with git-format output
 pub fn jj_get_file_hunks(workspace_path: &str, file_path: &str) -> Result<Vec<JjDiffHunk>, JjError> {
-    // Use git diff to get hunks (simpler and more reliable than reimplementing unified diff)
-    let output = Command::new("git")
+    // Use jj diff --git to get hunks in git-compatible format
+    let output = Command::new("jj")
         .current_dir(workspace_path)
-        .args(["diff", "HEAD", "--", file_path])
+        .args(["diff", "--git", "--no-pager", "--", file_path])
         .output()
         .map_err(|e| JjError::IoError(e.to_string()))?;
 
@@ -895,4 +918,71 @@ pub fn get_default_branch(repo_path: &str) -> Result<String, JjError> {
 
     // Default fallback
     Ok("main".to_string())
+}
+
+/// Push changes to remote using jj git push
+pub fn jj_push(workspace_path: &str) -> Result<String, JjError> {
+    let output = Command::new("jj")
+        .current_dir(workspace_path)
+        .args(["git", "push"])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    if !output.status.success() {
+        return Err(JjError::IoError(format!("{}{}", stdout, stderr)));
+    }
+
+    Ok(format!("{}{}", stdout, stderr))
+}
+
+/// Pull changes from remote using jj git fetch + rebase
+/// Fetches from origin and rebases current workspace onto tracking branch
+pub fn jj_pull(workspace_path: &str) -> Result<String, JjError> {
+    // First, fetch from remote
+    let fetch_output = Command::new("jj")
+        .current_dir(workspace_path)
+        .args(["git", "fetch"])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    let fetch_stdout = String::from_utf8_lossy(&fetch_output.stdout);
+    let fetch_stderr = String::from_utf8_lossy(&fetch_output.stderr);
+
+    if !fetch_output.status.success() {
+        return Err(JjError::IoError(format!("{}{}", fetch_stdout, fetch_stderr)));
+    }
+
+    // Get the current branch name to determine tracking branch
+    let branch_name = get_workspace_branch(workspace_path)?;
+
+    if branch_name.is_empty() || branch_name == "HEAD" {
+        // No branch - just return fetch result
+        return Ok(format!("{}{}", fetch_stdout, fetch_stderr));
+    }
+
+    // Rebase onto the tracking branch (branch@origin)
+    let tracking_branch = format!("{}@origin", branch_name);
+    let rebase_output = Command::new("jj")
+        .current_dir(workspace_path)
+        .args(["rebase", "-d", &tracking_branch])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    let rebase_stdout = String::from_utf8_lossy(&rebase_output.stdout);
+    let rebase_stderr = String::from_utf8_lossy(&rebase_output.stderr);
+
+    // Combine fetch and rebase output
+    let combined = format!(
+        "Fetch:\n{}{}\nRebase:\n{}{}",
+        fetch_stdout, fetch_stderr, rebase_stdout, rebase_stderr
+    );
+
+    if !rebase_output.status.success() {
+        return Err(JjError::IoError(combined));
+    }
+
+    Ok(combined)
 }

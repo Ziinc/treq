@@ -25,7 +25,6 @@ pub struct CachedFileChange {
     pub id: i64,
     pub workspace_id: Option<i64>,
     pub file_path: String,
-    pub staged_status: Option<String>,
     pub workspace_status: Option<String>,
     pub is_untracked: bool,
     pub hunks_json: Option<String>,
@@ -65,7 +64,8 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
             workspace_path TEXT NOT NULL UNIQUE,
             branch_name TEXT NOT NULL,
             created_at TEXT NOT NULL,
-            metadata TEXT
+            metadata TEXT,
+            target_branch TEXT
         )",
         [],
     )
@@ -76,6 +76,12 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
         [],
     )
     .map_err(|e| format!("Failed to create workspaces branch index: {}", e))?;
+
+    // Migration: Add target_branch column if it doesn't exist
+    let _ = conn.execute(
+        "ALTER TABLE workspaces ADD COLUMN target_branch TEXT",
+        [],
+    );
 
     // Create sessions table
     conn.execute(
@@ -154,7 +160,6 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             workspace_id INTEGER,
             file_path TEXT NOT NULL,
-            staged_status TEXT,
             workspace_status TEXT,
             is_untracked INTEGER NOT NULL DEFAULT 0,
             hunks_json TEXT,
@@ -236,7 +241,7 @@ fn get_connection(repo_path: &str) -> Result<Connection, String> {
 pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, metadata FROM workspaces ORDER BY branch_name COLLATE NOCASE ASC")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch FROM workspaces ORDER BY branch_name COLLATE NOCASE ASC")
         .map_err(|e| format!("Failed to prepare workspaces query: {}", e))?;
 
     let workspaces = stmt
@@ -249,6 +254,7 @@ pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
                 branch_name: row.get(3)?,
                 created_at: row.get(4)?,
                 metadata: row.get(5)?,
+                target_branch: row.get(6)?,
             })
         })
         .map_err(|e| format!("Failed to query workspaces: {}", e))?;
@@ -296,6 +302,20 @@ pub fn update_workspace_metadata(
         params![metadata, id],
     )
     .map_err(|e| format!("Failed to update workspace metadata: {}", e))?;
+    Ok(())
+}
+
+pub fn update_workspace_target_branch(
+    repo_path: &str,
+    id: i64,
+    target_branch: &str,
+) -> Result<(), String> {
+    let conn = get_connection(repo_path)?;
+    conn.execute(
+        "UPDATE workspaces SET target_branch = ?1 WHERE id = ?2",
+        params![target_branch, id],
+    )
+    .map_err(|e| format!("Failed to update workspace target branch: {}", e))?;
     Ok(())
 }
 
@@ -359,6 +379,7 @@ pub fn rebuild_workspaces_from_filesystem(repo_path: &str) -> Result<Vec<Workspa
             branch_name,
             created_at: Utc::now().to_rfc3339(),
             metadata: None,
+            target_branch: None,
         });
     }
 
@@ -366,6 +387,7 @@ pub fn rebuild_workspaces_from_filesystem(repo_path: &str) -> Result<Vec<Workspa
 }
 
 /// Get the current branch of a workspace
+/// Falls back to jj bookmark if git is in detached HEAD state
 fn get_workspace_branch(workspace_path: &str) -> Result<String, String> {
     use std::process::Command;
 
@@ -376,7 +398,41 @@ fn get_workspace_branch(workspace_path: &str) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
 
     if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        
+        // If not detached, return the branch name
+        if branch != "HEAD" {
+            return Ok(branch);
+        }
+        
+        // Git is in detached HEAD - try to get branch from jj bookmark
+        // jj bookmark list outputs: bookmark_name: <commit_id>
+        if let Ok(jj_output) = Command::new("jj")
+            .current_dir(workspace_path)
+            .args(["bookmark", "list", "--no-pager"])
+            .output()
+        {
+            if jj_output.status.success() {
+                let bookmarks = String::from_utf8_lossy(&jj_output.stdout);
+                // Find the first non-remote bookmark (local bookmarks don't have @)
+                for line in bookmarks.lines() {
+                    let line = line.trim();
+                    if line.is_empty() || line.contains('@') {
+                        continue;
+                    }
+                    // Extract bookmark name (before the colon)
+                    if let Some(name) = line.split(':').next() {
+                        let name = name.trim();
+                        if !name.is_empty() {
+                            return Ok(name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Still detached with no bookmark - return HEAD
+        Ok(branch)
     } else {
         Err(String::from_utf8_lossy(&output.stderr).to_string())
     }
@@ -508,11 +564,10 @@ pub fn get_cached_changes(
                 id: row.get(0)?,
                 workspace_id: row.get(1)?,
                 file_path: row.get(2)?,
-                staged_status: row.get(3)?,
-                workspace_status: row.get(4)?,
-                is_untracked: row.get::<_, i64>(5)? != 0,
-                hunks_json: row.get(6)?,
-                updated_at: row.get(7)?,
+                workspace_status: row.get(3)?,
+                is_untracked: row.get::<_, i64>(4)? != 0,
+                hunks_json: row.get(5)?,
+                updated_at: row.get(6)?,
             })
         })
         .map_err(|e| format!("Failed to query cached changes: {}", e))?;
@@ -544,12 +599,11 @@ pub fn sync_workspace_changes(
     for change in &changes {
         tx.execute(
             "INSERT INTO changed_files
-             (workspace_id, file_path, staged_status, workspace_status, is_untracked, hunks_json, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+             (workspace_id, file_path, workspace_status, is_untracked, hunks_json, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 workspace_id,
                 &change.file_path,
-                &change.staged_status,
                 &change.workspace_status,
                 if change.is_untracked { 1 } else { 0 },
                 &change.hunks_json,

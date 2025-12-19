@@ -15,22 +15,14 @@ import { v4 as uuidv4 } from "uuid";
 import {
   jjGetChangedFiles,
   jjGetFileHunks,
-  jjGetFileLines,
   jjRestoreFile,
   jjRestoreAll,
   jjCommit,
-  jjIsWorkspace,
-  gitGetFileHunks,
-  getGitCache,
-  setGitCache,
-  invalidateGitCache,
-  gitPush,
-  gitPull,
+  getDiffCache,
   ptyWrite,
-  getViewedFiles,
   markFileViewed,
   unmarkFileViewed,
-  type GitDiffHunk,
+  type JjDiffHunk,
 } from "../lib/api";
 import { useCachedWorkspaceChanges } from "../hooks/useCachedWorkspaceChanges";
 import { Button } from "./ui/button";
@@ -48,9 +40,7 @@ import {
   AlertTriangle,
   FileText,
   Loader2,
-  Minus,
   Plus,
-  ChevronUp,
   ChevronDown,
   ChevronRight,
   MoreVertical,
@@ -74,20 +64,12 @@ import { useDiffSettings } from "../hooks/useDiffSettings";
 import { ChangesSection } from "./ChangesSection";
 import { ConflictsSection } from "./ConflictsSection";
 import { MoveToWorkspaceDialog } from "./MoveToWorkspaceDialog";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-  TooltipProvider,
-} from "./ui/tooltip";
 
 interface ChangesDiffViewerProps {
   workspacePath: string;
   readOnly?: boolean;
-  disableInteractions?: boolean;
   onStagedFilesChange?: (files: string[]) => void;
-  refreshSignal?: number;
-  initialSelectedFile?: string;
+  initialSelectedFile: string | null;
   terminalSessionId?: string;
   onReviewSubmitted?: () => void;
   conflictedFiles?: string[];
@@ -121,15 +103,9 @@ interface DiffLineSelection {
 
 interface FileHunksData {
   filePath: string;
-  hunks: GitDiffHunk[];
+  hunks: JjDiffHunk[];
   isLoading: boolean;
   error?: string;
-}
-
-interface ExpandedRange {
-  startLine: number;
-  endLine: number;
-  lines: string[];
 }
 
 // Helper to get line type styling (background only, text color handled by syntax highlighting)
@@ -146,8 +122,8 @@ const getLinePrefix = (line: string): string => {
 };
 
 const hunksEqual = (
-  a?: GitDiffHunk[] | null,
-  b?: GitDiffHunk[] | null
+  a?: JjDiffHunk[] | null,
+  b?: JjDiffHunk[] | null
 ): boolean => {
   if (!a && !b) return true;
   if (!a || !b) return false;
@@ -170,11 +146,11 @@ const filesEqual = (a: ParsedFileChange[], b: ParsedFileChange[]): boolean => {
   return true;
 };
 
-const parseCachedHunks = (raw: string): GitDiffHunk[] | null => {
+const parseCachedHunks = (raw: string): JjDiffHunk[] | null => {
   try {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      return parsed as GitDiffHunk[];
+      return parsed as JjDiffHunk[];
     }
   } catch {
     // Silently ignore parse failures
@@ -203,13 +179,9 @@ const parseHunkHeader = (
   };
 };
 
-// Generate unique key for hunk that includes file path to prevent collisions
-const getHunkKey = (filePath: string, hunkId: string) =>
-  `${filePath}:${hunkId}`;
-
 // Compute actual line numbers for each line in a hunk
 const computeHunkLineNumbers = (
-  hunk: GitDiffHunk
+  hunk: JjDiffHunk
 ): Array<{ old?: number; new?: number }> => {
   const { oldStart, newStart } = parseHunkHeader(hunk.header);
   let oldLine = oldStart;
@@ -227,11 +199,8 @@ const computeHunkLineNumbers = (
   });
 };
 
-// Threshold for lazy-loading large diffs
-const LARGE_DIFF_THRESHOLD = 100;
-
 // Compute a simple hash of file hunks for change detection
-const computeHunksHash = (hunks: GitDiffHunk[]): string => {
+const computeHunksHash = (hunks: JjDiffHunk[]): string => {
   // Create a string from all hunk content and hash it
   const content = hunks.map((h) => h.header + h.lines.join("")).join("|");
   // Simple hash function (djb2)
@@ -251,18 +220,6 @@ interface CommentInputProps {
   startLine?: number;
   endLine?: number;
 }
-
-// File placeholder for lazy loading
-const FilePlaceholder = memo(
-  ({ filePath, height }: { filePath: string; height: number }) => (
-    <div
-      data-file-placeholder={filePath}
-      className="border border-border rounded-lg bg-muted/30"
-      style={{ height: `${height}px` }}
-    />
-  )
-);
-FilePlaceholder.displayName = "FilePlaceholder";
 
 const CommentInput: React.FC<CommentInputProps> = memo(
   ({ onSubmit, onCancel, filePath, startLine, endLine }) => {
@@ -302,9 +259,9 @@ const CommentInput: React.FC<CommentInputProps> = memo(
         : null;
 
     return (
-      <div className="bg-muted/60 border-y border-border/40 px-4 py-3 font-sans">
+      <div className="bg-muted/60 border-y border-border/40 px-4 py-3 font-sans text-base">
         {filePath && lineLabel && (
-          <div className="mb-2 text-xs text-muted-foreground">
+          <div className="mb-2 text-sm text-muted-foreground font-mono">
             {filePath}:{lineLabel}
           </div>
         )}
@@ -312,15 +269,15 @@ const CommentInput: React.FC<CommentInputProps> = memo(
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Add a comment..."
-          className="mb-2 text-sm font-sans"
+          className="mb-2 font-sans"
           autoFocus
           onKeyDown={handleKeyDown}
         />
         <div className="flex justify-end gap-2">
-          <Button size="sm" variant="ghost" onClick={onCancel}>
+          <Button variant="ghost" onClick={onCancel}>
             Cancel
           </Button>
-          <Button size="sm" onClick={handleSubmit} disabled={!text.trim()}>
+          <Button onClick={handleSubmit} disabled={!text.trim()}>
             Add Comment
           </Button>
         </div>
@@ -337,30 +294,13 @@ interface CommitInputHandle {
 
 interface CommitInputProps {
   onCommit: (message: string) => void;
-  onCommitAmend: (message: string) => void;
-  onCommitAndPush: (message: string) => void;
-  onCommitAndSync: (message: string) => void;
-  stagedFilesCount: number;
   disabled: boolean;
   pending: boolean;
-  actionPending: "commit" | "amend" | "push" | "sync" | null;
 }
 
 const CommitInput = memo(
   forwardRef<CommitInputHandle, CommitInputProps>(
-    (
-      {
-        onCommit,
-        onCommitAmend,
-        onCommitAndPush,
-        onCommitAndSync,
-        stagedFilesCount,
-        disabled,
-        pending,
-        actionPending,
-      },
-      ref
-    ) => {
+    ({ onCommit, disabled, pending }, ref) => {
       const [message, setMessage] = useState("");
       const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -381,74 +321,21 @@ const CommitInput = memo(
         []
       );
 
-      const canCommit = useMemo(() => {
-        const trimmed = message.trim();
-        return (
-          Boolean(trimmed) &&
-          trimmed.length <= 500 &&
-          stagedFilesCount > 0 &&
-          !pending &&
-          !actionPending
-        );
-      }, [message, stagedFilesCount, pending, actionPending]);
-
-      const adjustHeight = useCallback(() => {
-        const textarea = textareaRef.current;
-        if (!textarea) return;
-        textarea.style.height = "auto";
-        const lineHeight = 20;
-        const minHeight = lineHeight + 16;
-        textarea.style.height = `${Math.max(
-          minHeight,
-          textarea.scrollHeight
-        )}px`;
-      }, []);
-
-      useEffect(() => {
-        adjustHeight();
-      }, [message, adjustHeight]);
-
       const handleKeyDown = useCallback(
         (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
           if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
             event.preventDefault();
-            if (canCommit) {
-              onCommit(message.trim());
-              setMessage("");
-            }
+            onCommit(message.trim());
+            setMessage("");
           }
         },
-        [canCommit, message, onCommit]
+        [message, onCommit]
       );
 
       const handleCommit = useCallback(() => {
-        if (canCommit) {
-          onCommit(message.trim());
-          setMessage("");
-        }
-      }, [canCommit, message, onCommit]);
-
-      const handleAmend = useCallback(() => {
-        const trimmed = message.trim();
-        if (trimmed) {
-          onCommitAmend(trimmed);
-          setMessage("");
-        }
-      }, [message, onCommitAmend]);
-
-      const handlePush = useCallback(() => {
-        if (canCommit) {
-          onCommitAndPush(message.trim());
-          setMessage("");
-        }
-      }, [canCommit, message, onCommitAndPush]);
-
-      const handleSync = useCallback(() => {
-        if (canCommit) {
-          onCommitAndSync(message.trim());
-          setMessage("");
-        }
-      }, [canCommit, message, onCommitAndSync]);
+        onCommit(message.trim());
+        setMessage("");
+      }, [message, onCommit]);
 
       return (
         <div className="px-4 py-3 border-b border-border space-y-2">
@@ -462,73 +349,14 @@ const CommitInput = memo(
             className="resize-none overflow-hidden"
             style={{ minHeight: "24px" }}
           />
-          <div className="flex gap-1">
-            <div className="flex flex-1">
-              <Button
-                className="flex-1 rounded-r-none border-r-0 text-xs !h-auto py-1.5"
-                disabled={!canCommit || disabled}
-                onClick={handleCommit}
-                size="sm"
-              >
-                {pending || actionPending ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  "Commit"
-                )}
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    className="px-2 rounded-l-none text-xs !h-auto py-1.5"
-                    disabled={!canCommit || disabled}
-                    size="sm"
-                    variant="default"
-                  >
-                    <ChevronDown className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" sideOffset={4}>
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      handleCommit();
-                    }}
-                    disabled={!canCommit}
-                  >
-                    Commit
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      handleAmend();
-                    }}
-                    disabled={!message.trim()}
-                  >
-                    Commit (Amend)
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      handlePush();
-                    }}
-                    disabled={!canCommit}
-                  >
-                    Commit & Push
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      handleSync();
-                    }}
-                    disabled={!canCommit}
-                  >
-                    Commit & Sync
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
+          <Button
+            className="w-full text-sm !h-auto py-1.5"
+            disabled={disabled}
+            onClick={handleCommit}
+            size="sm"
+          >
+            {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Commit"}
+          </Button>
         </div>
       );
     }
@@ -553,15 +381,282 @@ const HighlightedLine: React.FC<HighlightedLineProps> = memo(
 );
 HighlightedLine.displayName = "HighlightedLine";
 
+// FileRow component (extracted for performance)
+interface FileRowComponentProps {
+  file: ParsedFileChange;
+  allFileHunks: Map<string, FileHunksData>;
+  collapsedFiles: Set<string>;
+  viewedFiles: Map<string, { viewedAt: string; contentHash: string }>;
+  expandedLargeDiffs: Set<string>;
+  diffFontSize: number;
+  readOnly: boolean;
+  fileActionTarget: string | null;
+  selectedUnstagedFiles: Set<string>;
+  workspacePath: string;
+  toggleFileCollapse: (filePath: string) => void;
+  toggleLargeDiff: (filePath: string) => void;
+  handleMarkFileViewed: (filePath: string) => void;
+  handleUnmarkFileViewed: (filePath: string) => void;
+  handleDiscardFiles: (filePath: string) => void;
+  handleContextMenu: (e: React.MouseEvent) => void;
+  handleContainerClick: (e: React.MouseEvent) => void;
+  renderHunkLines: (
+    hunk: JjDiffHunk,
+    hunkIndex: number,
+    filePath: string
+  ) => JSX.Element;
+  addToast: ReturnType<typeof useToast>["addToast"];
+}
+
+const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
+  const {
+    file,
+    allFileHunks,
+    collapsedFiles,
+    viewedFiles,
+    expandedLargeDiffs,
+    diffFontSize,
+    readOnly,
+    fileActionTarget,
+    selectedUnstagedFiles,
+    workspacePath,
+    toggleFileCollapse,
+    toggleLargeDiff,
+    handleMarkFileViewed,
+    handleUnmarkFileViewed,
+    handleDiscardFiles,
+    handleContextMenu,
+    handleContainerClick,
+    renderHunkLines,
+    addToast,
+  } = props;
+
+  const filePath = file.path;
+  const fileData = allFileHunks.get(filePath);
+  if (!fileData) return <div />;
+
+  const isCollapsed = isBinaryFile(filePath)
+    ? true
+    : collapsedFiles.has(filePath);
+  const isViewed = viewedFiles.has(filePath);
+  const fileId = `file-section-${filePath.replace(/[^a-zA-Z0-9]/g, "-")}`;
+
+  // Compute line stats from hunks
+  let additions = 0;
+  let deletions = 0;
+  if (!fileData.isLoading && fileData.hunks) {
+    for (const hunk of fileData.hunks) {
+      for (const line of hunk.lines) {
+        if (line.startsWith("+")) additions++;
+        else if (line.startsWith("-")) deletions++;
+      }
+    }
+  }
+
+  return (
+    <div
+      key={filePath}
+      id={fileId}
+      data-file-path={filePath}
+      className="border border-border rounded-lg overflow-hidden"
+    >
+      {/* File Header */}
+      <div
+        className="sticky top-0 z-10 flex items-center justify-between px-[16px] py-[8px] bg-muted cursor-pointer hover:bg-muted/80 border-b border-border"
+        onClick={() => toggleFileCollapse(filePath)}
+      >
+        <div className="flex items-center gap-[8px] flex-1 min-w-0">
+          {isCollapsed ? (
+            <ChevronRight className="w-3 h-3 flex-shrink-0" />
+          ) : (
+            <ChevronDown className="w-3 h-3 flex-shrink-0" />
+          )}
+          <div className="min-w-0 flex-1 flex items-center gap-[6px]">
+            <span className="text-sm text-muted-foreground truncate font-mono">
+              {filePath.replace(/\/+$/, "")}
+            </span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(filePath);
+                addToast({
+                  title: "Copied",
+                  description: "File path copied to clipboard",
+                  type: "success",
+                });
+              }}
+              className="text-muted-foreground hover:text-foreground flex-shrink-0"
+              title="Copy file path"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+        <div className="flex items-center gap-[8px]">
+          {/* Viewed checkbox */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isViewed) {
+                handleUnmarkFileViewed(filePath);
+              } else {
+                handleMarkFileViewed(filePath);
+              }
+            }}
+            className={cn(
+              "flex items-center gap-[4px] px-[8px] py-[2px] rounded text-sm transition-colors",
+              isViewed
+                ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/30"
+                : "bg-muted hover:bg-accent text-muted-foreground hover:text-foreground"
+            )}
+            title={isViewed ? "Mark as not viewed" : "Mark as viewed"}
+          >
+            {isViewed ? (
+              <Check className="w-3 h-3" />
+            ) : (
+              <Square className="w-3 h-3" />
+            )}
+            <span>Viewed</span>
+          </button>
+          {isBinaryFile(filePath) && (
+            <span className="text-sm px-[8px] py-[2px] rounded bg-zinc-500/20 text-zinc-600 dark:text-zinc-400">
+              Binary
+            </span>
+          )}
+          {(additions > 0 || deletions > 0) && (
+            <span className="text-sm font-mono flex items-center gap-[4px]">
+              <span className="text-emerald-600 dark:text-emerald-400">
+                +{additions}
+              </span>
+              <span className="text-red-600 dark:text-red-400">
+                -{deletions}
+              </span>
+            </span>
+          )}
+          {!readOnly && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                <button className="p-[4px] rounded hover:bg-accent">
+                  <MoreVertical className="w-3 h-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" sideOffset={4}>
+                {(file.workspaceStatus || file.stagedStatus) && (
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      handleDiscardFiles(filePath);
+                    }}
+                    disabled={fileActionTarget === filePath}
+                    className="text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+                  >
+                    {selectedUnstagedFiles.has(filePath) &&
+                    selectedUnstagedFiles.size > 1
+                      ? `Discard ${selectedUnstagedFiles.size} files`
+                      : "Discard file"}
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={async (e) => {
+                    e.preventDefault();
+                    try {
+                      await openPath(`${workspacePath}/${filePath}`);
+                    } catch (err) {
+                      const msg =
+                        err instanceof Error ? err.message : String(err);
+                      addToast({
+                        title: "Open Failed",
+                        description: msg,
+                        type: "error",
+                      });
+                    }
+                  }}
+                >
+                  Edit file
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      </div>
+
+      {/* File Hunks - consolidated view without per-hunk collapsible */}
+      {!isCollapsed && (
+        <div
+          className="bg-background font-mono"
+          style={{ fontSize: `${diffFontSize}px` }}
+          onContextMenu={handleContextMenu}
+          onClick={handleContainerClick}
+        >
+          {isBinaryFile(filePath) ? (
+            <div className="flex items-center justify-center py-[32px] text-muted-foreground">
+              <FileText className="w-5 h-5 mr-[8px] opacity-50" />
+              <span>Binary file - no diff available</span>
+            </div>
+          ) : fileData.isLoading ? (
+            <div className="flex items-center justify-center py-[32px] text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin mr-[8px]" />
+              Loading diff...
+            </div>
+          ) : fileData.error ? (
+            <div className="text-sm text-destructive px-[12px] py-[8px]">
+              {fileData.error}
+            </div>
+          ) : fileData.hunks.length === 0 ? (
+            <div className="text-sm text-muted-foreground px-[12px] py-[24px] text-center">
+              No diff hunks available
+            </div>
+          ) : additions + deletions > 75 &&
+            !expandedLargeDiffs.has(filePath) ? (
+            <div className="flex items-center justify-center gap-[12px] h-20 text-muted-foreground">
+              <FileText className="w-5 h-5 opacity-50" />
+              <span className="text-sm">
+                Large diff ({additions + deletions} lines)
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => toggleLargeDiff(filePath)}
+              >
+                View changes
+              </Button>
+            </div>
+          ) : (
+            <>
+              {/* Toggle button for large diffs that are currently shown */}
+              {additions + deletions > 75 && (
+                <div className="flex justify-center py-2 border-b border-border/40">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggleLargeDiff(filePath)}
+                    className="text-sm"
+                  >
+                    Hide large diff ({additions + deletions} lines)
+                  </Button>
+                </div>
+              )}
+              {/* Render all hunks */}
+              {fileData.hunks.map((hunk, hunkIndex) =>
+                renderHunkLines(hunk, hunkIndex, filePath)
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+});
+FileRowComponent.displayName = "FileRowComponent";
+
 export const ChangesDiffViewer = memo(
   forwardRef<ChangesDiffViewerHandle, ChangesDiffViewerProps>(
     (
       {
         workspacePath,
         readOnly = false,
-        disableInteractions = false,
         onStagedFilesChange,
-        refreshSignal = 0,
         initialSelectedFile,
         terminalSessionId,
         onReviewSubmitted,
@@ -572,25 +667,19 @@ export const ChangesDiffViewer = memo(
       const { addToast } = useToast();
       const { fontSize: diffFontSize } = useDiffSettings();
 
-      // Detect workspace type (Git vs JJ)
-      const [isJjWorkspace, setIsJjWorkspace] = useState<boolean | null>(null);
-
-      // Use cached changes hook for Git workspaces
-      const cachedChanges = useCachedWorkspaceChanges(
-        isJjWorkspace === false ? workspacePath : null,
-        {
-          enabled: isJjWorkspace === false && !!workspacePath,
-          repoPath: workspacePath || undefined,
-          workspaceId: null,
-        }
-      );
+      // Use cached changes hook for workspaces
+      const cachedChanges = useCachedWorkspaceChanges(workspacePath, {
+        enabled: true,
+        repoPath: workspacePath,
+        workspaceId: null,
+      });
 
       const [files, setFiles] = useState<ParsedFileChange[]>([]);
       const [allFileHunks, setAllFileHunks] = useState<
         Map<string, FileHunksData>
       >(new Map());
       const [loadingAllHunks, setLoadingAllHunks] = useState(false);
-      const [manualRefreshKey, setManualRefreshKey] = useState(0);
+      const [initialLoading, setInitialLoading] = useState(true);
       const [fileActionTarget, setFileActionTarget] = useState<string | null>(
         null
       );
@@ -600,9 +689,11 @@ export const ChangesDiffViewer = memo(
       const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
         new Set()
       );
-      const [forceRenderedFiles, setForceRenderedFiles] = useState<Set<string>>(
+      const [expandedLargeDiffs, setExpandedLargeDiffs] = useState<Set<string>>(
         new Set()
       );
+      const [largeChangesetExpanded, setLargeChangesetExpanded] =
+        useState(false);
 
       // Line selection state for staging
       const [diffLineSelection, setDiffLineSelection] =
@@ -617,99 +708,13 @@ export const ChangesDiffViewer = memo(
         x: number;
         y: number;
       } | null>(null);
-      const [stagingLines, _setStagingLines] = useState(false);
       const [commitPending, setCommitPending] = useState(false);
-      const [actionPending, setActionPending] = useState<
-        "commit" | "amend" | "push" | "sync" | null
-      >(null);
       const commitInputRef = useRef<CommitInputHandle>(null);
       const prevFilePathsRef = useRef<string[]>([]);
       const diffContainerRef = useRef<HTMLDivElement>(null);
 
       // Active file tracking (for sidebar highlighting)
       const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
-
-      // Lazy loading state - tracks which files have been rendered
-      const [renderedFiles, setRenderedFiles] = useState<Set<string>>(
-        new Set()
-      );
-
-      // Detect if workspace is JJ or Git
-      useEffect(() => {
-        if (!workspacePath) {
-          setIsJjWorkspace(null);
-          return;
-        }
-        jjIsWorkspace(workspacePath)
-          .then(setIsJjWorkspace)
-          .catch(() => setIsJjWorkspace(false));
-      }, [workspacePath]);
-
-      // Apply cached Git hunks when available
-      useEffect(() => {
-        if (isJjWorkspace === false && cachedChanges.fileHunks.size > 0) {
-          setAllFileHunks(cachedChanges.fileHunks);
-          setLoadingAllHunks(false);
-        }
-      }, [cachedChanges.fileHunks, isJjWorkspace]);
-
-      // On-demand hunk loading when a file is selected
-      useEffect(() => {
-        if (isJjWorkspace || !activeFilePath || !workspacePath) return;
-
-        // Check if this file already has hunks loaded
-        const existingHunks = allFileHunks.get(activeFilePath);
-        if (existingHunks && !existingHunks.isLoading) {
-          // Hunks already loaded
-          return;
-        }
-
-        // Check if it's in the process of loading
-        if (existingHunks?.isLoading) {
-          return;
-        }
-
-        // Mark as loading and fetch hunks on demand
-        setAllFileHunks((prev) => {
-          const next = new Map(prev);
-          next.set(activeFilePath, {
-            filePath: activeFilePath,
-            hunks: [],
-            isLoading: true,
-          });
-          return next;
-        });
-
-        // Fetch hunks on demand for Git workspaces
-        (async () => {
-          try {
-            const hunks = await gitGetFileHunks(workspacePath, activeFilePath);
-
-            setAllFileHunks((prev) => {
-              const next = new Map(prev);
-              next.set(activeFilePath, {
-                filePath: activeFilePath,
-                hunks: hunks,
-                isLoading: false,
-              });
-              return next;
-            });
-          } catch (error) {
-            const message =
-              error instanceof Error ? error.message : String(error);
-            setAllFileHunks((prev) => {
-              const next = new Map(prev);
-              next.set(activeFilePath, {
-                filePath: activeFilePath,
-                hunks: [],
-                isLoading: false,
-                error: message,
-              });
-              return next;
-            });
-          }
-        })();
-      }, [activeFilePath, isJjWorkspace, workspacePath, allFileHunks]);
 
       // Expose focusCommitInput method via ref
       useImperativeHandle(
@@ -776,18 +781,6 @@ export const ChangesDiffViewer = memo(
         number | null
       >(null);
       const [moveDialogOpen, setMoveDialogOpen] = useState(false);
-
-      // Expanded context lines state
-      const [expandedRanges, setExpandedRanges] = useState<
-        Map<string, { before: ExpandedRange[]; after: ExpandedRange[] }>
-      >(new Map());
-      const [loadingExpansions, setLoadingExpansions] = useState<Set<string>>(
-        new Set()
-      );
-
-      // JJ has no staging - all files are working copy changes
-      const stagedFiles = useMemo(() => [], [files]); // Always empty in JJ
-      const unstagedFiles = useMemo(() => files, [files]); // All files are "unstaged"
 
       const applyChangedFiles = useCallback(
         (parsed: ParsedFileChange[], forceApply = false) => {
@@ -863,466 +856,29 @@ export const ChangesDiffViewer = memo(
         [initialSelectedFile, onStagedFilesChange, isInReviewMode]
       );
 
-      // Apply cached Git files when available
-      useEffect(() => {
-        if (isJjWorkspace === false && cachedChanges.files.length > 0) {
-          applyChangedFiles(cachedChanges.files);
-        }
-      }, [cachedChanges.files, isJjWorkspace, applyChangedFiles]);
-
       const invalidateCache = useCallback(async () => {
-        if (!workspacePath) {
-          return;
-        }
-        try {
-          if (isJjWorkspace === true) {
-            // JJ workspaces use the old cache system
-            await invalidateGitCache(workspacePath);
-          } else if (isJjWorkspace === false) {
-            // Git workspaces use the new cached changes hook
-            await cachedChanges.refresh();
-          }
-        } catch {
-          // Silently ignore cache invalidation failures
-        }
-      }, [workspacePath, isJjWorkspace, cachedChanges]);
-
-      // Compute expandable lines for a hunk boundary
-      const computeExpandableLines = useCallback(
-        (
-          hunk: GitDiffHunk,
-          position: "before" | "after",
-          existingRanges: ExpandedRange[],
-          allHunks: GitDiffHunk[],
-          hunkIndex: number
-        ): {
-          startLine: number;
-          endLine: number;
-          canExpand: boolean;
-        } | null => {
-          const { oldStart, oldCount } = parseHunkHeader(hunk.header);
-
-          if (position === "before") {
-            // Find the lowest line we've already expanded to
-            const lowestExpanded =
-              existingRanges.length > 0
-                ? Math.min(...existingRanges.map((r) => r.startLine))
-                : oldStart;
-
-            // Can we expand 25 more lines?
-            const targetStart = Math.max(1, lowestExpanded - 25);
-            const targetEnd = lowestExpanded - 1;
-
-            if (targetStart > targetEnd) return null;
-
-            return {
-              startLine: targetStart,
-              endLine: targetEnd,
-              canExpand: true,
-            };
-          } else {
-            // After: expand down from last hunk line
-            const hunkEndLine = oldStart + oldCount - 1;
-            const highestExpanded =
-              existingRanges.length > 0
-                ? Math.max(...existingRanges.map((r) => r.endLine))
-                : hunkEndLine;
-
-            // Check if next hunk exists and calculate gap
-            const nextHunk = allHunks[hunkIndex + 1];
-            let maxLine: number;
-
-            if (nextHunk) {
-              const { oldStart: nextStart } = parseHunkHeader(nextHunk.header);
-              maxLine = nextStart - 1;
-            } else {
-              // Last hunk - allow expanding 25 lines (will be capped by file length)
-              maxLine = highestExpanded + 25;
-            }
-
-            const targetStart = highestExpanded + 1;
-            const targetEnd = Math.min(highestExpanded + 25, maxLine);
-
-            if (targetStart > targetEnd) return null;
-
-            return {
-              startLine: targetStart,
-              endLine: targetEnd,
-              canExpand: true,
-            };
-          }
-        },
-        []
-      );
-
-      // Handle expanding context lines
-      const handleExpandLines = useCallback(
-        async (
-          filePath: string,
-          hunk: GitDiffHunk,
-          hunkIndex: number,
-          position: "before" | "after"
-        ) => {
-          const fileData = allFileHunks.get(filePath);
-          if (!fileData) return;
-
-          const hunkRanges = expandedRanges.get(
-            getHunkKey(filePath, hunk.id)
-          ) || { before: [], after: [] };
-          const existingRanges =
-            position === "before" ? hunkRanges.before : hunkRanges.after;
-
-          const expandInfo = computeExpandableLines(
-            hunk,
-            position,
-            existingRanges,
-            fileData.hunks,
-            hunkIndex
-          );
-
-          if (!expandInfo?.canExpand) return;
-
-          // Set loading state
-          const loadingKey = `${getHunkKey(filePath, hunk.id)}-${position}`;
-          setLoadingExpansions((prev) => new Set(prev).add(loadingKey));
-
-          try {
-            const result = await jjGetFileLines(
-              workspacePath,
-              filePath,
-              false, // fromParent - use working copy for context expansion
-              expandInfo.startLine,
-              expandInfo.endLine
-            );
-
-            // Update expanded ranges
-            setExpandedRanges((prev) => {
-              const next = new Map(prev);
-              const ranges = next.get(getHunkKey(filePath, hunk.id)) || {
-                before: [],
-                after: [],
-              };
-
-              const newRange: ExpandedRange = {
-                startLine: result.start_line,
-                endLine: result.end_line,
-                lines: result.lines,
-              };
-
-              if (position === "before") {
-                ranges.before = [...ranges.before, newRange].sort(
-                  (a, b) => a.startLine - b.startLine
-                );
-              } else {
-                ranges.after = [...ranges.after, newRange].sort(
-                  (a, b) => a.startLine - b.startLine
-                );
-              }
-
-              next.set(getHunkKey(filePath, hunk.id), ranges);
-              return next;
-            });
-          } catch (error: unknown) {
-            console.error("Failed to expand context:", error);
-            addToast({
-              title: "Expansion failed",
-              description:
-                error instanceof Error ? error.message : "Unknown error",
-              type: "error",
-            });
-          } finally {
-            // Clear loading state
-            setLoadingExpansions((prev) => {
-              const next = new Set(prev);
-              next.delete(loadingKey);
-              return next;
-            });
-          }
-        },
-        [
-          workspacePath,
-          allFileHunks,
-          expandedRanges,
-          computeExpandableLines,
-          addToast,
-        ]
-      );
+        await cachedChanges.refresh();
+      }, [cachedChanges]);
 
       const loadChangedFiles = useCallback(async () => {
-        if (!workspacePath) {
-          setFiles([]);
-          return;
-        }
-
-        let cachedEntries: unknown[] | null = null;
-
-        try {
-          const cached = await getGitCache(workspacePath, "changed_files");
-          if (cached?.data) {
-            try {
-              cachedEntries = JSON.parse(cached.data);
-              if (cachedEntries && Array.isArray(cachedEntries)) {
-                const parsed = parseJjChangedFiles(
-                  cachedEntries as Array<{
-                    path: string;
-                    status: string;
-                    previous_path?: string | null;
-                  }>
-                );
-                applyChangedFiles(parsed);
-              }
-            } catch {
-              // Invalid cache format, ignore
-            }
-          }
-        } catch {
-          // Silently ignore cache retrieval failures
-        }
+        // Caching removed - getDiffCache/setDiffCache no longer available
 
         try {
           const jjFiles = await jjGetChangedFiles(workspacePath);
           const parsed = parseJjChangedFiles(jjFiles);
-          if (
-            !cachedEntries ||
-            JSON.stringify(cachedEntries) !== JSON.stringify(jjFiles)
-          ) {
-            applyChangedFiles(parsed);
-          }
-          setGitCache(
-            workspacePath,
-            "changed_files",
-            JSON.stringify(jjFiles)
-          ).catch(() => {
-            // Silently ignore cache write failures
-          });
+          applyChangedFiles(parsed);
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);
           addToast({ title: "JJ Error", description: message, type: "error" });
+        } finally {
+          setInitialLoading(false);
         }
-      }, [workspacePath, addToast, applyChangedFiles]);
+      }, [applyChangedFiles]);
 
       useEffect(() => {
-        // Only load for JJ workspaces; Git uses the cached hook
-        if (isJjWorkspace === true) {
-          loadChangedFiles();
-        }
-      }, [loadChangedFiles, refreshSignal, isJjWorkspace]);
-
-      // Load viewed files from database
-      const loadViewedFiles = useCallback(async () => {
-        if (!workspacePath) {
-          setViewedFiles(new Map());
-          return;
-        }
-
-        try {
-          const views = await getViewedFiles(workspacePath);
-          const viewsMap = new Map<
-            string,
-            { viewedAt: string; contentHash: string }
-          >();
-          for (const view of views) {
-            viewsMap.set(view.file_path, {
-              viewedAt: view.viewed_at,
-              contentHash: view.content_hash,
-            });
-          }
-          setViewedFiles(viewsMap);
-
-          // Auto-collapse viewed files
-          setCollapsedFiles((prev) => {
-            const next = new Set(prev);
-            for (const filePath of viewsMap.keys()) {
-              next.add(filePath);
-            }
-            return next;
-          });
-        } catch {
-          // Silently ignore viewed files load failures
-        }
-      }, [workspacePath]);
-
-      useEffect(() => {
-        loadViewedFiles();
-      }, [loadViewedFiles]);
-
-      // Reset expanded lines when files change
-      useEffect(() => {
-        setExpandedRanges(new Map());
-        setLoadingExpansions(new Set());
-      }, [files, manualRefreshKey]);
-
-      // Auto-expand 10 lines of context before and after each hunk
-      const autoExpandedHunksRef = useRef<Set<string>>(new Set());
-
-      useEffect(() => {
-        // Reset auto-expanded tracking when files change
-        autoExpandedHunksRef.current = new Set();
-      }, [files, manualRefreshKey]);
-
-      useEffect(() => {
-        if (loadingAllHunks) return;
-
-        const expandContextForHunks = async () => {
-          const hunksToExpand: Array<{
-            filePath: string;
-            hunk: GitDiffHunk;
-            hunkIndex: number;
-            allHunks: GitDiffHunk[];
-          }> = [];
-
-          // Collect all hunks that need auto-expansion
-          for (const [filePath, fileData] of allFileHunks) {
-            if (
-              fileData.isLoading ||
-              fileData.error ||
-              fileData.hunks.length === 0
-            )
-              continue;
-
-            for (
-              let hunkIndex = 0;
-              hunkIndex < fileData.hunks.length;
-              hunkIndex++
-            ) {
-              const hunk = fileData.hunks[hunkIndex];
-              const hunkKey = `${filePath}:${hunk.id}`;
-
-              // Skip if already auto-expanded
-              if (autoExpandedHunksRef.current.has(hunkKey)) continue;
-
-              // Mark as being processed
-              autoExpandedHunksRef.current.add(hunkKey);
-
-              hunksToExpand.push({
-                filePath,
-                hunk,
-                hunkIndex,
-                allHunks: fileData.hunks,
-              });
-            }
-          }
-
-          if (hunksToExpand.length === 0) return;
-
-          // Expand context for each hunk (3 lines before and after)
-          const CONTEXT_LINES = 3;
-
-          for (const { filePath, hunk, hunkIndex, allHunks } of hunksToExpand) {
-            const { oldStart, oldCount } = parseHunkHeader(hunk.header);
-
-            // Calculate lines to fetch BEFORE the hunk
-            const beforeStart = Math.max(1, oldStart - CONTEXT_LINES);
-            const beforeEnd = oldStart - 1;
-
-            // Calculate lines to fetch AFTER the hunk
-            const hunkEndLine = oldStart + oldCount - 1;
-            const nextHunk = allHunks[hunkIndex + 1];
-            let afterEnd: number;
-
-            if (nextHunk) {
-              const { oldStart: nextStart } = parseHunkHeader(nextHunk.header);
-              afterEnd = Math.min(hunkEndLine + CONTEXT_LINES, nextStart - 1);
-            } else {
-              afterEnd = hunkEndLine + CONTEXT_LINES;
-            }
-            const afterStart = hunkEndLine + 1;
-
-            // Fetch before context
-            if (beforeStart <= beforeEnd) {
-              try {
-                const result = await jjGetFileLines(
-                  workspacePath,
-                  filePath,
-                  false, // fromParent - use working copy
-                  beforeStart,
-                  beforeEnd
-                );
-
-                if (result.lines.length > 0) {
-                  setExpandedRanges((prev) => {
-                    const next = new Map(prev);
-                    const ranges = next.get(getHunkKey(filePath, hunk.id)) || {
-                      before: [],
-                      after: [],
-                    };
-
-                    const newRange: ExpandedRange = {
-                      startLine: result.start_line,
-                      endLine: result.end_line,
-                      lines: result.lines,
-                    };
-
-                    // Only add if not already present
-                    if (
-                      !ranges.before.some(
-                        (r) => r.startLine === newRange.startLine
-                      )
-                    ) {
-                      ranges.before = [...ranges.before, newRange].sort(
-                        (a, b) => a.startLine - b.startLine
-                      );
-                      next.set(getHunkKey(filePath, hunk.id), ranges);
-                    }
-
-                    return next;
-                  });
-                }
-              } catch {
-                // Silently ignore - context expansion is optional
-              }
-            }
-
-            // Fetch after context
-            if (afterStart <= afterEnd) {
-              try {
-                const result = await jjGetFileLines(
-                  workspacePath,
-                  filePath,
-                  false, // fromParent - use working copy
-                  afterStart,
-                  afterEnd
-                );
-
-                if (result.lines.length > 0) {
-                  setExpandedRanges((prev) => {
-                    const next = new Map(prev);
-                    const ranges = next.get(getHunkKey(filePath, hunk.id)) || {
-                      before: [],
-                      after: [],
-                    };
-
-                    const newRange: ExpandedRange = {
-                      startLine: result.start_line,
-                      endLine: result.end_line,
-                      lines: result.lines,
-                    };
-
-                    // Only add if not already present
-                    if (
-                      !ranges.after.some(
-                        (r) => r.startLine === newRange.startLine
-                      )
-                    ) {
-                      ranges.after = [...ranges.after, newRange].sort(
-                        (a, b) => a.startLine - b.startLine
-                      );
-                      next.set(getHunkKey(filePath, hunk.id), ranges);
-                    }
-
-                    return next;
-                  });
-                }
-              } catch {
-                // Silently ignore - context expansion is optional
-              }
-            }
-          }
-        };
-
-        expandContextForHunks();
-      }, [allFileHunks, loadingAllHunks, workspacePath]);
+        loadChangedFiles();
+      }, []);
 
       // Clear stale viewed files when files change (file no longer in changed list = remove from viewed)
       // Also clear when content hash doesn't match (file was modified since being marked as viewed)
@@ -1377,8 +933,6 @@ export const ChangesDiffViewer = memo(
 
       const handleMarkFileViewed = useCallback(
         async (filePath: string) => {
-          if (!workspacePath) return;
-
           // Compute hash from current hunks
           const fileData = allFileHunks.get(filePath);
           const contentHash = fileData?.hunks
@@ -1402,8 +956,6 @@ export const ChangesDiffViewer = memo(
 
       const handleUnmarkFileViewed = useCallback(
         async (filePath: string) => {
-          if (!workspacePath) return;
-
           try {
             await unmarkFileViewed(workspacePath, filePath);
             setViewedFiles((prev) => {
@@ -1426,7 +978,7 @@ export const ChangesDiffViewer = memo(
 
       const loadAllFileHunks = useCallback(
         async (filesToLoad: ParsedFileChange[], forceApply = false) => {
-          if (!workspacePath || filesToLoad.length === 0) {
+          if (filesToLoad.length === 0) {
             if (!isInReviewMode || forceApply) {
               setAllFileHunks((prev) => (prev.size === 0 ? prev : new Map()));
             }
@@ -1435,14 +987,14 @@ export const ChangesDiffViewer = memo(
           }
           setLoadingAllHunks(true);
 
-          const cachedHunks = new Map<string, GitDiffHunk[]>();
+          const cachedHunks = new Map<string, JjDiffHunk[]>();
           const hunksMap = new Map<string, FileHunksData>();
 
           // Load cached data first
           await Promise.all(
             filesToLoad.map(async (file) => {
               try {
-                const cache = await getGitCache(
+                const cache = await getDiffCache(
                   workspacePath,
                   "file_hunks",
                   file.path
@@ -1501,15 +1053,7 @@ export const ChangesDiffViewer = memo(
             const results = await Promise.all(
               filesToLoad.map(async (file) => {
                 try {
-                  const jjHunks = await jjGetFileHunks(
-                    workspacePath,
-                    file.path
-                  );
-                  // Normalize JJ hunks to have is_staged: false for type compatibility
-                  const hunks: GitDiffHunk[] = jjHunks.map((h) => ({
-                    ...h,
-                    is_staged: false,
-                  }));
+                  const hunks = await jjGetFileHunks(workspacePath, file.path);
                   return {
                     filePath: file.path,
                     hunks,
@@ -1520,7 +1064,7 @@ export const ChangesDiffViewer = memo(
                     error instanceof Error ? error.message : String(error);
                   return {
                     filePath: file.path,
-                    hunks: [] as GitDiffHunk[],
+                    hunks: [] as JjDiffHunk[],
                     error: message,
                   };
                 }
@@ -1601,17 +1145,6 @@ export const ChangesDiffViewer = memo(
                     isLoading: false,
                   });
                 }
-
-                // Cache result
-                const cached = cachedHunks.get(result.filePath);
-                if (!cached || !hunksEqual(cached, result.hunks)) {
-                  setGitCache(
-                    workspacePath,
-                    "file_hunks",
-                    result.hunks,
-                    result.filePath
-                  ).catch(console.debug);
-                }
               }
 
               return hasChanges ? next : prev;
@@ -1629,52 +1162,22 @@ export const ChangesDiffViewer = memo(
           currentPaths.length !== prevFilePathsRef.current.length ||
           currentPaths.some((p, i) => p !== prevFilePathsRef.current[i]);
 
-        // Only load hunks for JJ workspaces; Git uses the cached hook
-        if (files.length > 0 && pathsChanged && isJjWorkspace === true) {
+        // Only load hunks for JJ workspaces;
+        if (files.length > 0 && pathsChanged) {
           prevFilePathsRef.current = currentPaths;
           loadAllFileHunks(files);
+          // Reset large changeset expanded state when files change
+          setLargeChangesetExpanded(false);
         } else if (files.length === 0 && prevFilePathsRef.current.length > 0) {
           prevFilePathsRef.current = [];
           setAllFileHunks(new Map());
+          setLargeChangesetExpanded(false);
         }
-      }, [files, loadAllFileHunks, isJjWorkspace]);
-
-      // Git workspaces use file watcher for real-time updates (no polling needed)
-      // JJ workspaces still use refresh signal from parent component
-
-      // Initialize first batch of files for immediate rendering
-      useEffect(() => {
-        if (files.length === 0) {
-          setRenderedFiles(new Set());
-          return;
-        }
-
-        // Always render first 5 files immediately
-        const initialFiles = files.slice(0, 5).map((f) => f.path);
-        setRenderedFiles((prev) => {
-          const next = new Set(prev);
-          initialFiles.forEach((f) => next.add(f));
-          return next;
-        });
-      }, [files]);
-
-      // Load more files callback
-      const loadMoreFiles = useCallback(() => {
-        setRenderedFiles((prev) => {
-          const nextUnrendered = files
-            .filter((f) => !prev.has(f.path))
-            .slice(0, 10) // Load next 10 files
-            .map((f) => f.path);
-
-          const next = new Set(prev);
-          nextUnrendered.forEach((f) => next.add(f));
-          return next;
-        });
-      }, [files]);
+      }, [files, loadAllFileHunks]);
 
       const refresh = useCallback(() => {
-        setManualRefreshKey((prev) => prev + 1);
-      }, []);
+        cachedChanges.refresh();
+      }, [cachedChanges]);
 
       // Reload with pending data, preserving comments and moving orphaned ones to general comment
       const handleReloadWithPendingChanges = useCallback(() => {
@@ -1766,17 +1269,8 @@ export const ChangesDiffViewer = memo(
         addToast,
       ]);
 
-      // JJ has no staging - these are no-ops
-      const handleStageFile = useCallback(async (_filePath: string) => {
-        // No-op: JJ doesn't have staging
-      }, []);
-
-      const handleUnstageFile = useCallback(async (_filePath: string) => {
-        // No-op: JJ doesn't have staging
-      }, []);
-
       const handleDiscardAll = useCallback(async () => {
-        if (readOnly || disableInteractions) return;
+        if (readOnly) return;
         try {
           await jjRestoreAll(workspacePath);
           addToast({
@@ -1795,18 +1289,11 @@ export const ChangesDiffViewer = memo(
             type: "error",
           });
         }
-      }, [
-        workspacePath,
-        readOnly,
-        disableInteractions,
-        refresh,
-        addToast,
-        invalidateCache,
-      ]);
+      }, [workspacePath, readOnly, refresh, addToast, invalidateCache]);
 
       const handleDiscardFiles = useCallback(
         async (filePath: string) => {
-          if (readOnly || disableInteractions || !filePath) {
+          if (readOnly || !filePath) {
             return;
           }
 
@@ -1848,21 +1335,13 @@ export const ChangesDiffViewer = memo(
             setFileActionTarget(null);
           }
         },
-        [
-          workspacePath,
-          readOnly,
-          disableInteractions,
-          selectedUnstagedFiles,
-          refresh,
-          addToast,
-          invalidateCache,
-        ]
+        [readOnly, selectedUnstagedFiles, refresh, addToast, invalidateCache]
       );
 
       // Scroll to file in the diff container
       const scrollToFileIfNeeded = useCallback(
         (fileIndex: number) => {
-          const file = unstagedFiles[fileIndex];
+          const file = files[fileIndex];
           if (!file) return;
 
           const filePath = file.path;
@@ -1874,15 +1353,7 @@ export const ChangesDiffViewer = memo(
             return next;
           });
 
-          // Ensure the file is rendered
-          setRenderedFiles((prev) => {
-            if (prev.has(filePath)) return prev;
-            const next = new Set(prev);
-            next.add(filePath);
-            return next;
-          });
-
-          // Use setTimeout to wait for React to re-render after expanding and rendering
+          // Use setTimeout to wait for React to re-render after expanding
           setTimeout(() => {
             const container = diffContainerRef.current;
             if (!container) return;
@@ -1900,13 +1371,13 @@ export const ChangesDiffViewer = memo(
             }
           }, 50);
         },
-        [unstagedFiles]
+        [files]
       );
 
       // File selection handler - VSCode-style click selection
       const handleFileSelect = useCallback(
         (path: string, event: React.MouseEvent) => {
-          const fileIndex = unstagedFiles.findIndex((f) => f.path === path);
+          const fileIndex = files.findIndex((f) => f.path === path);
           if (fileIndex === -1) return;
 
           const isMetaKey = event.metaKey || event.ctrlKey;
@@ -1921,7 +1392,7 @@ export const ChangesDiffViewer = memo(
               const start = Math.min(lastSelectedFileIndex, fileIndex);
               const end = Math.max(lastSelectedFileIndex, fileIndex);
               for (let i = start; i <= end; i++) {
-                next.add(unstagedFiles[i].path);
+                next.add(files[i].path);
               }
             } else if (isMetaKey) {
               // Cmd/Ctrl+click - toggle individual file
@@ -1947,7 +1418,7 @@ export const ChangesDiffViewer = memo(
           // Smart scroll to file
           scrollToFileIfNeeded(fileIndex);
         },
-        [lastSelectedFileIndex, unstagedFiles, scrollToFileIfNeeded]
+        [lastSelectedFileIndex, files, scrollToFileIfNeeded]
       );
 
       // Handler for when files are successfully moved to workspace
@@ -1978,7 +1449,18 @@ export const ChangesDiffViewer = memo(
           }
           return next;
         });
-        // In react-window v2, heights are recalculated automatically when rowHeight function changes
+      }, []);
+
+      const toggleLargeDiff = useCallback((filePath: string) => {
+        setExpandedLargeDiffs((prev) => {
+          const next = new Set(prev);
+          if (next.has(filePath)) {
+            next.delete(filePath);
+          } else {
+            next.add(filePath);
+          }
+          return next;
+        });
       }, []);
 
       // Line selection handlers for staging and comments
@@ -2056,7 +1538,7 @@ export const ChangesDiffViewer = memo(
                   hunkIndex: h,
                   lineIndex: l,
                   content: line,
-                  isStaged: hunk.is_staged,
+                  isStaged: false, // JJ has no staging
                 });
               }
             }
@@ -2104,14 +1586,6 @@ export const ChangesDiffViewer = memo(
         },
         [diffLineSelection]
       );
-
-      const handleStageSelectedLines = useCallback(async () => {
-        // No-op: JJ doesn't have line-level staging
-      }, []);
-
-      const handleUnstageSelectedLines = useCallback(async () => {
-        // No-op: JJ doesn't have line-level staging
-      }, []);
 
       useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -2300,26 +1774,8 @@ export const ChangesDiffViewer = memo(
         onReviewSubmitted,
       ]);
 
-      const extractCommitHash = useCallback((output: string) => {
-        const bracketMatch = output.match(/\[.+? ([0-9a-f]{7,})\]/i);
-        if (bracketMatch && bracketMatch[1]) {
-          return bracketMatch[1];
-        }
-        const looseMatch = output.match(/\b[0-9a-f]{7,40}\b/i);
-        return looseMatch ? looseMatch[0] : null;
-      }, []);
-
       const handleCommit = useCallback(
         async (commitMsg: string) => {
-          if (!workspacePath) {
-            addToast({
-              title: "Missing Workspace",
-              description: "Select a workspace before committing.",
-              type: "error",
-            });
-            return;
-          }
-
           if (!commitMsg) {
             addToast({
               title: "Commit message",
@@ -2333,15 +1789,6 @@ export const ChangesDiffViewer = memo(
             addToast({
               title: "Commit message",
               description: "Please keep the message under 500 characters.",
-              type: "error",
-            });
-            return;
-          }
-
-          if (files.length === 0) {
-            addToast({
-              title: "No changes",
-              description: "No changes to commit.",
               type: "error",
             });
             return;
@@ -2369,146 +1816,7 @@ export const ChangesDiffViewer = memo(
             setCommitPending(false);
           }
         },
-        [workspacePath, files, addToast, refresh, invalidateCache]
-      );
-
-      const handleCommitAmend = useCallback(
-        async (commitMsg: string) => {
-          if (!workspacePath) {
-            addToast({
-              title: "Missing Workspace",
-              description: "Select a workspace before amending.",
-              type: "error",
-            });
-            return;
-          }
-
-          if (!commitMsg) {
-            addToast({
-              title: "Commit message",
-              description: "Enter a commit message.",
-              type: "error",
-            });
-            return;
-          }
-
-          setActionPending("amend");
-          try {
-            // JJ doesn't have direct amend - use jj squash or jj describe instead
-            // For now, just update the description of the current commit
-            addToast({
-              title: "Amend not supported",
-              description:
-                "JJ handles amendments differently. Use 'jj squash' or 'jj describe' in the terminal.",
-              type: "info",
-            });
-          } catch (error) {
-            const message =
-              error instanceof Error ? error.message : String(error);
-            addToast({
-              title: "Amend failed",
-              description: message,
-              type: "error",
-            });
-          } finally {
-            setActionPending(null);
-          }
-        },
         [workspacePath, addToast, refresh, invalidateCache]
-      );
-
-      const handleCommitAndPush = useCallback(
-        async (commitMsg: string) => {
-          if (!commitMsg || files.length === 0) return;
-
-          setActionPending("push");
-          try {
-            // First commit
-            const commitResult = await jjCommit(workspacePath, commitMsg);
-            await invalidateCache();
-            addToast({
-              title: "Commit created",
-              description: commitResult.trim() || "Commit successful",
-              type: "success",
-            });
-
-            // Then push
-            await gitPush(workspacePath);
-            addToast({
-              title: "Pushed",
-              description: "Changes pushed to remote",
-              type: "success",
-            });
-
-            refresh();
-          } catch (error) {
-            const message =
-              error instanceof Error ? error.message : String(error);
-            addToast({
-              title: "Commit & Push failed",
-              description: message,
-              type: "error",
-            });
-          } finally {
-            setActionPending(null);
-          }
-        },
-        [workspacePath, files, addToast, refresh, invalidateCache]
-      );
-
-      const handleCommitAndSync = useCallback(
-        async (commitMsg: string) => {
-          if (!commitMsg || files.length === 0) return;
-
-          setActionPending("sync");
-          try {
-            // First commit
-            const commitResult = await jjCommit(workspacePath, commitMsg);
-            await invalidateCache();
-            addToast({
-              title: "Commit created",
-              description: commitResult.trim() || "Commit successful",
-              type: "success",
-            });
-
-            // Then pull
-            await gitPull(workspacePath);
-            await invalidateCache();
-            addToast({
-              title: "Pulled",
-              description: "Changes pulled from remote",
-              type: "success",
-            });
-
-            // Then push
-            await gitPush(workspacePath);
-            addToast({
-              title: "Pushed",
-              description: "Changes pushed to remote",
-              type: "success",
-            });
-
-            refresh();
-          } catch (error) {
-            const message =
-              error instanceof Error ? error.message : String(error);
-            addToast({
-              title: "Commit & Sync failed",
-              description: message,
-              type: "error",
-            });
-          } finally {
-            setActionPending(null);
-          }
-        },
-        [
-          workspacePath,
-          stagedFiles,
-          addToast,
-          extractCommitHash,
-          refresh,
-          invalidateCache,
-        ]
       );
 
       const toggleSectionCollapse = useCallback((sectionId: string) => {
@@ -2537,181 +1845,26 @@ export const ChangesDiffViewer = memo(
         [comments]
       );
 
-      // Compact expand button component for inline use
-      const CompactExpandButton = ({
-        direction,
-        onClick,
-        isLoading,
-        tooltip,
-      }: {
-        direction: "up" | "down";
-        onClick: () => void;
-        isLoading: boolean;
-        tooltip: string;
-      }) => {
-        const Icon = direction === "up" ? ChevronUp : ChevronDown;
-
-        return (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                className="w-full h-full flex flex-col items-center justify-center text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 transition-colors"
-                disabled={isLoading}
-                onClick={onClick}
-              >
-                {isLoading ? (
-                  <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <>
-                    {direction === "up" && <Icon className="w-2.5 h-2.5" />}
-                    <div className="flex gap-[2px]">
-                      <div className="w-0.5 h-0.5 rounded-full bg-blue-600 dark:bg-blue-400" />
-                      <div className="w-0.5 h-0.5 rounded-full bg-blue-600 dark:bg-blue-400" />
-                      <div className="w-0.5 h-0.5 rounded-full bg-blue-600 dark:bg-blue-400" />
-                    </div>
-                    {direction === "down" && <Icon className="w-2.5 h-2.5" />}
-                  </>
-                )}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">{tooltip}</TooltipContent>
-          </Tooltip>
-        );
-      };
-
-      // Expanded lines component
-      const ExpandedLines = ({
-        ranges,
-        language,
-        fontSize,
-      }: {
-        ranges: ExpandedRange[];
-        language: string | null;
-        fontSize: number;
-      }) => {
-        return (
-          <>
-            {ranges.flatMap((range) =>
-              range.lines.map((line, idx) => {
-                const lineNum = range.startLine + idx;
-                return (
-                  <div
-                    key={`expanded-${range.startLine}-${idx}`}
-                    className="flex items-stretch"
-                  >
-                    {/* Line numbers (both old and new) */}
-                    <div className="w-16 flex-shrink-0 text-muted-foreground select-none border-r border-border/40 flex items-center gap-[4px] px-[4px]">
-                      <span
-                        className="w-6 text-right"
-                        style={{ fontSize: `${fontSize}px` }}
-                      >
-                        {lineNum}
-                      </span>
-                      <span
-                        className="w-6 text-right"
-                        style={{ fontSize: `${fontSize}px` }}
-                      >
-                        {lineNum}
-                      </span>
-                    </div>
-
-                    {/* Comment button spacer */}
-                    <div className="w-6 flex-shrink-0" />
-
-                    {/* Line prefix (context = space) */}
-                    <div className="w-5 flex-shrink-0 text-center text-muted-foreground/40 select-none">
-                      {" "}
-                    </div>
-
-                    {/* Line content */}
-                    <div
-                      className="flex-1 px-[8px] py-[2px] whitespace-pre-wrap break-all font-mono"
-                      style={{ fontSize: `${fontSize}px` }}
-                    >
-                      <HighlightedLine content={line} language={language} />
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </>
-        );
-      };
-
       // Render diff lines for a hunk (no collapsible, just lines with selection support)
       const renderHunkLines = (
-        hunk: GitDiffHunk,
+        hunk: JjDiffHunk,
         hunkIndex: number,
         filePath: string
       ) => {
         const lineNumbers = computeHunkLineNumbers(hunk);
         const language = getLanguageFromPath(filePath);
 
-        const fileData = allFileHunks.get(filePath);
-        const hunkRanges = expandedRanges.get(
-          getHunkKey(filePath, hunk.id)
-        ) || { before: [], after: [] };
-
-        // Check if we can expand more lines
-        const beforeExpandInfo = fileData
-          ? computeExpandableLines(
-              hunk,
-              "before",
-              hunkRanges.before,
-              fileData.hunks,
-              hunkIndex
-            )
-          : null;
-        const afterExpandInfo = fileData
-          ? computeExpandableLines(
-              hunk,
-              "after",
-              hunkRanges.after,
-              fileData.hunks,
-              hunkIndex
-            )
-          : null;
-
-        const isLoadingBefore = loadingExpansions.has(
-          `${getHunkKey(filePath, hunk.id)}-before`
-        );
-        const isLoadingAfter = loadingExpansions.has(
-          `${getHunkKey(filePath, hunk.id)}-after`
-        );
-
         return (
           <Fragment key={hunk.id}>
-            {/* Expanded lines BEFORE hunk */}
-            {hunkRanges.before.length > 0 && (
-              <ExpandedLines
-                ranges={hunkRanges.before}
-                language={language}
-                fontSize={diffFontSize}
-              />
-            )}
-
-            {/* Hunk separator header with inline expand button */}
+            {/* Hunk separator header */}
             <div
               className={cn(
                 "flex items-stretch font-mono",
-                hunk.is_staged ? "bg-emerald-500/10" : "bg-muted/60"
+                "bg-muted/60" // JJ has no staging
               )}
             >
-              {/* Line number column with expand button */}
-              <div className="w-16 flex-shrink-0 border-r border-border/40 flex items-center justify-center">
-                <TooltipProvider>
-                  {beforeExpandInfo && (
-                    <CompactExpandButton
-                      direction="up"
-                      onClick={() =>
-                        handleExpandLines(filePath, hunk, hunkIndex, "before")
-                      }
-                      isLoading={isLoadingBefore}
-                      tooltip="Expand up"
-                    />
-                  )}
-                </TooltipProvider>
-              </div>
+              {/* Line number column */}
+              <div className="w-16 flex-shrink-0 border-r border-border/40" />
 
               {/* Comment button spacer */}
               <div className="w-6 flex-shrink-0" />
@@ -2720,7 +1873,7 @@ export const ChangesDiffViewer = memo(
               <div className="w-5 flex-shrink-0" />
 
               {/* Header text */}
-              <div className="flex-1 flex items-center px-[8px] py-[4px]">
+              <div className="flex-1 flex items-center px-[8px] py-[2px]">
                 <span className="text-muted-foreground truncate">
                   {hunk.header}
                 </span>
@@ -2760,7 +1913,7 @@ export const ChangesDiffViewer = memo(
                         hunkIndex,
                         lineIndex,
                         line,
-                        hunk.is_staged
+                        false // JJ has no staging
                       )
                     }
                     onMouseUp={handleLineMouseUp}
@@ -2775,7 +1928,7 @@ export const ChangesDiffViewer = memo(
                           hunkIndex,
                           lineIndex,
                           line,
-                          hunk.is_staged
+                          false // JJ has no staging
                         )
                       }
                     >
@@ -2887,346 +2040,11 @@ export const ChangesDiffViewer = memo(
                 </Fragment>
               );
             })}
-
-            {/* Expanded lines AFTER hunk */}
-            {hunkRanges.after.length > 0 && (
-              <ExpandedLines
-                ranges={hunkRanges.after}
-                language={language}
-                fontSize={diffFontSize}
-              />
-            )}
-
-            {/* Expand DOWN button integrated in a row */}
-            {afterExpandInfo && (
-              <div
-                className={cn(
-                  "flex items-stretch font-mono",
-                  hunk.is_staged ? "bg-emerald-500/10" : "bg-muted/60"
-                )}
-              >
-                {/* Line number column with expand button */}
-                <div className="w-16 flex-shrink-0 border-r border-border/40 flex items-center justify-center">
-                  <TooltipProvider>
-                    <CompactExpandButton
-                      direction="down"
-                      onClick={() =>
-                        handleExpandLines(filePath, hunk, hunkIndex, "after")
-                      }
-                      isLoading={isLoadingAfter}
-                      tooltip="Expand down"
-                    />
-                  </TooltipProvider>
-                </div>
-
-                {/* Comment button spacer */}
-                <div className="w-6 flex-shrink-0" />
-
-                {/* Line prefix spacer */}
-                <div className="w-5 flex-shrink-0" />
-
-                {/* Empty content area */}
-                <div className="flex-1 px-2" />
-              </div>
-            )}
           </Fragment>
         );
       };
 
-      // FileRow component
-      const FileRowComponent = memo(
-        ({
-          file,
-          allFileHunks,
-          collapsedFiles,
-          viewedFiles,
-          forceRenderedFiles,
-          diffFontSize,
-          readOnly,
-          disableInteractions,
-          fileActionTarget,
-          selectedUnstagedFiles,
-          workspacePath,
-          toggleFileCollapse,
-          handleMarkFileViewed,
-          handleUnmarkFileViewed,
-          handleStageFile,
-          handleUnstageFile,
-          handleDiscardFiles,
-          setForceRenderedFiles,
-          handleContextMenu,
-          handleContainerClick,
-          renderHunkLines,
-          addToast,
-        }: {
-          file: ParsedFileChange;
-          allFileHunks: Map<string, FileHunksData>;
-          collapsedFiles: Set<string>;
-          viewedFiles: Map<string, { viewedAt: string; contentHash: string }>;
-          forceRenderedFiles: Set<string>;
-          diffFontSize: number;
-          readOnly: boolean;
-          disableInteractions: boolean;
-          fileActionTarget: string | null;
-          selectedUnstagedFiles: Set<string>;
-          workspacePath: string;
-          toggleFileCollapse: (filePath: string) => void;
-          handleMarkFileViewed: (filePath: string) => void;
-          handleUnmarkFileViewed: (filePath: string) => void;
-          handleStageFile: (filePath: string) => void;
-          handleUnstageFile: (filePath: string) => void;
-          handleDiscardFiles: (filePath: string) => void;
-          setForceRenderedFiles: React.Dispatch<
-            React.SetStateAction<Set<string>>
-          >;
-          handleContextMenu: (e: React.MouseEvent) => void;
-          handleContainerClick: (e: React.MouseEvent) => void;
-          renderHunkLines: (
-            hunk: GitDiffHunk,
-            hunkIndex: number,
-            filePath: string
-          ) => JSX.Element;
-          addToast: ReturnType<typeof useToast>["addToast"];
-        }): React.ReactElement => {
-          const filePath = file.path;
-          const fileData = allFileHunks.get(filePath);
-          if (!fileData) return <div />;
-
-          const isCollapsed = isBinaryFile(filePath)
-            ? true
-            : collapsedFiles.has(filePath);
-          const isViewed = viewedFiles.has(filePath);
-          const fileId = `file-section-${filePath.replace(
-            /[^a-zA-Z0-9]/g,
-            "-"
-          )}`;
-
-          // Compute line stats from hunks
-          let additions = 0;
-          let deletions = 0;
-          if (!fileData.isLoading && fileData.hunks) {
-            for (const hunk of fileData.hunks) {
-              for (const line of hunk.lines) {
-                if (line.startsWith("+")) additions++;
-                else if (line.startsWith("-")) deletions++;
-              }
-            }
-          }
-
-          return (
-            <div
-              key={filePath}
-              id={fileId}
-              data-file-path={filePath}
-              className="border border-border rounded-lg overflow-hidden"
-            >
-              {/* File Header */}
-              <div
-                className="sticky top-0 z-10 flex items-center justify-between px-[16px] py-[8px] bg-muted cursor-pointer hover:bg-muted/80 border-b border-border"
-                onClick={() => toggleFileCollapse(filePath)}
-              >
-                <div className="flex items-center gap-[8px] flex-1 min-w-0">
-                  {isCollapsed ? (
-                    <ChevronRight className="w-3 h-3 flex-shrink-0" />
-                  ) : (
-                    <ChevronDown className="w-3 h-3 flex-shrink-0" />
-                  )}
-                  <div className="min-w-0 flex-1 flex items-center gap-[6px]">
-                    <span className="text-xs text-muted-foreground truncate">
-                      {filePath}
-                    </span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigator.clipboard.writeText(filePath);
-                        addToast({
-                          title: "Copied",
-                          description: "File path copied to clipboard",
-                          type: "success",
-                        });
-                      }}
-                      className="text-muted-foreground hover:text-foreground flex-shrink-0"
-                      title="Copy file path"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-                <div className="flex items-center gap-[8px]">
-                  {/* Viewed checkbox */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (isViewed) {
-                        handleUnmarkFileViewed(filePath);
-                      } else {
-                        handleMarkFileViewed(filePath);
-                      }
-                    }}
-                    className={cn(
-                      "flex items-center gap-[4px] px-[8px] py-[2px] rounded text-xs transition-colors",
-                      isViewed
-                        ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/30"
-                        : "bg-muted hover:bg-accent text-muted-foreground hover:text-foreground"
-                    )}
-                    title={isViewed ? "Mark as not viewed" : "Mark as viewed"}
-                  >
-                    {isViewed ? (
-                      <Check className="w-3 h-3" />
-                    ) : (
-                      <Square className="w-3 h-3" />
-                    )}
-                    <span>Viewed</span>
-                  </button>
-                  {isBinaryFile(filePath) && (
-                    <span className="text-xs px-[8px] py-[2px] rounded bg-zinc-500/20 text-zinc-600 dark:text-zinc-400">
-                      Binary
-                    </span>
-                  )}
-                  {(additions > 0 || deletions > 0) && (
-                    <span className="text-xs font-mono flex items-center gap-[4px]">
-                      <span className="text-emerald-600 dark:text-emerald-400">
-                        +{additions}
-                      </span>
-                      <span className="text-red-600 dark:text-red-400">
-                        -{deletions}
-                      </span>
-                    </span>
-                  )}
-                  {!readOnly && !disableInteractions && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        asChild
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <button className="p-[4px] rounded hover:bg-accent">
-                          <MoreVertical className="w-3 h-3" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" sideOffset={4}>
-                        {file.workspaceStatus && (
-                          <DropdownMenuItem
-                            onSelect={(e) => {
-                              e.preventDefault();
-                              handleStageFile(filePath);
-                            }}
-                            disabled={fileActionTarget === filePath}
-                          >
-                            Stage file
-                          </DropdownMenuItem>
-                        )}
-                        {file.stagedStatus && (
-                          <DropdownMenuItem
-                            onSelect={(e) => {
-                              e.preventDefault();
-                              handleUnstageFile(filePath);
-                            }}
-                            disabled={fileActionTarget === filePath}
-                          >
-                            Unstage file
-                          </DropdownMenuItem>
-                        )}
-                        {(file.workspaceStatus || file.stagedStatus) && (
-                          <DropdownMenuItem
-                            onSelect={(e) => {
-                              e.preventDefault();
-                              handleDiscardFiles(filePath);
-                            }}
-                            disabled={fileActionTarget === filePath}
-                            className="text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
-                          >
-                            {selectedUnstagedFiles.has(filePath) &&
-                            selectedUnstagedFiles.size > 1
-                              ? `Discard ${selectedUnstagedFiles.size} files`
-                              : "Discard file"}
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onSelect={async (e) => {
-                            e.preventDefault();
-                            try {
-                              await openPath(`${workspacePath}/${filePath}`);
-                            } catch (err) {
-                              const msg =
-                                err instanceof Error
-                                  ? err.message
-                                  : String(err);
-                              addToast({
-                                title: "Open Failed",
-                                description: msg,
-                                type: "error",
-                              });
-                            }
-                          }}
-                        >
-                          Edit file
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </div>
-              </div>
-
-              {/* File Hunks - consolidated view without per-hunk collapsible */}
-              {!isCollapsed && (
-                <div
-                  className="bg-background font-mono"
-                  style={{ fontSize: `${diffFontSize}px` }}
-                  onContextMenu={handleContextMenu}
-                  onClick={handleContainerClick}
-                >
-                  {isBinaryFile(filePath) ? (
-                    <div className="flex items-center justify-center py-[32px] text-muted-foreground">
-                      <FileText className="w-5 h-5 mr-[8px] opacity-50" />
-                      <span>Binary file - no diff available</span>
-                    </div>
-                  ) : fileData.isLoading ? (
-                    <div className="flex items-center justify-center py-[32px] text-muted-foreground">
-                      <Loader2 className="w-5 h-5 animate-spin mr-[8px]" />
-                      Loading diff...
-                    </div>
-                  ) : fileData.error ? (
-                    <div className="text-sm text-destructive px-[12px] py-[8px]">
-                      {fileData.error}
-                    </div>
-                  ) : fileData.hunks.length === 0 ? (
-                    <div className="text-sm text-muted-foreground px-[12px] py-[24px] text-center">
-                      No diff hunks available
-                    </div>
-                  ) : additions + deletions > LARGE_DIFF_THRESHOLD &&
-                    !forceRenderedFiles.has(filePath) ? (
-                    <div className="flex items-center justify-center gap-[12px] h-20 text-muted-foreground">
-                      <FileText className="w-5 h-5 opacity-50" />
-                      <span className="text-sm">
-                        Large diff ({additions + deletions} lines)
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setForceRenderedFiles((prev) =>
-                            new Set(prev).add(filePath)
-                          )
-                        }
-                      >
-                        View changes
-                      </Button>
-                    </div>
-                  ) : (
-                    // Render all hunks directly
-                    fileData.hunks.map((hunk, hunkIndex) =>
-                      renderHunkLines(hunk, hunkIndex, filePath)
-                    )
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        }
-      );
-
-      FileRowComponent.displayName = "FileRowComponent";
+      // Note: FileRowComponent extracted outside for performance
 
       return (
         <div className="flex h-full overflow-hidden">
@@ -3234,41 +2052,45 @@ export const ChangesDiffViewer = memo(
             <CommitInput
               ref={commitInputRef}
               onCommit={handleCommit}
-              onCommitAmend={handleCommitAmend}
-              onCommitAndPush={handleCommitAndPush}
-              onCommitAndSync={handleCommitAndSync}
-              stagedFilesCount={stagedFiles.length}
-              disabled={readOnly || disableInteractions}
+              disabled={readOnly}
               pending={commitPending}
-              actionPending={actionPending}
             />
             <div className="flex-1 overflow-y-auto px-4 pb-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full">
-              <ConflictsSection
-                files={conflictedFiles}
-                isCollapsed={collapsedSections.has("conflicts")}
-                onToggleCollapse={() => toggleSectionCollapse("conflicts")}
-                onFileSelect={(path) => setActiveFilePath(path)}
-                activeFilePath={activeFilePath}
-              />
-              {stagedFiles.length === 0 && unstagedFiles.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-center py-12">
-                  <CheckCircle2 className="w-12 h-12 text-muted-foreground/40 mb-3" />
-                  <p className="text-sm text-muted-foreground">No changes</p>
+              {initialLoading ? (
+                <div className="flex items-center justify-center h-full">
+                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                 </div>
               ) : (
-                <ChangesSection
-                  title="Changes"
-                  files={[...stagedFiles, ...unstagedFiles]}
-                  isCollapsed={collapsedSections.has("changes")}
-                  onToggleCollapse={() => toggleSectionCollapse("changes")}
-                  fileActionTarget={fileActionTarget}
-                  readOnly={readOnly || disableInteractions}
-                  activeFilePath={activeFilePath}
-                  selectedFiles={selectedUnstagedFiles}
-                  onFileSelect={handleFileSelect}
-                  onMoveToWorkspace={() => setMoveDialogOpen(true)}
-                  onDiscardAll={handleDiscardAll}
-                />
+                <>
+                  <ConflictsSection
+                    files={conflictedFiles}
+                    isCollapsed={collapsedSections.has("conflicts")}
+                    onToggleCollapse={() => toggleSectionCollapse("conflicts")}
+                    onFileSelect={(path) => setActiveFilePath(path)}
+                    activeFilePath={activeFilePath}
+                  />
+                  {files.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-center py-12">
+                      <CheckCircle2 className="w-12 h-12 text-muted-foreground/40 mb-3" />
+                      <p className="text-sm text-muted-foreground">
+                        No changes
+                      </p>
+                    </div>
+                  ) : (
+                    <ChangesSection
+                      title="Changes"
+                      files={files}
+                      isCollapsed={collapsedSections.has("changes")}
+                      onToggleCollapse={() => toggleSectionCollapse("changes")}
+                      fileActionTarget={fileActionTarget}
+                      activeFilePath={activeFilePath}
+                      selectedFiles={selectedUnstagedFiles}
+                      onFileSelect={handleFileSelect}
+                      onMoveToWorkspace={() => setMoveDialogOpen(true)}
+                      onDiscardAll={handleDiscardAll}
+                    />
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -3299,7 +2121,7 @@ export const ChangesDiffViewer = memo(
                         <h4 className="font-medium text-sm mb-1">
                           Finish your review
                         </h4>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-sm text-muted-foreground">
                           {comments.length} comment
                           {comments.length !== 1 ? "s" : ""} will be submitted.
                         </p>
@@ -3348,7 +2170,7 @@ export const ChangesDiffViewer = memo(
                     {staleFiles.size} file{staleFiles.size !== 1 ? "s" : ""}{" "}
                     changed since you started reviewing
                   </span>
-                  <span className="text-xs text-amber-600/70 dark:text-amber-400/70">
+                  <span className="text-sm text-amber-600/70 dark:text-amber-400/70">
                     ({Array.from(staleFiles).slice(0, 3).join(", ")}
                     {staleFiles.size > 3 ? ` +${staleFiles.size - 3} more` : ""}
                     )
@@ -3366,9 +2188,9 @@ export const ChangesDiffViewer = memo(
               </div>
             )}
 
-            {/* All Files Diffs - Virtualized */}
+            {/* All Files Diffs */}
             <div className="flex-1 overflow-hidden">
-              {loadingAllHunks ? (
+              {initialLoading || loadingAllHunks ? (
                 <div className="h-full flex items-center justify-center text-muted-foreground">
                   <Loader2 className="w-6 h-6 animate-spin" />
                   <span className="ml-2">Loading diffs...</span>
@@ -3379,66 +2201,73 @@ export const ChangesDiffViewer = memo(
                   <p className="text-sm">No changes to review</p>
                 </div>
               ) : (
-                <div ref={diffContainerRef} className="h-full overflow-y-auto">
-                  <div className="p-4 space-y-4">
-                    {files.map((file) => {
-                      const filePath = file.path;
-                      const isRendered = renderedFiles.has(filePath);
-
-                      if (!isRendered) {
-                        return (
-                          <FilePlaceholder
-                            key={filePath}
-                            filePath={filePath}
-                            height={collapsedFiles.has(filePath) ? 48 : 128}
-                          />
-                        );
+                (() => {
+                  // Calculate total lines across all files
+                  let totalLines = 0;
+                  for (const [_, fileData] of allFileHunks) {
+                    if (!fileData.isLoading && fileData.hunks) {
+                      for (const hunk of fileData.hunks) {
+                        totalLines += hunk.lines.length;
                       }
+                    }
+                  }
 
-                      return (
-                        <FileRowComponent
-                          key={filePath}
-                          file={file}
-                          allFileHunks={allFileHunks}
-                          collapsedFiles={collapsedFiles}
-                          viewedFiles={viewedFiles}
-                          forceRenderedFiles={forceRenderedFiles}
-                          diffFontSize={diffFontSize}
-                          readOnly={readOnly}
-                          disableInteractions={disableInteractions}
-                          fileActionTarget={fileActionTarget}
-                          selectedUnstagedFiles={selectedUnstagedFiles}
-                          workspacePath={workspacePath}
-                          toggleFileCollapse={toggleFileCollapse}
-                          handleMarkFileViewed={handleMarkFileViewed}
-                          handleUnmarkFileViewed={handleUnmarkFileViewed}
-                          handleStageFile={handleStageFile}
-                          handleUnstageFile={handleUnstageFile}
-                          handleDiscardFiles={handleDiscardFiles}
-                          setForceRenderedFiles={setForceRenderedFiles}
-                          handleContextMenu={handleContextMenu}
-                          handleContainerClick={handleContainerClick}
-                          renderHunkLines={renderHunkLines}
-                          addToast={addToast}
-                        />
-                      );
-                    })}
-
-                    {/* Load More Files Button */}
-                    {renderedFiles.size < files.length && (
-                      <div className="flex justify-center pt-4">
+                  // If total lines exceed 1000 and not expanded, show a button
+                  if (totalLines > 1000 && !largeChangesetExpanded) {
+                    return (
+                      <div className="h-full flex flex-col items-center justify-center gap-4 text-muted-foreground">
+                        <FileText className="w-12 h-12 opacity-50" />
+                        <div className="text-center">
+                          <p className="font-medium mb-1">Large changeset</p>
+                          <p className="text-sm">
+                            {totalLines} lines across {files.length} file
+                            {files.length !== 1 ? "s" : ""}
+                          </p>
+                        </div>
                         <Button
                           variant="outline"
-                          onClick={loadMoreFiles}
-                          className="gap-2"
+                          onClick={() => setLargeChangesetExpanded(true)}
                         >
-                          Load Next 10 Files (
-                          {files.length - renderedFiles.size} remaining)
+                          View changes
                         </Button>
                       </div>
-                    )}
-                  </div>
-                </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      ref={diffContainerRef}
+                      className="h-full overflow-y-auto"
+                    >
+                      <div className="p-4 space-y-4">
+                        {files.map((file) => (
+                          <FileRowComponent
+                            key={file.path}
+                            file={file}
+                            allFileHunks={allFileHunks}
+                            collapsedFiles={collapsedFiles}
+                            viewedFiles={viewedFiles}
+                            expandedLargeDiffs={expandedLargeDiffs}
+                            diffFontSize={diffFontSize}
+                            readOnly={readOnly}
+                            fileActionTarget={fileActionTarget}
+                            selectedUnstagedFiles={selectedUnstagedFiles}
+                            workspacePath={workspacePath}
+                            toggleFileCollapse={toggleFileCollapse}
+                            toggleLargeDiff={toggleLargeDiff}
+                            handleMarkFileViewed={handleMarkFileViewed}
+                            handleUnmarkFileViewed={handleUnmarkFileViewed}
+                            handleDiscardFiles={handleDiscardFiles}
+                            handleContextMenu={handleContextMenu}
+                            handleContainerClick={handleContainerClick}
+                            renderHunkLines={renderHunkLines}
+                            addToast={addToast}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()
               )}
             </div>
           </div>
@@ -3455,42 +2284,6 @@ export const ChangesDiffViewer = memo(
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
-                {diffLineSelection.lines.some(
-                  (l) =>
-                    !l.isStaged &&
-                    (l.content.startsWith("+") || l.content.startsWith("-"))
-                ) && (
-                  <button
-                    className="w-full px-3 py-1.5 text-sm text-left hover:bg-accent flex items-center gap-2 disabled:opacity-50"
-                    onClick={handleStageSelectedLines}
-                    disabled={stagingLines}
-                  >
-                    {stagingLines ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Plus className="w-4 h-4" />
-                    )}
-                    Stage selected lines
-                  </button>
-                )}
-                {diffLineSelection.lines.some(
-                  (l) =>
-                    l.isStaged &&
-                    (l.content.startsWith("+") || l.content.startsWith("-"))
-                ) && (
-                  <button
-                    className="w-full px-3 py-1.5 text-sm text-left hover:bg-accent flex items-center gap-2 disabled:opacity-50"
-                    onClick={handleUnstageSelectedLines}
-                    disabled={stagingLines}
-                  >
-                    {stagingLines ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Minus className="w-4 h-4" />
-                    )}
-                    Unstage selected lines
-                  </button>
-                )}
                 <button
                   className="w-full px-3 py-1.5 text-sm text-left hover:bg-accent flex items-center gap-2"
                   onClick={handleAddCommentFromSelection}

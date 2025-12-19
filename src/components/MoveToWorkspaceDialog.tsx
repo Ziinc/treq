@@ -17,7 +17,6 @@ import {
   jjSquashToWorkspace,
   addWorkspaceToDb,
   getRepoSetting,
-  gitExecutePostCreateCommand,
 } from "../lib/api";
 import { ChevronDown, ChevronRight, FileText } from "lucide-react";
 
@@ -144,38 +143,11 @@ export const MoveToWorkspaceDialog: React.FC<MoveToWorkspaceDialogProps> = ({
 
       const workspaceId = await addWorkspaceToDb(repoPath, branchName, workspacePath, branchName, metadata);
 
-      // Step 5: Execute post-create command if configured
-      const postCreateCmd = await getRepoSetting(repoPath, "post_create_command");
-      if (postCreateCmd && postCreateCmd.trim()) {
-        try {
-          addToast({
-            title: "Running post-create command...",
-            description: "Executing setup command in workspace",
-            type: "info",
-          });
-
-          await gitExecutePostCreateCommand(workspacePath, postCreateCmd);
-
-          addToast({
-            title: "Files moved successfully",
-            description: `${selectedFiles.length} file(s) moved to ${branchName}`,
-            type: "success",
-          });
-        } catch (cmdError) {
-          console.error("Post-create command failed:", cmdError);
-          addToast({
-            title: "Files moved",
-            description: `Post-create command failed: ${cmdError}`,
-            type: "warning",
-          });
-        }
-      } else {
-        addToast({
-          title: "Files moved successfully",
-          description: `${selectedFiles.length} file(s) moved to ${branchName}`,
-          type: "success",
-        });
-      }
+      addToast({
+        title: "Files moved successfully",
+        description: `${selectedFiles.length} file(s) moved to ${branchName}`,
+        type: "success",
+      });
 
       onSuccess({
         id: workspaceId,
@@ -220,7 +192,7 @@ export const MoveToWorkspaceDialog: React.FC<MoveToWorkspaceDialogProps> = ({
               {displayedFiles.map((file) => (
                 <div
                   key={file}
-                  className="px-3 py-1.5 text-xs flex items-center gap-2 border-b border-border/50 last:border-0"
+                  className="px-3 py-1.5 text-sm flex items-center gap-2 border-b border-border/50 last:border-0"
                 >
                   <FileText className="w-3 h-3 text-muted-foreground flex-shrink-0" />
                   <span className="truncate font-mono">{file}</span>
@@ -230,7 +202,7 @@ export const MoveToWorkspaceDialog: React.FC<MoveToWorkspaceDialogProps> = ({
             {hasMoreFiles && (
               <button
                 type="button"
-                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
                 onClick={() => setShowAllFiles(!showAllFiles)}
               >
                 {showAllFiles ? (
@@ -259,7 +231,7 @@ export const MoveToWorkspaceDialog: React.FC<MoveToWorkspaceDialogProps> = ({
               rows={3}
               className="resize-none"
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Describe what you plan to implement with these files
             </p>
           </div>
@@ -276,7 +248,7 @@ export const MoveToWorkspaceDialog: React.FC<MoveToWorkspaceDialogProps> = ({
               }}
               placeholder={branchPattern.replace("{name}", "example")}
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Pattern: {branchPattern} (configure in Repository Settings)
             </p>
           </div>

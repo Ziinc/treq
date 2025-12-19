@@ -1,4 +1,4 @@
-import type { ReviewComment } from "./MergeReviewPage";
+import type { ReviewComment } from "./AnnotatableDiffViewer";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
 import { MessageCircle, Trash2 } from "lucide-react";
@@ -37,10 +37,10 @@ export const ReviewSummaryPanel: React.FC<ReviewSummaryPanelProps> = ({
     <div className="h-full flex flex-col border-l bg-card">
       <div className="p-4 border-b space-y-2">
         <div>
-          <p className="text-xs text-muted-foreground">Reviewing</p>
+          <p className="text-sm text-muted-foreground">Reviewing</p>
           <p className="font-medium text-sm">{workspaceBranch} → {baseBranch}</p>
         </div>
-        <div className="text-xs text-muted-foreground">
+        <div className="text-sm text-muted-foreground">
           {commitCount} commit{commitCount === 1 ? "" : "s"}
         </div>
       </div>
@@ -49,10 +49,10 @@ export const ReviewSummaryPanel: React.FC<ReviewSummaryPanelProps> = ({
         <div>
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-semibold">Line Comments</span>
-            <span className="text-xs text-muted-foreground">{comments.length}</span>
+            <span className="text-sm text-muted-foreground">{comments.length}</span>
           </div>
           {comments.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               No inline comments yet. Click on a line number to leave feedback.
             </p>
           ) : (
@@ -61,7 +61,7 @@ export const ReviewSummaryPanel: React.FC<ReviewSummaryPanelProps> = ({
                 <div
                   key={comment.id}
                   className={cn(
-                    "border rounded-md p-2 text-xs space-y-1",
+                    "border rounded-md p-2 text-sm space-y-1",
                     selectedCommentId === comment.id && "border-primary"
                   )}
                 >
@@ -108,7 +108,7 @@ export const ReviewSummaryPanel: React.FC<ReviewSummaryPanelProps> = ({
       </div>
 
       <div className="border-t p-4 space-y-3">
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Merge or send feedback to terminal
         </p>
         <div className="flex flex-col gap-2">

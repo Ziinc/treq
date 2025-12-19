@@ -6,7 +6,6 @@ import {
   Settings,
   GitBranch,
   Terminal,
-  ArrowRight,
 } from "lucide-react";
 
 interface CommandItem {
@@ -120,26 +119,19 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     return result;
   }, [workspaces, sessions, onNavigateToDashboard, onNavigateToSettings, onOpenWorkspaceSession, onOpenSession, onOpenBranchSwitcher, onOpenChange, repoPath]);
 
-  // Group items by type
-  const groupedByType = useMemo(() => ({
-    actions: items.filter(i => i.type === "action"),
-    workspaces: items.filter(i => i.type === "workspace"),
-    sessions: items.filter(i => i.type === "session")
-  }), [items]);
-
   // Render a command item
   const renderItem = (item: CommandItem) => (
     <Command.Item
       key={item.id}
       value={item.label}
       onSelect={item.onSelect}
-      className="px-3 py-2 mx-2 rounded-md flex items-center gap-3 cursor-pointer text-foreground aria-selected:bg-accent/50 aria-selected:text-foreground data-[disabled]:opacity-50 data-[disabled]:pointer-events-none hover:bg-accent/30 transition-colors"
+      className="px-3 py-1.5 mx-2 rounded-md flex items-center gap-3 cursor-pointer text-foreground aria-selected:bg-accent/50 aria-selected:text-foreground data-[disabled]:opacity-50 data-[disabled]:pointer-events-none hover:bg-accent/30 transition-colors"
     >
       <span className="text-muted-foreground">{item.icon}</span>
       <div className="flex-1 min-w-0">
         <div className="truncate text-sm font-medium">{item.label}</div>
         {item.description && (
-          <div className="truncate text-xs text-muted-foreground">
+          <div className="truncate text-sm text-muted-foreground">
             {item.description}
           </div>
         )}
@@ -157,7 +149,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       <div className="bg-background text-foreground rounded-xl border border-border shadow-2xl w-[40vw] max-w-none overflow-hidden">
         {/* Search Input */}
         <div className="flex items-center border-b border-border px-3 bg-background">
-          <ArrowRight className="w-4 h-4 text-muted-foreground mr-2" />
           <Command.Input
             placeholder="Type a command or search..."
             className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 h-12 flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground text-foreground"
@@ -172,30 +163,12 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             </div>
           </Command.Empty>
 
-          {/* Actions Group */}
-          {groupedByType.actions.length > 0 && (
-            <Command.Group heading="Actions">
-              {groupedByType.actions.map(renderItem)}
-            </Command.Group>
-          )}
-
-          {/* Workspaces Group */}
-          {groupedByType.workspaces.length > 0 && (
-            <Command.Group heading="Workspaces">
-              {groupedByType.workspaces.map(renderItem)}
-            </Command.Group>
-          )}
-
-          {/* Sessions Group */}
-          {groupedByType.sessions.length > 0 && (
-            <Command.Group heading="Sessions">
-              {groupedByType.sessions.map(renderItem)}
-            </Command.Group>
-          )}
+          {/* Flat list of all items */}
+          {items.map(renderItem)}
         </Command.List>
 
         {/* Footer with keyboard hints */}
-        <div className="border-t border-border px-3 py-2 flex items-center justify-between text-xs text-muted-foreground">
+        <div className="border-t border-border px-3 py-2 flex items-center justify-between text-sm text-muted-foreground">
           <div className="flex items-center gap-3">
             <span><kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">↑↓</kbd> Navigate</span>
             <span><kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">↵</kbd> Select</span>

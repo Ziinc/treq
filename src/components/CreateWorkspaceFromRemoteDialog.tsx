@@ -14,9 +14,7 @@ import { sanitizeForBranchName } from "../lib/utils";
 import {
   gitListRemotes,
   jjCreateWorkspace,
-  addWorkspaceToDb,
-  getRepoSetting,
-  gitExecutePostCreateCommand,
+  addWorkspaceToDb
 } from "../lib/api";
 import { Loader2 } from "lucide-react";
 
@@ -114,38 +112,11 @@ export const CreateWorkspaceFromRemoteDialog: React.FC<CreateWorkspaceFromRemote
         metadata
       );
 
-      // Get and execute post-create command if configured
-      const postCreateCmd = await getRepoSetting(repoPath, "post_create_command");
-      if (postCreateCmd && postCreateCmd.trim()) {
-        try {
-          addToast({
-            title: "Running post-create command...",
-            description: "Executing setup command in workspace",
-            type: "info",
-          });
-
-          await gitExecutePostCreateCommand(workspacePath, postCreateCmd);
-
-          addToast({
-            title: "Workspace created successfully",
-            description: `Created workspace from ${remoteBranchRef}`,
-            type: "success",
-          });
-        } catch (cmdError) {
-          console.error("Post-create command failed:", cmdError);
-          addToast({
-            title: "Workspace created",
-            description: `Post-create command failed: ${cmdError}`,
-            type: "warning",
-          });
-        }
-      } else {
-        addToast({
-          title: "Workspace created successfully",
-          description: `Created workspace from ${remoteBranchRef}`,
-          type: "success",
-        });
-      }
+      addToast({
+        title: "Workspace created successfully",
+        description: `Created workspace from ${remoteBranchRef}`,
+        type: "success",
+      });
 
       // Reset form
       setBranchName("");
@@ -192,7 +163,7 @@ export const CreateWorkspaceFromRemoteDialog: React.FC<CreateWorkspaceFromRemote
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 Select the remote to fetch the branch from
               </p>
             </div>
@@ -207,7 +178,7 @@ export const CreateWorkspaceFromRemoteDialog: React.FC<CreateWorkspaceFromRemote
               placeholder="e.g., feature/my-branch"
               disabled={loadingRemotes}
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Enter the name of the remote branch (without remote prefix)
             </p>
           </div>

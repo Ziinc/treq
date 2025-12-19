@@ -20,6 +20,9 @@ export const ResizeDivider = memo<ResizeDividerProps>(function ResizeDivider({
   useEffect(() => {
     if (!isDragging) return;
 
+    document.body.style.cursor = "ew-resize";
+    document.body.style.userSelect = "none";
+
     const handleMouseMove = (e: MouseEvent) => {
       const deltaX = e.clientX - lastXRef.current;
       lastXRef.current = e.clientX;
@@ -35,19 +38,10 @@ export const ResizeDivider = memo<ResizeDividerProps>(function ResizeDivider({
     return () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [isDragging, onResize]);
-
-  // Set cursor during drag
-  useEffect(() => {
-    if (isDragging) {
-      document.body.style.cursor = "ew-resize";
-      document.body.style.userSelect = "none";
-    } else {
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
-    }
-  }, [isDragging]);
+    };
+  }, [isDragging, onResize]);
 
   return (
     <div

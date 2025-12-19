@@ -2,8 +2,21 @@ import { useEffect, useState } from "react";
 import { Terminal } from "./Terminal";
 import { Button } from "./ui/button";
 import { X, GitBranch } from "lucide-react";
-import { Workspace, BranchInfo, BranchDivergence, gitGetBranchInfo, gitGetBranchDivergence, getSetting } from "../lib/api";
+import { Workspace, getSetting } from "../lib/api";
 import { cn } from "../lib/utils";
+
+// Define types locally since git API was removed
+interface BranchInfo {
+  name: string;
+  ahead: number;
+  behind: number;
+  upstream?: string;
+}
+
+interface BranchDivergence {
+  ahead: number;
+  behind: number;
+}
 
 interface WorkspaceEditSessionProps {
   workspace: Workspace;
@@ -54,60 +67,11 @@ export const WorkspaceEditSession: React.FC<WorkspaceEditSessionProps> = ({
         return;
       }
 
-      try {
-        const info = await gitGetBranchInfo(workspace.workspace_path);
-        if (!isCancelled) {
-          setRemoteBranchInfo(info);
-        }
-      } catch {
-        if (!isCancelled) {
-          setRemoteBranchInfo(null);
-        }
-      }
-
-      if (!mainRepoPath) {
-        if (!isCancelled) {
-          setMainBranchName(null);
-          setMainDivergence(null);
-        }
-        return;
-      }
-
-      let baseBranchName = "";
-      try {
-        const baseInfo = await gitGetBranchInfo(mainRepoPath);
-        if (isCancelled) {
-          return;
-        }
-        baseBranchName = baseInfo.name.trim();
-        setMainBranchName(baseInfo.name);
-      } catch {
-        if (!isCancelled) {
-          setMainBranchName(null);
-          setMainDivergence(null);
-        }
-        return;
-      }
-
-      if (!baseBranchName) {
-        if (!isCancelled) {
-          setMainDivergence(null);
-        }
-        return;
-      }
-
-      try {
-        const divergence = await gitGetBranchDivergence(
-          mainRepoPath,
-          workspace.branch_name
-        );
-        if (!isCancelled) {
-          setMainDivergence(divergence);
-        }
-      } catch {
-        if (!isCancelled) {
-          setMainDivergence(null);
-        }
+      // Note: Branch info loading would need JJ equivalents
+      if (!isCancelled) {
+        setRemoteBranchInfo(null);
+        setMainBranchName(null);
+        setMainDivergence(null);
       }
     };
 
@@ -142,7 +106,7 @@ export const WorkspaceEditSession: React.FC<WorkspaceEditSessionProps> = ({
         </div>
 
         {/* Status indicators */}
-        <div className="flex items-start gap-3 text-xs text-muted-foreground">
+        <div className="flex items-start gap-3 text-sm text-muted-foreground">
           <span className="inline-flex items-center gap-1 font-mono text-foreground">
             <GitBranch className="w-3 h-3" />
             <span className="font-semibold block max-w-[160px] truncate" title={workspace.branch_name}>

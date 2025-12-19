@@ -5,7 +5,8 @@ import {
   FileText,
   Loader2,
   AlertCircle,
-  Plus,
+  Copy,
+  Check,
 } from "lucide-react";
 import { List } from "react-window";
 import type { Workspace, DirectoryEntry } from "../lib/api";
@@ -13,29 +14,33 @@ import {
   listDirectory,
   listDirectoryCached,
   readFile,
-  gitGetFileHunks,
+  jjGetFileHunks,
+  jjGetChangedFiles,
 } from "../lib/api";
 import { cn } from "../lib/utils";
-import { Button } from "./ui/button";
-import { Textarea } from "./ui/textarea";
-import { isBinaryFile, type ParsedFileChange } from "../lib/git-utils";
 import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
 import { useToast } from "./ui/toast";
-import { useWorkspaceGitStatus } from "../hooks/useWorkspaceGitStatus";
-import { getFileStatusTextColor } from "../lib/git-status-colors";
-import { useChangedFiles } from "../hooks/useChangedFiles";
+import { getFileStatusTextColor, getStatusBgColor } from "../lib/git-status-colors";
+import { useTerminalSettings } from "../hooks/useTerminalSettings";
+import { parseJjChangedFiles, type ParsedFileChange } from "../lib/git-utils";
 
-interface FileBrowserProps {
-  workspace?: Workspace;
-  repoPath?: string;
-  mainBranch?: string;
-  initialSelectedFile?: string;
-  initialExpandedDir?: string;
+// Helper to check if file is binary
+function isBinaryFile(path: string): boolean {
+  const binaryExtensions = [
+    '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.svg',
+    '.pdf', '.zip', '.tar', '.gz', '.rar', '.7z',
+    '.exe', '.dll', '.so', '.dylib',
+    '.mp3', '.mp4', '.avi', '.mov', '.wmv',
+    '.woff', '.woff2', '.ttf', '.eot'
+  ];
+  return binaryExtensions.some(ext => path.toLowerCase().endsWith(ext));
 }
 
-interface LineSelection {
-  startLine: number;
-  endLine: number;
+interface FileBrowserProps {
+  workspace: Workspace | null;
+  repoPath: string | null;
+  initialSelectedFile: string | null;
+  initialExpandedDir: string | null;
 }
 
 // Filter out .git and .treq files/directories (but keep .github, .gitignore, etc.)
@@ -48,23 +53,350 @@ function filterHiddenEntries(entries: DirectoryEntry[]): DirectoryEntry[] {
 
 // Virtualization constants
 const LINE_HEIGHT = 24;
-const COMMENT_INPUT_HEIGHT = 180;
+
+// TreeNode component - memoized to prevent unnecessary re-renders
+interface TreeNodeProps {
+  entry: DirectoryEntry;
+  depth: number;
+  isExpanded: boolean;
+  children: DirectoryEntry[];
+  hasChanges: boolean;
+  selectedFile: string | null;
+  changedFiles: Map<string, ParsedFileChange>;
+  onDirectoryClick: (path: string) => void;
+  onFileClick: (path: string) => void;
+  getDirectoryChangeStatus: (path: string) => ParsedFileChange | undefined;
+  renderChildren: (entry: DirectoryEntry, depth: number) => JSX.Element;
+  fontSize: number;
+}
+
+// CodeLine component - memoized individual line to prevent re-renders
+interface CodeLineProps {
+  lineNum: number;
+  htmlContent: string;
+  diffStatus: "add" | "modify" | "delete" | undefined;
+  hasDeletionMarker: boolean;
+  lineNumberWidth: number;
+  language: string | null;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+  style: React.CSSProperties;
+  fontSize: number;
+}
+
+const CodeLine = memo(function CodeLine({
+  lineNum,
+  htmlContent,
+  diffStatus,
+  hasDeletionMarker,
+  lineNumberWidth,
+  language,
+  onMouseEnter,
+  onMouseLeave,
+  style,
+  fontSize,
+}: CodeLineProps) {
+  return (
+    <div style={style}>
+      <div
+        className={cn(
+          "flex items-center group relative hover:bg-muted/30 transition-colors text-sm font-mono leading-normal",
+          diffStatus === "add" && "bg-emerald-500/10"
+        )}
+        style={{ height: LINE_HEIGHT }}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
+      >
+        {diffStatus && (
+          <span
+            className={cn(
+              "absolute left-0 w-1 h-full",
+              diffStatus === "add" && "bg-emerald-500",
+              diffStatus === "modify" && "bg-yellow-500",
+              diffStatus === "delete" && "bg-red-500"
+            )}
+          />
+        )}
+        {/* Deletion marker - shown between lines where content was deleted */}
+        {hasDeletionMarker && (
+          <span
+            className="absolute left-0 bottom-0 w-2 h-[3px] bg-red-500"
+            style={{
+              clipPath: "polygon(0 0, 100% 50%, 0 100%)",
+              transform: "translateY(50%)",
+            }}
+            title="Lines deleted here"
+          />
+        )}
+        {/* Line number */}
+        <span
+          className="select-none text-muted-foreground/50 pr-2 text-right"
+          style={{
+            minWidth: `${lineNumberWidth}ch`,
+            paddingLeft: diffStatus ? "4px" : "0",
+          }}
+        >
+          {lineNum}
+        </span>
+        {/* Code content */}
+        <span
+          className="flex-1 whitespace-pre"
+          style={{ fontSize: `${fontSize}px` }}
+          dangerouslySetInnerHTML={{ __html: htmlContent }}
+        />
+      </div>
+    </div>
+  );
+});
+
+// FileContentView component - memoized file content panel
+interface FileContentViewProps {
+  selectedFile: string | null;
+  isLoadingFile: boolean;
+  fileContent: string;
+  fileContentData: {
+    lines: string[];
+    rawLines: string[];
+    lineNumberWidth: number;
+    language: string | null;
+  } | null;
+  basePath: string;
+  fileHunks: Map<number, "add" | "modify" | "delete">;
+  deletionMarkers: Set<number>;
+  getItemHeight: () => number;
+  onSetHoveredLine: (lineNum: number | null) => void;
+  fontSize: number;
+}
+
+const FileContentView = memo(function FileContentView({
+  selectedFile,
+  isLoadingFile,
+  fileContent,
+  fileContentData,
+  basePath,
+  fileHunks,
+  deletionMarkers,
+  getItemHeight,
+  onSetHoveredLine,
+  fontSize,
+}: FileContentViewProps) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    if (!fileContentData) return;
+    try {
+      await navigator.clipboard.writeText(fileContentData.rawLines.join("\n"));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error("Failed to copy:", error);
+    }
+  }, [fileContentData]);
+
+  if (!selectedFile) {
+    return (
+      <div className="flex items-center justify-center h-full text-muted-foreground">
+        Select a file to view its contents
+      </div>
+    );
+  }
+
+  if (isBinaryFile(selectedFile)) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
+        <AlertCircle className="w-8 h-8" />
+        <p>Binary file - cannot display</p>
+        <p className="text-sm">{selectedFile.split("/").pop()}</p>
+      </div>
+    );
+  }
+
+  if (isLoadingFile) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!fileContent || !fileContentData) {
+    return (
+      <div className="flex items-center justify-center h-full text-muted-foreground">
+        Failed to load file content
+      </div>
+    );
+  }
+
+  const { lines, lineNumberWidth, language } = fileContentData;
+
+  return (
+    <div className="h-full flex flex-col bg-[hsl(var(--code-background))]">
+      <div className="px-4 pt-4 pb-2 border-b border-border flex items-center justify-between">
+        <div className="text-sm text-muted-foreground font-mono" style={{ fontSize: `${fontSize}px` }}>
+          <span>
+            {selectedFile.startsWith(basePath + "/")
+              ? selectedFile.slice(basePath.length + 1)
+              : selectedFile}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="p-1 hover:bg-muted rounded transition-colors text-muted-foreground hover:text-foreground"
+          title="Copy file contents"
+        >
+          {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+        </button>
+      </div>
+      <div className="flex-1 overflow-hidden">
+        <List
+          style={{ height: window.innerHeight, width: "100%" }}
+          className="px-4 pb-4"
+          rowCount={lines.length}
+          rowHeight={getItemHeight}
+          rowComponent={({
+            index,
+            style,
+          }: {
+            index: number;
+            style: React.CSSProperties;
+          }) => {
+            const lineNum = index + 1;
+            const line = lines[index];
+            const diffStatus = fileHunks.get(lineNum);
+            const hasDeletionMarker = deletionMarkers.has(lineNum);
+
+            return (
+              <CodeLine
+                lineNum={lineNum}
+                htmlContent={line}
+                diffStatus={diffStatus}
+                hasDeletionMarker={hasDeletionMarker}
+                lineNumberWidth={lineNumberWidth}
+                language={language}
+                onMouseEnter={() => onSetHoveredLine(lineNum)}
+                onMouseLeave={() => onSetHoveredLine(null)}
+                style={style}
+                fontSize={fontSize}
+              />
+            );
+          }}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          rowProps={{} as any}
+        />
+      </div>
+    </div>
+  );
+});
+
+const TreeNode = memo(function TreeNode({
+  entry,
+  depth,
+  isExpanded,
+  children,
+  hasChanges,
+  selectedFile,
+  changedFiles,
+  onDirectoryClick,
+  onFileClick,
+  getDirectoryChangeStatus,
+  renderChildren,
+  fontSize,
+}: TreeNodeProps) {
+  if (entry.is_directory) {
+    return (
+      <div key={entry.path} className="text-sm">
+        <button
+          type="button"
+          className={cn(
+            "flex items-center gap-2 w-full px-2 py-1 rounded-md hover:bg-muted/60 transition",
+            "text-left"
+          )}
+          style={{ paddingLeft: `${depth * 16 + 8}px` }}
+          onClick={() => onDirectoryClick(entry.path)}
+        >
+          {isExpanded ? (
+            <FolderOpen className="w-4 h-4 flex-shrink-0" />
+          ) : (
+            <Folder className="w-4 h-4 flex-shrink-0" />
+          )}
+          <span
+            className={cn(
+              "font-medium truncate font-mono text-sm",
+              getFileStatusTextColor(getDirectoryChangeStatus(entry.path)?.workspaceStatus)
+            )}
+          >
+            {entry.name}
+          </span>
+          {hasChanges && (
+            <span
+              className="w-2 h-2 rounded-full flex-shrink-0 bg-yellow-500 ml-auto"
+              title="Contains modified files"
+            />
+          )}
+        </button>
+        {isExpanded && children.length > 0 && (
+          <div>
+            {children
+              .sort((a, b) => {
+                // Directories first, then alphabetically
+                if (a.is_directory === b.is_directory) {
+                  return a.name.localeCompare(b.name);
+                }
+                return a.is_directory ? -1 : 1;
+              })
+              .map((child) => renderChildren(child, depth + 1))}
+          </div>
+        )}
+        {isExpanded && children.length === 0 && (
+          <div
+            className="text-sm text-muted-foreground px-2 py-1"
+            style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
+          >
+            Empty directory
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // File node
+  const fileStatus = changedFiles.get(entry.path);
+  const status = fileStatus?.workspaceStatus;
+  return (
+    <button
+      key={entry.path}
+      type="button"
+      onClick={() => onFileClick(entry.path)}
+      className={cn(
+        "w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm transition",
+        "hover:bg-muted/60 text-left",
+        selectedFile === entry.path && "bg-primary/10"
+      )}
+      style={{ paddingLeft: `${depth * 16 + 8}px` }}
+    >
+      <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+      <span className={cn("truncate font-mono text-sm", getFileStatusTextColor(status))}>
+        {entry.name}
+      </span>
+      {status && (
+        <span
+          className={cn("w-2 h-2 rounded-full flex-shrink-0 ml-auto", getStatusBgColor(status))}
+          title={status === "M" ? "Modified" : status === "A" ? "Added" : status === "D" ? "Deleted" : "Changed"}
+        />
+      )}
+    </button>
+  );
+});
 
 export const FileBrowser = memo(function FileBrowser({
   workspace,
   repoPath,
-  mainBranch,
   initialSelectedFile,
   initialExpandedDir,
 }: FileBrowserProps) {
   // Determine the path and branch to use
   const basePath = workspace?.workspace_path ?? repoPath ?? "";
-
-  // Get git status for workspace
-  useWorkspaceGitStatus(workspace?.workspace_path, {
-    refetchInterval: 30000,
-    baseBranch: mainBranch,
-  });
 
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(
     new Set([basePath])
@@ -77,70 +409,53 @@ export const FileBrowser = memo(function FileBrowser({
   const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [isLoadingDir, setIsLoadingDir] = useState(false);
   const [rootEntries, setRootEntries] = useState<DirectoryEntry[]>([]);
-  const changedFiles = useChangedFiles(basePath);
+  const [changedFiles, setChangedFiles] = useState<Map<string, ParsedFileChange>>(new Map());
   const [fileHunks, setFileHunks] = useState<
     Map<number, "add" | "modify" | "delete">
   >(new Map());
   const [deletionMarkers, setDeletionMarkers] = useState<Set<number>>(
     new Set()
   );
-  const [lineSelection, setLineSelection] = useState<LineSelection | null>(
-    null
-  );
-  const [isSelecting, setIsSelecting] = useState(false);
-  const [selectionAnchor, setSelectionAnchor] = useState<number | null>(null);
-  const [showCommentInput, setShowCommentInput] = useState(false);
-  const [pendingComment, setPendingComment] = useState<{
-    startLine: number;
-    endLine: number;
-    lineContent: string[];
-  } | null>(null);
-  const [hoveredLine, setHoveredLine] = useState<number | null>(null);
   const { addToast } = useToast();
+  const { fontSize } = useTerminalSettings();
 
   // Load root directory on mount
   useEffect(() => {
-    const loadRoot = async () => {
-      setIsLoadingDir(true);
-      try {
-        // Use cached version if workspace info is available
-        let entries: DirectoryEntry[];
-        if (workspace?.repo_path && workspace?.id !== undefined) {
-          const cachedEntries = await listDirectoryCached(
-            workspace.repo_path,
-            workspace.id,
-            basePath
-          );
-          // CachedDirectoryEntry is compatible with DirectoryEntry
-          entries = cachedEntries;
-        } else if (repoPath) {
-          // Fallback to cached with null workspace_id
-          const cachedEntries = await listDirectoryCached(
-            repoPath,
-            null,
-            basePath
-          );
-          entries = cachedEntries;
-        } else {
-          // Final fallback to live filesystem
-          entries = await listDirectory(basePath);
-        }
-
+    setIsLoadingDir(true);
+    listDirectory(basePath)
+      .then((entries) => {
         const filtered = filterHiddenEntries(entries);
         setRootEntries(filtered);
         setDirectoryCache(new Map([[basePath, filtered]]));
-      } catch (error) {
+      })
+      .catch((error) => {
         addToast({
           title: "Failed to load directory",
           description: error instanceof Error ? error.message : String(error),
           type: "error",
         });
-      } finally {
-        setIsLoadingDir(false);
-      }
-    };
-    loadRoot();
-  }, [basePath, workspace, repoPath, addToast]);
+      })
+      .finally(() => setIsLoadingDir(false));
+  }, [basePath]);
+
+  // Load changed files from JJ
+  useEffect(() => {
+    if (repoPath) {
+      const workspacePath = workspace?.workspace_path || repoPath;
+      jjGetChangedFiles(workspacePath)
+        .then(jjFiles => {
+          const parsed = parseJjChangedFiles(jjFiles);
+          const map = new Map<string, ParsedFileChange>();
+          for (const file of parsed) {
+            // Store with full path as key (basePath + relative path)
+            const fullPath = `${basePath}/${file.path}`;
+            map.set(fullPath, file);
+          }
+          setChangedFiles(map);
+        })
+        .catch(() => setChangedFiles(new Map()));
+    }
+  }, [repoPath, workspace?.workspace_path, basePath]);
 
   const handleFileClick = useCallback(
     async (path: string) => {
@@ -157,25 +472,24 @@ export const FileBrowser = memo(function FileBrowser({
       try {
         const content = await readFile(path);
 
-        // Warn for large files
+        // Don't load large files
         if (content.length > 1024 * 1024) {
-          // 1MB
-          const confirmed = window.confirm(
-            "This file is quite large (>1MB). Loading it may slow down the browser. Continue?"
-          );
-          if (!confirmed) {
-            setSelectedFile(null);
-            setIsLoadingFile(false);
-            return;
-          }
+          addToast({
+            title: "File too large",
+            description: "Files larger than 1MB cannot be displayed.",
+            type: "warning",
+          });
+          setSelectedFile(null);
+          setIsLoadingFile(false);
+          return;
         }
 
         setFileContent(content);
 
-        // Load git hunks for line-level indicators
+        // Load hunks for line-level indicators
         if (changedFiles.has(path)) {
           try {
-            const hunks = await gitGetFileHunks(
+            const hunks = await jjGetFileHunks(
               basePath,
               path.replace(`${basePath}/`, "")
             );
@@ -212,7 +526,7 @@ export const FileBrowser = memo(function FileBrowser({
             setFileHunks(lineMap);
             setDeletionMarkers(deletionSet);
           } catch (error) {
-            console.error("Failed to load git hunks:", error);
+            console.error("Failed to load jj hunks:", error);
             setFileHunks(new Map());
             setDeletionMarkers(new Set());
           }
@@ -234,92 +548,6 @@ export const FileBrowser = memo(function FileBrowser({
     },
     [addToast, basePath, changedFiles]
   );
-
-  // Line selection handlers
-  const handleLineMouseDown = useCallback(
-    (e: React.MouseEvent, lineNum: number, _lineContent: string) => {
-      if (e.button !== 0) return;
-      e.preventDefault();
-      setIsSelecting(true);
-      setSelectionAnchor(lineNum);
-      setLineSelection({ startLine: lineNum, endLine: lineNum });
-      setShowCommentInput(false);
-    },
-    []
-  );
-
-  const handleLineMouseEnter = useCallback(
-    (lineNum: number) => {
-      if (!isSelecting || selectionAnchor === null) return;
-      const start = Math.min(selectionAnchor, lineNum);
-      const end = Math.max(selectionAnchor, lineNum);
-      setLineSelection({ startLine: start, endLine: end });
-    },
-    [isSelecting, selectionAnchor]
-  );
-
-  const handleLineMouseUp = useCallback(() => {
-    setIsSelecting(false);
-  }, []);
-
-  const isLineSelected = useCallback(
-    (lineNum: number) => {
-      if (!lineSelection) return false;
-      return (
-        lineNum >= lineSelection.startLine && lineNum <= lineSelection.endLine
-      );
-    },
-    [lineSelection]
-  );
-
-  // Comment handlers
-  const handleAddComment = useCallback(
-    (lineNum?: number) => {
-      if (!selectedFile) return;
-
-      const lines = fileContent.split("\n");
-      let start: number, end: number, selectedLines: string[];
-
-      if (lineNum !== undefined) {
-        // Single line comment from + button
-        start = lineNum;
-        end = lineNum;
-        selectedLines = [lines[lineNum - 1]];
-        setLineSelection({ startLine: lineNum, endLine: lineNum });
-      } else if (lineSelection) {
-        // Multi-line comment from selection
-        start = lineSelection.startLine;
-        end = lineSelection.endLine;
-        selectedLines = lines.slice(start - 1, end);
-      } else {
-        return;
-      }
-
-      setPendingComment({
-        startLine: start,
-        endLine: end,
-        lineContent: selectedLines,
-      });
-      setShowCommentInput(true);
-    },
-    [lineSelection, selectedFile, fileContent]
-  );
-
-  const handleSubmitComment = useCallback(
-    (_text: string, _action: "edit") => {
-      if (!pendingComment || !selectedFile) return;
-
-      setShowCommentInput(false);
-      setPendingComment(null);
-      setLineSelection(null);
-    },
-    [pendingComment, selectedFile, basePath]
-  );
-
-  const handleCancelComment = useCallback(() => {
-    setShowCommentInput(false);
-    setPendingComment(null);
-  }, []);
 
   // Auto-select README.md when rootEntries change (switching workspaces)
   useEffect(() => {
@@ -441,125 +669,45 @@ export const FileBrowser = memo(function FileBrowser({
 
   const renderTreeNode = useCallback(
     (entry: DirectoryEntry, depth: number = 0): JSX.Element => {
-      if (entry.is_directory) {
-        const isExpanded = expandedDirs.has(entry.path);
-        const children = directoryCache.get(entry.path) || [];
-        const hasChanges = hasChangedFilesInDirectory(entry.path);
+      const isExpanded = expandedDirs.has(entry.path);
+      const children = directoryCache.get(entry.path) || [];
+      const hasChanges = hasChangedFilesInDirectory(entry.path);
 
-        return (
-          <div key={entry.path} className="text-xs">
-            <button
-              type="button"
-              className={cn(
-                "flex items-center gap-2 w-full px-2 py-1 rounded-md hover:bg-muted/60 transition",
-                "text-left"
-              )}
-              style={{ paddingLeft: `${depth * 16 + 8}px` }}
-              onClick={() => handleDirectoryClick(entry.path)}
-            >
-              {isExpanded ? (
-                <FolderOpen className="w-4 h-4 flex-shrink-0" />
-              ) : (
-                <Folder className="w-4 h-4 flex-shrink-0" />
-              )}
-              <span
-                className={cn(
-                  "font-medium truncate",
-                  getFileStatusTextColor(getDirectoryChangeStatus(entry.path))
-                )}
-              >
-                {entry.name}
-              </span>
-              {hasChanges && (
-                <span
-                  className="w-2 h-2 rounded-full flex-shrink-0 bg-yellow-500 ml-auto"
-                  title="Contains modified files"
-                />
-              )}
-            </button>
-            {isExpanded && children.length > 0 && (
-              <div>
-                {children
-                  .sort((a, b) => {
-                    // Directories first, then alphabetically
-                    if (a.is_directory === b.is_directory) {
-                      return a.name.localeCompare(b.name);
-                    }
-                    return a.is_directory ? -1 : 1;
-                  })
-                  .map((child) => renderTreeNode(child, depth + 1))}
-              </div>
-            )}
-            {isExpanded && children.length === 0 && (
-              <div
-                className="text-xs text-muted-foreground px-2 py-1"
-                style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
-              >
-                Empty directory
-              </div>
-            )}
-          </div>
-        );
-      }
-
-      // File node
-      const fileStatus = changedFiles.get(entry.path);
-      const isChanged = fileStatus !== undefined;
       return (
-        <button
+        <TreeNode
           key={entry.path}
-          type="button"
-          onClick={() => handleFileClick(entry.path)}
-          className={cn(
-            "w-full flex items-center gap-2 px-2 py-1 rounded-md text-xs transition",
-            "hover:bg-muted/60 text-left",
-            selectedFile === entry.path && "bg-primary/10"
-          )}
-          style={{ paddingLeft: `${depth * 16 + 8}px` }}
-        >
-          <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-          <span className={cn("truncate", getFileStatusTextColor(fileStatus))}>
-            {entry.name}
-          </span>
-          {isChanged && (
-            <span
-              className="w-2 h-2 rounded-full flex-shrink-0 bg-yellow-500 ml-auto"
-              title="Modified"
-            />
-          )}
-        </button>
+          entry={entry}
+          depth={depth}
+          isExpanded={isExpanded}
+          children={children}
+          hasChanges={hasChanges}
+          selectedFile={selectedFile}
+          changedFiles={changedFiles}
+          onDirectoryClick={handleDirectoryClick}
+          onFileClick={handleFileClick}
+          getDirectoryChangeStatus={getDirectoryChangeStatus}
+          renderChildren={renderTreeNode}
+          fontSize={fontSize}
+        />
       );
     },
     [
       expandedDirs,
       directoryCache,
       hasChangedFilesInDirectory,
-      handleDirectoryClick,
-      changedFiles,
-      handleFileClick,
       selectedFile,
+      changedFiles,
+      handleDirectoryClick,
+      handleFileClick,
+      getDirectoryChangeStatus,
+      fontSize,
     ]
   );
 
   // Calculate item height for virtualization
-  const getItemHeight = useCallback(
-    (index: number) => {
-      const lineNum = index + 1;
-      let height = LINE_HEIGHT;
-
-      // Add comment input height if this line has it
-      if (
-        showCommentInput &&
-        pendingComment &&
-        lineNum === pendingComment.endLine
-      ) {
-        height += COMMENT_INPUT_HEIGHT;
-      }
-
-      return height;
-    },
-    [showCommentInput, pendingComment]
-  );
+  const getItemHeight = useCallback(() => {
+    return LINE_HEIGHT;
+  }, []);
 
   // Memoize file content data for virtualization
   const fileContentData = useMemo(() => {
@@ -594,223 +742,19 @@ export const FileBrowser = memo(function FileBrowser({
   );
 
   const renderFileContent = () => {
-    if (!selectedFile) {
-      return (
-        <div className="flex items-center justify-center h-full text-muted-foreground">
-          Select a file to view its contents
-        </div>
-      );
-    }
-
-    if (isBinaryFile(selectedFile)) {
-      return (
-        <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
-          <AlertCircle className="w-8 h-8" />
-          <p>Binary file - cannot display</p>
-          <p className="text-xs">{selectedFile.split("/").pop()}</p>
-        </div>
-      );
-    }
-
-    if (isLoadingFile) {
-      return (
-        <div className="flex items-center justify-center h-full">
-          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-        </div>
-      );
-    }
-
-    if (!fileContent || !fileContentData) {
-      return (
-        <div className="flex items-center justify-center h-full text-muted-foreground">
-          Failed to load file content
-        </div>
-      );
-    }
-
-    const { lines, rawLines, lineNumberWidth, language } = fileContentData;
-
     return (
-      <div
-        className="h-full flex flex-col bg-[hsl(var(--code-background))]"
-        onMouseUp={handleLineMouseUp}
-      >
-        <div className="px-4 pt-4 pb-2">
-          <div className="mb-2 text-xs text-muted-foreground font-mono">
-            <span>
-              {selectedFile.startsWith(basePath + "/")
-                ? selectedFile.slice(basePath.length + 1)
-                : selectedFile}
-            </span>
-          </div>
-        </div>
-        <div className="flex-1 overflow-hidden">
-          <List
-            style={{ height: window.innerHeight, width: "100%" }}
-            className="px-4 pb-4"
-            rowCount={lines.length}
-            rowHeight={getItemHeight}
-            rowComponent={({
-              index,
-              style,
-            }: {
-              index: number;
-              style: React.CSSProperties;
-            }) => {
-              const lineNum = index + 1;
-              const line = lines[index];
-              const gitStatus = fileHunks.get(lineNum);
-              const isSelected = isLineSelected(lineNum);
-
-              return (
-                <div style={style}>
-                  <div
-                    className={cn(
-                      "flex group relative cursor-pointer hover:bg-muted/30 transition-colors text-xs font-mono leading-normal",
-                      isSelected && "bg-primary/10",
-                      gitStatus === "add" && "bg-emerald-500/10"
-                    )}
-                    style={{ height: LINE_HEIGHT }}
-                    onMouseDown={(e) =>
-                      handleLineMouseDown(e, lineNum, rawLines[index])
-                    }
-                    onMouseEnter={() => {
-                      handleLineMouseEnter(lineNum);
-                      setHoveredLine(lineNum);
-                    }}
-                    onMouseLeave={() => setHoveredLine(null)}
-                  >
-                    {gitStatus && (
-                      <span
-                        className={cn(
-                          "absolute left-0 w-1 h-full",
-                          gitStatus === "add" && "bg-emerald-500",
-                          gitStatus === "modify" && "bg-yellow-500",
-                          gitStatus === "delete" && "bg-red-500"
-                        )}
-                      />
-                    )}
-                    {/* Deletion marker - shown between lines where content was deleted */}
-                    {deletionMarkers.has(lineNum) && (
-                      <span
-                        className="absolute left-0 bottom-0 w-2 h-[3px] bg-red-500"
-                        style={{
-                          clipPath: "polygon(0 0, 100% 50%, 0 100%)",
-                          transform: "translateY(50%)",
-                        }}
-                        title="Lines deleted here"
-                      />
-                    )}
-                    {/* Line number */}
-                    <span
-                      className="select-none text-muted-foreground/50 pr-2 text-right"
-                      style={{
-                        minWidth: `${lineNumberWidth}ch`,
-                        paddingLeft: gitStatus ? "4px" : "0",
-                      }}
-                    >
-                      {lineNum}
-                    </span>
-                    {/* Comment button - appears on hover to the right of line numbers */}
-                    <span className="flex-shrink-0 w-6 flex items-center justify-center">
-                      {hoveredLine === lineNum && !isSelecting && (
-                        <button
-                          onMouseDown={(e) => {
-                            e.stopPropagation();
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // If there's a selection, use it; otherwise create single-line comment
-                            if (lineSelection) {
-                              handleAddComment();
-                            } else {
-                              handleAddComment(lineNum);
-                            }
-                          }}
-                          className="w-5 h-5 flex items-center justify-center rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors"
-                          title={
-                            lineSelection
-                              ? "Add comment to selection"
-                              : "Add comment"
-                          }
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </span>
-                    {/* Code content */}
-                    <code
-                      className={cn(
-                        "flex-1 whitespace-pre",
-                        language ? `language-${language}` : ""
-                      )}
-                      dangerouslySetInnerHTML={{ __html: line || "&nbsp;" }}
-                    />
-                  </div>
-
-                  {/* Show comment input after last selected line */}
-                  {showCommentInput &&
-                    pendingComment &&
-                    lineNum === pendingComment.endLine && (
-                      <div className="bg-muted/60 border-y border-border/40 px-4 py-3 my-1 font-sans">
-                        <div className="mb-2 text-xs text-muted-foreground">
-                          <span>
-                            {selectedFile.startsWith(basePath + "/")
-                              ? selectedFile.slice(basePath.length + 1)
-                              : selectedFile}
-                            :L{pendingComment.startLine}
-                            {pendingComment.startLine !==
-                              pendingComment.endLine &&
-                              `-${pendingComment.endLine}`}
-                          </span>
-                        </div>
-                        <Textarea
-                          id="comment-textarea"
-                          placeholder="Describe what you want to change..."
-                          className="mb-2 text-sm font-sans"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === "Escape") {
-                              handleCancelComment();
-                            }
-                          }}
-                        />
-                        <div className="flex justify-end items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={handleCancelComment}
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              const textarea = document.getElementById(
-                                "comment-textarea"
-                              ) as HTMLTextAreaElement;
-                              if (textarea) {
-                                const text = textarea.value;
-                                if (text.trim()) {
-                                  handleSubmitComment(text, "edit");
-                                }
-                              }
-                            }}
-                          >
-                            Edit
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                </div>
-              );
-            }}
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            rowProps={{} as any}
-          />
-        </div>
-      </div>
+      <FileContentView
+        selectedFile={selectedFile}
+        isLoadingFile={isLoadingFile}
+        fileContent={fileContent}
+        fileContentData={fileContentData}
+        basePath={basePath}
+        fileHunks={fileHunks}
+        deletionMarkers={deletionMarkers}
+        getItemHeight={getItemHeight}
+        onSetHoveredLine={() => {}}
+        fontSize={fontSize}
+      />
     );
   };
 
@@ -820,7 +764,7 @@ export const FileBrowser = memo(function FileBrowser({
       data-testid="file-browser"
     >
       {/* File Tree */}
-      <div className="w-[400px] flex-shrink-0 border-r bg-sidebar overflow-auto">
+      <div className="w-72 flex-shrink-0 border-r bg-sidebar overflow-auto">
         {isLoadingDir && rootEntries.length === 0 ? (
           <div className="flex items-center justify-center p-4">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />

@@ -462,7 +462,7 @@ export const ConsolidatedTerminal = forwardRef<
                 <p className="text-sm font-semibold">
                   Unable to start terminal
                 </p>
-                <p className="text-xs text-muted-foreground mt-2 break-words">
+                <p className="text-sm text-muted-foreground mt-2 break-words">
                   {terminalError}
                 </p>
                 <div className="mt-4 flex flex-col gap-2">

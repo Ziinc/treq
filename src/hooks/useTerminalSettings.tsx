@@ -9,7 +9,7 @@ interface TerminalSettingsContextType {
 const TerminalSettingsContext = createContext<TerminalSettingsContextType | undefined>(undefined);
 
 export function TerminalSettingsProvider({ children }: { children: ReactNode }) {
-  const [fontSize, setFontSizeState] = useState<number>(14);
+  const [fontSize, setFontSizeState] = useState<number>(12);
 
   // Load saved font size from database on mount
   useEffect(() => {
@@ -30,6 +30,8 @@ export function TerminalSettingsProvider({ children }: { children: ReactNode }) 
     }
 
     setFontSizeState(size);
+    // Update html element font-size (affects all rem units)
+    document.documentElement.style.fontSize = `${size}px`;
     await setSetting("terminal_font_size", size.toString());
   };
 

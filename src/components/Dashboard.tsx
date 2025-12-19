@@ -10,7 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { MergeDialog } from "./MergeDialog";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
 import { CreateWorkspaceFromRemoteDialog } from "./CreateWorkspaceFromRemoteDialog";
 import { CommandPalette } from "./CommandPalette";
@@ -27,12 +27,8 @@ const ShowWorkspace = lazy(() =>
 const SettingsPage = lazy(() =>
   import("./SettingsPage").then((m) => ({ default: m.SettingsPage }))
 );
-const MergeReviewPage = lazy(() =>
-  import("./MergeReviewPage").then((m) => ({ default: m.MergeReviewPage }))
-);
 import { useToast } from "./ui/toast";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
-import { useGitCachePreloader } from "../hooks/useGitCachePreloader";
 import {
   getWorkspaces,
   rebuildWorkspaces,
@@ -41,27 +37,15 @@ import {
   getSetting,
   setSetting,
   selectFolder,
-  isGitRepository,
-  gitGetCurrentBranch,
-  gitGetStatus,
-  gitGetBranchInfo,
   getRepoSetting,
   Workspace,
-  BranchInfo,
   createSession,
   updateSessionAccess,
   updateSessionName,
   getSessions,
   setSessionModel,
-  gitGetChangedFiles,
-  gitMerge,
-  gitDiscardAllChanges,
-  gitHasUncommittedChanges,
-  invalidateGitCache,
-  startGitWatcher,
-  stopGitWatcher,
+  jjIsWorkspace,
 } from "../lib/api";
-import type { MergeStrategy } from "../lib/api";
 import { Loader2 } from "lucide-react";
 
 // Loading spinner component for Suspense fallback
@@ -77,11 +61,6 @@ type ViewMode =
   | "workspace-session"
   | "merge-review"
   | "settings";
-type MergeConfirmPayload = {
-  strategy: MergeStrategy;
-  commitMessage: string;
-  discardChanges: boolean;
-};
 
 type SessionOpenOptions = {
   initialPrompt?: string;
@@ -93,13 +72,7 @@ type SessionOpenOptions = {
 
 export const Dashboard: React.FC = () => {
   const [repoPath, setRepoPath] = useState("");
-  const { data: currentBranch = null } = useQuery({
-    queryKey: ["mainRepoBranch", repoPath],
-    queryFn: () => gitGetCurrentBranch(repoPath),
-    enabled: !!repoPath,
-    staleTime: 0, // Always consider stale to refetch on invalidation
-  });
-  const [mainBranchInfo, setMainBranchInfo] = useState<BranchInfo | null>(null);
+  const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showCreateFromRemoteDialog, setShowCreateFromRemoteDialog] =
     useState(false);
@@ -107,7 +80,6 @@ export const Dashboard: React.FC = () => {
   const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(
     null
   );
-  const [changesTabActive, setChangesTabActive] = useState(false);
   const [initialSettingsTab, setInitialSettingsTab] = useState<
     "application" | "repository"
   >("repository");
@@ -117,15 +89,6 @@ export const Dashboard: React.FC = () => {
   const [sessionSelectedFile, setSessionSelectedFile] = useState<string | null>(
     null
   );
-  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
-  const [mergeTargetWorkspace, setMergeTargetWorkspace] =
-    useState<Workspace | null>(null);
-  const [mergeAheadCount, setMergeAheadCount] = useState(0);
-  const [mergeWorkspaceHasChanges, setMergeWorkspaceHasChanges] =
-    useState(false);
-  const [mergeChangedFiles, setMergeChangedFiles] = useState<string[]>([]);
-  const [mergeDetailsLoading, setMergeDetailsLoading] = useState(false);
-  const [forceMainRepoOverview, setForceMainRepoOverview] = useState(0);
 
   const queryClient = useQueryClient();
   const { addToast } = useToast();
@@ -135,17 +98,6 @@ export const Dashboard: React.FC = () => {
     setSelectedWorkspace(null);
     setActiveSessionId(null);
     setViewMode("session");
-    // Signal ShowWorkspace to switch to Overview tab
-    setForceMainRepoOverview((prev) => prev + 1);
-  }, []);
-
-  const resetMergeState = useCallback(() => {
-    setMergeDialogOpen(false);
-    setMergeTargetWorkspace(null);
-    setMergeAheadCount(0);
-    setMergeWorkspaceHasChanges(false);
-    setMergeChangedFiles([]);
-    setMergeDetailsLoading(false);
   }, []);
 
   const openSettings = useCallback((tab?: string) => {
@@ -155,15 +107,6 @@ export const Dashboard: React.FC = () => {
     setViewMode("settings");
   }, []);
 
-  const handleActiveTabChange = useCallback((tab: string) => {
-    setChangesTabActive(tab === "changes");
-  }, []);
-
-  const handleCloseTerminal = useCallback(() => {
-    // Keep showing current workspace, just close the active terminal session
-    setActiveSessionId(null);
-    setSessionSelectedFile(null);
-  }, []);
 
   // Keyboard shortcuts
   useKeyboardShortcut("n", true, () => {
@@ -189,7 +132,8 @@ export const Dashboard: React.FC = () => {
       const urlRepoPath = urlParams.get("repo");
 
       if (urlRepoPath) {
-        const isValid = await isGitRepository(urlRepoPath);
+        // Check if it's a jj workspace
+        const isValid = await jjIsWorkspace(urlRepoPath);
         if (isValid) {
           setRepoPath(urlRepoPath);
           return;
@@ -203,7 +147,22 @@ export const Dashboard: React.FC = () => {
       }
     };
 
+    const loadAppFontSize = async () => {
+      // Load and apply font size to html element (sets base for rem units)
+      const savedSize = await getSetting("terminal_font_size");
+      if (savedSize) {
+        const parsed = parseInt(savedSize, 10);
+        if (!isNaN(parsed) && parsed >= 8 && parsed <= 32) {
+          document.documentElement.style.fontSize = `${parsed}px`;
+        }
+      } else {
+        // Default to 12px if no setting exists
+        document.documentElement.style.fontSize = "12px";
+      }
+    };
+
     loadInitialRepo();
+    loadAppFontSize();
   }, []);
 
   // Derive repo name from repo path
@@ -224,39 +183,17 @@ export const Dashboard: React.FC = () => {
     }
   }, [repoName]);
 
-  // Start git watcher when repo opens and Changes tab is active
+  // Fetch main repository branch info
   useEffect(() => {
-    if (repoPath && changesTabActive) {
-      startGitWatcher(repoPath).catch((err) => {
-        console.error("Failed to start git watcher:", err);
-      });
-
-      return () => {
-        stopGitWatcher(repoPath).catch((err) => {
-          console.error("Failed to stop git watcher:", err);
-        });
-      };
-    }
-  }, [repoPath, changesTabActive]);
-
-  const refreshMainRepoInfo = useCallback(async () => {
     if (!repoPath) {
-      setMainBranchInfo(null);
+      setCurrentBranch(null);
       return;
     }
 
-    const [_status, branchInfo] = await Promise.all([
-      gitGetStatus(repoPath).catch(() => null),
-      gitGetBranchInfo(repoPath).catch(() => null),
-    ]);
-
-    setMainBranchInfo(branchInfo);
+    // Load current branch for jj
+    // For now, we'll just set it to null since we don't have a jj equivalent yet
+    setCurrentBranch(null);
   }, [repoPath]);
-
-  // Fetch main repository git status and branch info
-  useEffect(() => {
-    refreshMainRepoInfo();
-  }, [refreshMainRepoInfo]);
 
   // Consolidate all Tauri event listeners
   useEffect(() => {
@@ -284,12 +221,12 @@ export const Dashboard: React.FC = () => {
         const selected = await selectFolder();
         if (!selected) return;
 
-        const isRepo = await isGitRepository(selected);
+        const isRepo = await jjIsWorkspace(selected);
         if (!isRepo) {
           addToast({
-            title: "Not a Git Repository",
+            title: "Not a JJ Repository",
             description:
-              "Please select a folder that contains a git repository.",
+              "Please select a folder that contains a jj repository.",
             type: "error",
           });
           return;
@@ -303,9 +240,6 @@ export const Dashboard: React.FC = () => {
         // Reset session state
         setActiveSessionId(null);
         setSessionSelectedFile(null);
-
-        // Reset merge state
-        resetMergeState();
 
         // Invalidate queries to force immediate refresh
         queryClient.invalidateQueries({ queryKey: ["workspaces"] });
@@ -322,12 +256,12 @@ export const Dashboard: React.FC = () => {
         const selected = await selectFolder();
         if (!selected) return;
 
-        const isRepo = await isGitRepository(selected);
+        const isRepo = await jjIsWorkspace(selected);
         if (!isRepo) {
           addToast({
-            title: "Not a Git Repository",
+            title: "Not a JJ Repository",
             description:
-              "Please select a folder that contains a git repository.",
+              "Please select a folder that contains a jj repository.",
             type: "error",
           });
           return;
@@ -368,24 +302,21 @@ export const Dashboard: React.FC = () => {
     repoPath,
     addToast,
     queryClient,
-    resetMergeState,
     handleReturnToDashboard,
   ]);
 
-  // Listen for window focus to refresh git status
+  // Listen for window focus to refresh workspace data
   useEffect(() => {
     if (!repoPath) return;
 
     const handleFocus = async () => {
       try {
-        // Invalidate to trigger refetch
+        // Invalidate queries to refresh workspace data
         queryClient.invalidateQueries({
-          queryKey: ["mainRepoBranch", repoPath],
+          queryKey: ["workspaces", repoPath],
         });
-        // Refresh main repo info
-        refreshMainRepoInfo();
       } catch (error) {
-        console.error("Failed to refresh git info on window focus:", error);
+        console.error("Failed to refresh workspace info on window focus:", error);
       }
     };
 
@@ -400,7 +331,7 @@ export const Dashboard: React.FC = () => {
     return () => {
       unlistenFocus.then((fn) => fn());
     };
-  }, [repoPath, queryClient, refreshMainRepoInfo]);
+  }, [repoPath, queryClient]);
 
   const { data: sessions = [] } = useQuery({
     queryKey: ["sessions", repoPath],
@@ -409,12 +340,6 @@ export const Dashboard: React.FC = () => {
     enabled: !!repoPath,
   });
 
-  // Compute the active workspace ID from the active session
-  const activeWorkspaceId = useMemo(() => {
-    if (activeSessionId === null) return null;
-    const session = sessions.find((s) => s.id === activeSessionId);
-    return session?.workspace_id ?? null;
-  }, [activeSessionId, sessions]);
 
   const { data: workspaces = [], refetch } = useQuery({
     queryKey: ["workspaces", repoPath],
@@ -441,8 +366,7 @@ export const Dashboard: React.FC = () => {
     rebuildIfNeeded();
   }, [repoPath, workspaces.length, queryClient]);
 
-  // Lazy preload: only preload selected workspace, not all workspaces
-  useGitCachePreloader(selectedWorkspace?.workspace_path ?? null);
+  // Note: Git cache preloader removed since we're using JJ now
 
   const deleteWorkspace = useMutation({
     mutationFn: async (workspace: Workspace) => {
@@ -466,66 +390,7 @@ export const Dashboard: React.FC = () => {
     },
   });
 
-  const mergeMutation = useMutation({
-    mutationFn: async (payload: MergeConfirmPayload) => {
-      if (!repoPath) {
-        throw new Error("Repository path is not set");
-      }
-
-      if (!mergeTargetWorkspace) {
-        throw new Error("No workspace selected for merge");
-      }
-
-      const mainRepoDirty = await gitHasUncommittedChanges(repoPath);
-      if (mainRepoDirty) {
-        throw new Error(
-          "Main repository has uncommitted changes. Please commit or stash them before merging."
-        );
-      }
-
-      const workspaceDirtyNow = await gitHasUncommittedChanges(
-        mergeTargetWorkspace.workspace_path
-      );
-      if (workspaceDirtyNow) {
-        if (payload.discardChanges) {
-          await gitDiscardAllChanges(mergeTargetWorkspace.workspace_path);
-        } else {
-          throw new Error(
-            "Workspace has uncommitted changes. Discard them before merging."
-          );
-        }
-      }
-
-      return gitMerge(
-        repoPath,
-        mergeTargetWorkspace.branch_name,
-        payload.strategy,
-        payload.commitMessage
-      );
-    },
-    onSuccess: () => {
-      const branchName = mergeTargetWorkspace?.branch_name || "workspace";
-      addToast({
-        title: "Merge complete",
-        description: `Merged ${branchName} into ${currentBranch || "main"}`,
-        type: "success",
-      });
-      queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
-      refreshMainRepoInfo();
-      resetMergeState();
-    },
-    onError: (error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      const description = message.includes("CONFLICT")
-        ? "Merge conflict detected. Resolve conflicts in the main repository and try again."
-        : message;
-      addToast({
-        title: "Merge failed",
-        description,
-        type: "error",
-      });
-    },
-  });
+  // Note: Git merge functionality removed - using JJ now
 
   // Helper to create or get session
   const getOrCreateSession = useCallback(
@@ -552,7 +417,7 @@ export const Dashboard: React.FC = () => {
       const index = scopedSessions.length + 1;
       let name = options?.name;
       if (!name) {
-        name = `Session ${index}`;
+        name = `Claude Session ${index}`;
       }
 
       const sessionId = await createSession(repoPath, workspaceId, name);
@@ -604,105 +469,24 @@ export const Dashboard: React.FC = () => {
     [handleOpenSession, workspaces]
   );
 
-  const openSessionWithPrompt = useCallback(
-    async (workspace: Workspace, prompt: string, label = "Review response") => {
-      await handleOpenSession(workspace, {
-        initialPrompt: prompt,
-        promptLabel: label,
-      });
+  // Note: openSessionWithPrompt removed - was only used by MergeReviewPage which is git-specific
 
-      // Focus terminal after session opens
-      setTimeout(() => {
-        // Try to find terminal container (ghostty-web or xterm)
-        const terminalContainer = document.querySelector(
-          ".xterm, [data-terminal]"
-        );
-        if (terminalContainer) {
-          const textarea = terminalContainer.querySelector("textarea");
-          if (textarea instanceof HTMLTextAreaElement) {
-            textarea.focus();
-          }
-        }
-      }, 300);
-    },
-    [handleOpenSession]
-  );
-
-  const handleDelete = (workspace: Workspace) => {
-    if (confirm(`Delete workspace ${workspace.branch_name}?`)) {
+  const handleDelete = async (workspace: Workspace) => {
+    const confirmed = await ask(`Delete workspace ${workspace.branch_name}?`, {
+      title: "Delete Workspace",
+      kind: "warning",
+    });
+    if (confirmed) {
       deleteWorkspace.mutate(workspace);
     }
   };
 
-  const openMergeDialogForWorkspace = async (workspace: Workspace) => {
-    if (!repoPath) {
-      addToast({
-        title: "Repository not set",
-        description: "Configure a repository path in settings before merging.",
-        type: "error",
-      });
-      return;
-    }
-
-    setMergeTargetWorkspace(workspace);
-    setMergeAheadCount(0);
-    setMergeChangedFiles([]);
-    setMergeWorkspaceHasChanges(false);
-    setMergeDetailsLoading(true);
-
-    try {
-      const mainRepoDirty = await gitHasUncommittedChanges(repoPath);
-      if (mainRepoDirty) {
-        addToast({
-          title: "Main repository has uncommitted changes",
-          description:
-            "Please clean up or commit changes in the main repository before merging.",
-          type: "error",
-        });
-        setMergeTargetWorkspace(null);
-        return;
-      }
-
-      setMergeDialogOpen(true);
-
-      const branchInfo = await gitGetBranchInfo(workspace.workspace_path);
-      setMergeAheadCount(branchInfo.ahead);
-
-      const workspaceDirty = await gitHasUncommittedChanges(
-        workspace.workspace_path
-      );
-      setMergeWorkspaceHasChanges(workspaceDirty);
-
-      if (workspaceDirty) {
-        try {
-          const files = await gitGetChangedFiles(workspace.workspace_path);
-          setMergeChangedFiles(files);
-        } catch (fileError) {
-          console.error("Failed to load changed files:", fileError);
-          setMergeChangedFiles([]);
-        }
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      addToast({
-        title: "Unable to start merge",
-        description: message,
-        type: "error",
-      });
-      resetMergeState();
-    } finally {
-      setMergeDetailsLoading(false);
-    }
-  };
+  // Note: Merge dialog functionality removed - using JJ now
 
   // Handle branch change after switching
   const handleBranchChanged = useCallback(() => {
-    // Refresh main repo info
-    queryClient.invalidateQueries({ queryKey: ["mainRepoBranch", repoPath] });
-    queryClient.invalidateQueries({ queryKey: ["mainRepoStatus", repoPath] });
-    queryClient.invalidateQueries({
-      queryKey: ["mainRepoChangedFiles", repoPath],
-    });
+    // Refresh workspace data
+    queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
     addToast({ title: "Branch switched successfully", type: "success" });
   }, [repoPath, queryClient, addToast]);
 
@@ -787,7 +571,6 @@ export const Dashboard: React.FC = () => {
           currentBranch={currentBranch}
           selectedWorkspaceId={selectedWorkspace?.id ?? null}
           onWorkspaceClick={(workspace) => handleOpenSession(workspace)}
-          onDeleteWorkspace={handleDelete}
           onCreateWorkspace={() => setShowCreateDialog(true)}
           onCreateWorkspaceFromRemote={() =>
             setShowCreateFromRemoteDialog(true)
@@ -827,6 +610,7 @@ export const Dashboard: React.FC = () => {
                     mainRepoBranch={currentBranch}
                     onClose={handleReturnToDashboard}
                     initialSelectedFile={sessionSelectedFile}
+                    onDeleteWorkspace={handleDelete}
                   />
                 </Suspense>
               </ErrorBoundary>
@@ -898,56 +682,16 @@ export const Dashboard: React.FC = () => {
                 onClose={handleReturnToDashboard}
                 repoName={repoName}
                 currentBranch={currentBranch}
-                mainBranchInfo={mainBranchInfo}
               />
             </Suspense>
           )}
 
-          {/* Merge Review View */}
-          {viewMode === "merge-review" && selectedWorkspace && (
-            <ErrorBoundary
-              fallbackTitle="Merge review failed"
-              resetKeys={[selectedWorkspace.id, currentBranch ?? ""]}
-              onReset={handleReturnToDashboard}
-            >
-              <Suspense fallback={<LoadingSpinner />}>
-                <MergeReviewPage
-                  repoPath={repoPath}
-                  baseBranch={currentBranch}
-                  workspace={selectedWorkspace}
-                  onClose={handleReturnToDashboard}
-                  onStartMerge={openMergeDialogForWorkspace}
-                  onRequestChanges={(prompt) =>
-                    openSessionWithPrompt(
-                      selectedWorkspace,
-                      prompt,
-                      "Review response"
-                    )
-                  }
-                />
-              </Suspense>
-            </ErrorBoundary>
-          )}
+          {/* Note: Merge Review View removed - git-specific feature */}
         </div>
       </div>
 
       {/* Global Dialogs */}
-      <MergeDialog
-        open={mergeDialogOpen}
-        onOpenChange={(open) => {
-          if (!open && !mergeMutation.isPending) {
-            resetMergeState();
-          }
-        }}
-        workspace={mergeTargetWorkspace}
-        mainBranch={currentBranch}
-        aheadCount={mergeAheadCount}
-        hasWorkspaceChanges={mergeWorkspaceHasChanges}
-        changedFiles={mergeChangedFiles}
-        isLoadingDetails={mergeDetailsLoading}
-        isSubmitting={mergeMutation.isPending}
-        onConfirm={(options) => mergeMutation.mutate(options)}
-      />
+      {/* Note: MergeDialog removed - git-specific feature */}
 
       <CreateWorkspaceDialog
         open={showCreateDialog}

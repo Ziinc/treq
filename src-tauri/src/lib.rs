@@ -1,158 +1,20 @@
 mod commands;
 mod db;
 mod file_indexer;
-mod git;
-mod git_ops;
-mod git2_ops;
-mod git_watcher;
 mod jj;
 mod jj_lib_ops;
 mod local_db;
 mod pty;
 
 use db::Database;
-use git::is_git_repository;
 use pty::PtyManager;
-use std::collections::HashSet;
-use std::sync::{Mutex, OnceLock};
+use std::sync::Mutex;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
-use tauri::{AppHandle, Emitter, EventTarget, Manager, State};
+use tauri::{AppHandle, Emitter, EventTarget, Manager};
 
 pub(crate) struct AppState {
     db: Mutex<Database>,
     pty_manager: Mutex<PtyManager>,
-    watcher_manager: git_watcher::GitWatcherManager,
-}
-
-/// Track which repositories have had their initialization triggered
-/// to avoid spawning multiple background tasks for the same repo
-static REPO_INIT_STARTED: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
-
-/// Ensure repository is properly configured before operations
-/// This includes git config and jj initialization
-/// Spawns background tasks for heavy operations to avoid blocking the UI
-/// Emits events to frontend when initialization completes or fails
-pub(crate) fn ensure_repo_ready(
-    state: &State<AppState>,
-    app: &AppHandle,
-    repo_path: &str,
-) -> Result<(), String> {
-    // Only initialize if it's a git repository
-    if !is_git_repository(repo_path).unwrap_or(false) {
-        return Ok(());
-    }
-
-    // Check if we've already triggered initialization for this repo
-    let init_started = REPO_INIT_STARTED.get_or_init(|| Mutex::new(HashSet::new()));
-    {
-        let mut guard = init_started.lock().unwrap();
-        if guard.contains(repo_path) {
-            // Initialization already in progress or completed
-            return Ok(());
-        }
-        guard.insert(repo_path.to_string());
-    }
-
-    // Clone what we need for the background task
-    let app_clone = app.clone();
-    let repo_path_clone = repo_path.to_string();
-    let db_path = {
-        let db = state.db.lock().unwrap();
-        db.db_path().to_path_buf()
-    };
-
-    // Spawn background task for initialization
-    tauri::async_runtime::spawn(async move {
-        initialize_repo_background(&app_clone, &repo_path_clone, &db_path).await;
-    });
-
-    Ok(())
-}
-
-/// Background task for repository initialization
-/// Runs gitignore updates, git config checks, and jj initialization
-async fn initialize_repo_background(app: &AppHandle, repo_path: &str, db_path: &std::path::Path) {
-    #[derive(Clone, serde::Serialize)]
-    struct InitError {
-        repo_path: String,
-        error: String,
-        error_type: String,
-    }
-
-    #[derive(Clone, serde::Serialize)]
-    struct JjInitSuccess {
-        repo_path: String,
-    }
-
-    // Ensure .jj and .treq are in .gitignore
-    if let Err(ref error) = jj::ensure_gitignore_entries(repo_path) {
-        let _ = app.emit(
-            "repo-init-error",
-            InitError {
-                repo_path: repo_path.to_string(),
-                error: error.to_string(),
-                error_type: "gitignore".to_string(),
-            },
-        );
-    }
-
-    // Open a database connection for this background task
-    let db = match Database::new(db_path.to_path_buf()) {
-        Ok(db) => db,
-        Err(e) => {
-            let _ = app.emit(
-                "repo-init-error",
-                InitError {
-                    repo_path: repo_path.to_string(),
-                    error: format!("Failed to open database: {}", e),
-                    error_type: "database".to_string(),
-                },
-            );
-            return;
-        }
-    };
-
-    // Check/initialize git config
-    if let Err(ref error) = git::ensure_repo_configured(&db, repo_path) {
-        let _ = app.emit(
-            "repo-init-error",
-            InitError {
-                repo_path: repo_path.to_string(),
-                error: error.clone(),
-                error_type: "git-config".to_string(),
-            },
-        );
-    }
-
-    // Initialize jj for git repository
-    match jj::ensure_jj_initialized(&db, repo_path) {
-        Ok(true) => {
-            // jj was newly initialized - emit success event
-            let _ = app.emit(
-                "jj-initialized",
-                JjInitSuccess {
-                    repo_path: repo_path.to_string(),
-                },
-            );
-        }
-        Ok(false) => {
-            // Already initialized, no action needed
-        }
-        Err(jj::JjError::AlreadyInitialized) | Err(jj::JjError::NotGitRepository) => {
-            // Not an error, just skip
-        }
-        Err(ref error) => {
-            // Other errors should be reported
-            let _ = app.emit(
-                "repo-init-error",
-                InitError {
-                    repo_path: repo_path.to_string(),
-                    error: error.to_string(),
-                    error_type: "jj-init".to_string(),
-                },
-            );
-        }
-    }
 }
 
 /// Emits an event only to the focused webview window.
@@ -186,12 +48,10 @@ pub fn run() {
             db.init().expect("Failed to initialize database");
 
             let pty_manager = PtyManager::new();
-            let watcher_manager = git_watcher::GitWatcherManager::new(app.handle().clone());
 
             let app_state = AppState {
                 db: Mutex::new(db),
                 pty_manager: Mutex::new(pty_manager),
-                watcher_manager,
             };
 
             app.manage(app_state);
@@ -349,20 +209,13 @@ pub fn run() {
             commands::delete_workspace_from_db,
             commands::rebuild_workspaces,
             commands::update_workspace_metadata,
+            commands::set_workspace_target_branch,
             commands::ensure_workspace_indexed,
             commands::get_setting,
             commands::get_settings_batch,
             commands::set_setting,
             commands::get_repo_setting,
             commands::set_repo_setting,
-            commands::get_git_cache,
-            commands::set_git_cache,
-            commands::invalidate_git_cache,
-            commands::get_cached_git_changes,
-            commands::start_git_watcher,
-            commands::stop_git_watcher,
-            commands::trigger_workspace_scan,
-            commands::preload_workspace_git_data,
             commands::jj_create_workspace,
             commands::jj_list_workspaces,
             commands::jj_remove_workspace,
@@ -379,46 +232,8 @@ pub fn run() {
             commands::jj_rebase_onto,
             commands::jj_get_conflicted_files,
             commands::jj_get_default_branch,
-            commands::git_get_current_branch,
-            commands::git_execute_post_create_command,
-            commands::git_get_status,
-            commands::git_get_branch_info,
-            commands::git_get_branch_divergence,
-            commands::git_get_line_diff_stats,
-            commands::git_get_workspace_info,
-            commands::git_get_diff_between_branches,
-            commands::git_get_changed_files_between_branches,
-            commands::git_get_commits_between_branches,
-            commands::git_list_branches,
-            commands::git_list_branches_detailed,
-            commands::git_checkout_branch,
-            commands::git_is_repository,
-            commands::git_init_repo,
-            commands::git_list_gitignored_files,
-            commands::git_merge,
-            commands::git_discard_all_changes,
-            commands::git_discard_files,
-            commands::git_has_uncommitted_changes,
-            commands::git_stash_push_files,
-            commands::git_stash_pop,
-            commands::git_commit,
-            commands::git_commit_amend,
-            commands::git_add_all,
-            commands::git_unstage_all,
-            commands::git_push,
-            commands::git_push_force,
-            commands::git_pull,
-            commands::git_fetch,
-            commands::git_stage_file,
-            commands::git_unstage_file,
-            commands::git_list_remotes,
-            commands::git_stage_hunk,
-            commands::git_unstage_hunk,
-            commands::git_get_changed_files,
-            commands::git_get_file_hunks,
-            commands::git_get_file_lines,
-            commands::git_stage_selected_lines,
-            commands::git_unstage_selected_lines,
+            commands::jj_push,
+            commands::jj_pull,
             commands::pty_create_session,
             commands::pty_session_exists,
             commands::pty_write,

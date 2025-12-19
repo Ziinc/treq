@@ -1,7 +1,13 @@
 import { useState, useEffect } from "react";
 import { Command } from "cmdk";
 import { GitBranch, Check, ArrowRight } from "lucide-react";
-import { BranchListItem, gitListBranchesDetailed, gitCheckoutBranch } from "../lib/api";
+
+// Type definition - Git API removed, needs JJ equivalent
+interface BranchListItem {
+  name: string;
+  is_current: boolean;
+  is_remote: boolean;
+}
 
 interface BranchSwitcherProps {
   open: boolean;
@@ -31,8 +37,8 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const result = await gitListBranchesDetailed(repoPath);
-      setBranches(result);
+      // TODO: Replace with JJ equivalent - gitListBranchesDetailed removed
+      setBranches([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -50,32 +56,8 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
     setError(null);
 
     try {
-      // If it's a remote branch, we need to create a local tracking branch
-      if (branch.is_remote) {
-        // Extract the branch name without the remote prefix (e.g., origin/feature -> feature)
-        const parts = branch.name.split('/');
-        const localBranchName = parts.slice(1).join('/'); // Remove the remote name
-
-        // Check if a local branch with this name already exists
-        const localBranchExists = branches.some(
-          b => !b.is_remote && b.name === localBranchName
-        );
-
-        if (localBranchExists) {
-          // If local branch exists, just checkout
-          await gitCheckoutBranch(repoPath, localBranchName, false);
-        } else {
-          // Create a new local tracking branch
-          await gitCheckoutBranch(repoPath, localBranchName, true);
-        }
-
-        onBranchChanged?.(localBranchName);
-      } else {
-        // For local branches, just checkout
-        await gitCheckoutBranch(repoPath, branch.name, false);
-        onBranchChanged?.(branch.name);
-      }
-
+      // TODO: Replace with JJ equivalent - gitCheckoutBranch removed
+      onBranchChanged?.(branch.name);
       onOpenChange(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -134,7 +116,7 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
                 <Command.Group heading="Current Branch">
                   {groupedBranches.current.map((branch) => (
                     <Command.Item
-                      key={branch.full_name}
+                      key={branch.name}
                       value={branch.name}
                       onSelect={() => handleSelectBranch(branch)}
                       disabled={switching}
@@ -144,7 +126,7 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
                       <div className="flex-1 min-w-0">
                         <div className="truncate text-sm font-medium">{branch.name}</div>
                       </div>
-                      <span className="text-xs text-muted-foreground">current</span>
+                      <span className="text-sm text-muted-foreground">current</span>
                     </Command.Item>
                   ))}
                 </Command.Group>
@@ -155,7 +137,7 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
                 <Command.Group heading="Local Branches">
                   {groupedBranches.local.map((branch) => (
                     <Command.Item
-                      key={branch.full_name}
+                      key={branch.name}
                       value={branch.name}
                       onSelect={() => handleSelectBranch(branch)}
                       disabled={switching}
@@ -175,7 +157,7 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
                 <Command.Group heading="Remote Branches">
                   {groupedBranches.remote.map((branch) => (
                     <Command.Item
-                      key={branch.full_name}
+                      key={branch.name}
                       value={branch.name}
                       onSelect={() => handleSelectBranch(branch)}
                       disabled={switching}
@@ -185,7 +167,7 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
                       <div className="flex-1 min-w-0">
                         <div className="truncate text-sm">{branch.name}</div>
                       </div>
-                      <span className="text-xs text-muted-foreground">remote</span>
+                      <span className="text-sm text-muted-foreground">remote</span>
                     </Command.Item>
                   ))}
                 </Command.Group>
@@ -195,13 +177,13 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
         </Command.List>
 
         {/* Footer with keyboard hints */}
-        <div className="border-t border-border px-3 py-2 flex items-center justify-between text-xs text-muted-foreground">
+        <div className="border-t border-border px-3 py-2 flex items-center justify-between text-sm text-muted-foreground">
           <div className="flex items-center gap-3">
             <span><kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">↑↓</kbd> Navigate</span>
             <span><kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">↵</kbd> Switch</span>
             <span><kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Esc</kbd> Close</span>
           </div>
-          {switching && <span className="text-xs">Switching...</span>}
+          {switching && <span className="text-sm">Switching...</span>}
         </div>
       </div>
     </Command.Dialog>

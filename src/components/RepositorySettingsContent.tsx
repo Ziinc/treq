@@ -3,7 +3,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Label } from "./ui/label";
-import { getRepoSetting, setRepoSetting, gitListGitignoredFiles } from "../lib/api";
+import { getRepoSetting, setRepoSetting } from "../lib/api";
 import { useToast } from "./ui/toast";
 
 interface RepositorySettingsContentProps {
@@ -16,7 +16,6 @@ export const RepositorySettingsContent: React.FC<RepositorySettingsContentProps>
   onClose,
 }) => {
   const [branchNamePattern, setBranchNamePattern] = useState("treq/{name}");
-  const [postCreateCommand, setPostCreateCommand] = useState("");
   const [includedFiles, setIncludedFiles] = useState("");
   const [defaultModel, setDefaultModel] = useState<string>("");
   const [loading, setLoading] = useState(false);
@@ -33,22 +32,19 @@ export const RepositorySettingsContent: React.FC<RepositorySettingsContentProps>
       
       Promise.all([
         getRepoSetting(repoPath, "branch_name_pattern"),
-        getRepoSetting(repoPath, "post_create_command"),
         getRepoSetting(repoPath, "included_copy_files"),
         getRepoSetting(repoPath, "default_model"),
-        gitListGitignoredFiles(repoPath),
       ])
-        .then(([branchPattern, postCommand, includedPatterns, model, gitignored]) => {
+        .then(([branchPattern, includedPatterns, model]) => {
           setBranchNamePattern(branchPattern || "treq/{name}");
-          setPostCreateCommand(postCommand || "");
           setIncludedFiles(includedPatterns || "");
           setDefaultModel(model || "");
-          setAvailableFiles(gitignored || []);
+          // Note: gitignored files listing removed - was git-specific
+          setAvailableFiles([]);
         })
         .catch((err) => {
           setError(`Failed to load settings: ${err}`);
           setBranchNamePattern("treq/{name}");
-          setPostCreateCommand("");
           setIncludedFiles("");
           setDefaultModel("");
           setAvailableFiles([]);
@@ -66,7 +62,6 @@ export const RepositorySettingsContent: React.FC<RepositorySettingsContentProps>
     try {
       await Promise.all([
         setRepoSetting(repoPath, "branch_name_pattern", branchNamePattern),
-        setRepoSetting(repoPath, "post_create_command", postCreateCommand),
         setRepoSetting(repoPath, "included_copy_files", includedFiles),
         setRepoSetting(repoPath, "default_model", defaultModel),
       ]);
@@ -116,27 +111,10 @@ export const RepositorySettingsContent: React.FC<RepositorySettingsContentProps>
           value={branchNamePattern}
           onChange={(e) => setBranchNamePattern(e.target.value)}
           placeholder="treq/{name}"
-          className="mt-2"
+          className="mt-2 font-mono"
         />
-        <p className="text-xs text-muted-foreground mt-1">
+        <p className="text-sm text-muted-foreground mt-1">
           treq/{"{name}"} → treq/add-dark-mode
-        </p>
-      </div>
-
-      <div>
-        <Label htmlFor="post-create-command">
-          Default Post-Create Command
-        </Label>
-        <Textarea
-          id="post-create-command"
-          value={postCreateCommand}
-          onChange={(e) => setPostCreateCommand(e.target.value)}
-          placeholder="e.g., npm install && npm run dev"
-          rows={4}
-          className="font-mono text-sm mt-2"
-        />
-        <p className="text-xs text-muted-foreground mt-1">
-          This command will run in each new workspace after creation. Leave empty to skip.
         </p>
       </div>
 
@@ -152,7 +130,7 @@ export const RepositorySettingsContent: React.FC<RepositorySettingsContentProps>
           rows={6}
           className="font-mono text-sm mt-2"
         />
-        <p className="text-xs text-muted-foreground mt-1">
+        <p className="text-sm text-muted-foreground mt-1">
           Patterns to copy (e.g., node_modules, .env*)
         </p>
         {availableFiles.length > 0 && (
@@ -164,7 +142,7 @@ export const RepositorySettingsContent: React.FC<RepositorySettingsContentProps>
                 variant="outline"
                 size="sm"
                 onClick={() => addPattern(file)}
-                className="text-xs h-7"
+                className="text-sm h-7"
               >
                 + {file}
               </Button>
@@ -172,7 +150,7 @@ export const RepositorySettingsContent: React.FC<RepositorySettingsContentProps>
           </div>
         )}
         {availableFiles.length === 0 && !loading && (
-          <p className="text-xs text-muted-foreground italic mt-2">
+          <p className="text-sm text-muted-foreground italic mt-2">
             No .gitignored files found in repository root
           </p>
         )}
@@ -193,7 +171,7 @@ export const RepositorySettingsContent: React.FC<RepositorySettingsContentProps>
           <option value="sonnet[1m]">Sonnet (1M)</option>
           <option value="opusplan">Opus Plan</option>
         </select>
-        <p className="text-xs text-muted-foreground mt-1">
+        <p className="text-sm text-muted-foreground mt-1">
           Default model for new Claude Code sessions in this repository (overrides application default)
         </p>
       </div>

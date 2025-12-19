@@ -1,9 +1,7 @@
-import type { ParsedFileChange } from "./git-utils";
-
 /**
- * Git status colors for different change types
+ * Status colors for different change types (works with jj and git)
  */
-export const GIT_STATUS_COLORS = {
+export const STATUS_COLORS = {
   A: {
     bg: "bg-green-500",
     text: "text-green-500",
@@ -27,30 +25,30 @@ export const GIT_STATUS_COLORS = {
 } as const;
 
 /**
- * Get background color class for a git status code
+ * Get background color class for a status code
  */
 export function getStatusBgColor(status?: string): string {
   if (!status) return "bg-muted";
-  return GIT_STATUS_COLORS[status as keyof typeof GIT_STATUS_COLORS]?.bg || "bg-muted";
+  return STATUS_COLORS[status as keyof typeof STATUS_COLORS]?.bg || "bg-muted";
 }
 
 /**
- * Get text color class for a git status code
+ * Get text color class for a status code
  */
 export function getStatusTextColor(status?: string): string {
   if (!status) return "";
-  return GIT_STATUS_COLORS[status as keyof typeof GIT_STATUS_COLORS]?.text || "text-yellow-500";
+  return STATUS_COLORS[status as keyof typeof STATUS_COLORS]?.text || "text-yellow-500";
 }
 
 /**
- * Get text color class for a parsed file change
- * Handles both staged and workspace status
+ * Get text color class for a file status
+ * Simplified to work with any status code
  */
-export function getFileStatusTextColor(file: ParsedFileChange | undefined): string {
-  if (!file) return "";
-  if (file.isUntracked) return "text-green-500";
-  if (file.workspaceStatus === "M" || file.stagedStatus === "M") return "text-yellow-500";
-  if (file.workspaceStatus === "A" || file.stagedStatus === "A") return "text-green-500";
-  if (file.workspaceStatus === "D" || file.stagedStatus === "D") return "text-red-500";
+export function getFileStatusTextColor(status?: string, isUntracked = false): string {
+  if (!status) return "";
+  if (isUntracked) return "text-green-500";
+  if (status === "M") return "text-yellow-500";
+  if (status === "A") return "text-green-500";
+  if (status === "D") return "text-red-500";
   return "text-yellow-500"; // default for any other change
 }

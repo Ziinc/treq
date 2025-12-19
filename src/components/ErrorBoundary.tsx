@@ -189,7 +189,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
           )}
 
           {isDev && (
-            <pre className="w-full max-w-4xl bg-muted p-4 rounded-md text-xs overflow-auto max-h-96 font-mono whitespace-pre-wrap">
+            <pre className="w-full max-w-4xl bg-muted p-4 rounded-md text-sm overflow-auto max-h-96 font-mono whitespace-pre-wrap">
               {[
                 "=== STACK TRACE ===",
                 error?.stack || "No stack trace available",

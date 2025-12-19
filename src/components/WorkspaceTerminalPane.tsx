@@ -1,12 +1,5 @@
-import React, {
-  memo,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
-  ConsolidatedTerminal,
   type ConsolidatedTerminalHandle,
 } from "./ConsolidatedTerminal";
 import {
@@ -15,94 +8,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
+import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
 import { ptyClose } from "../lib/api";
-import {
-  ChevronDown,
-  ChevronUp,
-  Bot,
-  Terminal,
-  Plus,
-  X,
-} from "lucide-react";
+import { ChevronDown, ChevronUp, Bot, Terminal } from "lucide-react";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
-import {
-  ClaudeTerminalPanel
-} from "./terminal/ClaudeTerminalPanel";
+import { ClaudeTerminalPanel } from "./terminal/ClaudeTerminalPanel";
+import { ResizeDivider } from "./terminal/ResizeDivider";
+import { ShellTerminalPanel } from "./terminal/ShellTerminalPanel";
 import { MIN_TERMINAL_WIDTH } from "./terminal/types";
 import { type ClaudeSessionData } from "./terminal/types";
-
-// Resize divider between terminal panels
-interface ResizeDividerProps {
-  onResize: (deltaX: number) => void;
-}
-
-const ResizeDivider = memo<ResizeDividerProps>(function ResizeDivider({
-  onResize,
-}) {
-  const [isDragging, setIsDragging] = useState(false);
-  const lastXRef = useRef<number>(0);
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-    lastXRef.current = e.clientX;
-  }, []);
-
-  useEffect(() => {
-    if (!isDragging) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const deltaX = e.clientX - lastXRef.current;
-      lastXRef.current = e.clientX;
-      onResize(deltaX);
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-    };
-
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [isDragging, onResize]);
-
-  // Set cursor during drag
-  useEffect(() => {
-    if (isDragging) {
-      document.body.style.cursor = "ew-resize";
-      document.body.style.userSelect = "none";
-    } else {
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    }
-  }, [isDragging]);
-
-  return (
-    <div
-      className="relative flex-shrink-0 w-1 group cursor-ew-resize"
-      onMouseDown={handleMouseDown}
-    >
-      <div
-        className={cn(
-          "absolute inset-y-0 left-0 w-1 bg-border transition-colors",
-          "group-hover:bg-primary/50",
-          isDragging && "bg-primary"
-        )}
-      />
-      <div className="absolute inset-y-0 -left-1 w-3 cursor-ew-resize" />
-    </div>
-  );
-});
 
 // Shell terminal data
 interface ShellTerminalData {
@@ -125,91 +40,6 @@ interface WorkspaceTerminalPaneProps {
   onCloseSession?: (sessionId: number) => void;
   onRenameSession?: (sessionId: number, newName: string) => void;
 }
-
-// Shell terminal panel with header
-interface ShellTerminalPanelProps {
-  terminalData: ShellTerminalData;
-  collapsed: boolean;
-  onClose?: () => void;
-  canClose: boolean;
-  onSessionError?: (message: string) => void;
-  terminalRefs: React.MutableRefObject<
-    Map<string, ConsolidatedTerminalHandle | null>
-  >;
-  width?: number | null;
-}
-
-const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
-  function ShellTerminalPanel({
-    terminalData,
-    collapsed,
-    onClose,
-    canClose,
-    onSessionError,
-    terminalRefs,
-    width,
-  }) {
-    const isHidden = collapsed;
-
-    return (
-      <div
-        data-terminal-id={terminalData.id}
-        className={cn(
-          "flex flex-col min-h-0 overflow-hidden flex-shrink-0",
-          width == null && "flex-1"
-        )}
-        style={{
-          minWidth: MIN_TERMINAL_WIDTH,
-          width: width != null ? width : undefined,
-        }}
-      >
-        {/* Header */}
-        <div className="h-7 min-h-[28px] flex items-center justify-between px-2 bg-background border-b border-r border-border flex-shrink-0">
-          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground min-w-0">
-            <Terminal className="w-3 h-3 flex-shrink-0" />
-            <span className="truncate">Shell</span>
-          </div>
-          {canClose && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="h-4 w-4 rounded-sm hover:bg-muted flex items-center justify-center opacity-60 hover:opacity-100 transition-opacity"
-                    aria-label="Close shell"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>Close</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-        </div>
-
-        {/* Terminal */}
-        <div className="flex-1 min-h-0 overflow-hidden border-r border-border" style={{ backgroundColor: "#1e1e1e" }}>
-          <ConsolidatedTerminal
-            ref={(el) => {
-              if (el) {
-                terminalRefs.current.set(terminalData.id, el);
-              } else {
-                terminalRefs.current.delete(terminalData.id);
-              }
-            }}
-            sessionId={terminalData.id}
-            workingDirectory={terminalData.workingDirectory}
-            onSessionError={onSessionError}
-            containerClassName="h-full w-full overflow-hidden"
-            terminalPaneClassName="w-full h-full"
-            isHidden={isHidden}
-          />
-        </div>
-      </div>
-    );
-  }
-);
 
 export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
   function WorkspaceTerminalPane({
@@ -245,51 +75,15 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
     const [terminalOrder, setTerminalOrder] = useState<string[]>([]);
 
     // Track terminal widths by ID (null means flex-1, number is fixed pixel width)
-    const [terminalWidths, setTerminalWidths] = useState<Map<string, number | null>>(new Map());
-
-    // Shared refs for all terminals
-    const terminalRefs = useRef<
-      Map<string, ConsolidatedTerminalHandle | null>
+    const [terminalWidths, setTerminalWidths] = useState<
+      Map<string, number | null>
     >(new Map());
 
-    // Track shell terminal IDs in a ref for cleanup on unmount
-    const shellTerminalIdsRef = useRef<string[]>(shellTerminals.map((t) => t.id));
-    useEffect(() => {
-      shellTerminalIdsRef.current = shellTerminals.map((t) => t.id);
-    }, [shellTerminals]);
+    // Shared refs for all terminals
+    const terminalRefs = useRef<Map<string, ConsolidatedTerminalHandle | null>>(
+      new Map()
+    );
 
-    // Cleanup all shell terminal PTYs on unmount only
-    useEffect(() => {
-      return () => {
-        shellTerminalIdsRef.current.forEach((id) => {
-          ptyClose(id).catch(console.error);
-        });
-      };
-    }, []);
-
-    // Track mounted Claude sessions when activeClaudeSessionId changes
-    useEffect(() => {
-      if (activeClaudeSessionId !== null) {
-        const claudeTerminalId = `claude-${activeClaudeSessionId}`;
-        const isNewSession = !mountedClaudeSessions.has(activeClaudeSessionId);
-
-        setMountedClaudeSessions((prev) => {
-          if (prev.has(activeClaudeSessionId)) return prev;
-          const next = new Set(prev);
-          next.add(activeClaudeSessionId);
-          return next;
-        });
-        // Add to terminal order if not already present
-        setTerminalOrder((prev) => {
-          if (prev.includes(claudeTerminalId)) return prev;
-          return [...prev, claudeTerminalId];
-        });
-        // Expand pane only when a NEW session is activated
-        if (isNewSession) {
-          setCollapsed(false);
-        }
-      }
-    }, [activeClaudeSessionId]);
 
     // Scroll to the right when new terminal is added
     useEffect(() => {
@@ -299,13 +93,30 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
       }
     }, [shellTerminals.length, mountedClaudeSessions.size]);
 
+    // Collapse pane when switching to a workspace with no terminals
+    useEffect(() => {
+      // Calculate terminals for this workspace
+      const claudeForWorkspace = claudeSessions.filter((s) => {
+        if (!mountedClaudeSessions.has(s.sessionId)) return false;
+        const sessionWorkingDir = s.workspacePath || s.repoPath;
+        return sessionWorkingDir === workingDirectory;
+      });
+      const shellsForWorkspace = shellTerminals.filter(
+        (t) => t.workingDirectory === workingDirectory
+      );
+
+      if (claudeForWorkspace.length === 0 && shellsForWorkspace.length === 0) {
+        setCollapsed(true);
+      }
+    }, [workingDirectory, claudeSessions, shellTerminals, mountedClaudeSessions]);
+
     // Add new shell terminal
     const handleAddShell = useCallback(() => {
-      const newId = `shell-${workingDirectory.replace(/[^a-zA-Z0-9]/g, "-")}-${Date.now()}`;
-      setShellTerminals((prev) => [
-        ...prev,
-        { id: newId, workingDirectory },
-      ]);
+      const newId = `shell-${workingDirectory.replace(
+        /[^a-zA-Z0-9]/g,
+        "-"
+      )}-${Date.now()}`;
+      setShellTerminals((prev) => [...prev, { id: newId, workingDirectory }]);
       // Add to terminal order (rightmost position)
       setTerminalOrder((prev) => [...prev, newId]);
       if (collapsed) {
@@ -313,22 +124,43 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
       }
     }, [workingDirectory, collapsed]);
 
+    // Create Agent session - mounts the Claude terminal and expands pane
+    const handleCreateAgentSession = useCallback(() => {
+      if (activeClaudeSessionId !== null) {
+        const claudeTerminalId = `claude-${activeClaudeSessionId}`;
+
+        setMountedClaudeSessions((prev) => {
+          if (prev.has(activeClaudeSessionId)) return prev;
+          const next = new Set(prev);
+          next.add(activeClaudeSessionId);
+          return next;
+        });
+
+        setTerminalOrder((prev) => {
+          if (prev.includes(claudeTerminalId)) return prev;
+          return [...prev, claudeTerminalId];
+        });
+
+        setCollapsed(false);
+      }
+      onCreateNewSession?.();
+    }, [activeClaudeSessionId, onCreateNewSession]);
+
     // Close shell terminal
-    const handleCloseShell = useCallback(
-      (terminalId: string) => {
-        ptyClose(terminalId).catch(console.error);
-        terminalRefs.current.delete(terminalId);
-        setShellTerminals((prev) => prev.filter((t) => t.id !== terminalId));
-        setTerminalOrder((prev) => prev.filter((id) => id !== terminalId));
-      },
-      []
-    );
+    const handleCloseShell = useCallback((terminalId: string) => {
+      ptyClose(terminalId).catch(console.error);
+      terminalRefs.current.delete(terminalId);
+      setShellTerminals((prev) => prev.filter((t) => t.id !== terminalId));
+      setTerminalOrder((prev) => prev.filter((id) => id !== terminalId));
+    }, []);
 
     // Close Claude session
     const handleCloseClaudeSession = useCallback(
       (sessionId: number) => {
         const claudeTerminalId = `claude-${sessionId}`;
-        const sessionData = claudeSessions.find((s) => s.sessionId === sessionId);
+        const sessionData = claudeSessions.find(
+          (s) => s.sessionId === sessionId
+        );
         if (sessionData) {
           ptyClose(sessionData.ptySessionId).catch(console.error);
           terminalRefs.current.delete(claudeTerminalId);
@@ -338,7 +170,9 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
           next.delete(sessionId);
           return next;
         });
-        setTerminalOrder((prev) => prev.filter((id) => id !== claudeTerminalId));
+        setTerminalOrder((prev) =>
+          prev.filter((id) => id !== claudeTerminalId)
+        );
         onCloseSession?.(sessionId);
       },
       [claudeSessions, onCloseSession]
@@ -396,13 +230,19 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
           if (!container) return prev;
 
           // Get current widths - if null, calculate from actual element width
-          const leftEl = container.querySelector(`[data-terminal-id="${leftId}"]`) as HTMLElement | null;
-          const rightEl = container.querySelector(`[data-terminal-id="${rightId}"]`) as HTMLElement | null;
+          const leftEl = container.querySelector(
+            `[data-terminal-id="${leftId}"]`
+          ) as HTMLElement | null;
+          const rightEl = container.querySelector(
+            `[data-terminal-id="${rightId}"]`
+          ) as HTMLElement | null;
 
           if (!leftEl || !rightEl) return prev;
 
-          const leftCurrentWidth = prev.get(leftId) ?? leftEl.getBoundingClientRect().width;
-          const rightCurrentWidth = prev.get(rightId) ?? rightEl.getBoundingClientRect().width;
+          const leftCurrentWidth =
+            prev.get(leftId) ?? leftEl.getBoundingClientRect().width;
+          const rightCurrentWidth =
+            prev.get(rightId) ?? rightEl.getBoundingClientRect().width;
 
           // Calculate new widths
           let newLeftWidth = leftCurrentWidth + deltaX;
@@ -421,7 +261,10 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
           }
 
           // Don't update if either would be below minimum
-          if (newLeftWidth < MIN_TERMINAL_WIDTH || newRightWidth < MIN_TERMINAL_WIDTH) {
+          if (
+            newLeftWidth < MIN_TERMINAL_WIDTH ||
+            newRightWidth < MIN_TERMINAL_WIDTH
+          ) {
             return prev;
           }
 
@@ -459,7 +302,9 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
     );
 
     // Build ordered list of all terminals for rendering based on terminalOrder
-    const shellTerminalMap = new Map(shellTerminalsForWorkspace.map((t) => [t.id, t]));
+    const shellTerminalMap = new Map(
+      shellTerminalsForWorkspace.map((t) => [t.id, t])
+    );
     const claudeSessionMap = new Map(
       claudeSessionsToRender.map((s) => [`claude-${s.sessionId}`, s])
     );
@@ -482,9 +327,7 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
         }
         return null;
       })
-      .filter(
-        (t): t is NonNullable<typeof t> => t !== null
-      );
+      .filter((t): t is NonNullable<typeof t> => t !== null);
 
     // When completely hidden, render terminals in hidden div to keep PTY sessions alive
     if (isHidden) {
@@ -549,61 +392,61 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
         >
           {/* Pane Header */}
           <div className="h-8 min-h-[32px] flex items-center justify-between px-2 border-b bg-muted/30 flex-shrink-0">
-            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <div className="flex items-center gap-2 font-medium text-muted-foreground">
               <Terminal className="w-3.5 h-3.5" />
-              <span>Terminals ({totalTerminals})</span>
+              <span>Terminals</span>
             </div>
 
-            <div className="flex items-center gap-1">
-              {/* Add new terminal dropdown */}
-              {!collapsed && (
-                <DropdownMenu>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            type="button"
-                            className="h-5 w-5 rounded-sm hover:bg-muted flex items-center justify-center"
-                            aria-label="New terminal"
-                          >
-                            <Plus className="w-3 h-3" />
-                          </button>
-                        </DropdownMenuTrigger>
-                      </TooltipTrigger>
-                      <TooltipContent>New Terminal</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <DropdownMenuContent align="end" sideOffset={4}>
-                    <DropdownMenuItem
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        onCreateNewSession?.();
-                      }}
+            <div className="flex items-center gap-2">
+              {/* New Agent button */}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      onClick={handleCreateAgentSession}
+                      variant={totalTerminals === 0 ? "default" : "ghost"}
+                      className={cn(
+                        "h-6 px-2 rounded-sm gap-1",
+                        totalTerminals === 0
+                          ? ""
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                      aria-label="New Agent"
                     >
-                      <Bot className="w-3 h-3 mr-2" />
-                      New Agent Session
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        handleAddShell();
-                      }}
+                      <Bot className="w-4 h-4" />
+                        Agent
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>New Agent Session</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              {/* New Shell button */}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      onClick={handleAddShell}
+                      variant="ghost"
+                      className="h-6 px-2 rounded-sm gap-1 text-muted-foreground hover:text-foreground"
+                      aria-label="New Shell"
                     >
-                      <Terminal className="w-3 h-3 mr-2" />
-                      New Shell
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
+                      <Terminal className="w-4 h-4" /> Shell
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>New Shell</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               {/* Collapse/Expand button */}
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button
+                    <Button
                       type="button"
                       onClick={() => setCollapsed(!collapsed)}
-                      className="h-5 w-5 rounded-sm hover:bg-muted flex items-center justify-center"
+                      variant="ghost"
+                      className="h-5 w-5 rounded-sm p-0"
                       aria-label={
                         collapsed ? "Expand terminal" : "Collapse terminal"
                       }
@@ -613,7 +456,7 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
                       ) : (
                         <ChevronDown className="w-3 h-3" />
                       )}
-                    </button>
+                    </Button>
                   </TooltipTrigger>
                   <TooltipContent>
                     {collapsed ? "Expand (⌘+`)" : "Collapse (⌘+`)"}
@@ -652,9 +495,10 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
                       {!isLastTerminal && nextTerminal && (
                         <ResizeDivider
                           onResize={(deltaX) => {
-                            const nextId = nextTerminal.type === "shell"
-                              ? nextTerminal.data.id
-                              : `claude-${nextTerminal.data.sessionId}`;
+                            const nextId =
+                              nextTerminal.type === "shell"
+                                ? nextTerminal.data.id
+                                : `claude-${nextTerminal.data.sessionId}`;
                             handleTerminalResize(terminalId, nextId, deltaX);
                           }}
                         />
@@ -673,7 +517,11 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
                         }
                         onRename={
                           onRenameSession
-                            ? (newName) => onRenameSession(terminal.data.sessionId, newName)
+                            ? (newName) =>
+                                onRenameSession(
+                                  terminal.data.sessionId,
+                                  newName
+                                )
                             : undefined
                         }
                         onSessionError={onSessionError}
@@ -698,9 +546,10 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
                       {!isLastTerminal && nextTerminal && (
                         <ResizeDivider
                           onResize={(deltaX) => {
-                            const nextId = nextTerminal.type === "shell"
-                              ? nextTerminal.data.id
-                              : `claude-${nextTerminal.data.sessionId}`;
+                            const nextId =
+                              nextTerminal.type === "shell"
+                                ? nextTerminal.data.id
+                                : `claude-${nextTerminal.data.sessionId}`;
                             handleTerminalResize(terminalId, nextId, deltaX);
                           }}
                         />

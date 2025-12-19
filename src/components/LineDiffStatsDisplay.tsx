@@ -1,6 +1,11 @@
 import { memo } from "react";
 import { cn } from "../lib/utils";
-import type { LineDiffStats } from "../lib/api";
+
+// Define LineDiffStats locally since git API was removed
+export interface LineDiffStats {
+  lines_added: number;
+  lines_deleted: number;
+}
 
 interface LineDiffStatsDisplayProps {
   stats: LineDiffStats | null;
@@ -21,7 +26,7 @@ export const LineDiffStatsDisplay = memo<LineDiffStatsDisplayProps>(
 
     const sizeClasses = {
       xs: "text-[10px]",
-      sm: "text-xs",
+      sm: "text-sm",
       md: "text-sm",
     };
 

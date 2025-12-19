@@ -1,5 +1,6 @@
 use crate::db::Workspace;
 use crate::local_db;
+use crate::jj::{self, JjRebaseResult};
 use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
 
@@ -65,4 +66,30 @@ pub fn ensure_workspace_indexed(
     crate::file_indexer::index_workspace_files(&repo_path, workspace_id, &workspace_path)?;
 
     Ok(true)
+}
+
+#[tauri::command]
+pub fn set_workspace_target_branch(
+    repo_path: String,
+    workspace_path: String,
+    id: i64,
+    target_branch: String,
+) -> Result<JjRebaseResult, String> {
+    // Convert Git remote branch format (origin/main) to jj format (main@origin)
+    let jj_branch_name = if target_branch.starts_with("origin/") {
+        target_branch.replace("origin/", "") + "@origin"
+    } else {
+        target_branch.clone()
+    };
+
+    // Perform rebase
+    let rebase_result = jj::jj_rebase_onto(&workspace_path, &jj_branch_name)
+        .map_err(|e| e.to_string())?;
+
+    // If rebase succeeded (even with conflicts), save the target branch (in Git format for UI)
+    if rebase_result.success || rebase_result.has_conflicts {
+        local_db::update_workspace_target_branch(&repo_path, id, &target_branch)?;
+    }
+
+    Ok(rebase_result)
 }
