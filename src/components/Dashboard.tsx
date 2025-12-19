@@ -55,12 +55,7 @@ const LoadingSpinner = () => (
   </div>
 );
 
-type ViewMode =
-  | "session"
-  | "workspace-edit"
-  | "workspace-session"
-  | "merge-review"
-  | "settings";
+type ViewMode = "session" | "workspace-session" | "settings";
 
 type SessionOpenOptions = {
   initialPrompt?: string;
@@ -375,6 +370,7 @@ export const Dashboard: React.FC = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+      handleReturnToDashboard(); // Navigate to dashboard & clear selected workspace
       addToast({
         title: "Workspace Deleted",
         description: "Workspace has been removed successfully",
@@ -528,8 +524,7 @@ export const Dashboard: React.FC = () => {
 
   const isSessionView =
     viewMode === "session" || viewMode === "workspace-session";
-  const showSidebar =
-    viewMode !== "merge-review" && viewMode !== "workspace-edit";
+  const showSidebar = viewMode !== "settings";
 
   // Build Claude sessions data for the terminal pane
   const claudeSessionsForPane = useMemo((): ClaudeSessionData[] => {
