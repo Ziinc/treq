@@ -828,26 +828,17 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     // Advance the bookmark if we found a valid branch name
     if let Some(ref branch) = branch_name {
         // Set the bookmark to point at @- (the commit with the actual content)
-        if let Err(e) = jj_set_bookmark(workspace_path, branch, "@-") {
-            eprintln!("Warning: Failed to advance bookmark '{}': {}", branch, e);
-            // Don't fail the commit for bookmark errors
-        }
+        jj_set_bookmark(workspace_path, branch, "@-")
+            .map_err(|e| JjError::IoError(format!("Failed to advance bookmark '{}': {}", branch, e)))?;
 
         // Checkout the branch in git to avoid detached HEAD
         if let Some(ref rp) = repo_path {
-            match Command::new("git")
+            let checkout = Command::new("git")
                 .current_dir(rp)
                 .args(["checkout", branch])
-                .output()
-            {
-                Ok(output) => {
-                    let stdout = String::from_utf8_lossy(&output.stdout);
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    eprintln!("git checkout {}: {}{}", branch, stdout, stderr);
-                }
-                Err(e) => {
-                    eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
-                }
+                .output();
+            if let Err(e) = checkout {
+                eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
             }
         }
     }
