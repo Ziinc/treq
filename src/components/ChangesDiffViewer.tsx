@@ -11,6 +11,7 @@ import {
 } from "react";
 import { type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { openPath } from "@tauri-apps/plugin-opener";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { v4 as uuidv4 } from "uuid";
 import {
   jjGetChangedFiles,
@@ -878,6 +879,21 @@ export const ChangesDiffViewer = memo(
 
       useEffect(() => {
         loadChangedFiles();
+      }, []);
+
+      // Refresh changed files when window regains focus
+      useEffect(() => {
+        const unlistenFocus = getCurrentWindow().onFocusChanged(
+          ({ payload: focused }) => {
+            if (focused) {
+              loadChangedFiles();
+            }
+          }
+        );
+
+        return () => {
+          unlistenFocus.then((fn) => fn());
+        };
       }, []);
 
       // Clear stale viewed files when files change (file no longer in changed list = remove from viewed)
