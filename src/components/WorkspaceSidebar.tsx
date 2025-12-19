@@ -88,7 +88,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
               }`}
               onClick={() => onWorkspaceClick?.(undefined as any)}
             >
-              <GitBranch className={`w-3 h-3 mr-1 shrink-0 ${selectedWorkspaceId === null ? "text-primary" : "text-muted-foreground"}`} />
+              <Home className={`w-3 h-3 mr-1 shrink-0 ${selectedWorkspaceId === null ? "text-primary" : "text-muted-foreground"}`} />
               <span
                 className={`flex-1 min-w-0 truncate font-mono ${selectedWorkspaceId === null ? "text-primary font-medium" : "text-muted-foreground"}`}
                 title={currentBranch || "Main"}
@@ -164,23 +164,8 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
           </div>
 
           {/* Footer with actions */}
-          {(openSettings || navigateToDashboard) && (
+          {openSettings && (
             <div className="border-t border-border px-2 h-8 min-h-[32px] flex items-center gap-2">
-              {navigateToDashboard && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={navigateToDashboard}
-                      className="h-6 w-6 rounded-md hover:bg-muted flex items-center justify-center transition-colors"
-                      aria-label="Home"
-                    >
-                      <Home className="w-5 h-5 text-muted-foreground" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">Home</TooltipContent>
-                </Tooltip>
-              )}
               {openSettings && (
                 <Tooltip>
                   <TooltipTrigger asChild>
