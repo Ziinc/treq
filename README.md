@@ -24,6 +24,7 @@ Inspect and iterate on each change for a human-in-the-loop agentic workflow.
 <!-- insert gif of a review -->
 
 - Spotted an issue when browsing files? Send it to an agent for adjustments in the background.
+
 <!-- insert gif of file browser code comment flow -->
 
 ### Isolated Workspaces
