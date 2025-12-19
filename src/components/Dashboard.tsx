@@ -524,7 +524,7 @@ export const Dashboard: React.FC = () => {
 
   const isSessionView =
     viewMode === "session" || viewMode === "workspace-session";
-  const showSidebar = viewMode !== "settings";
+  const showSidebar = true;
 
   // Build Claude sessions data for the terminal pane
   const claudeSessionsForPane = useMemo((): ClaudeSessionData[] => {
