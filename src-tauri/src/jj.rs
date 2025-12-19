@@ -792,60 +792,28 @@ fn derive_repo_path_from_workspace(workspace_path: &str) -> Option<String> {
 
 /// Commit with message and create new working copy
 pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError> {
-    // Determine branch name BEFORE committing - fail early if we can't determine it
-    let mut branch_name: Option<String> = None;
-    let repo_path = derive_repo_path_from_workspace(workspace_path);
+    // For workspaces, derive repo path; for main repo, use workspace_path itself
+    let repo_path = derive_repo_path_from_workspace(workspace_path)
+        .unwrap_or_else(|| workspace_path.to_string());
 
-    // Try to get branch name from database first (workspace record)
-    if let Some(ref rp) = repo_path {
-        if let Ok(db_branch) = local_db::get_workspace_branch_name(rp, workspace_path) {
-            branch_name = db_branch;
-        }
-    }
+    // First check what branch git is currently checked out at
+    let rp = &repo_path;
 
-    // Fallback for main repo case: try current git branch, then default branch
-    if branch_name.is_none() {
-        if let Some(ref rp) = repo_path {
-            // First try the branch git was previously on (git rev-parse)
-            if let Ok(git_branch) = get_workspace_branch(rp) {
-                if !git_branch.is_empty() && git_branch != "HEAD" {
-                    branch_name = Some(git_branch);
-                }
-            }
-            // Try `git branch` command to find current branch (marked with *)
-            if branch_name.is_none() {
-                if let Ok(output) = Command::new("git")
-                    .current_dir(rp)
-                    .args(["branch"])
-                    .output()
-                {
-                    if output.status.success() {
-                        let stdout = String::from_utf8_lossy(&output.stdout);
-                        for line in stdout.lines() {
-                            if line.starts_with("* ") {
-                                let current = line.trim_start_matches("* ").trim();
-                                if !current.is_empty() && !current.starts_with("(") {
-                                    branch_name = Some(current.to_string());
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            // If still none, fall back to default branch
-            if branch_name.is_none() {
-                if let Ok(default_branch) = get_default_branch(rp) {
-                    branch_name = Some(default_branch);
-                }
-            }
-        }
-    }
-
-    // Branch name is required - fail before committing if we can't determine it
-    let branch = branch_name.ok_or_else(|| {
-        JjError::IoError("Cannot determine branch name for workspace. Commit aborted.".to_string())
+    let git_branch = get_workspace_branch(rp).map_err(|e| {
+        JjError::IoError(format!(
+            "Failed to determine current git branch: {}. Please checkout a branch before committing.",
+            e
+        ))
     })?;
+
+    // Fail if not on a valid branch (empty or detached HEAD)
+    if git_branch.is_empty() || git_branch == "HEAD" {
+        return Err(JjError::IoError(
+            "Git is not checked out to a branch. Please checkout a branch before committing.".to_string(),
+        ));
+    }
+
+    let branch = git_branch;
 
     // Now commit with message (sets message on current change and creates new empty change)
     let commit = Command::new("jj")
@@ -865,14 +833,12 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
         .map_err(|e| JjError::IoError(format!("Failed to advance bookmark '{}': {}", branch, e)))?;
 
     // Checkout the branch in git to avoid detached HEAD
-    if let Some(ref rp) = repo_path {
-        let checkout = Command::new("git")
-            .current_dir(rp)
-            .args(["checkout", &branch])
-            .output();
-        if let Err(e) = checkout {
-            eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
-        }
+    let checkout = Command::new("git")
+        .current_dir(&repo_path)
+        .args(["checkout", &branch])
+        .output();
+    if let Err(e) = checkout {
+        eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
     }
 
     Ok(format!("Committed successfully to branch '{}'", branch))
