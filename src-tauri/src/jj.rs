@@ -851,7 +851,28 @@ pub fn jj_split(
     message: &str,
     file_paths: Vec<String>,
 ) -> Result<String, JjError> {
-    // Build the jj split command
+    // Derive repo path (same as jj_commit)
+    let repo_path = derive_repo_path_from_workspace(workspace_path)
+        .unwrap_or_else(|| workspace_path.to_string());
+
+    // Get and validate git branch (same as jj_commit)
+    let git_branch = get_workspace_branch(&repo_path).map_err(|e| {
+        JjError::IoError(format!(
+            "Failed to determine current git branch: {}. Please checkout a branch before committing.",
+            e
+        ))
+    })?;
+
+    if git_branch.is_empty() || git_branch == "HEAD" {
+        return Err(JjError::IoError(
+            "Git is not checked out to a branch. Please checkout a branch before committing."
+                .to_string(),
+        ));
+    }
+
+    let branch = git_branch;
+
+    // Build and execute the jj split command
     let mut cmd = Command::new("jj");
     cmd.current_dir(workspace_path);
     cmd.args(["split", "-r", "@", "-m", message]);
@@ -869,47 +890,23 @@ pub fn jj_split(
         ));
     }
 
-    // After split, advance the bookmark to the parent commit (@- has the selected files)
-    // Try to get branch name from database first
-    let mut branch_name: Option<String> = None;
-    let repo_path = derive_repo_path_from_workspace(workspace_path);
+    // Set the bookmark to point at @- (critical - same as jj_commit)
+    jj_set_bookmark(workspace_path, &branch, "@-")
+        .map_err(|e| JjError::IoError(format!("Failed to advance bookmark '{}': {}", branch, e)))?;
 
-    if let Some(ref rp) = repo_path {
-        if let Ok(db_branch) = local_db::get_workspace_branch_name(rp, workspace_path) {
-            branch_name = db_branch;
-        }
+    // Checkout the branch in git to avoid detached HEAD
+    let checkout = Command::new("git")
+        .current_dir(&repo_path)
+        .args(["checkout", &branch])
+        .output();
+    if let Err(e) = checkout {
+        eprintln!(
+            "Warning: Failed to checkout git branch '{}': {}",
+            branch, e
+        );
     }
 
-    // Fallback to git detection if database lookup failed
-    if branch_name.is_none() {
-        if let Ok(git_branch) = get_workspace_branch(workspace_path) {
-            if !git_branch.is_empty() && git_branch != "HEAD" {
-                branch_name = Some(git_branch);
-            }
-        }
-    }
-
-    // Advance the bookmark if we found a valid branch name
-    if let Some(ref branch) = branch_name {
-        // Set the bookmark to point at @- (the parent with selected files)
-        if let Err(e) = jj_set_bookmark(workspace_path, branch, "@-") {
-            eprintln!("Warning: Failed to advance bookmark '{}': {}", branch, e);
-            // Don't fail the split for bookmark errors
-        }
-
-        // Checkout the branch in git to avoid detached HEAD
-        if let Some(ref rp) = repo_path {
-            let checkout = Command::new("git")
-                .current_dir(rp)
-                .args(["checkout", branch])
-                .output();
-            if let Err(e) = checkout {
-                eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
-            }
-        }
-    }
-
-    Ok("Split successfully".to_string())
+    Ok(format!("Committed successfully to branch '{}'", branch))
 }
 
 /// Rebase the current workspace onto a target branch
