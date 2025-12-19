@@ -227,6 +227,7 @@ pub fn run() {
             commands::jj_restore_file,
             commands::jj_restore_all,
             commands::jj_commit,
+            commands::jj_split,
             commands::jj_is_workspace,
             commands::jj_init,
             commands::jj_rebase_onto,

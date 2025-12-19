@@ -7,8 +7,6 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::Command;
 
-use git2::Repository;
-
 use crate::local_db;
 
 /// Error type for jj operations
@@ -837,11 +835,12 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
 
         // Checkout the branch in git to avoid detached HEAD
         if let Some(ref rp) = repo_path {
-            if let Ok(repo) = Repository::open(rp) {
-                let refname = format!("refs/heads/{}", branch);
-                if let Err(e) = repo.set_head(&refname) {
-                    eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
-                }
+            let checkout = Command::new("git")
+                .current_dir(rp)
+                .args(["checkout", branch])
+                .output();
+            if let Err(e) = checkout {
+                eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
             }
         }
     }
@@ -904,11 +903,12 @@ pub fn jj_split(
 
         // Checkout the branch in git to avoid detached HEAD
         if let Some(ref rp) = repo_path {
-            if let Ok(repo) = Repository::open(rp) {
-                let refname = format!("refs/heads/{}", branch);
-                if let Err(e) = repo.set_head(&refname) {
-                    eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
-                }
+            let checkout = Command::new("git")
+                .current_dir(rp)
+                .args(["checkout", branch])
+                .output();
+            if let Err(e) = checkout {
+                eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
             }
         }
     }
