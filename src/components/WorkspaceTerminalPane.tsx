@@ -85,6 +85,27 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
     );
 
 
+    // Auto-mount active session when it changes (after creation or selection)
+    useEffect(() => {
+      if (activeClaudeSessionId === null) return;
+
+      const claudeTerminalId = `claude-${activeClaudeSessionId}`;
+
+      setMountedClaudeSessions((prev) => {
+        if (prev.has(activeClaudeSessionId)) return prev;
+        const next = new Set(prev);
+        next.add(activeClaudeSessionId);
+        return next;
+      });
+
+      setTerminalOrder((prev) => {
+        if (prev.includes(claudeTerminalId)) return prev;
+        return [...prev, claudeTerminalId];
+      });
+
+      setCollapsed(false);
+    }, [activeClaudeSessionId]);
+
     // Scroll to the right when new terminal is added
     useEffect(() => {
       if (scrollContainerRef.current) {
@@ -124,27 +145,10 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
       }
     }, [workingDirectory, collapsed]);
 
-    // Create Agent session - mounts the Claude terminal and expands pane
+    // Create Agent session - creates a new Claude session
     const handleCreateAgentSession = useCallback(() => {
-      if (activeClaudeSessionId !== null) {
-        const claudeTerminalId = `claude-${activeClaudeSessionId}`;
-
-        setMountedClaudeSessions((prev) => {
-          if (prev.has(activeClaudeSessionId)) return prev;
-          const next = new Set(prev);
-          next.add(activeClaudeSessionId);
-          return next;
-        });
-
-        setTerminalOrder((prev) => {
-          if (prev.includes(claudeTerminalId)) return prev;
-          return [...prev, claudeTerminalId];
-        });
-
-        setCollapsed(false);
-      }
       onCreateNewSession?.();
-    }, [activeClaudeSessionId, onCreateNewSession]);
+    }, [onCreateNewSession]);
 
     // Close shell terminal
     const handleCloseShell = useCallback((terminalId: string) => {

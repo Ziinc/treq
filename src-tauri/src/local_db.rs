@@ -1,5 +1,5 @@
 use chrono::Utc;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
@@ -317,6 +317,21 @@ pub fn update_workspace_target_branch(
     )
     .map_err(|e| format!("Failed to update workspace target branch: {}", e))?;
     Ok(())
+}
+
+/// Get the branch_name for a workspace by its workspace_path
+pub fn get_workspace_branch_name(repo_path: &str, workspace_path: &str) -> Result<Option<String>, String> {
+    let conn = get_connection(repo_path)?;
+    let mut stmt = conn
+        .prepare("SELECT branch_name FROM workspaces WHERE workspace_path = ?1")
+        .map_err(|e| format!("Failed to prepare branch_name query: {}", e))?;
+
+    let result = stmt
+        .query_row(params![workspace_path], |row| row.get::<_, String>(0))
+        .optional()
+        .map_err(|e| format!("Failed to query branch_name: {}", e))?;
+
+    Ok(result)
 }
 
 pub fn rebuild_workspaces_from_filesystem(repo_path: &str) -> Result<Vec<Workspace>, String> {
