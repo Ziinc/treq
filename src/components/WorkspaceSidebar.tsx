@@ -67,18 +67,43 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
       <TooltipProvider delayDuration={200} skipDelayDuration={100}>
         <div className="group/sidebar w-[240px] bg-sidebar border-r border-border flex flex-col h-screen">
           {/* Repository selector / Command palette trigger */}
-          <button
-            onClick={onOpenCommandPalette}
-            className="flex items-center gap-2 mx-2 mt-2 px-3 py-1.5 rounded-lg border border-border bg-muted/50 hover:bg-muted text-muted-foreground transition-colors"
-          >
-            <Search className="w-4 h-4 shrink-0" />
-            <span className="flex-1 text-left truncate">
-              {repoName}
-            </span>
-            <span className="text-[10px] text-muted-foreground/60 shrink-0">
-              ⌘K
-            </span>
-          </button>
+          <div className="flex items-center gap-2 mx-2 mt-2">
+            <button
+              onClick={onOpenCommandPalette}
+              className="flex items-center gap-2 flex-1 px-3 py-1.5 rounded-lg border border-border bg-muted/50 hover:bg-muted text-muted-foreground transition-colors"
+            >
+              <Search className="w-4 h-4 shrink-0" />
+              <span className="flex-1 text-left truncate">
+                {repoName}
+              </span>
+              <span className="text-[10px] text-muted-foreground/60 shrink-0">
+                ⌘K
+              </span>
+            </button>
+            {openSettings && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => openSettings("application")}
+                    className={`h-9 w-9 rounded-lg hover:bg-muted flex items-center justify-center transition-colors border border-border ${
+                      currentPage === "settings" ? "bg-primary/20" : "bg-muted/50"
+                    }`}
+                    aria-label="Settings"
+                  >
+                    <Settings
+                      className={`w-4 h-4 ${
+                        currentPage === "settings"
+                          ? "text-primary"
+                          : "text-muted-foreground"
+                      }`}
+                    />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Settings</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
 
           <div className="pl-1 pr-2 py-2 space-y-1 min-h-[120px] flex-1 overflow-y-auto">
             {/* Main repository section */}
@@ -162,35 +187,6 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
               )}
             </div>
           </div>
-
-          {/* Footer with actions */}
-          {openSettings && (
-            <div className="border-t border-border px-2 h-8 min-h-[32px] flex items-center gap-2">
-              {openSettings && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={() => openSettings("application")}
-                      className={`h-6 w-6 rounded-md hover:bg-muted flex items-center justify-center transition-colors ${
-                        currentPage === "settings" ? "bg-primary/20" : ""
-                      }`}
-                      aria-label="Settings"
-                    >
-                      <Settings
-                        className={`w-5 h-5 ${
-                          currentPage === "settings"
-                            ? "text-primary"
-                            : "text-muted-foreground"
-                        }`}
-                      />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">Settings</TooltipContent>
-                </Tooltip>
-              )}
-            </div>
-          )}
         </div>
       </TooltipProvider>
     );
