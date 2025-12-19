@@ -816,11 +816,20 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
         }
     }
 
-    // Fallback to git detection if database lookup failed
+    // Fallback for main repo case: try current git branch, then default branch
     if branch_name.is_none() {
-        if let Ok(git_branch) = get_workspace_branch(workspace_path) {
-            if !git_branch.is_empty() && git_branch != "HEAD" {
-                branch_name = Some(git_branch);
+        if let Some(ref rp) = repo_path {
+            // First try the branch git was previously on
+            if let Ok(git_branch) = get_workspace_branch(rp) {
+                if !git_branch.is_empty() && git_branch != "HEAD" {
+                    branch_name = Some(git_branch);
+                }
+            }
+            // If still none, fall back to default branch
+            if branch_name.is_none() {
+                if let Ok(default_branch) = get_default_branch(rp) {
+                    branch_name = Some(default_branch);
+                }
             }
         }
     }
