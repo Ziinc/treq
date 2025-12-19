@@ -26,8 +26,12 @@ export function useKeyboardShortcut(
         return;
       }
 
-      // Don't intercept events when terminal is focused
-      if (isWithinTerminal(target) || isWithinTerminal(activeElement)) {
+      // Allow specific global shortcuts to work even when terminal is focused
+      const allowInTerminal = ['k', 'j', 'n', 'Escape'];
+      const shouldAllow = (ctrlOrCmd && allowInTerminal.includes(key)) ||
+                          (!ctrlOrCmd && key === 'Escape');
+
+      if (!shouldAllow && (isWithinTerminal(target) || isWithinTerminal(activeElement))) {
         return;
       }
 
