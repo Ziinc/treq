@@ -6,6 +6,7 @@ import { TerminalSettingsProvider } from "./hooks/useTerminalSettings";
 import { DiffSettingsProvider } from "./hooks/useDiffSettings";
 import { useSettingsPreloader } from "./hooks/useSettingsPreloader";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { PrismThemeLoader } from "./components/PrismThemeLoader";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -41,6 +42,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
+        <PrismThemeLoader />
         <TerminalSettingsProvider>
           <DiffSettingsProvider>
             <ToastProvider>

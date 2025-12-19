@@ -16,6 +16,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "../ui/tooltip";
+import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
 import { ptyClose, setSessionModel, getSessionModel } from "../../lib/api";
 import {
@@ -256,7 +257,7 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
       >
         {/* Header */}
         <div className="h-7 min-h-[28px] flex items-center justify-between px-2 bg-background border-b border-r border-border flex-shrink-0">
-          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground min-w-0">
+          <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground min-w-0">
             <Bot className="w-3 h-3 flex-shrink-0" />
             {isEditingName ? (
               <input
@@ -266,7 +267,7 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
                 onChange={(e) => setEditNameValue(e.target.value)}
                 onKeyDown={handleNameKeyDown}
                 onBlur={saveEditedName}
-                className="bg-muted border border-border rounded px-1 py-0 text-xs font-medium text-foreground w-full max-w-[150px] outline-none focus:ring-1 focus:ring-primary"
+                className="bg-muted border border-border rounded px-1 py-0 text-sm font-medium text-foreground w-full max-w-[150px] outline-none focus:ring-1 focus:ring-primary"
               />
             ) : (
               <span
@@ -289,11 +290,12 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button
+                  <Button
                     type="button"
                     onClick={handleReset}
                     disabled={isResetting}
-                    className="h-5 w-5 rounded-sm hover:bg-muted flex items-center justify-center opacity-60 hover:opacity-100 transition-opacity disabled:opacity-30"
+                    variant="ghost"
+                    className="h-5 w-5 rounded-sm p-0 opacity-60 hover:opacity-100 disabled:opacity-30"
                     aria-label="Reset terminal"
                   >
                     {isResetting ? (
@@ -301,7 +303,7 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
                     ) : (
                       <RotateCw className="w-3 h-3" />
                     )}
-                  </button>
+                  </Button>
                 </TooltipTrigger>
                 <TooltipContent>Reset</TooltipContent>
               </Tooltip>
@@ -310,14 +312,15 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button
+                  <Button
                     type="button"
                     onClick={openSearchPanel}
-                    className="h-5 w-5 rounded-sm hover:bg-muted flex items-center justify-center opacity-60 hover:opacity-100 transition-opacity"
+                    variant="ghost"
+                    className="h-5 w-5 rounded-sm p-0 opacity-60 hover:opacity-100"
                     aria-label="Search"
                   >
                     <Search className="w-3 h-3" />
-                  </button>
+                  </Button>
                 </TooltipTrigger>
                 <TooltipContent>Search (⌘+F)</TooltipContent>
               </Tooltip>
@@ -327,14 +330,15 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button
+                    <Button
                       type="button"
                       onClick={onClose}
-                      className="h-5 w-5 rounded-sm hover:bg-muted flex items-center justify-center opacity-60 hover:opacity-100 transition-opacity"
+                      variant="ghost"
+                      className="h-5 w-5 rounded-sm p-0 opacity-60 hover:opacity-100"
                       aria-label="Close session"
                     >
                       <X className="w-3 h-3" />
-                    </button>
+                    </Button>
                   </TooltipTrigger>
                   <TooltipContent>Close</TooltipContent>
                 </Tooltip>
@@ -359,15 +363,16 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button
+                    <Button
                       type="button"
-                      className="h-5 w-5 rounded-sm bg-background text-muted-foreground flex items-center justify-center transition-colors hover:text-foreground hover:bg-muted disabled:opacity-50 disabled:pointer-events-none"
+                      variant="ghost"
+                      className="h-5 w-5 rounded-sm p-0 bg-background text-muted-foreground hover:text-foreground"
                       onClick={() => runSearch("previous")}
                       disabled={!searchQuery.trim()}
                       aria-label="Find previous"
                     >
                       <ChevronUp className="w-3.5 h-3.5" />
-                    </button>
+                    </Button>
                   </TooltipTrigger>
                   <TooltipContent>Previous (Shift+Enter)</TooltipContent>
                 </Tooltip>
@@ -375,15 +380,16 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button
+                    <Button
                       type="button"
-                      className="h-5 w-5 rounded-sm bg-background text-muted-foreground flex items-center justify-center transition-colors hover:text-foreground hover:bg-muted disabled:opacity-50 disabled:pointer-events-none"
+                      variant="ghost"
+                      className="h-5 w-5 rounded-sm p-0 bg-background text-muted-foreground hover:text-foreground"
                       onClick={() => runSearch("next")}
                       disabled={!searchQuery.trim()}
                       aria-label="Find next"
                     >
                       <ChevronDown className="w-3.5 h-3.5" />
-                    </button>
+                    </Button>
                   </TooltipTrigger>
                   <TooltipContent>Next (Enter)</TooltipContent>
                 </Tooltip>
@@ -391,14 +397,15 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button
+                    <Button
                       type="button"
-                      className="h-5 w-5 rounded-sm bg-background text-muted-foreground flex items-center justify-center transition-colors hover:text-foreground hover:bg-muted"
+                      variant="ghost"
+                      className="h-5 w-5 rounded-sm p-0 bg-background text-muted-foreground hover:text-foreground"
                       onClick={closeSearchPanel}
                       aria-label="Close search"
                     >
                       <X className="w-3.5 h-3.5" />
-                    </button>
+                    </Button>
                   </TooltipTrigger>
                   <TooltipContent>Close (Esc)</TooltipContent>
                 </Tooltip>

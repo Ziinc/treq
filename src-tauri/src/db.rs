@@ -13,6 +13,7 @@ pub struct Workspace {
     pub branch_name: String,
     pub created_at: String,
     pub metadata: Option<String>,
+    pub target_branch: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

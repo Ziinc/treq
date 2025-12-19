@@ -1,7 +1,12 @@
 import { useMemo, useState, useEffect } from "react";
-import type { BranchDiffFileChange } from "../lib/api";
 import { cn } from "../lib/utils";
 import { Folder, FolderOpen, FileText } from "lucide-react";
+
+// Define BranchDiffFileChange locally since git API was removed
+export interface BranchDiffFileChange {
+  path: string;
+  status: string;
+}
 
 interface FileTreeViewProps {
   files: BranchDiffFileChange[];
@@ -149,14 +154,14 @@ export const FileTreeView: React.FC<FileTreeViewProps> = ({
       const isOpen = expanded.has(node.path);
       const hasChanges = hasChangesInFolder(node);
       return (
-        <div key={node.path} className="text-xs">
+        <div key={node.path} className="text-sm">
           <button
             type="button"
             className="flex items-center gap-2 w-full px-2 py-1 rounded-md hover:bg-muted/60"
             onClick={() => toggleNode(node.path)}
           >
             {isOpen ? <FolderOpen className="w-3.5 h-3.5" /> : <Folder className="w-3.5 h-3.5" />}
-            <span className="font-medium text-left">{node.name}</span>
+            <span className="font-medium text-left font-mono">{node.name}</span>
             {hasChanges && <StatusPip status="M" className="ml-auto" />}
           </button>
           {isOpen && node.children && (
@@ -174,14 +179,14 @@ export const FileTreeView: React.FC<FileTreeViewProps> = ({
         type="button"
         onClick={() => onSelect(node.path)}
         className={cn(
-          "w-full flex items-center justify-between px-2 py-1 rounded-md text-xs",
+          "w-full flex items-center justify-between px-2 py-1 rounded-md text-sm",
           "hover:bg-muted/60 transition",
           selectedPath === node.path && "bg-primary/10"
         )}
       >
         <div className="flex items-center gap-2">
           <FileText className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="truncate text-left">{node.name}</span>
+          <span className="truncate text-left font-mono">{node.name}</span>
           <StatusPip status={node.status} />
         </div>
       </button>

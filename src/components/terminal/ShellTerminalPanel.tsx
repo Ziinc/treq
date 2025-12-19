@@ -7,6 +7,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "../ui/tooltip";
+import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
 import {
   MIN_TERMINAL_WIDTH,
@@ -50,7 +51,7 @@ export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
       >
         {/* Header */}
         <div className="h-7 min-h-[28px] flex items-center justify-between px-2 bg-background border-b border-r border-border flex-shrink-0">
-          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground min-w-0">
+          <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground min-w-0">
             <Terminal className="w-3 h-3 flex-shrink-0" />
             <span className="truncate">Shell</span>
           </div>
@@ -58,14 +59,15 @@ export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button
+                  <Button
                     type="button"
                     onClick={onClose}
-                    className="h-4 w-4 rounded-sm hover:bg-muted flex items-center justify-center opacity-60 hover:opacity-100 transition-opacity"
+                    variant="ghost"
+                    className="h-4 w-4 rounded-sm p-0 opacity-60 hover:opacity-100"
                     aria-label="Close shell"
                   >
                     <X className="w-3 h-3" />
-                  </button>
+                  </Button>
                 </TooltipTrigger>
                 <TooltipContent>Close</TooltipContent>
               </Tooltip>

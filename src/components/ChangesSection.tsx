@@ -3,6 +3,7 @@ import { ArrowRight, ChevronDown, ChevronRight, Undo2 } from "lucide-react";
 import { GitFileRow } from "./GitFileRow";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "./ui/tooltip";
 import type { ParsedFileChange } from "../lib/git-utils";
+import type { JjFileChange } from "../lib/api";
 
 export interface ChangesSectionProps {
   title: string;
@@ -23,7 +24,6 @@ export const ChangesSection = memo<ChangesSectionProps>(({
   files,
   isCollapsed,
   onToggleCollapse,
-  fileActionTarget,
   readOnly = false,
   activeFilePath,
   selectedFiles,
@@ -36,7 +36,7 @@ export const ChangesSection = memo<ChangesSectionProps>(({
 
   return (
     <div className="mt-4">
-      <div className="flex items-center justify-between w-full text-xs uppercase tracking-wide text-muted-foreground">
+      <div className="flex items-center justify-between w-full text-sm uppercase tracking-wide text-muted-foreground">
         <button
           type="button"
           className="flex items-center gap-1 hover:text-foreground transition-colors"
@@ -98,11 +98,9 @@ export const ChangesSection = memo<ChangesSectionProps>(({
           {files.map((file) => (
             <GitFileRow
               key={file.path}
-              file={file}
-              isStaged={false}
+              file={file as JjFileChange}
               isSelected={selectedFiles?.has(file.path) || false}
               isActive={activeFilePath === file.path}
-              isBusy={fileActionTarget === file.path}
               readOnly={readOnly}
               onFileClick={onFileSelect}
             />

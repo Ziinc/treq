@@ -47,8 +47,8 @@ export const TabsList: React.FC<TabsListProps> = ({ className, children }) => {
   const { orientation } = useTabsContext();
   const baseClass = orientation === "vertical"
     ? "flex flex-col gap-1"
-    : "flex gap-2 border-b";
-  
+    : "flex gap-1 bg-muted p-1 rounded-md w-fit";
+
   return (
     <div className={`${baseClass} ${className || ""}`}>
       {children}
@@ -76,10 +76,10 @@ export const TabsTrigger: React.FC<TabsTriggerProps> = ({
           ? "bg-accent text-accent-foreground"
           : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
       }`
-    : `px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+    : `px-3 py-1 font-medium transition-colors rounded-md ${
         isActive
-          ? "border-primary text-foreground"
-          : "border-transparent text-muted-foreground hover:text-foreground"
+          ? "bg-background text-foreground shadow-sm"
+          : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
       }`;
 
   return (

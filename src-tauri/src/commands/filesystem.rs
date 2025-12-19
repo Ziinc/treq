@@ -130,16 +130,8 @@ pub fn list_directory_cached(
 }
 
 #[tauri::command]
-pub fn get_change_indicators(workspace_path: String) -> Result<Vec<String>, String> {
-    // Get directories with changes (includes all parent directories of changed files)
-    let directories = crate::git_ops::get_directories_with_changes(&workspace_path)?;
-
-    // Also get the actual changed file paths
-    let files = crate::git_ops::get_changed_paths_set(&workspace_path)?;
-
-    // Combine both into a single vector
-    let mut all_paths: Vec<String> = directories.into_iter().collect();
-    all_paths.extend(files.into_iter());
-
-    Ok(all_paths)
+pub fn get_change_indicators(_workspace_path: String) -> Result<Vec<String>, String> {
+    // TODO: Implement with jj - for now return empty
+    // This feature shows change indicators in file browser
+    Ok(Vec::new())
 }

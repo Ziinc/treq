@@ -1,10 +1,46 @@
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
-import type { BranchDiffFileDiff, BranchDiffHunk, DiffLineKind } from "../lib/api";
-import type { ReviewComment } from "./MergeReviewPage";
 import { cn } from "../lib/utils";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
 import { MessageCircle, Loader2, X } from "lucide-react";
+
+// Type definitions - Git API removed, needs JJ equivalent
+type DiffLineKind = "context" | "addition" | "deletion" | "meta";
+
+export interface ReviewComment {
+  id: string;
+  filePath: string;
+  lineKey: string;
+  lineLabel: string;
+  kind: DiffLineKind;
+  oldLine?: number | null;
+  newLine?: number | null;
+  lineText: string;
+  text: string;
+  contextBefore: string[];
+  contextAfter: string[];
+  createdAt: string;
+}
+
+interface BranchDiffHunk {
+  id: string;
+  header: string;
+  lines: Array<{
+    kind: DiffLineKind;
+    text: string;
+    old_line?: number | null;
+    new_line?: number | null;
+  }>;
+}
+
+interface BranchDiffFileDiff {
+  path: string;
+  status: string;
+  is_binary?: boolean;
+  binary_message?: string;
+  hunks?: BranchDiffHunk[];
+  metadata?: any;
+}
 
 export interface CommentInput {
   filePath: string;
@@ -40,16 +76,16 @@ interface DraftState {
 }
 
 const lineKindStyles: Record<DiffLineKind, string> = {
+  context: "bg-transparent",
   addition: "bg-green-500/10",
   deletion: "bg-red-500/10",
-  context: "bg-transparent",
   meta: "bg-muted/40",
 };
 
 const lineKindPrefix: Record<DiffLineKind, string> = {
+  context: " ",
   addition: "+",
   deletion: "-",
-  context: " ",
   meta: " ",
 };
 
@@ -175,17 +211,19 @@ const AnnotatableDiffViewerComponent: React.FC<AnnotatableDiffViewerProps> = ({
       for (let offset = radius; offset > 0; offset -= 1) {
         const line = lines[index - offset];
         if (line) {
-          before.push(`${lineKindPrefix[line.kind]}${line.content}`);
+          before.push(`${lineKindPrefix[line.kind]}${line.text}`);
         }
       }
       for (let offset = 1; offset <= radius; offset += 1) {
         const line = lines[index + offset];
         if (line) {
-          after.push(`${lineKindPrefix[line.kind]}${line.content}`);
+          after.push(`${lineKindPrefix[line.kind]}${line.text}`);
         }
       }
       return { before, after };
     };
+
+    if (!diff.hunks) return [];
 
     return diff.hunks.flatMap((hunk, hunkIndex) =>
       hunk.lines.map((line, lineIndex) => ({
@@ -262,7 +300,7 @@ const AnnotatableDiffViewerComponent: React.FC<AnnotatableDiffViewerProps> = ({
       <div className="border-b px-4 py-3 flex items-center justify-between">
         <div>
           <p className="text-sm font-mono">{diff.path}</p>
-          <p className="text-xs text-muted-foreground">Status: {diff.status}</p>
+          <p className="text-sm text-muted-foreground">Status: {diff.status}</p>
         </div>
         {diff.metadata.length > 0 && (
           <div className="text-[10px] text-muted-foreground text-right max-w-xs truncate">
@@ -270,8 +308,8 @@ const AnnotatableDiffViewerComponent: React.FC<AnnotatableDiffViewerProps> = ({
           </div>
         )}
       </div>
-      <div className="flex-1 overflow-auto font-mono text-xs">
-        {diff.hunks.map((hunk, hunkIndex) => {
+      <div className="flex-1 overflow-auto font-mono text-sm">
+        {diff.hunks?.map((hunk, hunkIndex) => {
           const hunkLines = linesWithContext.filter(item => item.hunkIndex === hunkIndex);
           return (
           <div key={`${diff.path}-hunk-${hunkIndex}`} className="border-b border-border/60">
@@ -286,7 +324,7 @@ const AnnotatableDiffViewerComponent: React.FC<AnnotatableDiffViewerProps> = ({
                 kind: line.kind,
                 oldLine: line.old_line,
                 newLine: line.new_line,
-                lineText: line.content,
+                lineText: line.text,
                 contextBefore: context.before,
                 contextAfter: context.after,
               };
@@ -308,7 +346,7 @@ const AnnotatableDiffViewerComponent: React.FC<AnnotatableDiffViewerProps> = ({
                     <div className="flex items-start justify-between gap-2">
                       <pre className="whitespace-pre-wrap leading-relaxed flex-1">
                         <span className="text-muted-foreground">{lineKindPrefix[line.kind]}</span>
-                        {line.content || " "}
+                        {line.text || " "}
                       </pre>
                       {draft?.lineKey === lineKey ? (
                         <Button
@@ -327,7 +365,7 @@ const AnnotatableDiffViewerComponent: React.FC<AnnotatableDiffViewerProps> = ({
                           placeholder="Add a comment"
                           value={draftText}
                           autoFocus
-                          className="text-xs"
+                          className="text-sm"
                           onChange={(event) => setDraftText(event.target.value)}
                           onKeyDown={(event) => {
                             if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
@@ -342,14 +380,14 @@ const AnnotatableDiffViewerComponent: React.FC<AnnotatableDiffViewerProps> = ({
                             <Button
                               size="sm"
                               variant="secondary"
-                              className="h-7 text-xs"
+                              className="h-7 text-sm"
                               onClick={cancelDraft}
                             >
                               Cancel
                             </Button>
                             <Button
                               size="sm"
-                              className="h-7 text-xs"
+                              className="h-7 text-sm"
                               disabled={!draftText.trim()}
                               onClick={handleSubmitDraft}
                             >

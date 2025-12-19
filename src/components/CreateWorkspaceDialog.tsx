@@ -15,8 +15,7 @@ import { applyBranchNamePattern } from "../lib/utils";
 import {
   jjCreateWorkspace,
   addWorkspaceToDb,
-  getRepoSetting,
-  gitExecutePostCreateCommand
+  getRepoSetting
 } from "../lib/api";
 
 interface CreateWorkspaceDialogProps {
@@ -97,38 +96,11 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
       // Add to database with metadata
       await addWorkspaceToDb(repoPath, branchName, workspacePath, branchName, metadata);
 
-      // Get and execute post-create command if configured
-      const postCreateCmd = await getRepoSetting(repoPath, "post_create_command");
-      if (postCreateCmd && postCreateCmd.trim()) {
-        try {
-          addToast({
-            title: "Running post-create command...",
-            description: "Executing setup command in workspace",
-            type: "info",
-          });
-
-          await gitExecutePostCreateCommand(workspacePath, postCreateCmd);
-
-          addToast({
-            title: "Workspace created successfully",
-            description: "Post-create command executed successfully",
-            type: "success",
-          });
-        } catch (cmdError) {
-          console.error("Post-create command failed:", cmdError);
-          addToast({
-            title: "Workspace created",
-            description: `Post-create command failed: ${cmdError}`,
-            type: "warning",
-          });
-        }
-      } else {
-        addToast({
-          title: "Workspace created successfully",
-          description: `Created workspace for branch ${branchName}`,
-          type: "success",
-        });
-      }
+      addToast({
+        title: "Workspace created successfully",
+        description: `Created workspace for branch ${branchName}`,
+        type: "success",
+      });
 
       // Reset form
       setIntent("");
@@ -172,7 +144,7 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
               rows={3}
               className="resize-none"
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Describe what you plan to implement in this workspace
             </p>
           </div>
@@ -188,7 +160,7 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
               }}
               placeholder={branchPattern.replace("{name}", "example")}
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Pattern: {branchPattern} (configure in Repository Settings)
             </p>
           </div>

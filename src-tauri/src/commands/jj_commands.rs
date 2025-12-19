@@ -7,16 +7,13 @@ use tauri::{AppHandle, State};
 #[tauri::command]
 pub fn jj_create_workspace(
     state: State<AppState>,
-    app: AppHandle,
+    _app: AppHandle,
     repo_path: String,
     workspace_name: String,
     branch: String,
     new_branch: bool,
     source_branch: Option<String>,
 ) -> Result<String, String> {
-    // Ensure repo is properly configured
-    crate::ensure_repo_ready(&state, &app, &repo_path)?;
-
     // Load inclusion patterns from database
     let inclusion_patterns = {
         let db = state.db.lock().unwrap();
@@ -45,11 +42,10 @@ pub fn jj_create_workspace(
 
 #[tauri::command]
 pub fn jj_list_workspaces(
-    state: State<AppState>,
-    app: AppHandle,
+    _state: State<AppState>,
+    _app: AppHandle,
     repo_path: String,
 ) -> Result<Vec<jj::WorkspaceInfo>, String> {
-    crate::ensure_repo_ready(&state, &app, &repo_path)?;
     jj::list_workspaces(&repo_path).map_err(|e| e.to_string())
 }
 
@@ -145,4 +141,16 @@ pub fn jj_get_conflicted_files(workspace_path: String) -> Result<Vec<String>, St
 #[tauri::command]
 pub fn jj_get_default_branch(repo_path: String) -> Result<String, String> {
     jj::get_default_branch(&repo_path).map_err(|e| e.to_string())
+}
+
+/// Push changes to remote using jj git push
+#[tauri::command]
+pub fn jj_push(workspace_path: String) -> Result<String, String> {
+    jj::jj_push(&workspace_path).map_err(|e| e.to_string())
+}
+
+/// Pull changes from remote using jj git fetch + rebase
+#[tauri::command]
+pub fn jj_pull(workspace_path: String) -> Result<String, String> {
+    jj::jj_pull(&workspace_path).map_err(|e| e.to_string())
 }
