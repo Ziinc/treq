@@ -196,6 +196,17 @@ export const jjCommit = (
     message,
   });
 
+export const jjSplit = (
+  workspace_path: string,
+  message: string,
+  file_paths: string[]
+): Promise<string> =>
+  invoke("jj_split", {
+    workspacePath: workspace_path,
+    message,
+    filePaths: file_paths,
+  });
+
 export const jjRebaseOnto = (
   workspace_path: string,
   target_branch: string
