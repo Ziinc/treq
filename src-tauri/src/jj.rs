@@ -792,24 +792,11 @@ fn derive_repo_path_from_workspace(workspace_path: &str) -> Option<String> {
 
 /// Commit with message and create new working copy
 pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError> {
-    // Commit with message (sets message on current change and creates new empty change)
-    let commit = Command::new("jj")
-        .current_dir(workspace_path)
-        .args(["commit", "-m", message])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
-
-    if !commit.status.success() {
-        return Err(JjError::IoError(
-            String::from_utf8_lossy(&commit.stderr).to_string(),
-        ));
-    }
-
-    // Advance the bookmark to the new commit (@- is the parent, which has the content)
-    // Try to get branch name from database first
+    // Determine branch name BEFORE committing - fail early if we can't determine it
     let mut branch_name: Option<String> = None;
     let repo_path = derive_repo_path_from_workspace(workspace_path);
 
+    // Try to get branch name from database first (workspace record)
     if let Some(ref rp) = repo_path {
         if let Ok(db_branch) = local_db::get_workspace_branch_name(rp, workspace_path) {
             branch_name = db_branch;
@@ -819,10 +806,31 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     // Fallback for main repo case: try current git branch, then default branch
     if branch_name.is_none() {
         if let Some(ref rp) = repo_path {
-            // First try the branch git was previously on
+            // First try the branch git was previously on (git rev-parse)
             if let Ok(git_branch) = get_workspace_branch(rp) {
                 if !git_branch.is_empty() && git_branch != "HEAD" {
                     branch_name = Some(git_branch);
+                }
+            }
+            // Try `git branch` command to find current branch (marked with *)
+            if branch_name.is_none() {
+                if let Ok(output) = Command::new("git")
+                    .current_dir(rp)
+                    .args(["branch"])
+                    .output()
+                {
+                    if output.status.success() {
+                        let stdout = String::from_utf8_lossy(&output.stdout);
+                        for line in stdout.lines() {
+                            if line.starts_with("* ") {
+                                let current = line.trim_start_matches("* ").trim();
+                                if !current.is_empty() && !current.starts_with("(") {
+                                    branch_name = Some(current.to_string());
+                                    break;
+                                }
+                            }
+                        }
+                    }
                 }
             }
             // If still none, fall back to default branch
@@ -834,10 +842,23 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
         }
     }
 
-    // Advance the bookmark - branch name is required
+    // Branch name is required - fail before committing if we can't determine it
     let branch = branch_name.ok_or_else(|| {
         JjError::IoError("Cannot determine branch name for workspace. Commit aborted.".to_string())
     })?;
+
+    // Now commit with message (sets message on current change and creates new empty change)
+    let commit = Command::new("jj")
+        .current_dir(workspace_path)
+        .args(["commit", "-m", message])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !commit.status.success() {
+        return Err(JjError::IoError(
+            String::from_utf8_lossy(&commit.stderr).to_string(),
+        ));
+    }
 
     // Set the bookmark to point at @- (the commit with the actual content)
     jj_set_bookmark(workspace_path, &branch, "@-")
@@ -854,7 +875,7 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
         }
     }
 
-    Ok("Committed successfully".to_string())
+    Ok(format!("Committed successfully to branch '{}'", branch))
 }
 
 /// Split selected files from working copy into a new parent commit
