@@ -19,6 +19,7 @@ import {
   jjRestoreFile,
   jjRestoreAll,
   jjCommit,
+  jjSplit,
   getDiffCache,
   ptyWrite,
   markFileViewed,
@@ -1812,14 +1813,24 @@ export const ChangesDiffViewer = memo(
 
           setCommitPending(true);
           try {
-            const result = await jjCommit(workspacePath, commitMsg);
+            const selectedPaths = Array.from(selectedUnstagedFiles);
+            const isPartialCommit = selectedPaths.length > 0 && selectedPaths.length < files.length;
+
+            let result: string;
+            if (isPartialCommit) {
+              result = await jjSplit(workspacePath, commitMsg, selectedPaths);
+              setSelectedUnstagedFiles(new Set()); // Clear selection after split
+            } else {
+              result = await jjCommit(workspacePath, commitMsg);
+            }
+
             await invalidateCache();
             addToast({
               title: "Commit created",
               description: result.trim() || "Commit successful",
               type: "success",
             });
-            refresh();
+            loadChangedFiles();
           } catch (error) {
             const message =
               error instanceof Error ? error.message : String(error);
@@ -1832,7 +1843,7 @@ export const ChangesDiffViewer = memo(
             setCommitPending(false);
           }
         },
-        [workspacePath, addToast, refresh, invalidateCache]
+        [workspacePath, addToast, invalidateCache, selectedUnstagedFiles, files.length]
       );
 
       const toggleSectionCollapse = useCallback((sectionId: string) => {

@@ -109,6 +109,15 @@ pub fn jj_commit(workspace_path: String, message: String) -> Result<String, Stri
     jj::jj_commit(&workspace_path, &message).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+pub fn jj_split(
+    workspace_path: String,
+    message: String,
+    file_paths: Vec<String>,
+) -> Result<String, String> {
+    jj::jj_split(&workspace_path, &message, file_paths).map_err(|e| e.to_string())
+}
+
 /// Check if a path has a jj workspace
 #[tauri::command]
 pub fn jj_is_workspace(repo_path: String) -> bool {

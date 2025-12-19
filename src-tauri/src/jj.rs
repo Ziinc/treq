@@ -7,6 +7,8 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::Command;
 
+use git2::Repository;
+
 use crate::local_db;
 
 /// Error type for jj operations
@@ -821,9 +823,10 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     // Advance the bookmark to the new commit (@- is the parent, which has the content)
     // Try to get branch name from database first
     let mut branch_name: Option<String> = None;
+    let repo_path = derive_repo_path_from_workspace(workspace_path);
 
-    if let Some(repo_path) = derive_repo_path_from_workspace(workspace_path) {
-        if let Ok(db_branch) = local_db::get_workspace_branch_name(&repo_path, workspace_path) {
+    if let Some(ref rp) = repo_path {
+        if let Ok(db_branch) = local_db::get_workspace_branch_name(rp, workspace_path) {
             branch_name = db_branch;
         }
     }
@@ -843,6 +846,16 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
         if let Err(e) = jj_set_bookmark(workspace_path, branch, "@-") {
             eprintln!("Warning: Failed to advance bookmark '{}': {}", branch, e);
             // Don't fail the commit for bookmark errors
+        }
+
+        // Checkout the branch in git to avoid detached HEAD
+        if let Some(ref rp) = repo_path {
+            if let Ok(repo) = Repository::open(rp) {
+                let refname = format!("refs/heads/{}", branch);
+                if let Err(e) = repo.set_head(&refname) {
+                    eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
+                }
+            }
         }
     }
 
