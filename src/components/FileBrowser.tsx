@@ -23,6 +23,7 @@ import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
 import { useToast } from "./ui/toast";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "./ui/tooltip";
 import { getFileStatusTextColor, getStatusBgColor } from "../lib/git-status-colors";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import { parseJjChangedFiles, type ParsedFileChange } from "../lib/git-utils";
@@ -95,12 +96,6 @@ interface CodeLineProps {
   onLineMouseEnter: (lineNum: number) => void;
   onLineMouseUp: () => void;
   onAddComment: (lineNum?: number) => void;
-  showCommentInput: boolean;
-  pendingComment: { startLine: number; endLine: number; lineContent: string[] } | null;
-  basePath: string;
-  selectedFile: string | null;
-  onSubmitComment: (text: string) => void;
-  onCancelComment: () => void;
 }
 
 const CodeLine = memo(function CodeLine({
@@ -120,144 +115,79 @@ const CodeLine = memo(function CodeLine({
   onLineMouseEnter,
   onLineMouseUp,
   onAddComment,
-  showCommentInput,
-  pendingComment,
-  basePath,
-  selectedFile,
-  onSubmitComment,
-  onCancelComment,
 }: CodeLineProps) {
-  const [commentText, setCommentText] = useState("");
-
   return (
-    <>
-      <div style={style}>
-        <div
-          className={cn(
-            "flex items-center group relative hover:bg-muted/30 transition-colors text-sm font-mono leading-normal",
-            diffStatus === "add" && "bg-emerald-500/10",
-            isLineSelected && "!bg-blue-500/20"
-          )}
-          style={{ height: LINE_HEIGHT }}
-          onMouseEnter={onMouseEnter}
-          onMouseLeave={onMouseLeave}
-          onMouseDown={(e) => onLineMouseDown(e, lineNum, htmlContent)}
-          onMouseMove={() => onLineMouseEnter(lineNum)}
-          onMouseUp={onLineMouseUp}
-        >
-          {diffStatus && (
-            <span
-              className={cn(
-                "absolute left-0 w-1 h-full",
-                diffStatus === "add" && "bg-emerald-500",
-                diffStatus === "modify" && "bg-yellow-500",
-                diffStatus === "delete" && "bg-red-500"
-              )}
-            />
-          )}
-          {/* Deletion marker - shown between lines where content was deleted */}
-          {hasDeletionMarker && (
-            <span
-              className="absolute left-0 bottom-0 w-2 h-[3px] bg-red-500"
-              style={{
-                clipPath: "polygon(0 0, 100% 50%, 0 100%)",
-                transform: "translateY(50%)",
-              }}
-              title="Lines deleted here"
-            />
-          )}
-          {/* Line number */}
-          <span
-            className="select-none text-muted-foreground/50 pr-2 text-right"
-            style={{
-              minWidth: `${lineNumberWidth}ch`,
-              paddingLeft: diffStatus ? "4px" : "0",
-            }}
-          >
-            {lineNum}
-          </span>
-          {/* Comment button - appears on hover to the right of line numbers */}
-          <span className="flex-shrink-0 w-6 flex items-center justify-center">
-            {hoveredLine === lineNum && !isSelecting && (
-              <button
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAddComment(lineNum);
-                }}
-                className="w-5 h-5 flex items-center justify-center rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors"
-                title="Add comment"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </span>
-          {/* Code content */}
-          <span
-            className="flex-1 whitespace-pre"
-            style={{ fontSize: `${fontSize}px` }}
-            dangerouslySetInnerHTML={{ __html: htmlContent }}
-          />
-        </div>
-      </div>
-      {/* Show comment input after last selected line */}
-      {showCommentInput &&
-        pendingComment &&
-        lineNum === pendingComment.endLine && (
-          <div className="bg-muted/60 border-y border-border/40 px-4 py-3 my-1 font-sans">
-            <div className="mb-2 text-xs text-muted-foreground">
-              <span>
-                {selectedFile && basePath && selectedFile.startsWith(basePath + "/")
-                  ? selectedFile.slice(basePath.length + 1)
-                  : selectedFile}
-                :L{pendingComment.startLine}
-                {pendingComment.startLine !== pendingComment.endLine &&
-                  `-${pendingComment.endLine}`}
-              </span>
-            </div>
-            <Textarea
-              id="comment-textarea"
-              placeholder="Describe what you want to change..."
-              className="mb-2 text-sm font-sans"
-              autoFocus
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  onCancelComment();
-                  setCommentText("");
-                } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                  onSubmitComment(commentText);
-                  setCommentText("");
-                }
-              }}
-            />
-            <div className="flex justify-end items-center gap-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  onCancelComment();
-                  setCommentText("");
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => {
-                  onSubmitComment(commentText);
-                  setCommentText("");
-                }}
-              >
-                Add to edit
-              </Button>
-            </div>
-          </div>
+    <div style={style}>
+      <div
+        className={cn(
+          "flex items-center group relative hover:bg-muted/30 transition-colors text-sm font-mono leading-normal",
+          diffStatus === "add" && "bg-emerald-500/10",
+          isLineSelected && "!bg-blue-500/20"
         )}
-    </>
+        style={{ height: LINE_HEIGHT }}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
+        onMouseDown={(e) => onLineMouseDown(e, lineNum, htmlContent)}
+        onMouseMove={() => onLineMouseEnter(lineNum)}
+        onMouseUp={onLineMouseUp}
+      >
+        {diffStatus && (
+          <span
+            className={cn(
+              "absolute left-0 w-1 h-full",
+              diffStatus === "add" && "bg-emerald-500",
+              diffStatus === "modify" && "bg-yellow-500",
+              diffStatus === "delete" && "bg-red-500"
+            )}
+          />
+        )}
+        {/* Deletion marker - shown between lines where content was deleted */}
+        {hasDeletionMarker && (
+          <span
+            className="absolute left-0 bottom-0 w-2 h-[3px] bg-red-500"
+            style={{
+              clipPath: "polygon(0 0, 100% 50%, 0 100%)",
+              transform: "translateY(50%)",
+            }}
+            title="Lines deleted here"
+          />
+        )}
+        {/* Line number */}
+        <span
+          className="select-none text-muted-foreground/50 pr-2 text-right"
+          style={{
+            minWidth: `${lineNumberWidth}ch`,
+            paddingLeft: diffStatus ? "4px" : "0",
+          }}
+        >
+          {lineNum}
+        </span>
+        {/* Comment button - appears on hover to the right of line numbers */}
+        <span className="flex-shrink-0 w-6 flex items-center justify-center">
+          {hoveredLine === lineNum && !isSelecting && (
+            <button
+              onMouseDown={(e) => {
+                e.stopPropagation();
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddComment(lineNum);
+              }}
+              className="w-5 h-5 flex items-center justify-center rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+              title="Add comment"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </span>
+        {/* Code content */}
+        <span
+          className="flex-1 whitespace-pre-wrap break-words"
+          style={{ fontSize: `${fontSize}px` }}
+          dangerouslySetInnerHTML={{ __html: htmlContent }}
+        />
+      </div>
+    </div>
   );
 });
 
@@ -315,6 +245,11 @@ const FileContentView = memo(function FileContentView({
   onCancelComment,
 }: FileContentViewProps) {
   const [copied, setCopied] = useState(false);
+  const [copiedPath, setCopiedPath] = useState(false);
+
+  const relativePath = selectedFile && basePath && selectedFile.startsWith(basePath + "/")
+    ? selectedFile.slice(basePath.length + 1)
+    : selectedFile;
 
   const handleCopy = useCallback(async () => {
     if (!fileContentData) return;
@@ -326,6 +261,17 @@ const FileContentView = memo(function FileContentView({
       console.error("Failed to copy:", error);
     }
   }, [fileContentData]);
+
+  const handleCopyPath = useCallback(async () => {
+    if (!relativePath) return;
+    try {
+      await navigator.clipboard.writeText(relativePath);
+      setCopiedPath(true);
+      setTimeout(() => setCopiedPath(false), 2000);
+    } catch (error) {
+      console.error("Failed to copy path:", error);
+    }
+  }, [relativePath]);
 
   if (!selectedFile) {
     return (
@@ -365,24 +311,44 @@ const FileContentView = memo(function FileContentView({
 
   return (
     <div className="h-full flex flex-col bg-[hsl(var(--code-background))]">
-      <div className="px-4 pt-4 pb-2 border-b border-border flex items-center justify-between">
-        <div className="text-sm text-muted-foreground font-mono" style={{ fontSize: `${fontSize}px` }}>
-          <span>
-            {selectedFile.startsWith(basePath + "/")
-              ? selectedFile.slice(basePath.length + 1)
-              : selectedFile}
-          </span>
+      <TooltipProvider>
+        <div className="px-4 pt-4 pb-2 border-b-[1px] border-solid border-zinc-700 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground font-mono" style={{ fontSize: `${fontSize}px` }}>
+              {relativePath}
+            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={handleCopyPath}
+                  className="p-1 hover:bg-muted rounded transition-colors text-muted-foreground hover:text-foreground"
+                >
+                  {copiedPath ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Copy file path</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="p-1 hover:bg-muted rounded border border-border/50 transition-colors text-muted-foreground hover:text-foreground"
+              >
+                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Copy file contents</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="p-1 hover:bg-muted rounded transition-colors text-muted-foreground hover:text-foreground"
-          title="Copy file contents"
-        >
-          {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-        </button>
-      </div>
-      <div className="flex-1 overflow-hidden">
+      </TooltipProvider>
+      <div className="flex-1 overflow-hidden relative">
         <List
           style={{ height: window.innerHeight, width: "100%" }}
           className="px-4 pb-4"
@@ -418,18 +384,62 @@ const FileContentView = memo(function FileContentView({
                 onLineMouseEnter={onLineMouseEnter}
                 onLineMouseUp={onLineMouseUp}
                 onAddComment={onAddComment}
-                showCommentInput={showCommentInput}
-                pendingComment={pendingComment}
-                basePath={basePath}
-                selectedFile={selectedFile}
-                onSubmitComment={onSubmitComment}
-                onCancelComment={onCancelComment}
               />
             );
           }}
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           rowProps={{} as any}
         />
+        {/* Comment form overlay - positioned after the selected line */}
+        {showCommentInput && pendingComment && (
+          <div
+            className="absolute left-4 right-4 z-10 bg-muted/60 border border-border/40 rounded px-4 py-3 shadow-lg"
+            style={{
+              top: `${pendingComment.endLine * LINE_HEIGHT + 52}px`, // 52px = header height
+            }}
+          >
+            <div className="mb-2 text-xs text-muted-foreground">
+              <span>
+                {selectedFile && basePath && selectedFile.startsWith(basePath + "/")
+                  ? selectedFile.slice(basePath.length + 1)
+                  : selectedFile}
+                :L{pendingComment.startLine}
+                {pendingComment.startLine !== pendingComment.endLine &&
+                  `-${pendingComment.endLine}`}
+              </span>
+            </div>
+            <Textarea
+              id="comment-textarea"
+              placeholder="Describe what you want to change..."
+              className="mb-2 text-sm font-sans"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  onCancelComment();
+                } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                  const target = e.target as HTMLTextAreaElement;
+                  onSubmitComment(target.value);
+                }
+              }}
+            />
+            <div className="flex justify-end items-center gap-2">
+              <Button size="sm" variant="ghost" onClick={onCancelComment}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  const textarea = document.getElementById("comment-textarea") as HTMLTextAreaElement;
+                  if (textarea) {
+                    onSubmitComment(textarea.value);
+                  }
+                }}
+              >
+                Add to edit
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
