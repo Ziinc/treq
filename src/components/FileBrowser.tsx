@@ -7,6 +7,7 @@ import {
   AlertCircle,
   Copy,
   Check,
+  Plus,
 } from "lucide-react";
 import { List } from "react-window";
 import type { Workspace, DirectoryEntry } from "../lib/api";
@@ -20,6 +21,8 @@ import {
 import { cn } from "../lib/utils";
 import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
 import { useToast } from "./ui/toast";
+import { Button } from "./ui/button";
+import { Textarea } from "./ui/textarea";
 import { getFileStatusTextColor, getStatusBgColor } from "../lib/git-status-colors";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import { parseJjChangedFiles, type ParsedFileChange } from "../lib/git-utils";
@@ -34,6 +37,11 @@ function isBinaryFile(path: string): boolean {
     '.woff', '.woff2', '.ttf', '.eot'
   ];
   return binaryExtensions.some(ext => path.toLowerCase().endsWith(ext));
+}
+
+interface LineSelection {
+  startLine: number;
+  endLine: number;
 }
 
 interface FileBrowserProps {
@@ -67,7 +75,6 @@ interface TreeNodeProps {
   onFileClick: (path: string) => void;
   getDirectoryChangeStatus: (path: string) => ParsedFileChange | undefined;
   renderChildren: (entry: DirectoryEntry, depth: number) => JSX.Element;
-  fontSize: number;
 }
 
 // CodeLine component - memoized individual line to prevent re-renders
@@ -77,11 +84,23 @@ interface CodeLineProps {
   diffStatus: "add" | "modify" | "delete" | undefined;
   hasDeletionMarker: boolean;
   lineNumberWidth: number;
-  language: string | null;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   style: React.CSSProperties;
   fontSize: number;
+  hoveredLine: number | null;
+  isLineSelected: boolean;
+  isSelecting: boolean;
+  onLineMouseDown: (e: React.MouseEvent, lineNum: number, lineContent: string) => void;
+  onLineMouseEnter: (lineNum: number) => void;
+  onLineMouseUp: () => void;
+  onAddComment: (lineNum?: number) => void;
+  showCommentInput: boolean;
+  pendingComment: { startLine: number; endLine: number; lineContent: string[] } | null;
+  basePath: string;
+  selectedFile: string | null;
+  onSubmitComment: (text: string) => void;
+  onCancelComment: () => void;
 }
 
 const CodeLine = memo(function CodeLine({
@@ -90,62 +109,155 @@ const CodeLine = memo(function CodeLine({
   diffStatus,
   hasDeletionMarker,
   lineNumberWidth,
-  language,
   onMouseEnter,
   onMouseLeave,
   style,
   fontSize,
+  hoveredLine,
+  isLineSelected,
+  isSelecting,
+  onLineMouseDown,
+  onLineMouseEnter,
+  onLineMouseUp,
+  onAddComment,
+  showCommentInput,
+  pendingComment,
+  basePath,
+  selectedFile,
+  onSubmitComment,
+  onCancelComment,
 }: CodeLineProps) {
+  const [commentText, setCommentText] = useState("");
+
   return (
-    <div style={style}>
-      <div
-        className={cn(
-          "flex items-center group relative hover:bg-muted/30 transition-colors text-sm font-mono leading-normal",
-          diffStatus === "add" && "bg-emerald-500/10"
-        )}
-        style={{ height: LINE_HEIGHT }}
-        onMouseEnter={onMouseEnter}
-        onMouseLeave={onMouseLeave}
-      >
-        {diffStatus && (
-          <span
-            className={cn(
-              "absolute left-0 w-1 h-full",
-              diffStatus === "add" && "bg-emerald-500",
-              diffStatus === "modify" && "bg-yellow-500",
-              diffStatus === "delete" && "bg-red-500"
-            )}
-          />
-        )}
-        {/* Deletion marker - shown between lines where content was deleted */}
-        {hasDeletionMarker && (
-          <span
-            className="absolute left-0 bottom-0 w-2 h-[3px] bg-red-500"
-            style={{
-              clipPath: "polygon(0 0, 100% 50%, 0 100%)",
-              transform: "translateY(50%)",
-            }}
-            title="Lines deleted here"
-          />
-        )}
-        {/* Line number */}
-        <span
-          className="select-none text-muted-foreground/50 pr-2 text-right"
-          style={{
-            minWidth: `${lineNumberWidth}ch`,
-            paddingLeft: diffStatus ? "4px" : "0",
-          }}
+    <>
+      <div style={style}>
+        <div
+          className={cn(
+            "flex items-center group relative hover:bg-muted/30 transition-colors text-sm font-mono leading-normal",
+            diffStatus === "add" && "bg-emerald-500/10",
+            isLineSelected && "!bg-blue-500/20"
+          )}
+          style={{ height: LINE_HEIGHT }}
+          onMouseEnter={onMouseEnter}
+          onMouseLeave={onMouseLeave}
+          onMouseDown={(e) => onLineMouseDown(e, lineNum, htmlContent)}
+          onMouseMove={() => onLineMouseEnter(lineNum)}
+          onMouseUp={onLineMouseUp}
         >
-          {lineNum}
-        </span>
-        {/* Code content */}
-        <span
-          className="flex-1 whitespace-pre"
-          style={{ fontSize: `${fontSize}px` }}
-          dangerouslySetInnerHTML={{ __html: htmlContent }}
-        />
+          {diffStatus && (
+            <span
+              className={cn(
+                "absolute left-0 w-1 h-full",
+                diffStatus === "add" && "bg-emerald-500",
+                diffStatus === "modify" && "bg-yellow-500",
+                diffStatus === "delete" && "bg-red-500"
+              )}
+            />
+          )}
+          {/* Deletion marker - shown between lines where content was deleted */}
+          {hasDeletionMarker && (
+            <span
+              className="absolute left-0 bottom-0 w-2 h-[3px] bg-red-500"
+              style={{
+                clipPath: "polygon(0 0, 100% 50%, 0 100%)",
+                transform: "translateY(50%)",
+              }}
+              title="Lines deleted here"
+            />
+          )}
+          {/* Line number */}
+          <span
+            className="select-none text-muted-foreground/50 pr-2 text-right"
+            style={{
+              minWidth: `${lineNumberWidth}ch`,
+              paddingLeft: diffStatus ? "4px" : "0",
+            }}
+          >
+            {lineNum}
+          </span>
+          {/* Comment button - appears on hover to the right of line numbers */}
+          <span className="flex-shrink-0 w-6 flex items-center justify-center">
+            {hoveredLine === lineNum && !isSelecting && (
+              <button
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddComment(lineNum);
+                }}
+                className="w-5 h-5 flex items-center justify-center rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                title="Add comment"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </span>
+          {/* Code content */}
+          <span
+            className="flex-1 whitespace-pre"
+            style={{ fontSize: `${fontSize}px` }}
+            dangerouslySetInnerHTML={{ __html: htmlContent }}
+          />
+        </div>
       </div>
-    </div>
+      {/* Show comment input after last selected line */}
+      {showCommentInput &&
+        pendingComment &&
+        lineNum === pendingComment.endLine && (
+          <div className="bg-muted/60 border-y border-border/40 px-4 py-3 my-1 font-sans">
+            <div className="mb-2 text-xs text-muted-foreground">
+              <span>
+                {selectedFile && basePath && selectedFile.startsWith(basePath + "/")
+                  ? selectedFile.slice(basePath.length + 1)
+                  : selectedFile}
+                :L{pendingComment.startLine}
+                {pendingComment.startLine !== pendingComment.endLine &&
+                  `-${pendingComment.endLine}`}
+              </span>
+            </div>
+            <Textarea
+              id="comment-textarea"
+              placeholder="Describe what you want to change..."
+              className="mb-2 text-sm font-sans"
+              autoFocus
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  onCancelComment();
+                  setCommentText("");
+                } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                  onSubmitComment(commentText);
+                  setCommentText("");
+                }
+              }}
+            />
+            <div className="flex justify-end items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  onCancelComment();
+                  setCommentText("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  onSubmitComment(commentText);
+                  setCommentText("");
+                }}
+              >
+                Add to edit
+              </Button>
+            </div>
+          </div>
+        )}
+    </>
   );
 });
 
@@ -166,6 +278,17 @@ interface FileContentViewProps {
   getItemHeight: () => number;
   onSetHoveredLine: (lineNum: number | null) => void;
   fontSize: number;
+  hoveredLine: number | null;
+  isSelecting: boolean;
+  onLineMouseDown: (e: React.MouseEvent, lineNum: number, lineContent: string) => void;
+  onLineMouseEnter: (lineNum: number) => void;
+  onLineMouseUp: () => void;
+  isLineSelected: (lineNum: number) => boolean;
+  onAddComment: (lineNum?: number) => void;
+  showCommentInput: boolean;
+  pendingComment: { startLine: number; endLine: number; lineContent: string[] } | null;
+  onSubmitComment: (text: string) => void;
+  onCancelComment: () => void;
 }
 
 const FileContentView = memo(function FileContentView({
@@ -179,6 +302,17 @@ const FileContentView = memo(function FileContentView({
   getItemHeight,
   onSetHoveredLine,
   fontSize,
+  hoveredLine,
+  isSelecting,
+  onLineMouseDown,
+  onLineMouseEnter,
+  onLineMouseUp,
+  isLineSelected,
+  onAddComment,
+  showCommentInput,
+  pendingComment,
+  onSubmitComment,
+  onCancelComment,
 }: FileContentViewProps) {
   const [copied, setCopied] = useState(false);
 
@@ -227,7 +361,7 @@ const FileContentView = memo(function FileContentView({
     );
   }
 
-  const { lines, lineNumberWidth, language } = fileContentData;
+  const { lines, lineNumberWidth } = fileContentData;
 
   return (
     <div className="h-full flex flex-col bg-[hsl(var(--code-background))]">
@@ -273,11 +407,23 @@ const FileContentView = memo(function FileContentView({
                 diffStatus={diffStatus}
                 hasDeletionMarker={hasDeletionMarker}
                 lineNumberWidth={lineNumberWidth}
-                language={language}
                 onMouseEnter={() => onSetHoveredLine(lineNum)}
                 onMouseLeave={() => onSetHoveredLine(null)}
                 style={style}
                 fontSize={fontSize}
+                hoveredLine={hoveredLine}
+                isLineSelected={isLineSelected(lineNum)}
+                isSelecting={isSelecting}
+                onLineMouseDown={onLineMouseDown}
+                onLineMouseEnter={onLineMouseEnter}
+                onLineMouseUp={onLineMouseUp}
+                onAddComment={onAddComment}
+                showCommentInput={showCommentInput}
+                pendingComment={pendingComment}
+                basePath={basePath}
+                selectedFile={selectedFile}
+                onSubmitComment={onSubmitComment}
+                onCancelComment={onCancelComment}
               />
             );
           }}
@@ -301,7 +447,6 @@ const TreeNode = memo(function TreeNode({
   onFileClick,
   getDirectoryChangeStatus,
   renderChildren,
-  fontSize,
 }: TreeNodeProps) {
   if (entry.is_directory) {
     return (
@@ -416,6 +561,18 @@ export const FileBrowser = memo(function FileBrowser({
   const [deletionMarkers, setDeletionMarkers] = useState<Set<number>>(
     new Set()
   );
+  const [lineSelection, setLineSelection] = useState<LineSelection | null>(
+    null
+  );
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectionAnchor, setSelectionAnchor] = useState<number | null>(null);
+  const [showCommentInput, setShowCommentInput] = useState(false);
+  const [pendingComment, setPendingComment] = useState<{
+    startLine: number;
+    endLine: number;
+    lineContent: string[];
+  } | null>(null);
+  const [hoveredLine, setHoveredLine] = useState<number | null>(null);
   const { addToast } = useToast();
   const { fontSize } = useTerminalSettings();
 
@@ -548,6 +705,92 @@ export const FileBrowser = memo(function FileBrowser({
     },
     [addToast, basePath, changedFiles]
   );
+
+  // Line selection handlers
+  const handleLineMouseDown = useCallback(
+    (e: React.MouseEvent, lineNum: number, _lineContent: string) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      setIsSelecting(true);
+      setSelectionAnchor(lineNum);
+      setLineSelection({ startLine: lineNum, endLine: lineNum });
+      setShowCommentInput(false);
+    },
+    []
+  );
+
+  const handleLineMouseEnter = useCallback(
+    (lineNum: number) => {
+      if (!isSelecting || selectionAnchor === null) return;
+      const start = Math.min(selectionAnchor, lineNum);
+      const end = Math.max(selectionAnchor, lineNum);
+      setLineSelection({ startLine: start, endLine: end });
+    },
+    [isSelecting, selectionAnchor]
+  );
+
+  const handleLineMouseUp = useCallback(() => {
+    setIsSelecting(false);
+  }, []);
+
+  const isLineSelected = useCallback(
+    (lineNum: number) => {
+      if (!lineSelection) return false;
+      return (
+        lineNum >= lineSelection.startLine && lineNum <= lineSelection.endLine
+      );
+    },
+    [lineSelection]
+  );
+
+  // Comment handlers
+  const handleAddComment = useCallback(
+    (lineNum?: number) => {
+      if (!selectedFile) return;
+
+      const lines = fileContent.split("\n");
+      let start: number, end: number, selectedLines: string[];
+
+      if (lineNum !== undefined) {
+        // Single line comment from + button
+        start = lineNum;
+        end = lineNum;
+        selectedLines = [lines[lineNum - 1]];
+        setLineSelection({ startLine: lineNum, endLine: lineNum });
+      } else if (lineSelection) {
+        // Multi-line comment from selection
+        start = lineSelection.startLine;
+        end = lineSelection.endLine;
+        selectedLines = lines.slice(start - 1, end);
+      } else {
+        return;
+      }
+
+      setPendingComment({
+        startLine: start,
+        endLine: end,
+        lineContent: selectedLines,
+      });
+      setShowCommentInput(true);
+    },
+    [lineSelection, selectedFile, fileContent]
+  );
+
+  const handleSubmitComment = useCallback(
+    (_text: string) => {
+      if (!pendingComment || !selectedFile) return;
+
+      setShowCommentInput(false);
+      setPendingComment(null);
+      setLineSelection(null);
+    },
+    [pendingComment, selectedFile]
+  );
+
+  const handleCancelComment = useCallback(() => {
+    setShowCommentInput(false);
+    setPendingComment(null);
+  }, []);
 
   // Auto-select README.md when rootEntries change (switching workspaces)
   useEffect(() => {
@@ -687,7 +930,6 @@ export const FileBrowser = memo(function FileBrowser({
           onFileClick={handleFileClick}
           getDirectoryChangeStatus={getDirectoryChangeStatus}
           renderChildren={renderTreeNode}
-          fontSize={fontSize}
         />
       );
     },
@@ -700,7 +942,6 @@ export const FileBrowser = memo(function FileBrowser({
       handleDirectoryClick,
       handleFileClick,
       getDirectoryChangeStatus,
-      fontSize,
     ]
   );
 
@@ -752,8 +993,19 @@ export const FileBrowser = memo(function FileBrowser({
         fileHunks={fileHunks}
         deletionMarkers={deletionMarkers}
         getItemHeight={getItemHeight}
-        onSetHoveredLine={() => {}}
+        onSetHoveredLine={setHoveredLine}
         fontSize={fontSize}
+        hoveredLine={hoveredLine}
+        isSelecting={isSelecting}
+        onLineMouseDown={handleLineMouseDown}
+        onLineMouseEnter={handleLineMouseEnter}
+        onLineMouseUp={handleLineMouseUp}
+        isLineSelected={isLineSelected}
+        onAddComment={handleAddComment}
+        showCommentInput={showCommentInput}
+        pendingComment={pendingComment}
+        onSubmitComment={handleSubmitComment}
+        onCancelComment={handleCancelComment}
       />
     );
   };

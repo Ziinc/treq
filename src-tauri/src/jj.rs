@@ -792,31 +792,18 @@ fn derive_repo_path_from_workspace(workspace_path: &str) -> Option<String> {
     None
 }
 
-/// Describe and create new commit
+/// Commit with message and create new working copy
 pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError> {
-    // First describe
-    let describe = Command::new("jj")
+    // Commit with message (sets message on current change and creates new empty change)
+    let commit = Command::new("jj")
         .current_dir(workspace_path)
-        .args(["describe", "-m", message])
+        .args(["commit", "-m", message])
         .output()
         .map_err(|e| JjError::IoError(e.to_string()))?;
 
-    if !describe.status.success() {
+    if !commit.status.success() {
         return Err(JjError::IoError(
-            String::from_utf8_lossy(&describe.stderr).to_string(),
-        ));
-    }
-
-    // Then create new empty commit
-    let new_commit = Command::new("jj")
-        .current_dir(workspace_path)
-        .args(["new"])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
-
-    if !new_commit.status.success() {
-        return Err(JjError::IoError(
-            String::from_utf8_lossy(&new_commit.stderr).to_string(),
+            String::from_utf8_lossy(&commit.stderr).to_string(),
         ));
     }
 
