@@ -634,19 +634,6 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
             </div>
           ) : (
             <>
-              {/* Toggle button for large diffs that are currently shown */}
-              {additions + deletions > 75 && (
-                <div className="flex justify-center py-2 border-b border-border/40">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => toggleLargeDiff(filePath)}
-                    className="text-sm"
-                  >
-                    Hide large diff ({additions + deletions} lines)
-                  </Button>
-                </div>
-              )}
               {/* Render all hunks */}
               {fileData.hunks.map((hunk, hunkIndex) =>
                 renderHunkLines(hunk, hunkIndex, filePath)
