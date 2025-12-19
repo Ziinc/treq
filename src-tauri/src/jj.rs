@@ -825,21 +825,23 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
         }
     }
 
-    // Advance the bookmark if we found a valid branch name
-    if let Some(ref branch) = branch_name {
-        // Set the bookmark to point at @- (the commit with the actual content)
-        jj_set_bookmark(workspace_path, branch, "@-")
-            .map_err(|e| JjError::IoError(format!("Failed to advance bookmark '{}': {}", branch, e)))?;
+    // Advance the bookmark - branch name is required
+    let branch = branch_name.ok_or_else(|| {
+        JjError::IoError("Cannot determine branch name for workspace. Commit aborted.".to_string())
+    })?;
 
-        // Checkout the branch in git to avoid detached HEAD
-        if let Some(ref rp) = repo_path {
-            let checkout = Command::new("git")
-                .current_dir(rp)
-                .args(["checkout", branch])
-                .output();
-            if let Err(e) = checkout {
-                eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
-            }
+    // Set the bookmark to point at @- (the commit with the actual content)
+    jj_set_bookmark(workspace_path, &branch, "@-")
+        .map_err(|e| JjError::IoError(format!("Failed to advance bookmark '{}': {}", branch, e)))?;
+
+    // Checkout the branch in git to avoid detached HEAD
+    if let Some(ref rp) = repo_path {
+        let checkout = Command::new("git")
+            .current_dir(rp)
+            .args(["checkout", &branch])
+            .output();
+        if let Err(e) = checkout {
+            eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
         }
     }
 
