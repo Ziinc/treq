@@ -835,12 +835,19 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
 
         // Checkout the branch in git to avoid detached HEAD
         if let Some(ref rp) = repo_path {
-            let checkout = Command::new("git")
+            match Command::new("git")
                 .current_dir(rp)
                 .args(["checkout", branch])
-                .output();
-            if let Err(e) = checkout {
-                eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
+                .output()
+            {
+                Ok(output) => {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    eprintln!("git checkout {}: {}{}", branch, stdout, stderr);
+                }
+                Err(e) => {
+                    eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
+                }
             }
         }
     }
