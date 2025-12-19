@@ -298,11 +298,13 @@ interface CommitInputProps {
   onCommit: (message: string) => void;
   disabled: boolean;
   pending: boolean;
+  selectedFileCount?: number;
+  totalFileCount?: number;
 }
 
 const CommitInput = memo(
   forwardRef<CommitInputHandle, CommitInputProps>(
-    ({ onCommit, disabled, pending }, ref) => {
+    ({ onCommit, disabled, pending, selectedFileCount = 0, totalFileCount = 0 }, ref) => {
       const [message, setMessage] = useState("");
       const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -357,7 +359,13 @@ const CommitInput = memo(
             onClick={handleCommit}
             size="sm"
           >
-            {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Commit"}
+            {pending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : selectedFileCount > 0 && selectedFileCount < totalFileCount ? (
+              `Commit ${selectedFileCount} file${selectedFileCount !== 1 ? 's' : ''}`
+            ) : (
+              "Commit"
+            )}
           </Button>
         </div>
       );
@@ -2081,6 +2089,8 @@ export const ChangesDiffViewer = memo(
               onCommit={handleCommit}
               disabled={readOnly}
               pending={commitPending}
+              selectedFileCount={selectedUnstagedFiles.size}
+              totalFileCount={files.length}
             />
             <div className="flex-1 overflow-y-auto px-4 pb-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full">
               {initialLoading ? (

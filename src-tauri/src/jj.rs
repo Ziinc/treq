@@ -862,6 +862,73 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     Ok("Committed successfully".to_string())
 }
 
+/// Split selected files from working copy into a new parent commit
+/// Uses: jj split -r @ -m <message> <file_paths...>
+pub fn jj_split(
+    workspace_path: &str,
+    message: &str,
+    file_paths: Vec<String>,
+) -> Result<String, JjError> {
+    // Build the jj split command
+    let mut cmd = Command::new("jj");
+    cmd.current_dir(workspace_path);
+    cmd.args(["split", "-r", "@", "-m", message]);
+    for path in &file_paths {
+        cmd.arg(path);
+    }
+
+    let output = cmd
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !output.status.success() {
+        return Err(JjError::IoError(
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        ));
+    }
+
+    // After split, advance the bookmark to the parent commit (@- has the selected files)
+    // Try to get branch name from database first
+    let mut branch_name: Option<String> = None;
+    let repo_path = derive_repo_path_from_workspace(workspace_path);
+
+    if let Some(ref rp) = repo_path {
+        if let Ok(db_branch) = local_db::get_workspace_branch_name(rp, workspace_path) {
+            branch_name = db_branch;
+        }
+    }
+
+    // Fallback to git detection if database lookup failed
+    if branch_name.is_none() {
+        if let Ok(git_branch) = get_workspace_branch(workspace_path) {
+            if !git_branch.is_empty() && git_branch != "HEAD" {
+                branch_name = Some(git_branch);
+            }
+        }
+    }
+
+    // Advance the bookmark if we found a valid branch name
+    if let Some(ref branch) = branch_name {
+        // Set the bookmark to point at @- (the parent with selected files)
+        if let Err(e) = jj_set_bookmark(workspace_path, branch, "@-") {
+            eprintln!("Warning: Failed to advance bookmark '{}': {}", branch, e);
+            // Don't fail the split for bookmark errors
+        }
+
+        // Checkout the branch in git to avoid detached HEAD
+        if let Some(ref rp) = repo_path {
+            if let Ok(repo) = Repository::open(rp) {
+                let refname = format!("refs/heads/{}", branch);
+                if let Err(e) = repo.set_head(&refname) {
+                    eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
+                }
+            }
+        }
+    }
+
+    Ok("Split successfully".to_string())
+}
+
 /// Rebase the current workspace onto a target branch
 /// Uses: jj rebase -d <target_branch>
 pub fn jj_rebase_onto(
