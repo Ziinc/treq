@@ -230,8 +230,8 @@ code[class*="language-"] .token {
   outline: none !important;
 }
 
-/* Ensure no borders on individual line wrappers */
-[data-testid="file-browser"] > div > div > div {
+/* Ensure no borders on individual line wrappers (code lines only, not header) */
+[data-testid="file-browser"] .flex-1.overflow-hidden > div > div {
   border: none !important;
   border-top: none !important;
   border-bottom: none !important;
