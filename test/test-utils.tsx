@@ -1,6 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React, { ReactNode } from "react";
 import { ToastProvider } from "../src/components/ui/toast";
+import { TerminalSettingsProvider } from "../src/hooks/useTerminalSettings";
+import { ThemeProvider } from "../src/hooks/useTheme";
+import { DiffSettingsProvider } from "../src/hooks/useDiffSettings";
 import { render, RenderOptions } from "@testing-library/react";
 
 /**
@@ -18,9 +21,15 @@ const AllTheProviders = ({ children }: { children: ReactNode }) => {
   });
 
   return (
-    <ToastProvider>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </ToastProvider>
+    <ThemeProvider>
+      <ToastProvider>
+        <QueryClientProvider client={queryClient}>
+          <DiffSettingsProvider>
+            <TerminalSettingsProvider>{children}</TerminalSettingsProvider>
+          </DiffSettingsProvider>
+        </QueryClientProvider>
+      </ToastProvider>
+    </ThemeProvider>
   );
 };
 

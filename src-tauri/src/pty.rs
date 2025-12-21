@@ -4,6 +4,43 @@ use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+/// Process a chunk of bytes, handling incomplete UTF-8 sequences at boundaries.
+///
+/// - `pending`: mutable buffer containing incomplete bytes from the previous chunk
+/// - `new_bytes`: the new bytes read from the PTY
+///
+/// Returns a valid UTF-8 String, potentially leaving trailing incomplete bytes in `pending`.
+fn process_utf8_chunk(pending: &mut Vec<u8>, new_bytes: &[u8]) -> String {
+    // Combine pending bytes with new bytes
+    let mut combined = std::mem::take(pending);
+    combined.extend_from_slice(new_bytes);
+
+    match std::str::from_utf8(&combined) {
+        Ok(valid_str) => {
+            // All bytes are valid UTF-8
+            valid_str.to_string()
+        }
+        Err(error) => {
+            let valid_up_to = error.valid_up_to();
+
+            // Check if this is an incomplete sequence at the end (not a real error)
+            if error.error_len().is_none() {
+                // Incomplete sequence at end - buffer the trailing bytes
+                let (valid, trailing) = combined.split_at(valid_up_to);
+                *pending = trailing.to_vec();
+
+                // Return the valid portion (should always be valid UTF-8)
+                String::from_utf8(valid.to_vec()).unwrap_or_default()
+            } else {
+                // Actual invalid UTF-8 byte(s) in the middle
+                // This shouldn't happen with a proper terminal, but handle gracefully
+                // Use lossy conversion and clear pending
+                String::from_utf8_lossy(&combined).to_string()
+            }
+        }
+    }
+}
+
 pub struct PtySession {
     writer: Box<dyn Write + Send>,
     master: Box<dyn MasterPty + Send>,
@@ -105,12 +142,25 @@ impl PtyManager {
         // Spawn reader thread
         thread::spawn(move || {
             let mut buffer = [0u8; 8192];
+            let mut pending_bytes: Vec<u8> = Vec::with_capacity(4);
+
             loop {
                 match reader.read(&mut buffer) {
-                    Ok(0) => break,
+                    Ok(0) => {
+                        // EOF: flush any pending bytes
+                        if !pending_bytes.is_empty() {
+                            let data = String::from_utf8_lossy(&pending_bytes).to_string();
+                            if !data.is_empty() {
+                                callback(data);
+                            }
+                        }
+                        break;
+                    }
                     Ok(n) => {
-                        let data = String::from_utf8_lossy(&buffer[..n]).to_string();
-                        callback(data);
+                        let data = process_utf8_chunk(&mut pending_bytes, &buffer[..n]);
+                        if !data.is_empty() {
+                            callback(data);
+                        }
                     }
                     Err(_) => break,
                 }

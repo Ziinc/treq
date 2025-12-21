@@ -38,7 +38,12 @@ notify = { version = "6.1", default-features = false, features = ["macos_fsevent
 notify-debouncer-full = "0.3"
 crossbeam-channel = "0.5"
 rayon = "1.10"
+tauri-plugin-log = "2"
+log = "0.4"
 
+[dev-dependencies]
+mockall = "0.14.0"
+tempfile = "3"
 # =============================================================================
 # Profile Configuration
 # =============================================================================

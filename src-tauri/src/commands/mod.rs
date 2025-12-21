@@ -1,17 +1,17 @@
 // Command modules
-pub mod workspace;
-pub mod settings;
+pub mod file_view;
+pub mod filesystem;
 pub mod jj_commands;
 pub mod pty_commands;
-pub mod filesystem;
 pub mod session;
-pub mod file_view;
+pub mod settings;
+pub mod workspace;
 
 // Re-export all commands for convenient access
-pub use workspace::*;
-pub use settings::*;
+pub use file_view::*;
+pub use filesystem::*;
 pub use jj_commands::*;
 pub use pty_commands::*;
-pub use filesystem::*;
 pub use session::*;
-pub use file_view::*;
+pub use settings::*;
+pub use workspace::*;

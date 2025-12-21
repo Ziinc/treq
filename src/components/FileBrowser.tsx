@@ -50,6 +50,13 @@ interface FileBrowserProps {
   repoPath: string | null;
   initialSelectedFile: string | null;
   initialExpandedDir: string | null;
+  onCreateAgentWithComment?: (
+    filePath: string,
+    startLine: number,
+    endLine: number,
+    lineContent: string[],
+    commentText: string
+  ) => void;
 }
 
 // Filter out .git and .treq files/directories (but keep .github, .gitignore, etc.)
@@ -219,6 +226,8 @@ interface FileContentViewProps {
   pendingComment: { startLine: number; endLine: number; lineContent: string[] } | null;
   onSubmitComment: (text: string) => void;
   onCancelComment: () => void;
+  scrollOffset: number;
+  onScrollOffsetChange: (offset: number) => void;
 }
 
 const FileContentView = memo(function FileContentView({
@@ -243,6 +252,8 @@ const FileContentView = memo(function FileContentView({
   pendingComment,
   onSubmitComment,
   onCancelComment,
+  scrollOffset,
+  onScrollOffsetChange,
 }: FileContentViewProps) {
   const [copied, setCopied] = useState(false);
   const [copiedPath, setCopiedPath] = useState(false);
@@ -354,6 +365,9 @@ const FileContentView = memo(function FileContentView({
           className="px-4 pb-4"
           rowCount={lines.length}
           rowHeight={getItemHeight}
+          onScroll={({ scrollOffset: offset }: { scrollOffset: number }) => {
+            onScrollOffsetChange(offset);
+          }}
           rowComponent={({
             index,
             style,
@@ -390,12 +404,15 @@ const FileContentView = memo(function FileContentView({
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           rowProps={{} as any}
         />
-        {/* Comment form overlay - positioned after the selected line */}
+        {/* Comment form overlay - positioned right after the selected line */}
         {showCommentInput && pendingComment && (
           <div
             className="absolute left-4 right-4 z-10 bg-muted/60 border border-border/40 rounded px-4 py-3 shadow-lg"
             style={{
-              top: `${pendingComment.endLine * LINE_HEIGHT + 52}px`, // 52px = header height
+              // Line N (1-indexed) occupies y: (N-1)*LINE_HEIGHT to N*LINE_HEIGHT
+              // To position after line N, we want top = N*LINE_HEIGHT
+              // Subtract scrollOffset for viewport coords, subtract additional LINE_HEIGHT for observed offset
+              top: `${pendingComment.endLine * LINE_HEIGHT - scrollOffset - LINE_HEIGHT}px`,
             }}
           >
             <div className="mb-2 text-xs text-muted-foreground">
@@ -549,6 +566,7 @@ export const FileBrowser = memo(function FileBrowser({
   repoPath,
   initialSelectedFile,
   initialExpandedDir,
+  onCreateAgentWithComment,
 }: FileBrowserProps) {
   // Determine the path and branch to use
   const basePath = workspace?.workspace_path ?? repoPath ?? "";
@@ -583,6 +601,7 @@ export const FileBrowser = memo(function FileBrowser({
     lineContent: string[];
   } | null>(null);
   const [hoveredLine, setHoveredLine] = useState<number | null>(null);
+  const [scrollOffset, setScrollOffset] = useState(0);
   const { addToast } = useToast();
   const { fontSize } = useTerminalSettings();
 
@@ -627,6 +646,7 @@ export const FileBrowser = memo(function FileBrowser({
   const handleFileClick = useCallback(
     async (path: string) => {
       setSelectedFile(path);
+      setScrollOffset(0); // Reset scroll when switching files
 
       // Check if binary file
       if (isBinaryFile(path)) {
@@ -787,14 +807,25 @@ export const FileBrowser = memo(function FileBrowser({
   );
 
   const handleSubmitComment = useCallback(
-    (_text: string) => {
+    (text: string) => {
       if (!pendingComment || !selectedFile) return;
+
+      // Call the callback to create agent and send comment
+      if (onCreateAgentWithComment) {
+        onCreateAgentWithComment(
+          selectedFile,
+          pendingComment.startLine,
+          pendingComment.endLine,
+          pendingComment.lineContent,
+          text
+        );
+      }
 
       setShowCommentInput(false);
       setPendingComment(null);
       setLineSelection(null);
     },
-    [pendingComment, selectedFile]
+    [pendingComment, selectedFile, onCreateAgentWithComment]
   );
 
   const handleCancelComment = useCallback(() => {
@@ -1016,6 +1047,8 @@ export const FileBrowser = memo(function FileBrowser({
         pendingComment={pendingComment}
         onSubmitComment={handleSubmitComment}
         onCancelComment={handleCancelComment}
+        scrollOffset={scrollOffset}
+        onScrollOffsetChange={setScrollOffset}
       />
     );
   };

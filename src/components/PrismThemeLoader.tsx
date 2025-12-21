@@ -16,7 +16,7 @@ export function PrismThemeLoader() {
       existingLink.remove();
     }
 
-    // Determine which theme to load
+    // Determine which theme to load based on app theme setting
     const themePath =
       actualTheme === "dark"
         ? "prism-themes/themes/prism-vsc-dark-plus.css"

@@ -2,7 +2,10 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main", "treq-*"],
+  "windows": [
+    "main",
+    "treq-*"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-create",
@@ -12,6 +15,7 @@
     "opener:allow-open-url",
     "opener:allow-open-path",
     "dialog:default",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "log:default"
   ]
 }

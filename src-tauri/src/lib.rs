@@ -33,6 +33,20 @@ pub fn emit_to_focused<S: serde::Serialize + Clone>(app: &AppHandle, event: &str
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .target(tauri_plugin_log::Target::new(
+                    tauri_plugin_log::TargetKind::Stdout,
+                ))
+                .target(tauri_plugin_log::Target::new(
+                    tauri_plugin_log::TargetKind::LogDir {
+                        file_name: Some("treq".to_string()),
+                    },
+                ))
+                .level(log::LevelFilter::Warn)
+                .level_for("treq", log::LevelFilter::Info)
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
@@ -124,8 +138,8 @@ pub fn run() {
                     .build()?;
 
                 // Help menu
-                let learn_more_item = MenuItemBuilder::with_id("learn_more", "Learn More")
-                    .build(app)?;
+                let learn_more_item =
+                    MenuItemBuilder::with_id("learn_more", "Learn More").build(app)?;
 
                 let help_menu = SubmenuBuilder::new(app, "Help")
                     .item(&learn_more_item)
@@ -184,21 +198,19 @@ pub fn run() {
             }
 
             // Handle menu events - emit only to focused window
-            app.on_menu_event(move |app, event| {
-                match event.id().as_ref() {
-                    "dashboard" => emit_to_focused(app, "navigate-to-dashboard", ()),
-                    "settings" => emit_to_focused(app, "navigate-to-settings", ()),
-                    "open" => emit_to_focused(app, "menu-open-repository", ()),
-                    "open_new_window" => emit_to_focused(app, "menu-open-in-new-window", ()),
-                    "learn_more" => {
-                        #[cfg(target_os = "macos")]
-                        {
-                            use tauri_plugin_opener::OpenerExt;
-                            let _ = app.opener().open_url("https://treq.dev", None::<&str>);
-                        }
+            app.on_menu_event(move |app, event| match event.id().as_ref() {
+                "dashboard" => emit_to_focused(app, "navigate-to-dashboard", ()),
+                "settings" => emit_to_focused(app, "navigate-to-settings", ()),
+                "open" => emit_to_focused(app, "menu-open-repository", ()),
+                "open_new_window" => emit_to_focused(app, "menu-open-in-new-window", ()),
+                "learn_more" => {
+                    #[cfg(target_os = "macos")]
+                    {
+                        use tauri_plugin_opener::OpenerExt;
+                        let _ = app.opener().open_url("https://treq.dev", None::<&str>);
                     }
-                    _ => {}
                 }
+                _ => {}
             });
 
             Ok(())
@@ -206,6 +218,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_workspaces,
             commands::add_workspace_to_db,
+            commands::create_workspace,
             commands::delete_workspace_from_db,
             commands::rebuild_workspaces,
             commands::update_workspace_metadata,
@@ -235,6 +248,7 @@ pub fn run() {
             commands::jj_get_default_branch,
             commands::jj_push,
             commands::jj_pull,
+            commands::jj_get_log,
             commands::pty_create_session,
             commands::pty_session_exists,
             commands::pty_write,

@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { Undo2 } from "lucide-react";
 import { cn } from "../lib/utils";
 
 export interface JjFileChange {
@@ -11,8 +12,10 @@ export interface GitFileRowProps {
   file: JjFileChange;
   isSelected?: boolean;
   isActive?: boolean;
+  isLastSelected?: boolean;
   readOnly?: boolean;
   onFileClick?: (path: string, event: React.MouseEvent) => void;
+  onDiscard?: (path: string) => void;
 }
 
 function formatFileLabel(filePath: string) {
@@ -26,7 +29,10 @@ export const GitFileRow = memo<GitFileRowProps>(({
   file,
   isSelected = false,
   isActive = false,
+  isLastSelected = false,
+  readOnly = false,
   onFileClick,
+  onDiscard,
 }) => {
   const label = formatFileLabel(file.path);
   const status = file.status;
@@ -48,12 +54,25 @@ export const GitFileRow = memo<GitFileRowProps>(({
           <span className={cn("text-muted-foreground/60 truncate text-xs", isActive && "text-blue-400")}>{label.directory}</span>
         )}
       </div>
-      <div className="flex items-center flex-shrink-0">
+      <div className="flex items-center gap-1 flex-shrink-0">
         <span
           className="text-sm font-mono min-w-[1ch] text-muted-foreground"
         >
           {status ?? ""}
         </span>
+        {isLastSelected && isSelected && !readOnly && onDiscard && (
+          <button
+            type="button"
+            className="p-0.5 hover:text-foreground hover:bg-red-500/20 text-red-600 dark:text-red-400 rounded transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDiscard(file.path);
+            }}
+            title="Discard selected files"
+          >
+            <Undo2 className="w-3 h-3" />
+          </button>
+        )}
       </div>
     </div>
   );

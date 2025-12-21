@@ -77,7 +77,9 @@ pub fn list_directory_cached(
     use std::path::Path;
 
     // Try cache first
-    if let Ok(cached) = local_db::get_cached_directory_listing(&repo_path, workspace_id, &parent_path) {
+    if let Ok(cached) =
+        local_db::get_cached_directory_listing(&repo_path, workspace_id, &parent_path)
+    {
         if !cached.is_empty() {
             // Convert to CachedDirectoryEntry format
             let entries: Vec<CachedDirectoryEntry> = cached

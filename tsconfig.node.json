@@ -4,7 +4,10 @@
     "skipLibCheck": true,
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "types": ["vitest/globals", "@testing-library/jest-dom"],
+    "jsx": "react-jsx"
   },
-  "include": ["vite.config.ts"]
+  "include": ["src", "test", "vite.config.ts", "./test/setup.ts", "./test/**/*.test.tsx"],
+  "exclude": [".treq/**", ".jj/**"]
 }

@@ -14,9 +14,12 @@ export interface ChangesSectionProps {
   readOnly?: boolean;
   activeFilePath?: string | null;
   selectedFiles?: Set<string>;
+  lastSelectedPath?: string | null;
   onFileSelect?: (path: string, event: React.MouseEvent) => void;
   onMoveToWorkspace?: () => void;
   onDiscardAll?: () => void;
+  onDiscard?: (path: string) => void;
+  onDeselectAll?: () => void;
 }
 
 export const ChangesSection = memo<ChangesSectionProps>(({
@@ -27,9 +30,12 @@ export const ChangesSection = memo<ChangesSectionProps>(({
   readOnly = false,
   activeFilePath,
   selectedFiles,
+  lastSelectedPath,
   onFileSelect,
   onMoveToWorkspace,
   onDiscardAll,
+  onDiscard,
+  onDeselectAll,
 }) => {
   const hasFiles = files.length > 0;
   const hasSelectedFiles = selectedFiles && selectedFiles.size > 0;
@@ -94,15 +100,24 @@ export const ChangesSection = memo<ChangesSectionProps>(({
         </TooltipProvider>
       </div>
       {!isCollapsed && files.length > 0 && (
-        <div className="mt-2 overflow-hidden">
+        <div
+          className="mt-2 overflow-hidden"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              onDeselectAll?.();
+            }
+          }}
+        >
           {files.map((file) => (
             <GitFileRow
               key={file.path}
               file={file as JjFileChange}
               isSelected={selectedFiles?.has(file.path) || false}
               isActive={activeFilePath === file.path}
+              isLastSelected={lastSelectedPath === file.path}
               readOnly={readOnly}
               onFileClick={onFileSelect}
+              onDiscard={onDiscard}
             />
           ))}
         </div>
