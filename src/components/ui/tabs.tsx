@@ -84,6 +84,9 @@ export const TabsTrigger: React.FC<TabsTriggerProps> = ({
 
   return (
     <button
+      role="tab"
+      aria-selected={isActive}
+      data-state={isActive ? "active" : "inactive"}
       onClick={() => onValueChange(triggerValue)}
       className={`${baseClass} ${className || ""}`}
     >

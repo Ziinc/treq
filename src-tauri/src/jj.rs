@@ -65,6 +65,28 @@ pub struct JjRebaseResult {
     pub conflicted_files: Vec<String>,
 }
 
+/// A single commit in the log
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct JjLogCommit {
+    pub commit_id: String,
+    pub short_id: String,
+    pub change_id: String,
+    pub description: String,
+    pub author_name: String,
+    pub timestamp: String,
+    pub parent_ids: Vec<String>,
+    pub is_working_copy: bool,
+    pub bookmarks: Vec<String>,
+}
+
+/// The full log response including metadata
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct JjLogResult {
+    pub commits: Vec<JjLogCommit>,
+    pub target_branch: String,
+    pub workspace_branch: String,
+}
+
 impl std::fmt::Display for JjError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -186,8 +208,9 @@ pub fn ensure_gitignore_entries(repo_path: &str) -> Result<(), JjError> {
     if gitignore_path.exists() {
         let content = fs::read_to_string(&gitignore_path).unwrap_or_default();
         if !content.is_empty() && !content.ends_with('\n') {
-            writeln!(file)
-                .map_err(|e| JjError::InitFailed(format!("Failed to write to .gitignore: {}", e)))?;
+            writeln!(file).map_err(|e| {
+                JjError::InitFailed(format!("Failed to write to .gitignore: {}", e))
+            })?;
         }
     }
 
@@ -233,10 +256,7 @@ pub fn init_jj_for_git_repo(repo_path: &str) -> Result<(), JjError> {
 /// Ensure jj is initialized for a repository
 /// This is idempotent - safe to call multiple times
 /// Returns true if initialization was performed, false if already initialized
-pub fn ensure_jj_initialized(
-    db: &crate::db::Database,
-    repo_path: &str,
-) -> Result<bool, JjError> {
+pub fn ensure_jj_initialized(db: &crate::db::Database, repo_path: &str) -> Result<bool, JjError> {
     // Check database flag first (avoid filesystem check if already configured)
     let flag_key = "jj_initialized";
     let already_configured = db
@@ -322,7 +342,7 @@ pub fn create_workspace(
 
     let workspace_path_str = workspace_dir.to_string_lossy().to_string();
 
-    // Create git workspace first using git worktree command
+    // Create git worktree first (gives each workspace isolated checkout)
     let mut git_cmd = std::process::Command::new("git");
     git_cmd.current_dir(repo_path)
         .arg("worktree")
@@ -358,7 +378,7 @@ pub fn create_workspace(
     let jj_result = Workspace::init_external_git(&settings, &workspace_dir, &git_path);
 
     if let Err(e) = jj_result {
-        // Clean up: remove the git workspace we just created
+        // Clean up: remove the git worktree we just created
         let _ = std::process::Command::new("git")
             .current_dir(repo_path)
             .args(&["worktree", "remove", "--force", &workspace_path_str])
@@ -376,7 +396,7 @@ pub fn create_workspace(
         // Don't fail workspace creation for bookmark errors
     }
 
-    Ok(workspace_path_str)
+    Ok(sanitized_name)
 }
 
 /// List all workspaces in a repository
@@ -390,8 +410,7 @@ pub fn list_workspaces(repo_path: &str) -> Result<Vec<WorkspaceInfo>, JjError> {
 
     let mut workspaces = Vec::new();
 
-    let entries =
-        fs::read_dir(&workspaces_dir).map_err(|e| JjError::IoError(e.to_string()))?;
+    let entries = fs::read_dir(&workspaces_dir).map_err(|e| JjError::IoError(e.to_string()))?;
 
     for entry in entries.filter_map(|e| e.ok()) {
         let entry_path = entry.path();
@@ -407,10 +426,7 @@ pub fn list_workspaces(repo_path: &str) -> Result<Vec<WorkspaceInfo>, JjError> {
             continue;
         }
 
-        let name = entry
-            .file_name()
-            .to_string_lossy()
-            .to_string();
+        let name = entry.file_name().to_string_lossy().to_string();
 
         let path = entry_path.to_string_lossy().to_string();
 
@@ -452,10 +468,7 @@ fn get_workspace_branch(workspace_path: &str) -> Result<String, JjError> {
 }
 
 /// Remove a workspace (jj + git workspace + files)
-pub fn remove_workspace(
-    repo_path: &str,
-    workspace_path: &str,
-) -> Result<(), JjError> {
+pub fn remove_workspace(repo_path: &str, workspace_path: &str) -> Result<(), JjError> {
     let workspace_dir = Path::new(workspace_path);
 
     // Check workspace exists
@@ -468,11 +481,13 @@ pub fn remove_workspace(
         .current_dir(repo_path)
         .args(&["worktree", "remove", "--force", workspace_path])
         .output()
-        .map_err(|e| JjError::GitWorkspaceError(format!("Failed to execute git worktree remove: {}", e)))?;
+        .map_err(|e| {
+            JjError::GitWorkspaceError(format!("Failed to execute git worktree remove: {}", e))
+        })?;
 
     if !output.status.success() {
         return Err(JjError::GitWorkspaceError(
-            String::from_utf8_lossy(&output.stderr).to_string()
+            String::from_utf8_lossy(&output.stderr).to_string(),
         ));
     }
 
@@ -577,7 +592,8 @@ fn parse_jj_status(status: &str) -> Result<Vec<JjFileChange>, JjError> {
         let line = line.trim();
 
         // Skip empty lines and section headers
-        if line.is_empty() || line.starts_with("Working copy") || line.starts_with("Parent commit") {
+        if line.is_empty() || line.starts_with("Working copy") || line.starts_with("Parent commit")
+        {
             continue;
         }
 
@@ -605,7 +621,10 @@ fn parse_jj_status(status: &str) -> Result<Vec<JjFileChange>, JjError> {
 
 /// Get diff hunks for a specific file
 /// Uses jj diff CLI with git-format output
-pub fn jj_get_file_hunks(workspace_path: &str, file_path: &str) -> Result<Vec<JjDiffHunk>, JjError> {
+pub fn jj_get_file_hunks(
+    workspace_path: &str,
+    file_path: &str,
+) -> Result<Vec<JjDiffHunk>, JjError> {
     // Use jj diff --git to get hunks in git-compatible format
     let output = Command::new("jj")
         .current_dir(workspace_path)
@@ -646,7 +665,11 @@ fn parse_git_diff_hunks(diff: &str) -> Result<Vec<JjDiffHunk>, JjError> {
             current_hunk = Some((line.to_string(), Vec::new()));
         } else if let Some((_, ref mut lines)) = current_hunk {
             // Skip diff metadata lines
-            if !line.starts_with("diff") && !line.starts_with("index") && !line.starts_with("---") && !line.starts_with("+++") {
+            if !line.starts_with("diff")
+                && !line.starts_with("index")
+                && !line.starts_with("---")
+                && !line.starts_with("+++")
+            {
                 lines.push(line.to_string());
             }
         }
@@ -752,7 +775,11 @@ pub fn jj_restore_all(workspace_path: &str) -> Result<String, JjError> {
 
 /// Set (or create) a jj bookmark to point at a specific revision
 /// Uses: jj bookmark set <name> -r <revision>
-pub fn jj_set_bookmark(workspace_path: &str, bookmark_name: &str, revision: &str) -> Result<(), JjError> {
+pub fn jj_set_bookmark(
+    workspace_path: &str,
+    bookmark_name: &str,
+    revision: &str,
+) -> Result<(), JjError> {
     let output = Command::new("jj")
         .current_dir(workspace_path)
         .args(["bookmark", "set", bookmark_name, "-r", revision])
@@ -809,7 +836,8 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     // Fail if not on a valid branch (empty or detached HEAD)
     if git_branch.is_empty() || git_branch == "HEAD" {
         return Err(JjError::IoError(
-            "Git is not checked out to a branch. Please checkout a branch before committing.".to_string(),
+            "Git is not checked out to a branch. Please checkout a branch before committing."
+                .to_string(),
         ));
     }
 
@@ -880,9 +908,7 @@ pub fn jj_split(
         cmd.arg(path);
     }
 
-    let output = cmd
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
+    let output = cmd.output().map_err(|e| JjError::IoError(e.to_string()))?;
 
     if !output.status.success() {
         return Err(JjError::IoError(
@@ -900,10 +926,7 @@ pub fn jj_split(
         .args(["checkout", &branch])
         .output();
     if let Err(e) = checkout {
-        eprintln!(
-            "Warning: Failed to checkout git branch '{}': {}",
-            branch, e
-        );
+        eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
     }
 
     Ok(format!("Committed successfully to branch '{}'", branch))
@@ -1052,7 +1075,10 @@ pub fn jj_pull(workspace_path: &str) -> Result<String, JjError> {
     let fetch_stderr = String::from_utf8_lossy(&fetch_output.stderr);
 
     if !fetch_output.status.success() {
-        return Err(JjError::IoError(format!("{}{}", fetch_stdout, fetch_stderr)));
+        return Err(JjError::IoError(format!(
+            "{}{}",
+            fetch_stdout, fetch_stderr
+        )));
     }
 
     // Get the current branch name to determine tracking branch
@@ -1085,4 +1111,102 @@ pub fn jj_pull(workspace_path: &str) -> Result<String, JjError> {
     }
 
     Ok(combined)
+}
+
+/// Get commit log from fork point to HEAD for a workspace
+/// Uses: jj log with custom template for machine-readable output
+pub fn jj_get_log(workspace_path: &str, target_branch: &str) -> Result<JjLogResult, JjError> {
+    // Get workspace branch name
+    let workspace_branch = get_workspace_branch(workspace_path)?;
+
+    // Build revset: ancestors(target_branch, 6) | target_branch::@
+    // This gives us: target branch + 6 ancestors + workspace commits
+    let revset = format!("ancestors({}, 7) | {}::@", target_branch, target_branch);
+
+    // Build template for tab-separated output
+    let template = concat!(
+        "commit_id.short(12) ++ \"\\t\" ++ ",
+        "change_id.short(12) ++ \"\\t\" ++ ",
+        "if(description, description.first_line(), \"(no description)\") ++ \"\\t\" ++ ",
+        "author.name() ++ \"\\t\" ++ ",
+        "author.timestamp() ++ \"\\t\" ++ ",
+        "parents.map(|p| p.commit_id().short(12)).join(\",\") ++ \"\\t\" ++ ",
+        "if(working_copies, \"true\", \"false\") ++ \"\\t\" ++ ",
+        "bookmarks.map(|b| b.name()).join(\",\") ++ \"\\n\""
+    );
+
+    let output = Command::new("jj")
+        .current_dir(workspace_path)
+        .args([
+            "log",
+            "-r",
+            &revset,
+            "--no-graph",
+            "-T",
+            template,
+        ])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !output.status.success() {
+        return Err(JjError::IoError(
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        ));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut commits = Vec::new();
+
+    // Parse each line of tab-separated output
+    for line in stdout.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() < 8 {
+            continue; // Skip malformed lines
+        }
+
+        let short_id = parts[0].to_string();
+        let change_id = parts[1].to_string();
+        let description = parts[2].to_string();
+        let author_name = parts[3].to_string();
+        let timestamp = parts[4].to_string();
+        let parent_ids_str = parts[5];
+        let is_working_copy = parts[6] == "true";
+        let bookmarks_str = parts[7];
+
+        // Parse parent IDs
+        let parent_ids: Vec<String> = if parent_ids_str.is_empty() {
+            Vec::new()
+        } else {
+            parent_ids_str.split(',').map(|s| s.to_string()).collect()
+        };
+
+        // Parse bookmarks
+        let bookmarks: Vec<String> = if bookmarks_str.is_empty() {
+            Vec::new()
+        } else {
+            bookmarks_str.split(',').map(|s| s.to_string()).collect()
+        };
+
+        commits.push(JjLogCommit {
+            commit_id: short_id.clone(),
+            short_id,
+            change_id,
+            description,
+            author_name,
+            timestamp,
+            parent_ids,
+            is_working_copy,
+            bookmarks,
+        });
+    }
+
+    Ok(JjLogResult {
+        commits,
+        target_branch: target_branch.to_string(),
+        workspace_branch,
+    })
 }

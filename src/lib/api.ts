@@ -56,6 +56,24 @@ export interface JjRebaseResult {
   conflicted_files: string[];
 }
 
+export interface JjLogCommit {
+  commit_id: string;
+  short_id: string;
+  change_id: string;
+  description: string;
+  author_name: string;
+  timestamp: string;
+  parent_ids: string[];
+  is_working_copy: boolean;
+  bookmarks: string[];
+}
+
+export interface JjLogResult {
+  commits: JjLogCommit[];
+  target_branch: string;
+  workspace_branch: string;
+}
+
 export interface DirectoryEntry {
   name: string;
   path: string;
@@ -84,6 +102,21 @@ export const addWorkspaceToDb = (
   metadata?: string
 ): Promise<number> =>
   invoke("add_workspace_to_db", { repoPath: repo_path, workspaceName: workspace_name, workspacePath: workspace_path, branchName: branch_name, metadata });
+
+export const createWorkspace = (
+  repo_path: string,
+  branch_name: string,
+  new_branch: boolean,
+  source_branch?: string,
+  metadata?: string
+): Promise<number> =>
+  invoke("create_workspace", {
+    repoPath: repo_path,
+    branchName: branch_name,
+    newBranch: new_branch,
+    sourceBranch: source_branch ?? null,
+    metadata: metadata ?? null,
+  });
 
 export const deleteWorkspaceFromDb = (repo_path: string, id: number): Promise<void> =>
   invoke("delete_workspace_from_db", { repoPath: repo_path, id });
@@ -224,11 +257,25 @@ export const jjGetConflictedFiles = (
 export const jjGetDefaultBranch = (repo_path: string): Promise<string> =>
   invoke("jj_get_default_branch", { repoPath: repo_path });
 
+export interface JjBranch {
+  name: string;
+  is_current: boolean;
+}
+
+export const jjGetBranches = (repo_path: string): Promise<JjBranch[]> =>
+  invoke("jj_get_branches", { repoPath: repo_path });
+
 export const jjPush = (workspace_path: string): Promise<string> =>
   invoke("jj_push", { workspacePath: workspace_path });
 
 export const jjPull = (workspace_path: string): Promise<string> =>
   invoke("jj_pull", { workspacePath: workspace_path });
+
+export const jjGetLog = (
+  workspacePath: string,
+  targetBranch: string
+): Promise<JjLogResult> =>
+  invoke("jj_get_log", { workspacePath, targetBranch });
 
 export const jjInit = (repo_path: string): Promise<string> =>
   invoke("jj_init", { repoPath: repo_path });
@@ -254,6 +301,16 @@ export const setWorkspaceTargetBranch = (
     repoPath: repo_path,
     workspacePath: workspace_path,
     id,
+    targetBranch: target_branch,
+  });
+
+// Alias for tests
+export const jjSetWorkspaceTarget = (
+  workspace_path: string,
+  target_branch: string
+): Promise<void> =>
+  invoke("set_workspace_target_branch", {
+    workspacePath: workspace_path,
     targetBranch: target_branch,
   });
 

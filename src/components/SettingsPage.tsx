@@ -6,7 +6,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { RepositorySettingsContent } from "./RepositorySettingsContent";
 import { useTheme } from "../hooks/useTheme";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
-import { useDiffSettings } from "../hooks/useDiffSettings";
 import { useToast } from "./ui/toast";
 import { getSetting, setSetting } from "../lib/api";
 import { Settings, FolderGit2, GitBranch } from "lucide-react";
@@ -15,31 +14,22 @@ type TabValue = "application" | "repository";
 
 interface SettingsPageProps {
   repoPath: string;
-  onRepoPathChange: (path: string) => void;
-  initialTab?: TabValue;
-  onRefresh?: () => void;
   onClose: () => void;
-  repoName?: string;
   currentBranch?: string | null;
 }
 
 export const SettingsPage: React.FC<SettingsPageProps> = ({
   repoPath,
-  onRepoPathChange,
-  initialTab = "repository",
-  onRefresh,
   onClose,
-  repoName,
   currentBranch,
 }) => {
-  const [currentTab, setCurrentTab] = useState<TabValue>(initialTab);
+  const [currentTab, setCurrentTab] = useState<TabValue>("repository");
   const [defaultModel, setDefaultModel] = useState<string>("");
   const [originalFontSize, setOriginalFontSize] = useState<number | null>(null);
   const [localFontSize, setLocalFontSize] = useState<number>(12);
 
   const { theme, setTheme } = useTheme();
   const { fontSize, setFontSize } = useTerminalSettings();
-  const { fontSize: diffFontSize, setFontSize: setDiffFontSize } = useDiffSettings();
   const { addToast } = useToast();
 
   // Load settings on mount
@@ -55,10 +45,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const handleSaveApplicationSettings = async () => {
     try {
       await setSetting("default_model", defaultModel);
-
-      // Save font size settings
       await setFontSize(localFontSize);
-      await setDiffFontSize(localFontSize);
 
       addToast({
         title: "Settings Saved",
@@ -88,12 +75,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             >
               Close
             </Button>
-            <Button
-              size="sm"
-              onClick={handleSaveApplicationSettings}
-            >
-              Save Settings
-            </Button>
+            {currentTab === "application" && (
+              <Button
+                size="sm"
+                onClick={handleSaveApplicationSettings}
+              >
+                Save Settings
+              </Button>
+            )}
           </div>
         </div>
 

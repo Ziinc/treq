@@ -8,8 +8,12 @@ import {
   DirectoryEntry,
   jjGetDefaultBranch,
   jjGetConflictedFiles,
+  jjGetBranches,
   setWorkspaceTargetBranch,
   jjGetChangedFiles,
+  createSession,
+  ptyCreateSession,
+  ptyWrite,
 } from "../lib/api";
 import { getStatusBgColor } from "../lib/git-status-colors";
 import { parseJjChangedFiles, type ParsedFileChange } from "../lib/git-utils";
@@ -26,6 +30,7 @@ import {
   type ChangesDiffViewerHandle,
 } from "./ChangesDiffViewer";
 import { FileBrowser } from "./FileBrowser";
+import { CommitGraph } from "./CommitGraph";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import { Button } from "./ui/button";
 import { useToast } from "./ui/toast";
@@ -63,24 +68,19 @@ import { useTerminalSettings } from "../hooks/useTerminalSettings";
 interface ShowWorkspaceProps {
   repositoryPath?: string;
   workspace: Workspace | null;
-  sessionId: number | null;
   mainRepoBranch?: string | null;
-  onClose: () => void;
   initialSelectedFile: string | null;
-  onSessionActivity?: (sessionId: number) => void;
-  isHidden?: boolean;
   onDeleteWorkspace?: (workspace: Workspace) => void;
+  allWorkspaces: Workspace[];
 }
 
 export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   repositoryPath,
   workspace,
-  sessionId: _sessionId,
   mainRepoBranch,
-  onClose: _onClose,
   initialSelectedFile,
-  isHidden: _isHidden = false,
   onDeleteWorkspace,
+  allWorkspaces,
 }) {
   const workingDirectory = workspace?.workspace_path || repositoryPath || "";
   const effectiveRepoPath = workspace?.repo_path || repositoryPath || "";
@@ -124,11 +124,26 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   // Show overview tab by default for main repo, changes tab for workspaces
   const [activeTab, setActiveTab] = useState("overview");
 
+  // Files list expansion state
+  const [isFilesExpanded, setIsFilesExpanded] = useState(false);
+
   useEffect(() => {
     // Fetch root directory listing
     listDirectory(workingDirectory)
-      .then(setRootEntries)
-      .catch(() => setRootEntries([]));
+      .then((entries) => {
+        // Filter to only show root-level entries (not nested files)
+        const rootOnly = entries.filter((entry) => {
+          const relativePath = entry.path.replace(workingDirectory, "").replace(/^\//, "");
+          return !relativePath.includes("/");
+        });
+        setRootEntries(rootOnly);
+        // Reset expansion state when workspace changes
+        setIsFilesExpanded(false);
+      })
+      .catch(() => {
+        setRootEntries([]);
+        setIsFilesExpanded(false);
+      });
 
     // Fetch README.md
     readFile(`${workingDirectory}/README.md`)
@@ -139,10 +154,21 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
       .then(setDefaultBranch)
       .catch(() => setDefaultBranch("main"));
 
-    // Note: Branch listing would need JJ equivalent
+    // Load available branches
     if (workspace && effectiveRepoPath) {
-      setBranchesLoading(false);
-      setAvailableBranches([]);
+      setBranchesLoading(true);
+      jjGetBranches(effectiveRepoPath)
+        .then((branches) => {
+          setAvailableBranches(
+            branches.map((b) => ({
+              name: b.name,
+              full_name: b.name,
+              is_current: b.is_current,
+            }))
+          );
+        })
+        .catch(() => setAvailableBranches([]))
+        .finally(() => setBranchesLoading(false));
     }
   }, [workspace, effectiveRepoPath]);
 
@@ -155,12 +181,12 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   }, [workspace?.target_branch, defaultBranch]);
 
   useEffect(() => {
-    if (activeTab === "changes") {
+    if (workingDirectory) {
       jjGetConflictedFiles(workingDirectory)
         .then(setConflictedFiles)
         .catch(() => setConflictedFiles([]));
     }
-  }, [activeTab]);
+  }, [workingDirectory]);
 
   useEffect(() => {
     if (activeTab === "overview" && workingDirectory) {
@@ -296,6 +322,66 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
     });
   }, [addToast]);
 
+  const handleCreateAgentWithComment = useCallback(
+    async (filePath: string, startLine: number, endLine: number, lineContent: string[], commentText: string) => {
+      try {
+        // Format comment as markdown
+        const relativePath = filePath.startsWith(workingDirectory + "/")
+          ? filePath.slice(workingDirectory.length + 1)
+          : filePath;
+
+        const lineRef = `${relativePath}:${startLine}${startLine !== endLine ? `-${endLine}` : ''}`;
+        const formattedComment = `${lineRef}\n\`\`\`\n${lineContent.join('\n')}\n\`\`\`\n> ${commentText}\n`;
+
+        // Create new database session
+        const dbSessionId = await createSession(
+          effectiveRepoPath,
+          workspace?.id ?? null,
+          "Code Comment"
+        );
+
+        // Construct PTY session ID
+        const ptySessionId = `session-${dbSessionId}`;
+
+        // Create PTY session
+        await ptyCreateSession(ptySessionId, workingDirectory);
+
+        // Wait for shell to be ready
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        // Launch Claude
+        await ptyWrite(ptySessionId, "claude --permission-mode plan\n");
+
+        // Wait for Claude to start
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Send the formatted comment
+        await ptyWrite(ptySessionId, formattedComment);
+
+        addToast({
+          title: "Comment sent to agent",
+          description: `Created new agent session and sent comment`,
+          type: "success",
+        });
+      } catch (error) {
+        addToast({
+          title: "Failed to create agent",
+          description: error instanceof Error ? error.message : String(error),
+          type: "error",
+        });
+      }
+    },
+    [workingDirectory, effectiveRepoPath, workspace, addToast]
+  );
+
+  // Compute displayed entries for files list
+  const MAX_VISIBLE_FILES = 10;
+  const displayedEntries = isFilesExpanded
+    ? rootEntries
+    : rootEntries.slice(0, MAX_VISIBLE_FILES);
+  const hasMoreEntries = rootEntries.length > MAX_VISIBLE_FILES;
+  const hiddenCount = rootEntries.length - MAX_VISIBLE_FILES;
+
   // Status pip component for file/directory indicators
   const StatusPip = ({ status }: { status?: string }) =>
     status ? (
@@ -321,9 +407,49 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
       <div className="flex-1 overflow-auto">
         {activeTab === "overview" ? (
           <div className="p-4 space-y-6">
+            {/* Commit Graph */}
+            {workingDirectory && (
+              <div className="border rounded-lg p-4">
+                <h3 className="text-sm font-medium mb-3">Commit History</h3>
+                <CommitGraph
+                  workspacePath={workingDirectory}
+                  targetBranch={workspace ? targetBranch : defaultBranch}
+                  workspaceBranch={workspace ? workspace.branch_name : defaultBranch}
+                  repoPath={effectiveRepoPath}
+                  allWorkspaces={allWorkspaces}
+                />
+              </div>
+            )}
+            {/* Conflicts Alert */}
+            {conflictedFiles.length > 0 && (
+              <div
+                role="alert"
+                className="border border-destructive/30 rounded-md bg-destructive/5 p-4"
+              >
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <h3 className="font-medium text-destructive">
+                      {conflictedFiles.length} {conflictedFiles.length === 1 ? 'conflict' : 'conflicts'} detected
+                    </h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Some files have conflicts that need to be resolved
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setActiveTab("changes")}
+                    className="border-destructive/30 text-destructive hover:bg-destructive/10"
+                  >
+                    View conflicts
+                  </Button>
+                </div>
+              </div>
+            )}
             {/* File Listing */}
             <div className="border rounded-lg divide-y divide-border">
-              {rootEntries.map((entry) => (
+              {displayedEntries.map((entry) => (
                 <button
                   key={entry.path}
                   type="button"
@@ -344,6 +470,15 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
                   <StatusPip status={getEntryStatus(entry)} />
                 </button>
               ))}
+              {hasMoreEntries && !isFilesExpanded && (
+                <button
+                  type="button"
+                  onClick={() => setIsFilesExpanded(true)}
+                  className="flex items-center justify-center gap-2 px-4 py-2 text-sm w-full hover:bg-muted/60 transition text-muted-foreground"
+                >
+                  Show {hiddenCount} more
+                </button>
+              )}
               {rootEntries.length === 0 && (
                 <div className="px-4 py-8 text-center text-sm text-muted-foreground">
                   No files found
@@ -354,11 +489,14 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
             {/* README Section */}
             <div className="border rounded-lg p-6">
               {readmeContent ? (
-                <div className="prose dark:prose-invert max-w-none prose-headings:font-semibold prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl prose-a:text-blue-500 prose-a:no-underline hover:prose-a:underline prose-strong:font-semibold prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-[''] prose-code:after:content-[''] prose-pre:bg-muted prose-pre:border prose-pre:border-border">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {readmeContent}
-                  </ReactMarkdown>
-                </div>
+                <>
+                  <h2 className="text-lg font-semibold mb-4">README.md</h2>
+                  <div className="prose dark:prose-invert max-w-none prose-headings:font-semibold prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl prose-a:text-blue-500 prose-a:no-underline hover:prose-a:underline prose-strong:font-semibold prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-[''] prose-code:after:content-[''] prose-pre:bg-muted prose-pre:border prose-pre:border-border">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {readmeContent}
+                    </ReactMarkdown>
+                  </div>
+                </>
               ) : (
                 <div className="text-muted-foreground text-sm text-center py-4">
                   No README.md found
@@ -379,6 +517,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
             repoPath={effectiveRepoPath}
             initialSelectedFile={initialSelectedFileForBrowser}
             initialExpandedDir={initialExpandedDir}
+            onCreateAgentWithComment={handleCreateAgentWithComment}
           />
         )}
       </div>

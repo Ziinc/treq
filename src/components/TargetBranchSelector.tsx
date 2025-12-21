@@ -37,6 +37,7 @@ export const TargetBranchSelector: React.FC<TargetBranchSelectorProps> = ({
           size="sm"
           disabled={disabled || loading}
           className="gap-2"
+          aria-label="Workspace target"
         >
           {loading ? (
             <Loader2 className="w-4 h-4 animate-spin" />

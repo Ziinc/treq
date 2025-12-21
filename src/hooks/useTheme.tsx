@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useMemo } from "react";
 import { getSetting, setSetting } from "../lib/api";
 
 type Theme = "system" | "light" | "dark";
@@ -9,14 +9,21 @@ interface ThemeContextType {
   actualTheme: "light" | "dark";
 }
 
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+// Default fallback for HMR edge cases where context gets disconnected
+const defaultContextValue: ThemeContextType = {
+  theme: "system",
+  setTheme: () => {
+    console.warn("ThemeProvider not found, using fallback");
+  },
+  actualTheme: "light",
+};
 
-export const useTheme = () => {
-  const context = useContext(ThemeContext);
-  if (!context) {
-    throw new Error("useTheme must be used within ThemeProvider");
-  }
-  return context;
+const ThemeContext = createContext<ThemeContextType>(defaultContextValue);
+
+ThemeContext.displayName = "ThemeContext";
+
+export const useTheme = (): ThemeContextType => {
+  return useContext(ThemeContext);
 };
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -64,8 +71,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     await setSetting("theme", newTheme);
   };
 
+  const value = useMemo(() => ({ theme, setTheme, actualTheme }), [theme, actualTheme]);
+
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, actualTheme }}>
+    <ThemeContext.Provider value={value}>
       {children}
     </ThemeContext.Provider>
   );

@@ -137,7 +137,8 @@ impl Database {
                 )?;
 
                 self.conn.execute("DROP TABLE git_cache", [])?;
-                self.conn.execute("ALTER TABLE git_cache_new RENAME TO git_cache", [])?;
+                self.conn
+                    .execute("ALTER TABLE git_cache_new RENAME TO git_cache", [])?;
             }
         }
 
@@ -202,14 +203,16 @@ impl Database {
                 }
 
                 self.conn.execute("DROP TABLE file_views", [])?;
-                self.conn.execute("ALTER TABLE file_views_new RENAME TO file_views", [])?;
+                self.conn
+                    .execute("ALTER TABLE file_views_new RENAME TO file_views", [])?;
             }
         }
 
         // Migration: Add content_hash column if it doesn't exist
-        let _ = self
-            .conn
-            .execute("ALTER TABLE file_views ADD COLUMN content_hash TEXT NOT NULL DEFAULT ''", []);
+        let _ = self.conn.execute(
+            "ALTER TABLE file_views ADD COLUMN content_hash TEXT NOT NULL DEFAULT ''",
+            [],
+        );
 
         self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_file_views_workspace ON file_views(workspace_path)",
@@ -240,7 +243,10 @@ impl Database {
         Ok(())
     }
 
-    pub fn get_settings_batch(&self, keys: &[String]) -> Result<std::collections::HashMap<String, Option<String>>> {
+    pub fn get_settings_batch(
+        &self,
+        keys: &[String],
+    ) -> Result<std::collections::HashMap<String, Option<String>>> {
         use std::collections::HashMap;
 
         let mut result = HashMap::new();
@@ -251,10 +257,14 @@ impl Database {
 
         // Build placeholders for IN clause
         let placeholders = keys.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
-        let query = format!("SELECT key, value FROM settings WHERE key IN ({})", placeholders);
+        let query = format!(
+            "SELECT key, value FROM settings WHERE key IN ({})",
+            placeholders
+        );
 
         let mut stmt = self.conn.prepare(&query)?;
-        let params: Vec<&dyn rusqlite::ToSql> = keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
+        let params: Vec<&dyn rusqlite::ToSql> =
+            keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
         let mut rows = stmt.query(&params[..])?;
 
         // First, initialize all keys with None

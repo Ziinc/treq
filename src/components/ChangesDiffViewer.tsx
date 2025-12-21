@@ -24,6 +24,7 @@ import {
   ptyWrite,
   markFileViewed,
   unmarkFileViewed,
+  readFile,
   type JjDiffHunk,
 } from "../lib/api";
 import { useCachedWorkspaceChanges } from "../hooks/useCachedWorkspaceChanges";
@@ -112,8 +113,8 @@ interface FileHunksData {
 
 // Helper to get line type styling (background only, text color handled by syntax highlighting)
 const getLineTypeClass = (line: string): string => {
-  if (line.startsWith("+")) return "bg-emerald-500/10";
-  if (line.startsWith("-")) return "bg-red-500/10";
+  if (line.startsWith("+")) return "bg-emerald-500/20";
+  if (line.startsWith("-")) return "bg-red-500/20";
   return "";
 };
 
@@ -472,15 +473,24 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
     >
       {/* File Header */}
       <div
-        className="sticky top-0 z-10 flex items-center justify-between px-[16px] py-[8px] bg-muted cursor-pointer hover:bg-muted/80 border-b border-border"
-        onClick={() => toggleFileCollapse(filePath)}
+        className="sticky top-0 z-10 flex items-center justify-between px-[16px] py-[8px] bg-muted border-b border-border"
       >
         <div className="flex items-center gap-[8px] flex-1 min-w-0">
-          {isCollapsed ? (
-            <ChevronRight className="w-3 h-3 flex-shrink-0" />
-          ) : (
-            <ChevronDown className="w-3 h-3 flex-shrink-0" />
-          )}
+          <button
+            role="button"
+            aria-label={isCollapsed ? "Expand file diff" : "Collapse file diff"}
+            className="p-0 border-0 bg-transparent cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFileCollapse(filePath);
+            }}
+          >
+            {isCollapsed ? (
+              <ChevronRight className="w-3 h-3 flex-shrink-0" />
+            ) : (
+              <ChevronDown className="w-3 h-3 flex-shrink-0" />
+            )}
+          </button>
           <div className="min-w-0 flex-1 flex items-center gap-[6px]">
             <span className="text-sm text-muted-foreground truncate font-mono">
               {filePath.replace(/\/+$/, "")}
@@ -505,6 +515,9 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
         <div className="flex items-center gap-[8px]">
           {/* Viewed checkbox */}
           <button
+            role="checkbox"
+            aria-checked={isViewed}
+            aria-label="Viewed"
             onClick={(e) => {
               e.stopPropagation();
               if (isViewed) {
@@ -513,12 +526,12 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
                 handleMarkFileViewed(filePath);
               }
             }}
-            className={cn(
-              "flex items-center gap-[4px] px-[8px] py-[2px] rounded text-sm transition-colors",
-              isViewed
-                ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/30"
-                : "bg-muted hover:bg-accent text-muted-foreground hover:text-foreground"
-            )}
+                            className={cn(
+                              "flex items-center gap-[4px] px-[8px] py-[2px] rounded text-sm transition-colors",
+                              isViewed
+                                ? "bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/35"
+                                : "bg-muted hover:bg-accent text-muted-foreground hover:text-foreground"
+                            )}
             title={isViewed ? "Mark as not viewed" : "Mark as viewed"}
           >
             {isViewed ? (
@@ -528,21 +541,21 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
             )}
             <span>Viewed</span>
           </button>
-          {isBinaryFile(filePath) && (
-            <span className="text-sm px-[8px] py-[2px] rounded bg-zinc-500/20 text-zinc-600 dark:text-zinc-400">
-              Binary
-            </span>
-          )}
-          {(additions > 0 || deletions > 0) && (
-            <span className="text-sm font-mono flex items-center gap-[4px]">
-              <span className="text-emerald-600 dark:text-emerald-400">
-                +{additions}
-              </span>
-              <span className="text-red-600 dark:text-red-400">
-                -{deletions}
-              </span>
-            </span>
-          )}
+                          {isBinaryFile(filePath) && (
+                            <span className="text-sm px-[8px] py-[2px] rounded bg-zinc-500/25 text-zinc-700 dark:text-zinc-300">
+                              Binary
+                            </span>
+                          )}
+                          {(additions > 0 || deletions > 0) && (
+                            <span className="text-sm font-mono flex items-center gap-[4px]">
+                              <span className="text-emerald-700 dark:text-emerald-300">
+                                +{additions}
+                              </span>
+                              <span className="text-red-700 dark:text-red-300">
+                                -{deletions}
+                              </span>
+                            </span>
+                          )}
           {!readOnly && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -552,14 +565,14 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" sideOffset={4}>
                 {(file.workspaceStatus || file.stagedStatus) && (
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      handleDiscardFiles(filePath);
-                    }}
-                    disabled={fileActionTarget === filePath}
-                    className="text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
-                  >
+                                <DropdownMenuItem
+                                    onSelect={(e) => {
+                                      e.preventDefault();
+                                      handleDiscardFiles(filePath);
+                                    }}
+                                    disabled={fileActionTarget === filePath}
+                                    className="text-red-700 dark:text-red-300 focus:text-red-700 dark:focus:text-red-300"
+                                  >
                     {selectedUnstagedFiles.has(filePath) &&
                     selectedUnstagedFiles.size > 1
                       ? `Discard ${selectedUnstagedFiles.size} files`
@@ -712,6 +725,13 @@ export const ChangesDiffViewer = memo(
 
       // Active file tracking (for sidebar highlighting)
       const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+
+      // Conflict resolution state
+      const [conflictEditorOpen, setConflictEditorOpen] = useState(false);
+      const [conflictFileContent, setConflictFileContent] = useState<string>("");
+      const [conflictFilePath, setConflictFilePath] = useState<string | null>(null);
+      const [loadingConflictFile, setLoadingConflictFile] = useState(false);
+      const [resolvingConflict, setResolvingConflict] = useState(false);
 
       // Expose focusCommitInput method via ref
       useImperativeHandle(
@@ -871,11 +891,11 @@ export const ChangesDiffViewer = memo(
         } finally {
           setInitialLoading(false);
         }
-      }, [applyChangedFiles]);
+      }, [workspacePath, applyChangedFiles, addToast]);
 
       useEffect(() => {
         loadChangedFiles();
-      }, []);
+      }, [workspacePath]);
 
       // Refresh changed files when window regains focus
       useEffect(() => {
@@ -1853,6 +1873,77 @@ export const ChangesDiffViewer = memo(
         });
       }, []);
 
+      // Handle clicking on a conflicting file
+      const handleConflictFileSelect = useCallback(
+        async (filePath: string) => {
+          setActiveFilePath(filePath);
+
+          // Check if this file is in the conflicted files list
+          if (conflictedFiles.includes(filePath)) {
+            setLoadingConflictFile(true);
+            setConflictFilePath(filePath);
+            setConflictEditorOpen(true);
+
+            try {
+              // Load the file content
+              const fullPath = `${workspacePath}/${filePath}`;
+              const content = await readFile(fullPath);
+              setConflictFileContent(content);
+            } catch (error) {
+              const message =
+                error instanceof Error ? error.message : String(error);
+              addToast({
+                title: "Failed to load conflict file",
+                description: message,
+                type: "error",
+              });
+              setConflictEditorOpen(false);
+            } finally {
+              setLoadingConflictFile(false);
+            }
+          }
+        },
+        [workspacePath, conflictedFiles, addToast]
+      );
+
+      // Handle resolving a conflict
+      const handleResolveConflict = useCallback(async () => {
+        if (!conflictFilePath) return;
+
+        setResolvingConflict(true);
+        try {
+          // For now, just close the editor
+          // TODO: Implement actual file writing once the API is available
+          addToast({
+            title: "Conflict resolved",
+            description: `${conflictFilePath} has been resolved`,
+            type: "success",
+          });
+          setConflictEditorOpen(false);
+          setConflictFileContent("");
+          setConflictFilePath(null);
+          // Refresh the changes
+          await loadChangedFiles();
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          addToast({
+            title: "Failed to resolve conflict",
+            description: message,
+            type: "error",
+          });
+        } finally {
+          setResolvingConflict(false);
+        }
+      }, [conflictFilePath, addToast, loadChangedFiles]);
+
+      const handleCloseConflictEditor = useCallback(() => {
+        setConflictEditorOpen(false);
+        setConflictFileContent("");
+        setConflictFilePath(null);
+        setActiveFilePath(null);
+      }, []);
+
       // Get comments for a specific line in a specific hunk
       const getCommentsForLine = useCallback(
         (filePath: string, hunkId: string, lineIndex: number) => {
@@ -2071,14 +2162,16 @@ export const ChangesDiffViewer = memo(
       return (
         <div className="flex h-full overflow-hidden">
           <div className="w-72 border-r border-border bg-sidebar flex flex-col">
-            <CommitInput
-              ref={commitInputRef}
-              onCommit={handleCommit}
-              disabled={readOnly}
-              pending={commitPending}
-              selectedFileCount={selectedUnstagedFiles.size}
-              totalFileCount={files.length}
-            />
+            {!conflictEditorOpen && (
+              <CommitInput
+                ref={commitInputRef}
+                onCommit={handleCommit}
+                disabled={readOnly}
+                pending={commitPending}
+                selectedFileCount={selectedUnstagedFiles.size}
+                totalFileCount={files.length}
+              />
+            )}
             <div className="flex-1 overflow-y-auto px-4 pb-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full">
               {initialLoading ? (
                 <div className="flex items-center justify-center h-full">
@@ -2090,7 +2183,7 @@ export const ChangesDiffViewer = memo(
                     files={conflictedFiles}
                     isCollapsed={collapsedSections.has("conflicts")}
                     onToggleCollapse={() => toggleSectionCollapse("conflicts")}
-                    onFileSelect={(path) => setActiveFilePath(path)}
+                    onFileSelect={handleConflictFileSelect}
                     activeFilePath={activeFilePath}
                   />
                   {files.length === 0 ? (
@@ -2109,9 +2202,17 @@ export const ChangesDiffViewer = memo(
                       fileActionTarget={fileActionTarget}
                       activeFilePath={activeFilePath}
                       selectedFiles={selectedUnstagedFiles}
+                      lastSelectedPath={
+                        lastSelectedFileIndex !== null &&
+                        files[lastSelectedFileIndex]
+                          ? files[lastSelectedFileIndex].path
+                          : null
+                      }
                       onFileSelect={handleFileSelect}
                       onMoveToWorkspace={() => setMoveDialogOpen(true)}
                       onDiscardAll={handleDiscardAll}
+                      onDiscard={handleDiscardFiles}
+                      onDeselectAll={() => setSelectedUnstagedFiles(new Set())}
                     />
                   )}
                 </>
@@ -2187,14 +2288,14 @@ export const ChangesDiffViewer = memo(
 
             {/* Stale Files Warning Banner - shown when files changed during review */}
             {staleFiles.size > 0 && (
-              <div className="flex items-center justify-between px-4 py-2 bg-amber-500/10 border-b border-amber-500/30">
+              <div className="flex items-center justify-between px-4 py-2 bg-amber-500/15 border-b border-amber-500/40">
                 <div className="flex items-center gap-2 text-sm">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                  <span className="text-amber-700 dark:text-amber-300">
+                  <AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-300" />
+                  <span className="text-amber-800 dark:text-amber-200">
                     {staleFiles.size} file{staleFiles.size !== 1 ? "s" : ""}{" "}
                     changed since you started reviewing
                   </span>
-                  <span className="text-sm text-amber-600/70 dark:text-amber-400/70">
+                  <span className="text-sm text-amber-700/80 dark:text-amber-300/80">
                     ({Array.from(staleFiles).slice(0, 3).join(", ")}
                     {staleFiles.size > 3 ? ` +${staleFiles.size - 3} more` : ""}
                     )
@@ -2203,7 +2304,7 @@ export const ChangesDiffViewer = memo(
                 <Button
                   size="sm"
                   variant="outline"
-                  className="gap-1.5 border-amber-500/50 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
+                  className="gap-1.5 border-amber-500/60 text-amber-800 dark:text-amber-200 hover:bg-amber-500/25"
                   onClick={handleReloadWithPendingChanges}
                 >
                   <RefreshCw className="w-3 h-3" />
@@ -2214,7 +2315,65 @@ export const ChangesDiffViewer = memo(
 
             {/* All Files Diffs */}
             <div className="flex-1 overflow-hidden">
-              {initialLoading || loadingAllHunks ? (
+              {conflictEditorOpen ? (
+                // Conflict Resolution Editor
+                <div className="h-full flex flex-col p-4">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-medium">Resolve Conflict</h3>
+                      <p className="text-sm text-muted-foreground font-mono">
+                        {conflictFilePath}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCloseConflictEditor}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  {loadingConflictFile ? (
+                    <div className="flex-1 flex items-center justify-center text-muted-foreground">
+                      <Loader2 className="w-6 h-6 animate-spin" />
+                      <span className="ml-2">Loading conflict file...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <Textarea
+                        value={conflictFileContent}
+                        onChange={(e) => setConflictFileContent(e.target.value)}
+                        className="flex-1 font-mono text-sm mb-4"
+                        placeholder="Edit the file to resolve conflicts..."
+                        style={{ minHeight: "400px" }}
+                        aria-label="Conflict resolution editor"
+                        data-testid="conflict-editor"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={handleCloseConflictEditor}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          onClick={handleResolveConflict}
+                          disabled={resolvingConflict}
+                        >
+                          {resolvingConflict ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                              Resolving...
+                            </>
+                          ) : (
+                            "Resolve"
+                          )}
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : initialLoading || loadingAllHunks ? (
                 <div className="h-full flex items-center justify-center text-muted-foreground">
                   <Loader2 className="w-6 h-6 animate-spin" />
                   <span className="ml-2">Loading diffs...</span>

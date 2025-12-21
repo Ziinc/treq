@@ -90,8 +90,14 @@ pub fn jj_get_file_lines(
     start_line: usize,
     end_line: usize,
 ) -> Result<jj::JjFileLines, String> {
-    jj::jj_get_file_lines(&workspace_path, &file_path, from_parent, start_line, end_line)
-        .map_err(|e| e.to_string())
+    jj::jj_get_file_lines(
+        &workspace_path,
+        &file_path,
+        from_parent,
+        start_line,
+        end_line,
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -162,4 +168,13 @@ pub fn jj_push(workspace_path: String) -> Result<String, String> {
 #[tauri::command]
 pub fn jj_pull(workspace_path: String) -> Result<String, String> {
     jj::jj_pull(&workspace_path).map_err(|e| e.to_string())
+}
+
+/// Get commit log for a workspace
+#[tauri::command]
+pub fn jj_get_log(
+    workspace_path: String,
+    target_branch: String,
+) -> Result<jj::JjLogResult, String> {
+    jj::jj_get_log(&workspace_path, &target_branch).map_err(|e| e.to_string())
 }

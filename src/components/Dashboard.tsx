@@ -24,9 +24,7 @@ import type { ClaudeSessionData } from "./terminal/types";
 const ShowWorkspace = lazy(() =>
   import("./ShowWorkspace").then((m) => ({ default: m.ShowWorkspace }))
 );
-const SettingsPage = lazy(() =>
-  import("./SettingsPage").then((m) => ({ default: m.SettingsPage }))
-);
+import { SettingsPage } from "./SettingsPage";
 import { useToast } from "./ui/toast";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import {
@@ -55,7 +53,7 @@ const LoadingSpinner = () => (
   </div>
 );
 
-type ViewMode = "session" | "workspace-session" | "settings";
+type ViewMode = "session" | "show-workspace" | "settings";
 
 type SessionOpenOptions = {
   initialPrompt?: string;
@@ -65,13 +63,16 @@ type SessionOpenOptions = {
   selectedFilePath?: string;
 };
 
-export const Dashboard: React.FC = () => {
+interface DashboardProps {
+  initialViewMode?: ViewMode;
+}
+export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-workspace" }) => {
   const [repoPath, setRepoPath] = useState("");
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showCreateFromRemoteDialog, setShowCreateFromRemoteDialog] =
     useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("session");
+  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
   const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(
     null
   );
@@ -84,6 +85,12 @@ export const Dashboard: React.FC = () => {
   const [sessionSelectedFile, setSessionSelectedFile] = useState<string | null>(
     null
   );
+  const [selectedWorkspaceIds, setSelectedWorkspaceIds] = useState<Set<number>>(
+    new Set()
+  );
+  const [lastSelectedWorkspaceIndex, setLastSelectedWorkspaceIndex] = useState<
+    number | null
+  >(null);
 
   const queryClient = useQueryClient();
   const { addToast } = useToast();
@@ -282,10 +289,6 @@ export const Dashboard: React.FC = () => {
           });
         });
       }),
-      // Navigate to dashboard
-      listen("navigate-to-dashboard", () => {
-        handleReturnToDashboard();
-      }),
     ];
 
     return () => {
@@ -297,7 +300,6 @@ export const Dashboard: React.FC = () => {
     repoPath,
     addToast,
     queryClient,
-    handleReturnToDashboard,
   ]);
 
   // Listen for window focus to refresh workspace data
@@ -450,7 +452,7 @@ export const Dashboard: React.FC = () => {
       setSelectedWorkspace(workspace);
       setSessionSelectedFile(options?.selectedFilePath ?? null);
       setActiveSessionId(sessionId);
-      setViewMode(workspace ? "workspace-session" : "session");
+      setViewMode(workspace ? "show-workspace" : "session");
     },
     [getOrCreateSession]
   );
@@ -464,6 +466,87 @@ export const Dashboard: React.FC = () => {
     },
     [handleOpenSession, workspaces]
   );
+
+  const handleWorkspaceMultiSelect = useCallback(
+    (workspace: Workspace | null, event: React.MouseEvent) => {
+      // Handle clicking away to clear selection
+      if (workspace === null) {
+        setSelectedWorkspaceIds(new Set());
+        setLastSelectedWorkspaceIndex(null);
+        return;
+      }
+
+      const workspaceIndex = workspaces.findIndex((w) => w.id === workspace.id);
+      if (workspaceIndex === -1) return;
+
+      const isMetaKey = event.metaKey || event.ctrlKey;
+      const isShiftKey = event.shiftKey;
+
+      if (isShiftKey && lastSelectedWorkspaceIndex !== null) {
+        // Range selection
+        const start = Math.min(lastSelectedWorkspaceIndex, workspaceIndex);
+        const end = Math.max(lastSelectedWorkspaceIndex, workspaceIndex);
+        const newSelection = new Set<number>();
+        for (let i = start; i <= end; i++) {
+          newSelection.add(workspaces[i].id);
+        }
+        setSelectedWorkspaceIds(newSelection);
+      } else if (isMetaKey) {
+        // Toggle selection
+        setSelectedWorkspaceIds((prev) => {
+          const next = new Set(prev);
+          if (next.has(workspace.id)) {
+            next.delete(workspace.id);
+          } else {
+            next.add(workspace.id);
+          }
+          return next;
+        });
+        setLastSelectedWorkspaceIndex(workspaceIndex);
+      } else {
+        // Regular click - clear multi-select, open workspace
+        setSelectedWorkspaceIds(new Set());
+        setLastSelectedWorkspaceIndex(workspaceIndex);
+        handleOpenSession(workspace);
+      }
+    },
+    [workspaces, lastSelectedWorkspaceIndex, handleOpenSession]
+  );
+
+  const handleBulkDelete = async () => {
+    const count = selectedWorkspaceIds.size;
+    const confirmed = await ask(
+      `Delete ${count} workspace${count > 1 ? "s" : ""}?`,
+      { title: "Delete Workspaces", kind: "warning" }
+    );
+    if (confirmed) {
+      const workspacesToDelete = workspaces.filter((w) =>
+        selectedWorkspaceIds.has(w.id)
+      );
+      try {
+        // Delete all workspaces without triggering individual onSuccess callbacks
+        for (const workspace of workspacesToDelete) {
+          await jjRemoveWorkspace(workspace.repo_path, workspace.workspace_path);
+          await deleteWorkspaceFromDb(workspace.repo_path, workspace.id);
+        }
+        // Show single toast and refresh after all deletions
+        queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+        handleReturnToDashboard();
+        addToast({
+          title: `${count} Workspace${count > 1 ? "s" : ""} Deleted`,
+          description: `Successfully removed ${count} workspace${count > 1 ? "s" : ""}`,
+          type: "success",
+        });
+      } catch (error) {
+        addToast({
+          title: "Delete Failed",
+          description: error instanceof Error ? error.message : String(error),
+          type: "error",
+        });
+      }
+      setSelectedWorkspaceIds(new Set());
+    }
+  };
 
   // Note: openSessionWithPrompt removed - was only used by MergeReviewPage which is git-specific
 
@@ -502,7 +585,7 @@ export const Dashboard: React.FC = () => {
         setActiveSessionId(session.id);
         if (workspace) {
           setSelectedWorkspace(workspace);
-          setViewMode("workspace-session");
+          setViewMode("show-workspace");
         } else {
           setViewMode("session");
         }
@@ -523,7 +606,7 @@ export const Dashboard: React.FC = () => {
   ) : null;
 
   const isSessionView =
-    viewMode === "session" || viewMode === "workspace-session";
+    viewMode === "session" || viewMode === "show-workspace";
   const showSidebar = true;
 
   // Build Claude sessions data for the terminal pane
@@ -565,7 +648,10 @@ export const Dashboard: React.FC = () => {
           repoPath={repoPath}
           currentBranch={currentBranch}
           selectedWorkspaceId={selectedWorkspace?.id ?? null}
+          selectedWorkspaceIds={selectedWorkspaceIds}
           onWorkspaceClick={(workspace) => handleOpenSession(workspace)}
+          onWorkspaceMultiSelect={handleWorkspaceMultiSelect}
+          onBulkDelete={handleBulkDelete}
           onCreateWorkspace={() => setShowCreateDialog(true)}
           onCreateWorkspaceFromRemote={() =>
             setShowCreateFromRemoteDialog(true)
@@ -576,7 +662,7 @@ export const Dashboard: React.FC = () => {
           currentPage={
             viewMode === "settings"
               ? "settings"
-              : viewMode === "session" || viewMode === "workspace-session"
+              : viewMode === "session" || viewMode === "show-workspace"
               ? "session"
               : null
           }
@@ -606,6 +692,7 @@ export const Dashboard: React.FC = () => {
                     onClose={handleReturnToDashboard}
                     initialSelectedFile={sessionSelectedFile}
                     onDeleteWorkspace={handleDelete}
+                    allWorkspaces={workspaces}
                   />
                 </Suspense>
               </ErrorBoundary>
@@ -615,7 +702,7 @@ export const Dashboard: React.FC = () => {
           <WorkspaceTerminalPane
             key={repoPath}
             workingDirectory={selectedWorkspace?.workspace_path || repoPath}
-            isHidden={!isSessionView}
+            isHidden={false}
             claudeSessions={claudeSessionsForPane}
             activeClaudeSessionId={isSessionView ? activeSessionId : null}
             onActiveSessionChange={(sessionId) => {
@@ -625,7 +712,7 @@ export const Dashboard: React.FC = () => {
                 const session = sessions.find((s) => s.id === sessionId);
                 if (session) {
                   setViewMode(
-                    session.workspace_id ? "workspace-session" : "session"
+                    session.workspace_id ? "show-workspace" : "session"
                   );
                   if (session.workspace_id) {
                     const ws = workspaces.find(
@@ -668,17 +755,15 @@ export const Dashboard: React.FC = () => {
         >
           {/* Settings View */}
           {viewMode === "settings" && (
-            <Suspense fallback={<LoadingSpinner />}>
-              <SettingsPage
-                repoPath={repoPath}
-                onRepoPathChange={setRepoPath}
-                initialTab={initialSettingsTab}
-                onRefresh={refetch}
-                onClose={handleReturnToDashboard}
-                repoName={repoName}
-                currentBranch={currentBranch}
-              />
-            </Suspense>
+            <SettingsPage
+              repoPath={repoPath}
+              onRepoPathChange={setRepoPath}
+              initialTab={initialSettingsTab}
+              onRefresh={refetch}
+              onClose={handleReturnToDashboard}
+              repoName={repoName}
+              currentBranch={currentBranch}
+            />
           )}
 
           {/* Note: Merge Review View removed - git-specific feature */}

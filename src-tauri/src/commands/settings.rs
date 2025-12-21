@@ -1,6 +1,6 @@
+use crate::AppState;
 use std::collections::HashMap;
 use tauri::State;
-use crate::AppState;
 
 #[tauri::command]
 pub fn get_setting(state: State<AppState>, key: String) -> Result<Option<String>, String> {
@@ -9,7 +9,10 @@ pub fn get_setting(state: State<AppState>, key: String) -> Result<Option<String>
 }
 
 #[tauri::command]
-pub fn get_settings_batch(state: State<AppState>, keys: Vec<String>) -> Result<HashMap<String, Option<String>>, String> {
+pub fn get_settings_batch(
+    state: State<AppState>,
+    keys: Vec<String>,
+) -> Result<HashMap<String, Option<String>>, String> {
     let db = state.db.lock().unwrap();
     db.get_settings_batch(&keys).map_err(|e| e.to_string())
 }

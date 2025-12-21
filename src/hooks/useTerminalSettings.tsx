@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode, useMemo } from "react";
 import { getSetting, setSetting } from "../lib/api";
 
 interface TerminalSettingsContextType {
@@ -6,10 +6,22 @@ interface TerminalSettingsContextType {
   setFontSize: (size: number) => Promise<void>;
 }
 
-const TerminalSettingsContext = createContext<TerminalSettingsContextType | undefined>(undefined);
+// Default fallback for HMR edge cases where context gets disconnected
+const DEFAULT_FONT_SIZE = 12;
+const defaultContextValue: TerminalSettingsContextType = {
+  fontSize: DEFAULT_FONT_SIZE,
+  setFontSize: async () => {
+    console.warn("TerminalSettingsProvider not found, using fallback");
+  },
+};
+
+const TerminalSettingsContext = createContext<TerminalSettingsContextType>(defaultContextValue);
+
+// Mark as a component for React Fast Refresh
+TerminalSettingsContext.displayName = "TerminalSettingsContext";
 
 export function TerminalSettingsProvider({ children }: { children: ReactNode }) {
-  const [fontSize, setFontSizeState] = useState<number>(12);
+  const [fontSize, setFontSizeState] = useState<number>(DEFAULT_FONT_SIZE);
 
   // Load saved font size from database on mount
   useEffect(() => {
@@ -35,18 +47,16 @@ export function TerminalSettingsProvider({ children }: { children: ReactNode }) 
     await setSetting("terminal_font_size", size.toString());
   };
 
+  const value = useMemo(() => ({ fontSize, setFontSize }), [fontSize]);
+
   return (
-    <TerminalSettingsContext.Provider value={{ fontSize, setFontSize }}>
+    <TerminalSettingsContext.Provider value={value}>
       {children}
     </TerminalSettingsContext.Provider>
   );
 }
 
-export function useTerminalSettings() {
-  const context = useContext(TerminalSettingsContext);
-  if (context === undefined) {
-    throw new Error("useTerminalSettings must be used within a TerminalSettingsProvider");
-  }
-  return context;
+export function useTerminalSettings(): TerminalSettingsContextType {
+  return useContext(TerminalSettingsContext);
 }
 

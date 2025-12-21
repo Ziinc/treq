@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode, useMemo } from "react";
 import { getSetting, setSetting } from "../lib/api";
 
 interface DiffSettingsContextType {
@@ -6,10 +6,21 @@ interface DiffSettingsContextType {
   setFontSize: (size: number) => Promise<void>;
 }
 
-const DiffSettingsContext = createContext<DiffSettingsContextType | undefined>(undefined);
+// Default fallback for HMR edge cases where context gets disconnected
+const DEFAULT_FONT_SIZE = 11;
+const defaultContextValue: DiffSettingsContextType = {
+  fontSize: DEFAULT_FONT_SIZE,
+  setFontSize: async () => {
+    console.warn("DiffSettingsProvider not found, using fallback");
+  },
+};
+
+const DiffSettingsContext = createContext<DiffSettingsContextType>(defaultContextValue);
+
+DiffSettingsContext.displayName = "DiffSettingsContext";
 
 export function DiffSettingsProvider({ children }: { children: ReactNode }) {
-  const [fontSize, setFontSizeState] = useState<number>(11);
+  const [fontSize, setFontSizeState] = useState<number>(DEFAULT_FONT_SIZE);
 
   // Load saved font size from database on mount
   useEffect(() => {
@@ -33,17 +44,15 @@ export function DiffSettingsProvider({ children }: { children: ReactNode }) {
     await setSetting("diff_font_size", size.toString());
   };
 
+  const value = useMemo(() => ({ fontSize, setFontSize }), [fontSize]);
+
   return (
-    <DiffSettingsContext.Provider value={{ fontSize, setFontSize }}>
+    <DiffSettingsContext.Provider value={value}>
       {children}
     </DiffSettingsContext.Provider>
   );
 }
 
-export function useDiffSettings() {
-  const context = useContext(DiffSettingsContext);
-  if (context === undefined) {
-    throw new Error("useDiffSettings must be used within a DiffSettingsProvider");
-  }
-  return context;
+export function useDiffSettings(): DiffSettingsContextType {
+  return useContext(DiffSettingsContext);
 }

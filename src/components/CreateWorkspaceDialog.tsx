@@ -13,8 +13,7 @@ import { Label } from "./ui/label";
 import { useToast } from "./ui/toast";
 import { applyBranchNamePattern } from "../lib/utils";
 import {
-  jjCreateWorkspace,
-  addWorkspaceToDb,
+  createWorkspace,
   getRepoSetting
 } from "../lib/api";
 
@@ -41,6 +40,17 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
   const [error, setError] = useState("");
   const { addToast } = useToast();
 
+  // Reset form when dialog opens
+  useEffect(() => {
+    if (open) {
+      console.log("[CreateWorkspaceDialog] Resetting form (dialog opened)");
+      setIntent("");
+      setBranchName("");
+      setIsEditingBranch(false);
+      setError("");
+    }
+  }, [open]);
+
   // Load branch pattern from repository settings
   useEffect(() => {
     if (open && repoPath) {
@@ -59,8 +69,15 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
   useEffect(() => {
     if (!isEditingBranch && intent.trim()) {
       const generatedBranch = applyBranchNamePattern(branchPattern, intent);
+      console.log("[CreateWorkspaceDialog] Auto-generating branch name:", {
+        intent: intent.trim(),
+        branchPattern,
+        generatedBranch,
+        isEditingBranch
+      });
       setBranchName(generatedBranch);
     } else if (!isEditingBranch && !intent.trim()) {
+      console.log("[CreateWorkspaceDialog] Clearing branch name (no intent)");
       setBranchName("");
     }
   }, [intent, branchPattern, isEditingBranch]);
@@ -80,21 +97,26 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
     setError("");
 
     try {
-      // Create the jj workspace (creates git workspace + initializes jj)
-      // Pass source branch if executing from workspace
-      const workspacePath = await jjCreateWorkspace(
-        repoPath,
+      console.log("[CreateWorkspaceDialog] Creating workspace with:", {
+        intent: intent.trim(),
         branchName,
-        branchName,
-        true,
-        sourceBranch || undefined
-      );
+        branchPattern,
+        repoPath
+      });
 
       // Prepare metadata
       const metadata = JSON.stringify({ intent: intent.trim() });
 
-      // Add to database with metadata
-      await addWorkspaceToDb(repoPath, branchName, workspacePath, branchName, metadata);
+      // Create workspace (jj + database) in single call
+      await createWorkspace(
+        repoPath,
+        branchName,
+        true,
+        sourceBranch || undefined,
+        metadata
+      );
+
+      console.log("[CreateWorkspaceDialog] Workspace created successfully");
 
       addToast({
         title: "Workspace created successfully",
