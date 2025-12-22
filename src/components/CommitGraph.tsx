@@ -16,6 +16,11 @@ interface ChartCommitNode {
   lane: string;
 }
 
+interface LaneConnection {
+  from: ChartCommitNode;
+  to: ChartCommitNode;
+}
+
 interface WorkspaceChainItem {
   branch: string;
   path: string;
@@ -31,6 +36,7 @@ export const CommitGraph = memo<CommitGraphProps>(function CommitGraph({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [lanes, setLanes] = useState<Map<string, ChartCommitNode[]> | null>(null);
+  const [laneConnections, setLaneConnections] = useState<LaneConnection[]>([]);
   const [chain, setChain] = useState<WorkspaceChainItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -108,22 +114,28 @@ export const CommitGraph = memo<CommitGraphProps>(function CommitGraph({
   const transformToChartData = useCallback((
     chain: WorkspaceChainItem[],
     commitsByLane: Map<string, JjLogResult>
-  ): { nodes: ChartCommitNode[]; lanes: Map<string, ChartCommitNode[]> } => {
+  ): {
+    nodes: ChartCommitNode[];
+    lanes: Map<string, ChartCommitNode[]>;
+    connectors: LaneConnection[];
+  } => {
     const nodes: ChartCommitNode[] = [];
     const lanes = new Map<string, ChartCommitNode[]>();
-    const commitIdToNode = new Map<string, ChartCommitNode>();
+    const nodeMap = new Map<string, ChartCommitNode>();
+    const connectors: LaneConnection[] = [];
 
     // Get all commits (they're all in the workspace branch result)
     const logResult = commitsByLane.get(workspaceBranch);
     if (!logResult || logResult.commits.length === 0) {
       console.log("[CommitGraph] No commits found");
-      return { nodes, lanes };
+      return { nodes, lanes, connectors };
     }
 
     console.log("[CommitGraph] Processing commits:", logResult.commits.length);
 
-    // Reverse for left-to-right (oldest to newest)
-    const commits = [...logResult.commits].reverse();
+    // Reverse for left-to-right (oldest to newest), limit to last 4 commits
+    const allCommits = [...logResult.commits].reverse();
+    const commits = allCommits.slice(-4);
 
     // If no chain (main repo or workspace == target), show single lane
     if (chain.length === 0) {
@@ -131,54 +143,88 @@ export const CommitGraph = memo<CommitGraphProps>(function CommitGraph({
       commits.forEach((commit, xIndex) => {
         const node: ChartCommitNode = {
           x: xIndex,
-          y: 1,
+          y: 1.5, // Centered vertically
           commit,
           lane: workspaceBranch,
         };
         nodes.push(node);
+        nodeMap.set(commit.short_id, node);
         laneNodes.push(node);
-        commitIdToNode.set(commit.short_id, node);
       });
       lanes.set(workspaceBranch, laneNodes);
     } else {
-      // Multi-lane: separate commits by which branch they belong to
       const targetBranchName = chain[0].branch;
-      const targetLaneNodes: ChartCommitNode[] = [];
-      const workspaceLaneNodes: ChartCommitNode[] = [];
+      const commitMap = new Map<string, JjLogCommit>();
+      commits.forEach((commit) => commitMap.set(commit.short_id, commit));
 
-      let targetX = 0;
-      let workspaceX = 0;
+      const findCommitByBookmark = (bookmark: string): JjLogCommit | undefined =>
+        commits.find((commit) => commit.bookmarks.includes(bookmark));
 
-      commits.forEach((commit) => {
-        if (commit.bookmarks.includes(targetBranchName)) {
-          const node: ChartCommitNode = {
-            x: targetX++,
-            y: 1,
-            commit,
-            lane: targetBranchName,
-          };
-          nodes.push(node);
-          targetLaneNodes.push(node);
-          commitIdToNode.set(commit.short_id, node);
-        } else {
-          const node: ChartCommitNode = {
-            x: workspaceX++,
-            y: 2,
-            commit,
-            lane: workspaceBranch,
-          };
-          nodes.push(node);
-          workspaceLaneNodes.push(node);
-          commitIdToNode.set(commit.short_id, node);
+      const collectAncestors = (start?: JjLogCommit): Set<string> => {
+        const visited = new Set<string>();
+        if (!start) {
+          return visited;
         }
+
+        const stack: JjLogCommit[] = [start];
+        while (stack.length > 0) {
+          const current = stack.pop();
+          if (!current || visited.has(current.short_id)) {
+            continue;
+          }
+          visited.add(current.short_id);
+          current.parent_ids.forEach((parentId) => {
+            const parent = commitMap.get(parentId);
+            if (parent && !visited.has(parent.short_id)) {
+              stack.push(parent);
+            }
+          });
+        }
+
+        return visited;
+      };
+
+      const targetHead = findCommitByBookmark(targetBranchName);
+      const targetAncestors = collectAncestors(targetHead);
+
+      commits.forEach((commit, xIndex) => {
+        const isTargetCommit =
+          targetAncestors.has(commit.short_id) ||
+          (targetAncestors.size === 0 && commit.bookmarks.includes(targetBranchName));
+        const laneName = isTargetCommit ? targetBranchName : workspaceBranch;
+        const yPosition = isTargetCommit ? 1.2 : 1.8; // Centered around 1.5
+
+        const node: ChartCommitNode = {
+          x: xIndex,
+          y: yPosition,
+          commit,
+          lane: laneName,
+        };
+
+        nodes.push(node);
+        nodeMap.set(commit.short_id, node);
+        const laneNodes = lanes.get(laneName) ?? [];
+        laneNodes.push(node);
+        lanes.set(laneName, laneNodes);
       });
 
-      lanes.set(targetBranchName, targetLaneNodes);
-      lanes.set(workspaceBranch, workspaceLaneNodes);
+      nodes.forEach((node) => {
+        if (node.lane !== workspaceBranch) {
+          return;
+        }
+
+        const bridgeParent = node.commit.parent_ids
+          .map((parentId) => nodeMap.get(parentId))
+          .find((parentNode) => parentNode && parentNode.lane !== node.lane);
+
+        if (bridgeParent) {
+          connectors.push({ from: bridgeParent, to: node });
+        }
+      });
     }
 
     console.log("[CommitGraph] Created nodes:", nodes.length, "lanes:", lanes.size);
-    return { nodes, lanes };
+    return { nodes, lanes, connectors };
   }, [workspaceBranch]);
 
   // Get computed CSS color values for canvas
@@ -231,7 +277,7 @@ export const CommitGraph = memo<CommitGraphProps>(function CommitGraph({
 
     // Set canvas size
     const width = canvas.offsetWidth;
-    const height = 200;
+    const height = 56;
     canvas.width = width;
     canvas.height = height;
 
@@ -239,7 +285,7 @@ export const CommitGraph = memo<CommitGraphProps>(function CommitGraph({
     ctx.clearRect(0, 0, width, height);
 
     // Calculate dimensions
-    const padding = { left: 20, right: 180, top: 30, bottom: 30 };
+    const padding = { left: 20, right: 180, top: 14, bottom: 14 };
     const drawWidth = width - padding.left - padding.right;
     const drawHeight = height - padding.top - padding.bottom;
 
@@ -252,6 +298,36 @@ export const CommitGraph = memo<CommitGraphProps>(function CommitGraph({
 
     const xScale = drawWidth / (maxX + 1);
     const yScale = drawHeight / 4;
+
+    // Draw connectors between lanes to highlight divergence points
+    if (laneConnections.length > 0) {
+      ctx.save();
+      ctx.lineWidth = 3;
+
+      laneConnections.forEach(({ from, to }) => {
+        const fromX = padding.left + from.x * xScale;
+        const fromY = padding.top + from.y * yScale;
+        const toX = padding.left + to.x * xScale;
+        const toY = padding.top + to.y * yScale;
+        const horizontalDelta = Math.abs(toX - fromX);
+        const curvature = Math.min(horizontalDelta * 0.7, 120);
+
+        ctx.beginPath();
+        ctx.strokeStyle = getLaneColor(from.lane, chain);
+        ctx.moveTo(fromX, fromY);
+        ctx.bezierCurveTo(
+          fromX + curvature,
+          fromY,
+          toX - curvature,
+          toY,
+          toX,
+          toY
+        );
+        ctx.stroke();
+      });
+
+      ctx.restore();
+    }
 
     // Draw each lane
     lanes.forEach((laneNodes, laneName) => {
@@ -314,7 +390,15 @@ export const CommitGraph = memo<CommitGraphProps>(function CommitGraph({
         ctx.fillText(laneName, x, y);
       }
     });
-  }, [lanes, chain, hoveredNode, getLaneColor, getNodeStyle]);
+  }, [
+    laneConnections,
+    lanes,
+    chain,
+    hoveredNode,
+    getLaneColor,
+    getNodeStyle,
+    getComputedColor,
+  ]);
 
   // Main effect to fetch data and build chart option
   useEffect(() => {
@@ -339,10 +423,15 @@ export const CommitGraph = memo<CommitGraphProps>(function CommitGraph({
         console.log("[CommitGraph] Commits by lane:", commitsByLane);
 
         console.log("[CommitGraph] Transforming to chart data...");
-        const { nodes, lanes: fetchedLanes } = transformToChartData(builtChain, commitsByLane);
+        const {
+          nodes,
+          lanes: fetchedLanes,
+          connectors,
+        } = transformToChartData(builtChain, commitsByLane);
         console.log("[CommitGraph] Chart data:", { nodes: nodes.length, lanes: fetchedLanes.size });
 
         setLanes(fetchedLanes);
+        setLaneConnections(connectors);
         setChain(builtChain);
         console.log("[CommitGraph] Data set successfully");
       } catch (err) {
@@ -384,12 +473,13 @@ export const CommitGraph = memo<CommitGraphProps>(function CommitGraph({
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
 
-    setMousePos({ x: e.clientX, y: e.clientY });
+    // Store coordinates relative to the container so the tooltip follows the cursor
+    setMousePos({ x: mouseX, y: mouseY });
 
     // Calculate dimensions (same as in drawCanvas)
     const width = canvas.width;
     const height = canvas.height;
-    const padding = { left: 20, right: 180, top: 30, bottom: 30 };
+    const padding = { left: 20, right: 180, top: 20, bottom: 20 };
     const drawWidth = width - padding.left - padding.right;
     const drawHeight = height - padding.top - padding.bottom;
 
@@ -400,7 +490,7 @@ export const CommitGraph = memo<CommitGraphProps>(function CommitGraph({
     });
 
     const xScale = drawWidth / (maxX + 1);
-    const yScale = drawHeight / 4;
+    const yScale = drawHeight / 3;
 
     // Check if mouse is over any node
     let foundNode: ChartCommitNode | null = null;
@@ -425,7 +515,7 @@ export const CommitGraph = memo<CommitGraphProps>(function CommitGraph({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-48 text-sm text-muted-foreground">
+      <div className="flex items-center justify-center h-[56px] text-sm text-muted-foreground">
         Loading commit history...
       </div>
     );
@@ -433,7 +523,7 @@ export const CommitGraph = memo<CommitGraphProps>(function CommitGraph({
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-48 text-sm text-destructive">
+      <div className="flex items-center justify-center h-[56px] text-sm text-destructive">
         Error: {error}
       </div>
     );
@@ -441,7 +531,7 @@ export const CommitGraph = memo<CommitGraphProps>(function CommitGraph({
 
   if (!lanes) {
     return (
-      <div className="flex items-center justify-center h-48 text-sm text-muted-foreground">
+      <div className="flex items-center justify-center h-[56px] text-sm text-muted-foreground">
         No commits to display
       </div>
     );
@@ -453,7 +543,7 @@ export const CommitGraph = memo<CommitGraphProps>(function CommitGraph({
         ref={canvasRef}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        style={{ width: "100%", height: "200px", cursor: hoveredNode ? "pointer" : "default" }}
+        style={{ width: "100%", height: "56px", cursor: hoveredNode ? "pointer" : "default" }}
       />
       {hoveredNode && (
         <div

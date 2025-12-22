@@ -44,3 +44,28 @@ export function applyBranchNamePattern(pattern: string, name: string): string {
   return pattern.replace(/\{name\}/g, sanitized);
 }
 
+/**
+ * Extract the filename from a file path (Unix or Windows style)
+ * @param path - Full file path (e.g., "src/components/CommitGraph.tsx")
+ * @returns Just the filename (e.g., "CommitGraph.tsx")
+ */
+export function getFileName(path: string): string {
+  if (!path) return "";
+  // Handle both Unix (/) and Windows (\) separators
+  const lastSeparator = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return lastSeparator === -1 ? path : path.slice(lastSeparator + 1);
+}
+
+/**
+ * Escape a string for use in bash $'...' syntax
+ * Escapes backslashes, single quotes, and newlines to pass multi-line strings correctly
+ * @param str - The string to escape
+ * @returns Escaped string suitable for bash $'...' syntax
+ */
+export function escapeBashString(str: string): string {
+  return str
+    .replace(/\\/g, '\\\\')     // escape backslashes first
+    .replace(/'/g, "\\'")        // escape single quotes
+    .replace(/\n/g, '\\n');      // escape newlines
+}
+

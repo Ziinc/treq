@@ -21,7 +21,6 @@ import {
   jjCommit,
   jjSplit,
   getDiffCache,
-  ptyWrite,
   markFileViewed,
   unmarkFileViewed,
   readFile,
@@ -56,7 +55,7 @@ import {
   Square,
   RefreshCw,
 } from "lucide-react";
-import { cn } from "../lib/utils";
+import { cn, getFileName } from "../lib/utils";
 import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
 import {
   parseJjChangedFiles,
@@ -73,8 +72,8 @@ interface ChangesDiffViewerProps {
   readOnly?: boolean;
   onStagedFilesChange?: (files: string[]) => void;
   initialSelectedFile: string | null;
-  terminalSessionId?: string;
   onReviewSubmitted?: () => void;
+  onCreateAgentWithReview?: (reviewMarkdown: string) => Promise<void>;
   conflictedFiles?: string[];
 }
 
@@ -264,7 +263,7 @@ const CommentInput: React.FC<CommentInputProps> = memo(
     return (
       <div className="bg-muted/60 border-y border-border/40 px-4 py-3 font-sans text-base">
         {filePath && lineLabel && (
-          <div className="mb-2 text-sm text-muted-foreground font-mono">
+          <div className="mb-2 text-md text-muted-foreground">
             {filePath}:{lineLabel}
           </div>
         )}
@@ -607,8 +606,7 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
       {/* File Hunks - consolidated view without per-hunk collapsible */}
       {!isCollapsed && (
         <div
-          className="bg-background font-mono"
-          style={{ fontSize: `${diffFontSize}px` }}
+          className="bg-background font-mono text-sm"
           onContextMenu={handleContextMenu}
           onClick={handleContainerClick}
         >
@@ -668,8 +666,8 @@ export const ChangesDiffViewer = memo(
         readOnly = false,
         onStagedFilesChange,
         initialSelectedFile,
-        terminalSessionId,
         onReviewSubmitted,
+        onCreateAgentWithReview,
         conflictedFiles = [],
       },
       ref
@@ -1378,6 +1376,9 @@ export const ChangesDiffViewer = memo(
 
           const filePath = file.path;
 
+          // Expand large changeset if it's collapsed
+          setLargeChangesetExpanded(true);
+
           // Expand the file first
           setCollapsedFiles((prev) => {
             const next = new Set(prev);
@@ -1764,24 +1765,27 @@ export const ChangesDiffViewer = memo(
 
       // Send review to terminal
       const handleRequestChanges = useCallback(async () => {
-        if (!terminalSessionId) {
-          addToast({
-            title: "No terminal",
-            description: "Terminal session not available",
-            type: "error",
-          });
-          return;
-        }
-
         setSendingReview(true);
         try {
           const markdown = formatReviewMarkdown();
-          await ptyWrite(terminalSessionId, markdown + "\n");
-          addToast({
-            title: "Review sent",
-            description: "Code review sent to terminal",
-            type: "success",
-          });
+
+          if (onCreateAgentWithReview) {
+            // Create new agent session with review pre-filled
+            await onCreateAgentWithReview(markdown);
+            addToast({
+              title: "Review sent",
+              description: "Code review sent to new agent session",
+              type: "success",
+            });
+          } else {
+            addToast({
+              title: "No handler provided",
+              description: "onCreateAgentWithReview callback not available",
+              type: "error",
+            });
+            return;
+          }
+
           // Clear review state
           setComments([]);
           setFinalReviewComment("");
@@ -1800,7 +1804,7 @@ export const ChangesDiffViewer = memo(
           setSendingReview(false);
         }
       }, [
-        terminalSessionId,
+        onCreateAgentWithReview,
         formatReviewMarkdown,
         addToast,
         onReviewSubmitted,
@@ -1972,7 +1976,7 @@ export const ChangesDiffViewer = memo(
             {/* Hunk separator header */}
             <div
               className={cn(
-                "flex items-stretch font-mono",
+                "flex items-stretch font-mono text-sm",
                 "bg-muted/60" // JJ has no staging
               )}
             >
@@ -2049,14 +2053,12 @@ export const ChangesDiffViewer = memo(
                         <MessageSquare className="w-3 h-3 text-primary ml-[4px]" />
                       )}
                       <span
-                        className="w-6 text-right"
-                        style={{ fontSize: `${diffFontSize}px` }}
+                        className="w-6 text-right text-sm mr-1"
                       >
                         {lineNum?.old ?? ""}
                       </span>
                       <span
-                        className="w-6 text-right"
-                        style={{ fontSize: `${diffFontSize}px` }}
+                        className="w-6 text-right text-sm"
                       >
                         {lineNum?.new ?? ""}
                       </span>
@@ -2296,7 +2298,7 @@ export const ChangesDiffViewer = memo(
                     changed since you started reviewing
                   </span>
                   <span className="text-sm text-amber-700/80 dark:text-amber-300/80">
-                    ({Array.from(staleFiles).slice(0, 3).join(", ")}
+                    ({Array.from(staleFiles).slice(0, 3).map(getFileName).join(", ")}
                     {staleFiles.size > 3 ? ` +${staleFiles.size - 3} more` : ""}
                     )
                   </span>

@@ -87,6 +87,11 @@ export interface CachedDirectoryEntry {
   relative_path: string;
 }
 
+export interface FileSearchResult {
+  file_path: string;
+  relative_path: string;
+}
+
 // Database API
 export const getWorkspaces = (repo_path: string): Promise<Workspace[]> =>
   invoke("get_workspaces", { repoPath: repo_path });
@@ -354,6 +359,19 @@ export const listDirectoryCached = (
     repoPath,
     workspaceId,
     parentPath,
+  });
+
+export const searchWorkspaceFiles = (
+  repoPath: string,
+  workspaceId: number | null,
+  query: string,
+  limit?: number
+): Promise<FileSearchResult[]> =>
+  invoke("search_workspace_files", {
+    repoPath,
+    workspaceId,
+    query,
+    limit: limit ?? 50,
   });
 
 // Folder picker

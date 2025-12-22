@@ -11,7 +11,7 @@ import {
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
 import { ptyClose } from "../lib/api";
-import { ChevronDown, ChevronUp, Bot, Terminal } from "lucide-react";
+import { ChevronDown, ChevronUp, Bot, Terminal, Maximize2, Minimize2 } from "lucide-react";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { ClaudeTerminalPanel } from "./terminal/ClaudeTerminalPanel";
 import { ResizeDivider } from "./terminal/ResizeDivider";
@@ -57,6 +57,7 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
   }) {
     // Shared pane state
     const [collapsed, setCollapsed] = useState(true);
+    const [maximized, setMaximized] = useState(false);
     const [height, setHeight] = useState(33); // percentage
     const [isResizingHeight, setIsResizingHeight] = useState(false);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -127,9 +128,13 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
 
     // Collapse pane when switching to a workspace with no terminals
     useEffect(() => {
-      // Calculate terminals for this workspace
+      // Calculate terminals for this workspace. Treat the active session as mounted
+      // immediately so the pane stays open while the terminal boots.
       const claudeForWorkspace = claudeSessions.filter((s) => {
-        if (!mountedClaudeSessions.has(s.sessionId)) return false;
+        const isActive = activeClaudeSessionId === s.sessionId;
+        if (!isActive && !mountedClaudeSessions.has(s.sessionId)) {
+          return false;
+        }
         const sessionWorkingDir = s.workspacePath || s.repoPath;
         return sessionWorkingDir === workingDirectory;
       });
@@ -140,7 +145,13 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
       if (claudeForWorkspace.length === 0 && shellsForWorkspace.length === 0) {
         setCollapsed(true);
       }
-    }, [workingDirectory, claudeSessions, shellTerminals, mountedClaudeSessions]);
+    }, [
+      workingDirectory,
+      claudeSessions,
+      shellTerminals,
+      mountedClaudeSessions,
+      activeClaudeSessionId,
+    ]);
 
     // Add new shell terminal
     const handleAddShell = useCallback(() => {
@@ -189,15 +200,19 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
           prev.filter((id) => id !== claudeTerminalId)
         );
         onCloseSession?.(sessionId);
+        if (activeClaudeSessionId === sessionId) {
+          _onActiveSessionChange?.(null);
+        }
       },
-      [claudeSessions, onCloseSession]
+      [claudeSessions, onCloseSession, activeClaudeSessionId, _onActiveSessionChange]
     );
 
     // Height resize handlers
     const handleHeightResizeMouseDown = useCallback((e: React.MouseEvent) => {
+      if (maximized) return; // Don't allow resize when maximized
       e.preventDefault();
       setIsResizingHeight(true);
-    }, []);
+    }, [maximized]);
 
     useEffect(() => {
       if (!isResizingHeight) return;
@@ -292,20 +307,12 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
       []
     );
 
-    // Cmd+J: Toggle bottom terminal pane
-    useKeyboardShortcut(
-      "j",
-      true,
-      () => {
-        if (isHidden) return;
-        setCollapsed((prev) => !prev);
-      },
-      [isHidden]
-    );
-
     // Get Claude sessions that should be rendered (mounted ones for this workspace)
     const claudeSessionsToRender = claudeSessions.filter((s) => {
-      if (!mountedClaudeSessions.has(s.sessionId)) return false;
+      const isActiveSession = activeClaudeSessionId === s.sessionId;
+      if (!isActiveSession && !mountedClaudeSessions.has(s.sessionId)) {
+        return false;
+      }
       // Filter by workspace: match workspacePath if set, otherwise match repoPath
       const sessionWorkingDir = s.workspacePath || s.repoPath;
       return sessionWorkingDir === workingDirectory;
@@ -316,6 +323,28 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
       (t) => t.workingDirectory === workingDirectory
     );
 
+    const hasAnyTerminals =
+      claudeSessionsToRender.length > 0 ||
+      shellTerminalsForWorkspace.length > 0;
+
+    // Cmd+J: Toggle bottom terminal pane or create first agent session
+    useKeyboardShortcut(
+      "j",
+      true,
+      () => {
+        if (isHidden) return;
+
+        if (collapsed && !hasAnyTerminals) {
+          setCollapsed(false);
+          onCreateNewSession?.();
+          return;
+        }
+
+        setCollapsed((prev) => !prev);
+      },
+      [isHidden, collapsed, hasAnyTerminals, onCreateNewSession]
+    );
+
     // Build ordered list of all terminals for rendering based on terminalOrder
     const shellTerminalMap = new Map(
       shellTerminalsForWorkspace.map((t) => [t.id, t])
@@ -324,7 +353,7 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
       claudeSessionsToRender.map((s) => [`claude-${s.sessionId}`, s])
     );
 
-    const allTerminals: Array<
+    const orderedTerminals: Array<
       | { type: "shell"; data: ShellTerminalData }
       | { type: "claude"; data: ClaudeSessionData }
     > = terminalOrder
@@ -343,6 +372,16 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
         return null;
       })
       .filter((t): t is NonNullable<typeof t> => t !== null);
+
+    // Ensure newly created Claude sessions render immediately even before their IDs
+    // are added to terminalOrder (e.g., pending agent sessions).
+    const missingClaudeTerminals = claudeSessionsToRender
+      .filter(
+        (session) => !terminalOrder.includes(`claude-${session.sessionId}`)
+      )
+      .map((session) => ({ type: "claude" as const, data: session }));
+
+    const allTerminals = [...orderedTerminals, ...missingClaudeTerminals];
 
     // When completely hidden, render terminals in hidden div to keep PTY sessions alive
     if (isHidden) {
@@ -380,8 +419,8 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
 
     return (
       <>
-        {/* Resize handle - only when expanded */}
-        {!collapsed && (
+        {/* Resize handle - only when expanded and not maximized */}
+        {!collapsed && !maximized && (
           <div
             className="relative flex-shrink-0 h-1 group"
             onMouseDown={handleHeightResizeMouseDown}
@@ -401,8 +440,8 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
         <div
           className="flex flex-col border-t bg-background flex-shrink-0 overflow-hidden"
           style={{
-            height: collapsed ? 32 : `${height}%`,
-            maxHeight: collapsed ? 32 : "60%",
+            height: collapsed ? 32 : maximized ? "100%" : `${height}%`,
+            maxHeight: collapsed ? 32 : maximized ? "100%" : "60%",
           }}
         >
           {/* Pane Header */}
@@ -410,6 +449,11 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
             <div className="flex items-center gap-2 font-medium text-muted-foreground">
               <Terminal className="w-3.5 h-3.5" />
               <span>Terminals</span>
+              {totalTerminals > 0 && (
+                <span className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                  {totalTerminals}
+                </span>
+              )}
             </div>
 
             <div className="flex items-center gap-2">
@@ -453,31 +497,81 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
                   <TooltipContent>New Shell</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-              {/* Collapse/Expand button */}
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      onClick={() => setCollapsed(!collapsed)}
-                      variant="ghost"
-                      className="h-5 w-5 rounded-sm p-0"
-                      aria-label={
-                        collapsed ? "Expand terminal" : "Collapse terminal"
-                      }
-                    >
-                      {collapsed ? (
+              {/* Expand/Maximize/Restore button */}
+              {collapsed && totalTerminals > 0 ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        onClick={() => setCollapsed(false)}
+                        variant="ghost"
+                        className="h-5 w-5 rounded-sm p-0"
+                        aria-label="Expand terminal"
+                      >
                         <ChevronUp className="w-3 h-3" />
-                      ) : (
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Expand (⌘+J)</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : maximized ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        onClick={() => setMaximized(false)}
+                        variant="ghost"
+                        className="h-5 w-5 rounded-sm p-0"
+                        aria-label="Restore terminal"
+                      >
+                        <Minimize2 className="w-3 h-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Restore</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        onClick={() => setMaximized(true)}
+                        variant="ghost"
+                        className="h-5 w-5 rounded-sm p-0"
+                        aria-label="Maximize terminal"
+                      >
+                        <Maximize2 className="w-3 h-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Maximize</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              {/* Collapse button (always visible when not collapsed) */}
+              {!collapsed && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          setCollapsed(true);
+                          setMaximized(false);
+                        }}
+                        variant="ghost"
+                        className="h-5 w-5 rounded-sm p-0"
+                        aria-label="Collapse terminal"
+                      >
                         <ChevronDown className="w-3 h-3" />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {collapsed ? "Expand (⌘+J)" : "Collapse (⌘+J)"}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Collapse (⌘+J)</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
           </div>
 

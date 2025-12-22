@@ -101,7 +101,7 @@ export const ChangesSection = memo<ChangesSectionProps>(({
       </div>
       {!isCollapsed && files.length > 0 && (
         <div
-          className="mt-2 overflow-hidden"
+          className="mt-2 overflow-hidden select-none font-sans"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               onDeselectAll?.();

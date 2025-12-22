@@ -132,7 +132,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
           >
             {/* Main repository section */}
             <div
-              className={`relative flex items-center text-[12px] tracking-wide px-2 py-1 rounded-md transition-colors cursor-pointer ${
+              className={`relative flex items-center text-sm tracking-wide px-2 py-1 rounded-md transition-colors cursor-pointer ${
                 selectedWorkspaceId === null ? "bg-primary/20" : "hover:bg-muted/50"
               }`}
               onClick={() => onWorkspaceClick?.(undefined as any)}
@@ -152,7 +152,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
               {workspaces.map((workspace) => (
                 <div
                   key={workspace.id}
-                  className={`relative flex items-center text-[12px] tracking-wide px-2 py-1 rounded-md transition-colors cursor-pointer ${
+                  className={`relative flex items-center text-sm tracking-wide px-2 py-1 rounded-md transition-colors cursor-pointer ${
                     selectedWorkspaceIds?.has(workspace.id)
                       ? "bg-primary/20"
                       : selectedWorkspaceId === workspace.id

@@ -476,7 +476,7 @@ pub fn remove_workspace(repo_path: &str, workspace_path: &str) -> Result<(), JjE
         return Err(JjError::WorkspaceNotFound(workspace_path.to_string()));
     }
 
-    // Remove git workspace first using git worktree command
+    // Try to remove git workspace using git worktree command
     let output = std::process::Command::new("git")
         .current_dir(repo_path)
         .args(&["worktree", "remove", "--force", workspace_path])
@@ -485,10 +485,15 @@ pub fn remove_workspace(repo_path: &str, workspace_path: &str) -> Result<(), JjE
             JjError::GitWorkspaceError(format!("Failed to execute git worktree remove: {}", e))
         })?;
 
+    // If git worktree remove failed, check if it's just "not a working tree"
+    // In that case, we can proceed with directory removal
     if !output.status.success() {
-        return Err(JjError::GitWorkspaceError(
-            String::from_utf8_lossy(&output.stderr).to_string(),
-        ));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // Allow deletion to proceed if it's not registered as a git worktree
+        // (e.g., manually created directory or orphaned workspace)
+        if !stderr.contains("is not a working tree") {
+            return Err(JjError::GitWorkspaceError(stderr.to_string()));
+        }
     }
 
     // Remove directory if it still exists (git worktree remove command should handle this)

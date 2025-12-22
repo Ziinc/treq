@@ -17,6 +17,7 @@ import {
   readFile,
   jjGetFileHunks,
   jjGetChangedFiles,
+  ensureWorkspaceIndexed,
 } from "../lib/api";
 import { cn } from "../lib/utils";
 import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
@@ -189,8 +190,7 @@ const CodeLine = memo(function CodeLine({
         </span>
         {/* Code content */}
         <span
-          className="flex-1 whitespace-pre-wrap break-words"
-          style={{ fontSize: `${fontSize}px` }}
+          className="flex-1 whitespace-pre-wrap break-words font-mono text-sm"
           dangerouslySetInnerHTML={{ __html: htmlContent }}
         />
       </div>
@@ -325,7 +325,7 @@ const FileContentView = memo(function FileContentView({
       <TooltipProvider>
         <div className="px-4 pt-4 pb-2 border-b-[1px] border-solid border-zinc-700 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground font-mono" style={{ fontSize: `${fontSize}px` }}>
+            <span className="text-sm text-muted-foreground font-mono">
               {relativePath}
             </span>
             <Tooltip>
@@ -415,7 +415,7 @@ const FileContentView = memo(function FileContentView({
               top: `${pendingComment.endLine * LINE_HEIGHT - scrollOffset - LINE_HEIGHT}px`,
             }}
           >
-            <div className="mb-2 text-xs text-muted-foreground">
+            <div className="mb-2 text-md text-muted-foreground">
               <span>
                 {selectedFile && basePath && selectedFile.startsWith(basePath + "/")
                   ? selectedFile.slice(basePath.length + 1)
@@ -452,7 +452,7 @@ const FileContentView = memo(function FileContentView({
                   }
                 }}
               >
-                Add to edit
+                Request changes
               </Button>
             </div>
           </div>
@@ -604,6 +604,18 @@ export const FileBrowser = memo(function FileBrowser({
   const [scrollOffset, setScrollOffset] = useState(0);
   const { addToast } = useToast();
   const { fontSize } = useTerminalSettings();
+
+  // Ensure workspace is indexed on mount
+  useEffect(() => {
+    if (repoPath) {
+      const workspacePath = workspace?.workspace_path || basePath;
+      const workspaceId = workspace?.id ?? null;
+      ensureWorkspaceIndexed(repoPath, workspaceId, workspacePath)
+        .catch((error) => {
+          console.error("Failed to ensure workspace indexed:", error);
+        });
+    }
+  }, [repoPath, workspace?.id, workspace?.workspace_path, basePath]);
 
   // Load root directory on mount
   useEffect(() => {

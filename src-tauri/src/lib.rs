@@ -258,6 +258,7 @@ pub fn run() {
             commands::list_directory,
             commands::list_directory_cached,
             commands::get_change_indicators,
+            commands::search_workspace_files,
             commands::create_session,
             commands::get_sessions,
             commands::update_session_access,

@@ -48,7 +48,7 @@ export const GitFileRow = memo<GitFileRowProps>(({
       }}
       title={file.path}
     >
-      <div className="ml-1 flex-1 flex items-center gap-2 min-w-0 font-mono">
+      <div className="ml-1 flex-1 flex items-center gap-2 min-w-0 font-sans">
         <span className={cn("font-medium truncate flex-shrink-0", isActive && "text-blue-500")}>{label.name}</span>
         {label.directory && (
           <span className={cn("text-muted-foreground/60 truncate text-xs", isActive && "text-blue-400")}>{label.directory}</span>
@@ -56,7 +56,7 @@ export const GitFileRow = memo<GitFileRowProps>(({
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
         <span
-          className="text-sm font-mono min-w-[1ch] text-muted-foreground"
+          className="text-sm font-sans min-w-[1ch] text-muted-foreground"
         >
           {status ?? ""}
         </span>

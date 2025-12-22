@@ -12,7 +12,6 @@ import {
   setWorkspaceTargetBranch,
   jjGetChangedFiles,
   createSession,
-  ptyCreateSession,
   ptyWrite,
 } from "../lib/api";
 import { getStatusBgColor } from "../lib/git-status-colors";
@@ -64,6 +63,7 @@ import {
 import { TargetBranchSelector } from "./TargetBranchSelector";
 import { cn } from "../lib/utils";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
+import type { SessionCreationInfo } from "../types/sessions";
 
 interface ShowWorkspaceProps {
   repositoryPath?: string;
@@ -72,6 +72,7 @@ interface ShowWorkspaceProps {
   initialSelectedFile: string | null;
   onDeleteWorkspace?: (workspace: Workspace) => void;
   allWorkspaces: Workspace[];
+  onSessionCreated?: (session: SessionCreationInfo) => void;
 }
 
 export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
@@ -81,6 +82,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   initialSelectedFile,
   onDeleteWorkspace,
   allWorkspaces,
+  onSessionCreated,
 }) {
   const workingDirectory = workspace?.workspace_path || repositoryPath || "";
   const effectiveRepoPath = workspace?.repo_path || repositoryPath || "";
@@ -323,7 +325,13 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   }, [addToast]);
 
   const handleCreateAgentWithComment = useCallback(
-    async (filePath: string, startLine: number, endLine: number, lineContent: string[], commentText: string) => {
+    async (
+      filePath: string,
+      startLine: number,
+      endLine: number,
+      lineContent: string[],
+      commentText: string
+    ) => {
       try {
         // Format comment as markdown
         const relativePath = filePath.startsWith(workingDirectory + "/")
@@ -332,31 +340,29 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 
         const lineRef = `${relativePath}:${startLine}${startLine !== endLine ? `-${endLine}` : ''}`;
         const formattedComment = `${lineRef}\n\`\`\`\n${lineContent.join('\n')}\n\`\`\`\n> ${commentText}\n`;
+        const sessionName = "Code Comment";
 
         // Create new database session
         const dbSessionId = await createSession(
           effectiveRepoPath,
           workspace?.id ?? null,
-          "Code Comment"
+          sessionName
         );
+        const sessionRepoPath = effectiveRepoPath || workingDirectory;
 
         // Construct PTY session ID
         const ptySessionId = `session-${dbSessionId}`;
 
-        // Create PTY session
-        await ptyCreateSession(ptySessionId, workingDirectory);
-
-        // Wait for shell to be ready
-        await new Promise(resolve => setTimeout(resolve, 200));
-
-        // Launch Claude
-        await ptyWrite(ptySessionId, "claude --permission-mode plan\n");
-
-        // Wait for Claude to start
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        // Send the formatted comment
-        await ptyWrite(ptySessionId, formattedComment);
+        // Notify parent with pending prompt to be sent after Claude initializes
+        // (ConsolidatedTerminal will create the PTY session when it mounts)
+        onSessionCreated?.({
+          sessionId: dbSessionId,
+          sessionName,
+          workspaceId: workspace?.id ?? null,
+          workspacePath: workspace?.workspace_path ?? null,
+          repoPath: sessionRepoPath,
+          pendingPrompt: formattedComment,
+        });
 
         addToast({
           title: "Comment sent to agent",
@@ -371,7 +377,51 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
         });
       }
     },
-    [workingDirectory, effectiveRepoPath, workspace, addToast]
+    [workingDirectory, effectiveRepoPath, workspace, addToast, onSessionCreated]
+  );
+
+  const handleCreateAgentWithReview = useCallback(
+    async (reviewMarkdown: string) => {
+      try {
+        const sessionName = "Code Review";
+
+        // Create new database session
+        const dbSessionId = await createSession(
+          effectiveRepoPath,
+          workspace?.id ?? null,
+          sessionName
+        );
+        const sessionRepoPath = effectiveRepoPath || workingDirectory;
+
+        // Construct PTY session ID
+        const ptySessionId = `session-${dbSessionId}`;
+
+        // Notify parent with pending prompt to be sent after Claude initializes
+        // (ConsolidatedTerminal will create the PTY session when it mounts)
+        onSessionCreated?.({
+          sessionId: dbSessionId,
+          sessionName,
+          workspaceId: workspace?.id ?? null,
+          workspacePath: workspace?.workspace_path ?? null,
+          repoPath: sessionRepoPath,
+          pendingPrompt: reviewMarkdown,
+        });
+
+        addToast({
+          title: "Review sent to agent",
+          description: "Created new agent session with code review",
+          type: "success",
+        });
+      } catch (error) {
+        addToast({
+          title: "Failed to create agent",
+          description: error instanceof Error ? error.message : String(error),
+          type: "error",
+        });
+        throw error;
+      }
+    },
+    [workingDirectory, effectiveRepoPath, workspace, addToast, onSessionCreated]
   );
 
   // Compute displayed entries for files list
@@ -510,6 +560,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
             workspacePath={workingDirectory}
             initialSelectedFile={initialSelectedFile}
             conflictedFiles={conflictedFiles}
+            onCreateAgentWithReview={handleCreateAgentWithReview}
           />
         ) : (
           <FileBrowser
@@ -558,7 +609,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   className="px-2"
                   disabled={!!actionPending}
@@ -567,27 +618,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" sideOffset={4}>
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    handleUpdateFromMaintree();
-                  }}
-                  disabled={!maintreeBranchName || !workingDirectory}
-                >
-                  <ArrowDownToLine className="w-4 h-4 mr-2" />
-                  Update from maintree
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    handleMergeIntoMaintree();
-                  }}
-                  disabled={!mainTreePath || !workspace?.branch_name}
-                >
-                  <GitMerge className="w-4 h-4 mr-2" />
-                  Merge into maintree
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onSelect={(e) => {
                     e.preventDefault();
