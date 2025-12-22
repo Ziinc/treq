@@ -137,3 +137,29 @@ pub fn get_change_indicators(_workspace_path: String) -> Result<Vec<String>, Str
     // This feature shows change indicators in file browser
     Ok(Vec::new())
 }
+
+#[derive(serde::Serialize)]
+pub struct FileSearchResult {
+    pub file_path: String,
+    pub relative_path: String,
+}
+
+#[tauri::command]
+pub fn search_workspace_files(
+    repo_path: String,
+    workspace_id: Option<i64>,
+    query: String,
+    limit: Option<usize>,
+) -> Result<Vec<FileSearchResult>, String> {
+    let max_results = limit.unwrap_or(50);
+
+    let files = local_db::search_workspace_files(&repo_path, workspace_id, &query, max_results)?;
+
+    Ok(files
+        .into_iter()
+        .map(|f| FileSearchResult {
+            file_path: f.file_path,
+            relative_path: f.relative_path,
+        })
+        .collect())
+}

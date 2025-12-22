@@ -95,6 +95,15 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
       loadModel();
     }, [sessionData.repoPath, sessionData.sessionId]);
 
+    // Handle terminal output
+    const handleTerminalOutput = useCallback(
+      (output: string) => {
+        // Forward to parent callback
+        onTerminalOutput?.(output);
+      },
+      [onTerminalOutput]
+    );
+
     // Search handlers
     const openSearchPanel = useCallback(() => {
       setSearchVisible(true);
@@ -176,17 +185,19 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
       [runSearch, closeSearchPanel]
     );
 
-    // Reset handler
-    const handleReset = useCallback(async () => {
+    // Reset handler - silent option used when reset is triggered by model change
+    const handleReset = useCallback(async (options?: { silent?: boolean }) => {
       setIsResetting(true);
       try {
         await ptyClose(sessionData.ptySessionId).catch(console.error);
         setTerminalInstanceKey((prev) => prev + 1);
-        addToast({
-          title: "Terminal Reset",
-          description: "Starting new Claude session",
-          type: "info",
-        });
+        if (!options?.silent) {
+          addToast({
+            title: "Terminal Reset",
+            description: "Starting new Claude session",
+            type: "info",
+          });
+        }
       } catch (error) {
         addToast({
           title: "Reset Failed",
@@ -227,11 +238,11 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
     useEffect(() => {
       if (!pendingModelReset) return;
       const performReset = async () => {
-        await handleReset();
+        await handleReset({ silent: true });
         addToast({
-          title: "Model Changed",
-          description: `Switched to ${sessionModel || "default"}`,
-          type: "success",
+          title: "Terminal Restarting",
+          description: `Using model: ${sessionModel || "default"}`,
+          type: "info",
         });
         setIsChangingModel(false);
         setPendingModelReset(false);
@@ -239,9 +250,20 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
       performReset();
     }, [pendingModelReset, handleReset, sessionModel, addToast]);
 
-    const autoCommand = sessionModel
+    // Build Claude command with optional pending prompt
+    let autoCommand = sessionModel
       ? `claude --permission-mode plan --model="${sessionModel}"`
       : "claude --permission-mode plan";
+
+    // If there's a pending prompt, append it as a command argument
+    if (sessionData.pendingPrompt) {
+      // Escape newlines and quotes for shell
+      const escapedPrompt = sessionData.pendingPrompt
+        .replace(/\\/g, '\\\\')  // Escape backslashes first
+        .replace(/"/g, '\\"')    // Escape double quotes
+        .replace(/\n/g, '\\n');  // Escape newlines as \n
+      autoCommand += ` "${escapedPrompt}"`;
+    }
 
     return (
       <div
@@ -428,7 +450,7 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
               workingDirectory={sessionData.workspacePath || sessionData.repoPath}
               autoCommand={autoCommand}
               onSessionError={onSessionError}
-              onTerminalOutput={onTerminalOutput}
+              onTerminalOutput={handleTerminalOutput}
               onTerminalIdle={onTerminalIdle}
               containerClassName="h-full w-full overflow-hidden"
               terminalPaneClassName="w-full h-full"

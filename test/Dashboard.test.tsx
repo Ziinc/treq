@@ -22,6 +22,22 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
   ask: vi.fn(),
 }));
 
+vi.mock("../src/components/ConsolidatedTerminal", async () => {
+  const ReactModule = await vi.importActual<typeof import("react")>("react");
+  const MockConsolidatedTerminal = ReactModule.forwardRef((_, ref) => {
+    ReactModule.useImperativeHandle(ref, () => ({
+      findNext: () => false,
+      findPrevious: () => false,
+      clearSearch: () => {},
+      focus: () => {},
+    }));
+    return <div data-testid="mock-terminal" />;
+  });
+  return {
+    ConsolidatedTerminal: MockConsolidatedTerminal,
+  };
+});
+
 // Mock the API module and set default return values
 vi.mock("../src/lib/api", async () => {
   const actual = await vi.importActual("../src/lib/api");
@@ -59,7 +75,9 @@ vi.mock("../src/lib/api", async () => {
     rebuildWorkspaces: vi.fn().mockResolvedValue([]),
     createSession: vi.fn().mockResolvedValue(1),
     updateSessionAccess: vi.fn().mockResolvedValue(undefined),
+    getSessionModel: vi.fn().mockResolvedValue(null),
     setSessionModel: vi.fn().mockResolvedValue(undefined),
+    ptyClose: vi.fn().mockResolvedValue(undefined),
     listDirectory: vi.fn().mockResolvedValue([]),
     readFile: vi.fn().mockRejectedValue(new Error("README.md not found")),
     preloadWorkspaceGitData: vi.fn().mockResolvedValue(undefined),
@@ -68,6 +86,7 @@ vi.mock("../src/lib/api", async () => {
     jjGetChangedFiles: vi.fn().mockResolvedValue([]),
     jjGetConflictedFiles: vi.fn().mockResolvedValue([]),
     jjCreateWorkspace: vi.fn().mockResolvedValue("/Users/test/repo/.treq/workspaces/test"),
+    createWorkspace: vi.fn().mockResolvedValue(1),
     addWorkspaceToDb: vi.fn().mockResolvedValue(1),
     setSetting: vi.fn().mockResolvedValue(undefined),
     jjRemoveWorkspace: vi.fn().mockResolvedValue(undefined),
@@ -251,6 +270,200 @@ describe("Settings", () => {
   });
 });
 
+describe("Terminal Pane", () => {
+  beforeEach(() => {
+    vi.mocked(api.getSetting).mockResolvedValue("/Users/test/repo");
+  });
+
+  afterEach(() => {
+    vi.mocked(api.getWorkspaces).mockResolvedValue([]);
+    vi.mocked(api.getSessions).mockResolvedValue([]);
+    vi.mocked(api.createSession).mockResolvedValue(1);
+  });
+
+  it("adds a new agent terminal to the right of the existing one", async () => {
+    const workspace = {
+      id: 1,
+      repo_path: "/Users/test/repo",
+      workspace_name: "Workspace One",
+      workspace_path: "/Users/test/repo/.treq/workspaces/one",
+      branch_name: "feature/one",
+      created_at: "2024-01-01T00:00:00Z",
+    };
+    const mockSessions: api.Session[] = [
+      {
+        id: 1,
+        workspace_id: workspace.id,
+        name: "Claude Session 1",
+        created_at: "2024-01-01T00:00:00Z",
+        last_accessed: "2024-01-01T00:00:00Z",
+        model: null,
+      },
+    ];
+
+    vi.mocked(api.getWorkspaces).mockImplementation(() =>
+      Promise.resolve([workspace])
+    );
+    vi.mocked(api.getSessions).mockImplementation(() =>
+      Promise.resolve(mockSessions.map((session) => ({ ...session })))
+    );
+    vi.mocked(api.createSession).mockImplementation(
+      async (_repoPath, workspaceId, name) => {
+        const newId = mockSessions.length + 1;
+        mockSessions.push({
+          id: newId,
+          workspace_id: workspaceId,
+          name: name ?? `Claude Session ${newId}`,
+          created_at: "2024-01-02T00:00:00Z",
+          last_accessed: "2024-01-02T00:00:00Z",
+          model: null,
+        });
+        return newId;
+      }
+    );
+
+    const user = userEvent.setup();
+    render(<Dashboard />);
+
+    const workspaceRow = await screen.findByText(workspace.branch_name);
+    await user.click(workspaceRow);
+
+    await screen.findByText("Claude Session 1");
+
+    expect(
+      document.querySelectorAll('[data-terminal-id^="claude-"]').length
+    ).toBe(1);
+
+    const newAgentButton = await screen.findByRole("button", {
+      name: /new agent/i,
+    });
+    await user.click(newAgentButton);
+
+    await waitFor(() => {
+      expect(
+        document.querySelectorAll('[data-terminal-id^="claude-"]').length
+      ).toBe(2);
+    });
+
+    const claudePanels = Array.from(
+      document.querySelectorAll('[data-terminal-id^="claude-"]')
+    );
+    expect(claudePanels[0].textContent).toContain("Claude Session 1");
+    expect(claudePanels[1].textContent).toContain("Claude Session 2");
+  });
+
+  it("removes the agent terminal when the close button is clicked", async () => {
+    const workspace = {
+      id: 1,
+      repo_path: "/Users/test/repo",
+      workspace_name: "Workspace One",
+      workspace_path: "/Users/test/repo/.treq/workspaces/one",
+      branch_name: "feature/one",
+      created_at: "2024-01-01T00:00:00Z",
+    };
+    const mockSessions: api.Session[] = [
+      {
+        id: 1,
+        workspace_id: workspace.id,
+        name: "Claude Session 1",
+        created_at: "2024-01-01T00:00:00Z",
+        last_accessed: "2024-01-01T00:00:00Z",
+        model: null,
+      },
+    ];
+
+    vi.mocked(api.getWorkspaces).mockResolvedValue([workspace]);
+    vi.mocked(api.getSessions).mockResolvedValue(
+      mockSessions.map((session) => ({ ...session }))
+    );
+
+    const user = userEvent.setup();
+    render(<Dashboard />);
+
+    const workspaceRow = await screen.findByText(workspace.branch_name);
+    await user.click(workspaceRow);
+
+    const terminalPanel = await waitFor(() =>
+      document.querySelector('[data-terminal-id="claude-1"]')
+    );
+    expect(terminalPanel).not.toBeNull();
+
+    const closeButton = within(terminalPanel as Element).getByLabelText(
+      /close session/i
+    );
+    await user.click(closeButton);
+
+    await waitFor(() => {
+      expect(
+        document.querySelector('[data-terminal-id="claude-1"]')
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it("creates a new agent terminal when Cmd+J is pressed while collapsed and empty", async () => {
+    const workspace = {
+      id: 1,
+      repo_path: "/Users/test/repo",
+      workspace_name: "Workspace One",
+      workspace_path: "/Users/test/repo/.treq/workspaces/one",
+      branch_name: "feature/one",
+      created_at: "2024-01-01T00:00:00Z",
+    };
+    const mockSessions: api.Session[] = [];
+
+    vi.mocked(api.getWorkspaces).mockResolvedValue([workspace]);
+    vi.mocked(api.getSessions).mockImplementation(() =>
+      Promise.resolve(mockSessions.map((session) => ({ ...session })))
+    );
+    vi.mocked(api.createSession).mockImplementation(
+      async (_repoPath, workspaceId, name) => {
+        const newId = mockSessions.length + 1;
+        mockSessions.push({
+          id: newId,
+          workspace_id: workspaceId,
+          name: name ?? `Claude Session ${newId}`,
+          created_at: "2024-01-02T00:00:00Z",
+          last_accessed: "2024-01-02T00:00:00Z",
+          model: null,
+        });
+        return newId;
+      }
+    );
+
+    const user = userEvent.setup();
+    render(<Dashboard />);
+
+    const workspaceRow = await screen.findByText(workspace.branch_name);
+    await user.click(workspaceRow);
+
+    await screen.findByText(/Terminals/i);
+
+    let expandButton = screen.queryByLabelText(/Expand terminal/i);
+    if (!expandButton) {
+      const collapseButton = await screen.findByLabelText(/Collapse terminal/i);
+      await user.click(collapseButton);
+      expandButton = await screen.findByLabelText(/Expand terminal/i);
+    }
+
+    expect(expandButton).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-terminal-id^="claude-"]')
+    ).toBeNull();
+
+    await user.keyboard("{Meta>}j{/Meta}");
+
+    await waitFor(() => {
+      expect(api.createSession).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(
+        document.querySelector('[data-terminal-id^="claude-"]')
+      ).not.toBeNull();
+    });
+  });
+});
+
 describe("WorkspacesSidebar", () => {
   beforeEach(() => {
     vi.mocked(api.getSetting).mockResolvedValue("/Users/test/repo");
@@ -299,11 +512,8 @@ describe("WorkspacesSidebar", () => {
   it("able to create a new workspace", async () => {
     const user = userEvent.setup();
 
-    // Mock workspace creation APIs
-    vi.mocked(api.jjCreateWorkspace).mockResolvedValue(
-      "/Users/test/repo/.treq/workspaces/treq-add-dark-mode"
-    );
-    vi.mocked(api.addWorkspaceToDb).mockResolvedValue(1);
+    // Mock workspace creation API - createWorkspace is a single call that handles jj + db
+    vi.mocked(api.createWorkspace).mockResolvedValue(1);
 
     // Render dashboard
     render(<Dashboard />);
@@ -332,24 +542,16 @@ describe("WorkspacesSidebar", () => {
     const submitButton = await screen.findByRole("button", { name: /create workspace/i });
     await user.click(submitButton);
 
-    // Verify workspace creation APIs were called
+    // Verify workspace creation API was called with correct params
     await waitFor(() => {
-      expect(api.jjCreateWorkspace).toHaveBeenCalledWith(
+      expect(api.createWorkspace).toHaveBeenCalledWith(
         "/Users/test/repo",
         "treq/add-dark-mode",
-        "treq/add-dark-mode",
         true,
-        undefined
+        undefined,
+        expect.stringContaining("Add dark mode")
       );
     });
-
-    expect(api.addWorkspaceToDb).toHaveBeenCalledWith(
-      "/Users/test/repo",
-      "treq/add-dark-mode",
-      "/Users/test/repo/.treq/workspaces/treq-add-dark-mode",
-      "treq/add-dark-mode",
-      expect.stringContaining("Add dark mode")
-    );
 
     // Dialog should close after successful creation
     await waitFor(() => {

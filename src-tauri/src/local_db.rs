@@ -726,6 +726,66 @@ pub fn get_cached_directory_listing(
         .map_err(|e| e.to_string())
 }
 
+/// Search workspace files by filename or path
+/// Returns files (not directories) matching the query string
+pub fn search_workspace_files(
+    repo_path: &str,
+    workspace_id: Option<i64>,
+    query: &str,
+    limit: usize,
+) -> Result<Vec<CachedWorkspaceFile>, String> {
+    if query.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let conn = get_connection(repo_path)?;
+
+    // Use LIKE for simple substring matching (case-insensitive)
+    // Query matches against relative_path (includes filename)
+    let search_pattern = format!("%{}%", query.to_lowercase());
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, workspace_id, file_path, relative_path, is_directory, parent_path, cached_at, mtime
+             FROM workspace_files
+             WHERE workspace_id IS ?1
+               AND is_directory = 0
+               AND LOWER(relative_path) LIKE ?2
+             ORDER BY
+               -- Prioritize exact filename matches
+               CASE WHEN LOWER(relative_path) LIKE ?3 THEN 0 ELSE 1 END,
+               -- Then by path length (shorter = more relevant)
+               LENGTH(relative_path)
+             LIMIT ?4",
+        )
+        .map_err(|e| format!("Failed to prepare search query: {}", e))?;
+
+    // Pattern for "ends with filename match" (file at end of path)
+    let filename_pattern = format!("%/{}", query.to_lowercase());
+
+    let files = stmt
+        .query_map(
+            params![workspace_id, search_pattern, filename_pattern, limit as i64],
+            |row| {
+                Ok(CachedWorkspaceFile {
+                    id: row.get(0)?,
+                    workspace_id: row.get(1)?,
+                    file_path: row.get(2)?,
+                    relative_path: row.get(3)?,
+                    is_directory: row.get::<_, i64>(4)? != 0,
+                    parent_path: row.get(5)?,
+                    cached_at: row.get(6)?,
+                    mtime: row.get(7)?,
+                })
+            },
+        )
+        .map_err(|e| format!("Failed to search files: {}", e))?;
+
+    files
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
 /// Batch update all cached files for a workspace (replaces all)
 pub fn sync_workspace_files(
     repo_path: &str,

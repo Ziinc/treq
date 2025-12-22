@@ -14,11 +14,13 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
 import { CreateWorkspaceFromRemoteDialog } from "./CreateWorkspaceFromRemoteDialog";
 import { CommandPalette } from "./CommandPalette";
+import { FilePicker } from "./FilePicker";
 import { BranchSwitcher } from "./BranchSwitcher";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { WorkspaceTerminalPane } from "./WorkspaceTerminalPane";
 import type { ClaudeSessionData } from "./terminal/types";
+import type { SessionCreationInfo } from "../types/sessions";
 
 // Lazy imports
 const ShowWorkspace = lazy(() =>
@@ -81,6 +83,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   >("repository");
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
+  const [showFilePicker, setShowFilePicker] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [sessionSelectedFile, setSessionSelectedFile] = useState<string | null>(
     null
@@ -91,6 +94,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   const [lastSelectedWorkspaceIndex, setLastSelectedWorkspaceIndex] = useState<
     number | null
   >(null);
+  const [pendingClaudeSession, setPendingClaudeSession] = useState<
+    SessionCreationInfo | null
+  >(null);
 
   const queryClient = useQueryClient();
   const { addToast } = useToast();
@@ -99,6 +105,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     // Navigate to main repo ShowWorkspace > Overview
     setSelectedWorkspace(null);
     setActiveSessionId(null);
+    setPendingClaudeSession(null);
     setViewMode("session");
   }, []);
 
@@ -119,6 +126,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
 
   useKeyboardShortcut("k", true, () => {
     setShowCommandPalette(true);
+  });
+
+  useKeyboardShortcut("p", true, () => {
+    if (repoPath) {
+      setShowFilePicker(true);
+    }
   });
 
   useKeyboardShortcut("Escape", false, () => {
@@ -611,21 +624,58 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
 
   // Build Claude sessions data for the terminal pane
   const claudeSessionsForPane = useMemo((): ClaudeSessionData[] => {
-    return sessions
-      .filter((s) => s.id === activeSessionId)
-      .map((session) => {
-        const sessionWorkspace = session.workspace_id
-          ? workspaces.find((w) => w.id === session.workspace_id)
-          : null;
-        return {
-          sessionId: session.id,
-          sessionName: session.name,
-          ptySessionId: `session-${session.id}`,
-          workspacePath: sessionWorkspace?.workspace_path ?? null,
-          repoPath: sessionWorkspace?.repo_path ?? repoPath,
-        };
+    const workspaceMap = new Map(workspaces.map((ws) => [ws.id, ws]));
+
+    const paneSessions = sessions.map((session) => {
+      const sessionWorkspace = session.workspace_id
+        ? workspaceMap.get(session.workspace_id) ?? null
+        : null;
+      return {
+        sessionId: session.id,
+        sessionName: session.name,
+        ptySessionId: `session-${session.id}`,
+        workspacePath: sessionWorkspace?.workspace_path ?? null,
+        repoPath: sessionWorkspace?.repo_path ?? repoPath,
+      };
+    });
+
+    if (
+      pendingClaudeSession &&
+      !paneSessions.some(
+        (session) => session.sessionId === pendingClaudeSession.sessionId
+      )
+    ) {
+      paneSessions.push({
+        sessionId: pendingClaudeSession.sessionId,
+        sessionName: pendingClaudeSession.sessionName,
+        ptySessionId: `session-${pendingClaudeSession.sessionId}`,
+        workspacePath: pendingClaudeSession.workspacePath,
+        repoPath: pendingClaudeSession.repoPath,
+        pendingPrompt: pendingClaudeSession.pendingPrompt,
       });
-  }, [sessions, activeSessionId, workspaces, repoPath]);
+    }
+
+    return paneSessions;
+  }, [sessions, workspaces, repoPath, pendingClaudeSession]);
+
+  useEffect(() => {
+    if (!pendingClaudeSession) return;
+    const sessionExists = sessions.some(
+      (session) => session.id === pendingClaudeSession.sessionId
+    );
+    if (sessionExists) {
+      setPendingClaudeSession(null);
+    }
+  }, [sessions, pendingClaudeSession]);
+
+  useEffect(() => {
+    if (
+      pendingClaudeSession &&
+      activeSessionId !== pendingClaudeSession.sessionId
+    ) {
+      setPendingClaudeSession(null);
+    }
+  }, [activeSessionId, pendingClaudeSession]);
 
   const mainContentStyle = useMemo(
     () => ({ width: showSidebar ? "calc(100vw - 240px)" : "100%" }),
@@ -693,6 +743,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
                     initialSelectedFile={sessionSelectedFile}
                     onDeleteWorkspace={handleDelete}
                     allWorkspaces={workspaces}
+                    onSessionCreated={(sessionData) => {
+                      queryClient.invalidateQueries({
+                        queryKey: ["sessions"],
+                      });
+                      setActiveSessionId(sessionData.sessionId);
+                      setPendingClaudeSession(sessionData);
+                    }}
                   />
                 </Suspense>
               </ErrorBoundary>
@@ -705,21 +762,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
             isHidden={false}
             claudeSessions={claudeSessionsForPane}
             activeClaudeSessionId={isSessionView ? activeSessionId : null}
+            onClaudeTerminalOutput={() => {
+              // No-op: Just ensure callback chain is connected so ClaudeTerminalPanel
+              // can detect when Claude is ready and send pending prompts
+            }}
             onActiveSessionChange={(sessionId) => {
-              if (sessionId !== null) {
-                setActiveSessionId(sessionId);
-                // Find the session to determine view mode
-                const session = sessions.find((s) => s.id === sessionId);
-                if (session) {
-                  setViewMode(
-                    session.workspace_id ? "show-workspace" : "session"
+              if (sessionId === null) {
+                setActiveSessionId(null);
+                return;
+              }
+              setActiveSessionId(sessionId);
+              // Find the session to determine view mode
+              const session = sessions.find((s) => s.id === sessionId);
+              if (session) {
+                setViewMode(
+                  session.workspace_id ? "show-workspace" : "session"
+                );
+                if (session.workspace_id) {
+                  const ws = workspaces.find(
+                    (w) => w.id === session.workspace_id
                   );
-                  if (session.workspace_id) {
-                    const ws = workspaces.find(
-                      (w) => w.id === session.workspace_id
-                    );
-                    if (ws) setSelectedWorkspace(ws);
-                  }
+                  if (ws) setSelectedWorkspace(ws);
                 }
               }
             }}
@@ -793,6 +856,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
 
       {commandPaletteElement}
       {branchSwitcherElement}
+
+      {repoPath && (
+        <FilePicker
+          open={showFilePicker}
+          onOpenChange={setShowFilePicker}
+          repoPath={repoPath}
+          workspaceId={selectedWorkspace?.id ?? null}
+          onFileSelect={(filePath) => {
+            setSessionSelectedFile(filePath);
+          }}
+        />
+      )}
     </div>
   );
 };

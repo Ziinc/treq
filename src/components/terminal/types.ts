@@ -9,6 +9,7 @@ export interface ClaudeSessionData {
   ptySessionId: string;
   workspacePath: string | null;
   repoPath: string;
+  pendingPrompt?: string; // Optional prompt to send after Claude initializes
 }
 
 export interface ShellTerminalData {

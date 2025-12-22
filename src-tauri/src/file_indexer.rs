@@ -39,6 +39,30 @@ pub fn get_jj_status_files(workspace_path: &str) -> Result<Vec<String>, String> 
     Ok(changes.into_iter().map(|c| c.path).collect())
 }
 
+/// Get list of all tracked files in a workspace using jj file list
+pub fn get_jj_tracked_files(workspace_path: &str) -> Result<Vec<String>, String> {
+    let output = Command::new("jj")
+        .args(["file", "list", "--quiet"])
+        .current_dir(workspace_path)
+        .output()
+        .map_err(|e| format!("Failed to run jj file list: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "jj file list failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    let files: Vec<String> = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    Ok(files)
+}
+
 /// Get file modification time as unix timestamp
 fn get_file_mtime(path: &Path) -> Option<i64> {
     std::fs::metadata(path)
@@ -138,14 +162,14 @@ fn build_file_tree(
 }
 
 /// Index workspace files into database
-/// Gets files from jj status (changed files only) and builds a hierarchical cache
+/// Gets all tracked files from jj file list and builds a hierarchical cache
 pub fn index_workspace_files(
     repo_path: &str,
     workspace_id: Option<i64>,
     workspace_path: &str,
 ) -> Result<(), String> {
-    // Get only changed files from jj status
-    let files = get_jj_status_files(workspace_path)?;
+    // Get all tracked files from jj file list
+    let files = get_jj_tracked_files(workspace_path)?;
 
     // Build file tree with parent relationships
     let mut cached_files = build_file_tree(workspace_path, files)?;
@@ -271,4 +295,75 @@ pub fn index_changed_files(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::process::Command;
+    use tempfile::TempDir;
+
+    fn setup_jj_repo(temp_dir: &TempDir) -> String {
+        let path = temp_dir.path().to_str().unwrap().to_string();
+
+        // Initialize jj repo
+        Command::new("jj")
+            .args(["git", "init"])
+            .current_dir(&path)
+            .output()
+            .expect("Failed to init jj repo");
+
+        path
+    }
+
+    #[test]
+    fn test_get_jj_tracked_files_returns_all_files() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let repo_path = setup_jj_repo(&temp_dir);
+
+        // Create some test files
+        fs::write(temp_dir.path().join("file1.txt"), "content1").unwrap();
+        fs::write(temp_dir.path().join("file2.txt"), "content2").unwrap();
+        fs::create_dir(temp_dir.path().join("subdir")).unwrap();
+        fs::write(temp_dir.path().join("subdir/file3.txt"), "content3").unwrap();
+
+        // Snapshot the working copy
+        Command::new("jj")
+            .args(["status"])
+            .current_dir(&repo_path)
+            .output()
+            .expect("Failed to run jj status");
+
+        // Get tracked files
+        let files = get_jj_tracked_files(&repo_path).expect("Should get files");
+
+        // Should return ALL files, not just changed ones
+        assert!(files.contains(&"file1.txt".to_string()));
+        assert!(files.contains(&"file2.txt".to_string()));
+        assert!(files.contains(&"subdir/file3.txt".to_string()));
+    }
+
+    #[test]
+    fn test_get_jj_tracked_files_includes_unchanged_committed_files() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let repo_path = setup_jj_repo(&temp_dir);
+
+        // Create and commit a file
+        fs::write(temp_dir.path().join("committed.txt"), "committed").unwrap();
+        Command::new("jj")
+            .args(["commit", "-m", "initial"])
+            .current_dir(&repo_path)
+            .output()
+            .expect("Failed to commit");
+
+        // Create a new changed file
+        fs::write(temp_dir.path().join("changed.txt"), "changed").unwrap();
+
+        let files = get_jj_tracked_files(&repo_path).expect("Should get files");
+
+        // Should include BOTH committed (unchanged) and changed files
+        assert!(files.contains(&"committed.txt".to_string()), "Should include committed file");
+        assert!(files.contains(&"changed.txt".to_string()), "Should include changed file");
+    }
 }

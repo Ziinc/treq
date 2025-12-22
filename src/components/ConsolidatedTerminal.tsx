@@ -105,8 +105,9 @@ export const ConsolidatedTerminal = forwardRef<
     const onTerminalOutputRef = useRef(onTerminalOutput);
     const onTerminalIdleRef = useRef(onTerminalIdle);
 
-    const { fontSize } = useTerminalSettings();
-
+    // Get font size from settings and scale to text-sm (0.875x)
+    const { fontSize: baseFontSize } = useTerminalSettings();
+    const fontSize = Math.round(baseFontSize * 0.875);
 
     // Sync isPtyReady state with ref for use in callbacks
     useEffect(() => {
@@ -159,7 +160,7 @@ export const ConsolidatedTerminal = forwardRef<
       const xterm = new XTerm({
         cursorBlink: true,
         cursorStyle: "bar",
-        fontSize,
+        fontSize, // Scaled to text-sm (0.875x of base font size)
         fontFamily: 'Menlo, Monaco, "Courier New", monospace',
         theme: { background: "#1e1e1e" },
         scrollback: 5000,

@@ -6,6 +6,17 @@ afterEach(() => {
   cleanup();
 });
 
+// Mock ResizeObserver
+global.ResizeObserver = class ResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn().mockResolvedValue(null),
+}));
+
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(() => Promise.resolve(() => {})),
 }));
@@ -35,6 +46,16 @@ global.requestIdleCallback = vi.fn((callback) => {
 }) as any;
 
 global.cancelIdleCallback = vi.fn();
+
+if (!("requestAnimationFrame" in globalThis)) {
+  global.requestAnimationFrame = ((callback: FrameRequestCallback) =>
+    setTimeout(() => callback(Date.now()), 0)) as any;
+}
+
+if (!("cancelAnimationFrame" in globalThis)) {
+  global.cancelAnimationFrame = ((handle: number) =>
+    clearTimeout(handle)) as any;
+}
 
 // Mock window.matchMedia for theme detection
 Object.defineProperty(window, 'matchMedia', {
