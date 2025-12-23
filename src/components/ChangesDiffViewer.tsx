@@ -425,7 +425,7 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
     collapsedFiles,
     viewedFiles,
     expandedLargeDiffs,
-    diffFontSize,
+    diffFontSize: _diffFontSize,
     readOnly,
     fileActionTarget,
     selectedUnstagedFiles,

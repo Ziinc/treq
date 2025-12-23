@@ -31,7 +31,7 @@ export const CommitGraph = memo<CommitGraphProps>(function CommitGraph({
   workspacePath,
   targetBranch,
   workspaceBranch,
-  repoPath,
+  repoPath: _repoPath,
   allWorkspaces,
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -86,7 +86,7 @@ export const CommitGraph = memo<CommitGraphProps>(function CommitGraph({
 
   // Fetch commits for all lanes
   const fetchCommitsForChain = useCallback(async (
-    chain: WorkspaceChainItem[],
+    _chain: WorkspaceChainItem[],
     effectiveTargetBranch: string
   ): Promise<Map<string, JjLogResult>> => {
     const commitsByLane = new Map<string, JjLogResult>();

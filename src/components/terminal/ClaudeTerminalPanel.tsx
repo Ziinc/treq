@@ -314,7 +314,7 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
                 <TooltipTrigger asChild>
                   <Button
                     type="button"
-                    onClick={handleReset}
+                    onClick={() => handleReset()}
                     disabled={isResetting}
                     variant="ghost"
                     className="h-5 w-5 rounded-sm p-0 opacity-60 hover:opacity-100 disabled:opacity-30"

@@ -6,8 +6,12 @@
     "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
     "types": ["vitest/globals", "@testing-library/jest-dom"],
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "declaration": true,
+    "declarationMap": true,
+    "outDir": "./dist-node",
+    "noEmit": false
   },
-  "include": ["src", "test", "vite.config.ts", "./test/setup.ts", "./test/**/*.test.tsx"],
+  "include": ["vite.config.ts", "vitest.config.ts"],
   "exclude": [".treq/**", ".jj/**"]
 }

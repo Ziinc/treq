@@ -115,7 +115,7 @@ const CodeLine = memo(function CodeLine({
   onMouseEnter,
   onMouseLeave,
   style,
-  fontSize,
+  fontSize: _fontSize,
   hoveredLine,
   isLineSelected,
   isSelecting,
@@ -365,8 +365,9 @@ const FileContentView = memo(function FileContentView({
           className="px-4 pb-4"
           rowCount={lines.length}
           rowHeight={getItemHeight}
-          onScroll={({ scrollOffset: offset }: { scrollOffset: number }) => {
-            onScrollOffsetChange(offset);
+          onScroll={(e: unknown) => {
+            const scrollEvent = e as { scrollOffset: number };
+            onScrollOffsetChange(scrollEvent.scrollOffset);
           }}
           rowComponent={({
             index,

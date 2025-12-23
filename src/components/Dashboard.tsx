@@ -78,7 +78,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(
     null
   );
-  const [initialSettingsTab, setInitialSettingsTab] = useState<
+  const [_initialSettingsTab, _setInitialSettingsTab] = useState<
     "application" | "repository"
   >("repository");
   const [showCommandPalette, setShowCommandPalette] = useState(false);
@@ -102,7 +102,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   const { addToast } = useToast();
 
   const handleReturnToDashboard = useCallback(() => {
-    // Navigate to main repo ShowWorkspace > Overview
+    // Navigate to main repo ShowWorkspace > Code
     setSelectedWorkspace(null);
     setActiveSessionId(null);
     setPendingClaudeSession(null);
@@ -110,7 +110,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   }, []);
 
   const openSettings = useCallback((tab?: string) => {
-    setInitialSettingsTab(
+    _setInitialSettingsTab(
       (tab as "application" | "repository") || "repository"
     );
     setViewMode("settings");
@@ -351,7 +351,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   });
 
 
-  const { data: workspaces = [], refetch } = useQuery({
+  const { data: workspaces = [], refetch: _refetch } = useQuery({
     queryKey: ["workspaces", repoPath],
     queryFn: () => getWorkspaces(repoPath),
     enabled: !!repoPath,
@@ -604,6 +604,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         }
       }}
       onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
+      onOpenFilePicker={() => setShowFilePicker(true)}
       repoPath={repoPath}
     />
   );
@@ -626,7 +627,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   const claudeSessionsForPane = useMemo((): ClaudeSessionData[] => {
     const workspaceMap = new Map(workspaces.map((ws) => [ws.id, ws]));
 
-    const paneSessions = sessions.map((session) => {
+    const paneSessions: ClaudeSessionData[] = sessions.map((session) => {
       const sessionWorkspace = session.workspace_id
         ? workspaceMap.get(session.workspace_id) ?? null
         : null;
@@ -737,12 +738,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
                   <ShowWorkspace
                     repositoryPath={repoPath}
                     workspace={selectedWorkspace}
-                    sessionId={activeSessionId}
                     mainRepoBranch={currentBranch}
-                    onClose={handleReturnToDashboard}
                     initialSelectedFile={sessionSelectedFile}
                     onDeleteWorkspace={handleDelete}
-                    allWorkspaces={workspaces}
+                    onOpenFilePicker={() => setShowFilePicker(true)}
                     onSessionCreated={(sessionData) => {
                       queryClient.invalidateQueries({
                         queryKey: ["sessions"],
@@ -820,11 +819,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
           {viewMode === "settings" && (
             <SettingsPage
               repoPath={repoPath}
-              onRepoPathChange={setRepoPath}
-              initialTab={initialSettingsTab}
-              onRefresh={refetch}
               onClose={handleReturnToDashboard}
-              repoName={repoName}
               currentBranch={currentBranch}
             />
           )}

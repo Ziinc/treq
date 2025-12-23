@@ -5,7 +5,7 @@ import {
   Home,
   Settings,
   GitBranch,
-  Terminal,
+  FileSearch,
 } from "lucide-react";
 
 interface CommandItem {
@@ -27,7 +27,9 @@ interface CommandPaletteProps {
   onOpenWorkspaceSession: (workspace: Workspace) => void;
   onOpenSession: (session: Session, workspace?: Workspace) => void;
   onOpenBranchSwitcher?: () => void;
+  onOpenFilePicker?: () => void;
   repoPath?: string;
+  workspaceChangeCounts?: Map<number, number>;
 }
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
@@ -40,7 +42,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onOpenWorkspaceSession,
   onOpenSession,
   onOpenBranchSwitcher,
+  onOpenFilePicker,
   repoPath,
+  workspaceChangeCounts,
 }) => {
   // Build command items
   const items = useMemo<CommandItem[]>(() => {
@@ -50,7 +54,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     result.push({
       id: "dashboard",
       type: "action",
-      label: "Go to Dashboard",
+      label: "Go to Home",
       icon: <Home className="w-4 h-4" />,
       onSelect: () => {
         onNavigateToDashboard();
@@ -84,14 +88,39 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       });
     }
 
+    // Add Search Files action if we have a repo path
+    if (repoPath && onOpenFilePicker) {
+      result.push({
+        id: "search-files",
+        type: "action",
+        label: "Search Files",
+        description: "Jump to a file in the repository",
+        icon: <FileSearch className="w-4 h-4" />,
+        onSelect: () => {
+          onOpenFilePicker();
+          onOpenChange(false);
+        },
+      });
+    }
+
     // Workspaces
     for (const workspace of workspaces) {
       const workspaceSessions = sessions.filter(s => s.workspace_id === workspace.id);
+      const agentCount = workspaceSessions.length;
+      const changeCount = workspaceChangeCounts?.get(workspace.id) ?? 0;
+
+      // Build description: "N agents, N shells, N changes"
+      const parts: string[] = [];
+      parts.push(`${agentCount} agent${agentCount !== 1 ? 's' : ''}`);
+      // Note: shells are not tracked in database, so we show 0 for now
+      parts.push(`0 shells`);
+      parts.push(`${changeCount} change${changeCount !== 1 ? 's' : ''}`);
+
       result.push({
         id: `workspace-${workspace.id}`,
         type: "workspace",
         label: workspace.branch_name,
-        description: `${workspaceSessions.length} session${workspaceSessions.length !== 1 ? 's' : ''}`,
+        description: parts.join(', '),
         icon: <GitBranch className="w-4 h-4" />,
         onSelect: () => {
           onOpenWorkspaceSession(workspace);
@@ -100,24 +129,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       });
     }
 
-    // Sessions
-    for (const session of sessions) {
-      const workspace = workspaces.find(w => w.id === session.workspace_id);
-      result.push({
-        id: `session-${session.id}`,
-        type: "session",
-        label: session.name,
-        description: workspace ? workspace.branch_name : "Main repo",
-        icon: <Terminal className="w-4 h-4" />,
-        onSelect: () => {
-          onOpenSession(session, workspace);
-          onOpenChange(false);
-        },
-      });
-    }
-
     return result;
-  }, [workspaces, sessions, onNavigateToDashboard, onNavigateToSettings, onOpenWorkspaceSession, onOpenSession, onOpenBranchSwitcher, onOpenChange, repoPath]);
+  }, [workspaces, sessions, onNavigateToDashboard, onNavigateToSettings, onOpenWorkspaceSession, onOpenSession, onOpenBranchSwitcher, onOpenFilePicker, onOpenChange, repoPath, workspaceChangeCounts]);
 
   // Render a command item
   const renderItem = (item: CommandItem) => (

@@ -164,3 +164,37 @@ describe("FilePicker", () => {
     expect(screen.getByText("Type to search files...")).toBeInTheDocument();
   });
 });
+
+describe("FilePicker - File Navigation Integration", () => {
+  it("should pass absolute file path to onFileSelect", async () => {
+    const user = userEvent.setup();
+    const onFileSelect = vi.fn();
+
+    vi.mocked(api.searchWorkspaceFiles).mockResolvedValue([
+      { file_path: "/test/repo/src/components/Button.tsx", relative_path: "src/components/Button.tsx" },
+    ]);
+
+    render(
+      <FilePicker
+        open={true}
+        onOpenChange={vi.fn()}
+        repoPath="/test/repo"
+        workspaceId={null}
+        onFileSelect={onFileSelect}
+      />
+    );
+
+    const input = screen.getByPlaceholderText("Search files...");
+    await user.type(input, "Button");
+
+    await waitFor(() => {
+      expect(screen.getByText("src/components/Button.tsx")).toBeInTheDocument();
+    });
+
+    const fileItem = screen.getByText("src/components/Button.tsx");
+    await user.click(fileItem);
+
+    // Verify the absolute path was passed
+    expect(onFileSelect).toHaveBeenCalledWith("/test/repo/src/components/Button.tsx");
+  });
+});

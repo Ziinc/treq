@@ -1,4 +1,5 @@
 // Command modules
+pub mod binary;
 pub mod file_view;
 pub mod filesystem;
 pub mod jj_commands;
@@ -8,6 +9,7 @@ pub mod settings;
 pub mod workspace;
 
 // Re-export all commands for convenient access
+pub use binary::*;
 pub use file_view::*;
 pub use filesystem::*;
 pub use jj_commands::*;
