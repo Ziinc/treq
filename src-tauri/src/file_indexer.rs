@@ -1,3 +1,4 @@
+use crate::binary_paths;
 use crate::jj;
 use crate::local_db::{self, CachedWorkspaceFile};
 use chrono::Utc;
@@ -5,10 +6,16 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// Helper function to create Command for a binary using cached path
+fn command_for(binary: &str) -> Command {
+    let path = binary_paths::get_binary_path(binary).unwrap_or_else(|| binary.to_string());
+    Command::new(path)
+}
+
 /// Get list of git-tracked files for a workspace
 /// Uses `git ls-files` to get both cached and untracked files (respecting .gitignore)
 pub fn get_git_tracked_files(workspace_path: &str) -> Result<Vec<String>, String> {
-    let output = Command::new("git")
+    let output = command_for("git")
         .args(["ls-files", "--cached", "--others", "--exclude-standard"])
         .current_dir(workspace_path)
         .output()
@@ -41,7 +48,7 @@ pub fn get_jj_status_files(workspace_path: &str) -> Result<Vec<String>, String> 
 
 /// Get list of all tracked files in a workspace using jj file list
 pub fn get_jj_tracked_files(workspace_path: &str) -> Result<Vec<String>, String> {
-    let output = Command::new("jj")
+    let output = command_for("jj")
         .args(["file", "list", "--quiet"])
         .current_dir(workspace_path)
         .output()
@@ -308,7 +315,7 @@ mod tests {
         let path = temp_dir.path().to_str().unwrap().to_string();
 
         // Initialize jj repo
-        Command::new("jj")
+        command_for("jj")
             .args(["git", "init"])
             .current_dir(&path)
             .output()
@@ -329,7 +336,7 @@ mod tests {
         fs::write(temp_dir.path().join("subdir/file3.txt"), "content3").unwrap();
 
         // Snapshot the working copy
-        Command::new("jj")
+        command_for("jj")
             .args(["status"])
             .current_dir(&repo_path)
             .output()
@@ -351,7 +358,7 @@ mod tests {
 
         // Create and commit a file
         fs::write(temp_dir.path().join("committed.txt"), "committed").unwrap();
-        Command::new("jj")
+        command_for("jj")
             .args(["commit", "-m", "initial"])
             .current_dir(&repo_path)
             .output()

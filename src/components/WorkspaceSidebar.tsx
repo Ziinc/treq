@@ -52,7 +52,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
     onCreateWorkspace,
     onCreateWorkspaceFromRemote,
     openSettings,
-    navigateToDashboard,
+    navigateToDashboard: _navigateToDashboard,
     onOpenCommandPalette,
     currentPage,
   }) => {

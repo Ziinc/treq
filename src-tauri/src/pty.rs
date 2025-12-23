@@ -111,6 +111,9 @@ impl PtyManager {
         }
         cmd.env("TERM", "xterm-256color");
 
+        // Set extended PATH so terminal can find jj, git, claude binaries
+        cmd.env("PATH", crate::binary_paths::get_extended_path());
+
         let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
         drop(pair.slave);
 

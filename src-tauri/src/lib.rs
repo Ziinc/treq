@@ -1,3 +1,4 @@
+mod binary_paths;
 mod commands;
 mod db;
 mod file_indexer;
@@ -60,6 +61,10 @@ pub fn run() {
 
             let db = Database::new(db_path).expect("Failed to open database");
             db.init().expect("Failed to initialize database");
+
+            // Load cached binary paths and initialize in-memory cache
+            let binary_paths = commands::load_cached_binary_paths(&db);
+            binary_paths::init_binary_paths_cache(binary_paths);
 
             let pty_manager = PtyManager::new();
 
@@ -216,6 +221,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::detect_binaries,
             commands::get_workspaces,
             commands::add_workspace_to_db,
             commands::create_workspace,

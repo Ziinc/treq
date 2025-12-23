@@ -153,7 +153,7 @@ describe("Dashboard", () => {
       render(<Dashboard />);
 
       
-      await screen.findByText("Overview")
+      await screen.findByText("Code")
       await screen.findByText(/Terminals/i)
       expect(listen).not.toHaveBeenCalledWith(
         "navigate-to-dashboard",
@@ -189,7 +189,7 @@ describe("Settings", () => {
     render(<Dashboard />);
 
     // Wait for dashboard to load
-    await screen.findByText("Overview");
+    await screen.findByText("Code");
 
     // Click settings button
     const settingsButton = await screen.findByLabelText("Settings");
@@ -519,7 +519,7 @@ describe("WorkspacesSidebar", () => {
     render(<Dashboard />);
 
     // Wait for dashboard to load
-    await screen.findByText("Overview");
+    await screen.findByText("Code");
 
     // Click create workspace button
     const createButton = await screen.findByLabelText(/create new workspace/i);

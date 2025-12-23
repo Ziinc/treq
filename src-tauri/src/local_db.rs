@@ -456,9 +456,16 @@ pub fn rebuild_workspaces_from_filesystem(repo_path: &str) -> Result<Vec<Workspa
 /// Get the current branch of a workspace
 /// Falls back to jj bookmark if git is in detached HEAD state
 fn get_workspace_branch(workspace_path: &str) -> Result<String, String> {
+    use crate::binary_paths;
     use std::process::Command;
 
-    let output = Command::new("git")
+    /// Helper function to create Command for a binary using cached path
+    fn command_for(binary: &str) -> Command {
+        let path = binary_paths::get_binary_path(binary).unwrap_or_else(|| binary.to_string());
+        Command::new(path)
+    }
+
+    let output = command_for("git")
         .current_dir(workspace_path)
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .output()
@@ -474,7 +481,7 @@ fn get_workspace_branch(workspace_path: &str) -> Result<String, String> {
 
         // Git is in detached HEAD - try to get branch from jj bookmark
         // jj bookmark list outputs: bookmark_name: <commit_id>
-        if let Ok(jj_output) = Command::new("jj")
+        if let Ok(jj_output) = command_for("jj")
             .current_dir(workspace_path)
             .args(["bookmark", "list", "--no-pager"])
             .output()

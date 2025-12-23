@@ -7,7 +7,13 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::Command;
 
-use crate::local_db;
+use crate::binary_paths;
+
+/// Helper function to create Command for a binary using cached path
+fn command_for(binary: &str) -> Command {
+    let path = binary_paths::get_binary_path(binary).unwrap_or_else(|| binary.to_string());
+    Command::new(path)
+}
 
 /// Error type for jj operations
 #[derive(Debug)]
@@ -109,7 +115,7 @@ pub fn is_jj_workspace(repo_path: &str) -> bool {
 
 /// Get git user.name and user.email from git config
 fn get_git_user_config(repo_path: &str) -> (String, String) {
-    let name = Command::new("git")
+    let name = command_for("git")
         .current_dir(repo_path)
         .args(["config", "--get", "user.name"])
         .output()
@@ -118,7 +124,7 @@ fn get_git_user_config(repo_path: &str) -> (String, String) {
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_else(|| "Treq User".to_string());
 
-    let email = Command::new("git")
+    let email = command_for("git")
         .current_dir(repo_path)
         .args(["config", "--get", "user.email"])
         .output()
@@ -343,7 +349,7 @@ pub fn create_workspace(
     let workspace_path_str = workspace_dir.to_string_lossy().to_string();
 
     // Create git worktree first (gives each workspace isolated checkout)
-    let mut git_cmd = std::process::Command::new("git");
+    let mut git_cmd = command_for("git");
     git_cmd.current_dir(repo_path)
         .arg("worktree")
         .arg("add");
@@ -379,7 +385,7 @@ pub fn create_workspace(
 
     if let Err(e) = jj_result {
         // Clean up: remove the git worktree we just created
-        let _ = std::process::Command::new("git")
+        let _ = command_for("git")
             .current_dir(repo_path)
             .args(&["worktree", "remove", "--force", &workspace_path_str])
             .output();
@@ -452,7 +458,7 @@ pub fn list_workspaces(repo_path: &str) -> Result<Vec<WorkspaceInfo>, JjError> {
 
 /// Get the current branch of a workspace
 fn get_workspace_branch(workspace_path: &str) -> Result<String, JjError> {
-    let output = Command::new("git")
+    let output = command_for("git")
         .current_dir(workspace_path)
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .output()
@@ -477,7 +483,7 @@ pub fn remove_workspace(repo_path: &str, workspace_path: &str) -> Result<(), JjE
     }
 
     // Try to remove git workspace using git worktree command
-    let output = std::process::Command::new("git")
+    let output = command_for("git")
         .current_dir(repo_path)
         .args(&["worktree", "remove", "--force", workspace_path])
         .output()
@@ -540,7 +546,7 @@ pub fn squash_to_workspace(
     let target_ref = format!("{}@", target_workspace_name);
 
     // Build the jj squash command
-    let mut cmd = Command::new("jj");
+    let mut cmd = command_for("jj");
     cmd.current_dir(source_workspace_path);
     cmd.args(["squash", "--from", "@", "--into", &target_ref]);
 
@@ -573,7 +579,7 @@ pub fn squash_to_workspace(
 /// Get list of changed files in working copy using jj status
 /// This is faster than git status for large repos
 pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, JjError> {
-    let output = Command::new("jj")
+    let output = command_for("jj")
         .current_dir(workspace_path)
         .args(["status", "--no-pager"])
         .output()
@@ -631,7 +637,7 @@ pub fn jj_get_file_hunks(
     file_path: &str,
 ) -> Result<Vec<JjDiffHunk>, JjError> {
     // Use jj diff --git to get hunks in git-compatible format
-    let output = Command::new("jj")
+    let output = command_for("jj")
         .current_dir(workspace_path)
         .args(["diff", "--git", "--no-pager", "--", file_path])
         .output()
@@ -703,7 +709,7 @@ pub fn jj_get_file_lines(
 ) -> Result<JjFileLines, JjError> {
     let content = if from_parent {
         // Get file from parent commit using git show
-        let output = Command::new("git")
+        let output = command_for("git")
             .current_dir(workspace_path)
             .args(["show", &format!("HEAD:{}", file_path)])
             .output()
@@ -746,7 +752,7 @@ pub fn jj_get_file_lines(
 /// Restore a file to parent state (discard changes)
 /// Uses CLI as jj-lib mutation APIs are complex
 pub fn jj_restore_file(workspace_path: &str, file_path: &str) -> Result<String, JjError> {
-    let output = Command::new("jj")
+    let output = command_for("jj")
         .current_dir(workspace_path)
         .args(["restore", file_path])
         .output()
@@ -763,7 +769,7 @@ pub fn jj_restore_file(workspace_path: &str, file_path: &str) -> Result<String, 
 
 /// Restore all changes
 pub fn jj_restore_all(workspace_path: &str) -> Result<String, JjError> {
-    let output = Command::new("jj")
+    let output = command_for("jj")
         .current_dir(workspace_path)
         .args(["restore"])
         .output()
@@ -785,7 +791,7 @@ pub fn jj_set_bookmark(
     bookmark_name: &str,
     revision: &str,
 ) -> Result<(), JjError> {
-    let output = Command::new("jj")
+    let output = command_for("jj")
         .current_dir(workspace_path)
         .args(["bookmark", "set", bookmark_name, "-r", revision])
         .output()
@@ -849,7 +855,7 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     let branch = git_branch;
 
     // Now commit with message (sets message on current change and creates new empty change)
-    let commit = Command::new("jj")
+    let commit = command_for("jj")
         .current_dir(workspace_path)
         .args(["commit", "-m", message])
         .output()
@@ -866,7 +872,7 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
         .map_err(|e| JjError::IoError(format!("Failed to advance bookmark '{}': {}", branch, e)))?;
 
     // Checkout the branch in git to avoid detached HEAD
-    let checkout = Command::new("git")
+    let checkout = command_for("git")
         .current_dir(&repo_path)
         .args(["checkout", &branch])
         .output();
@@ -906,7 +912,7 @@ pub fn jj_split(
     let branch = git_branch;
 
     // Build and execute the jj split command
-    let mut cmd = Command::new("jj");
+    let mut cmd = command_for("jj");
     cmd.current_dir(workspace_path);
     cmd.args(["split", "-r", "@", "-m", message]);
     for path in &file_paths {
@@ -926,7 +932,7 @@ pub fn jj_split(
         .map_err(|e| JjError::IoError(format!("Failed to advance bookmark '{}': {}", branch, e)))?;
 
     // Checkout the branch in git to avoid detached HEAD
-    let checkout = Command::new("git")
+    let checkout = command_for("git")
         .current_dir(&repo_path)
         .args(["checkout", &branch])
         .output();
@@ -943,7 +949,7 @@ pub fn jj_rebase_onto(
     workspace_path: &str,
     target_branch: &str,
 ) -> Result<JjRebaseResult, JjError> {
-    let output = Command::new("jj")
+    let output = command_for("jj")
         .current_dir(workspace_path)
         .args(["rebase", "-d", target_branch])
         .output()
@@ -973,7 +979,7 @@ pub fn jj_rebase_onto(
 
 /// Get list of conflicted files from jj status
 pub fn get_conflicted_files(workspace_path: &str) -> Result<Vec<String>, JjError> {
-    let output = Command::new("jj")
+    let output = command_for("jj")
         .current_dir(workspace_path)
         .args(["status", "--no-pager"])
         .output()
@@ -1017,7 +1023,7 @@ fn parse_conflicted_files(status: &str) -> Result<Vec<String>, JjError> {
 /// Checks git symbolic-ref for origin/HEAD, falls back to checking for main/master
 pub fn get_default_branch(repo_path: &str) -> Result<String, JjError> {
     // Try origin/HEAD first
-    let output = Command::new("git")
+    let output = command_for("git")
         .current_dir(repo_path)
         .args(["symbolic-ref", "refs/remotes/origin/HEAD"])
         .output()
@@ -1034,7 +1040,7 @@ pub fn get_default_branch(repo_path: &str) -> Result<String, JjError> {
 
     // Fallback: check for main or master branches
     for branch in &["main", "master"] {
-        let check = Command::new("git")
+        let check = command_for("git")
             .current_dir(repo_path)
             .args(["rev-parse", "--verify", branch])
             .output();
@@ -1050,7 +1056,7 @@ pub fn get_default_branch(repo_path: &str) -> Result<String, JjError> {
 
 /// Push changes to remote using jj git push
 pub fn jj_push(workspace_path: &str) -> Result<String, JjError> {
-    let output = Command::new("jj")
+    let output = command_for("jj")
         .current_dir(workspace_path)
         .args(["git", "push"])
         .output()
@@ -1070,7 +1076,7 @@ pub fn jj_push(workspace_path: &str) -> Result<String, JjError> {
 /// Fetches from origin and rebases current workspace onto tracking branch
 pub fn jj_pull(workspace_path: &str) -> Result<String, JjError> {
     // First, fetch from remote
-    let fetch_output = Command::new("jj")
+    let fetch_output = command_for("jj")
         .current_dir(workspace_path)
         .args(["git", "fetch"])
         .output()
@@ -1096,7 +1102,7 @@ pub fn jj_pull(workspace_path: &str) -> Result<String, JjError> {
 
     // Rebase onto the tracking branch (branch@origin)
     let tracking_branch = format!("{}@origin", branch_name);
-    let rebase_output = Command::new("jj")
+    let rebase_output = command_for("jj")
         .current_dir(workspace_path)
         .args(["rebase", "-d", &tracking_branch])
         .output()
@@ -1140,7 +1146,7 @@ pub fn jj_get_log(workspace_path: &str, target_branch: &str) -> Result<JjLogResu
         "bookmarks.map(|b| b.name()).join(\",\") ++ \"\\n\""
     );
 
-    let output = Command::new("jj")
+    let output = command_for("jj")
         .current_dir(workspace_path)
         .args([
             "log",

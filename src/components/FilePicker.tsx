@@ -21,7 +21,7 @@ export const FilePicker: React.FC<FilePickerProps> = ({
 }) => {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<FileSearchResult[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [_isLoading, setIsLoading] = useState(false);
 
   const debouncedQuery = useDebounce(query, 150);
 

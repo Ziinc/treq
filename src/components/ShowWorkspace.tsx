@@ -12,7 +12,6 @@ import {
   setWorkspaceTargetBranch,
   jjGetChangedFiles,
   createSession,
-  ptyWrite,
 } from "../lib/api";
 import { getStatusBgColor } from "../lib/git-status-colors";
 import { parseJjChangedFiles, type ParsedFileChange } from "../lib/git-utils";
@@ -29,7 +28,6 @@ import {
   type ChangesDiffViewerHandle,
 } from "./ChangesDiffViewer";
 import { FileBrowser } from "./FileBrowser";
-import { CommitGraph } from "./CommitGraph";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import { Button } from "./ui/button";
 import { useToast } from "./ui/toast";
@@ -51,14 +49,16 @@ import {
   Loader2,
   GitBranch,
   MoreVertical,
-  GitMerge,
   Upload,
   AlertTriangle,
-  ArrowDownToLine,
   ArrowRight,
   File,
   Folder,
   Trash2,
+  Search,
+  Code2,
+  GitCompareArrows,
+  FolderTree,
 } from "lucide-react";
 import { TargetBranchSelector } from "./TargetBranchSelector";
 import { cn } from "../lib/utils";
@@ -71,7 +71,7 @@ interface ShowWorkspaceProps {
   mainRepoBranch?: string | null;
   initialSelectedFile: string | null;
   onDeleteWorkspace?: (workspace: Workspace) => void;
-  allWorkspaces: Workspace[];
+  onOpenFilePicker?: () => void;
   onSessionCreated?: (session: SessionCreationInfo) => void;
 }
 
@@ -81,7 +81,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   mainRepoBranch,
   initialSelectedFile,
   onDeleteWorkspace,
-  allWorkspaces,
+  onOpenFilePicker,
   onSessionCreated,
 }) {
   const workingDirectory = workspace?.workspace_path || repositoryPath || "";
@@ -119,15 +119,10 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [rebasing, setRebasing] = useState(false);
 
-  // Stub git info values - these would need JJ equivalents
-  const mainTreePath = null;
-  const maintreeBranchName = null;
-
   // Show overview tab by default for main repo, changes tab for workspaces
   const [activeTab, setActiveTab] = useState("overview");
 
   // Files list expansion state
-  const [isFilesExpanded, setIsFilesExpanded] = useState(false);
 
   useEffect(() => {
     // Fetch root directory listing
@@ -139,12 +134,9 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
           return !relativePath.includes("/");
         });
         setRootEntries(rootOnly);
-        // Reset expansion state when workspace changes
-        setIsFilesExpanded(false);
       })
       .catch(() => {
         setRootEntries([]);
-        setIsFilesExpanded(false);
       });
 
     // Fetch README.md
@@ -206,6 +198,17 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
     }
   }, [activeTab, workingDirectory]);
 
+  // Handle file selection from Cmd+P (or other external sources)
+  useEffect(() => {
+    if (initialSelectedFile) {
+      setInitialSelectedFileForBrowser(initialSelectedFile);
+      // Extract parent directory from file path
+      const parentDir = initialSelectedFile.substring(0, initialSelectedFile.lastIndexOf('/'));
+      setInitialExpandedDir(parentDir);
+      setActiveTab("files");
+    }
+  }, [initialSelectedFile]);
+
   const handleTargetBranchSelect = useCallback(
     async (branch: string) => {
       if (branch === targetBranch || !workspace) return;
@@ -222,7 +225,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
         if (result.has_conflicts) {
           addToast({
             title: "Rebase completed with conflicts",
-            description: `${result.conflicted_files.length} file(s) have conflicts. Resolve them in the Changes tab.`,
+            description: `${result.conflicted_files.length} file(s) have conflicts. Resolve them in the Review tab.`,
             type: "warning",
           });
         } else if (result.success) {
@@ -291,23 +294,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
     [workingDirectory]
   );
 
-  // Note: Git merge/push operations removed - these would need JJ equivalents
-  const handleMergeIntoMaintree = useCallback(async () => {
-    addToast({
-      title: "Not Implemented",
-      description: "Merge operations need JJ equivalents",
-      type: "error",
-    });
-  }, [addToast]);
-
-  const handleUpdateFromMaintree = useCallback(async () => {
-    addToast({
-      title: "Not Implemented",
-      description: "Update operations need JJ equivalents",
-      type: "error",
-    });
-  }, [addToast]);
-
   const handlePushToRemote = useCallback(async () => {
     addToast({
       title: "Not Implemented",
@@ -350,9 +336,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
         );
         const sessionRepoPath = effectiveRepoPath || workingDirectory;
 
-        // Construct PTY session ID
-        const ptySessionId = `session-${dbSessionId}`;
-
         // Notify parent with pending prompt to be sent after Claude initializes
         // (ConsolidatedTerminal will create the PTY session when it mounts)
         onSessionCreated?.({
@@ -393,9 +376,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
         );
         const sessionRepoPath = effectiveRepoPath || workingDirectory;
 
-        // Construct PTY session ID
-        const ptySessionId = `session-${dbSessionId}`;
-
         // Notify parent with pending prompt to be sent after Claude initializes
         // (ConsolidatedTerminal will create the PTY session when it mounts)
         onSessionCreated?.({
@@ -424,13 +404,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
     [workingDirectory, effectiveRepoPath, workspace, addToast, onSessionCreated]
   );
 
-  // Compute displayed entries for files list
-  const MAX_VISIBLE_FILES = 10;
-  const displayedEntries = isFilesExpanded
-    ? rootEntries
-    : rootEntries.slice(0, MAX_VISIBLE_FILES);
-  const hasMoreEntries = rootEntries.length > MAX_VISIBLE_FILES;
-  const hiddenCount = rootEntries.length - MAX_VISIBLE_FILES;
+  // Display all files in the list
+  const displayedEntries = rootEntries;
 
   // Status pip component for file/directory indicators
   const StatusPip = ({ status }: { status?: string }) =>
@@ -448,28 +423,24 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
       <div className="flex-shrink-0 bg-background px-4 py-2 border-b border-border">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="changes">Changes</TabsTrigger>
-            <TabsTrigger value="files">Files</TabsTrigger>
+            <TabsTrigger value="overview" className="inline-flex items-center">
+              <Code2 className="w-4 h-4 mr-1.5" />
+              Code
+            </TabsTrigger>
+            <TabsTrigger value="changes" className="inline-flex items-center">
+              <GitCompareArrows className="w-4 h-4 mr-1.5" />
+              Review
+            </TabsTrigger>
+            <TabsTrigger value="files" className="inline-flex items-center">
+              <FolderTree className="w-4 h-4 mr-1.5" />
+              Files
+            </TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
       <div className="flex-1 overflow-auto">
         {activeTab === "overview" ? (
           <div className="p-4 space-y-6">
-            {/* Commit Graph */}
-            {workingDirectory && (
-              <div className="border rounded-lg p-4">
-                <h3 className="text-sm font-medium mb-3">Commit History</h3>
-                <CommitGraph
-                  workspacePath={workingDirectory}
-                  targetBranch={workspace ? targetBranch : defaultBranch}
-                  workspaceBranch={workspace ? workspace.branch_name : defaultBranch}
-                  repoPath={effectiveRepoPath}
-                  allWorkspaces={allWorkspaces}
-                />
-              </div>
-            )}
             {/* Conflicts Alert */}
             {conflictedFiles.length > 0 && (
               <div
@@ -497,6 +468,22 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
                 </div>
               </div>
             )}
+            {/* File Search Input */}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={onOpenFilePicker}
+                className="flex items-center gap-3 px-4 py-2 border border-border rounded-lg bg-background hover:bg-muted/30 transition-colors text-left w-full max-w-xs"
+              >
+                <Search className="w-4 h-4 text-muted-foreground" />
+                <span className="flex-1 text-sm text-muted-foreground">
+                  Go to file
+                </span>
+                <kbd className="px-2 py-1 bg-muted text-muted-foreground rounded text-xs font-mono">
+                  ⌘P
+                </kbd>
+              </button>
+            </div>
             {/* File Listing */}
             <div className="border rounded-lg divide-y divide-border">
               {displayedEntries.map((entry) => (
@@ -520,15 +507,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
                   <StatusPip status={getEntryStatus(entry)} />
                 </button>
               ))}
-              {hasMoreEntries && !isFilesExpanded && (
-                <button
-                  type="button"
-                  onClick={() => setIsFilesExpanded(true)}
-                  className="flex items-center justify-center gap-2 px-4 py-2 text-sm w-full hover:bg-muted/60 transition text-muted-foreground"
-                >
-                  Show {hiddenCount} more
-                </button>
-              )}
               {rootEntries.length === 0 && (
                 <div className="px-4 py-8 text-center text-sm text-muted-foreground">
                   No files found
