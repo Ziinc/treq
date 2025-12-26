@@ -119,6 +119,9 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
     // Migration: Add target_branch column if it doesn't exist
     let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN target_branch TEXT", []);
 
+    // Migration: Add has_conflicts column if it doesn't exist
+    let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN has_conflicts BOOLEAN DEFAULT 0", []);
+
     // Create sessions table
     conn.execute(
         "CREATE TABLE IF NOT EXISTS sessions (
@@ -271,7 +274,7 @@ fn get_connection(repo_path: &str) -> Result<Connection, String> {
 pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch FROM workspaces ORDER BY branch_name COLLATE NOCASE ASC")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch, COALESCE(has_conflicts, 0) FROM workspaces ORDER BY branch_name COLLATE NOCASE ASC")
         .map_err(|e| format!("Failed to prepare workspaces query: {}", e))?;
 
     let workspaces = stmt
@@ -285,6 +288,7 @@ pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
                 created_at: row.get(4)?,
                 metadata: row.get(5)?,
                 target_branch: row.get(6)?,
+                has_conflicts: row.get::<_, i64>(7)? != 0,
             })
         })
         .map_err(|e| format!("Failed to query workspaces: {}", e))?;
@@ -348,6 +352,52 @@ pub fn update_workspace_target_branch(
         params![target_branch, id],
     )
     .map_err(|e| format!("Failed to update workspace target branch: {}", e))?;
+    Ok(())
+}
+
+/// Get all workspaces targeting a specific branch
+pub fn get_workspaces_by_target_branch(
+    repo_path: &str,
+    target_branch: &str,
+) -> Result<Vec<Workspace>, String> {
+    let conn = get_connection(repo_path)?;
+    let mut stmt = conn
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch, COALESCE(has_conflicts, 0) FROM workspaces WHERE target_branch = ?1 ORDER BY branch_name COLLATE NOCASE ASC")
+        .map_err(|e| format!("Failed to prepare workspaces query: {}", e))?;
+
+    let workspaces = stmt
+        .query_map([target_branch], |row| {
+            Ok(Workspace {
+                id: row.get(0)?,
+                repo_path: repo_path.to_string(),
+                workspace_name: row.get(1)?,
+                workspace_path: row.get(2)?,
+                branch_name: row.get(3)?,
+                created_at: row.get(4)?,
+                metadata: row.get(5)?,
+                target_branch: row.get(6)?,
+                has_conflicts: row.get::<_, i64>(7)? != 0,
+            })
+        })
+        .map_err(|e| format!("Failed to query workspaces: {}", e))?;
+
+    workspaces
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+/// Update the has_conflicts flag for a workspace
+pub fn update_workspace_has_conflicts(
+    repo_path: &str,
+    id: i64,
+    has_conflicts: bool,
+) -> Result<(), String> {
+    let conn = get_connection(repo_path)?;
+    conn.execute(
+        "UPDATE workspaces SET has_conflicts = ?1 WHERE id = ?2",
+        params![has_conflicts as i64, id],
+    )
+    .map_err(|e| format!("Failed to update workspace has_conflicts: {}", e))?;
     Ok(())
 }
 
@@ -443,6 +493,7 @@ pub fn rebuild_workspaces_from_filesystem(repo_path: &str) -> Result<Vec<Workspa
             created_at: Utc::now().to_rfc3339(),
             metadata: None,
             target_branch: None,
+            has_conflicts: false,
         });
     }
 
@@ -1119,6 +1170,106 @@ mod tests {
             "Workspace should still exist in database after rebuild"
         );
         assert_eq!(workspaces_after[0].id, id);
+
+        // Cleanup
+        if let Some(initialized) = INITIALIZED_DBS.get() {
+            initialized.lock().unwrap().remove(repo_path);
+        }
+    }
+
+    #[test]
+    fn test_get_workspaces_by_target_branch() {
+        // Given: workspaces with different target_branches
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let repo_path = temp_dir.path().to_str().unwrap();
+
+        // Add workspace targeting "main"
+        let id1 = add_workspace(
+            repo_path,
+            "workspace-1".to_string(),
+            format!("{}/.treq/workspaces/workspace-1", repo_path),
+            "branch-a".to_string(),
+            None,
+        )
+        .expect("add_workspace 1 should succeed");
+        update_workspace_target_branch(repo_path, id1, "main")
+            .expect("update target branch should succeed");
+
+        // Add workspace targeting "develop"
+        let id2 = add_workspace(
+            repo_path,
+            "workspace-2".to_string(),
+            format!("{}/.treq/workspaces/workspace-2", repo_path),
+            "branch-b".to_string(),
+            None,
+        )
+        .expect("add_workspace 2 should succeed");
+        update_workspace_target_branch(repo_path, id2, "develop")
+            .expect("update target branch should succeed");
+
+        // Add workspace targeting "main"
+        let id3 = add_workspace(
+            repo_path,
+            "workspace-3".to_string(),
+            format!("{}/.treq/workspaces/workspace-3", repo_path),
+            "branch-c".to_string(),
+            None,
+        )
+        .expect("add_workspace 3 should succeed");
+        update_workspace_target_branch(repo_path, id3, "main")
+            .expect("update target branch should succeed");
+
+        // When: get_workspaces_by_target_branch("main")
+        let main_workspaces =
+            get_workspaces_by_target_branch(repo_path, "main").expect("query should succeed");
+
+        // Then: only returns workspaces targeting "main"
+        assert_eq!(main_workspaces.len(), 2);
+        assert_eq!(main_workspaces[0].id, id1);
+        assert_eq!(main_workspaces[1].id, id3);
+        assert_eq!(main_workspaces[0].target_branch, Some("main".to_string()));
+        assert_eq!(main_workspaces[1].target_branch, Some("main".to_string()));
+
+        // Cleanup
+        if let Some(initialized) = INITIALIZED_DBS.get() {
+            initialized.lock().unwrap().remove(repo_path);
+        }
+    }
+
+    #[test]
+    fn test_update_workspace_has_conflicts() {
+        // Given: workspace with has_conflicts = false
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let repo_path = temp_dir.path().to_str().unwrap();
+
+        let id = add_workspace(
+            repo_path,
+            "test-workspace".to_string(),
+            format!("{}/.treq/workspaces/test-workspace", repo_path),
+            "test-branch".to_string(),
+            None,
+        )
+        .expect("add_workspace should succeed");
+
+        // Verify initial state
+        let workspaces = get_workspaces(repo_path).expect("get_workspaces should succeed");
+        assert_eq!(workspaces[0].has_conflicts, false);
+
+        // When: update_workspace_has_conflicts(id, true)
+        update_workspace_has_conflicts(repo_path, id, true)
+            .expect("update should succeed");
+
+        // Then: workspace.has_conflicts = true
+        let workspaces = get_workspaces(repo_path).expect("get_workspaces should succeed");
+        assert_eq!(workspaces[0].has_conflicts, true);
+
+        // When: update_workspace_has_conflicts(id, false)
+        update_workspace_has_conflicts(repo_path, id, false)
+            .expect("update should succeed");
+
+        // Then: workspace.has_conflicts = false
+        let workspaces = get_workspaces(repo_path).expect("get_workspaces should succeed");
+        assert_eq!(workspaces[0].has_conflicts, false);
 
         // Cleanup
         if let Some(initialized) = INITIALIZED_DBS.get() {

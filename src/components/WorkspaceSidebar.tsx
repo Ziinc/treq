@@ -9,6 +9,7 @@ import {
   GitBranch,
   Cloud,
   Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import {
   Tooltip,
@@ -184,6 +185,9 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                   >
                     {getWorkspaceTitle(workspace)}
                   </span>
+                  {workspace.has_conflicts && (
+                    <AlertTriangle className="w-3 h-3 text-destructive shrink-0" />
+                  )}
                   <StatusPill path={workspace.workspace_path} />
                 </div>
               ))}

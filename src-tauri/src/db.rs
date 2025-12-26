@@ -14,6 +14,7 @@ pub struct Workspace {
     pub created_at: String,
     pub metadata: Option<String>,
     pub target_branch: Option<String>,
+    pub has_conflicts: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

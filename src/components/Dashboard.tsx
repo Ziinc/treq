@@ -45,6 +45,7 @@ import {
   getSessions,
   setSessionModel,
   jjIsWorkspace,
+  checkAndRebaseWorkspaces,
 } from "../lib/api";
 import { Loader2 } from "lucide-react";
 
@@ -191,11 +192,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
 
   // Update window title when repo changes
   useEffect(() => {
-    const devSuffix = import.meta.env.DEV ? " - DEVELOPMENT" : "";
     if (repoName) {
-      getCurrentWindow().setTitle(`Treq - ${repoName}${devSuffix}`);
+      getCurrentWindow().setTitle(`Treq - ${repoName}`);
     } else {
-      getCurrentWindow().setTitle(`Treq - Git Workspace Manager${devSuffix}`);
+      getCurrentWindow().setTitle("Treq - Git Workspace Manager");
     }
   }, [repoName]);
 
@@ -322,6 +322,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
 
     const handleFocus = async () => {
       try {
+        // Trigger background rebase check (fire-and-forget)
+        checkAndRebaseWorkspaces(repoPath).catch((error) => {
+          console.error("Auto-rebase failed:", error);
+        });
+
         // Invalidate queries to refresh workspace data
         queryClient.invalidateQueries({
           queryKey: ["workspaces", repoPath],

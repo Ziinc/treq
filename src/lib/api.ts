@@ -11,6 +11,7 @@ export interface Workspace {
   created_at: string;
   metadata?: string;
   target_branch?: string | null;
+  has_conflicts: boolean;
 }
 
 export interface Session {
@@ -318,6 +319,9 @@ export const jjSetWorkspaceTarget = (
     workspacePath: workspace_path,
     targetBranch: target_branch,
   });
+
+export const checkAndRebaseWorkspaces = (repo_path: string): Promise<string> =>
+  invoke("check_and_rebase_workspaces", { repoPath: repo_path });
 
 // PTY API
 export const ptyCreateSession = (
