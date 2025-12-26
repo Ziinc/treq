@@ -191,10 +191,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
 
   // Update window title when repo changes
   useEffect(() => {
+    const devSuffix = import.meta.env.DEV ? " - DEVELOPMENT" : "";
     if (repoName) {
-      getCurrentWindow().setTitle(`Treq - ${repoName}`);
+      getCurrentWindow().setTitle(`Treq - ${repoName}${devSuffix}`);
     } else {
-      getCurrentWindow().setTitle("Treq - Git Workspace Manager");
+      getCurrentWindow().setTitle(`Treq - Git Workspace Manager${devSuffix}`);
     }
   }, [repoName]);
 
