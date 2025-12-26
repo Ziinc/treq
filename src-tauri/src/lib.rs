@@ -1,3 +1,4 @@
+mod auto_rebase;
 mod binary_paths;
 mod commands;
 mod db;
@@ -229,6 +230,7 @@ pub fn run() {
             commands::rebuild_workspaces,
             commands::update_workspace_metadata,
             commands::set_workspace_target_branch,
+            commands::check_and_rebase_workspaces,
             commands::ensure_workspace_indexed,
             commands::get_setting,
             commands::get_settings_batch,

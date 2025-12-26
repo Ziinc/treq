@@ -157,6 +157,31 @@ pub fn set_workspace_target_branch(
     Ok(rebase_result)
 }
 
+#[tauri::command]
+pub fn check_and_rebase_workspaces(repo_path: String) -> Result<String, String> {
+    let results = crate::auto_rebase::check_and_rebase_all(&repo_path)?;
+
+    let mut summary = String::new();
+    for result in &results {
+        summary.push_str(&format!(
+            "Target '{}': rebased {} workspace(s) - {}\n",
+            result.target_branch,
+            result.workspaces_rebased.len(),
+            if result.rebase_result.success {
+                "success"
+            } else {
+                "failed"
+            }
+        ));
+    }
+
+    if results.is_empty() {
+        summary.push_str("No workspaces with target branches to rebase\n");
+    }
+
+    Ok(summary)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,6 +253,7 @@ mod tests {
                     created_at: "2024-01-01T00:00:00Z".to_string(),
                     metadata: Some(r#"{"intent":"test"}"#.to_string()),
                     target_branch: None,
+                    has_conflicts: false,
                 }])
             });
 

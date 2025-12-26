@@ -112,7 +112,20 @@ pub fn jj_restore_all(workspace_path: String) -> Result<String, String> {
 
 #[tauri::command]
 pub fn jj_commit(workspace_path: String, message: String) -> Result<String, String> {
-    jj::jj_commit(&workspace_path, &message).map_err(|e| e.to_string())
+    let result = jj::jj_commit(&workspace_path, &message).map_err(|e| e.to_string())?;
+
+    // Trigger auto-rebase in background (fire-and-forget)
+    std::thread::spawn(move || {
+        // Derive repo path and get committed branch
+        if let Some(repo_path) = jj::derive_repo_path_from_workspace(&workspace_path) {
+            if let Ok(branch) = jj::get_workspace_branch(&workspace_path) {
+                // Fire and forget - don't block commit result on rebase
+                let _ = crate::auto_rebase::rebase_after_commit(&repo_path, &branch);
+            }
+        }
+    });
+
+    Ok(result)
 }
 
 #[tauri::command]

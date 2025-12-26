@@ -457,7 +457,7 @@ pub fn list_workspaces(repo_path: &str) -> Result<Vec<WorkspaceInfo>, JjError> {
 }
 
 /// Get the current branch of a workspace
-fn get_workspace_branch(workspace_path: &str) -> Result<String, JjError> {
+pub fn get_workspace_branch(workspace_path: &str) -> Result<String, JjError> {
     let output = command_for("git")
         .current_dir(workspace_path)
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
@@ -808,7 +808,7 @@ pub fn jj_set_bookmark(
 
 /// Derive repo_path from workspace_path
 /// Workspace paths are: {repo_path}/.treq/workspaces/{workspace_name}
-fn derive_repo_path_from_workspace(workspace_path: &str) -> Option<String> {
+pub fn derive_repo_path_from_workspace(workspace_path: &str) -> Option<String> {
     let path = Path::new(workspace_path);
 
     // Look for .treq/workspaces pattern in the path
@@ -837,7 +837,7 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     // First check what branch git is currently checked out at
     let rp = &repo_path;
 
-    let git_branch = get_workspace_branch(rp).map_err(|e| {
+    let git_branch = get_workspace_branch(workspace_path).map_err(|e| {
         JjError::IoError(format!(
             "Failed to determine current git branch: {}. Please checkout a branch before committing.",
             e
@@ -873,7 +873,7 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
 
     // Checkout the branch in git to avoid detached HEAD
     let checkout = command_for("git")
-        .current_dir(&repo_path)
+        .current_dir(workspace_path)
         .args(["checkout", &branch])
         .output();
     if let Err(e) = checkout {
@@ -895,7 +895,7 @@ pub fn jj_split(
         .unwrap_or_else(|| workspace_path.to_string());
 
     // Get and validate git branch (same as jj_commit)
-    let git_branch = get_workspace_branch(&repo_path).map_err(|e| {
+    let git_branch = get_workspace_branch(workspace_path).map_err(|e| {
         JjError::IoError(format!(
             "Failed to determine current git branch: {}. Please checkout a branch before committing.",
             e
@@ -933,7 +933,7 @@ pub fn jj_split(
 
     // Checkout the branch in git to avoid detached HEAD
     let checkout = command_for("git")
-        .current_dir(&repo_path)
+        .current_dir(workspace_path)
         .args(["checkout", &branch])
         .output();
     if let Err(e) = checkout {
@@ -1017,6 +1017,96 @@ fn parse_conflicted_files(status: &str) -> Result<Vec<String>, JjError> {
     }
 
     Ok(conflicts)
+}
+
+/// Get the current commit ID for a branch/revision
+/// Uses: jj log -r <revision> --no-graph -T 'commit_id.short(12)'
+pub fn jj_get_commit_id(repo_path: &str, revision: &str) -> Result<String, JjError> {
+    let output = command_for("jj")
+        .current_dir(repo_path)
+        .args([
+            "log",
+            "-r",
+            revision,
+            "--no-graph",
+            "-T",
+            "commit_id.short(12)",
+        ])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(JjError::IoError(format!(
+            "Failed to get commit ID for '{}': {}",
+            revision, stderr
+        )));
+    }
+
+    let commit_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    if commit_id.is_empty() {
+        return Err(JjError::IoError(format!(
+            "No commit found for revision '{}'",
+            revision
+        )));
+    }
+
+    Ok(commit_id)
+}
+
+/// Rebase multiple workspaces onto their shared target branch
+/// Uses: jj rebase -s 'roots(target..branch1)' -s 'roots(target..branch2)' ... -d target
+pub fn jj_rebase_workspaces_onto_target(
+    repo_path: &str,
+    target_branch: &str,
+    workspace_branches: Vec<String>,
+) -> Result<JjRebaseResult, JjError> {
+    if workspace_branches.is_empty() {
+        return Ok(JjRebaseResult {
+            success: true,
+            message: "No workspaces to rebase".to_string(),
+            has_conflicts: false,
+            conflicted_files: Vec::new(),
+        });
+    }
+
+    let mut args = vec!["rebase".to_string()];
+
+    // Add -s argument for each workspace
+    for branch in &workspace_branches {
+        args.push("-s".to_string());
+        args.push(format!("roots({}..{})", target_branch, branch));
+    }
+
+    // Add destination
+    args.push("-d".to_string());
+    args.push(target_branch.to_string());
+
+    let output = command_for("jj")
+        .current_dir(repo_path)
+        .args(&args)
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined_message = format!("{}{}", stdout, stderr);
+
+    // Check for conflicts in output
+    let has_conflicts = combined_message.to_lowercase().contains("conflict");
+
+    // Get conflicted files if there are conflicts
+    // Note: For multi-workspace rebase, we'd need to check each workspace individually
+    // For now, we'll return an empty list since this is a bulk operation
+    let conflicted_files = Vec::new();
+
+    Ok(JjRebaseResult {
+        success: output.status.success(),
+        message: combined_message,
+        has_conflicts,
+        conflicted_files,
+    })
 }
 
 /// Get the default branch of the repository (main/master)
