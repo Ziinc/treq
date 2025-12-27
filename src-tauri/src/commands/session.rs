@@ -1,5 +1,4 @@
-use crate::db::Session;
-use crate::local_db;
+use crate::local_db::{self, Session};
 
 #[tauri::command]
 pub fn create_session(
