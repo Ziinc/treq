@@ -6,9 +6,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
-// ============================================================================
-// Core Types
-// ============================================================================
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Workspace {
@@ -33,22 +30,9 @@ pub struct Session {
     pub model: Option<String>,
 }
 
-// ============================================================================
-// Database Trait for Testing
-// ============================================================================
-
-
-// ============================================================================
-// Database Initialization Tracker
-// ============================================================================
-
-/// Track which local databases have been initialized to avoid repeated schema checks
 static INITIALIZED_DBS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
-// ============================================================================
-// Git Cache Types
-// ============================================================================
-
+/// Cached file information for workspace file indexing
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CachedWorkspaceFile {
     pub id: i64,
@@ -58,13 +42,18 @@ pub struct CachedWorkspaceFile {
     pub is_directory: bool,
     pub parent_path: Option<String>,
     pub cached_at: String,
-    pub mtime: Option<i64>, // File modification time (unix timestamp)
+    /// File modification time (unix timestamp)
+    pub mtime: Option<i64>,
 }
 
 pub fn get_local_db_path(repo_path: &str) -> PathBuf {
     Path::new(repo_path).join(".treq").join("local.db")
 }
 
+/// Initialize the local database for a repository.
+///
+/// Creates tables for workspaces, sessions, changed_files, and workspace_files.
+/// Handles schema migrations for backward compatibility.
 pub fn init_local_db(repo_path: &str) -> Result<(), String> {
     let db_path = get_local_db_path(repo_path);
     if let Some(parent) = db_path.parent() {
@@ -74,7 +63,6 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
 
     let conn = Connection::open(db_path).map_err(|e| format!("Failed to open local db: {}", e))?;
 
-    // Create workspaces table
     conn.execute(
         "CREATE TABLE IF NOT EXISTS workspaces (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -95,13 +83,9 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
     )
     .map_err(|e| format!("Failed to create workspaces branch index: {}", e))?;
 
-    // Migration: Add target_branch column if it doesn't exist
     let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN target_branch TEXT", []);
-
-    // Migration: Add has_conflicts column if it doesn't exist
     let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN has_conflicts BOOLEAN DEFAULT 0", []);
 
-    // Create sessions table
     conn.execute(
         "CREATE TABLE IF NOT EXISTS sessions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -116,7 +100,6 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
     )
     .map_err(|e| format!("Failed to create sessions table: {}", e))?;
 
-    // Migration: Rename worktree_id to workspace_id in sessions table
     let has_worktree_col: Result<i64, _> = conn.query_row(
         "SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name='worktree_id'",
         [],
@@ -125,7 +108,6 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
 
     if let Ok(count) = has_worktree_col {
         if count > 0 {
-            // Recreate the sessions table with new column name
             conn.execute(
                 "CREATE TABLE sessions_new (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -154,7 +136,6 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
         }
     }
 
-    // Migration: Add model column if it doesn't exist
     let _ = conn.execute("ALTER TABLE sessions ADD COLUMN model TEXT", []);
 
     conn.execute(
@@ -163,13 +144,11 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
     )
     .map_err(|e| format!("Failed to create sessions workspace index: {}", e))?;
 
-    // Migration: Drop old tables if they exist
     let _ = conn.execute("DROP TABLE IF EXISTS git_file_hunks", []);
     let _ = conn.execute("DROP TABLE IF EXISTS git_changed_files", []);
     let _ = conn.execute("DROP INDEX IF EXISTS idx_git_file_hunks_workspace", []);
     let _ = conn.execute("DROP INDEX IF EXISTS idx_git_changed_files_workspace", []);
 
-    // Create consolidated changes cache table
     conn.execute(
         "CREATE TABLE IF NOT EXISTS changed_files (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -192,7 +171,6 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
     )
     .map_err(|e| format!("Failed to create changed_files workspace index: {}", e))?;
 
-    // Create workspace files cache table
     conn.execute(
         "CREATE TABLE IF NOT EXISTS workspace_files (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -210,7 +188,6 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
     )
     .map_err(|e| format!("Failed to create workspace_files table: {}", e))?;
 
-    // Migration: Add mtime column if it doesn't exist
     let _ = conn.execute("ALTER TABLE workspace_files ADD COLUMN mtime INTEGER", []);
 
     conn.execute(
@@ -228,15 +205,18 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Get a database connection for a repository.
+///
+/// Ensures the database is initialized before returning the connection.
+/// Uses a cache to avoid re-initializing databases that have already been set up in this session.
 fn get_connection(repo_path: &str) -> Result<Connection, String> {
-    // Check if this database has already been initialized
     let initialized = INITIALIZED_DBS.get_or_init(|| Mutex::new(HashSet::new()));
     let db_key = repo_path.to_string();
 
     {
         let guard = initialized.lock().unwrap();
         if !guard.contains(&db_key) {
-            drop(guard); // Release lock before calling init
+            drop(guard);
             init_local_db(repo_path)?;
             initialized.lock().unwrap().insert(db_key);
         }
@@ -245,10 +225,6 @@ fn get_connection(repo_path: &str) -> Result<Connection, String> {
     let db_path = get_local_db_path(repo_path);
     Connection::open(db_path).map_err(|e| format!("Failed to open local db: {}", e))
 }
-
-// ============================================================================
-// Workspaces Functions
-// ============================================================================
 
 pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
     let conn = get_connection(repo_path)?;
@@ -401,7 +377,10 @@ pub fn get_workspace_last_rebased_commit(
     Ok(None)
 }
 
-/// Update last rebased commit in workspace metadata
+/// Update last rebased commit in workspace metadata.
+///
+/// Retrieves the current metadata, parses it as JSON, updates the
+/// last_rebased_target_commit field, and serializes it back to the database.
 pub fn update_workspace_last_rebased_commit(
     repo_path: &str,
     id: i64,
@@ -409,14 +388,12 @@ pub fn update_workspace_last_rebased_commit(
 ) -> Result<(), String> {
     let conn = get_connection(repo_path)?;
 
-    // Get current metadata
     let current_metadata: Option<String> = conn
         .query_row("SELECT metadata FROM workspaces WHERE id = ?1", [id], |row| {
             row.get(0)
         })
         .ok();
 
-    // Parse, update, serialize
     let mut meta: serde_json::Value = current_metadata
         .and_then(|m| serde_json::from_str(&m).ok())
         .unwrap_or(serde_json::json!({}));
@@ -435,24 +412,26 @@ pub fn update_workspace_last_rebased_commit(
     Ok(())
 }
 
+/// Rebuild workspaces list from filesystem.
+///
+/// Scans the .treq/workspaces directory and adds any new workspaces to the database
+/// that aren't already tracked. Returns existing workspaces from database if the
+/// workspaces directory doesn't exist. Only adds directories with a .git file.
 pub fn rebuild_workspaces_from_filesystem(repo_path: &str) -> Result<Vec<Workspace>, String> {
     let workspaces_dir = Path::new(repo_path).join(".treq").join("workspaces");
 
-    // Get existing workspaces from database before rebuilding
     let existing_workspaces = get_workspaces(repo_path)?;
     let existing_paths: std::collections::HashSet<String> = existing_workspaces
         .iter()
         .map(|w| w.workspace_path.clone())
         .collect();
 
-    // If the workspaces directory doesn't exist, return existing workspaces from database
     if !workspaces_dir.exists() {
         return Ok(existing_workspaces);
     }
 
     let mut workspaces = Vec::new();
 
-    // Read the workspaces directory
     let entries = fs::read_dir(&workspaces_dir)
         .map_err(|e| format!("Failed to read workspaces directory: {}", e))?;
 
@@ -460,12 +439,10 @@ pub fn rebuild_workspaces_from_filesystem(repo_path: &str) -> Result<Vec<Workspa
         let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
         let path = entry.path();
 
-        // Skip if not a directory
         if !path.is_dir() {
             continue;
         }
 
-        // Get the workspace name from the directory name
         let workspace_name = path
             .file_name()
             .and_then(|n| n.to_str())
@@ -477,21 +454,17 @@ pub fn rebuild_workspaces_from_filesystem(repo_path: &str) -> Result<Vec<Workspa
             .ok_or_else(|| "Invalid workspace path".to_string())?
             .to_string();
 
-        // Skip if workspace already exists in database
         if existing_paths.contains(&workspace_path) {
             continue;
         }
 
-        // Check if it's actually a git workspace (has .git file)
         let git_file = path.join(".git");
         if !git_file.exists() {
             continue;
         }
 
-        // Get the branch name from git
         let branch_name = get_workspace_branch(&workspace_path).unwrap_or(workspace_name.clone());
 
-        // Add to database (only if not already present)
         let id = add_workspace(
             repo_path,
             workspace_name.clone(),
@@ -513,15 +486,16 @@ pub fn rebuild_workspaces_from_filesystem(repo_path: &str) -> Result<Vec<Workspa
         });
     }
 
-    // Combine existing workspaces with newly found ones
     let mut all_workspaces = existing_workspaces;
     all_workspaces.extend(workspaces);
 
     Ok(all_workspaces)
 }
 
-/// Get the current branch of a workspace
-/// Falls back to jj bookmark if git is in detached HEAD state
+/// Get the current branch of a workspace.
+///
+/// Falls back to jj bookmark if git is in detached HEAD state.
+/// Returns the branch name, or "HEAD" if in detached state with no bookmark.
 fn get_workspace_branch(workspace_path: &str) -> Result<String, String> {
     use crate::binary_paths;
     use std::process::Command;
@@ -541,13 +515,10 @@ fn get_workspace_branch(workspace_path: &str) -> Result<String, String> {
     if output.status.success() {
         let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
-        // If not detached, return the branch name
         if branch != "HEAD" {
             return Ok(branch);
         }
 
-        // Git is in detached HEAD - try to get branch from jj bookmark
-        // jj bookmark list outputs: bookmark_name: <commit_id>
         if let Ok(jj_output) = command_for("jj")
             .current_dir(workspace_path)
             .args(["bookmark", "list", "--no-pager"])
@@ -555,13 +526,11 @@ fn get_workspace_branch(workspace_path: &str) -> Result<String, String> {
         {
             if jj_output.status.success() {
                 let bookmarks = String::from_utf8_lossy(&jj_output.stdout);
-                // Find the first non-remote bookmark (local bookmarks don't have @)
                 for line in bookmarks.lines() {
                     let line = line.trim();
                     if line.is_empty() || line.contains('@') {
                         continue;
                     }
-                    // Extract bookmark name (before the colon)
                     if let Some(name) = line.split(':').next() {
                         let name = name.trim();
                         if !name.is_empty() {
@@ -572,16 +541,11 @@ fn get_workspace_branch(workspace_path: &str) -> Result<String, String> {
             }
         }
 
-        // Still detached with no bookmark - return HEAD
         Ok(branch)
     } else {
         Err(String::from_utf8_lossy(&output.stderr).to_string())
     }
 }
-
-// ============================================================================
-// Sessions Functions
-// ============================================================================
 
 pub fn get_sessions(repo_path: &str) -> Result<Vec<Session>, String> {
     let conn = get_connection(repo_path)?;
@@ -720,8 +684,12 @@ pub fn get_cached_directory_listing(
         .map_err(|e| e.to_string())
 }
 
-/// Search workspace files by filename or path
-/// Returns files (not directories) matching the query string
+/// Search workspace files by filename or path.
+///
+/// Returns files (not directories) matching the query string using case-insensitive
+/// LIKE matching against the relative_path. Results are ordered by:
+/// - Exact filename matches first
+/// - Then by path length (shorter = more relevant)
 pub fn search_workspace_files(
     repo_path: &str,
     workspace_id: Option<i64>,
@@ -734,8 +702,6 @@ pub fn search_workspace_files(
 
     let conn = get_connection(repo_path)?;
 
-    // Use LIKE for simple substring matching (case-insensitive)
-    // Query matches against relative_path (includes filename)
     let search_pattern = format!("%{}%", query.to_lowercase());
 
     let mut stmt = conn
@@ -746,15 +712,12 @@ pub fn search_workspace_files(
                AND is_directory = 0
                AND LOWER(relative_path) LIKE ?2
              ORDER BY
-               -- Prioritize exact filename matches
                CASE WHEN LOWER(relative_path) LIKE ?3 THEN 0 ELSE 1 END,
-               -- Then by path length (shorter = more relevant)
                LENGTH(relative_path)
              LIMIT ?4",
         )
         .map_err(|e| format!("Failed to prepare search query: {}", e))?;
 
-    // Pattern for "ends with filename match" (file at end of path)
     let filename_pattern = format!("%/{}", query.to_lowercase());
 
     let files = stmt
@@ -780,7 +743,10 @@ pub fn search_workspace_files(
         .map_err(|e| e.to_string())
 }
 
-/// Batch update all cached files for a workspace (replaces all)
+/// Batch update all cached files for a workspace.
+///
+/// Deletes all existing entries for the workspace and inserts the provided files.
+/// This is an all-or-nothing replacement operation performed within a transaction.
 pub fn sync_workspace_files(
     repo_path: &str,
     workspace_id: Option<i64>,
@@ -791,14 +757,12 @@ pub fn sync_workspace_files(
         .transaction()
         .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
-    // Delete existing entries for this workspace
     tx.execute(
         "DELETE FROM workspace_files WHERE workspace_id IS ?1",
         params![workspace_id],
     )
     .map_err(|e| format!("Failed to delete existing files: {}", e))?;
 
-    // Insert new entries
     for file in &files {
         tx.execute(
             "INSERT INTO workspace_files
@@ -831,11 +795,9 @@ mod tests {
 
     #[test]
     fn test_add_workspace_persists_to_db() {
-        // Setup: Create temp directory as repo_path
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let repo_path = temp_dir.path().to_str().unwrap();
 
-        // Create workspace directory structure (simulating jj::create_workspace)
         let workspace_dir = temp_dir
             .path()
             .join(".treq")
@@ -844,13 +806,11 @@ mod tests {
         fs::create_dir_all(&workspace_dir).expect("Failed to create workspace dir");
         let workspace_path = workspace_dir.to_str().unwrap().to_string();
 
-        // Verify directory was created
         assert!(
             workspace_dir.exists(),
             "Workspace directory should exist"
         );
 
-        // Add workspace to database
         let id = add_workspace(
             repo_path,
             "test-workspace".to_string(),
@@ -862,10 +822,8 @@ mod tests {
 
         assert!(id > 0, "Workspace ID should be positive");
 
-        // Retrieve workspaces from database
         let workspaces = get_workspaces(repo_path).expect("get_workspaces should succeed");
 
-        // Verify workspace exists in database
         assert_eq!(workspaces.len(), 1, "Should have exactly 1 workspace");
         assert_eq!(workspaces[0].id, id);
         assert_eq!(workspaces[0].workspace_name, "test-workspace");
@@ -877,7 +835,6 @@ mod tests {
         );
         assert!(workspaces[0].target_branch.is_none());
 
-        // Verify database file was created
         let db_path = get_local_db_path(repo_path);
         assert!(
             db_path.exists(),
@@ -885,8 +842,6 @@ mod tests {
             db_path
         );
 
-        // Cleanup: TempDir automatically cleans up on drop
-        // Clear INITIALIZED_DBS cache for this repo to avoid test pollution
         if let Some(initialized) = INITIALIZED_DBS.get() {
             initialized.lock().unwrap().remove(repo_path);
         }
@@ -897,7 +852,6 @@ mod tests {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let repo_path = temp_dir.path().to_str().unwrap();
 
-        // Add two workspaces
         let id1 = add_workspace(
             repo_path,
             "workspace-1".to_string(),
@@ -916,18 +870,14 @@ mod tests {
         )
         .expect("add_workspace 2 should succeed");
 
-        // Retrieve and verify
         let workspaces = get_workspaces(repo_path).expect("get_workspaces should succeed");
 
         assert_eq!(workspaces.len(), 2, "Should have 2 workspaces");
-
-        // Workspaces are ordered by branch_name (branch-a, branch-b)
         assert_eq!(workspaces[0].id, id1);
         assert_eq!(workspaces[0].workspace_name, "workspace-1");
         assert_eq!(workspaces[1].id, id2);
         assert_eq!(workspaces[1].workspace_name, "workspace-2");
 
-        // Cleanup
         if let Some(initialized) = INITIALIZED_DBS.get() {
             initialized.lock().unwrap().remove(repo_path);
         }
@@ -935,11 +885,9 @@ mod tests {
 
     #[test]
     fn test_workspace_persists_after_reload() {
-        // This test simulates the user's bug: workspace appears initially but disappears after reload
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let repo_path = temp_dir.path().to_str().unwrap();
 
-        // Step 1: Add workspace
         let id = add_workspace(
             repo_path,
             "test-workspace".to_string(),
@@ -949,18 +897,14 @@ mod tests {
         )
         .expect("add_workspace should succeed");
 
-        // Step 2: Verify workspace exists (this simulates the UI showing it initially)
         let workspaces = get_workspaces(repo_path).expect("get_workspaces should succeed");
         assert_eq!(workspaces.len(), 1, "Workspace should exist initially");
         assert_eq!(workspaces[0].id, id);
 
-        // Step 3: Simulate app reload by clearing the INITIALIZED_DBS cache
-        // This forces the next get_connection to re-initialize
         if let Some(initialized) = INITIALIZED_DBS.get() {
             initialized.lock().unwrap().remove(repo_path);
         }
 
-        // Step 4: Verify workspace still exists after "reload" (this is where the bug appears)
         let workspaces_after_reload =
             get_workspaces(repo_path).expect("get_workspaces should succeed after reload");
         assert_eq!(
@@ -974,7 +918,6 @@ mod tests {
             "test-workspace"
         );
 
-        // Cleanup
         if let Some(initialized) = INITIALIZED_DBS.get() {
             initialized.lock().unwrap().remove(repo_path);
         }
@@ -982,11 +925,9 @@ mod tests {
 
     #[test]
     fn test_rebuild_workspaces_deletes_workspace_without_git_file() {
-        // This test reproduces the actual bug: rebuild_workspaces deletes workspaces without .git files
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let repo_path = temp_dir.path().to_str().unwrap();
 
-        // Step 1: Create workspace directory structure WITHOUT .git file
         let workspace_dir = temp_dir
             .path()
             .join(".treq")
@@ -995,7 +936,6 @@ mod tests {
         fs::create_dir_all(&workspace_dir).expect("Failed to create workspace dir");
         let workspace_path = workspace_dir.to_str().unwrap().to_string();
 
-        // Step 2: Add workspace to database (simulating create_workspace)
         let id = add_workspace(
             repo_path,
             "test-workspace".to_string(),
@@ -1005,24 +945,19 @@ mod tests {
         )
         .expect("add_workspace should succeed");
 
-        // Step 3: Verify workspace exists in database
         let workspaces = get_workspaces(repo_path).expect("get_workspaces should succeed");
         assert_eq!(workspaces.len(), 1, "Workspace should exist before rebuild");
         assert_eq!(workspaces[0].id, id);
 
-        // Step 4: Call rebuild_workspaces (this is what Dashboard does on reload)
         let rebuilt =
             rebuild_workspaces_from_filesystem(repo_path).expect("rebuild should succeed");
 
-        // EXPECTED: Workspace should still be present (even without .git file)
-        // ACTUAL: Workspace is deleted because it has no .git file (THIS IS THE BUG!)
         assert_eq!(
             rebuilt.len(),
             1,
             "Workspace should persist after rebuild, even without .git file"
         );
 
-        // Step 5: Verify workspace still exists in database after rebuild
         let workspaces_after = get_workspaces(repo_path).expect("get_workspaces should succeed");
         assert_eq!(
             workspaces_after.len(),
@@ -1031,7 +966,6 @@ mod tests {
         );
         assert_eq!(workspaces_after[0].id, id);
 
-        // Cleanup
         if let Some(initialized) = INITIALIZED_DBS.get() {
             initialized.lock().unwrap().remove(repo_path);
         }
@@ -1039,11 +973,9 @@ mod tests {
 
     #[test]
     fn test_get_workspaces_by_target_branch() {
-        // Given: workspaces with different target_branches
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let repo_path = temp_dir.path().to_str().unwrap();
 
-        // Add workspace targeting "main"
         let id1 = add_workspace(
             repo_path,
             "workspace-1".to_string(),
@@ -1055,7 +987,6 @@ mod tests {
         update_workspace_target_branch(repo_path, id1, "main")
             .expect("update target branch should succeed");
 
-        // Add workspace targeting "develop"
         let id2 = add_workspace(
             repo_path,
             "workspace-2".to_string(),
@@ -1067,7 +998,6 @@ mod tests {
         update_workspace_target_branch(repo_path, id2, "develop")
             .expect("update target branch should succeed");
 
-        // Add workspace targeting "main"
         let id3 = add_workspace(
             repo_path,
             "workspace-3".to_string(),
@@ -1079,18 +1009,15 @@ mod tests {
         update_workspace_target_branch(repo_path, id3, "main")
             .expect("update target branch should succeed");
 
-        // When: get_workspaces_by_target_branch("main")
         let main_workspaces =
             get_workspaces_by_target_branch(repo_path, "main").expect("query should succeed");
 
-        // Then: only returns workspaces targeting "main"
         assert_eq!(main_workspaces.len(), 2);
         assert_eq!(main_workspaces[0].id, id1);
         assert_eq!(main_workspaces[1].id, id3);
         assert_eq!(main_workspaces[0].target_branch, Some("main".to_string()));
         assert_eq!(main_workspaces[1].target_branch, Some("main".to_string()));
 
-        // Cleanup
         if let Some(initialized) = INITIALIZED_DBS.get() {
             initialized.lock().unwrap().remove(repo_path);
         }
@@ -1098,7 +1025,6 @@ mod tests {
 
     #[test]
     fn test_update_workspace_has_conflicts() {
-        // Given: workspace with has_conflicts = false
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let repo_path = temp_dir.path().to_str().unwrap();
 
@@ -1111,27 +1037,21 @@ mod tests {
         )
         .expect("add_workspace should succeed");
 
-        // Verify initial state
         let workspaces = get_workspaces(repo_path).expect("get_workspaces should succeed");
         assert_eq!(workspaces[0].has_conflicts, false);
 
-        // When: update_workspace_has_conflicts(id, true)
         update_workspace_has_conflicts(repo_path, id, true)
             .expect("update should succeed");
 
-        // Then: workspace.has_conflicts = true
         let workspaces = get_workspaces(repo_path).expect("get_workspaces should succeed");
         assert_eq!(workspaces[0].has_conflicts, true);
 
-        // When: update_workspace_has_conflicts(id, false)
         update_workspace_has_conflicts(repo_path, id, false)
             .expect("update should succeed");
 
-        // Then: workspace.has_conflicts = false
         let workspaces = get_workspaces(repo_path).expect("get_workspaces should succeed");
         assert_eq!(workspaces[0].has_conflicts, false);
 
-        // Cleanup
         if let Some(initialized) = INITIALIZED_DBS.get() {
             initialized.lock().unwrap().remove(repo_path);
         }
