@@ -1,177 +1,299 @@
 # Treq - AI Agent Reference
 
-This document provides essential information for AI agents working with the Treq codebase.
+Essential information for AI agents working with the Treq codebase.
 
 ## Project Overview
 
-Treq is a modern desktop application for managing Git worktrees with integrated terminal, diff viewer, and AI editor launcher support. Built with Tauri 2.0 (Rust backend) and React/TypeScript (frontend).
+Treq is a desktop application for managing JJ (Jujutsu) workspaces with integrated terminal, diff viewer, and AI editor. Built with Tauri 2.0 (Rust) and React/TypeScript.
+
+**Key**: Uses JJ on top of Git in colocated mode for advanced workspace management with Git compatibility.
 
 ## Development Commands
 
 ```bash
 npm install                   # Install dependencies
-npm run build                 # Build frontend (production)
-npm run tauri build           # Build complete production app
+npm run build                 # Build frontend
+npm run tauri build           # Build app
 
-# DO NOT RUN DEV COMMANDS - ONLY DEVELOPER SHOULD RUN THESE
-npm run tauri dev            # Run in dev mode (Rust + frontend dev server)
+# Testing
+npm test                      # Watch mode
+npm run test:run              # Single run
+npm run test:ui               # Vitest UI
+cargo test                    # Rust tests
+
+# DO NOT RUN - DEVELOPER ONLY
+npm run tauri dev            # Dev mode
 ```
-
-
 
 ## Architecture
 
-### Backend Structure (src-tauri/src/)
+### Backend (src-tauri/src/)
 
-- **lib.rs** - Main entry point, Tauri command registry, global state (AppState.db, AppState.pty_manager)
-- **db.rs** - SQLite database layer with dual-database architecture:
-  - **Local DB** (`.treq/local.db` in each repo): worktrees, commands (repo-specific data)
-  - **Global DB** (`~/Library/Application Support/.../treq.db`): settings (application-level config)
-- **git.rs** - Git CLI wrapper for worktree operations (create, list, remove, status)
-- **git_ops.rs** - Git operations (commit, push, pull, fetch, log)
-- **pty.rs** - PTY management using portable-pty, background threads for output streaming
-- **shell.rs** - Shell command execution and application launching (platform-specific)
+**Core:**
+- **lib.rs** - Entry point, command registry, AppState
+- **main.rs** - Calls `treq_lib::run()`
+- **db.rs** - Global SQLite (settings, sessions, git_cache, file_views)
+- **local_db.rs** - Per-repo SQLite (workspaces, sessions, changed_files, workspace_files)
 
-### Frontend Structure (src/)
+**JJ Integration:**
+- **jj.rs** - JJ VCS operations (workspaces, diffs, commits, rebase, push/pull)
+- **auto_rebase.rs** - Auto-rebase for target branch tracking
+- **file_indexer.rs** - Workspace file indexing via `jj file list`
 
-**Core Components:**
-- **App.tsx** - Root with QueryClient provider, routing, and global state
-- **components/Dashboard.tsx** - Main UI controller (repository dashboard)
-- **components/ShowWorkspace.tsx** - Workspace viewer with overview, changes, and files tabs
-- **components/StagingDiffViewer.tsx** - Git staging area with file tree and diff view
-- **components/AnnotatableDiffViewer.tsx** - Diff viewer with annotation support
-- **components/ui/** - Shadcn-based UI primitives
+**Infrastructure:**
+- **pty.rs** - PTY management with portable-pty
+- **binary_paths.rs** - Binary detection (git, jj, claude)
 
-**Key Modules:**
-- **lib/api.ts** - Type-safe Tauri command wrappers
-- **hooks/** - React hooks for keyboard shortcuts, terminal management, etc.
+**Commands (src-tauri/src/commands/):**
+- **workspace.rs** - Workspace CRUD, auto-rebase, indexing
+- **jj_commands.rs** - JJ command wrappers
+- **session.rs** - AI session management
+- **settings.rs** - App/repo settings
+- **filesystem.rs** - File operations
+- **file_view.rs** - File view tracking
+- **pty_commands.rs** - Terminal sessions
+- **binary.rs** - Binary detection
+- **git_watcher.rs** - File change detection
 
-### Communication Flow
+### Frontend (src/)
 
-1. **Commands (Request/Response)**: Frontend calls `invoke("command_name", args)` → Rust handler → returns `Result<T, String>`
-2. **Events (Backend → Frontend)**: Rust emits via `app.emit()` → Frontend listens with `listen()` (used for PTY output streaming)
+**Core:**
+- **App.tsx** - Root with providers (QueryClient, Theme, Terminal/Diff settings, Toast)
+- **Dashboard.tsx** - Main UI, auto-rebase on focus
+- **ShowWorkspace.tsx** - Workspace detail (Code/Review/Files tabs)
+
+**Navigation:**
+- **WorkspaceSidebar.tsx** - Workspace list, multi-select
+- **CommandPalette.tsx** - Cmd+K
+- **FilePicker.tsx** - Cmd+P
+- **BranchSwitcher.tsx** - Branch switching
+
+**Diff & Review:**
+- **ChangesDiffViewer.tsx** - Main diff viewer (2508 lines), code review
+- **ChangesSection.tsx** / **ConflictsSection.tsx** - File lists
+- **ReviewSummaryPanel.tsx** - Review summary
+- **FileBrowser.tsx** - File tree with virtualized code view
+
+**Terminal:**
+- **WorkspaceTerminalPane.tsx** - Terminal container
+- **terminal/** - ClaudeTerminalPanel, ShellTerminalPanel, ResizeDivider
+
+**Other:**
+- **lib/api.ts** - Type-safe Tauri wrappers
+- **hooks/** - Custom React hooks (theme, settings, keyboard, debounce)
+
+### Hooks (src/hooks/)
+
+- **useTheme.tsx** - Theme management
+- **useTerminalSettings.tsx** - Terminal font (8-32px)
+- **useDiffSettings.tsx** - Diff font (8-16px)
+- **useSettingsPreloader.tsx** - Batch settings preload
+- **useCachedWorkspaceChanges.ts** - Workspace cache
+- **useDebounce.ts** - Debounce
+- **useKeyboard.ts** - Shortcuts (j, k, p, n)
 
 ### Database Schema
 
-Treq uses a dual-database architecture to separate local repository data from global application settings:
+**Local DB (`.treq/local.db`)** - Per repository:
+- **workspaces** - id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch, has_conflicts
+- **sessions** - id, workspace_id, name, created_at, last_accessed, model
+- **changed_files** - id, workspace_id, file_path, workspace_status, is_untracked, hunks_json, updated_at
+- **workspace_files** - id, workspace_id, file_path, relative_path, is_directory, parent_path, cached_at, mtime
 
-#### Local Database (`.treq/local.db`)
-**Location**: `.treq/local.db` in each Git repository root
-**Purpose**: Repository-specific worktree and command history data
-**Tables**:
-- **worktrees**: id, repo_path, worktree_path, branch_name, created_at, metadata
-- **commands**: id, worktree_id, command, created_at, status, output
+**Global DB (`treq.db`)** - App-wide:
+- **settings** - key, value (theme, last_repo_path, etc.)
+- **sessions** - id, workspace_id, type, name, created_at, last_accessed, model (legacy)
+- **git_cache** - id, workspace_path, file_path, cache_type, data, updated_at
+- **file_views** - id, workspace_path, file_path, viewed_at, content_hash
 
-#### Global Database (`treq.db`)
-**Location**: `~/Library/Application Support/com.treq.app/treq.db` (macOS), `~/.local/share/com.treq.app/treq.db` (Linux), `%APPDATA%/com.treq.app/treq.db` (Windows)
-**Purpose**: Application-level settings and state shared across all repositories
-**Tables**:
-- **settings**: key, value (e.g., "last_repo_path", global preferences)
+## Key Patterns
 
-## Key Design Patterns
+- **JJ + Git Colocated** - JJ workspaces in `.treq/workspaces/` as git worktrees with `.jj` dirs
+- **Dual Database** - Global (`treq.db`) for app settings, Local (`.treq/local.db`) per repo
+- **Auto-Rebase** - Workspaces track `target_branch`, rebase on updates, store `has_conflicts`
+- **File Indexing** - `jj file list` → hierarchical DB tree for fast search/browsing
+- **Command Modules** - Commands in `commands/` submodules, re-exported via `mod.rs`
+- **Session Caching** - `OnceLock<Mutex<HashSet>>` prevents redundant indexing
+- **Binary Detection** - Caches git/jj/claude paths in `OnceLock`, extends PTY PATH
+- **State (Frontend)** - React Query for server state, Context API for UI state
+- **PTY** - portable-pty with background threads, HashMap storage, UTF-8 handling
 
-### State Management
-- TanStack Query for server state (auto-refresh every 30s)
-- React hooks for local UI state
-- No global state library - data flows through React Query cache
+## Key Commands (Condensed)
 
-### Error Handling
-- All Tauri commands return `Result<T, String>` in Rust
-- Frontend uses toast notifications for user-facing errors
-- Git command errors captured and displayed inline
+**Workspace:** get_workspaces, create_workspace, delete_workspace_from_db, rebuild_workspaces, set_workspace_target_branch, check_and_rebase_workspaces, ensure_workspace_indexed
 
-### PTY/Terminal Pattern
-1. Frontend creates session: `ptyCreateSession(sessionId, workingDir, shell)`
-2. Backend spawns PTY, starts reader thread emitting to `pty-data-{sessionId}`
-3. Frontend listens to event, renders in ghostty-web terminal
-4. User input → `ptyWrite(sessionId, data)` → written to PTY stdin
-5. Cleanup: `ptyClose(sessionId)` when component unmounts
+**JJ:** jj_create_workspace, jj_get_changed_files, jj_get_file_hunks, jj_restore_file, jj_commit, jj_split, jj_rebase_onto, jj_get_conflicted_files, jj_push, jj_pull, jj_get_log
 
-### Diff Viewer Pattern
-- File tree is lazy-loaded (directories expanded on click)
-- `git diff` output fetched per file on selection
-- Monaco Editor in read-only mode with diff syntax highlighting
+**PTY:** pty_create_session, pty_write, pty_resize, pty_close, pty_session_exists
 
-## Important Implementation Notes
+**Session:** create_session, get_sessions, update_session_access, delete_session, get_session_model, set_session_model
 
-### Dependencies
-- **react-window**: Always use v2 API (not v1). Use `List` component with `rowComponent`, `rowHeight`, `rowCount`, and `listRef` props. The v1 `VariableSizeList` API is deprecated.
+**Settings:** get_setting, get_settings_batch, set_setting, get_repo_setting, set_repo_setting
 
-### Git Operations
-- All git commands execute in main repository path or specific worktree path
-- Worktree creation uses `git worktree add` with `-b` flag for new branches
-- Status tracking uses `git status --porcelain` for parsing
+**File System:** read_file, list_directory, list_directory_cached, search_workspace_files
 
-### Terminal Sessions
-- Each terminal has unique session ID (typically worktree path or random UUID)
-- Sessions persist until explicitly closed or app shutdown
-- PTY sessions run in background threads with bidirectional communication
-- Proper resize functionality: Store `MasterPty` reference in session for resizing
+**File View:** mark_file_viewed, unmark_file_viewed, get_viewed_files, clear_all_viewed_files
 
-### Cross-Platform Compatibility
-- Shell detection: Unix uses `$SHELL` env var, Windows defaults to PowerShell
-- Path handling: All paths converted to platform-specific format
-- Editor launching: Uses platform-specific commands (open on macOS, start on Windows, xdg-open on Linux)
+**Binary:** detect_binaries
 
-### Monaco Editor Integration
-- Loaded from CDN (not bundled) via `@monaco-editor/react`
-- Syntax highlighting for all major languages
-- Diff view uses Monaco's built-in diff editor component
+## Code Style
+
+### Rust
+- **Use rustdoc comments (`///`)** for public functions, structs, enums, modules
+- **No inline comments (`//`)** - code should be self-documenting
+- Include `# Arguments` and `# Returns` sections in rustdoc
+
+```rust
+/// Creates a new JJ workspace at the specified path.
+///
+/// # Arguments
+/// * `repo_path` - Path to the repository root
+/// * `workspace_name` - Name for the new workspace
+/// * `branch` - Branch to create or checkout
+///
+/// # Returns
+/// Returns the workspace path on success, or an error string on failure.
+pub fn create_workspace(repo_path: &str, workspace_name: &str, branch: &str) -> Result<String, String> {
+    let workspace_path = format!("{}/{}", repo_path, workspace_name);
+    initialize_jj_workspace(&workspace_path, branch)?;
+    Ok(workspace_path)
+}
+```
+
+### TypeScript/JavaScript
+- **No JSDoc tags** (`@param`, `@returns`, `@type`) - TypeScript types are sufficient
+- **No inline comments (`//`)** - code should be self-documenting
+- Only comment complex business logic that isn't obvious
+
+```typescript
+// GOOD
+export async function createWorkspace(
+  repoPath: string,
+  workspaceName: string,
+  branch: string
+): Promise<number> {
+  return await invoke<number>("create_workspace", {
+    repoPath,
+    workspaceName,
+    branch,
+  });
+}
+
+// BAD - Don't do this
+/**
+ * Creates a workspace
+ * @param repoPath - The repository path
+ * @returns The workspace ID
+ */
+export async function createWorkspace(...) { ... }
+```
+
+## Implementation Notes
+
+**JJ Operations:**
+- Commands run in workspace/repo path
+- Uses `Workspace::init_external_git()` for colocated mode
+- No staging area - working copy only
+- `jj_commit` for direct commits, `jj_split` for partial
+
+**Terminal:**
+- Unique session IDs (workspace path or UUID)
+- Background threads with bidirectional communication
+- Store `MasterPty` reference for resizing
+
+**Cross-Platform:**
+- Shell: `$SHELL` on Unix, PowerShell on Windows
+- Paths: Platform-specific conversion
+- Launch: `open` (macOS), `start` (Windows), `xdg-open` (Linux)
+
+**Dependencies:**
+- **react-window** - Use v2 API (`List` with `rowComponent`, `rowHeight`, `rowCount`, `listRef`)
+- **Monaco Editor** - CDN loaded via `@monaco-editor/react`
+
+**Frontend:**
+- Lazy load `ShowWorkspace` with `Suspense`
+- Heavy memoization (`memo`, `useMemo`, `useCallback`)
+- Virtualization with `react-window`
+- View modes: `"session" | "show-workspace" | "settings"`
+
+**Keyboard:**
+- Cmd+K: Command Palette
+- Cmd+P: File Picker
+- Cmd+J: Toggle Terminal
+- Cmd+N: New Workspace
+
+## Testing (Recommended, Not Mandatory)
+
+**Frameworks:**
+- Frontend: Vitest + Testing Library
+- Backend: Rust + mockall + tempfile
+
+**Organization:**
+- Frontend: `/test/*.test.{ts,tsx}`
+- Backend: `#[cfg(test)] mod tests` inline
+
+**Patterns:**
+
+Frontend:
+```typescript
+import { render, screen, waitFor } from "../test/test-utils";
+import userEvent from "@testing-library/user-event";
+import { vi } from "vitest";
+
+vi.mock("../src/lib/api", () => ({
+  getWorkspaces: vi.fn().mockResolvedValue([]),
+}));
+
+test("component test", async () => {
+  const user = userEvent.setup();
+  render(<Component />);
+  await user.click(screen.getByRole("button"));
+  await waitFor(() => expect(screen.getByText("Result")).toBeInTheDocument());
+});
+```
+
+Backend:
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_function() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().to_str().unwrap();
+        // Test implementation
+    }
+}
+```
+
+**Guidelines:**
+- Write tests before or alongside features
+- Frontend: `/test/` directory
+- Backend: `#[cfg(test)]` in same file
+- Mock Tauri APIs (see `test/setup.ts`)
+- Use `test-utils.tsx` render (includes providers)
+- Clean up resources
 
 ## Common Tasks
 
-### Adding a New Tauri Command
-1. Define Rust function with `#[tauri::command]` attribute in `src-tauri/src/lib.rs` (or relevant module)
-2. Add to `invoke_handler` in `lib.rs` setup
-3. Add TypeScript wrapper in `src/lib/api.ts` with proper types
-4. Use in components via `invoke()` or wrap in React Query hook
+**Add Tauri Command:**
+1. Define in command module with `#[tauri::command]`
+2. Export from module, ensure `commands/mod.rs` re-exports
+3. Add to `lib.rs` `invoke_handler`
+4. Add TypeScript wrapper in `src/lib/api.ts`
 
-### Adding a New UI Component
-1. Create in `src/components/` (or `src/components/ui/` for reusable primitives)
-2. Use Tailwind classes for styling
-3. Follow patterns: TypeScript with explicit prop types, forwardRef for ref-able components
+**Add Component:**
+1. Create in `src/components/`
+2. Use Tailwind, explicit prop types, forwardRef if needed
+3. Consider test in `/test/`
 
-### Modifying Git Operations
-- Git logic is in `src-tauri/src/git.rs` and `src-tauri/src/git_ops.rs`
-- All commands use `std::process::Command` with proper error handling
-- Return structured data (serde-serializable structs), not raw strings
+**Modify JJ Operations:**
+- Edit `src-tauri/src/jj.rs` or `src-tauri/src/commands/jj_commands.rs`
+- Return serde-serializable structs
 
-### Debugging
-- Frontend: Browser DevTools (Tauri opens with DevTools in dev mode)
-- Backend: Rust logs via `println!` or `eprintln!` appear in terminal
-- Database: Use SQLite CLI to inspect databases:
-  - Local DB: `.treq/local.db` in each repository (worktrees, commands)
-  - Global DB: `treq.db` in app data directory (settings)
-
-## Key Tauri Commands
-
-### Database
-- **Worktrees**: `get_worktrees()`, `add_worktree_to_db()`, `delete_worktree_from_db()`
-- **Settings**: `get_setting()`, `set_setting()`, `get_repo_setting()`, `set_repo_setting()`, `delete_repo_setting()`
-- **Sessions**: `create_session()`, `get_sessions()`, `update_session_access()`, `delete_session()`
-- **Cache**: `get_git_cache()`, `set_git_cache()`, `invalidate_git_cache()`, `preload_worktree_git_data()`
-- **File Views**: `mark_file_viewed()`, `unmark_file_viewed()`, `get_viewed_files()`, `clear_all_viewed_files()`
-
-### Git
-- **Worktrees**: `git_create_worktree()`, `git_list_worktrees()`, `git_remove_worktree()`
-- **Status**: `git_get_status()`, `git_get_branch_info()`, `git_get_branch_divergence()`, `git_get_changed_files()`, `git_get_file_hunks()`
-- **Diffs**: `git_get_file_diff()`, `git_get_diff_between_branches()`, `git_get_commits_between_branches()`
-- **Staging**: `git_stage_file()`, `git_unstage_file()`, `git_add_all()`, `git_unstage_all()`, `git_stage_hunk()`, `git_stage_selected_lines()`
-- **Commits**: `git_commit()`, `git_commit_amend()`, `git_log()`
-- **Remote**: `git_push()`, `git_push_force()`, `git_pull()`, `git_fetch()`
-- **Branches**: `git_list_branches()`, `git_merge()`, `git_get_current_branch()`
-- **Changes**: `git_discard_all_changes()`, `git_stash_push_files()`, `git_stash_pop()`
-
-### PTY
-- `pty_create_session()`, `pty_write()`, `pty_resize()`, `pty_close()`, `pty_session_exists()`
-
-### File System
-- `read_file()`, `list_directory()`, `calculate_directory_size()`
-
-### Shell
-- `shell_execute(command, working_dir)`
-
-### Plans
-- `save_executed_plan_command()`, `get_worktree_plans_command()`, `save_plan_to_file()`, `load_plans_from_files()`
-
-
+**Debug:**
+- Frontend: DevTools
+- Backend: `println!`/`eprintln!`
+- Database: SQLite CLI on `.treq/local.db` or `treq.db`

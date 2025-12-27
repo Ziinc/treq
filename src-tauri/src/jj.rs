@@ -996,6 +996,53 @@ pub fn jj_get_commit_id(repo_path: &str, revision: &str) -> Result<String, JjErr
     Ok(commit_id)
 }
 
+/// Rebase using a revset expression
+/// Runs from specified directory to ensure correct commit resolution
+/// Sets jj bookmark after successful rebase
+pub fn jj_rebase_with_revset(
+    working_dir: &str,
+    revset: &str,
+    target_branch: &str,
+    branch_name: &str,
+) -> Result<JjRebaseResult, JjError> {
+    let output = command_for("jj")
+        .current_dir(working_dir)
+        .args(["rebase", "-s", revset, "-d", target_branch])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined_message = format!("{}{}", stdout, stderr);
+
+    // Check for conflicts in output
+    let has_conflicts = combined_message.to_lowercase().contains("conflict");
+
+    // Get conflicted files if there are conflicts
+    let conflicted_files = if has_conflicts {
+        get_conflicted_files(working_dir)
+            .unwrap_or_else(|_| Vec::new())
+    } else {
+        Vec::new()
+    };
+
+    // Set jj bookmark after successful rebase
+    if output.status.success() {
+        jj_set_bookmark(working_dir, branch_name, "@")
+            .map_err(|e| JjError::IoError(format!(
+                "Rebase succeeded but failed to set bookmark '{}': {}",
+                branch_name, e
+            )))?;
+    }
+
+    Ok(JjRebaseResult {
+        success: output.status.success(),
+        message: combined_message,
+        has_conflicts,
+        conflicted_files,
+    })
+}
+
 /// Rebase multiple workspaces onto their shared target branch
 /// Uses: jj rebase -s 'roots(target..branch1)' -s 'roots(target..branch2)' ... -d target
 pub fn jj_rebase_workspaces_onto_target(

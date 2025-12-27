@@ -322,18 +322,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
 
     const handleFocus = async () => {
       try {
-        // Trigger background rebase check (fire-and-forget)
-        checkAndRebaseWorkspaces(repoPath).catch((error) => {
-          console.error("Auto-rebase failed:", error);
-        });
-
-        // Invalidate queries to refresh workspace data
-        queryClient.invalidateQueries({
-          queryKey: ["workspaces", repoPath],
-        });
+        // Trigger background rebase check for all workspaces
+        const result = await checkAndRebaseWorkspaces(repoPath);
+        if (result.rebased && result.has_conflicts) {
+          addToast({
+            title: "Some workspaces have conflicts",
+            description: "Check workspace details for more information",
+            type: "warning",
+          });
+        }
       } catch (error) {
-        console.error("Failed to refresh workspace info on window focus:", error);
+        console.error("Auto-rebase failed:", error);
       }
+
+      // Invalidate queries to refresh workspace data
+      queryClient.invalidateQueries({
+        queryKey: ["workspaces", repoPath],
+      });
     };
 
     const unlistenFocus = getCurrentWindow().onFocusChanged(

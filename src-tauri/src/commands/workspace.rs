@@ -76,13 +76,22 @@ pub fn create_workspace(
         .to_string();
 
     // Add to database
-    local_db::add_workspace(
+    let workspace_id = local_db::add_workspace(
         &repo_path,
         workspace_name,
         workspace_path,
         branch_name,
         metadata,
-    )
+    )?;
+
+    // Initialize rebase flag to empty string (will trigger rebase on first view)
+    local_db::update_workspace_last_rebased_commit(
+        &repo_path,
+        workspace_id,
+        "",  // Empty = will trigger rebase
+    )?;
+
+    Ok(workspace_id)
 }
 
 #[tauri::command]
@@ -156,29 +165,80 @@ pub fn set_workspace_target_branch(
     Ok(rebase_result)
 }
 
+/// Result structure for single workspace rebase (serializable for frontend)
+#[derive(serde::Serialize)]
+pub struct SingleRebaseResult {
+    pub rebased: bool,
+    pub success: bool,
+    pub has_conflicts: bool,
+    pub conflicted_files: Vec<String>,
+    pub message: String,
+}
+
 #[tauri::command]
-pub fn check_and_rebase_workspaces(repo_path: String) -> Result<String, String> {
-    let results = crate::auto_rebase::check_and_rebase_all(&repo_path)?;
+pub fn check_and_rebase_workspaces(
+    repo_path: String,
+    workspace_id: Option<i64>,
+    default_branch: Option<String>,
+    force: Option<bool>,
+) -> Result<SingleRebaseResult, String> {
+    // If workspace_id provided, only rebase that workspace
+    if let Some(id) = workspace_id {
+        let default_branch = default_branch.unwrap_or_else(|| "main".to_string());
+        let force = force.unwrap_or(false);
+        let result = crate::auto_rebase::rebase_single_workspace(&repo_path, id, &default_branch, force)?;
 
-    let mut summary = String::new();
-    for result in &results {
-        summary.push_str(&format!(
-            "Target '{}': rebased {} workspace(s) - {}\n",
-            result.target_branch,
-            result.workspaces_rebased.len(),
-            if result.rebase_result.success {
-                "success"
-            } else {
-                "failed"
-            }
-        ));
+        match result {
+            Some(auto_result) => Ok(SingleRebaseResult {
+                rebased: true,
+                success: auto_result.rebase_result.success,
+                has_conflicts: auto_result.rebase_result.has_conflicts,
+                conflicted_files: auto_result.rebase_result.conflicted_files,
+                message: auto_result.rebase_result.message,
+            }),
+            None => Ok(SingleRebaseResult {
+                rebased: false,
+                success: true,
+                has_conflicts: false,
+                conflicted_files: vec![],
+                message: "No rebase needed".to_string(),
+            }),
+        }
+    } else {
+        // Existing behavior: rebase all workspaces
+        let results = crate::auto_rebase::check_and_rebase_all(&repo_path)?;
+
+        // Aggregate results
+        let rebased_count: usize = results.iter().map(|r| r.workspaces_rebased.len()).sum();
+        let any_conflicts = results.iter().any(|r| r.rebase_result.has_conflicts);
+        let all_success = results.iter().all(|r| r.rebase_result.success);
+
+        let mut summary = String::new();
+        for result in &results {
+            summary.push_str(&format!(
+                "Target '{}': rebased {} workspace(s) - {}\n",
+                result.target_branch,
+                result.workspaces_rebased.len(),
+                if result.rebase_result.success {
+                    "success"
+                } else {
+                    "failed"
+                }
+            ));
+        }
+
+        if results.is_empty() {
+            summary.push_str("No workspaces with target branches to rebase\n");
+        }
+
+        Ok(SingleRebaseResult {
+            rebased: rebased_count > 0,
+            success: all_success,
+            has_conflicts: any_conflicts,
+            conflicted_files: vec![], // Not aggregated for bulk operations
+            message: summary,
+        })
     }
-
-    if results.is_empty() {
-        summary.push_str("No workspaces with target branches to rebase\n");
-    }
-
-    Ok(summary)
 }
 
 #[cfg(test)]

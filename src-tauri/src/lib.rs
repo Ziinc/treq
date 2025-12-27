@@ -135,6 +135,19 @@ pub fn run() {
                     .item(&settings_item)
                     .build()?;
 
+                // Developer menu (only in debug mode)
+                #[cfg(debug_assertions)]
+                let developer_menu = {
+                    let force_rebase_item =
+                        MenuItemBuilder::with_id("force_rebase_workspace", "Force Rebase Workspace")
+                            .accelerator("CmdOrCtrl+Shift+R")
+                            .build(app)?;
+
+                    SubmenuBuilder::new(app, "Developer")
+                        .item(&force_rebase_item)
+                        .build()?
+                };
+
                 // Window menu
                 let window_menu = SubmenuBuilder::new(app, "Window")
                     .item(&PredefinedMenuItem::minimize(app, None)?)
@@ -151,12 +164,20 @@ pub fn run() {
                     .item(&learn_more_item)
                     .build()?;
 
-                let menu = MenuBuilder::new(app)
+                let mut menu_builder = MenuBuilder::new(app)
                     .item(&app_menu)
                     .item(&file_menu)
                     .item(&edit_menu)
                     .item(&view_menu)
-                    .item(&go_menu)
+                    .item(&go_menu);
+
+                // Add Developer menu in debug mode
+                #[cfg(debug_assertions)]
+                {
+                    menu_builder = menu_builder.item(&developer_menu);
+                }
+
+                let menu = menu_builder
                     .item(&window_menu)
                     .item(&help_menu)
                     .build()?;
@@ -195,10 +216,30 @@ pub fn run() {
                     .item(&settings_item)
                     .build()?;
 
-                let menu = MenuBuilder::new(app)
+                // Developer menu (only in debug mode)
+                #[cfg(debug_assertions)]
+                let developer_menu = {
+                    let force_rebase_item =
+                        MenuItemBuilder::with_id("force_rebase_workspace", "Force Rebase Workspace")
+                            .accelerator("CmdOrCtrl+Shift+R")
+                            .build(app)?;
+
+                    SubmenuBuilder::new(app, "Developer")
+                        .item(&force_rebase_item)
+                        .build()?
+                };
+
+                let mut menu_builder = MenuBuilder::new(app)
                     .item(&file_menu)
-                    .item(&go_menu)
-                    .build()?;
+                    .item(&go_menu);
+
+                // Add Developer menu in debug mode
+                #[cfg(debug_assertions)]
+                {
+                    menu_builder = menu_builder.item(&developer_menu);
+                }
+
+                let menu = menu_builder.build()?;
 
                 app.set_menu(menu)?;
             }
@@ -209,6 +250,7 @@ pub fn run() {
                 "settings" => emit_to_focused(app, "navigate-to-settings", ()),
                 "open" => emit_to_focused(app, "menu-open-repository", ()),
                 "open_new_window" => emit_to_focused(app, "menu-open-in-new-window", ()),
+                "force_rebase_workspace" => emit_to_focused(app, "menu-force-rebase-workspace", ()),
                 "learn_more" => {
                     #[cfg(target_os = "macos")]
                     {
