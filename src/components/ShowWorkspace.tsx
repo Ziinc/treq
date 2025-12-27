@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { listen } from "@tauri-apps/api/event";
 import {
   Workspace,
   listDirectory,
@@ -12,6 +13,7 @@ import {
   setWorkspaceTargetBranch,
   jjGetChangedFiles,
   createSession,
+  checkAndRebaseWorkspaces,
 } from "../lib/api";
 import { getStatusBgColor } from "../lib/git-status-colors";
 import { parseJjChangedFiles, type ParsedFileChange } from "../lib/git-utils";
@@ -209,6 +211,76 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
     }
   }, [initialSelectedFile]);
 
+  // Auto-rebase on mount if workspace might be in detached HEAD state
+  useEffect(() => {
+    // Only run for workspaces with computed targetBranch
+    if (!workspace || !targetBranch || !effectiveRepoPath) {
+      return;
+    }
+
+    // Skip if workspace branch equals target branch
+    if (workspace.branch_name === targetBranch) {
+      return;
+    }
+
+    let mounted = true;
+
+    const checkAndRebase = async () => {
+      const startTime = Date.now();
+      try {
+        setRebasing(true);
+        const result = await checkAndRebaseWorkspaces(
+          effectiveRepoPath,
+          workspace.id,
+          targetBranch,
+          true // Always force rebase to keep changes fresh
+        );
+
+        if (!mounted) return;
+
+        if (result.rebased) {
+          if (result.has_conflicts) {
+            addToast({
+              title: "Workspace rebased with conflicts",
+              description: `${result.conflicted_files.length} file(s) have conflicts. Resolve them in the Review tab.`,
+              type: "warning",
+            });
+            // Update local conflicted files state
+            setConflictedFiles(result.conflicted_files);
+          } else if (!result.success) {
+            addToast({
+              title: "Rebase failed",
+              description: result.message,
+              type: "error",
+            });
+          }
+          // Success case: no toast, status indicator shows progress
+        }
+      } catch (error) {
+        if (!mounted) return;
+        console.error("Auto-rebase check failed:", error);
+        // Don't show toast for silent failures - user can manually trigger rebase
+      } finally {
+        if (mounted) {
+          // Ensure indicator is visible for at least 500ms
+          const elapsed = Date.now() - startTime;
+          const remainingTime = Math.max(0, 500 - elapsed);
+          setTimeout(() => {
+            if (mounted) {
+              setRebasing(false);
+            }
+          }, remainingTime);
+        }
+      }
+    };
+
+    checkAndRebase();
+
+    return () => {
+      mounted = false;
+    };
+  }, [workspace?.id, workspace?.branch_name, targetBranch, effectiveRepoPath, addToast]);
+
   const handleTargetBranchSelect = useCallback(
     async (branch: string) => {
       if (branch === targetBranch || !workspace) return;
@@ -309,6 +381,84 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
       type: "error",
     });
   }, [addToast]);
+
+  const handleForceRebase = useCallback(async () => {
+    if (!workspace || !targetBranch || !effectiveRepoPath) {
+      return;
+    }
+
+    const startTime = Date.now();
+    setRebasing(true);
+    try {
+      const result = await checkAndRebaseWorkspaces(
+        effectiveRepoPath,
+        workspace.id,
+        targetBranch,
+        true // force = true
+      );
+
+      if (result.rebased) {
+        if (result.has_conflicts) {
+          addToast({
+            title: "Workspace rebased with conflicts",
+            description: `${result.conflicted_files.length} file(s) have conflicts. Resolve them in the Review tab.`,
+            type: "warning",
+          });
+          setConflictedFiles(result.conflicted_files);
+        } else if (!result.success) {
+          addToast({
+            title: "Rebase failed",
+            description: result.message,
+            type: "error",
+          });
+        }
+        // Success case: no toast, status indicator shows progress
+
+        // Refresh changed files after rebase
+        const files = await jjGetChangedFiles(workingDirectory);
+        const parsed = parseJjChangedFiles(files);
+        const map = new Map<string, ParsedFileChange>();
+        for (const file of parsed) {
+          const fullPath = `${workingDirectory}/${file.path}`;
+          map.set(fullPath, file);
+        }
+        setChangedFiles(map);
+      } else {
+        addToast({
+          title: "No rebase needed",
+          description: "Workspace is already up to date",
+          type: "info",
+        });
+      }
+    } catch (error) {
+      addToast({
+        title: "Force rebase failed",
+        description: error instanceof Error ? error.message : String(error),
+        type: "error",
+      });
+    } finally {
+      // Ensure indicator is visible for at least 500ms
+      const elapsed = Date.now() - startTime;
+      const remainingTime = Math.max(0, 500 - elapsed);
+      setTimeout(() => {
+        setRebasing(false);
+      }, remainingTime);
+    }
+  }, [workspace, targetBranch, effectiveRepoPath, workingDirectory, addToast]);
+
+  // Listen for Developer menu > Force Rebase Workspace command
+  useEffect(() => {
+    const unlisten = listen("menu-force-rebase-workspace", () => {
+      // Only trigger if we're viewing a workspace
+      if (workspace && targetBranch && effectiveRepoPath) {
+        handleForceRebase();
+      }
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [workspace, targetBranch, effectiveRepoPath, handleForceRebase]);
 
   const handleCreateAgentWithComment = useCallback(
     async (
@@ -421,7 +571,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 
   const executionPanel = workingDirectory ? (
     <div className="flex flex-col h-full">
-      <div className="flex-shrink-0 bg-background px-4 py-2 border-b border-border">
+      <div className="flex-shrink-0 bg-background px-4 py-2 border-b border-border flex items-center justify-between">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="overview" className="inline-flex items-center">
@@ -438,6 +588,12 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
             </TabsTrigger>
           </TabsList>
         </Tabs>
+        {rebasing && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>Rebasing...</span>
+          </div>
+        )}
       </div>
       <div className="flex-1 overflow-auto">
         {activeTab === "overview" ? (
