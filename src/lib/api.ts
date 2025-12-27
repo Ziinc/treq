@@ -320,8 +320,26 @@ export const jjSetWorkspaceTarget = (
     targetBranch: target_branch,
   });
 
-export const checkAndRebaseWorkspaces = (repo_path: string): Promise<string> =>
-  invoke("check_and_rebase_workspaces", { repoPath: repo_path });
+export interface SingleRebaseResult {
+  rebased: boolean;
+  success: boolean;
+  has_conflicts: boolean;
+  conflicted_files: string[];
+  message: string;
+}
+
+export const checkAndRebaseWorkspaces = (
+  repo_path: string,
+  workspace_id?: number | null,
+  default_branch?: string | null,
+  force?: boolean
+): Promise<SingleRebaseResult> =>
+  invoke("check_and_rebase_workspaces", {
+    repoPath: repo_path,
+    workspaceId: workspace_id ?? null,
+    defaultBranch: default_branch ?? null,
+    force: force ?? null,
+  });
 
 // PTY API
 export const ptyCreateSession = (

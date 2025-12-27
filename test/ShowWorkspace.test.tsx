@@ -65,6 +65,13 @@ vi.mock("../src/lib/api", async () => {
     createSession: vi.fn().mockResolvedValue(42),
     ptyCreateSession: vi.fn().mockResolvedValue(undefined),
     ptyWrite: vi.fn().mockResolvedValue(undefined),
+    checkAndRebaseWorkspaces: vi.fn().mockResolvedValue({
+      rebased: false,
+      success: true,
+      has_conflicts: false,
+      conflicted_files: [],
+      message: "No rebase needed",
+    }),
   };
 });
 
@@ -184,5 +191,214 @@ describe("ShowWorkspace agent comments", () => {
         pendingPrompt: reviewMarkdown,
       })
     );
+  });
+});
+
+describe("ShowWorkspace rebasing indicator", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("displays rebasing indicator during auto-rebase on mount", async () => {
+    // Mock a slow rebase operation
+    vi.mocked(api.checkAndRebaseWorkspaces).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(
+            () =>
+              resolve({
+                rebased: true,
+                success: true,
+                has_conflicts: false,
+                conflicted_files: [],
+                message: "Rebased successfully",
+              }),
+            100
+          );
+        })
+    );
+
+    render(
+      <ShowWorkspace
+        repositoryPath={workspace.repo_path}
+        workspace={workspace}
+        mainRepoBranch="main"
+        initialSelectedFile={null}
+        onDeleteWorkspace={vi.fn()}
+        allWorkspaces={[workspace]}
+      />
+    );
+
+    // Rebasing indicator should appear while rebase is in progress
+    await waitFor(() => {
+      expect(screen.getByText("Rebasing...")).toBeInTheDocument();
+    });
+
+    // Verify checkAndRebaseWorkspaces was called with force=true
+    expect(api.checkAndRebaseWorkspaces).toHaveBeenCalledWith(
+      workspace.repo_path,
+      workspace.id,
+      "main",
+      true
+    );
+
+    // Wait for rebase to complete - indicator should disappear (min 500ms)
+    await waitFor(
+      () => {
+        expect(screen.queryByText("Rebasing...")).not.toBeInTheDocument();
+      },
+      { timeout: 700 }
+    );
+  });
+
+  it("hides rebasing indicator after successful rebase (min 500ms)", async () => {
+    vi.mocked(api.checkAndRebaseWorkspaces).mockResolvedValue({
+      rebased: true,
+      success: true,
+      has_conflicts: false,
+      conflicted_files: [],
+      message: "Rebased successfully",
+    });
+
+    render(
+      <ShowWorkspace
+        repositoryPath={workspace.repo_path}
+        workspace={workspace}
+        mainRepoBranch="main"
+        initialSelectedFile={null}
+        onDeleteWorkspace={vi.fn()}
+        allWorkspaces={[workspace]}
+      />
+    );
+
+    // Wait for rebase to complete
+    await waitFor(() => {
+      expect(api.checkAndRebaseWorkspaces).toHaveBeenCalled();
+    });
+
+    // Indicator should remain visible for at least 500ms
+    expect(screen.getByText("Rebasing...")).toBeInTheDocument();
+
+    // Wait for minimum visibility duration
+    await waitFor(
+      () => {
+        expect(screen.queryByText("Rebasing...")).not.toBeInTheDocument();
+      },
+      { timeout: 700 }
+    );
+
+    // No success toast should be shown (only status indicator was displayed)
+    expect(screen.queryByText("Workspace rebased")).not.toBeInTheDocument();
+  });
+
+  it("hides rebasing indicator after rebase with conflicts (min 500ms)", async () => {
+    vi.mocked(api.checkAndRebaseWorkspaces).mockResolvedValue({
+      rebased: true,
+      success: true,
+      has_conflicts: true,
+      conflicted_files: ["src/App.tsx", "src/utils.ts"],
+      message: "Rebased with conflicts",
+    });
+
+    render(
+      <ShowWorkspace
+        repositoryPath={workspace.repo_path}
+        workspace={workspace}
+        mainRepoBranch="main"
+        initialSelectedFile={null}
+        onDeleteWorkspace={vi.fn()}
+        allWorkspaces={[workspace]}
+      />
+    );
+
+    // Wait for rebase to complete
+    await waitFor(() => {
+      expect(api.checkAndRebaseWorkspaces).toHaveBeenCalled();
+    });
+
+    // Indicator should remain visible for at least 500ms
+    expect(screen.getByText("Rebasing...")).toBeInTheDocument();
+
+    // Wait for minimum visibility duration
+    await waitFor(
+      () => {
+        expect(screen.queryByText("Rebasing...")).not.toBeInTheDocument();
+      },
+      { timeout: 700 }
+    );
+
+    // Conflict toast should be shown
+    await waitFor(() => {
+      expect(
+        screen.getByText("Workspace rebased with conflicts")
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("hides rebasing indicator after rebase error (min 500ms)", async () => {
+    vi.mocked(api.checkAndRebaseWorkspaces).mockRejectedValue(
+      new Error("Rebase command failed")
+    );
+
+    render(
+      <ShowWorkspace
+        repositoryPath={workspace.repo_path}
+        workspace={workspace}
+        mainRepoBranch="main"
+        initialSelectedFile={null}
+        onDeleteWorkspace={vi.fn()}
+        allWorkspaces={[workspace]}
+      />
+    );
+
+    // Wait for rebase to fail
+    await waitFor(() => {
+      expect(api.checkAndRebaseWorkspaces).toHaveBeenCalled();
+    });
+
+    // Indicator should remain visible for at least 500ms even on error
+    expect(screen.getByText("Rebasing...")).toBeInTheDocument();
+
+    // Wait for minimum visibility duration
+    await waitFor(
+      () => {
+        expect(screen.queryByText("Rebasing...")).not.toBeInTheDocument();
+      },
+      { timeout: 700 }
+    );
+
+    // No error toast should be shown (silent failure for auto-rebase)
+    expect(screen.queryByText("Rebase failed")).not.toBeInTheDocument();
+  });
+
+  it("does not show success toast on successful rebase", async () => {
+    vi.mocked(api.checkAndRebaseWorkspaces).mockResolvedValue({
+      rebased: true,
+      success: true,
+      has_conflicts: false,
+      conflicted_files: [],
+      message: "Rebased successfully",
+    });
+
+    render(
+      <ShowWorkspace
+        repositoryPath={workspace.repo_path}
+        workspace={workspace}
+        mainRepoBranch="main"
+        initialSelectedFile={null}
+        onDeleteWorkspace={vi.fn()}
+        allWorkspaces={[workspace]}
+      />
+    );
+
+    await waitFor(() => {
+      expect(api.checkAndRebaseWorkspaces).toHaveBeenCalled();
+    });
+
+    // Wait a bit to ensure no toast appears
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Verify no success toast is displayed
+    expect(screen.queryByText("Workspace rebased")).not.toBeInTheDocument();
   });
 });
