@@ -31,8 +31,8 @@ vi.mock("../src/components/FileBrowser", () => ({
   },
 }));
 
-vi.mock("../src/components/CommitGraph", () => ({
-  CommitGraph: () => <div data-testid="commit-graph" />,
+vi.mock("../src/components/LinearCommitHistory", () => ({
+  LinearCommitHistory: () => <div data-testid="linear-commit-history" />,
 }));
 
 vi.mock("../src/components/ChangesDiffViewer", () => ({
