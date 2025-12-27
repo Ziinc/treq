@@ -298,6 +298,10 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
                 onChange={(e) => setEditNameValue(e.target.value)}
                 onKeyDown={handleNameKeyDown}
                 onBlur={saveEditedName}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
                 className="bg-muted border border-border rounded px-1 py-0 text-sm font-medium text-foreground w-full max-w-[150px] outline-none focus:ring-1 focus:ring-primary"
               />
             ) : (
