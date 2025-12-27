@@ -1,5 +1,4 @@
 use crate::binary_paths;
-use crate::jj;
 use crate::local_db::{self, CachedWorkspaceFile};
 use chrono::Utc;
 use std::collections::HashSet;
@@ -10,40 +9,6 @@ use std::process::Command;
 fn command_for(binary: &str) -> Command {
     let path = binary_paths::get_binary_path(binary).unwrap_or_else(|| binary.to_string());
     Command::new(path)
-}
-
-/// Get list of git-tracked files for a workspace
-/// Uses `git ls-files` to get both cached and untracked files (respecting .gitignore)
-pub fn get_git_tracked_files(workspace_path: &str) -> Result<Vec<String>, String> {
-    let output = command_for("git")
-        .args(["ls-files", "--cached", "--others", "--exclude-standard"])
-        .current_dir(workspace_path)
-        .output()
-        .map_err(|e| format!("Failed to run git ls-files: {}", e))?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "git ls-files failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    let files: Vec<String> = String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
-
-    Ok(files)
-}
-
-/// Get list of files from jj status (changed files only)
-/// Uses `jj status` to get only files that have been modified, added, or deleted
-pub fn get_jj_status_files(workspace_path: &str) -> Result<Vec<String>, String> {
-    let changes = jj::jj_get_changed_files(workspace_path)
-        .map_err(|e| format!("Failed to get jj status: {}", e))?;
-
-    Ok(changes.into_iter().map(|c| c.path).collect())
 }
 
 /// Get list of all tracked files in a workspace using jj file list
@@ -194,116 +159,6 @@ pub fn index_workspace_files(
 
 /// Incrementally update specific files in the index
 /// Only updates the files that have actually changed, instead of full replacement
-pub fn index_changed_files(
-    repo_path: &str,
-    workspace_id: Option<i64>,
-    workspace_path: &str,
-    changed_paths: Vec<String>,
-) -> Result<(), String> {
-    if changed_paths.is_empty() {
-        return Ok(());
-    }
-
-    let workspace_path_buf = Path::new(workspace_path);
-    let mut files_to_delete = Vec::new();
-    let mut directories_seen = HashSet::new();
-
-    // Process each changed file
-    for file_path in &changed_paths {
-        let full_path = workspace_path_buf.join(file_path);
-
-        if full_path.exists() {
-            // File exists - upsert it
-            let full_path_str = full_path
-                .to_str()
-                .ok_or_else(|| format!("Invalid file path: {:?}", full_path))?
-                .to_string();
-
-            let parent_path = if let Some(parent) = full_path.parent() {
-                if parent == workspace_path_buf {
-                    Some(workspace_path)
-                } else {
-                    parent.to_str()
-                }
-            } else {
-                Some(workspace_path)
-            };
-
-            let is_directory = full_path.is_dir();
-            let mtime = if is_directory {
-                get_file_mtime(&full_path)
-            } else {
-                get_file_mtime(&full_path)
-            };
-
-            local_db::upsert_workspace_file(
-                repo_path,
-                workspace_id,
-                &full_path_str,
-                file_path,
-                is_directory,
-                parent_path,
-                mtime,
-            )?;
-
-            // Collect parent directories
-            let path = Path::new(file_path);
-            let mut current = PathBuf::new();
-            for component in path.components() {
-                if let Some(comp_str) = component.as_os_str().to_str() {
-                    current.push(comp_str);
-                    if current != path {
-                        directories_seen.insert(current.to_string_lossy().to_string());
-                    }
-                }
-            }
-        } else {
-            // File was deleted - mark for removal
-            let full_path_str = full_path
-                .to_str()
-                .ok_or_else(|| format!("Invalid file path: {:?}", full_path))?
-                .to_string();
-            files_to_delete.push(full_path_str);
-        }
-    }
-
-    // Upsert parent directories
-    for dir_rel_path in directories_seen {
-        let full_dir_path = workspace_path_buf.join(&dir_rel_path);
-        let full_dir_path_str = full_dir_path
-            .to_str()
-            .ok_or_else(|| format!("Invalid directory path: {:?}", full_dir_path))?
-            .to_string();
-
-        let parent_path = if let Some(parent) = full_dir_path.parent() {
-            if parent == workspace_path_buf {
-                Some(workspace_path)
-            } else {
-                parent.to_str()
-            }
-        } else {
-            Some(workspace_path)
-        };
-
-        local_db::upsert_workspace_file(
-            repo_path,
-            workspace_id,
-            &full_dir_path_str,
-            &dir_rel_path,
-            true,
-            parent_path,
-            get_file_mtime(&full_dir_path),
-        )?;
-    }
-
-    // Delete files that no longer exist
-    if !files_to_delete.is_empty() {
-        local_db::delete_workspace_files(repo_path, workspace_id, files_to_delete)?;
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

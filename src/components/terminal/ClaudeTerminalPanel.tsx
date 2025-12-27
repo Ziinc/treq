@@ -255,18 +255,23 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
       ? ' --permission-mode plan'
       : ' --permission-mode acceptEdits';
 
-    let autoCommand = sessionModel
-      ? `claude${permissionModeArg} --model="${sessionModel}"`
-      : `claude${permissionModeArg}`;
+    let autoCommand = 'claude';
 
-    // If there's a pending prompt, append it as a command argument
+    // Add permission mode and model flags first
+    autoCommand += permissionModeArg;
+    if (sessionModel) {
+      autoCommand += ` --model="${sessionModel}"`;
+    }
+
+    // If there's a pending prompt, add it as a positional argument after --
     if (sessionData.pendingPrompt) {
-      // Escape newlines and quotes for shell
+      // Escape shell special characters (keep newlines as actual newlines)
       const escapedPrompt = sessionData.pendingPrompt
         .replace(/\\/g, '\\\\')  // Escape backslashes first
         .replace(/"/g, '\\"')    // Escape double quotes
-        .replace(/\n/g, '\\n');  // Escape newlines as \n
-      autoCommand += ` "${escapedPrompt}"`;
+        .replace(/`/g, '\\`')    // Escape backticks (command substitution)
+        .replace(/\$/g, '\\$');  // Escape dollar signs (variable expansion)
+      autoCommand += ` -- "${escapedPrompt}"`;
     }
 
     return (

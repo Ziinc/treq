@@ -1,52 +1,42 @@
 use chrono::Utc;
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
-// Re-export types from db module
-use crate::db::{Session, Workspace};
+// ============================================================================
+// Core Types
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Workspace {
+    pub id: i64,
+    pub repo_path: String,
+    pub workspace_name: String,
+    pub workspace_path: String,
+    pub branch_name: String,
+    pub created_at: String,
+    pub metadata: Option<String>,
+    pub target_branch: Option<String>,
+    pub has_conflicts: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Session {
+    pub id: i64,
+    pub workspace_id: Option<i64>,
+    pub name: String,
+    pub created_at: String,
+    pub last_accessed: String,
+    pub model: Option<String>,
+}
 
 // ============================================================================
 // Database Trait for Testing
 // ============================================================================
 
-/// Trait for database operations (enables mocking in tests)
-#[cfg_attr(test, mockall::automock)]
-pub trait WorkspaceDb {
-    fn add_workspace(
-        &self,
-        repo_path: &str,
-        workspace_name: String,
-        workspace_path: String,
-        branch_name: String,
-        metadata: Option<String>,
-    ) -> Result<i64, String>;
-
-    fn get_workspaces(&self, repo_path: &str) -> Result<Vec<Workspace>, String>;
-}
-
-/// Real implementation of WorkspaceDb
-pub struct LocalDb;
-
-impl WorkspaceDb for LocalDb {
-    fn add_workspace(
-        &self,
-        repo_path: &str,
-        workspace_name: String,
-        workspace_path: String,
-        branch_name: String,
-        metadata: Option<String>,
-    ) -> Result<i64, String> {
-        add_workspace(repo_path, workspace_name, workspace_path, branch_name, metadata)
-    }
-
-    fn get_workspaces(&self, repo_path: &str) -> Result<Vec<Workspace>, String> {
-        get_workspaces(repo_path)
-    }
-}
 
 // ============================================================================
 // Database Initialization Tracker
@@ -58,17 +48,6 @@ static INITIALIZED_DBS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 // ============================================================================
 // Git Cache Types
 // ============================================================================
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct CachedFileChange {
-    pub id: i64,
-    pub workspace_id: Option<i64>,
-    pub file_path: String,
-    pub workspace_status: Option<String>,
-    pub is_untracked: bool,
-    pub hunks_json: Option<String>,
-    pub updated_at: String,
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CachedWorkspaceFile {
@@ -401,22 +380,59 @@ pub fn update_workspace_has_conflicts(
     Ok(())
 }
 
-/// Get the branch_name for a workspace by its workspace_path
-pub fn get_workspace_branch_name(
+/// Get last rebased commit from workspace metadata
+pub fn get_workspace_last_rebased_commit(
     repo_path: &str,
-    workspace_path: &str,
+    id: i64,
 ) -> Result<Option<String>, String> {
+    let workspaces = get_workspaces(repo_path)?;
+    let workspace = workspaces.iter().find(|w| w.id == id);
+
+    if let Some(ws) = workspace {
+        if let Some(metadata) = &ws.metadata {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(metadata) {
+                return Ok(json
+                    .get("last_rebased_target_commit")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()));
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// Update last rebased commit in workspace metadata
+pub fn update_workspace_last_rebased_commit(
+    repo_path: &str,
+    id: i64,
+    commit_id: &str,
+) -> Result<(), String> {
     let conn = get_connection(repo_path)?;
-    let mut stmt = conn
-        .prepare("SELECT branch_name FROM workspaces WHERE workspace_path = ?1")
-        .map_err(|e| format!("Failed to prepare branch_name query: {}", e))?;
 
-    let result = stmt
-        .query_row(params![workspace_path], |row| row.get::<_, String>(0))
-        .optional()
-        .map_err(|e| format!("Failed to query branch_name: {}", e))?;
+    // Get current metadata
+    let current_metadata: Option<String> = conn
+        .query_row("SELECT metadata FROM workspaces WHERE id = ?1", [id], |row| {
+            row.get(0)
+        })
+        .ok();
 
-    Ok(result)
+    // Parse, update, serialize
+    let mut meta: serde_json::Value = current_metadata
+        .and_then(|m| serde_json::from_str(&m).ok())
+        .unwrap_or(serde_json::json!({}));
+
+    meta["last_rebased_target_commit"] = serde_json::Value::String(commit_id.to_string());
+
+    let new_metadata = serde_json::to_string(&meta)
+        .map_err(|e| format!("Failed to serialize metadata: {}", e))?;
+
+    conn.execute(
+        "UPDATE workspaces SET metadata = ?1 WHERE id = ?2",
+        params![new_metadata, id],
+    )
+    .map_err(|e| format!("Failed to update metadata: {}", e))?;
+
+    Ok(())
 }
 
 pub fn rebuild_workspaces_from_filesystem(repo_path: &str) -> Result<Vec<Workspace>, String> {
@@ -665,86 +681,6 @@ pub fn set_session_model(repo_path: &str, id: i64, model: Option<String>) -> Res
 }
 
 // ============================================================================
-// Git Cache Functions
-// ============================================================================
-
-/// Get all cached changed files for a workspace
-pub fn get_cached_changes(
-    repo_path: &str,
-    workspace_id: Option<i64>,
-) -> Result<Vec<CachedFileChange>, String> {
-    let conn = get_connection(repo_path)?;
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, workspace_id, file_path, staged_status, workspace_status, is_untracked, hunks_json, updated_at
-             FROM changed_files
-             WHERE workspace_id IS ?1
-             ORDER BY file_path",
-        )
-        .map_err(|e| format!("Failed to prepare query: {}", e))?;
-
-    let changes = stmt
-        .query_map([workspace_id], |row| {
-            Ok(CachedFileChange {
-                id: row.get(0)?,
-                workspace_id: row.get(1)?,
-                file_path: row.get(2)?,
-                workspace_status: row.get(3)?,
-                is_untracked: row.get::<_, i64>(4)? != 0,
-                hunks_json: row.get(5)?,
-                updated_at: row.get(6)?,
-            })
-        })
-        .map_err(|e| format!("Failed to query cached changes: {}", e))?;
-
-    changes
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())
-}
-
-/// Batch update all changed files for a workspace (replaces all)
-pub fn sync_workspace_changes(
-    repo_path: &str,
-    workspace_id: Option<i64>,
-    changes: Vec<CachedFileChange>,
-) -> Result<(), String> {
-    let mut conn = get_connection(repo_path)?;
-    let tx = conn
-        .transaction()
-        .map_err(|e| format!("Failed to start transaction: {}", e))?;
-
-    // Delete existing entries for this workspace
-    tx.execute(
-        "DELETE FROM changed_files WHERE workspace_id IS ?1",
-        params![workspace_id],
-    )
-    .map_err(|e| format!("Failed to delete existing changes: {}", e))?;
-
-    // Insert new entries
-    for change in &changes {
-        tx.execute(
-            "INSERT INTO changed_files
-             (workspace_id, file_path, workspace_status, is_untracked, hunks_json, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![
-                workspace_id,
-                &change.file_path,
-                &change.workspace_status,
-                if change.is_untracked { 1 } else { 0 },
-                &change.hunks_json,
-                &change.updated_at,
-            ],
-        )
-        .map_err(|e| format!("Failed to insert change: {}", e))?;
-    }
-
-    tx.commit()
-        .map_err(|e| format!("Failed to commit transaction: {}", e))?;
-
-    Ok(())
-}
-
-// ============================================================================
 // Workspace Files Cache Functions
 // ============================================================================
 
@@ -884,82 +820,6 @@ pub fn sync_workspace_files(
     tx.commit()
         .map_err(|e| format!("Failed to commit transaction: {}", e))?;
 
-    Ok(())
-}
-
-/// Upsert a single workspace file (for incremental updates)
-pub fn upsert_workspace_file(
-    repo_path: &str,
-    workspace_id: Option<i64>,
-    file_path: &str,
-    relative_path: &str,
-    is_directory: bool,
-    parent_path: Option<&str>,
-    mtime: Option<i64>,
-) -> Result<(), String> {
-    let conn = get_connection(repo_path)?;
-    let cached_at = Utc::now().to_rfc3339();
-
-    conn.execute(
-        "INSERT INTO workspace_files (workspace_id, file_path, relative_path, is_directory, parent_path, cached_at, mtime)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-         ON CONFLICT(workspace_id, file_path)
-         DO UPDATE SET relative_path = ?3, is_directory = ?4, parent_path = ?5, cached_at = ?6, mtime = ?7",
-        params![
-            workspace_id,
-            file_path,
-            relative_path,
-            if is_directory { 1 } else { 0 },
-            parent_path,
-            cached_at,
-            mtime,
-        ],
-    )
-    .map_err(|e| format!("Failed to upsert workspace file: {}", e))?;
-
-    Ok(())
-}
-
-/// Delete specific workspace files by paths (for incremental updates when files are deleted)
-pub fn delete_workspace_files(
-    repo_path: &str,
-    workspace_id: Option<i64>,
-    file_paths: Vec<String>,
-) -> Result<(), String> {
-    if file_paths.is_empty() {
-        return Ok(());
-    }
-
-    let mut conn = get_connection(repo_path)?;
-    let tx = conn
-        .transaction()
-        .map_err(|e| format!("Failed to start transaction: {}", e))?;
-
-    for file_path in &file_paths {
-        tx.execute(
-            "DELETE FROM workspace_files WHERE workspace_id IS ?1 AND file_path = ?2",
-            params![workspace_id, file_path],
-        )
-        .map_err(|e| format!("Failed to delete file: {}", e))?;
-    }
-
-    tx.commit()
-        .map_err(|e| format!("Failed to commit transaction: {}", e))?;
-
-    Ok(())
-}
-
-/// Invalidate (clear) all cached files for a workspace
-pub fn invalidate_workspace_files(
-    repo_path: &str,
-    workspace_id: Option<i64>,
-) -> Result<(), String> {
-    let conn = get_connection(repo_path)?;
-    conn.execute(
-        "DELETE FROM workspace_files WHERE workspace_id IS ?1",
-        params![workspace_id],
-    )
-    .map_err(|e| format!("Failed to invalidate workspace files: {}", e))?;
     Ok(())
 }
 

@@ -127,12 +127,12 @@ export const ConsolidatedTerminal = forwardRef<
       onTerminalIdleRef.current = onTerminalIdle;
     }, [onTerminalIdle]);
 
-    // Reset output and error when session changes
+    // Reset output and error when session or autoCommand changes
     useEffect(() => {
       outputRef.current = "";
       autoCommandSentRef.current = false;
       setTerminalError(null);
-    }, [sessionId, instanceKey]);
+    }, [sessionId, instanceKey, autoCommand]);
 
     const handleRetryTerminal = useCallback(() => {
       setTerminalError(null);
@@ -314,11 +314,16 @@ export const ConsolidatedTerminal = forwardRef<
 
           resizeTimeout = setTimeout(localHandleResize, 100);
 
-          if (autoCommand && isNewSession && !autoCommandSentRef.current) {
+          // Send autoCommand if we have one and haven't sent it yet
+          // (isNewSession check ensures we only send on first setup, ref prevents duplicates)
+          if (autoCommand && !autoCommandSentRef.current) {
             autoCommandSentRef.current = true;
-            ptyWrite(sessionId, normalizeCommand(autoCommand)).catch(
-              localHandleError
-            );
+            // Add a small delay to ensure the shell prompt is ready
+            setTimeout(() => {
+              ptyWrite(sessionId, normalizeCommand(autoCommand)).catch(
+                localHandleError
+              );
+            }, isNewSession ? 100 : 0);
           }
         } catch (error) {
           localHandleError(error);

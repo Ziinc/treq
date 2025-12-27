@@ -629,7 +629,7 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
             <div className="text-sm text-muted-foreground px-[12px] py-[24px] text-center">
               No diff hunks available
             </div>
-          ) : additions + deletions > 75 &&
+          ) : additions + deletions > 250 &&
             !expandedLargeDiffs.has(filePath) ? (
             <div className="flex items-center justify-center gap-[12px] h-20 text-muted-foreground">
               <FileText className="w-5 h-5 opacity-50" />
