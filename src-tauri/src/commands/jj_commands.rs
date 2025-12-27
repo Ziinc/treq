@@ -134,7 +134,20 @@ pub fn jj_split(
     message: String,
     file_paths: Vec<String>,
 ) -> Result<String, String> {
-    jj::jj_split(&workspace_path, &message, file_paths).map_err(|e| e.to_string())
+    let result = jj::jj_split(&workspace_path, &message, file_paths).map_err(|e| e.to_string())?;
+
+    // Trigger auto-rebase in background (fire-and-forget)
+    std::thread::spawn(move || {
+        // Derive repo path and get committed branch
+        if let Some(repo_path) = jj::derive_repo_path_from_workspace(&workspace_path) {
+            if let Ok(branch) = jj::get_workspace_branch(&workspace_path) {
+                // Fire and forget - don't block split result on rebase
+                let _ = crate::auto_rebase::rebase_after_commit(&repo_path, &branch);
+            }
+        }
+    });
+
+    Ok(result)
 }
 
 /// Check if a path has a jj workspace

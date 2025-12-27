@@ -2,8 +2,7 @@ use jj_lib::config::{ConfigLayer, ConfigSource, StackedConfig};
 use jj_lib::settings::UserSettings;
 use jj_lib::workspace::Workspace;
 use serde::{Deserialize, Serialize};
-use std::fs::{self, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
+use std::fs;
 use std::path::Path;
 use std::process::Command;
 
@@ -175,62 +174,6 @@ username = "{}"
 
 /// Ensure .jj and .treq directories are in .gitignore
 /// This is idempotent - entries won't be duplicated
-pub fn ensure_gitignore_entries(repo_path: &str) -> Result<(), JjError> {
-    let gitignore_path = Path::new(repo_path).join(".gitignore");
-    let entries_to_add = [".jj/", ".treq/"];
-
-    // Read existing .gitignore content
-    let existing_entries: std::collections::HashSet<String> = if gitignore_path.exists() {
-        let file = fs::File::open(&gitignore_path)
-            .map_err(|e| JjError::InitFailed(format!("Failed to read .gitignore: {}", e)))?;
-        BufReader::new(file)
-            .lines()
-            .filter_map(|l| l.ok())
-            .map(|l| l.trim().to_string())
-            .collect()
-    } else {
-        std::collections::HashSet::new()
-    };
-
-    // Find entries that need to be added
-    let entries_needed: Vec<&str> = entries_to_add
-        .iter()
-        .filter(|entry| !existing_entries.contains(&entry.to_string()))
-        .copied()
-        .collect();
-
-    if entries_needed.is_empty() {
-        return Ok(());
-    }
-
-    // Append missing entries to .gitignore
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&gitignore_path)
-        .map_err(|e| JjError::InitFailed(format!("Failed to open .gitignore: {}", e)))?;
-
-    // Add a newline before our entries if file exists and doesn't end with newline
-    if gitignore_path.exists() {
-        let content = fs::read_to_string(&gitignore_path).unwrap_or_default();
-        if !content.is_empty() && !content.ends_with('\n') {
-            writeln!(file).map_err(|e| {
-                JjError::InitFailed(format!("Failed to write to .gitignore: {}", e))
-            })?;
-        }
-    }
-
-    // Add comment and entries
-    writeln!(file, "\n# Added by Treq")
-        .map_err(|e| JjError::InitFailed(format!("Failed to write to .gitignore: {}", e)))?;
-    for entry in entries_needed {
-        writeln!(file, "{}", entry)
-            .map_err(|e| JjError::InitFailed(format!("Failed to write to .gitignore: {}", e)))?;
-    }
-
-    Ok(())
-}
-
 /// Initialize jj for an existing git repository (colocated mode)
 /// This creates a .jj/ directory alongside the existing .git/ directory
 /// Note: .gitignore entries are handled separately by ensure_gitignore_entries()
@@ -321,7 +264,7 @@ pub fn create_workspace(
     branch_name: &str,
     new_branch: bool,
     source_branch: Option<&str>,
-    inclusion_patterns: Option<Vec<String>>,
+    _inclusion_patterns: Option<Vec<String>>,
 ) -> Result<String, JjError> {
     let repo_path_buf = Path::new(repo_path);
 
@@ -831,12 +774,10 @@ pub fn derive_repo_path_from_workspace(workspace_path: &str) -> Option<String> {
 /// Commit with message and create new working copy
 pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError> {
     // For workspaces, derive repo path; for main repo, use workspace_path itself
-    let repo_path = derive_repo_path_from_workspace(workspace_path)
+    let _repo_path = derive_repo_path_from_workspace(workspace_path)
         .unwrap_or_else(|| workspace_path.to_string());
 
     // First check what branch git is currently checked out at
-    let rp = &repo_path;
-
     let git_branch = get_workspace_branch(workspace_path).map_err(|e| {
         JjError::IoError(format!(
             "Failed to determine current git branch: {}. Please checkout a branch before committing.",
@@ -891,7 +832,7 @@ pub fn jj_split(
     file_paths: Vec<String>,
 ) -> Result<String, JjError> {
     // Derive repo path (same as jj_commit)
-    let repo_path = derive_repo_path_from_workspace(workspace_path)
+    let _repo_path = derive_repo_path_from_workspace(workspace_path)
         .unwrap_or_else(|| workspace_path.to_string());
 
     // Get and validate git branch (same as jj_commit)

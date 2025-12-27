@@ -4,38 +4,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Workspace {
-    pub id: i64,
-    pub repo_path: String,
-    pub workspace_name: String,
-    pub workspace_path: String,
-    pub branch_name: String,
-    pub created_at: String,
-    pub metadata: Option<String>,
-    pub target_branch: Option<String>,
-    pub has_conflicts: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Session {
-    pub id: i64,
-    pub workspace_id: Option<i64>,
-    pub name: String,
-    pub created_at: String,
-    pub last_accessed: String,
-    pub model: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GitCacheEntry {
-    pub id: i64,
-    pub workspace_path: String,
-    pub file_path: Option<String>,
-    pub cache_type: String,
-    pub data: String,
-    pub updated_at: String,
-}
+// Import Session type from local_db for internal use
+use crate::local_db::Session;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FileView {
@@ -48,17 +18,12 @@ pub struct FileView {
 
 pub struct Database {
     conn: Connection,
-    db_path: PathBuf,
 }
 
 impl Database {
     pub fn new(db_path: PathBuf) -> Result<Self> {
         let conn = Connection::open(&db_path)?;
-        Ok(Database { conn, db_path })
-    }
-
-    pub fn db_path(&self) -> &PathBuf {
-        &self.db_path
+        Ok(Database { conn })
     }
 
     pub fn init(&self) -> Result<()> {
@@ -300,63 +265,6 @@ impl Database {
     pub fn set_repo_setting(&self, repo_path: &str, key: &str, value: &str) -> Result<()> {
         let composite_key = Self::make_repo_key(repo_path, key);
         self.set_setting(&composite_key, value)
-    }
-
-    pub fn get_git_cache(
-        &self,
-        workspace_path: &str,
-        file_path: Option<&str>,
-        cache_type: &str,
-    ) -> Result<Option<GitCacheEntry>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, workspace_path, file_path, cache_type, data, updated_at
-             FROM git_cache
-             WHERE workspace_path = ?1
-               AND cache_type = ?3
-               AND ((?2 IS NULL AND file_path IS NULL) OR file_path = ?2)
-             LIMIT 1",
-        )?;
-
-        let mut rows = stmt.query(params![workspace_path, file_path, cache_type])?;
-
-        if let Some(row) = rows.next()? {
-            Ok(Some(GitCacheEntry {
-                id: row.get(0)?,
-                workspace_path: row.get(1)?,
-                file_path: row.get(2)?,
-                cache_type: row.get(3)?,
-                data: row.get(4)?,
-                updated_at: row.get(5)?,
-            }))
-        } else {
-            Ok(None)
-        }
-    }
-
-    pub fn set_git_cache(
-        &self,
-        workspace_path: &str,
-        file_path: Option<&str>,
-        cache_type: &str,
-        data: &str,
-    ) -> Result<()> {
-        let updated_at = Utc::now().to_rfc3339();
-        self.conn.execute(
-            "INSERT INTO git_cache (workspace_path, file_path, cache_type, data, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)
-             ON CONFLICT(workspace_path, file_path, cache_type)
-             DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at",
-            params![workspace_path, file_path, cache_type, data, updated_at],
-        )?;
-        Ok(())
-    }
-
-    pub fn invalidate_git_cache(&self, workspace_path: &str) -> Result<()> {
-        self.conn.execute(
-            "DELETE FROM git_cache WHERE workspace_path = ?1",
-            [workspace_path],
-        )?;
-        Ok(())
     }
 
     #[allow(dead_code)]

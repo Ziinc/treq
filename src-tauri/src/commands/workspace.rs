@@ -1,6 +1,5 @@
-use crate::db::Workspace;
 use crate::jj::{self, JjRebaseResult};
-use crate::local_db;
+use crate::local_db::{self, Workspace};
 use crate::AppState;
 use std::collections::HashSet;
 use std::path::Path;
