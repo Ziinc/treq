@@ -364,7 +364,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   );
 
   const handleCreateAgentWithReview = useCallback(
-    async (reviewMarkdown: string) => {
+    async (reviewMarkdown: string, mode: 'plan' | 'acceptEdits') => {
       try {
         const sessionName = "Code Review";
 
@@ -385,6 +385,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
           workspacePath: workspace?.workspace_path ?? null,
           repoPath: sessionRepoPath,
           pendingPrompt: reviewMarkdown,
+          permissionMode: mode,
         });
 
         addToast({

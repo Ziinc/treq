@@ -31,6 +31,7 @@ import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { useToast } from "./ui/toast";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "./ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -73,7 +74,7 @@ interface ChangesDiffViewerProps {
   onStagedFilesChange?: (files: string[]) => void;
   initialSelectedFile: string | null;
   onReviewSubmitted?: () => void;
-  onCreateAgentWithReview?: (reviewMarkdown: string) => Promise<void>;
+  onCreateAgentWithReview?: (reviewMarkdown: string, mode: 'plan' | 'acceptEdits') => Promise<void>;
   conflictedFiles?: string[];
 }
 
@@ -1764,14 +1765,14 @@ export const ChangesDiffViewer = memo(
       }, [comments, finalReviewComment]);
 
       // Send review to terminal
-      const handleRequestChanges = useCallback(async () => {
+      const handleRequestChanges = useCallback(async (mode: 'plan' | 'acceptEdits') => {
         setSendingReview(true);
         try {
           const markdown = formatReviewMarkdown();
 
           if (onCreateAgentWithReview) {
             // Create new agent session with review pre-filled
-            await onCreateAgentWithReview(markdown);
+            await onCreateAgentWithReview(markdown, mode);
             addToast({
               title: "Review sent",
               description: "Code review sent to new agent session",
@@ -2260,26 +2261,36 @@ export const ChangesDiffViewer = memo(
                         className="min-h-[80px] text-sm"
                       />
                       <div className="flex justify-end gap-2">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8"
+                                onClick={() => setReviewPopoverOpen(false)}
+                                disabled={sendingReview}
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Cancel</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                         <Button
                           size="sm"
-                          variant="ghost"
-                          onClick={() => setReviewPopoverOpen(false)}
+                          variant="secondary"
+                          onClick={() => handleRequestChanges('plan')}
                           disabled={sendingReview}
                         >
-                          Cancel
+                          Plan
                         </Button>
                         <Button
                           size="sm"
-                          onClick={handleRequestChanges}
+                          onClick={() => handleRequestChanges('acceptEdits')}
                           disabled={sendingReview}
-                          className="gap-1.5"
                         >
-                          {sendingReview ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : (
-                            <Send className="w-3 h-3" />
-                          )}
-                          Request changes
+                          Edit
                         </Button>
                       </div>
                     </div>

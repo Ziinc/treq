@@ -659,6 +659,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         workspacePath: pendingClaudeSession.workspacePath,
         repoPath: pendingClaudeSession.repoPath,
         pendingPrompt: pendingClaudeSession.pendingPrompt,
+        permissionMode: pendingClaudeSession.permissionMode,
       });
     }
 

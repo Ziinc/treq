@@ -251,9 +251,13 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
     }, [pendingModelReset, handleReset, sessionModel, addToast]);
 
     // Build Claude command with optional pending prompt
+    const permissionModeArg = sessionData.permissionMode === 'plan'
+      ? ' --permission-mode plan'
+      : ' --permission-mode acceptEdits';
+
     let autoCommand = sessionModel
-      ? `claude --permission-mode plan --model="${sessionModel}"`
-      : "claude --permission-mode plan";
+      ? `claude${permissionModeArg} --model="${sessionModel}"`
+      : `claude${permissionModeArg}`;
 
     // If there's a pending prompt, append it as a command argument
     if (sessionData.pendingPrompt) {
