@@ -316,7 +316,7 @@ export const ConsolidatedTerminal = forwardRef<
 
           // Send autoCommand if we have one and haven't sent it yet
           // (isNewSession check ensures we only send on first setup, ref prevents duplicates)
-          if (autoCommand && !autoCommandSentRef.current) {
+          if (autoCommand && !autoCommandSentRef.current && isNewSession) {
             autoCommandSentRef.current = true;
             // Add a small delay to ensure the shell prompt is ready
             setTimeout(() => {
