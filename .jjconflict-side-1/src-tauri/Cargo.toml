@@ -1,0 +1,72 @@
+[package]
+name = "treq"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "treq_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+# Tokio with only needed features (instead of "full") for faster compilation
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-util", "process", "fs", "sync"] }
+portable-pty = "0.8"
+chrono = { version = "0.4", features = ["serde"] }
+sha2 = "0.10"
+ignore = "0.4"
+walkdir = "2"
+globset = "0.4"
+git2 = { version = "0.20.2", features = ["https", "ssh"] }
+jj-lib = "0.36.0"
+notify = { version = "6.1", default-features = false, features = ["macos_fsevent"] }
+notify-debouncer-full = "0.3"
+crossbeam-channel = "0.5"
+rayon = "1.10"
+tauri-plugin-log = "2"
+log = "0.4"
+
+[dev-dependencies]
+mockall = "0.14.0"
+tempfile = "3"
+# =============================================================================
+# Profile Configuration
+# =============================================================================
+
+# Development profile - faster compilation with minimal optimization
+[profile.dev]
+opt-level = 0                # No optimization (fastest compile)
+debug = true                 # Keep debug symbols for debugging
+incremental = true           # Enable incremental compilation
+split-debuginfo = "unpacked" # Skip dsymutil on macOS (faster linking)
+
+# Compile dependencies with higher optimization in dev mode
+# This makes dev builds faster by optimizing slow dependencies once
+[profile.dev.package."*"]
+opt-level = 3           # Optimize dependencies more aggressively
+debug = false           # Strip debug info from dependencies
+
+# Release profile - optimized for size and performance
+[profile.release]
+opt-level = "z"         # Optimize for size (alternative: "s" for slightly faster code)
+lto = "thin"            # Thin Link Time Optimization (good balance of speed vs build time)
+codegen-units = 1       # Single codegen unit for better optimization (slower build, smaller binary)
+strip = true            # Strip symbols from binary (reduces size significantly)
+panic = "abort"         # Abort on panic instead of unwinding (smaller binary)
+incremental = false     # Disable incremental for release builds
+
