@@ -17,6 +17,58 @@ vi.mock("../src/lib/api", async () => {
 });
 
 describe("Cancel review feature", () => {
+  const renderComponent = () => {
+    return render(
+      <ChangesDiffViewer
+        workspacePath="/test/workspace"
+        repoPath="/test/repo"
+        workspaceId={1}
+        initialSelectedFile={null}
+      />
+    );
+  };
+
+  const setupReviewMode = async () => {
+    // Wait for file to load
+    await waitFor(() => {
+      expect(screen.getAllByText(/test\.txt/).length).toBeGreaterThan(0);
+    });
+
+    // Expand the file
+    const fileElements = screen.getAllByText(/test\.txt/);
+    await userEvent.click(fileElements[0]);
+
+    // Wait for add comment button
+    await waitFor(() => {
+      const buttons = screen.queryAllByRole("button", { name: /add comment/i });
+      expect(buttons.length).toBeGreaterThan(0);
+    });
+
+    // Click add comment
+    const addCommentButtons = screen.getAllByRole("button", { name: /add comment/i });
+    await userEvent.click(addCommentButtons[0]);
+
+    // Type comment
+    const textarea = screen.getByPlaceholderText(/add a comment/i);
+    await userEvent.type(textarea, "Test comment");
+
+    // Submit comment
+    const submitButtons = screen.getAllByRole("button", { name: /add comment/i });
+    const submitButton = submitButtons.find((btn) => btn.textContent === "Add Comment");
+    if (submitButton) await userEvent.click(submitButton);
+
+    // Wait for comment to appear
+    await waitFor(() => {
+      expect(screen.getByText("Test comment")).toBeInTheDocument();
+    });
+  };
+
+  const clickDiscardButton = async () => {
+    const discardButtons = await screen.findAllByRole("button", { name: /discard/i });
+    const discardButton = discardButtons.find(btn => btn.textContent === "Discard");
+    if (discardButton) await userEvent.click(discardButton);
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
 
@@ -42,38 +94,8 @@ describe("Cancel review feature", () => {
   });
 
   it("should show cancel button when in review mode", async () => {
-    render(
-      <ChangesDiffViewer
-        workspacePath="/test/workspace"
-        repoPath="/test/repo"
-        workspaceId={1}
-        initialSelectedFile={null}
-      />
-    );
-
-    // Wait for file to load
-    await waitFor(() => {
-      expect(screen.getAllByText(/test\.txt/).length).toBeGreaterThan(0);
-    });
-
-    // Expand the file to show hunks
-    const fileElements = screen.getAllByText(/test\.txt/);
-    await userEvent.click(fileElements[0]);
-
-    // Add a comment to enter review mode
-    await waitFor(() => {
-      expect(screen.getByText(/new line/)).toBeInTheDocument();
-    });
-
-    const addCommentButtons = screen.getAllByRole("button", { name: /add comment/i });
-    await userEvent.click(addCommentButtons[0]);
-
-    const textarea = screen.getByPlaceholderText(/add a comment/i);
-    await userEvent.type(textarea, "Test comment");
-
-    const submitButtons = screen.getAllByRole("button", { name: /add comment/i });
-    const submitButton = submitButtons.find((btn) => btn.textContent === "Add Comment");
-    if (submitButton) await userEvent.click(submitButton);
+    renderComponent();
+    await setupReviewMode();
 
     // Should show cancel button
     await waitFor(() => {
@@ -82,48 +104,10 @@ describe("Cancel review feature", () => {
   });
 
   it("should show confirmation dialog on cancel click", async () => {
-    // This test needs the component to be in review mode
-    render(
-      <ChangesDiffViewer
-        workspacePath="/test/workspace"
-        repoPath="/test/repo"
-        workspaceId={1}
-        initialSelectedFile={null}
-      />
-    );
-
-    // Setup review mode with a comment (abbreviated for brevity)
-    await waitFor(() => {
-      expect(screen.getAllByText(/test\.txt/).length).toBeGreaterThan(0);
-    });
-
-    const fileElements = screen.getAllByText(/test\.txt/);
-    await userEvent.click(fileElements[0]);
-
-    await waitFor(() => {
-      const buttons = screen.queryAllByRole("button", { name: /add comment/i });
-      expect(buttons.length).toBeGreaterThan(0);
-    });
-
-    const addCommentButtons = screen.getAllByRole("button", { name: /add comment/i });
-    await userEvent.click(addCommentButtons[0]);
-
-    const textarea = screen.getByPlaceholderText(/add a comment/i);
-    await userEvent.type(textarea, "Test comment");
-
-    const submitButtons = screen.getAllByRole("button", { name: /add comment/i });
-    const submitButton = submitButtons.find(
-      (btn) => btn.textContent === "Add Comment"
-    );
-    if (submitButton) {
-      await userEvent.click(submitButton);
-    }
+    renderComponent();
+    await setupReviewMode();
 
     // Click cancel review button
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /cancel review/i })).toBeInTheDocument();
-    });
-
     const cancelButton = screen.getByRole("button", { name: /cancel review/i });
     await userEvent.click(cancelButton);
 
@@ -135,50 +119,15 @@ describe("Cancel review feature", () => {
   });
 
   it("should clear all comments when confirmed", async () => {
-    render(
-      <ChangesDiffViewer
-        workspacePath="/test/workspace"
-        repoPath="/test/repo"
-        workspaceId={1}
-        initialSelectedFile={null}
-      />
-    );
-
-    // Setup: Add a comment
-    await waitFor(() => {
-      expect(screen.getAllByText(/test\.txt/).length).toBeGreaterThan(0);
-    });
-
-    const fileElements = screen.getAllByText(/test\.txt/);
-    await userEvent.click(fileElements[0]);
-
-    await waitFor(() => {
-      const buttons = screen.queryAllByRole("button", { name: /add comment/i });
-      expect(buttons.length).toBeGreaterThan(0);
-    });
-
-    const addCommentButtons = screen.getAllByRole("button", { name: /add comment/i });
-    await userEvent.click(addCommentButtons[0]);
-
-    const textarea = screen.getByPlaceholderText(/add a comment/i);
-    await userEvent.type(textarea, "Test comment");
-
-    const submitButtons = screen.getAllByRole("button", { name: /add comment/i });
-    const submitButton = submitButtons.find((btn) => btn.textContent === "Add Comment");
-    if (submitButton) await userEvent.click(submitButton);
-
-    // Verify comment exists
-    await waitFor(() => {
-      expect(screen.getByText("Test comment")).toBeInTheDocument();
-    });
+    renderComponent();
+    await setupReviewMode();
 
     // Click cancel review
     const cancelButton = await screen.findByRole("button", { name: /cancel review/i });
     await userEvent.click(cancelButton);
 
     // Click discard in dialog
-    const discardButton = await screen.findByRole("button", { name: /discard/i });
-    await userEvent.click(discardButton);
+    await clickDiscardButton();
 
     // Comment should be gone
     await waitFor(() => {
@@ -187,41 +136,8 @@ describe("Cancel review feature", () => {
   });
 
   it("should not clear anything when dialog is dismissed", async () => {
-    render(
-      <ChangesDiffViewer
-        workspacePath="/test/workspace"
-        repoPath="/test/repo"
-        workspaceId={1}
-        initialSelectedFile={null}
-      />
-    );
-
-    // Add a comment
-    await waitFor(() => {
-      expect(screen.getAllByText(/test\.txt/).length).toBeGreaterThan(0);
-    });
-
-    const fileElements = screen.getAllByText(/test\.txt/);
-    await userEvent.click(fileElements[0]);
-
-    await waitFor(() => {
-      const buttons = screen.queryAllByRole("button", { name: /add comment/i });
-      expect(buttons.length).toBeGreaterThan(0);
-    });
-
-    const addCommentButtons = screen.getAllByRole("button", { name: /add comment/i });
-    await userEvent.click(addCommentButtons[0]);
-
-    const textarea = screen.getByPlaceholderText(/add a comment/i);
-    await userEvent.type(textarea, "Test comment");
-
-    const submitButtons = screen.getAllByRole("button", { name: /add comment/i });
-    const submitButton = submitButtons.find((btn) => btn.textContent === "Add Comment");
-    if (submitButton) await userEvent.click(submitButton);
-
-    await waitFor(() => {
-      expect(screen.getByText("Test comment")).toBeInTheDocument();
-    });
+    renderComponent();
+    await setupReviewMode();
 
     // Click cancel review
     const cancelButton = await screen.findByRole("button", { name: /cancel review/i });
@@ -238,41 +154,8 @@ describe("Cancel review feature", () => {
   });
 
   it("should close dialog when 'Keep Reviewing' is clicked", async () => {
-    render(
-      <ChangesDiffViewer
-        workspacePath="/test/workspace"
-        repoPath="/test/repo"
-        workspaceId={1}
-        initialSelectedFile={null}
-      />
-    );
-
-    // Add a comment to enter review mode
-    await waitFor(() => {
-      expect(screen.getAllByText(/test\.txt/).length).toBeGreaterThan(0);
-    });
-
-    const fileElements = screen.getAllByText(/test\.txt/);
-    await userEvent.click(fileElements[0]);
-
-    await waitFor(() => {
-      const buttons = screen.queryAllByRole("button", { name: /add comment/i });
-      expect(buttons.length).toBeGreaterThan(0);
-    });
-
-    const addCommentButtons = screen.getAllByRole("button", { name: /add comment/i });
-    await userEvent.click(addCommentButtons[0]);
-
-    const textarea = screen.getByPlaceholderText(/add a comment/i);
-    await userEvent.type(textarea, "Test comment");
-
-    const submitButtons = screen.getAllByRole("button", { name: /add comment/i });
-    const submitButton = submitButtons.find((btn) => btn.textContent === "Add Comment");
-    if (submitButton) await userEvent.click(submitButton);
-
-    await waitFor(() => {
-      expect(screen.getByText("Test comment")).toBeInTheDocument();
-    });
+    renderComponent();
+    await setupReviewMode();
 
     // Click cancel review button
     const cancelButton = await screen.findByRole("button", { name: /cancel review/i });
@@ -287,7 +170,7 @@ describe("Cancel review feature", () => {
     const keepButton = await screen.findByRole("button", { name: /keep reviewing/i });
     await userEvent.click(keepButton);
 
-    // Verify dialog is closed (dialog title should not be in document)
+    // Verify dialog is closed
     await waitFor(() => {
       expect(screen.queryByText(/cancel review\?/i)).not.toBeInTheDocument();
     });
@@ -297,41 +180,8 @@ describe("Cancel review feature", () => {
   });
 
   it("should clear persisted review from database on confirm", async () => {
-    render(
-      <ChangesDiffViewer
-        workspacePath="/test/workspace"
-        repoPath="/test/repo"
-        workspaceId={1}
-        initialSelectedFile={null}
-      />
-    );
-
-    // Add a comment
-    await waitFor(() => {
-      expect(screen.getAllByText(/test\.txt/).length).toBeGreaterThan(0);
-    });
-
-    const fileElements = screen.getAllByText(/test\.txt/);
-    await userEvent.click(fileElements[0]);
-
-    await waitFor(() => {
-      const buttons = screen.queryAllByRole("button", { name: /add comment/i });
-      expect(buttons.length).toBeGreaterThan(0);
-    });
-
-    const addCommentButtons = screen.getAllByRole("button", { name: /add comment/i });
-    await userEvent.click(addCommentButtons[0]);
-
-    const textarea = screen.getByPlaceholderText(/add a comment/i);
-    await userEvent.type(textarea, "Test comment");
-
-    const submitButtons = screen.getAllByRole("button", { name: /add comment/i });
-    const submitButton = submitButtons.find((btn) => btn.textContent === "Add Comment");
-    if (submitButton) await userEvent.click(submitButton);
-
-    await waitFor(() => {
-      expect(screen.getByText("Test comment")).toBeInTheDocument();
-    });
+    renderComponent();
+    await setupReviewMode();
 
     // Clear mock calls
     vi.mocked(api.clearPendingReview).mockClear();
@@ -340,8 +190,7 @@ describe("Cancel review feature", () => {
     const cancelButton = await screen.findByRole("button", { name: /cancel review/i });
     await userEvent.click(cancelButton);
 
-    const discardButton = await screen.findByRole("button", { name: /discard/i });
-    await userEvent.click(discardButton);
+    await clickDiscardButton();
 
     // Verify clearPendingReview was called
     await waitFor(() => {

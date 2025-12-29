@@ -549,3 +549,10 @@ export const gitGetCommitsBetweenBranches = (
   _limit?: number
 ): Promise<BranchCommitInfo[]> =>
   Promise.resolve([]);
+
+// Clear pending review data (stub implementation)
+export const clearPendingReview = (
+  _repoPath: string,
+  _workspaceId: number
+): Promise<void> =>
+  Promise.resolve();
