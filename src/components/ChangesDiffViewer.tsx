@@ -12,6 +12,7 @@ import {
 import { type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
 import { v4 as uuidv4 } from "uuid";
 import {
   jjGetChangedFiles,
@@ -853,6 +854,11 @@ export const ChangesDiffViewer = memo(
         hunkIndex: number;
         lineIndex: number;
       } | null>(null);
+      const [currentDragLine, setCurrentDragLine] = useState<{
+        filePath: string;
+        hunkIndex: number;
+        lineIndex: number;
+      } | null>(null);
       const [contextMenuPosition, setContextMenuPosition] = useState<{
         x: number;
         y: number;
@@ -862,6 +868,7 @@ export const ChangesDiffViewer = memo(
       const prevFilePathsRef = useRef<string[]>([]);
       const diffContainerRef = useRef<HTMLDivElement>(null);
       const isReloadingRef = useRef<boolean>(false);
+      const isDraggingRef = useRef<boolean>(false);
 
       // Active file tracking (for sidebar highlighting)
       const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
@@ -1058,6 +1065,24 @@ export const ChangesDiffViewer = memo(
           unlistenFocus.then((fn) => fn());
         };
       }, []);
+
+      // Listen for workspace file changes
+      useEffect(() => {
+        if (!workspaceId) return;
+
+        const unlisten = listen<{ workspace_id: number; changed_paths: string[] }>(
+          "workspace-files-changed",
+          (event) => {
+            if (event.payload.workspace_id === workspaceId) {
+              loadChangedFiles();
+            }
+          }
+        );
+
+        return () => {
+          unlisten.then((fn) => fn());
+        };
+      }, [workspaceId, loadChangedFiles]);
 
       // Load pending review comments on mount
       useEffect(() => {
@@ -1691,6 +1716,8 @@ export const ChangesDiffViewer = memo(
             return;
           }
           e.preventDefault();
+          e.stopPropagation();
+          isDraggingRef.current = false; // Reset drag flag on new selection
           setIsSelecting(true);
           setSelectionAnchor({ filePath, hunkIndex, lineIndex });
           setDiffLineSelection({
@@ -1758,16 +1785,32 @@ export const ChangesDiffViewer = memo(
             }
           }
 
+          // Mark as dragging if we've moved to a different line
+          if (
+            selectionAnchor.hunkIndex !== hunkIndex ||
+            selectionAnchor.lineIndex !== lineIndex
+          ) {
+            isDraggingRef.current = true;
+          }
+
           setDiffLineSelection({ filePath, lines: newLines });
+          setCurrentDragLine({ filePath, hunkIndex, lineIndex });
         },
         [isSelecting, selectionAnchor, allFileHunks]
       );
 
       const handleLineMouseUp = useCallback(() => {
         setIsSelecting(false);
+        // Don't clear currentDragLine - keep it to remember where selection ended
       }, []);
 
       const handleContainerClick = useCallback((e: React.MouseEvent) => {
+        // Ignore clicks immediately after a drag operation
+        if (isDraggingRef.current) {
+          isDraggingRef.current = false;
+          return;
+        }
+
         // Don't clear selection if clicking on a diff line or the comment button
         if (
           (e.target as HTMLElement).closest("[data-diff-line]") ||
@@ -1776,6 +1819,7 @@ export const ChangesDiffViewer = memo(
           return;
         }
         setDiffLineSelection(null);
+        setCurrentDragLine(null);
         setContextMenuPosition(null);
       }, []);
 
@@ -1801,11 +1845,60 @@ export const ChangesDiffViewer = memo(
         [diffLineSelection]
       );
 
+      const shouldShowAddButton = useCallback(
+        (filePath: string, hunkIndex: number, lineIndex: number): boolean => {
+          // No selection - rely on CSS hover
+          if (!diffLineSelection || diffLineSelection.filePath !== filePath) {
+            return false;
+          }
+
+          const isInSelection = diffLineSelection.lines.some(
+            (l) => l.hunkIndex === hunkIndex && l.lineIndex === lineIndex
+          );
+
+          if (!isInSelection) {
+            return false;
+          }
+
+          // If actively selecting, show button only on the line under cursor
+          if (isSelecting && currentDragLine) {
+            return (
+              currentDragLine.filePath === filePath &&
+              currentDragLine.hunkIndex === hunkIndex &&
+              currentDragLine.lineIndex === lineIndex
+            );
+          }
+
+          // Selection complete: show button on the line where selection ended
+          if (currentDragLine) {
+            return (
+              currentDragLine.filePath === filePath &&
+              currentDragLine.hunkIndex === hunkIndex &&
+              currentDragLine.lineIndex === lineIndex
+            );
+          }
+
+          // Fallback: show on last line (shouldn't happen in normal flow)
+          if (diffLineSelection.lines.length > 0) {
+            const lastLine =
+              diffLineSelection.lines[diffLineSelection.lines.length - 1];
+            return (
+              lastLine.hunkIndex === hunkIndex &&
+              lastLine.lineIndex === lineIndex
+            );
+          }
+
+          return false;
+        },
+        [diffLineSelection, isSelecting, currentDragLine]
+      );
+
       useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
           if (e.key === "Escape") {
             setContextMenuPosition(null);
             setDiffLineSelection(null);
+            setCurrentDragLine(null);
           }
         };
         document.addEventListener("keydown", handleKeyDown);
@@ -2307,6 +2400,11 @@ export const ChangesDiffViewer = memo(
                 pendingComment.hunkId === hunk.id &&
                 lineIndex === pendingComment.displayAtLineIndex;
               const selected = isLineSelected(filePath, hunkIndex, lineIndex);
+              const showButton = shouldShowAddButton(
+                filePath,
+                hunkIndex,
+                lineIndex
+              );
 
               return (
                 <Fragment key={`${hunk.id}-line-${lineIndex}`}>
@@ -2363,7 +2461,7 @@ export const ChangesDiffViewer = memo(
                         data-comment-button
                         className={cn(
                           "p-[2px] rounded bg-primary text-primary-foreground hover:bg-primary/90",
-                          selected ? "visible" : "invisible group-hover:visible"
+                          showButton ? "visible" : "invisible group-hover:visible"
                         )}
                         onMouseDown={(e) => e.stopPropagation()}
                         onClick={(e) => {
