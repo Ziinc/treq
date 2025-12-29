@@ -67,6 +67,7 @@ import {
   Check,
   Square,
   RefreshCw,
+  Pencil,
 } from "lucide-react";
 import { cn, getFileName } from "../lib/utils";
 import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
@@ -303,6 +304,85 @@ const CommentInput: React.FC<CommentInputProps> = memo(
   }
 );
 CommentInput.displayName = "CommentInput";
+
+interface CommentEditInputProps {
+  initialText: string;
+  onSave: (text: string) => void;
+  onCancel: () => void;
+  onDiscard: () => void;
+}
+
+const CommentEditInput: React.FC<CommentEditInputProps> = memo(
+  ({ initialText, onSave, onCancel, onDiscard }) => {
+    const [text, setText] = useState(initialText);
+
+    const handleSave = useCallback(() => {
+      if (text.trim()) {
+        onSave(text.trim());
+      }
+    }, [text, onSave]);
+
+    const handleKeyDown = useCallback(
+      (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.metaKey || e.ctrlKey) {
+          const key = e.key.toLowerCase();
+          if (["a", "c", "x", "v", "z", "y"].includes(key)) {
+            e.stopPropagation();
+            return;
+          }
+        }
+
+        if (e.key === "Escape") {
+          onCancel();
+        } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+          handleSave();
+        }
+      },
+      [onCancel, handleSave]
+    );
+
+    return (
+      <div className="space-y-2">
+        <Textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          className="font-sans text-sm"
+          autoFocus
+          onKeyDown={handleKeyDown}
+        />
+        <div className="flex justify-between gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onDiscard}
+            className="text-destructive hover:text-destructive hover:bg-destructive/10 font-sans"
+          >
+            Discard
+          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onCancel}
+              className="font-sans"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={!text.trim()}
+              className="font-sans"
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+);
+CommentEditInput.displayName = "CommentEditInput";
 
 // Isolated commit input component to prevent parent re-renders during typing
 interface CommitInputHandle {
@@ -810,6 +890,7 @@ export const ChangesDiffViewer = memo(
       const [showCancelDialog, setShowCancelDialog] = useState(false);
       const [copiedReview, setCopiedReview] = useState(false);
       const [hasUserAddedComments, setHasUserAddedComments] = useState(false);
+      const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
 
       // Track if user is in review mode (actively reviewing, not just viewing persisted comments)
       const isInReviewMode = useMemo(() => {
@@ -1802,6 +1883,30 @@ export const ChangesDiffViewer = memo(
         setComments((prev) => prev.filter((c) => c.id !== commentId));
       }, []);
 
+      const startEditComment = useCallback((commentId: string) => {
+        setEditingCommentId(commentId);
+      }, []);
+
+      const cancelEditComment = useCallback(() => {
+        setEditingCommentId(null);
+      }, []);
+
+      const saveEditComment = useCallback(
+        (commentId: string, newText: string) => {
+          if (!newText.trim()) return;
+
+          setComments((prev) =>
+            prev.map((comment) =>
+              comment.id === commentId
+                ? { ...comment, text: newText.trim() }
+                : comment
+            )
+          );
+          setEditingCommentId(null);
+        },
+        []
+      );
+
       // Format review as markdown
       const formatReviewMarkdown = useCallback(() => {
         let markdown = "## Code Review\n\n";
@@ -2288,25 +2393,65 @@ export const ChangesDiffViewer = memo(
                   {lineComments.length > 0 &&
                     actualLineNum === lineComments[0].endLine && (
                       <div className="bg-muted/60 border-y border-border/40 px-[16px] py-[8px] space-y-2">
-                        {lineComments.map((comment) => (
-                          <div
-                            key={comment.id}
-                            className="bg-background rounded-md p-[12px] border border-border/60"
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="text-sm whitespace-pre-wrap flex-1">
-                                {comment.text}
-                              </p>
-                              <button
-                                onClick={() => deleteComment(comment.id)}
-                                className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
-                                title="Delete comment"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
+                        {lineComments.map((comment) => {
+                          const isEditing = editingCommentId === comment.id;
+
+                          return (
+                            <div key={comment.id}>
+                              {isEditing ? (
+                                <div className="bg-background rounded-md p-[12px] border border-border/60">
+                                  <CommentEditInput
+                                    initialText={comment.text}
+                                    onSave={(newText) =>
+                                      saveEditComment(comment.id, newText)
+                                    }
+                                    onCancel={cancelEditComment}
+                                    onDiscard={() => deleteComment(comment.id)}
+                                  />
+                                </div>
+                              ) : (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div
+                                        className="group bg-background rounded-md p-[12px] border border-border/60 cursor-pointer hover:shadow-md transition-shadow"
+                                        onClick={() =>
+                                          startEditComment(comment.id)
+                                        }
+                                      >
+                                        <div className="flex items-start gap-2">
+                                          <Pencil className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5" />
+                                          <p className="text-sm whitespace-pre-wrap flex-1">
+                                            {comment.text}
+                                          </p>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  deleteComment(comment.id);
+                                                }}
+                                                className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground flex-shrink-0"
+                                              >
+                                                <X className="w-3 h-3" />
+                                              </button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                              Delete comment
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </div>
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      Click to edit
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
 
