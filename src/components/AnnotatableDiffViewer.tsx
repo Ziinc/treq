@@ -418,7 +418,7 @@ const AnnotatableDiffViewerComponent: React.FC<AnnotatableDiffViewerProps> = ({
                               Jump
                             </button>
                           </div>
-                          <p>{comment.text}</p>
+                          <p className="font-sans">{comment.text}</p>
                         </div>
                       ))}
                   </div>

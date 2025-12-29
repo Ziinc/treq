@@ -89,7 +89,7 @@ export const ReviewSummaryPanel: React.FC<ReviewSummaryPanelProps> = ({
                   <pre className="bg-muted rounded px-2 py-1 whitespace-pre-wrap overflow-auto">
                     {comment.lineText || "(empty line)"}
                   </pre>
-                  <p>{comment.text}</p>
+                  <p className="font-sans">{comment.text}</p>
                 </div>
               ))}
             </div>
