@@ -16,7 +16,7 @@ vi.mock("../src/lib/api", async () => {
   };
 });
 
-describe("Cancel review feature", () => {
+describe("Cancel/Discard review feature", () => {
   const renderComponent = () => {
     return render(
       <ChangesDiffViewer
@@ -57,9 +57,9 @@ describe("Cancel review feature", () => {
     const submitButton = submitButtons.find((btn) => btn.textContent === "Add Comment");
     if (submitButton) await userEvent.click(submitButton);
 
-    // Wait for comment to appear
+    // Wait for comment to appear (will be in multiple places: inline + review panel)
     await waitFor(() => {
-      expect(screen.getByText("Test comment")).toBeInTheDocument();
+      expect(screen.getAllByText("Test comment").length).toBeGreaterThan(0);
     });
   };
 
@@ -99,7 +99,7 @@ describe("Cancel review feature", () => {
 
     // Should show cancel button
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /cancel review/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /^cancel$/i })).toBeInTheDocument();
     });
   });
 
@@ -107,13 +107,13 @@ describe("Cancel review feature", () => {
     renderComponent();
     await setupReviewMode();
 
-    // Click cancel review button
-    const cancelButton = screen.getByRole("button", { name: /cancel review/i });
+    // Click cancel button
+    const cancelButton = screen.getByRole("button", { name: /^cancel$/i });
     await userEvent.click(cancelButton);
 
     // Should show confirmation dialog
     await waitFor(() => {
-      expect(screen.getByText(/cancel review\?/i)).toBeInTheDocument();
+      expect(screen.getByText(/discard review\?/i)).toBeInTheDocument();
       expect(screen.getByText(/this will discard/i)).toBeInTheDocument();
     });
   });
@@ -122,8 +122,8 @@ describe("Cancel review feature", () => {
     renderComponent();
     await setupReviewMode();
 
-    // Click cancel review
-    const cancelButton = await screen.findByRole("button", { name: /cancel review/i });
+    // Click cancel button
+    const cancelButton = await screen.findByRole("button", { name: /^cancel$/i });
     await userEvent.click(cancelButton);
 
     // Click discard in dialog
@@ -139,8 +139,8 @@ describe("Cancel review feature", () => {
     renderComponent();
     await setupReviewMode();
 
-    // Click cancel review
-    const cancelButton = await screen.findByRole("button", { name: /cancel review/i });
+    // Click cancel button
+    const cancelButton = await screen.findByRole("button", { name: /^cancel$/i });
     await userEvent.click(cancelButton);
 
     // Click "Keep reviewing" button
@@ -149,7 +149,7 @@ describe("Cancel review feature", () => {
 
     // Comment should still exist
     await waitFor(() => {
-      expect(screen.getByText("Test comment")).toBeInTheDocument();
+      expect(screen.getAllByText("Test comment").length).toBeGreaterThan(0);
     });
   });
 
@@ -157,13 +157,13 @@ describe("Cancel review feature", () => {
     renderComponent();
     await setupReviewMode();
 
-    // Click cancel review button
-    const cancelButton = await screen.findByRole("button", { name: /cancel review/i });
+    // Click cancel button
+    const cancelButton = await screen.findByRole("button", { name: /^cancel$/i });
     await userEvent.click(cancelButton);
 
     // Verify dialog is shown
     await waitFor(() => {
-      expect(screen.getByText(/cancel review\?/i)).toBeInTheDocument();
+      expect(screen.getByText(/discard review\?/i)).toBeInTheDocument();
     });
 
     // Click "Keep reviewing" button
@@ -172,11 +172,11 @@ describe("Cancel review feature", () => {
 
     // Verify dialog is closed
     await waitFor(() => {
-      expect(screen.queryByText(/cancel review\?/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/discard review\?/i)).not.toBeInTheDocument();
     });
 
     // Verify comment is still present
-    expect(screen.getByText("Test comment")).toBeInTheDocument();
+    expect(screen.getAllByText("Test comment").length).toBeGreaterThan(0);
   });
 
   it("should clear persisted review from database on confirm", async () => {
@@ -187,7 +187,7 @@ describe("Cancel review feature", () => {
     vi.mocked(api.clearPendingReview).mockClear();
 
     // Click cancel and confirm
-    const cancelButton = await screen.findByRole("button", { name: /cancel review/i });
+    const cancelButton = await screen.findByRole("button", { name: /^cancel$/i });
     await userEvent.click(cancelButton);
 
     await clickDiscardButton();
