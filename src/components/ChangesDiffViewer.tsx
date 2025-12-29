@@ -24,6 +24,7 @@ import {
   markFileViewed,
   unmarkFileViewed,
   readFile,
+  clearPendingReview,
   type JjDiffHunk,
 } from "../lib/api";
 import { useCachedWorkspaceChanges } from "../hooks/useCachedWorkspaceChanges";
@@ -39,6 +40,16 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "./ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 import {
   AlertTriangle,
   FileText,
@@ -70,6 +81,8 @@ import { MoveToWorkspaceDialog } from "./MoveToWorkspaceDialog";
 
 interface ChangesDiffViewerProps {
   workspacePath: string;
+  repoPath?: string;
+  workspaceId?: number;
   readOnly?: boolean;
   onStagedFilesChange?: (files: string[]) => void;
   initialSelectedFile: string | null;
@@ -664,6 +677,8 @@ export const ChangesDiffViewer = memo(
     (
       {
         workspacePath,
+        repoPath,
+        workspaceId,
         readOnly = false,
         onStagedFilesChange,
         initialSelectedFile,
@@ -748,6 +763,7 @@ export const ChangesDiffViewer = memo(
       const [showCommentInput, setShowCommentInput] = useState(false);
       const [reviewPopoverOpen, setReviewPopoverOpen] = useState(false);
       const [finalReviewComment, setFinalReviewComment] = useState("");
+      const [showCancelDialog, setShowCancelDialog] = useState(false);
 
       // Track if user is in review mode (has comments or is typing)
       const isInReviewMode = useMemo(() => {
@@ -1811,6 +1827,36 @@ export const ChangesDiffViewer = memo(
         onReviewSubmitted,
       ]);
 
+      // Cancel review handler
+      const handleCancelReview = useCallback(async () => {
+        try {
+          // Clear review state
+          setComments([]);
+          setFinalReviewComment("");
+          setShowCancelDialog(false);
+          setReviewPopoverOpen(false);
+
+          // Clear persisted review from database if available
+          if (repoPath && workspaceId !== undefined) {
+            await clearPendingReview(repoPath, workspaceId);
+          }
+
+          addToast({
+            title: "Review canceled",
+            description: "All comments have been discarded",
+            type: "success",
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          addToast({
+            title: "Failed to cancel review",
+            description: message,
+            type: "error",
+          });
+        }
+      }, [repoPath, workspaceId, addToast]);
+
       const handleCommit = useCallback(
         async (commitMsg: string) => {
           if (!commitMsg) {
@@ -2233,16 +2279,24 @@ export const ChangesDiffViewer = memo(
                     pending
                   </span>
                 </div>
-                <Popover
-                  open={reviewPopoverOpen}
-                  onOpenChange={setReviewPopoverOpen}
-                >
-                  <PopoverTrigger asChild>
-                    <Button size="sm" variant="default" className="gap-2">
-                      <Send className="w-3 h-3" />
-                      Finish review
-                    </Button>
-                  </PopoverTrigger>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowCancelDialog(true)}
+                  >
+                    Cancel review
+                  </Button>
+                  <Popover
+                    open={reviewPopoverOpen}
+                    onOpenChange={setReviewPopoverOpen}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button size="sm" variant="default" className="gap-2">
+                        <Send className="w-3 h-3" />
+                        Finish review
+                      </Button>
+                    </PopoverTrigger>
                   <PopoverContent align="end" side="bottom" className="w-80">
                     <div className="space-y-3">
                       <div>
@@ -2296,8 +2350,27 @@ export const ChangesDiffViewer = memo(
                     </div>
                   </PopoverContent>
                 </Popover>
+                </div>
               </div>
             )}
+
+            {/* Cancel Review Confirmation Dialog */}
+            <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Cancel review?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will discard all {comments.length} pending comment{comments.length !== 1 ? "s" : ""}. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Keep reviewing</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleCancelReview}>
+                    Discard
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
             {/* Stale Files Warning Banner - shown when files changed during review */}
             {staleFiles.size > 0 && (
