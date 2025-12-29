@@ -159,7 +159,7 @@ describe("ShowWorkspace agent comments", () => {
     );
 
     const user = userEvent.setup();
-    const changesTab = await screen.findByRole("tab", { name: /changes/i });
+    const changesTab = await screen.findByRole("tab", { name: /review/i });
     await user.click(changesTab);
 
     await waitFor(() => expect(changesDiffReviewHandler).toBeTruthy());
