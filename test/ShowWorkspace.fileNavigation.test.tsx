@@ -84,9 +84,9 @@ describe("ShowWorkspace - File Navigation from Cmd+P", () => {
       />
     );
 
-    // Wait for tabs to appear and verify we're on overview tab
-    const overviewTab = await screen.findByRole("tab", { name: /overview/i });
-    expect(overviewTab).toHaveAttribute("data-state", "active");
+    // Wait for tabs to appear and verify we're on code tab
+    const codeTab = await screen.findByRole("tab", { name: /code/i });
+    expect(codeTab).toHaveAttribute("data-state", "active");
 
     // Rerender with a file selected (simulating Cmd+P selection)
     rerender(
@@ -139,7 +139,7 @@ describe("ShowWorkspace - File Navigation from Cmd+P", () => {
     );
 
     // Wait for tabs to appear
-    await screen.findByRole("tab", { name: /overview/i });
+    await screen.findByRole("tab", { name: /code/i });
 
     // Select a nested file (simulating Cmd+P selection)
     rerender(
