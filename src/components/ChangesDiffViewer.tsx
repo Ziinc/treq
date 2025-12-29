@@ -764,6 +764,7 @@ export const ChangesDiffViewer = memo(
       const [reviewPopoverOpen, setReviewPopoverOpen] = useState(false);
       const [finalReviewComment, setFinalReviewComment] = useState("");
       const [showCancelDialog, setShowCancelDialog] = useState(false);
+      const [copiedReview, setCopiedReview] = useState(false);
 
       // Track if user is in review mode (has comments or is typing)
       const isInReviewMode = useMemo(() => {
@@ -1857,6 +1858,29 @@ export const ChangesDiffViewer = memo(
         }
       }, [repoPath, workspaceId, addToast]);
 
+      // Copy review to clipboard
+      const handleCopyReview = useCallback(async () => {
+        try {
+          const markdown = formatReviewMarkdown();
+          await navigator.clipboard.writeText(markdown);
+          setCopiedReview(true);
+          setTimeout(() => setCopiedReview(false), 2000);
+          addToast({
+            title: "Copied to clipboard",
+            description: "Review comments copied",
+            type: "success",
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          addToast({
+            title: "Failed to copy",
+            description: message,
+            type: "error",
+          });
+        }
+      }, [formatReviewMarkdown, addToast]);
+
       const handleCommit = useCallback(
         async (commitMsg: string) => {
           if (!commitMsg) {
@@ -1997,13 +2021,13 @@ export const ChangesDiffViewer = memo(
 
       // Get comments for a specific line in a specific hunk
       const getCommentsForLine = useCallback(
-        (filePath: string, hunkId: string, lineIndex: number) => {
+        (filePath: string, hunkId: string, actualLineNum: number) => {
           return comments.filter(
             (c) =>
               c.filePath === filePath &&
               c.hunkId === hunkId &&
-              lineIndex >= c.startLine &&
-              lineIndex <= c.endLine
+              actualLineNum >= c.startLine &&
+              actualLineNum <= c.endLine
           );
         },
         [comments]
@@ -2045,10 +2069,13 @@ export const ChangesDiffViewer = memo(
             </div>
             {/* Hunk lines */}
             {hunk.lines.map((line, lineIndex) => {
+              const lineNum = lineNumbers[lineIndex];
+              const actualLineNum =
+                lineNum?.new ?? lineNum?.old ?? lineIndex + 1;
               const lineComments = getCommentsForLine(
                 filePath,
                 hunk.id,
-                lineIndex
+                actualLineNum
               );
               const showCommentInputHere =
                 showCommentInput &&
@@ -2057,9 +2084,6 @@ export const ChangesDiffViewer = memo(
                 pendingComment.hunkId === hunk.id &&
                 lineIndex === pendingComment.displayAtLineIndex;
               const selected = isLineSelected(filePath, hunkIndex, lineIndex);
-              const lineNum = lineNumbers[lineIndex];
-              const actualLineNum =
-                lineNum?.new ?? lineNum?.old ?? lineIndex + 1;
 
               return (
                 <Fragment key={`${hunk.id}-line-${lineIndex}`}>
@@ -2164,7 +2188,7 @@ export const ChangesDiffViewer = memo(
 
                   {/* Inline comments display */}
                   {lineComments.length > 0 &&
-                    lineIndex === lineComments[0].endLine && (
+                    actualLineNum === lineComments[0].endLine && (
                       <div className="bg-muted/60 border-y border-border/40 px-[16px] py-[8px] space-y-2">
                         {lineComments.map((comment) => (
                           <div
@@ -2283,9 +2307,27 @@ export const ChangesDiffViewer = memo(
                   <Button
                     size="sm"
                     variant="outline"
+                    onClick={handleCopyReview}
+                    className="gap-2"
+                  >
+                    {copiedReview ? (
+                      <>
+                        <Check className="w-3 h-3" />
+                        Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" />
+                        Copy
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
                     onClick={() => setShowCancelDialog(true)}
                   >
-                    Cancel review
+                    Cancel
                   </Button>
                   <Popover
                     open={reviewPopoverOpen}
@@ -2358,7 +2400,7 @@ export const ChangesDiffViewer = memo(
             <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Cancel review?</AlertDialogTitle>
+                  <AlertDialogTitle>Discard review?</AlertDialogTitle>
                   <AlertDialogDescription>
                     This will discard all {comments.length} pending comment{comments.length !== 1 ? "s" : ""}. This action cannot be undone.
                   </AlertDialogDescription>
