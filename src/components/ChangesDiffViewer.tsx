@@ -24,6 +24,7 @@ import {
   markFileViewed,
   unmarkFileViewed,
   readFile,
+  loadPendingReview,
   clearPendingReview,
   type JjDiffHunk,
 } from "../lib/api";
@@ -430,6 +431,8 @@ interface FileRowComponentProps {
     filePath: string
   ) => JSX.Element;
   addToast: ReturnType<typeof useToast>["addToast"];
+  getOutdatedCommentsForFile: (filePath: string) => LineComment[];
+  deleteComment: (commentId: string) => void;
 }
 
 const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
@@ -453,6 +456,8 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
     handleContainerClick,
     renderHunkLines,
     addToast,
+    getOutdatedCommentsForFile,
+    deleteComment,
   } = props;
 
   const filePath = file.path;
@@ -476,6 +481,8 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
       }
     }
   }
+
+  const outdatedComments = getOutdatedCommentsForFile(filePath);
 
   return (
     <div
@@ -659,6 +666,43 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
             </div>
           ) : (
             <>
+              {outdatedComments.length > 0 && (
+                <div className="border-b border-amber-500/40 bg-amber-500/5 px-4 py-3 space-y-3">
+                  {outdatedComments.map((comment) => (
+                    <div
+                      key={comment.id}
+                      className="bg-background rounded-md p-3 border border-amber-500/30"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="px-1.5 py-0.5 rounded bg-amber-500/25 text-amber-700 dark:text-amber-300 text-[10px] font-medium">
+                            Outdated
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            Line {comment.startLine === comment.endLine
+                              ? comment.startLine
+                              : `${comment.startLine}-${comment.endLine}`}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => deleteComment(comment.id)}
+                          className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                          title="Delete"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                      {comment.lineContent.length > 0 && (
+                        <pre className="bg-muted/60 rounded px-2 py-1 text-xs mb-2 whitespace-pre-wrap overflow-auto font-mono">
+                          {comment.lineContent.join("\n")}
+                        </pre>
+                      )}
+                      <p className="text-sm font-sans">{comment.text}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Render all hunks */}
               {fileData.hunks.map((hunk, hunkIndex) =>
                 renderHunkLines(hunk, hunkIndex, filePath)
@@ -765,17 +809,18 @@ export const ChangesDiffViewer = memo(
       const [finalReviewComment, setFinalReviewComment] = useState("");
       const [showCancelDialog, setShowCancelDialog] = useState(false);
       const [copiedReview, setCopiedReview] = useState(false);
+      const [hasUserAddedComments, setHasUserAddedComments] = useState(false);
 
-      // Track if user is in review mode (has comments or is typing)
+      // Track if user is in review mode (actively reviewing, not just viewing persisted comments)
       const isInReviewMode = useMemo(() => {
         return (
-          comments.length > 0 ||
+          hasUserAddedComments ||
           showCommentInput ||
           reviewPopoverOpen ||
           finalReviewComment.trim().length > 0
         );
       }, [
-        comments.length,
+        hasUserAddedComments,
         showCommentInput,
         reviewPopoverOpen,
         finalReviewComment,
@@ -927,6 +972,23 @@ export const ChangesDiffViewer = memo(
           unlistenFocus.then((fn) => fn());
         };
       }, []);
+
+      // Load pending review comments on mount
+      useEffect(() => {
+        const loadComments = async () => {
+          if (repoPath && workspaceId !== undefined) {
+            try {
+              const loadedComments = await loadPendingReview(repoPath, workspaceId);
+              if (loadedComments.length > 0) {
+                setComments(loadedComments);
+              }
+            } catch (error) {
+              console.error("Failed to load pending review:", error);
+            }
+          }
+        };
+        loadComments();
+      }, [repoPath, workspaceId]);
 
       // Clear stale viewed files when files change (file no longer in changed list = remove from viewed)
       // Also clear when content hash doesn't match (file was modified since being marked as viewed)
@@ -1677,6 +1739,7 @@ export const ChangesDiffViewer = memo(
           };
 
           setComments((prev) => [...prev, newComment]);
+          setHasUserAddedComments(true);
           setShowCommentInput(false);
           setPendingComment(null);
           setDiffLineSelection(null);
@@ -1806,6 +1869,7 @@ export const ChangesDiffViewer = memo(
 
           // Clear review state
           setComments([]);
+          setHasUserAddedComments(false);
           setFinalReviewComment("");
           setReviewPopoverOpen(false);
           // Notify parent that review was submitted
@@ -1833,6 +1897,7 @@ export const ChangesDiffViewer = memo(
         try {
           // Clear review state
           setComments([]);
+          setHasUserAddedComments(false);
           setFinalReviewComment("");
           setShowCancelDialog(false);
           setReviewPopoverOpen(false);
@@ -2019,6 +2084,38 @@ export const ChangesDiffViewer = memo(
         setActiveFilePath(null);
       }, []);
 
+      // Check if a comment is outdated (its referenced line no longer exists)
+      const isCommentOutdated = useCallback(
+        (comment: LineComment): boolean => {
+          const fileData = allFileHunks.get(comment.filePath);
+          if (!fileData || fileData.isLoading || !fileData.hunks) return false;
+
+          // Check if hunk still exists
+          const hunk = fileData.hunks.find((h) => h.id === comment.hunkId);
+          if (!hunk) return true; // Hunk no longer exists = outdated
+
+          // Check if line numbers are still in range
+          const lineNumbers = computeHunkLineNumbers(hunk);
+          const hasMatchingLine = lineNumbers.some((ln) => {
+            const actualNum = ln.new ?? ln.old;
+            return actualNum && actualNum >= comment.startLine && actualNum <= comment.endLine;
+          });
+
+          return !hasMatchingLine;
+        },
+        [allFileHunks]
+      );
+
+      // Get outdated comments for a specific file
+      const getOutdatedCommentsForFile = useCallback(
+        (filePath: string): LineComment[] => {
+          return comments.filter(
+            (c) => c.filePath === filePath && isCommentOutdated(c)
+          );
+        },
+        [comments, isCommentOutdated]
+      );
+
       // Get comments for a specific line in a specific hunk
       const getCommentsForLine = useCallback(
         (filePath: string, hunkId: string, actualLineNum: number) => {
@@ -2027,10 +2124,11 @@ export const ChangesDiffViewer = memo(
               c.filePath === filePath &&
               c.hunkId === hunkId &&
               actualLineNum >= c.startLine &&
-              actualLineNum <= c.endLine
+              actualLineNum <= c.endLine &&
+              !isCommentOutdated(c) // Exclude outdated comments
           );
         },
-        [comments]
+        [comments, isCommentOutdated]
       );
 
       // Render diff lines for a hunk (no collapsible, just lines with selection support)
@@ -2573,6 +2671,8 @@ export const ChangesDiffViewer = memo(
                             handleContainerClick={handleContainerClick}
                             renderHunkLines={renderHunkLines}
                             addToast={addToast}
+                            getOutdatedCommentsForFile={getOutdatedCommentsForFile}
+                            deleteComment={deleteComment}
                           />
                         ))}
                       </div>
