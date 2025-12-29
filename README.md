@@ -1,14 +1,14 @@
-# Treq - Coding Agent Orchestrator
+# Treq - Coding Agent Manager
 
-Treq transforms AI-generated code into local isolated pull requests.
+Treq organizes your Coding Agents to work in local isolated workspaces, turning AI-generated code into local pull requests for review and refinement.
 
 ## What is Treq?
 
-AI agents can create results fast, but they don’t organize anything. The output code on top of each other, overwriting previous work, and make it hard to see what changed or what should happen next.
+AI agents can create results fast, but without the right review process, AI code can easily become technical debt. Agents output code on top of each other, overwriting previous work, and make it hard to see what changed or what should happen next.
 
 **Treq fixes that by adding structure.**
 
-Treq gives each agent result its own space, shows all changes clearly for review, and focuses on maximizing the engineer-in-the-loop development flow state.
+Treq gives each agent result its own working copy of the codebase, shows all changes clearly for review, and focuses on maximizing the engineer-in-the-loop development flow state.
 
 Now, instead of a messy pile of AI output, you get a clean, organized workflow you can control.
 
