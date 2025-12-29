@@ -274,6 +274,7 @@ mod tests {
 - Backend: `#[cfg(test)]` in same file
 - Mock Tauri APIs (see `test/setup.ts`)
 - Use `test-utils.tsx` render (includes providers)
+- Use UI interactions for assertions (userEvent.click, userEvent.type, etc.)
 - Clean up resources
 
 ## Common Tasks
