@@ -95,6 +95,7 @@ interface ChangesDiffViewerProps {
 
 export interface ChangesDiffViewerHandle {
   focusCommitInput: () => void;
+  refresh: () => void;
 }
 
 interface LineComment {
@@ -860,6 +861,7 @@ export const ChangesDiffViewer = memo(
       const commitInputRef = useRef<CommitInputHandle>(null);
       const prevFilePathsRef = useRef<string[]>([]);
       const diffContainerRef = useRef<HTMLDivElement>(null);
+      const isReloadingRef = useRef<boolean>(false);
 
       // Active file tracking (for sidebar highlighting)
       const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
@@ -870,17 +872,6 @@ export const ChangesDiffViewer = memo(
       const [conflictFilePath, setConflictFilePath] = useState<string | null>(null);
       const [loadingConflictFile, setLoadingConflictFile] = useState(false);
       const [resolvingConflict, setResolvingConflict] = useState(false);
-
-      // Expose focusCommitInput method via ref
-      useImperativeHandle(
-        ref,
-        () => ({
-          focusCommitInput: () => {
-            commitInputRef.current?.focus();
-          },
-        }),
-        []
-      );
 
       // Review/comment state
       const [comments, setComments] = useState<LineComment[]>([]);
@@ -1038,6 +1029,20 @@ export const ChangesDiffViewer = memo(
       useEffect(() => {
         loadChangedFiles();
       }, [workspacePath]);
+
+      // Expose focusCommitInput and refresh methods via ref
+      useImperativeHandle(
+        ref,
+        () => ({
+          focusCommitInput: () => {
+            commitInputRef.current?.focus();
+          },
+          refresh: () => {
+            loadChangedFiles();
+          },
+        }),
+        [loadChangedFiles]
+      );
 
       // Refresh changed files when window regains focus
       useEffect(() => {
@@ -1262,8 +1267,8 @@ export const ChangesDiffViewer = memo(
               })
             );
 
-            // If in review mode and not forcing, check for changes and store as pending
-            if (isInReviewMode && !forceApply) {
+            // If in review mode and not forcing and not reloading, check for changes and store as pending
+            if (isInReviewMode && !forceApply && !isReloadingRef.current) {
               const newHunksMap = new Map<string, FileHunksData>();
               const changedFiles = new Set<string>();
 
@@ -1372,6 +1377,9 @@ export const ChangesDiffViewer = memo(
 
       // Reload with pending data, preserving comments and moving orphaned ones to general comment
       const handleReloadWithPendingChanges = useCallback(() => {
+        // Set flag to bypass review mode check during reload
+        isReloadingRef.current = true;
+
         // If we have pending data, apply it now
         if (pendingFilesData) {
           // Find orphaned comments (comments on files/hunks that no longer exist or changed)
@@ -1452,6 +1460,11 @@ export const ChangesDiffViewer = memo(
         // Clear stale state
         setStaleFiles(new Set());
         setPendingFilesData(null);
+
+        // Reset reload flag after a small delay to allow useEffect to complete
+        setTimeout(() => {
+          isReloadingRef.current = false;
+        }, 100);
       }, [
         pendingFilesData,
         pendingHunksData,
@@ -1544,6 +1557,13 @@ export const ChangesDiffViewer = memo(
           setCollapsedFiles((prev) => {
             const next = new Set(prev);
             next.delete(filePath);
+            return next;
+          });
+
+          // Also expand large diff for this file
+          setExpandedLargeDiffs((prev) => {
+            const next = new Set(prev);
+            next.add(filePath);
             return next;
           });
 

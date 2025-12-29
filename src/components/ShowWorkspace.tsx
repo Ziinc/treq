@@ -691,6 +691,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
           </div>
         ) : activeTab === "changes" ? (
           <ChangesDiffViewer
+            key={`changes-${workingDirectory}`}
             ref={changesDiffViewerRef}
             workspacePath={workingDirectory}
             initialSelectedFile={initialSelectedFile}
