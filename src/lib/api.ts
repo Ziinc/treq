@@ -550,6 +550,24 @@ export const gitGetCommitsBetweenBranches = (
 ): Promise<BranchCommitInfo[]> =>
   Promise.resolve([]);
 
+// Load pending review comments (stub implementation)
+export interface PendingReviewComment {
+  id: string;
+  filePath: string;
+  hunkId: string;
+  startLine: number;
+  endLine: number;
+  lineContent: string[];
+  text: string;
+  createdAt: string;
+}
+
+export const loadPendingReview = (
+  _repoPath: string,
+  _workspaceId: number
+): Promise<PendingReviewComment[]> =>
+  Promise.resolve([]);
+
 // Clear pending review data (stub implementation)
 export const clearPendingReview = (
   _repoPath: string,
