@@ -120,6 +120,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   );
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [rebasing, setRebasing] = useState(false);
+  const [refreshingFiles, setRefreshingFiles] = useState(false);
 
   // Show overview tab by default for main repo, changes tab for workspaces
   const [activeTab, setActiveTab] = useState("overview");
@@ -588,10 +589,10 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
             </TabsTrigger>
           </TabsList>
         </Tabs>
-        {rebasing && (
+        {(rebasing || refreshingFiles) && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin" />
-            <span>Rebasing...</span>
+            <span>{rebasing ? "Rebasing..." : "Refreshing..."}</span>
           </div>
         )}
       </div>
@@ -694,6 +695,9 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
             key={`changes-${workingDirectory}`}
             ref={changesDiffViewerRef}
             workspacePath={workingDirectory}
+            workspaceId={workspace?.id}
+            repoPath={effectiveRepoPath}
+            onRefreshingChange={setRefreshingFiles}
             initialSelectedFile={initialSelectedFile}
             conflictedFiles={conflictedFiles}
             onCreateAgentWithReview={handleCreateAgentWithReview}

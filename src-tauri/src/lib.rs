@@ -8,6 +8,7 @@ mod jj_lib_ops;
 mod local_db;
 mod pty;
 
+use commands::file_watcher::WatcherManager;
 use db::Database;
 use pty::PtyManager;
 use std::sync::Mutex;
@@ -17,6 +18,7 @@ use tauri::{AppHandle, Emitter, EventTarget, Manager};
 pub(crate) struct AppState {
     db: Mutex<Database>,
     pty_manager: Mutex<PtyManager>,
+    watcher_manager: WatcherManager,
 }
 
 /// Emits an event only to the focused webview window.
@@ -69,9 +71,14 @@ pub fn run() {
 
             let pty_manager = PtyManager::new();
 
+            // Initialize file watcher
+            let watcher_manager = WatcherManager::new();
+            watcher_manager.set_app_handle(app.handle().clone());
+
             let app_state = AppState {
                 db: Mutex::new(db),
                 pty_manager: Mutex::new(pty_manager),
+                watcher_manager,
             };
 
             app.manage(app_state);
@@ -320,6 +327,8 @@ pub fn run() {
             commands::unmark_file_viewed,
             commands::get_viewed_files,
             commands::clear_all_viewed_files,
+            commands::start_file_watcher,
+            commands::stop_file_watcher,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

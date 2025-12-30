@@ -34,7 +34,12 @@ import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { useToast } from "./ui/toast";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "./ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from "./ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -88,9 +93,13 @@ interface ChangesDiffViewerProps {
   workspaceId?: number;
   readOnly?: boolean;
   onStagedFilesChange?: (files: string[]) => void;
+  onRefreshingChange?: (isRefreshing: boolean) => void;
   initialSelectedFile: string | null;
   onReviewSubmitted?: () => void;
-  onCreateAgentWithReview?: (reviewMarkdown: string, mode: 'plan' | 'acceptEdits') => Promise<void>;
+  onCreateAgentWithReview?: (
+    reviewMarkdown: string,
+    mode: "plan" | "acceptEdits"
+  ) => Promise<void>;
   conflictedFiles?: string[];
 }
 
@@ -401,7 +410,16 @@ interface CommitInputProps {
 
 const CommitInput = memo(
   forwardRef<CommitInputHandle, CommitInputProps>(
-    ({ onCommit, disabled, pending, selectedFileCount = 0, totalFileCount = 0 }, ref) => {
+    (
+      {
+        onCommit,
+        disabled,
+        pending,
+        selectedFileCount = 0,
+        totalFileCount = 0,
+      },
+      ref
+    ) => {
       const [message, setMessage] = useState("");
       const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -459,7 +477,9 @@ const CommitInput = memo(
             {pending ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : selectedFileCount > 0 && selectedFileCount < totalFileCount ? (
-              `Commit ${selectedFileCount} file${selectedFileCount !== 1 ? 's' : ''}`
+              `Commit ${selectedFileCount} file${
+                selectedFileCount !== 1 ? "s" : ""
+              }`
             ) : (
               "Commit"
             )}
@@ -506,7 +526,6 @@ interface FileRowComponentProps {
   handleUnmarkFileViewed: (filePath: string) => void;
   handleDiscardFiles: (filePath: string) => void;
   handleContextMenu: (e: React.MouseEvent) => void;
-  handleContainerClick: (e: React.MouseEvent) => void;
   renderHunkLines: (
     hunk: JjDiffHunk,
     hunkIndex: number,
@@ -535,7 +554,6 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
     handleUnmarkFileViewed,
     handleDiscardFiles,
     handleContextMenu,
-    handleContainerClick,
     renderHunkLines,
     addToast,
     getOutdatedCommentsForFile,
@@ -574,9 +592,7 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
       className="border border-border rounded-lg overflow-hidden"
     >
       {/* File Header */}
-      <div
-        className="sticky top-0 z-10 flex items-center justify-between px-[16px] py-[8px] bg-muted border-b border-border"
-      >
+      <div className="sticky top-0 z-10 flex items-center justify-between px-[16px] py-[8px] bg-muted border-b border-border">
         <div className="flex items-center gap-[8px] flex-1 min-w-0">
           <button
             role="button"
@@ -628,12 +644,12 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
                 handleMarkFileViewed(filePath);
               }
             }}
-                            className={cn(
-                              "flex items-center gap-[4px] px-[8px] py-[2px] rounded text-sm transition-colors",
-                              isViewed
-                                ? "bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/35"
-                                : "bg-muted hover:bg-accent text-muted-foreground hover:text-foreground"
-                            )}
+            className={cn(
+              "flex items-center gap-[4px] px-[8px] py-[2px] rounded text-sm transition-colors",
+              isViewed
+                ? "bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/35"
+                : "bg-muted hover:bg-accent text-muted-foreground hover:text-foreground"
+            )}
             title={isViewed ? "Mark as not viewed" : "Mark as viewed"}
           >
             {isViewed ? (
@@ -643,21 +659,21 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
             )}
             <span>Viewed</span>
           </button>
-                          {isBinaryFile(filePath) && (
-                            <span className="text-sm px-[8px] py-[2px] rounded bg-zinc-500/25 text-zinc-700 dark:text-zinc-300">
-                              Binary
-                            </span>
-                          )}
-                          {(additions > 0 || deletions > 0) && (
-                            <span className="text-sm font-mono flex items-center gap-[4px]">
-                              <span className="text-emerald-700 dark:text-emerald-300">
-                                +{additions}
-                              </span>
-                              <span className="text-red-700 dark:text-red-300">
-                                -{deletions}
-                              </span>
-                            </span>
-                          )}
+          {isBinaryFile(filePath) && (
+            <span className="text-sm px-[8px] py-[2px] rounded bg-zinc-500/25 text-zinc-700 dark:text-zinc-300">
+              Binary
+            </span>
+          )}
+          {(additions > 0 || deletions > 0) && (
+            <span className="text-sm font-mono flex items-center gap-[4px]">
+              <span className="text-emerald-700 dark:text-emerald-300">
+                +{additions}
+              </span>
+              <span className="text-red-700 dark:text-red-300">
+                -{deletions}
+              </span>
+            </span>
+          )}
           {!readOnly && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -667,14 +683,14 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" sideOffset={4}>
                 {(file.workspaceStatus || file.stagedStatus) && (
-                                <DropdownMenuItem
-                                    onSelect={(e) => {
-                                      e.preventDefault();
-                                      handleDiscardFiles(filePath);
-                                    }}
-                                    disabled={fileActionTarget === filePath}
-                                    className="text-red-700 dark:text-red-300 focus:text-red-700 dark:focus:text-red-300"
-                                  >
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      handleDiscardFiles(filePath);
+                    }}
+                    disabled={fileActionTarget === filePath}
+                    className="text-red-700 dark:text-red-300 focus:text-red-700 dark:focus:text-red-300"
+                  >
                     {selectedUnstagedFiles.has(filePath) &&
                     selectedUnstagedFiles.size > 1
                       ? `Discard ${selectedUnstagedFiles.size} files`
@@ -711,7 +727,6 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
         <div
           className="bg-background font-mono text-sm"
           onContextMenu={handleContextMenu}
-          onClick={handleContainerClick}
         >
           {isBinaryFile(filePath) ? (
             <div className="flex items-center justify-center py-[32px] text-muted-foreground">
@@ -761,7 +776,8 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
                             Outdated
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            Line {comment.startLine === comment.endLine
+                            Line{" "}
+                            {comment.startLine === comment.endLine
                               ? comment.startLine
                               : `${comment.startLine}-${comment.endLine}`}
                           </span>
@@ -807,6 +823,7 @@ export const ChangesDiffViewer = memo(
         workspaceId,
         readOnly = false,
         onStagedFilesChange,
+        onRefreshingChange,
         initialSelectedFile,
         onReviewSubmitted,
         onCreateAgentWithReview,
@@ -830,6 +847,7 @@ export const ChangesDiffViewer = memo(
       >(new Map());
       const [loadingAllHunks, setLoadingAllHunks] = useState(false);
       const [initialLoading, setInitialLoading] = useState(true);
+      const [_refreshing, setRefreshing] = useState(false);
       const [fileActionTarget, setFileActionTarget] = useState<string | null>(
         null
       );
@@ -875,8 +893,11 @@ export const ChangesDiffViewer = memo(
 
       // Conflict resolution state
       const [conflictEditorOpen, setConflictEditorOpen] = useState(false);
-      const [conflictFileContent, setConflictFileContent] = useState<string>("");
-      const [conflictFilePath, setConflictFilePath] = useState<string | null>(null);
+      const [conflictFileContent, setConflictFileContent] =
+        useState<string>("");
+      const [conflictFilePath, setConflictFilePath] = useState<string | null>(
+        null
+      );
       const [loadingConflictFile, setLoadingConflictFile] = useState(false);
       const [resolvingConflict, setResolvingConflict] = useState(false);
 
@@ -888,7 +909,9 @@ export const ChangesDiffViewer = memo(
       const [showCancelDialog, setShowCancelDialog] = useState(false);
       const [copiedReview, setCopiedReview] = useState(false);
       const [hasUserAddedComments, setHasUserAddedComments] = useState(false);
-      const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+      const [editingCommentId, setEditingCommentId] = useState<string | null>(
+        null
+      );
 
       // Track if user is in review mode (actively reviewing, not just viewing persisted comments)
       const isInReviewMode = useMemo(() => {
@@ -1020,6 +1043,8 @@ export const ChangesDiffViewer = memo(
       const loadChangedFiles = useCallback(async () => {
         // Caching removed - getDiffCache/setDiffCache no longer available
 
+        setRefreshing(true);
+        onRefreshingChange?.(true);
         try {
           const jjFiles = await jjGetChangedFiles(workspacePath);
           const parsed = parseJjChangedFiles(jjFiles);
@@ -1030,8 +1055,10 @@ export const ChangesDiffViewer = memo(
           addToast({ title: "JJ Error", description: message, type: "error" });
         } finally {
           setInitialLoading(false);
+          setRefreshing(false);
+          onRefreshingChange?.(false);
         }
-      }, [workspacePath, applyChangedFiles, addToast]);
+      }, [workspacePath, applyChangedFiles, addToast, onRefreshingChange]);
 
       useEffect(() => {
         loadChangedFiles();
@@ -1070,14 +1097,14 @@ export const ChangesDiffViewer = memo(
       useEffect(() => {
         if (!workspaceId) return;
 
-        const unlisten = listen<{ workspace_id: number; changed_paths: string[] }>(
-          "workspace-files-changed",
-          (event) => {
-            if (event.payload.workspace_id === workspaceId) {
-              loadChangedFiles();
-            }
+        const unlisten = listen<{
+          workspace_id: number;
+          changed_paths: string[];
+        }>("workspace-files-changed", (event) => {
+          if (event.payload.workspace_id === workspaceId) {
+            loadChangedFiles();
           }
-        );
+        });
 
         return () => {
           unlisten.then((fn) => fn());
@@ -1089,7 +1116,10 @@ export const ChangesDiffViewer = memo(
         const loadComments = async () => {
           if (repoPath && workspaceId !== undefined) {
             try {
-              const loadedComments = await loadPendingReview(repoPath, workspaceId);
+              const loadedComments = await loadPendingReview(
+                repoPath,
+                workspaceId
+              );
               if (loadedComments.length > 0) {
                 setComments(loadedComments);
               }
@@ -1724,19 +1754,14 @@ export const ChangesDiffViewer = memo(
             filePath,
             lines: [{ hunkIndex, lineIndex, content: lineContent, isStaged }],
           });
+          setCurrentDragLine({ filePath, hunkIndex, lineIndex });
           setContextMenuPosition(null);
         },
         []
       );
 
       const handleLineMouseEnter = useCallback(
-        (
-          filePath: string,
-          hunkIndex: number,
-          lineIndex: number,
-          _lineContent: string,
-          _isStaged: boolean
-        ) => {
+        (filePath: string, hunkIndex: number, lineIndex: number) => {
           if (
             !isSelecting ||
             !selectionAnchor ||
@@ -1804,23 +1829,26 @@ export const ChangesDiffViewer = memo(
         // Don't clear currentDragLine - keep it to remember where selection ended
       }, []);
 
-      const handleContainerClick = useCallback((e: React.MouseEvent) => {
-        // Ignore clicks immediately after a drag operation
-        if (isDraggingRef.current) {
-          isDraggingRef.current = false;
+      const handleBackgroundClick = useCallback((e: React.MouseEvent) => {
+        // Don't clear selection if clicking on interactive elements
+        const target = e.target as HTMLElement;
+
+        // Check if clicked on a file row in sidebar (has group/row class)
+        if (target.closest(".group\\/row")) {
           return;
         }
 
-        // Don't clear selection if clicking on a diff line or the comment button
+        // Check if clicked on a button or interactive element
         if (
-          (e.target as HTMLElement).closest("[data-diff-line]") ||
-          (e.target as HTMLElement).closest("[data-comment-button]")
+          target.closest(
+            "button, [role='button'], input, textarea, [role='checkbox'], [role='menuitem']"
+          )
         ) {
           return;
         }
-        setDiffLineSelection(null);
-        setCurrentDragLine(null);
-        setContextMenuPosition(null);
+
+        // Clear file selection
+        setSelectedUnstagedFiles(new Set());
       }, []);
 
       const handleContextMenu = useCallback(
@@ -1845,54 +1873,6 @@ export const ChangesDiffViewer = memo(
         [diffLineSelection]
       );
 
-      const shouldShowAddButton = useCallback(
-        (filePath: string, hunkIndex: number, lineIndex: number): boolean => {
-          // No selection - rely on CSS hover
-          if (!diffLineSelection || diffLineSelection.filePath !== filePath) {
-            return false;
-          }
-
-          const isInSelection = diffLineSelection.lines.some(
-            (l) => l.hunkIndex === hunkIndex && l.lineIndex === lineIndex
-          );
-
-          if (!isInSelection) {
-            return false;
-          }
-
-          // If actively selecting, show button only on the line under cursor
-          if (isSelecting && currentDragLine) {
-            return (
-              currentDragLine.filePath === filePath &&
-              currentDragLine.hunkIndex === hunkIndex &&
-              currentDragLine.lineIndex === lineIndex
-            );
-          }
-
-          // Selection complete: show button on the line where selection ended
-          if (currentDragLine) {
-            return (
-              currentDragLine.filePath === filePath &&
-              currentDragLine.hunkIndex === hunkIndex &&
-              currentDragLine.lineIndex === lineIndex
-            );
-          }
-
-          // Fallback: show on last line (shouldn't happen in normal flow)
-          if (diffLineSelection.lines.length > 0) {
-            const lastLine =
-              diffLineSelection.lines[diffLineSelection.lines.length - 1];
-            return (
-              lastLine.hunkIndex === hunkIndex &&
-              lastLine.lineIndex === lineIndex
-            );
-          }
-
-          return false;
-        },
-        [diffLineSelection, isSelecting, currentDragLine]
-      );
-
       useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
           if (e.key === "Escape") {
@@ -1915,6 +1895,17 @@ export const ChangesDiffViewer = memo(
             document.removeEventListener("click", handleClickOutside);
         }
       }, [contextMenuPosition]);
+
+      useEffect(() => {
+        const handleGlobalMouseUp = () => {
+          if (isSelecting) {
+            setIsSelecting(false);
+          }
+        };
+        document.addEventListener("mouseup", handleGlobalMouseUp);
+        return () =>
+          document.removeEventListener("mouseup", handleGlobalMouseUp);
+      }, [isSelecting]);
 
       // Comment management
       const addComment = useCallback(
@@ -2023,7 +2014,8 @@ export const ChangesDiffViewer = memo(
       // Copy line location to clipboard
       const handleCopyLineLocation = useCallback(async () => {
         try {
-          if (!diffLineSelection || diffLineSelection.lines.length === 0) return;
+          if (!diffLineSelection || diffLineSelection.lines.length === 0)
+            return;
 
           const filePath = diffLineSelection.filePath;
           const fileData = allFileHunks.get(filePath);
@@ -2037,29 +2029,43 @@ export const ChangesDiffViewer = memo(
             const hunk = fileData.hunks[line.hunkIndex];
             if (!hunk) continue;
             const lineNumbers = computeHunkLineNumbers(hunk);
-            const lineNum = lineNumbers[line.lineIndex]?.new ?? lineNumbers[line.lineIndex]?.old ?? line.lineIndex + 1;
+            const lineNum =
+              lineNumbers[line.lineIndex]?.new ??
+              lineNumbers[line.lineIndex]?.old ??
+              line.lineIndex + 1;
             minLineNum = Math.min(minLineNum, lineNum);
             maxLineNum = Math.max(maxLineNum, lineNum);
           }
 
-          const locationStr = minLineNum === maxLineNum
-            ? `${filePath}:${minLineNum}`
-            : `${filePath}:${minLineNum}-${maxLineNum}`;
+          const locationStr =
+            minLineNum === maxLineNum
+              ? `${filePath}:${minLineNum}`
+              : `${filePath}:${minLineNum}-${maxLineNum}`;
 
           await navigator.clipboard.writeText(locationStr);
           setContextMenuPosition(null);
-          addToast({ title: "Copied", description: "Line location copied to clipboard", type: "success" });
+          addToast({
+            title: "Copied",
+            description: "Line location copied to clipboard",
+            type: "success",
+          });
         } catch (error) {
           setContextMenuPosition(null);
-          const message = error instanceof Error ? error.message : String(error);
-          addToast({ title: "Failed to copy", description: message, type: "error" });
+          const message =
+            error instanceof Error ? error.message : String(error);
+          addToast({
+            title: "Failed to copy",
+            description: message,
+            type: "error",
+          });
         }
       }, [diffLineSelection, allFileHunks, addToast]);
 
       // Copy line contents to clipboard
       const handleCopyLines = useCallback(async () => {
         try {
-          const lineContents = diffLineSelection?.lines?.map(l => l.content).join('\n') || '';
+          const lineContents =
+            diffLineSelection?.lines?.map((l) => l.content).join("\n") || "";
           if (!lineContents) {
             setContextMenuPosition(null);
             return;
@@ -2067,11 +2073,20 @@ export const ChangesDiffViewer = memo(
 
           await navigator.clipboard.writeText(lineContents);
           setContextMenuPosition(null);
-          addToast({ title: "Copied", description: "Lines copied to clipboard", type: "success" });
+          addToast({
+            title: "Copied",
+            description: "Lines copied to clipboard",
+            type: "success",
+          });
         } catch (error) {
           setContextMenuPosition(null);
-          const message = error instanceof Error ? error.message : String(error);
-          addToast({ title: "Failed to copy", description: message, type: "error" });
+          const message =
+            error instanceof Error ? error.message : String(error);
+          addToast({
+            title: "Failed to copy",
+            description: message,
+            type: "error",
+          });
         }
       }, [diffLineSelection, addToast]);
 
@@ -2118,52 +2133,55 @@ export const ChangesDiffViewer = memo(
       }, [comments, finalReviewComment]);
 
       // Send review to terminal
-      const handleRequestChanges = useCallback(async (mode: 'plan' | 'acceptEdits') => {
-        setSendingReview(true);
-        try {
-          const markdown = formatReviewMarkdown();
+      const handleRequestChanges = useCallback(
+        async (mode: "plan" | "acceptEdits") => {
+          setSendingReview(true);
+          try {
+            const markdown = formatReviewMarkdown();
 
-          if (onCreateAgentWithReview) {
-            // Create new agent session with review pre-filled
-            await onCreateAgentWithReview(markdown, mode);
+            if (onCreateAgentWithReview) {
+              // Create new agent session with review pre-filled
+              await onCreateAgentWithReview(markdown, mode);
+              addToast({
+                title: "Review sent",
+                description: "Code review sent to new agent session",
+                type: "success",
+              });
+            } else {
+              addToast({
+                title: "No handler provided",
+                description: "onCreateAgentWithReview callback not available",
+                type: "error",
+              });
+              return;
+            }
+
+            // Clear review state
+            setComments([]);
+            setHasUserAddedComments(false);
+            setFinalReviewComment("");
+            setReviewPopoverOpen(false);
+            // Notify parent that review was submitted
+            onReviewSubmitted?.();
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : String(error);
             addToast({
-              title: "Review sent",
-              description: "Code review sent to new agent session",
-              type: "success",
-            });
-          } else {
-            addToast({
-              title: "No handler provided",
-              description: "onCreateAgentWithReview callback not available",
+              title: "Failed to send review",
+              description: message,
               type: "error",
             });
-            return;
+          } finally {
+            setSendingReview(false);
           }
-
-          // Clear review state
-          setComments([]);
-          setHasUserAddedComments(false);
-          setFinalReviewComment("");
-          setReviewPopoverOpen(false);
-          // Notify parent that review was submitted
-          onReviewSubmitted?.();
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          addToast({
-            title: "Failed to send review",
-            description: message,
-            type: "error",
-          });
-        } finally {
-          setSendingReview(false);
-        }
-      }, [
-        onCreateAgentWithReview,
-        formatReviewMarkdown,
-        addToast,
-        onReviewSubmitted,
-      ]);
+        },
+        [
+          onCreateAgentWithReview,
+          formatReviewMarkdown,
+          addToast,
+          onReviewSubmitted,
+        ]
+      );
 
       // Cancel review handler
       const handleCancelReview = useCallback(async () => {
@@ -2242,7 +2260,8 @@ export const ChangesDiffViewer = memo(
           setCommitPending(true);
           try {
             const selectedPaths = Array.from(selectedUnstagedFiles);
-            const isPartialCommit = selectedPaths.length > 0 && selectedPaths.length < files.length;
+            const isPartialCommit =
+              selectedPaths.length > 0 && selectedPaths.length < files.length;
 
             let result: string;
             if (isPartialCommit) {
@@ -2271,7 +2290,13 @@ export const ChangesDiffViewer = memo(
             setCommitPending(false);
           }
         },
-        [workspacePath, addToast, invalidateCache, selectedUnstagedFiles, files.length]
+        [
+          workspacePath,
+          addToast,
+          invalidateCache,
+          selectedUnstagedFiles,
+          files.length,
+        ]
       );
 
       const toggleSectionCollapse = useCallback((sectionId: string) => {
@@ -2371,7 +2396,11 @@ export const ChangesDiffViewer = memo(
           const lineNumbers = computeHunkLineNumbers(hunk);
           const hasMatchingLine = lineNumbers.some((ln) => {
             const actualNum = ln.new ?? ln.old;
-            return actualNum && actualNum >= comment.startLine && actualNum <= comment.endLine;
+            return (
+              actualNum &&
+              actualNum >= comment.startLine &&
+              actualNum <= comment.endLine
+            );
           });
 
           return !hasMatchingLine;
@@ -2455,11 +2484,6 @@ export const ChangesDiffViewer = memo(
                 pendingComment.hunkId === hunk.id &&
                 lineIndex === pendingComment.displayAtLineIndex;
               const selected = isLineSelected(filePath, hunkIndex, lineIndex);
-              const showButton = shouldShowAddButton(
-                filePath,
-                hunkIndex,
-                lineIndex
-              );
 
               return (
                 <Fragment key={`${hunk.id}-line-${lineIndex}`}>
@@ -2472,15 +2496,12 @@ export const ChangesDiffViewer = memo(
                         "!bg-blue-500/30 ring-1 ring-inset ring-blue-500/50"
                     )}
                     onMouseEnter={() =>
-                      handleLineMouseEnter(
-                        filePath,
-                        hunkIndex,
-                        lineIndex,
-                        line,
-                        false // JJ has no staging
-                      )
+                      handleLineMouseEnter(filePath, hunkIndex, lineIndex)
                     }
                     onMouseUp={handleLineMouseUp}
+                    onClick={(e) => {
+                      e.preventDefault();
+                    }}
                   >
                     {/* Line number / comment indicator - click here to select lines */}
                     <div
@@ -2499,14 +2520,10 @@ export const ChangesDiffViewer = memo(
                       {lineComments.length > 0 && (
                         <MessageSquare className="w-3 h-3 text-primary ml-[4px]" />
                       )}
-                      <span
-                        className="w-6 text-right text-sm mr-1"
-                      >
+                      <span className="w-6 text-right text-sm mr-1">
                         {lineNum?.old ?? ""}
                       </span>
-                      <span
-                        className="w-6 text-right text-sm"
-                      >
+                      <span className="w-6 text-right text-sm">
                         {lineNum?.new ?? ""}
                       </span>
                     </div>
@@ -2516,7 +2533,7 @@ export const ChangesDiffViewer = memo(
                         data-comment-button
                         className={cn(
                           "p-[2px] rounded bg-primary text-primary-foreground hover:bg-primary/90",
-                          showButton ? "visible" : "invisible group-hover:visible"
+                          "invisible group-hover:visible"
                         )}
                         onMouseDown={(e) => e.stopPropagation()}
                         onClick={(e) => {
@@ -2649,8 +2666,11 @@ export const ChangesDiffViewer = memo(
       // Note: FileRowComponent extracted outside for performance
 
       return (
-        <div className="flex h-full overflow-hidden">
-          <div className="w-72 border-r border-border bg-sidebar flex flex-col">
+        <div
+          className="flex h-full overflow-hidden"
+          onClick={handleBackgroundClick}
+        >
+          <div className="w-60 border-r border-border bg-sidebar flex flex-col">
             {!conflictEditorOpen && (
               <CommitInput
                 ref={commitInputRef}
@@ -2755,70 +2775,78 @@ export const ChangesDiffViewer = memo(
                         Finish review
                       </Button>
                     </PopoverTrigger>
-                  <PopoverContent align="end" side="bottom" className="w-80">
-                    <div className="space-y-3">
-                      <div>
-                        <h4 className="font-medium text-sm mb-1">
-                          Finish your review
-                        </h4>
-                        <p className="text-sm text-muted-foreground">
-                          {comments.length} comment
-                          {comments.length !== 1 ? "s" : ""} will be submitted.
-                        </p>
+                    <PopoverContent align="end" side="bottom" className="w-80">
+                      <div className="space-y-3">
+                        <div>
+                          <h4 className="font-medium text-sm mb-1">
+                            Finish your review
+                          </h4>
+                          <p className="text-sm text-muted-foreground">
+                            {comments.length} comment
+                            {comments.length !== 1 ? "s" : ""} will be
+                            submitted.
+                          </p>
+                        </div>
+                        <Textarea
+                          value={finalReviewComment}
+                          onChange={(e) =>
+                            setFinalReviewComment(e.target.value)
+                          }
+                          placeholder="Add a summary comment (optional)..."
+                          className="min-h-[80px] text-sm"
+                        />
+                        <div className="flex justify-end gap-2">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8"
+                                  onClick={() => setReviewPopoverOpen(false)}
+                                  disabled={sendingReview}
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Cancel</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => handleRequestChanges("plan")}
+                            disabled={sendingReview}
+                          >
+                            Plan
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => handleRequestChanges("acceptEdits")}
+                            disabled={sendingReview}
+                          >
+                            Edit
+                          </Button>
+                        </div>
                       </div>
-                      <Textarea
-                        value={finalReviewComment}
-                        onChange={(e) => setFinalReviewComment(e.target.value)}
-                        placeholder="Add a summary comment (optional)..."
-                        className="min-h-[80px] text-sm"
-                      />
-                      <div className="flex justify-end gap-2">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-8 w-8"
-                                onClick={() => setReviewPopoverOpen(false)}
-                                disabled={sendingReview}
-                              >
-                                <X className="w-4 h-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Cancel</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => handleRequestChanges('plan')}
-                          disabled={sendingReview}
-                        >
-                          Plan
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => handleRequestChanges('acceptEdits')}
-                          disabled={sendingReview}
-                        >
-                          Edit
-                        </Button>
-                      </div>
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
             )}
 
             {/* Cancel Review Confirmation Dialog */}
-            <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+            <AlertDialog
+              open={showCancelDialog}
+              onOpenChange={setShowCancelDialog}
+            >
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Discard review?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will discard all {comments.length} pending comment{comments.length !== 1 ? "s" : ""}. This action cannot be undone.
+                    This will discard all {comments.length} pending comment
+                    {comments.length !== 1 ? "s" : ""}. This action cannot be
+                    undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -2840,7 +2868,11 @@ export const ChangesDiffViewer = memo(
                     changed since you started reviewing
                   </span>
                   <span className="text-sm text-amber-700/80 dark:text-amber-300/80">
-                    ({Array.from(staleFiles).slice(0, 3).map(getFileName).join(", ")}
+                    (
+                    {Array.from(staleFiles)
+                      .slice(0, 3)
+                      .map(getFileName)
+                      .join(", ")}
                     {staleFiles.size > 3 ? ` +${staleFiles.size - 3} more` : ""}
                     )
                   </span>
@@ -2986,10 +3018,11 @@ export const ChangesDiffViewer = memo(
                             handleUnmarkFileViewed={handleUnmarkFileViewed}
                             handleDiscardFiles={handleDiscardFiles}
                             handleContextMenu={handleContextMenu}
-                            handleContainerClick={handleContainerClick}
                             renderHunkLines={renderHunkLines}
                             addToast={addToast}
-                            getOutdatedCommentsForFile={getOutdatedCommentsForFile}
+                            getOutdatedCommentsForFile={
+                              getOutdatedCommentsForFile
+                            }
                             deleteComment={deleteComment}
                           />
                         ))}

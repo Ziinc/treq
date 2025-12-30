@@ -46,6 +46,8 @@ import {
   setSessionModel,
   jjIsWorkspace,
   checkAndRebaseWorkspaces,
+  startFileWatcher,
+  stopFileWatcher,
 } from "../lib/api";
 import { Loader2 } from "lucide-react";
 
@@ -210,6 +212,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     // For now, we'll just set it to null since we don't have a jj equivalent yet
     setCurrentBranch(null);
   }, [repoPath]);
+
+  // Manage file watcher lifecycle for selected workspace
+  useEffect(() => {
+    if (!selectedWorkspace) return;
+
+    const workspaceId = selectedWorkspace.id;
+    const workspacePath = selectedWorkspace.workspace_path;
+
+    // Start watching when workspace is selected - pass workspace_path (not repoPath!)
+    startFileWatcher(workspaceId, workspacePath).catch((err) => {
+      console.error("Failed to start file watcher:", err);
+    });
+
+    // Stop watching when workspace changes or component unmounts
+    return () => {
+      stopFileWatcher(workspaceId, workspacePath).catch((err) => {
+        console.error("Failed to stop file watcher:", err);
+      });
+    };
+  }, [selectedWorkspace?.id, selectedWorkspace?.workspace_path]);
 
   // Consolidate all Tauri event listeners
   useEffect(() => {
