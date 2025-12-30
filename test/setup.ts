@@ -92,3 +92,15 @@ vi.mock("../src/hooks/useCachedWorkspaceChanges", () => ({
     refresh: vi.fn(),
   })),
 }));
+
+// Mock clipboard API
+if (!navigator.clipboard) {
+  Object.defineProperty(navigator, 'clipboard', {
+    value: {
+      writeText: async (text: string) => {},
+    },
+    writable: true,
+    configurable: true,
+  });
+}
+vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
