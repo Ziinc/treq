@@ -2020,6 +2020,61 @@ export const ChangesDiffViewer = memo(
         []
       );
 
+      // Copy line location to clipboard
+      const handleCopyLineLocation = useCallback(async () => {
+        try {
+          if (!diffLineSelection || diffLineSelection.lines.length === 0) return;
+
+          const filePath = diffLineSelection.filePath;
+          const fileData = allFileHunks.get(filePath);
+          if (!fileData) return;
+
+          // Compute actual line numbers for selected lines
+          let minLineNum = Infinity;
+          let maxLineNum = -Infinity;
+
+          for (const line of diffLineSelection.lines) {
+            const hunk = fileData.hunks[line.hunkIndex];
+            if (!hunk) continue;
+            const lineNumbers = computeHunkLineNumbers(hunk);
+            const lineNum = lineNumbers[line.lineIndex]?.new ?? lineNumbers[line.lineIndex]?.old ?? line.lineIndex + 1;
+            minLineNum = Math.min(minLineNum, lineNum);
+            maxLineNum = Math.max(maxLineNum, lineNum);
+          }
+
+          const locationStr = minLineNum === maxLineNum
+            ? `${filePath}:${minLineNum}`
+            : `${filePath}:${minLineNum}-${maxLineNum}`;
+
+          await navigator.clipboard.writeText(locationStr);
+          setContextMenuPosition(null);
+          addToast({ title: "Copied", description: "Line location copied to clipboard", type: "success" });
+        } catch (error) {
+          setContextMenuPosition(null);
+          const message = error instanceof Error ? error.message : String(error);
+          addToast({ title: "Failed to copy", description: message, type: "error" });
+        }
+      }, [diffLineSelection, allFileHunks, addToast]);
+
+      // Copy line contents to clipboard
+      const handleCopyLines = useCallback(async () => {
+        try {
+          const lineContents = diffLineSelection?.lines?.map(l => l.content).join('\n') || '';
+          if (!lineContents) {
+            setContextMenuPosition(null);
+            return;
+          }
+
+          await navigator.clipboard.writeText(lineContents);
+          setContextMenuPosition(null);
+          addToast({ title: "Copied", description: "Lines copied to clipboard", type: "success" });
+        } catch (error) {
+          setContextMenuPosition(null);
+          const message = error instanceof Error ? error.message : String(error);
+          addToast({ title: "Failed to copy", description: message, type: "error" });
+        }
+      }, [diffLineSelection, addToast]);
+
       // Format review as markdown
       const formatReviewMarkdown = useCallback(() => {
         let markdown = "## Code Review\n\n";
@@ -2964,6 +3019,22 @@ export const ChangesDiffViewer = memo(
                 >
                   <MessageSquare className="w-4 h-4" />
                   Add comment
+                </button>
+                <button
+                  className="w-full px-3 py-1.5 text-sm text-left hover:bg-accent flex items-center gap-2"
+                  onClick={handleCopyLineLocation}
+                  data-testid="copy-line-location"
+                >
+                  <Copy className="w-4 h-4" />
+                  Copy line location
+                </button>
+                <button
+                  className="w-full px-3 py-1.5 text-sm text-left hover:bg-accent flex items-center gap-2"
+                  onClick={handleCopyLines}
+                  data-testid="copy-lines"
+                >
+                  <Copy className="w-4 h-4" />
+                  Copy lines
                 </button>
               </div>
             )}
