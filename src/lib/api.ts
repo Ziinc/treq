@@ -574,3 +574,14 @@ export const clearPendingReview = (
   _workspaceId: number
 ): Promise<void> =>
   Promise.resolve();
+
+// File Watcher API
+export const startFileWatcher = (
+  workspaceId: number,
+  workspacePath: string
+): Promise<void> => invoke("start_file_watcher", { workspaceId, workspacePath });
+
+export const stopFileWatcher = (
+  workspaceId: number,
+  workspacePath: string
+): Promise<void> => invoke("stop_file_watcher", { workspaceId, workspacePath });
