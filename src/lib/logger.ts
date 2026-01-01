@@ -17,7 +17,7 @@ export async function initLogger(): Promise<() => void> {
 
   // Forward console methods to Tauri log plugin
   forwardConsole("log", trace);
-  // forwardConsole("debug", debug);
+  forwardConsole("debug", debug);
   forwardConsole("info", info);
   forwardConsole("warn", warn);
   forwardConsole("error", error);

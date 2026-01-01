@@ -189,6 +189,15 @@ pub fn update_workspace_metadata(
 }
 
 #[tauri::command]
+pub fn update_workspace_conflicts(
+    repo_path: String,
+    workspace_id: i64,
+    has_conflicts: bool,
+) -> Result<(), String> {
+    local_db::update_workspace_has_conflicts(&repo_path, workspace_id, has_conflicts)
+}
+
+#[tauri::command]
 pub fn ensure_workspace_indexed(
     repo_path: String,
     workspace_id: Option<i64>,

@@ -24,7 +24,6 @@ import {
   getDiffCache,
   markFileViewed,
   unmarkFileViewed,
-  readFile,
   loadPendingReview,
   clearPendingReview,
   type JjDiffHunk,
@@ -85,6 +84,7 @@ import {
 import { useDiffSettings } from "../hooks/useDiffSettings";
 import { ChangesSection } from "./ChangesSection";
 import { ConflictsSection } from "./ConflictsSection";
+import { ConflictCommentCard } from "./ConflictCommentCard";
 import { MoveToWorkspaceDialog } from "./MoveToWorkspaceDialog";
 
 interface ChangesDiffViewerProps {
@@ -115,6 +115,25 @@ interface LineComment {
   startLine: number; // actual file line number (1-indexed)
   endLine: number; // actual file line number (1-indexed)
   lineContent: string[];
+  text: string;
+  createdAt: string;
+}
+
+interface ConflictRegion {
+  id: string;
+  filePath: string;
+  conflictNumber: number;  // e.g., "1" from "Conflict..."
+  totalConflicts: number;  // e.g., "3" from "Conflict..."
+  startLine: number;       // line number of  marker
+  endLine: number;         // line number of  marker
+  content: string;         // full conflict content including markers
+}
+
+interface ConflictComment {
+  id: string;
+  conflictId: string;      // references ConflictRegion.id
+  filePath: string;
+  conflictNumber: number;
   text: string;
   createdAt: string;
 }
@@ -185,6 +204,46 @@ const parseCachedHunks = (raw: string): JjDiffHunk[] | null => {
     // Silently ignore parse failures
   }
   return null;
+};
+
+// Parse JJ conflict markers from file content
+const parseConflictMarkers = (content: string, filePath: string): ConflictRegion[] => {
+  const lines = content.split('\n');
+  const regions: ConflictRegion[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const startMatch = line.match(/^\s*<{7}\s+Conflict\s+(\d+)\s+of\s+(\d+)/);
+    if (startMatch) {
+      const conflictNumber = parseInt(startMatch[1], 10);
+      const totalConflicts = parseInt(startMatch[2], 10);
+      const startLine = i + 1; // 1-indexed
+
+      // Find the end marker
+      let endLine = startLine;
+      let conflictContent = line + '\n';
+      for (let j = i + 1; j < lines.length; j++) {
+        conflictContent += lines[j] + '\n';
+        if (lines[j].match(/^\s*>{7}\s+Conflict\s+\d+\s+of\s+\d+\s+ends/)) {
+          endLine = j + 1; // 1-indexed
+          i = j; // Skip to end of this conflict
+          break;
+        }
+      }
+
+      regions.push({
+        id: `${filePath}-conflict-${conflictNumber}`,
+        filePath,
+        conflictNumber,
+        totalConflicts,
+        startLine,
+        endLine,
+        content: conflictContent.trim(),
+      });
+    }
+  }
+
+  return regions;
 };
 
 // Parse hunk header to extract starting line numbers and counts
@@ -534,6 +593,12 @@ interface FileRowComponentProps {
   addToast: ReturnType<typeof useToast>["addToast"];
   getOutdatedCommentsForFile: (filePath: string) => LineComment[];
   deleteComment: (commentId: string) => void;
+  // Conflict-related props
+  conflictRegions?: ConflictRegion[];
+  conflictComments: Map<string, ConflictComment>;
+  saveConflictComment: (conflictId: string, filePath: string, conflictNumber: number, text: string) => void;
+  clearConflictComment: (conflictId: string) => void;
+  conflictFileRefs: React.MutableRefObject<Map<string, HTMLDivElement>>;
 }
 
 const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
@@ -558,6 +623,11 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
     addToast,
     getOutdatedCommentsForFile,
     deleteComment,
+    conflictRegions,
+    conflictComments,
+    saveConflictComment,
+    clearConflictComment,
+    conflictFileRefs,
   } = props;
 
   const filePath = file.path;
@@ -585,13 +655,56 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
   const outdatedComments = getOutdatedCommentsForFile(filePath);
 
   return (
-    <div
-      key={filePath}
-      id={fileId}
-      data-file-path={filePath}
-      className="border border-border rounded-lg overflow-hidden"
-    >
-      {/* File Header */}
+    <>
+      {/* Conflict Cards - shown before file diff if this file has conflicts */}
+      {conflictRegions && conflictRegions.length > 0 && (
+        <Fragment>
+          {conflictRegions.map((region) => (
+            <div
+              key={region.id}
+              ref={(el) => {
+                if (el) {
+                  conflictFileRefs.current.set(filePath, el);
+                } else {
+                  conflictFileRefs.current.delete(filePath);
+                }
+              }}
+              className="border border-destructive/30 rounded-md overflow-hidden mb-4"
+            >
+              <div className="bg-destructive/10 px-3 py-2 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm">{filePath}</span>
+                  <span className="text-xs text-destructive uppercase font-medium">
+                    Conflict {region.conflictNumber} of {region.totalConflicts}
+                  </span>
+                </div>
+              </div>
+              <div className="p-3">
+                <pre className="text-xs font-mono overflow-x-auto bg-muted/30 p-3 rounded whitespace-pre-wrap break-all">
+                  {region.content}
+                </pre>
+              </div>
+              <ConflictCommentCard
+                conflictId={region.id}
+                filePath={region.filePath}
+                conflictNumber={region.conflictNumber}
+                comment={conflictComments.get(region.id)}
+                onSave={(text) => saveConflictComment(region.id, region.filePath, region.conflictNumber, text)}
+                onClear={() => clearConflictComment(region.id)}
+              />
+            </div>
+          ))}
+        </Fragment>
+      )}
+
+      {/* Regular File Diff */}
+      <div
+        key={filePath}
+        id={fileId}
+        data-file-path={filePath}
+        className="border border-border rounded-lg overflow-hidden"
+      >
+        {/* File Header */}
       <div className="sticky top-0 z-10 flex items-center justify-between px-[16px] py-[8px] bg-muted border-b border-border">
         <div className="flex items-center gap-[8px] flex-1 min-w-0">
           <button
@@ -810,6 +923,7 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
         </div>
       )}
     </div>
+    </>
   );
 });
 FileRowComponent.displayName = "FileRowComponent";
@@ -827,7 +941,7 @@ export const ChangesDiffViewer = memo(
         initialSelectedFile,
         onReviewSubmitted,
         onCreateAgentWithReview,
-        conflictedFiles = [],
+        conflictedFiles: _conflictedFiles = [], // Not used - we detect conflicts from hunk content
       },
       ref
     ) => {
@@ -892,17 +1006,11 @@ export const ChangesDiffViewer = memo(
       const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
 
       // Conflict resolution state
-      const [conflictEditorOpen, setConflictEditorOpen] = useState(false);
-      const [conflictFileContent, setConflictFileContent] =
-        useState<string>("");
-      const [conflictFilePath, setConflictFilePath] = useState<string | null>(
-        null
-      );
-      const [loadingConflictFile, setLoadingConflictFile] = useState(false);
-      const [resolvingConflict, setResolvingConflict] = useState(false);
+      const conflictFileRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
       // Review/comment state
       const [comments, setComments] = useState<LineComment[]>([]);
+      const [conflictComments, setConflictComments] = useState<Map<string, ConflictComment>>(new Map());
       const [showCommentInput, setShowCommentInput] = useState(false);
       const [reviewPopoverOpen, setReviewPopoverOpen] = useState(false);
       const [finalReviewComment, setFinalReviewComment] = useState("");
@@ -927,6 +1035,69 @@ export const ChangesDiffViewer = memo(
         reviewPopoverOpen,
         finalReviewComment,
       ]);
+
+      // Compute actual conflicted files and their conflict regions
+      const { actualConflictedFiles, conflictRegionsByFile } = useMemo(() => {
+        const conflicted: string[] = [];
+        const regionsByFile = new Map<string, ConflictRegion[]>();
+
+        // Safety check - ensure files array exists
+        if (!files || !Array.isArray(files)) {
+          return { actualConflictedFiles: conflicted, conflictRegionsByFile: regionsByFile };
+        }
+
+        try {
+          for (const file of files) {
+            // Skip if file or path is invalid
+            if (!file || !file.path) {
+              continue;
+            }
+
+            const fileHunksData = allFileHunks.get(file.path);
+            if (!fileHunksData || fileHunksData.isLoading || !fileHunksData.hunks) {
+              continue;
+            }
+
+            // Reconstruct file content from hunks
+            const lines: string[] = [];
+            for (const hunk of fileHunksData.hunks) {
+              if (!hunk || !hunk.lines) continue;
+
+              for (const line of hunk.lines) {
+                if (!line) continue;
+
+                // Check if file has conflict markers
+                if (line.includes('<<<<<<< Conflict') || line.includes('>>>>>>> Conflict')) {
+                  if (!conflicted.includes(file.path)) {
+                    conflicted.push(file.path);
+                  }
+                }
+
+                // For additions (+), include them as they represent the current state
+                if (line.startsWith('+')) {
+                  lines.push(line.substring(1));
+                } else if (line.startsWith(' ')) {
+                  lines.push(line.substring(1)); // Context lines
+                }
+                // Skip removal lines (-)
+              }
+            }
+
+            // If this file has conflicts, parse the regions
+            if (conflicted.includes(file.path)) {
+              const content = lines.join('\n');
+              const regions = parseConflictMarkers(content, file.path);
+              if (regions.length > 0) {
+                regionsByFile.set(file.path, regions);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error computing conflicted files:', error);
+        }
+
+        return { actualConflictedFiles: conflicted, conflictRegionsByFile: regionsByFile };
+      }, [files, allFileHunks]);
 
       // Track stale files that changed while user is in review mode
       const [staleFiles, setStaleFiles] = useState<Set<string>>(new Set());
@@ -2011,6 +2182,37 @@ export const ChangesDiffViewer = memo(
         []
       );
 
+      // Conflict comment management
+      const saveConflictComment = useCallback(
+        (conflictId: string, filePath: string, conflictNumber: number, text: string) => {
+          if (!text.trim()) return;
+
+          const comment: ConflictComment = {
+            id: uuidv4(),
+            conflictId,
+            filePath,
+            conflictNumber,
+            text: text.trim(),
+            createdAt: new Date().toISOString(),
+          };
+
+          setConflictComments((prev) => {
+            const next = new Map(prev);
+            next.set(conflictId, comment);
+            return next;
+          });
+        },
+        []
+      );
+
+      const clearConflictComment = useCallback((conflictId: string) => {
+        setConflictComments((prev) => {
+          const next = new Map(prev);
+          next.delete(conflictId);
+          return next;
+        });
+      }, []);
+
       // Copy line location to clipboard
       const handleCopyLineLocation = useCallback(async () => {
         try {
@@ -2092,45 +2294,61 @@ export const ChangesDiffViewer = memo(
 
       // Format review as markdown
       const formatReviewMarkdown = useCallback(() => {
-        let markdown = "## Code Review\n\n";
+        let markdown = "";
 
-        if (finalReviewComment.trim()) {
-          markdown += "### Summary\n";
-          markdown += finalReviewComment.trim() + "\n\n";
-        }
-
-        if (comments.length > 0) {
-          markdown += "### Comments\n\n";
-
-          // Group comments by file
-          const commentsByFile = comments.reduce((acc, comment) => {
-            if (!acc[comment.filePath]) {
-              acc[comment.filePath] = [];
-            }
-            acc[comment.filePath].push(comment);
-            return acc;
-          }, {} as Record<string, LineComment[]>);
-
-          for (const [filePath, fileComments] of Object.entries(
-            commentsByFile
-          )) {
-            for (const comment of fileComments) {
-              // Line numbers are already 1-indexed actual file line numbers
-              const lineRef =
-                comment.startLine === comment.endLine
-                  ? `${filePath}:${comment.startLine}`
-                  : `${filePath}:${comment.startLine}:${comment.endLine}`;
-              markdown += `${lineRef}\n`;
-              markdown += "```\n";
-              markdown += comment.lineContent.join("\n") + "\n";
-              markdown += "```\n";
+        // Add conflict resolution section if there are conflict comments
+        if (conflictComments.size > 0) {
+          markdown += "## Conflict Resolution\n\n";
+          for (const comment of conflictComments.values()) {
+            if (comment.text.trim()) {
+              markdown += `### ${comment.filePath} - Conflict ${comment.conflictNumber}\n`;
               markdown += `> ${comment.text}\n\n`;
             }
           }
         }
 
+        // Add code review section if there are review comments or final comment
+        if (comments.length > 0 || finalReviewComment.trim()) {
+          markdown += "## Code Review\n\n";
+
+          if (finalReviewComment.trim()) {
+            markdown += "### Summary\n";
+            markdown += finalReviewComment.trim() + "\n\n";
+          }
+
+          if (comments.length > 0) {
+            markdown += "### Comments\n\n";
+
+            // Group comments by file
+            const commentsByFile = comments.reduce((acc, comment) => {
+              if (!acc[comment.filePath]) {
+                acc[comment.filePath] = [];
+              }
+              acc[comment.filePath].push(comment);
+              return acc;
+            }, {} as Record<string, LineComment[]>);
+
+            for (const [filePath, fileComments] of Object.entries(
+              commentsByFile
+            )) {
+              for (const comment of fileComments) {
+                // Line numbers are already 1-indexed actual file line numbers
+                const lineRef =
+                  comment.startLine === comment.endLine
+                    ? `${filePath}:${comment.startLine}`
+                    : `${filePath}:${comment.startLine}:${comment.endLine}`;
+                markdown += `${lineRef}\n`;
+                markdown += "```\n";
+                markdown += comment.lineContent.join("\n") + "\n";
+                markdown += "```\n";
+                markdown += `> ${comment.text}\n\n`;
+              }
+            }
+          }
+        }
+
         return markdown;
-      }, [comments, finalReviewComment]);
+      }, [comments, conflictComments, finalReviewComment]);
 
       // Send review to terminal
       const handleRequestChanges = useCallback(
@@ -2158,6 +2376,7 @@ export const ChangesDiffViewer = memo(
 
             // Clear review state
             setComments([]);
+            setConflictComments(new Map());
             setHasUserAddedComments(false);
             setFinalReviewComment("");
             setReviewPopoverOpen(false);
@@ -2188,6 +2407,7 @@ export const ChangesDiffViewer = memo(
         try {
           // Clear review state
           setComments([]);
+          setConflictComments(new Map());
           setHasUserAddedComments(false);
           setFinalReviewComment("");
           setShowCancelDialog(false);
@@ -2312,75 +2532,19 @@ export const ChangesDiffViewer = memo(
       }, []);
 
       // Handle clicking on a conflicting file
+      // Load conflict file content
       const handleConflictFileSelect = useCallback(
-        async (filePath: string) => {
+        (filePath: string) => {
           setActiveFilePath(filePath);
 
-          // Check if this file is in the conflicted files list
-          if (conflictedFiles.includes(filePath)) {
-            setLoadingConflictFile(true);
-            setConflictFilePath(filePath);
-            setConflictEditorOpen(true);
-
-            try {
-              // Load the file content
-              const fullPath = `${workspacePath}/${filePath}`;
-              const content = await readFile(fullPath);
-              setConflictFileContent(content);
-            } catch (error) {
-              const message =
-                error instanceof Error ? error.message : String(error);
-              addToast({
-                title: "Failed to load conflict file",
-                description: message,
-                type: "error",
-              });
-              setConflictEditorOpen(false);
-            } finally {
-              setLoadingConflictFile(false);
-            }
+          // Scroll to the conflict file section
+          const ref = conflictFileRefs.current.get(filePath);
+          if (ref) {
+            ref.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
         },
-        [workspacePath, conflictedFiles, addToast]
+        []
       );
-
-      // Handle resolving a conflict
-      const handleResolveConflict = useCallback(async () => {
-        if (!conflictFilePath) return;
-
-        setResolvingConflict(true);
-        try {
-          // For now, just close the editor
-          // TODO: Implement actual file writing once the API is available
-          addToast({
-            title: "Conflict resolved",
-            description: `${conflictFilePath} has been resolved`,
-            type: "success",
-          });
-          setConflictEditorOpen(false);
-          setConflictFileContent("");
-          setConflictFilePath(null);
-          // Refresh the changes
-          await loadChangedFiles();
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          addToast({
-            title: "Failed to resolve conflict",
-            description: message,
-            type: "error",
-          });
-        } finally {
-          setResolvingConflict(false);
-        }
-      }, [conflictFilePath, addToast, loadChangedFiles]);
-
-      const handleCloseConflictEditor = useCallback(() => {
-        setConflictEditorOpen(false);
-        setConflictFileContent("");
-        setConflictFilePath(null);
-        setActiveFilePath(null);
-      }, []);
 
       // Check if a comment is outdated (its referenced line no longer exists)
       const isCommentOutdated = useCallback(
@@ -2671,16 +2835,14 @@ export const ChangesDiffViewer = memo(
           onClick={handleBackgroundClick}
         >
           <div className="w-60 border-r border-border bg-sidebar flex flex-col">
-            {!conflictEditorOpen && (
-              <CommitInput
-                ref={commitInputRef}
-                onCommit={handleCommit}
-                disabled={readOnly}
-                pending={commitPending}
-                selectedFileCount={selectedUnstagedFiles.size}
-                totalFileCount={files.length}
-              />
-            )}
+            <CommitInput
+              ref={commitInputRef}
+              onCommit={handleCommit}
+              disabled={readOnly}
+              pending={commitPending}
+              selectedFileCount={selectedUnstagedFiles.size}
+              totalFileCount={files.length}
+            />
             <div className="flex-1 overflow-y-auto px-4 pb-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full">
               {initialLoading ? (
                 <div className="flex items-center justify-center h-full">
@@ -2689,7 +2851,7 @@ export const ChangesDiffViewer = memo(
               ) : (
                 <>
                   <ConflictsSection
-                    files={conflictedFiles}
+                    files={actualConflictedFiles}
                     isCollapsed={collapsedSections.has("conflicts")}
                     onToggleCollapse={() => toggleSectionCollapse("conflicts")}
                     onFileSelect={handleConflictFileSelect}
@@ -2729,64 +2891,75 @@ export const ChangesDiffViewer = memo(
             </div>
           </div>
           <div className="flex-1 flex flex-col min-w-0">
-            {/* Review Action Bar - shown when there are comments */}
-            {comments.length > 0 && (
-              <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-2 bg-muted/80 backdrop-blur-sm border-b border-border">
-                <div className="flex items-center gap-2 text-sm">
-                  <MessageSquare className="w-4 h-4 text-primary" />
-                  <span className="text-muted-foreground">
-                    {comments.length} comment{comments.length !== 1 ? "s" : ""}{" "}
-                    pending
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleCopyReview}
-                    className="gap-2"
-                  >
-                    {copiedReview ? (
-                      <>
-                        <Check className="w-3 h-3" />
-                        Copied
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3 h-3" />
-                        Copy
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setShowCancelDialog(true)}
-                  >
-                    Cancel
-                  </Button>
-                  <Popover
-                    open={reviewPopoverOpen}
-                    onOpenChange={setReviewPopoverOpen}
-                  >
-                    <PopoverTrigger asChild>
-                      <Button size="sm" variant="default" className="gap-2">
-                        <Send className="w-3 h-3" />
-                        Finish review
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent align="end" side="bottom" className="w-80">
-                      <div className="space-y-3">
-                        <div>
-                          <h4 className="font-medium text-sm mb-1">
-                            Finish your review
-                          </h4>
-                          <p className="text-sm text-muted-foreground">
-                            {comments.length} comment
-                            {comments.length !== 1 ? "s" : ""} will be
-                            submitted.
-                          </p>
-                        </div>
+            {/* Review Action Bar - shown when there are comments or conflicts */}
+            {(() => {
+              const hasConflicts = actualConflictedFiles.length > 0;
+              const totalComments = comments.length + conflictComments.size;
+              const showActionBar = hasConflicts || comments.length > 0;
+
+              if (!showActionBar) return null;
+
+              return (
+                <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-2 bg-muted/80 backdrop-blur-sm border-b border-border">
+                  <div className="flex items-center gap-2 text-sm">
+                    <MessageSquare className={`w-4 h-4 ${hasConflicts ? "text-destructive" : "text-primary"}`} />
+                    <span className="text-muted-foreground">
+                      {totalComments} comment{totalComments !== 1 ? "s" : ""}{" "}
+                      pending
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleCopyReview}
+                      className="gap-2"
+                    >
+                      {copiedReview ? (
+                        <>
+                          <Check className="w-3 h-3" />
+                          Copied
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          Copy
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setShowCancelDialog(true)}
+                    >
+                      Cancel
+                    </Button>
+                    <Popover
+                      open={reviewPopoverOpen}
+                      onOpenChange={setReviewPopoverOpen}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="default"
+                          className={cn("gap-2", hasConflicts && "bg-destructive hover:bg-destructive/90 text-destructive-foreground")}
+                        >
+                          <Send className="w-3 h-3" />
+                          {hasConflicts ? "Resolve conflicts..." : "Finish review"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" side="bottom" className="w-80">
+                        <div className="space-y-3">
+                          <div>
+                            <h4 className="font-medium text-sm mb-1">
+                              {hasConflicts ? "Resolve conflicts" : "Finish your review"}
+                            </h4>
+                            <p className="text-sm text-muted-foreground">
+                              {totalComments} comment
+                              {totalComments !== 1 ? "s" : ""} will be
+                              submitted.
+                            </p>
+                          </div>
                         <Textarea
                           value={finalReviewComment}
                           onChange={(e) =>
@@ -2833,7 +3006,8 @@ export const ChangesDiffViewer = memo(
                   </Popover>
                 </div>
               </div>
-            )}
+              );
+            })()}
 
             {/* Cancel Review Confirmation Dialog */}
             <AlertDialog
@@ -2891,65 +3065,7 @@ export const ChangesDiffViewer = memo(
 
             {/* All Files Diffs */}
             <div className="flex-1 overflow-hidden">
-              {conflictEditorOpen ? (
-                // Conflict Resolution Editor
-                <div className="h-full flex flex-col p-4">
-                  <div className="mb-4 flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-medium">Resolve Conflict</h3>
-                      <p className="text-sm text-muted-foreground font-mono">
-                        {conflictFilePath}
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleCloseConflictEditor}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                  {loadingConflictFile ? (
-                    <div className="flex-1 flex items-center justify-center text-muted-foreground">
-                      <Loader2 className="w-6 h-6 animate-spin" />
-                      <span className="ml-2">Loading conflict file...</span>
-                    </div>
-                  ) : (
-                    <>
-                      <Textarea
-                        value={conflictFileContent}
-                        onChange={(e) => setConflictFileContent(e.target.value)}
-                        className="flex-1 font-mono text-sm mb-4"
-                        placeholder="Edit the file to resolve conflicts..."
-                        style={{ minHeight: "400px" }}
-                        aria-label="Conflict resolution editor"
-                        data-testid="conflict-editor"
-                      />
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          onClick={handleCloseConflictEditor}
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          onClick={handleResolveConflict}
-                          disabled={resolvingConflict}
-                        >
-                          {resolvingConflict ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                              Resolving...
-                            </>
-                          ) : (
-                            "Resolve"
-                          )}
-                        </Button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ) : initialLoading || loadingAllHunks ? (
+              {initialLoading || loadingAllHunks ? (
                 <div className="h-full flex items-center justify-center text-muted-foreground">
                   <Loader2 className="w-6 h-6 animate-spin" />
                   <span className="ml-2">Loading diffs...</span>
@@ -2999,6 +3115,7 @@ export const ChangesDiffViewer = memo(
                       className="h-full overflow-y-auto"
                     >
                       <div className="p-4 space-y-4">
+                        {/* All files - FileRowComponent handles both regular files and conflicts */}
                         {files.map((file) => (
                           <FileRowComponent
                             key={file.path}
@@ -3024,6 +3141,11 @@ export const ChangesDiffViewer = memo(
                               getOutdatedCommentsForFile
                             }
                             deleteComment={deleteComment}
+                            conflictRegions={conflictRegionsByFile.get(file.path)}
+                            conflictComments={conflictComments}
+                            saveConflictComment={saveConflictComment}
+                            clearConflictComment={clearConflictComment}
+                            conflictFileRefs={conflictFileRefs}
                           />
                         ))}
                       </div>

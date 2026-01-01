@@ -1,6 +1,6 @@
 import { memo } from "react";
-import { AlertTriangle, ChevronDown, ChevronRight, FileWarning } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "./ui/tooltip";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { cn } from "../lib/utils";
 
 export interface ConflictsSectionProps {
   files: string[];
@@ -8,6 +8,13 @@ export interface ConflictsSectionProps {
   onToggleCollapse: () => void;
   onFileSelect?: (path: string) => void;
   activeFilePath?: string | null;
+}
+
+function formatFileLabel(filePath: string) {
+  const parts = filePath.split("/");
+  const name = parts.pop() || filePath;
+  const directory = parts.length > 0 ? parts.join("/") : null;
+  return { name, directory };
 }
 
 export const ConflictsSection = memo<ConflictsSectionProps>(({
@@ -22,55 +29,46 @@ export const ConflictsSection = memo<ConflictsSectionProps>(({
   }
 
   return (
-    <div className="mb-4 border border-destructive/30 rounded-md bg-destructive/5">
-      <div className="flex items-center justify-between w-full px-4 py-3">
+    <div className="mt-4">
+      <div className="flex items-center justify-between w-full text-sm uppercase tracking-wide text-destructive">
         <button
           type="button"
-          className="flex items-center gap-2 text-sm font-medium text-destructive hover:text-destructive/80 transition-colors"
+          className="flex items-center gap-1 hover:text-destructive/80 transition-colors"
           onClick={onToggleCollapse}
         >
           {isCollapsed ? (
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="w-3 h-3" />
           ) : (
-            <ChevronDown className="w-4 h-4" />
+            <ChevronDown className="w-3 h-3" />
           )}
-          <AlertTriangle className="w-4 h-4" />
           <span>Conflicts</span>
         </button>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-destructive font-medium">{files.length}</span>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              {files.length} file(s) with conflicts
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <span className="ml-1">{files.length}</span>
       </div>
       {!isCollapsed && (
-        <div className="px-4 pb-3 space-y-1">
-          {files.map((file) => (
-            <button
-              key={file}
-              type="button"
-              className={`
-                w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded
-                transition-colors text-left font-mono
-                ${
-                  activeFilePath === file
-                    ? "bg-destructive/20 text-foreground"
-                    : "text-muted-foreground hover:bg-destructive/10 hover:text-foreground"
-                }
-              `}
-              onClick={() => onFileSelect?.(file)}
-            >
-              <FileWarning className="w-4 h-4 text-destructive flex-shrink-0" />
-              <span className="truncate">{file}</span>
-            </button>
-          ))}
+        <div className="mt-2 overflow-hidden select-none font-sans">
+          {files.map((file) => {
+            const label = formatFileLabel(file);
+            return (
+              <div
+                key={file}
+                className={cn(
+                  "group/row relative py-1 text-sm flex items-center gap-1 cursor-pointer",
+                  activeFilePath === file ? "bg-accent/40" : "hover:bg-accent/30"
+                )}
+                onClick={() => onFileSelect?.(file)}
+                title={file}
+              >
+                <div className="ml-1 flex-1 flex items-center gap-2 min-w-0 font-sans">
+                  <span className={cn("font-medium truncate flex-shrink-0", activeFilePath === file && "text-destructive")}>{label.name}</span>
+                  {label.directory && (
+                    <span className={cn("text-muted-foreground/60 truncate text-xs", activeFilePath === file && "text-destructive/70")}>{label.directory}</span>
+                  )}
+                </div>
+                <span className="text-sm font-sans min-w-[1ch] text-destructive mr-1">C</span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
