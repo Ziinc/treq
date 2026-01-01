@@ -32,8 +32,8 @@ import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import {
   getWorkspaces,
   rebuildWorkspaces,
-  deleteWorkspaceFromDb,
-  jjRemoveWorkspace,
+  deleteWorkspace,
+  cleanupStaleWorkspaces,
   getSetting,
   setSetting,
   selectFolder,
@@ -233,6 +233,115 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     };
   }, [selectedWorkspace?.id, selectedWorkspace?.workspace_path]);
 
+  // Listen for window focus to refresh workspace data
+  useEffect(() => {
+    if (!repoPath) return;
+
+    const handleFocus = async () => {
+      try {
+        // Trigger background rebase check for all workspaces
+        const result = await checkAndRebaseWorkspaces(repoPath);
+        if (result.rebased && result.has_conflicts) {
+          addToast({
+            title: "Some workspaces have conflicts",
+            description: "Check workspace details for more information",
+            type: "warning",
+          });
+        }
+      } catch (error) {
+        console.error("Auto-rebase failed:", error);
+      }
+
+      // Invalidate queries to refresh workspace data
+      queryClient.invalidateQueries({
+        queryKey: ["workspaces", repoPath],
+      });
+    };
+
+    const unlistenFocus = getCurrentWindow().onFocusChanged(
+      ({ payload: focused }) => {
+        if (focused) {
+          handleFocus();
+        }
+      }
+    );
+
+    return () => {
+      unlistenFocus.then((fn) => fn());
+    };
+  }, [repoPath, queryClient]);
+
+  const { data: sessions = [] } = useQuery({
+    queryKey: ["sessions", repoPath],
+    queryFn: () => getSessions(repoPath),
+    refetchInterval: 30000,
+    enabled: !!repoPath,
+  });
+
+
+  const { data: workspaces = [], refetch: _refetch } = useQuery({
+    queryKey: ["workspaces", repoPath],
+    queryFn: () => getWorkspaces(repoPath),
+    enabled: !!repoPath,
+  });
+
+  // Clean up stale workspace directories on startup
+  useEffect(() => {
+    const cleanup = async () => {
+      if (repoPath) {
+        try {
+          await cleanupStaleWorkspaces(repoPath);
+        } catch (error) {
+          console.error("Failed to cleanup stale workspaces:", error);
+        }
+      }
+    };
+    cleanup();
+  }, [repoPath]);
+
+  // Rebuild workspaces from filesystem if database is empty
+  useEffect(() => {
+    const rebuildIfNeeded = async () => {
+      if (repoPath && workspaces.length === 0) {
+        try {
+          const rebuilt = await rebuildWorkspaces(repoPath);
+          if (rebuilt.length > 0) {
+            queryClient.invalidateQueries({
+              queryKey: ["workspaces", repoPath],
+            });
+          }
+        } catch (error) {
+          console.error("Failed to rebuild workspaces:", error);
+        }
+      }
+    };
+    rebuildIfNeeded();
+  }, [repoPath, workspaces.length, queryClient]);
+
+  // Note: Git cache preloader removed since we're using JJ now
+
+  const deleteWorkspaceMutation = useMutation({
+    mutationFn: async (workspace: Workspace) => {
+      await deleteWorkspace(workspace.repo_path, workspace.workspace_path, workspace.id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+      handleReturnToDashboard(); // Navigate to dashboard & clear selected workspace
+      addToast({
+        title: "Workspace Deleted",
+        description: "Workspace has been removed successfully",
+        type: "success",
+      });
+    },
+    onError: (error) => {
+      addToast({
+        title: "Delete Failed",
+        description: error instanceof Error ? error.message : String(error),
+        type: "error",
+      });
+    },
+  });
+
   // Consolidate all Tauri event listeners
   useEffect(() => {
     const listeners = [
@@ -336,103 +445,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     repoPath,
     addToast,
     queryClient,
+    selectedWorkspace,
+    deleteWorkspaceMutation,
   ]);
-
-  // Listen for window focus to refresh workspace data
-  useEffect(() => {
-    if (!repoPath) return;
-
-    const handleFocus = async () => {
-      try {
-        // Trigger background rebase check for all workspaces
-        const result = await checkAndRebaseWorkspaces(repoPath);
-        if (result.rebased && result.has_conflicts) {
-          addToast({
-            title: "Some workspaces have conflicts",
-            description: "Check workspace details for more information",
-            type: "warning",
-          });
-        }
-      } catch (error) {
-        console.error("Auto-rebase failed:", error);
-      }
-
-      // Invalidate queries to refresh workspace data
-      queryClient.invalidateQueries({
-        queryKey: ["workspaces", repoPath],
-      });
-    };
-
-    const unlistenFocus = getCurrentWindow().onFocusChanged(
-      ({ payload: focused }) => {
-        if (focused) {
-          handleFocus();
-        }
-      }
-    );
-
-    return () => {
-      unlistenFocus.then((fn) => fn());
-    };
-  }, [repoPath, queryClient]);
-
-  const { data: sessions = [] } = useQuery({
-    queryKey: ["sessions", repoPath],
-    queryFn: () => getSessions(repoPath),
-    refetchInterval: 30000,
-    enabled: !!repoPath,
-  });
-
-
-  const { data: workspaces = [], refetch: _refetch } = useQuery({
-    queryKey: ["workspaces", repoPath],
-    queryFn: () => getWorkspaces(repoPath),
-    enabled: !!repoPath,
-  });
-
-  // Rebuild workspaces from filesystem if database is empty
-  useEffect(() => {
-    const rebuildIfNeeded = async () => {
-      if (repoPath && workspaces.length === 0) {
-        try {
-          const rebuilt = await rebuildWorkspaces(repoPath);
-          if (rebuilt.length > 0) {
-            queryClient.invalidateQueries({
-              queryKey: ["workspaces", repoPath],
-            });
-          }
-        } catch (error) {
-          console.error("Failed to rebuild workspaces:", error);
-        }
-      }
-    };
-    rebuildIfNeeded();
-  }, [repoPath, workspaces.length, queryClient]);
-
-  // Note: Git cache preloader removed since we're using JJ now
-
-  const deleteWorkspace = useMutation({
-    mutationFn: async (workspace: Workspace) => {
-      await jjRemoveWorkspace(workspace.repo_path, workspace.workspace_path);
-      await deleteWorkspaceFromDb(workspace.repo_path, workspace.id);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
-      handleReturnToDashboard(); // Navigate to dashboard & clear selected workspace
-      addToast({
-        title: "Workspace Deleted",
-        description: "Workspace has been removed successfully",
-        type: "success",
-      });
-    },
-    onError: (error) => {
-      addToast({
-        title: "Delete Failed",
-        description: error instanceof Error ? error.message : String(error),
-        type: "error",
-      });
-    },
-  });
 
   // Note: Git merge functionality removed - using JJ now
 
@@ -572,8 +587,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
       try {
         // Delete all workspaces without triggering individual onSuccess callbacks
         for (const workspace of workspacesToDelete) {
-          await jjRemoveWorkspace(workspace.repo_path, workspace.workspace_path);
-          await deleteWorkspaceFromDb(workspace.repo_path, workspace.id);
+          await deleteWorkspace(workspace.repo_path, workspace.workspace_path, workspace.id);
         }
         // Show single toast and refresh after all deletions
         queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
@@ -602,7 +616,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
       kind: "warning",
     });
     if (confirmed) {
-      deleteWorkspace.mutate(workspace);
+      deleteWorkspaceMutation.mutate(workspace);
     }
   };
 
@@ -737,6 +751,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
           onWorkspaceClick={(workspace) => handleOpenSession(workspace)}
           onWorkspaceMultiSelect={handleWorkspaceMultiSelect}
           onBulkDelete={handleBulkDelete}
+          onDeleteWorkspace={handleDelete}
           onCreateWorkspace={() => setShowCreateDialog(true)}
           onCreateWorkspaceFromRemote={() =>
             setShowCreateFromRemoteDialog(true)

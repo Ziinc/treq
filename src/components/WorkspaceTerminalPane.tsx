@@ -345,6 +345,48 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
       [isHidden, collapsed, hasAnyTerminals, onCreateNewSession]
     );
 
+    // Cmd+Control+J: Toggle maximize/restore terminal pane
+    useKeyboardShortcut(
+      "j",
+      true,
+      () => {
+        if (isHidden) return;
+
+        if (maximized) {
+          // If already maximized, restore to expanded state
+          setMaximized(false);
+        } else {
+          // If collapsed or expanded, maximize
+          setCollapsed(false);
+          setMaximized(true);
+        }
+      },
+      [isHidden, maximized],
+      { requireBothCmdAndCtrl: true }
+    );
+
+    // Cmd+]: Create new agent terminal
+    useKeyboardShortcut(
+      "]",
+      true,
+      () => {
+        if (isHidden) return;
+        handleCreateAgentSession();
+      },
+      [isHidden, handleCreateAgentSession]
+    );
+
+    // Cmd+\: Create new shell terminal
+    useKeyboardShortcut(
+      "\\",
+      true,
+      () => {
+        if (isHidden) return;
+        handleAddShell();
+      },
+      [isHidden, handleAddShell]
+    );
+
     // Build ordered list of all terminals for rendering based on terminalOrder
     const shellTerminalMap = new Map(
       shellTerminalsForWorkspace.map((t) => [t.id, t])
@@ -477,7 +519,7 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
                         Agent
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>New Agent Session</TooltipContent>
+                  <TooltipContent>New Agent Session (⌘+])</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
               {/* New Shell button */}
@@ -494,7 +536,7 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
                       <Terminal className="w-4 h-4" /> Shell
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>New Shell</TooltipContent>
+                  <TooltipContent>New Shell (⌘+\)</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
               {/* Expand/Maximize/Restore button */}
@@ -546,7 +588,7 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
                         <Maximize2 className="w-3 h-3" />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Maximize</TooltipContent>
+                    <TooltipContent>Maximize (⌘+⌃+J)</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               )}

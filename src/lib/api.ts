@@ -127,6 +127,20 @@ export const createWorkspace = (
 export const deleteWorkspaceFromDb = (repo_path: string, id: number): Promise<void> =>
   invoke("delete_workspace_from_db", { repoPath: repo_path, id });
 
+export const deleteWorkspace = (
+  repo_path: string,
+  workspace_path: string,
+  id: number
+): Promise<void> =>
+  invoke("delete_workspace", {
+    repoPath: repo_path,
+    workspacePath: workspace_path,
+    id,
+  });
+
+export const cleanupStaleWorkspaces = (repo_path: string): Promise<void> =>
+  invoke("cleanup_stale_workspaces", { repoPath: repo_path });
+
 export const ensureWorkspaceIndexed = (
   repo_path: string,
   workspace_id: number | null,

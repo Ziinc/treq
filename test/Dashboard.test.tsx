@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "./test-utils";
+import { render, screen, waitFor, within, act } from "./test-utils";
 import userEvent from "@testing-library/user-event";
 import { Dashboard } from "../src/components/Dashboard";
 import * as api from "../src/lib/api";
@@ -459,6 +459,297 @@ describe("Terminal Pane", () => {
     await waitFor(() => {
       expect(
         document.querySelector('[data-terminal-id^="claude-"]')
+      ).not.toBeNull();
+    });
+  });
+
+  it("maximizes terminal pane when Cmd+Control+J is pressed while collapsed", async () => {
+    const workspace = {
+      id: 1,
+      repo_path: "/Users/test/repo",
+      workspace_name: "Workspace One",
+      workspace_path: "/Users/test/repo/.treq/workspaces/one",
+      branch_name: "feature/one",
+      created_at: "2024-01-01T00:00:00Z",
+    };
+    const mockSessions: api.Session[] = [
+      {
+        id: 1,
+        workspace_id: workspace.id,
+        name: "Claude Session 1",
+        created_at: "2024-01-01T00:00:00Z",
+        last_accessed: "2024-01-01T00:00:00Z",
+        model: null,
+      },
+    ];
+
+    vi.mocked(api.getWorkspaces).mockResolvedValue([workspace]);
+    vi.mocked(api.getSessions).mockResolvedValue(mockSessions);
+
+    const user = userEvent.setup();
+    render(<Dashboard />);
+
+    const workspaceRow = await screen.findByText(workspace.branch_name);
+    await user.click(workspaceRow);
+
+    await screen.findByText(/Terminals/i);
+
+    // Ensure terminal pane is collapsed
+    let expandButton = screen.queryByLabelText(/Expand terminal/i);
+    if (!expandButton) {
+      const collapseButton = await screen.findByLabelText(/Collapse terminal/i);
+      await user.click(collapseButton);
+      expandButton = await screen.findByLabelText(/Expand terminal/i);
+    }
+
+    expect(expandButton).toBeInTheDocument();
+
+    // Press Cmd+Control+J to maximize
+    // Note: userEvent doesn't support both metaKey and ctrlKey at the same time
+    // So we dispatch the event manually
+    act(() => {
+      const keydownEvent = new KeyboardEvent("keydown", {
+        key: "j",
+        metaKey: true,
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      window.dispatchEvent(keydownEvent);
+    });
+
+    // Terminal should now be maximized - Restore button should appear
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Restore terminal/i)).toBeInTheDocument();
+    });
+
+    // Expand button should not be visible anymore
+    expect(screen.queryByLabelText(/Expand terminal/i)).not.toBeInTheDocument();
+  });
+
+  it("maximizes terminal pane when Cmd+Control+J is pressed while expanded", async () => {
+    const workspace = {
+      id: 1,
+      repo_path: "/Users/test/repo",
+      workspace_name: "Workspace One",
+      workspace_path: "/Users/test/repo/.treq/workspaces/one",
+      branch_name: "feature/one",
+      created_at: "2024-01-01T00:00:00Z",
+    };
+    const mockSessions: api.Session[] = [
+      {
+        id: 1,
+        workspace_id: workspace.id,
+        name: "Claude Session 1",
+        created_at: "2024-01-01T00:00:00Z",
+        last_accessed: "2024-01-01T00:00:00Z",
+        model: null,
+      },
+    ];
+
+    vi.mocked(api.getWorkspaces).mockResolvedValue([workspace]);
+    vi.mocked(api.getSessions).mockResolvedValue(mockSessions);
+
+    const user = userEvent.setup();
+    render(<Dashboard />);
+
+    const workspaceRow = await screen.findByText(workspace.branch_name);
+    await user.click(workspaceRow);
+
+    await screen.findByText(/Terminals/i);
+
+    // Ensure terminal pane is expanded (not collapsed, not maximized)
+    const collapseButton = screen.queryByLabelText(/Collapse terminal/i);
+    if (!collapseButton) {
+      // Terminal is collapsed, expand it first
+      const expandButton = await screen.findByLabelText(/Expand terminal/i);
+      await user.click(expandButton);
+      await screen.findByLabelText(/Collapse terminal/i);
+    }
+
+    // Verify we're in expanded state - Maximize button should be visible
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Maximize terminal/i)).toBeInTheDocument();
+    });
+
+    // Press Cmd+Control+J to maximize
+    act(() => {
+      const keydownEvent = new KeyboardEvent("keydown", {
+        key: "j",
+        metaKey: true,
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      window.dispatchEvent(keydownEvent);
+    });
+
+    // Terminal should now be maximized - Restore button should appear
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Restore terminal/i)).toBeInTheDocument();
+    });
+
+    // Maximize button should no longer be visible
+    expect(screen.queryByLabelText(/Maximize terminal/i)).not.toBeInTheDocument();
+  });
+
+  it("restores terminal pane when Cmd+Control+J is pressed while already maximized", async () => {
+    const workspace = {
+      id: 1,
+      repo_path: "/Users/test/repo",
+      workspace_name: "Workspace One",
+      workspace_path: "/Users/test/repo/.treq/workspaces/one",
+      branch_name: "feature/one",
+      created_at: "2024-01-01T00:00:00Z",
+    };
+    const mockSessions: api.Session[] = [
+      {
+        id: 1,
+        workspace_id: workspace.id,
+        name: "Claude Session 1",
+        created_at: "2024-01-01T00:00:00Z",
+        last_accessed: "2024-01-01T00:00:00Z",
+        model: null,
+      },
+    ];
+
+    vi.mocked(api.getWorkspaces).mockResolvedValue([workspace]);
+    vi.mocked(api.getSessions).mockResolvedValue(mockSessions);
+
+    const user = userEvent.setup();
+    render(<Dashboard />);
+
+    const workspaceRow = await screen.findByText(workspace.branch_name);
+    await user.click(workspaceRow);
+
+    await screen.findByText(/Terminals/i);
+
+    // Ensure terminal pane is expanded first
+    const collapseButton = screen.queryByLabelText(/Collapse terminal/i);
+    if (!collapseButton) {
+      const expandButton = await screen.findByLabelText(/Expand terminal/i);
+      await user.click(expandButton);
+      await screen.findByLabelText(/Collapse terminal/i);
+    }
+
+    // Click maximize button to maximize the terminal
+    const maximizeButton = await screen.findByLabelText(/Maximize terminal/i);
+    await user.click(maximizeButton);
+
+    // Verify terminal is now maximized
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Restore terminal/i)).toBeInTheDocument();
+    });
+
+    // Press Cmd+Control+J while already maximized - should restore
+    act(() => {
+      const keydownEvent = new KeyboardEvent("keydown", {
+        key: "j",
+        metaKey: true,
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      window.dispatchEvent(keydownEvent);
+    });
+
+    // Terminal should now be restored (expanded, not maximized) - Maximize button should appear
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Maximize terminal/i)).toBeInTheDocument();
+    });
+
+    // Should be expanded (not collapsed or maximized)
+    expect(screen.queryByLabelText(/Expand terminal/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Restore terminal/i)).not.toBeInTheDocument();
+  });
+
+  it("creates a new agent terminal when Cmd+] is pressed", async () => {
+    const workspace = {
+      id: 1,
+      repo_path: "/Users/test/repo",
+      workspace_name: "Workspace One",
+      workspace_path: "/Users/test/repo/.treq/workspaces/one",
+      branch_name: "feature/one",
+      created_at: "2024-01-01T00:00:00Z",
+    };
+    const mockSessions: api.Session[] = [];
+
+    vi.mocked(api.getWorkspaces).mockResolvedValue([workspace]);
+    vi.mocked(api.getSessions).mockImplementation(() =>
+      Promise.resolve(mockSessions.map((session) => ({ ...session })))
+    );
+    vi.mocked(api.createSession).mockImplementation(
+      async (_repoPath, workspaceId, name) => {
+        const newId = mockSessions.length + 1;
+        mockSessions.push({
+          id: newId,
+          workspace_id: workspaceId,
+          name: name ?? `Claude Session ${newId}`,
+          created_at: "2024-01-02T00:00:00Z",
+          last_accessed: "2024-01-02T00:00:00Z",
+          model: null,
+        });
+        return newId;
+      }
+    );
+
+    const user = userEvent.setup();
+    render(<Dashboard />);
+
+    const workspaceRow = await screen.findByText(workspace.branch_name);
+    await user.click(workspaceRow);
+
+    await screen.findByText(/Terminals/i);
+
+    // Count initial agent terminals
+    const initialTerminals = document.querySelectorAll('[data-terminal-id^="claude-"]').length;
+    const initialCreateCalls = vi.mocked(api.createSession).mock.calls.length;
+
+    // Press Cmd+] to create new agent terminal
+    await user.keyboard("{Meta>}]{/Meta}");
+
+    // New agent terminal should be created
+    await waitFor(() => {
+      expect(api.createSession).toHaveBeenCalledTimes(initialCreateCalls + 1);
+      const currentTerminals = document.querySelectorAll('[data-terminal-id^="claude-"]').length;
+      expect(currentTerminals).toBe(initialTerminals + 1);
+    });
+  });
+
+  it("creates a new shell terminal when Cmd+\\ is pressed", async () => {
+    const workspace = {
+      id: 1,
+      repo_path: "/Users/test/repo",
+      workspace_name: "Workspace One",
+      workspace_path: "/Users/test/repo/.treq/workspaces/one",
+      branch_name: "feature/one",
+      created_at: "2024-01-01T00:00:00Z",
+    };
+    const mockSessions: api.Session[] = [];
+
+    vi.mocked(api.getWorkspaces).mockResolvedValue([workspace]);
+    vi.mocked(api.getSessions).mockResolvedValue(mockSessions);
+
+    const user = userEvent.setup();
+    render(<Dashboard />);
+
+    const workspaceRow = await screen.findByText(workspace.branch_name);
+    await user.click(workspaceRow);
+
+    await screen.findByText(/Terminals/i);
+
+    // Initial state: no shell terminals
+    expect(
+      document.querySelector('[data-terminal-id^="shell-"]')
+    ).toBeNull();
+
+    // Press Cmd+\ to create new shell terminal
+    await user.keyboard("{Meta>}\\{/Meta}");
+
+    // New shell terminal should be created
+    await waitFor(() => {
+      expect(
+        document.querySelector('[data-terminal-id^="shell-"]')
       ).not.toBeNull();
     });
   });

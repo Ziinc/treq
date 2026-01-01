@@ -276,6 +276,8 @@ pub fn run() {
             commands::add_workspace_to_db,
             commands::create_workspace,
             commands::delete_workspace_from_db,
+            commands::delete_workspace,
+            commands::cleanup_stale_workspaces,
             commands::rebuild_workspaces,
             commands::update_workspace_metadata,
             commands::set_workspace_target_branch,
