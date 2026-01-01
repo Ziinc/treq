@@ -311,6 +311,17 @@ export const updateWorkspaceMetadata = (
     metadata,
   });
 
+export const updateWorkspaceConflicts = (
+  repo_path: string,
+  workspace_id: number,
+  has_conflicts: boolean
+): Promise<void> =>
+  invoke("update_workspace_conflicts", {
+    repoPath: repo_path,
+    workspaceId: workspace_id,
+    hasConflicts: has_conflicts,
+  });
+
 export const setWorkspaceTargetBranch = (
   repo_path: string,
   workspace_path: string,

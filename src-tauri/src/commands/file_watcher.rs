@@ -107,26 +107,18 @@ fn is_ignored_path(path: &PathBuf) -> bool {
 pub fn start_file_watcher(
     state: State<AppState>,
     workspace_id: i64,
-    repo_path: String,
+    workspace_path: String,
 ) -> Result<(), String> {
-    // Look up workspace path from database
-    let workspace = crate::local_db::get_workspace_by_id(&repo_path, workspace_id)?
-        .ok_or_else(|| format!("Workspace with ID {} not found", workspace_id))?;
-
     state
         .watcher_manager
-        .start_watching(workspace_id, workspace.workspace_path)
+        .start_watching(workspace_id, workspace_path)
 }
 
 #[tauri::command]
 pub fn stop_file_watcher(
     state: State<AppState>,
     workspace_id: i64,
-    repo_path: String,
+    workspace_path: String,
 ) -> Result<(), String> {
-    // Look up workspace path from database
-    let workspace = crate::local_db::get_workspace_by_id(&repo_path, workspace_id)?
-        .ok_or_else(|| format!("Workspace with ID {} not found", workspace_id))?;
-
-    state.watcher_manager.stop_watching(&workspace.workspace_path)
+    state.watcher_manager.stop_watching(&workspace_path)
 }

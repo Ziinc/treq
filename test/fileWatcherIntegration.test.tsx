@@ -18,7 +18,7 @@ describe("File watcher API integration", () => {
 
     expect(invoke).toHaveBeenCalledWith("start_file_watcher", {
       workspaceId: 123,
-      workspacePath: "/path/to/workspace",  // NOT repoPath!
+      workspacePath: "/path/to/workspace",
     });
   });
 

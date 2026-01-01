@@ -220,7 +220,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     const workspaceId = selectedWorkspace.id;
     const workspacePath = selectedWorkspace.workspace_path;
 
-    // Start watching when workspace is selected - pass workspace_path (not repoPath!)
     startFileWatcher(workspaceId, workspacePath).catch((err) => {
       console.error("Failed to start file watcher:", err);
     });

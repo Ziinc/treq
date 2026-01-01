@@ -280,6 +280,7 @@ pub fn run() {
             commands::cleanup_stale_workspaces,
             commands::rebuild_workspaces,
             commands::update_workspace_metadata,
+            commands::update_workspace_conflicts,
             commands::set_workspace_target_branch,
             commands::check_and_rebase_workspaces,
             commands::ensure_workspace_indexed,
