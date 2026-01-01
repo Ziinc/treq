@@ -420,32 +420,19 @@ pub fn get_workspace_branch(workspace_path: &str) -> Result<String, JjError> {
 pub fn remove_workspace(repo_path: &str, workspace_path: &str) -> Result<(), JjError> {
     let workspace_dir = Path::new(workspace_path);
 
-    // Check workspace exists
+    // If workspace doesn't exist, nothing to do - return success
     if !workspace_dir.exists() {
-        return Err(JjError::WorkspaceNotFound(workspace_path.to_string()));
+        return Ok(());
     }
 
-    // Try to remove git workspace using git worktree command
-    let output = command_for("git")
+    // Try to remove git workspace using git worktree command (best effort)
+    // Ignore errors from git worktree remove - we'll clean up the directory regardless
+    let _ = command_for("git")
         .current_dir(repo_path)
         .args(&["worktree", "remove", "--force", workspace_path])
-        .output()
-        .map_err(|e| {
-            JjError::GitWorkspaceError(format!("Failed to execute git worktree remove: {}", e))
-        })?;
+        .output();
 
-    // If git worktree remove failed, check if it's just "not a working tree"
-    // In that case, we can proceed with directory removal
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        // Allow deletion to proceed if it's not registered as a git worktree
-        // (e.g., manually created directory or orphaned workspace)
-        if !stderr.contains("is not a working tree") {
-            return Err(JjError::GitWorkspaceError(stderr.to_string()));
-        }
-    }
-
-    // Remove directory if it still exists (git worktree remove command should handle this)
+    // Always try to remove directory if it still exists
     if workspace_dir.exists() {
         fs::remove_dir_all(workspace_dir).map_err(|e| JjError::IoError(e.to_string()))?;
     }
@@ -1298,4 +1285,73 @@ pub fn jj_get_log(workspace_path: &str, target_branch: &str) -> Result<JjLogResu
         target_branch: target_branch.to_string(),
         workspace_branch,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    /// Helper to create a temporary directory for testing
+    fn setup_test_dir() -> (TempDir, PathBuf) {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_path = temp_dir.path().join("test_workspace");
+        fs::create_dir_all(&workspace_path).unwrap();
+        (temp_dir, workspace_path)
+    }
+
+    #[test]
+    fn test_remove_workspace_nonexistent_directory() {
+        // Test that removing a non-existent workspace should succeed (not error)
+        // This is the bug fix - currently it returns Err(WorkspaceNotFound)
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().to_str().unwrap();
+        let nonexistent_path = temp_dir.path().join("nonexistent").to_str().unwrap().to_string();
+
+        let result = remove_workspace(repo_path, &nonexistent_path);
+
+        // Should succeed even if workspace doesn't exist
+        assert!(result.is_ok(), "remove_workspace should succeed when directory doesn't exist");
+    }
+
+    #[test]
+    fn test_remove_workspace_existing_directory() {
+        // Test that removing an existing directory works
+        let (_temp_dir, workspace_path) = setup_test_dir();
+        let workspace_path_str = workspace_path.to_str().unwrap();
+        let repo_path = workspace_path.parent().unwrap().to_str().unwrap();
+
+        assert!(workspace_path.exists(), "Workspace should exist before removal");
+
+        let result = remove_workspace(repo_path, workspace_path_str);
+
+        // Should succeed and directory should be removed
+        assert!(result.is_ok(), "remove_workspace should succeed: {:?}", result);
+        assert!(!workspace_path.exists(), "Workspace directory should be removed");
+    }
+
+    #[test]
+    fn test_remove_workspace_handles_git_failure_gracefully() {
+        // Test that workspace removal continues even if git worktree remove fails
+        // This simulates a workspace that was created without git worktree
+        let (_temp_dir, workspace_path) = setup_test_dir();
+        let workspace_path_str = workspace_path.to_str().unwrap();
+
+        // Create a file in the workspace to ensure it needs cleanup
+        let test_file = workspace_path.join("test.txt");
+        fs::write(&test_file, "test content").unwrap();
+
+        assert!(workspace_path.exists(), "Workspace should exist before removal");
+        assert!(test_file.exists(), "Test file should exist");
+
+        // Use a non-git repo path - git worktree remove will fail
+        let fake_repo_path = workspace_path.parent().unwrap().to_str().unwrap();
+        let result = remove_workspace(fake_repo_path, workspace_path_str);
+
+        // Should still succeed by falling back to fs::remove_dir_all
+        assert!(result.is_ok(), "remove_workspace should succeed even when git fails: {:?}", result);
+        assert!(!workspace_path.exists(), "Workspace directory should be removed despite git failure");
+    }
 }
