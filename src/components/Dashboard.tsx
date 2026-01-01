@@ -884,8 +884,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
         repoPath={repoPath}
-        onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+        onSuccess={async (workspaceId) => {
+          // Invalidate and refetch workspaces
+          await queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+          // Force refetch to get the latest data
+          const updatedWorkspaces = await queryClient.fetchQuery({
+            queryKey: ["workspaces", repoPath],
+            queryFn: () => getWorkspaces(repoPath),
+          });
+          // Find the newly created workspace and navigate to it
+          const newWorkspace = updatedWorkspaces.find((w) => w.id === workspaceId);
+          if (newWorkspace) {
+            handleOpenSession(newWorkspace);
+          }
         }}
       />
 
@@ -893,8 +904,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         open={showCreateFromRemoteDialog}
         onOpenChange={setShowCreateFromRemoteDialog}
         repoPath={repoPath}
-        onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+        onSuccess={async (workspaceId) => {
+          // Invalidate and refetch workspaces
+          await queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+          // Force refetch to get the latest data
+          const updatedWorkspaces = await queryClient.fetchQuery({
+            queryKey: ["workspaces", repoPath],
+            queryFn: () => getWorkspaces(repoPath),
+          });
+          // Find the newly created workspace and navigate to it
+          const newWorkspace = updatedWorkspaces.find((w) => w.id === workspaceId);
+          if (newWorkspace) {
+            handleOpenSession(newWorkspace);
+          }
         }}
       />
 

@@ -21,7 +21,7 @@ interface CreateWorkspaceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   repoPath: string;
-  onSuccess: () => void;
+  onSuccess: (workspaceId: number) => void;
   sourceBranch?: string;
 }
 
@@ -108,7 +108,7 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
       const metadata = JSON.stringify({ intent: intent.trim() });
 
       // Create workspace (jj + database) in single call
-      await createWorkspace(
+      const workspaceId = await createWorkspace(
         repoPath,
         branchName,
         true,
@@ -116,7 +116,7 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
         metadata
       );
 
-      console.log("[CreateWorkspaceDialog] Workspace created successfully");
+      console.log("[CreateWorkspaceDialog] Workspace created successfully, ID:", workspaceId);
 
       addToast({
         title: "Workspace created successfully",
@@ -129,8 +129,8 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
       setBranchName("");
       setIsEditingBranch(false);
 
-      // Call success callback
-      onSuccess();
+      // Call success callback with workspace ID
+      onSuccess(workspaceId);
       onOpenChange(false);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
