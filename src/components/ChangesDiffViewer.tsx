@@ -872,7 +872,7 @@ export const ChangesDiffViewer = memo(
         hunkIndex: number;
         lineIndex: number;
       } | null>(null);
-      const [currentDragLine, setCurrentDragLine] = useState<{
+      const [_currentDragLine, setCurrentDragLine] = useState<{
         filePath: string;
         hunkIndex: number;
         lineIndex: number;
