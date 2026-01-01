@@ -22,7 +22,7 @@ interface CreateWorkspaceFromRemoteDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   repoPath: string;
-  onSuccess: () => void;
+  onSuccess: (workspaceId: number) => void;
 }
 
 export const CreateWorkspaceFromRemoteDialog: React.FC<CreateWorkspaceFromRemoteDialogProps> = ({
@@ -104,7 +104,7 @@ export const CreateWorkspaceFromRemoteDialog: React.FC<CreateWorkspaceFromRemote
       });
 
       // Add to database with metadata
-      await addWorkspaceToDb(
+      const workspaceId = await addWorkspaceToDb(
         repoPath,
         workspaceName,
         workspacePath,
@@ -121,7 +121,7 @@ export const CreateWorkspaceFromRemoteDialog: React.FC<CreateWorkspaceFromRemote
       // Reset form
       setBranchName("");
 
-      onSuccess();
+      onSuccess(workspaceId);
       onOpenChange(false);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
