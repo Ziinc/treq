@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, memo } from "react";
+import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
 import {
   Folder,
   FolderOpen,
@@ -28,6 +28,9 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "./ui/t
 import { getFileStatusTextColor, getStatusBgColor } from "../lib/git-status-colors";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import { parseJjChangedFiles, type ParsedFileChange } from "../lib/git-utils";
+import { useKeyboardShortcut } from "../hooks/useKeyboard";
+import { SearchOverlay } from "./SearchOverlay";
+import { findMatches, highlightInHtml, type SearchMatch } from "../lib/text-search";
 
 // Helper to check if file is binary
 function isBinaryFile(path: string): boolean {
@@ -228,6 +231,16 @@ interface FileContentViewProps {
   onCancelComment: () => void;
   scrollOffset: number;
   onScrollOffsetChange: (offset: number) => void;
+  listRef: React.RefObject<List>;
+  // Search props
+  isSearchOpen: boolean;
+  searchQuery: string;
+  searchMatches: SearchMatch[];
+  currentMatchIndex: number;
+  onSearchQueryChange: (query: string) => void;
+  onSearchNext: () => void;
+  onSearchPrevious: () => void;
+  onSearchClose: () => void;
 }
 
 const FileContentView = memo(function FileContentView({
@@ -254,6 +267,15 @@ const FileContentView = memo(function FileContentView({
   onCancelComment,
   scrollOffset,
   onScrollOffsetChange,
+  listRef,
+  isSearchOpen,
+  searchQuery,
+  searchMatches,
+  currentMatchIndex,
+  onSearchQueryChange,
+  onSearchNext,
+  onSearchPrevious,
+  onSearchClose,
 }: FileContentViewProps) {
   const [copied, setCopied] = useState(false);
   const [copiedPath, setCopiedPath] = useState(false);
@@ -361,6 +383,7 @@ const FileContentView = memo(function FileContentView({
       </TooltipProvider>
       <div className="flex-1 overflow-hidden relative">
         <List
+          ref={listRef}
           style={{ height: window.innerHeight, width: "100%" }}
           className="px-4 pb-4"
           rowCount={lines.length}
@@ -377,9 +400,25 @@ const FileContentView = memo(function FileContentView({
             style: React.CSSProperties;
           }) => {
             const lineNum = index + 1;
-            const line = lines[index];
+            let line = lines[index];
             const diffStatus = fileHunks.get(lineNum);
             const hasDeletionMarker = deletionMarkers.has(lineNum);
+
+            // Apply search highlighting if there's a query
+            if (searchQuery) {
+              // Find which global match index corresponds to this line
+              const lineMatches = searchMatches.filter(m => m.lineNumber === index);
+              if (lineMatches.length > 0) {
+                // Find global index of first match on this line
+                const firstMatchGlobalIndex = searchMatches.findIndex(m => m.lineNumber === index);
+                const isCurrentMatchOnLine = searchMatches[currentMatchIndex]?.lineNumber === index;
+                const currentMatchOffset = isCurrentMatchOnLine ?
+                  currentMatchIndex - firstMatchGlobalIndex : -1;
+
+                const result = highlightInHtml(line, searchQuery, currentMatchOffset);
+                line = result.html;
+              }
+            }
 
             return (
               <CodeLine
@@ -458,6 +497,18 @@ const FileContentView = memo(function FileContentView({
             </div>
           </div>
         )}
+        {/* Search overlay */}
+        <SearchOverlay
+          isVisible={isSearchOpen}
+          query={searchQuery}
+          onQueryChange={onSearchQueryChange}
+          onNext={onSearchNext}
+          onPrevious={onSearchPrevious}
+          onClose={onSearchClose}
+          currentMatch={searchMatches.length > 0 ? currentMatchIndex + 1 : 0}
+          totalMatches={searchMatches.length}
+          className="absolute top-2 right-2 z-20"
+        />
       </div>
     </div>
   );
@@ -603,8 +654,12 @@ export const FileBrowser = memo(function FileBrowser({
   } | null>(null);
   const [hoveredLine, setHoveredLine] = useState<number | null>(null);
   const [scrollOffset, setScrollOffset] = useState(0);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const { addToast } = useToast();
-  const { fontSize } = useTerminalSettings();
+  const { fontSize} = useTerminalSettings();
+  const listRef = useRef<List>(null);
 
   // Ensure workspace is indexed on mount
   useEffect(() => {
@@ -655,6 +710,64 @@ export const FileBrowser = memo(function FileBrowser({
         .catch(() => setChangedFiles(new Map()));
     }
   }, [repoPath, workspace?.workspace_path, basePath]);
+
+  // Keyboard shortcut for search
+  useKeyboardShortcut("f", true, () => {
+    if (selectedFile && !isBinaryFile(selectedFile)) {
+      setIsSearchOpen(true);
+    }
+  }, [selectedFile]);
+
+  // Compute search matches
+  const searchMatches = useMemo(() => {
+    if (!searchQuery || !fileContent) {
+      return [];
+    }
+    return findMatches(fileContent, searchQuery);
+  }, [fileContent, searchQuery]);
+
+  // Search navigation handlers
+  const handleSearchNext = useCallback(() => {
+    if (searchMatches.length === 0) return;
+    const newIndex = (currentMatchIndex + 1) % searchMatches.length;
+    setCurrentMatchIndex(newIndex);
+
+    // Scroll to the match
+    const match = searchMatches[newIndex];
+    if (match && listRef.current) {
+      listRef.current.scrollToItem(match.lineNumber, "center");
+    }
+  }, [searchMatches, currentMatchIndex]);
+
+  const handleSearchPrevious = useCallback(() => {
+    if (searchMatches.length === 0) return;
+    const newIndex = (currentMatchIndex - 1 + searchMatches.length) % searchMatches.length;
+    setCurrentMatchIndex(newIndex);
+
+    // Scroll to the match
+    const match = searchMatches[newIndex];
+    if (match && listRef.current) {
+      listRef.current.scrollToItem(match.lineNumber, "center");
+    }
+  }, [searchMatches, currentMatchIndex]);
+
+  const handleSearchClose = useCallback(() => {
+    setIsSearchOpen(false);
+    setSearchQuery("");
+    setCurrentMatchIndex(0);
+  }, []);
+
+  // Reset search when file changes
+  useEffect(() => {
+    setSearchQuery("");
+    setCurrentMatchIndex(0);
+    setIsSearchOpen(false);
+  }, [selectedFile]);
+
+  // Reset current match index when query changes
+  useEffect(() => {
+    setCurrentMatchIndex(0);
+  }, [searchQuery]);
 
   const handleFileClick = useCallback(
     async (path: string) => {
@@ -1062,6 +1175,15 @@ export const FileBrowser = memo(function FileBrowser({
         onCancelComment={handleCancelComment}
         scrollOffset={scrollOffset}
         onScrollOffsetChange={setScrollOffset}
+        listRef={listRef}
+        isSearchOpen={isSearchOpen}
+        searchQuery={searchQuery}
+        searchMatches={searchMatches}
+        currentMatchIndex={currentMatchIndex}
+        onSearchQueryChange={setSearchQuery}
+        onSearchNext={handleSearchNext}
+        onSearchPrevious={handleSearchPrevious}
+        onSearchClose={handleSearchClose}
       />
     );
   };
