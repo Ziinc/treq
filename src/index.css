@@ -269,3 +269,25 @@ code[class*="language-"] * {
 .terminal-scroll-container::-webkit-scrollbar-thumb:hover {
   background-color: #5a5a5a;
 }
+
+/* Search match highlighting */
+mark.search-match {
+  background-color: hsl(var(--primary) / 0.3);
+  border-radius: 2px;
+  padding: 0 1px;
+  color: inherit;
+}
+
+mark.search-match-current {
+  background-color: hsl(var(--primary) / 0.6);
+  outline: 2px solid hsl(var(--primary));
+  border-radius: 2px;
+  padding: 0 1px;
+  color: inherit;
+}
+
+/* Ensure marks work within syntax highlighting */
+.token mark.search-match,
+.token mark.search-match-current {
+  color: inherit;
+}
