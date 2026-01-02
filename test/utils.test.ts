@@ -3,7 +3,7 @@ import { getFileName, escapeBashString } from "../src/lib/utils";
 
 describe("getFileName", () => {
   it("extracts filename from path with directories", () => {
-    expect(getFileName("src/components/CommitGraph.tsx")).toBe("CommitGraph.tsx");
+    expect(getFileName("src/components/LinearCommitHistory.tsx")).toBe("LinearCommitHistory.tsx");
   });
 
   it("extracts filename from deeply nested path", () => {

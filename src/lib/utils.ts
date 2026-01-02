@@ -45,9 +45,7 @@ export function applyBranchNamePattern(pattern: string, name: string): string {
 }
 
 /**
- * Extract the filename from a file path (Unix or Windows style)
- * @param path - Full file path (e.g., "src/components/CommitGraph.tsx")
- * @returns Just the filename (e.g., "CommitGraph.tsx")
+ * Extract filename from a file path
  */
 export function getFileName(path: string): string {
   if (!path) return "";

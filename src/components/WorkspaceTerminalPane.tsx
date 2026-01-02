@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useRef, useState, useImperativeHandle, forwardRef } from "react";
 import {
   type ConsolidatedTerminalHandle,
 } from "./ConsolidatedTerminal";
@@ -41,7 +41,14 @@ interface WorkspaceTerminalPaneProps {
   onRenameSession?: (sessionId: number, newName: string) => void;
 }
 
-export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
+export interface WorkspaceTerminalPaneHandle {
+  toggleCollapse: () => void;
+  toggleMaximize: () => void;
+  createAgentSession: () => void;
+  createShellSession: () => void;
+}
+
+const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, WorkspaceTerminalPaneProps>(
   function WorkspaceTerminalPane({
     workingDirectory,
     isHidden = false,
@@ -54,7 +61,7 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
     onCreateNewSession,
     onCloseSession,
     onRenameSession,
-  }) {
+  }, ref) {
     // Shared pane state
     const [collapsed, setCollapsed] = useState(true);
     const [maximized, setMaximized] = useState(false);
@@ -206,6 +213,21 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
       },
       [claudeSessions, onCloseSession, activeClaudeSessionId, _onActiveSessionChange]
     );
+
+    // Expose methods via ref for command palette
+    useImperativeHandle(ref, () => ({
+      toggleCollapse: () => setCollapsed((prev) => !prev),
+      toggleMaximize: () => {
+        if (maximized) {
+          setMaximized(false);
+        } else {
+          setCollapsed(false);
+          setMaximized(true);
+        }
+      },
+      createAgentSession: handleCreateAgentSession,
+      createShellSession: handleAddShell,
+    }), [maximized, handleCreateAgentSession, handleAddShell]);
 
     // Height resize handlers
     const handleHeightResizeMouseDown = useCallback((e: React.MouseEvent) => {
@@ -716,3 +738,5 @@ export const WorkspaceTerminalPane = memo<WorkspaceTerminalPaneProps>(
     );
   }
 );
+
+export const WorkspaceTerminalPane = memo(WorkspaceTerminalPaneInner);
