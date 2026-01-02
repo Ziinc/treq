@@ -204,3 +204,32 @@ pub fn jj_get_log(
 ) -> Result<jj::JjLogResult, String> {
     jj::jj_get_log(&workspace_path, &target_branch).map_err(|e| e.to_string())
 }
+
+/// Get commits ahead of target branch (commits to be merged)
+#[tauri::command]
+pub fn jj_get_commits_ahead(
+    workspace_path: String,
+    target_branch: String,
+) -> Result<jj::JjCommitsAhead, String> {
+    jj::jj_get_commits_ahead(&workspace_path, &target_branch).map_err(|e| e.to_string())
+}
+
+/// Get combined diff between workspace and target branch
+#[tauri::command]
+pub fn jj_get_merge_diff(
+    workspace_path: String,
+    target_branch: String,
+) -> Result<jj::JjRevisionDiff, String> {
+    jj::jj_get_merge_diff(&workspace_path, &target_branch).map_err(|e| e.to_string())
+}
+
+/// Create a merge commit combining workspace changes with target branch
+#[tauri::command]
+pub fn jj_create_merge(
+    workspace_path: String,
+    target_branch: String,
+    message: String,
+) -> Result<jj::JjMergeResult, String> {
+    jj::jj_create_merge_commit(&workspace_path, &target_branch, &message)
+        .map_err(|e| e.to_string())
+}

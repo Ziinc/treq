@@ -92,6 +92,37 @@ pub struct JjLogResult {
     pub workspace_branch: String,
 }
 
+/// Commits ahead of target branch
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct JjCommitsAhead {
+    pub commits: Vec<JjLogCommit>,
+    pub total_count: usize,
+}
+
+/// Result of merge operation
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct JjMergeResult {
+    pub success: bool,
+    pub message: String,
+    pub has_conflicts: bool,
+    pub conflicted_files: Vec<String>,
+    pub merge_commit_id: Option<String>,
+}
+
+/// Diff hunks for a single file
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct JjFileDiff {
+    pub path: String,
+    pub hunks: Vec<JjDiffHunk>,
+}
+
+/// Combined diff between two revisions
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct JjRevisionDiff {
+    pub files: Vec<JjFileChange>,
+    pub hunks_by_file: Vec<JjFileDiff>,
+}
+
 impl std::fmt::Display for JjError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -414,6 +445,38 @@ pub fn get_workspace_branch(workspace_path: &str) -> Result<String, JjError> {
             String::from_utf8_lossy(&output.stderr).to_string(),
         ))
     }
+}
+
+/// Get the first local bookmark name from jj (used for workspaces in detached HEAD)
+fn get_branch_from_jj_bookmark(workspace_path: &str) -> Result<String, JjError> {
+    let output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["bookmark", "list", "--no-pager"])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !output.status.success() {
+        return Err(JjError::IoError(
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        ));
+    }
+
+    let bookmarks = String::from_utf8_lossy(&output.stdout);
+    for line in bookmarks.lines() {
+        let line = line.trim();
+        // Skip empty lines and remote tracking bookmarks (contain @)
+        if line.is_empty() || line.contains('@') {
+            continue;
+        }
+        if let Some(name) = line.split(':').next() {
+            let name = name.trim();
+            if !name.is_empty() {
+                return Ok(name.to_string());
+            }
+        }
+    }
+
+    Err(JjError::IoError("No local bookmark found".to_string()))
 }
 
 /// Remove a workspace (jj + git workspace + files)
@@ -760,27 +823,29 @@ pub fn derive_repo_path_from_workspace(workspace_path: &str) -> Option<String> {
 
 /// Commit with message and create new working copy
 pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError> {
-    // For workspaces, derive repo path; for main repo, use workspace_path itself
-    let _repo_path = derive_repo_path_from_workspace(workspace_path)
-        .unwrap_or_else(|| workspace_path.to_string());
+    let is_workspace = derive_repo_path_from_workspace(workspace_path).is_some();
 
-    // First check what branch git is currently checked out at
-    let git_branch = get_workspace_branch(workspace_path).map_err(|e| {
-        JjError::IoError(format!(
-            "Failed to determine current git branch: {}. Please checkout a branch before committing.",
-            e
-        ))
-    })?;
+    // Get branch name - different logic for workspaces vs main repo
+    let branch = if is_workspace {
+        // For workspaces: get from jj bookmark (detached HEAD is expected)
+        get_branch_from_jj_bookmark(workspace_path)?
+    } else {
+        // For main repo: require git to be on a branch
+        let git_branch = get_workspace_branch(workspace_path).map_err(|e| {
+            JjError::IoError(format!(
+                "Failed to determine current git branch: {}",
+                e
+            ))
+        })?;
 
-    // Fail if not on a valid branch (empty or detached HEAD)
-    if git_branch.is_empty() || git_branch == "HEAD" {
-        return Err(JjError::IoError(
-            "Git is not checked out to a branch. Please checkout a branch before committing."
-                .to_string(),
-        ));
-    }
-
-    let branch = git_branch;
+        if git_branch.is_empty() || git_branch == "HEAD" {
+            return Err(JjError::IoError(
+                "Git is not checked out to a branch. Please checkout a branch before committing."
+                    .to_string(),
+            ));
+        }
+        git_branch
+    };
 
     // Now commit with message (sets message on current change and creates new empty change)
     let commit = command_for("jj")
@@ -799,13 +864,15 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     jj_set_bookmark(workspace_path, &branch, "@-")
         .map_err(|e| JjError::IoError(format!("Failed to advance bookmark '{}': {}", branch, e)))?;
 
-    // Checkout the branch in git to avoid detached HEAD
-    let checkout = command_for("git")
-        .current_dir(workspace_path)
-        .args(["checkout", &branch])
-        .output();
-    if let Err(e) = checkout {
-        eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
+    // Only checkout branch in git for main repo (not workspaces)
+    if !is_workspace {
+        let checkout = command_for("git")
+            .current_dir(workspace_path)
+            .args(["checkout", &branch])
+            .output();
+        if let Err(e) = checkout {
+            eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
+        }
     }
 
     Ok(format!("Committed successfully to branch '{}'", branch))
@@ -818,26 +885,27 @@ pub fn jj_split(
     message: &str,
     file_paths: Vec<String>,
 ) -> Result<String, JjError> {
-    // Derive repo path (same as jj_commit)
-    let _repo_path = derive_repo_path_from_workspace(workspace_path)
-        .unwrap_or_else(|| workspace_path.to_string());
+    let is_workspace = derive_repo_path_from_workspace(workspace_path).is_some();
 
-    // Get and validate git branch (same as jj_commit)
-    let git_branch = get_workspace_branch(workspace_path).map_err(|e| {
-        JjError::IoError(format!(
-            "Failed to determine current git branch: {}. Please checkout a branch before committing.",
-            e
-        ))
-    })?;
+    // Get branch name - different logic for workspaces vs main repo
+    let branch = if is_workspace {
+        get_branch_from_jj_bookmark(workspace_path)?
+    } else {
+        let git_branch = get_workspace_branch(workspace_path).map_err(|e| {
+            JjError::IoError(format!(
+                "Failed to determine current git branch: {}",
+                e
+            ))
+        })?;
 
-    if git_branch.is_empty() || git_branch == "HEAD" {
-        return Err(JjError::IoError(
-            "Git is not checked out to a branch. Please checkout a branch before committing."
-                .to_string(),
-        ));
-    }
-
-    let branch = git_branch;
+        if git_branch.is_empty() || git_branch == "HEAD" {
+            return Err(JjError::IoError(
+                "Git is not checked out to a branch. Please checkout a branch before committing."
+                    .to_string(),
+            ));
+        }
+        git_branch
+    };
 
     // Build and execute the jj split command
     let mut cmd = command_for("jj");
@@ -859,13 +927,15 @@ pub fn jj_split(
     jj_set_bookmark(workspace_path, &branch, "@-")
         .map_err(|e| JjError::IoError(format!("Failed to advance bookmark '{}': {}", branch, e)))?;
 
-    // Checkout the branch in git to avoid detached HEAD
-    let checkout = command_for("git")
-        .current_dir(workspace_path)
-        .args(["checkout", &branch])
-        .output();
-    if let Err(e) = checkout {
-        eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
+    // Only checkout branch in git for main repo
+    if !is_workspace {
+        let checkout = command_for("git")
+            .current_dir(workspace_path)
+            .args(["checkout", &branch])
+            .output();
+        if let Err(e) = checkout {
+            eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
+        }
     }
 
     Ok(format!("Committed successfully to branch '{}'", branch))
@@ -930,17 +1000,9 @@ fn parse_conflicted_files(status: &str) -> Result<Vec<String>, JjError> {
         let trimmed = line.trim();
 
         // Look for lines that start with "C " indicating conflicts
+        // This is the ONLY way jj marks conflicted files in status output
         if let Some(rest) = trimmed.strip_prefix("C ") {
             conflicts.push(rest.trim().to_string());
-        }
-        // Also check for explicit conflict messages
-        else if trimmed.contains("conflict") && trimmed.contains(":") {
-            if let Some(file_path) = trimmed.split(':').next() {
-                let clean_path = file_path.trim();
-                if !clean_path.is_empty() && !conflicts.contains(&clean_path.to_string()) {
-                    conflicts.push(clean_path.to_string());
-                }
-            }
         }
     }
 
@@ -1287,6 +1349,264 @@ pub fn jj_get_log(workspace_path: &str, target_branch: &str) -> Result<JjLogResu
     })
 }
 
+/// Get commits that are in workspace but not in target branch
+/// Uses revset: target_branch..@ (commits reachable from @ but not from target)
+pub fn jj_get_commits_ahead(
+    workspace_path: &str,
+    target_branch: &str,
+) -> Result<JjCommitsAhead, JjError> {
+    // Validate target_branch to prevent injection
+    if target_branch.starts_with('-') || target_branch.contains('\0') || target_branch.is_empty() {
+        return Err(JjError::IoError("Invalid target branch name".to_string()));
+    }
+
+    // Revset: commits reachable from @ but not from target_branch
+    let revset = format!("{}..@", target_branch);
+
+    // Use same template as jj_get_log
+    let template = concat!(
+        "commit_id.short(12) ++ \"\\t\" ++ ",
+        "change_id.short(12) ++ \"\\t\" ++ ",
+        "if(description, description.first_line(), \"(no description)\") ++ \"\\t\" ++ ",
+        "author.name() ++ \"\\t\" ++ ",
+        "author.timestamp() ++ \"\\t\" ++ ",
+        "parents.map(|p| p.commit_id().short(12)).join(\",\") ++ \"\\t\" ++ ",
+        "if(working_copies, \"true\", \"false\") ++ \"\\t\" ++ ",
+        "bookmarks.map(|b| b.name()).join(\",\") ++ \"\\n\""
+    );
+
+    let output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["log", "-r", &revset, "--no-graph", "-T", template])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !output.status.success() {
+        return Err(JjError::IoError(
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        ));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut commits = Vec::new();
+
+    // Parse each line of tab-separated output (same logic as jj_get_log)
+    for line in stdout.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() < 8 {
+            continue;
+        }
+
+        let short_id = parts[0].to_string();
+        let change_id = parts[1].to_string();
+        let description = parts[2].to_string();
+        let author_name = parts[3].to_string();
+        let timestamp = parts[4].to_string();
+        let parent_ids_str = parts[5];
+        let is_working_copy = parts[6] == "true";
+        let bookmarks_str = parts[7];
+
+        let parent_ids: Vec<String> = if parent_ids_str.is_empty() {
+            Vec::new()
+        } else {
+            parent_ids_str.split(',').map(|s| s.to_string()).collect()
+        };
+
+        let bookmarks: Vec<String> = if bookmarks_str.is_empty() {
+            Vec::new()
+        } else {
+            bookmarks_str.split(',').map(|s| s.to_string()).collect()
+        };
+
+        commits.push(JjLogCommit {
+            commit_id: short_id.clone(),
+            short_id,
+            change_id,
+            description,
+            author_name,
+            timestamp,
+            parent_ids,
+            is_working_copy,
+            bookmarks,
+        });
+    }
+
+    let total_count = commits.len();
+
+    Ok(JjCommitsAhead {
+        commits,
+        total_count,
+    })
+}
+
+/// Parse diff summary output from jj diff --summary
+/// Format: "M file.txt", "A new.txt", "D removed.txt"
+fn parse_diff_summary(summary: &str) -> Result<Vec<JjFileChange>, JjError> {
+    let mut files = Vec::new();
+
+    for line in summary.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        // Parse format: "M path/to/file.txt"
+        let parts: Vec<&str> = line.splitn(2, ' ').collect();
+        if parts.len() < 2 {
+            continue;
+        }
+
+        let status = parts[0].to_string();
+        let path = parts[1].to_string();
+
+        files.push(JjFileChange {
+            path,
+            status,
+            previous_path: None,
+        });
+    }
+
+    Ok(files)
+}
+
+/// Get combined diff of all changes between target branch and workspace HEAD
+/// Uses: jj diff --from target_branch --to @ --git
+pub fn jj_get_merge_diff(
+    workspace_path: &str,
+    target_branch: &str,
+) -> Result<JjRevisionDiff, JjError> {
+    // Validate target_branch to prevent injection
+    if target_branch.starts_with('-') || target_branch.contains('\0') || target_branch.is_empty() {
+        return Err(JjError::IoError("Invalid target branch name".to_string()));
+    }
+
+    // First get list of changed files
+    let status_output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["diff", "--from", target_branch, "--to", "@", "--summary"])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !status_output.status.success() {
+        return Err(JjError::IoError(
+            String::from_utf8_lossy(&status_output.stderr).to_string(),
+        ));
+    }
+
+    let summary = String::from_utf8_lossy(&status_output.stdout);
+    let files = parse_diff_summary(&summary)?;
+
+    // For each file, get the hunks
+    let mut hunks_by_file = Vec::new();
+    for file in &files {
+        let diff_output = command_for("jj")
+            .current_dir(workspace_path)
+            .args([
+                "diff",
+                "--from", target_branch,
+                "--to", "@",
+                "--git",
+                "--no-pager",
+                "--",
+                &file.path,
+            ])
+            .output()
+            .map_err(|e| JjError::IoError(e.to_string()))?;
+
+        if !diff_output.status.success() {
+            // If diff fails for a file, skip it but continue with others
+            continue;
+        }
+
+        let diff_text = String::from_utf8_lossy(&diff_output.stdout);
+        let hunks = parse_git_diff_hunks(&diff_text)?;
+
+        hunks_by_file.push(JjFileDiff {
+            path: file.path.clone(),
+            hunks,
+        });
+    }
+
+    Ok(JjRevisionDiff {
+        files,
+        hunks_by_file,
+    })
+}
+
+/// Create a merge commit using jj new
+/// Uses: jj new target_branch @ -m "message"
+/// This creates a new commit with two parents: target_branch and @
+pub fn jj_create_merge_commit(
+    workspace_path: &str,
+    target_branch: &str,
+    message: &str,
+) -> Result<JjMergeResult, JjError> {
+    // Validate inputs to prevent command injection
+    if target_branch.starts_with('-') || target_branch.contains('\0') || target_branch.is_empty() {
+        return Err(JjError::IoError("Invalid target branch name".to_string()));
+    }
+
+    if message.contains('\0') {
+        return Err(JjError::IoError("Invalid commit message".to_string()));
+    }
+
+    if message.len() > 10000 {
+        return Err(JjError::IoError("Commit message too long (max 10000 characters)".to_string()));
+    }
+
+    // Create merge commit with two parents
+    let output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["new", target_branch, "@", "-m", message])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{}{}", stdout, stderr);
+
+    let has_conflicts = combined.to_lowercase().contains("conflict");
+
+    let conflicted_files = if has_conflicts {
+        get_conflicted_files(workspace_path).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    // Get the new commit ID if successful
+    let merge_commit_id = if output.status.success() {
+        // Get current commit ID using jj log
+        command_for("jj")
+            .current_dir(workspace_path)
+            .args(["log", "-r", "@", "--no-graph", "-T", "commit_id.short(12)"])
+            .output()
+            .ok()
+            .and_then(|out| {
+                if out.status.success() {
+                    String::from_utf8(out.stdout)
+                        .ok()
+                        .map(|s| s.trim().to_string())
+                } else {
+                    None
+                }
+            })
+    } else {
+        None
+    };
+
+    Ok(JjMergeResult {
+        success: output.status.success(),
+        message: combined,
+        has_conflicts,
+        conflicted_files,
+        merge_commit_id,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1353,5 +1673,220 @@ mod tests {
         // Should still succeed by falling back to fs::remove_dir_all
         assert!(result.is_ok(), "remove_workspace should succeed even when git fails: {:?}", result);
         assert!(!workspace_path.exists(), "Workspace directory should be removed despite git failure");
+    }
+
+    #[test]
+    fn test_parse_diff_summary() {
+        let summary = "M src/file.ts\nA src/new.ts\nD src/old.ts";
+        let files = parse_diff_summary(summary).unwrap();
+
+        assert_eq!(files.len(), 3);
+        assert_eq!(files[0].status, "M");
+        assert_eq!(files[0].path, "src/file.ts");
+        assert_eq!(files[1].status, "A");
+        assert_eq!(files[1].path, "src/new.ts");
+        assert_eq!(files[2].status, "D");
+        assert_eq!(files[2].path, "src/old.ts");
+    }
+
+    #[test]
+    fn test_parse_diff_summary_empty() {
+        let summary = "";
+        let files = parse_diff_summary(summary).unwrap();
+        assert_eq!(files.len(), 0);
+    }
+
+    #[test]
+    fn test_jj_commits_ahead_serialization() {
+        // Test that JjCommitsAhead serializes correctly
+        let result = JjCommitsAhead {
+            commits: vec![],
+            total_count: 0,
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("total_count"));
+        assert!(json.contains("commits"));
+    }
+
+    #[test]
+    fn test_commit_in_workspace_with_detached_head() {
+        // This test reproduces the bug where jj_commit fails when workspace is in detached HEAD
+        // Workspaces SHOULD be in detached HEAD state - jj manages version control, not git
+
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().join("test_repo");
+        fs::create_dir_all(&repo_path).unwrap();
+        let repo_path_str = repo_path.to_str().unwrap();
+
+        // Initialize git repo
+        let git_init = command_for("git")
+            .current_dir(&repo_path)
+            .args(["init"])
+            .output();
+        assert!(git_init.is_ok(), "Failed to init git repo");
+
+        // Configure git (required for commits)
+        command_for("git")
+            .current_dir(&repo_path)
+            .args(["config", "user.name", "Test User"])
+            .output()
+            .unwrap();
+        command_for("git")
+            .current_dir(&repo_path)
+            .args(["config", "user.email", "test@example.com"])
+            .output()
+            .unwrap();
+
+        // Create initial commit in git
+        let readme = repo_path.join("README.md");
+        fs::write(&readme, "# Test Repo").unwrap();
+        command_for("git")
+            .current_dir(&repo_path)
+            .args(["add", "."])
+            .output()
+            .unwrap();
+        command_for("git")
+            .current_dir(&repo_path)
+            .args(["commit", "-m", "Initial commit"])
+            .output()
+            .unwrap();
+
+        // Initialize jj in the repo
+        let jj_init = command_for("jj")
+            .current_dir(&repo_path)
+            .args(["git", "init", "--colocate"])
+            .output();
+
+        let jj_init_result = jj_init.unwrap();
+        if !jj_init_result.status.success() {
+            eprintln!("Skipping test: jj not available or init failed: {}",
+                String::from_utf8_lossy(&jj_init_result.stderr));
+            return;
+        }
+
+        eprintln!("✓ JJ initialized successfully");
+
+        // Create main branch in git
+        command_for("git")
+            .current_dir(&repo_path)
+            .args(["checkout", "-b", "main"])
+            .output()
+            .unwrap();
+
+        eprintln!("✓ Created main branch in git");
+
+        // Create a workspace using the actual create_workspace function
+        let workspace_result = create_workspace(
+            repo_path_str,
+            "test-workspace",
+            "test-branch",
+            true,  // new_branch
+            Some("main"),
+            None,
+        );
+
+        if workspace_result.is_err() {
+            eprintln!("Skipping test: workspace creation failed: {:?}", workspace_result);
+            return;
+        }
+        eprintln!("✓ Workspace created successfully");
+
+        let workspace_name = workspace_result.unwrap();
+        let workspace_path = repo_path.join(".treq/workspaces").join(&workspace_name);
+        let workspace_path_str = workspace_path.to_str().unwrap();
+
+        // Verify workspace is in detached HEAD (expected state)
+        let git_branch_output = command_for("git")
+            .current_dir(&workspace_path)
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .output()
+            .unwrap();
+        let git_branch = String::from_utf8_lossy(&git_branch_output.stdout).trim().to_string();
+
+        eprintln!("Git branch in workspace: '{}'", git_branch);
+
+        // Workspace should be in detached HEAD
+        if git_branch != "HEAD" {
+            eprintln!("WARNING: Workspace is NOT in detached HEAD (on branch: {})", git_branch);
+            eprintln!("This may be a different issue - workspace creation should leave it detached");
+            // Don't skip the test, let's see what happens
+        }
+
+        // Make a change in the workspace
+        let test_file = workspace_path.join("test.txt");
+        fs::write(&test_file, "test content").unwrap();
+
+        eprintln!("✓ Made changes in workspace");
+
+        // Try to commit - THIS SHOULD CURRENTLY FAIL with "Git is not checked out to a branch"
+        eprintln!("Attempting to commit...");
+        let commit_result = jj_commit(workspace_path_str, "Test commit");
+
+        eprintln!("Commit result: {:?}", commit_result);
+
+        // After the fix: commits should succeed in workspaces even in detached HEAD
+        assert!(
+            commit_result.is_ok(),
+            "jj_commit should succeed in workspace detached HEAD, got error: {:?}",
+            commit_result
+        );
+
+        if let Ok(msg) = commit_result {
+            eprintln!("✓ Commit succeeded: {}", msg);
+            assert!(msg.contains("Committed successfully"), "Success message should confirm commit");
+        }
+    }
+
+    #[test]
+    fn test_jj_merge_result_serialization() {
+        let result = JjMergeResult {
+            success: true,
+            message: "Merged successfully".to_string(),
+            has_conflicts: false,
+            conflicted_files: vec![],
+            merge_commit_id: Some("abc123".to_string()),
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("success"));
+        assert!(json.contains("merge_commit_id"));
+    }
+
+    #[test]
+    fn test_parse_conflicted_files_only_matches_c_prefix() {
+        // Test that parse_conflicted_files only detects files with "C " prefix
+        // and does NOT match status messages containing "conflict"
+
+        // Actual jj status output with a real conflict
+        let status_with_conflict = "Working copy: qpvuntsm 70db4c90 (no description set)\n\
+            C src/conflicted-file.ts\n\
+            Working copy : qpvuntsm 70db4c90 (no description set)";
+
+        let conflicts = parse_conflicted_files(status_with_conflict).unwrap();
+        assert_eq!(conflicts.len(), 1);
+        assert_eq!(conflicts[0], "src/conflicted-file.ts");
+
+        // Status message that contains "conflict" but is NOT a conflict
+        // This simulates false positive scenarios
+        let status_no_conflict = "Working copy: qpvuntsm 70db4c90 (conflict in description: fixed)\n\
+            M src/file.ts\n\
+            Working copy : qpvuntsm 70db4c90 (no description set)";
+
+        let conflicts = parse_conflicted_files(status_no_conflict).unwrap();
+        assert_eq!(conflicts.len(), 0, "Should not detect false positive conflicts");
+
+        // Multiple conflicts
+        let status_multiple = "C src/file1.ts\n\
+            C src/file2.ts\n\
+            M src/normal.ts";
+
+        let conflicts = parse_conflicted_files(status_multiple).unwrap();
+        assert_eq!(conflicts.len(), 2);
+        assert!(conflicts.contains(&"src/file1.ts".to_string()));
+        assert!(conflicts.contains(&"src/file2.ts".to_string()));
+
+        // Empty status
+        let status_empty = "";
+        let conflicts = parse_conflicted_files(status_empty).unwrap();
+        assert_eq!(conflicts.len(), 0);
     }
 }
