@@ -1060,34 +1060,41 @@ export const ChangesDiffViewer = memo(
 
             // Reconstruct file content from hunks
             const lines: string[] = [];
+            let hasConflictMarkers = false;
+
             for (const hunk of fileHunksData.hunks) {
               if (!hunk || !hunk.lines) continue;
 
               for (const line of hunk.lines) {
                 if (!line) continue;
 
-                // Check if file has conflict markers
-                if (line.includes('<<<<<<< Conflict') || line.includes('>>>>>>> Conflict')) {
-                  if (!conflicted.includes(file.path)) {
-                    conflicted.push(file.path);
-                  }
-                }
-
                 // For additions (+), include them as they represent the current state
                 if (line.startsWith('+')) {
-                  lines.push(line.substring(1));
+                  const content = line.substring(1);
+                  lines.push(content);
+                  // Check for conflict markers in lines we're actually including
+                  if (content.includes('<<<<<<< Conflict') || content.includes('>>>>>>> Conflict')) {
+                    hasConflictMarkers = true;
+                  }
                 } else if (line.startsWith(' ')) {
-                  lines.push(line.substring(1)); // Context lines
+                  const content = line.substring(1); // Context lines
+                  lines.push(content);
+                  // Check for conflict markers in lines we're actually including
+                  if (content.includes('<<<<<<< Conflict') || content.includes('>>>>>>> Conflict')) {
+                    hasConflictMarkers = true;
+                  }
                 }
                 // Skip removal lines (-)
               }
             }
 
             // If this file has conflicts, parse the regions
-            if (conflicted.includes(file.path)) {
+            if (hasConflictMarkers) {
               const content = lines.join('\n');
               const regions = parseConflictMarkers(content, file.path);
+
               if (regions.length > 0) {
+                conflicted.push(file.path);
                 regionsByFile.set(file.path, regions);
               }
             }
