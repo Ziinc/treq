@@ -27,6 +27,7 @@ const ShowWorkspace = lazy(() =>
   import("./ShowWorkspace").then((m) => ({ default: m.ShowWorkspace }))
 );
 import { SettingsPage } from "./SettingsPage";
+import { MergePreviewPage } from "./MergePreviewPage";
 import { useToast } from "./ui/toast";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import {
@@ -58,7 +59,7 @@ const LoadingSpinner = () => (
   </div>
 );
 
-type ViewMode = "session" | "show-workspace" | "settings";
+type ViewMode = "session" | "show-workspace" | "settings" | "merge-preview";
 
 type SessionOpenOptions = {
   initialPrompt?: string;
@@ -81,6 +82,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(
     null
   );
+  const [mergeWorkspace, setMergeWorkspace] = useState<Workspace | null>(null);
   const [_initialSettingsTab, _setInitialSettingsTab] = useState<
     "application" | "repository"
   >("repository");
@@ -119,6 +121,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     setViewMode("settings");
   }, []);
 
+  const handleOpenMergePreview = useCallback(() => {
+    if (selectedWorkspace) {
+      setMergeWorkspace(selectedWorkspace);
+      setViewMode("merge-preview");
+    }
+  }, [selectedWorkspace]);
 
   // Keyboard shortcuts
   useKeyboardShortcut("n", true, () => {
@@ -790,6 +798,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
                     initialSelectedFile={sessionSelectedFile}
                     onDeleteWorkspace={handleDelete}
                     onOpenFilePicker={() => setShowFilePicker(true)}
+                    onOpenMergePreview={handleOpenMergePreview}
                     onSessionCreated={(sessionData) => {
                       queryClient.invalidateQueries({
                         queryKey: ["sessions"],
@@ -872,7 +881,38 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
             />
           )}
 
-          {/* Note: Merge Review View removed - git-specific feature */}
+          {/* Merge Preview View */}
+          {viewMode === "merge-preview" && mergeWorkspace && (
+            <MergePreviewPage
+              workspace={mergeWorkspace}
+              repoPath={repoPath}
+              onCancel={() => {
+                setMergeWorkspace(null);
+                setViewMode("show-workspace");
+              }}
+              onMergeComplete={async () => {
+                // Delete workspace after successful merge
+                try {
+                  await deleteWorkspace(
+                    mergeWorkspace.repo_path,
+                    mergeWorkspace.workspace_path,
+                    mergeWorkspace.id
+                  );
+                  // Invalidate workspace queries
+                  queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+                } catch (error) {
+                  addToast({
+                    title: "Merge succeeded but workspace deletion failed",
+                    description: "Please manually delete the workspace from the sidebar",
+                    type: "warning",
+                  });
+                } finally {
+                  setMergeWorkspace(null);
+                  handleReturnToDashboard();
+                }
+              }}
+            />
+          )}
         </div>
       </div>
 

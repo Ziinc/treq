@@ -75,6 +75,29 @@ export interface JjLogResult {
   workspace_branch: string;
 }
 
+export interface JjCommitsAhead {
+  commits: JjLogCommit[];
+  total_count: number;
+}
+
+export interface JjMergeResult {
+  success: boolean;
+  message: string;
+  has_conflicts: boolean;
+  conflicted_files: string[];
+  merge_commit_id: string | null;
+}
+
+export interface JjFileDiff {
+  path: string;
+  hunks: JjDiffHunk[];
+}
+
+export interface JjRevisionDiff {
+  files: JjFileChange[];
+  hunks_by_file: JjFileDiff[];
+}
+
 export interface DirectoryEntry {
   name: string;
   path: string;
@@ -299,6 +322,25 @@ export const jjGetLog = (
 
 export const jjInit = (repo_path: string): Promise<string> =>
   invoke("jj_init", { repoPath: repo_path });
+
+export const jjGetCommitsAhead = (
+  workspacePath: string,
+  targetBranch: string
+): Promise<JjCommitsAhead> =>
+  invoke("jj_get_commits_ahead", { workspacePath, targetBranch });
+
+export const jjGetMergeDiff = (
+  workspacePath: string,
+  targetBranch: string
+): Promise<JjRevisionDiff> =>
+  invoke("jj_get_merge_diff", { workspacePath, targetBranch });
+
+export const jjCreateMerge = (
+  workspacePath: string,
+  targetBranch: string,
+  message: string
+): Promise<JjMergeResult> =>
+  invoke("jj_create_merge", { workspacePath, targetBranch, message });
 
 export const updateWorkspaceMetadata = (
   repo_path: string,

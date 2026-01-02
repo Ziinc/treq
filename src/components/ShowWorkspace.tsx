@@ -48,8 +48,15 @@ import {
   DialogDescription,
 } from "./ui/dialog";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "./ui/tooltip";
+import {
   Loader2,
   GitBranch,
+  GitMerge,
   MoreVertical,
   Upload,
   AlertTriangle,
@@ -75,6 +82,7 @@ interface ShowWorkspaceProps {
   onDeleteWorkspace?: (workspace: Workspace) => void;
   onOpenFilePicker?: () => void;
   onSessionCreated?: (session: SessionCreationInfo) => void;
+  onOpenMergePreview?: () => void;
 }
 
 export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
@@ -85,6 +93,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   onDeleteWorkspace,
   onOpenFilePicker,
   onSessionCreated,
+  onOpenMergePreview,
 }) {
   const workingDirectory = workspace?.workspace_path || repositoryPath || "";
   const effectiveRepoPath = workspace?.repo_path || repositoryPath || "";
@@ -178,17 +187,26 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   }, [workspace?.target_branch, defaultBranch]);
 
   useEffect(() => {
-    if (workingDirectory) {
-      jjGetConflictedFiles(workingDirectory)
-        .then(setConflictedFiles)
-        .catch(() => setConflictedFiles([]));
-    }
-  }, [workingDirectory]);
-
-  useEffect(() => {
     if (activeTab === "overview" && workingDirectory) {
+      let isMounted = true;
+
+      // Refresh conflicted files when switching to overview tab
+      jjGetConflictedFiles(workingDirectory)
+        .then((files) => {
+          if (isMounted) {
+            setConflictedFiles(files);
+          }
+        })
+        .catch(() => {
+          if (isMounted) {
+            setConflictedFiles([]);
+          }
+        });
+
+      // Refresh changed files
       jjGetChangedFiles(workingDirectory)
         .then((jjFiles) => {
+          if (!isMounted) return;
           const parsed = parseJjChangedFiles(jjFiles);
           const map = new Map<string, ParsedFileChange>();
           for (const file of parsed) {
@@ -197,7 +215,15 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
           }
           setChangedFiles(map);
         })
-        .catch(() => setChangedFiles(new Map()));
+        .catch(() => {
+          if (isMounted) {
+            setChangedFiles(new Map());
+          }
+        });
+
+      return () => {
+        isMounted = false;
+      };
     }
   }, [activeTab, workingDirectory]);
 
@@ -742,6 +768,33 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
                   onSelect={handleTargetBranchSelect}
                   disabled={rebasing}
                 />
+                <div className="flex-1" />
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      {/* Wrapper div needed for tooltip on disabled button */}
+                      <div className="inline-flex">
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={onOpenMergePreview}
+                          disabled={rebasing || conflictedFiles.length > 0}
+                          className="gap-2"
+                        >
+                          <GitMerge className="w-4 h-4" />
+                          Merge...
+                        </Button>
+                      </div>
+                    </TooltipTrigger>
+                    {(rebasing || conflictedFiles.length > 0) && (
+                      <TooltipContent>
+                        {rebasing
+                          ? "Rebasing in progress..."
+                          : `Cannot merge: ${conflictedFiles.length} conflict${conflictedFiles.length === 1 ? '' : 's'} detected`}
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
               </>
             )}
           </div>
