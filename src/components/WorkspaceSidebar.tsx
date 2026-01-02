@@ -10,6 +10,8 @@ import {
   Cloud,
   Trash2,
   AlertTriangle,
+  Copy,
+  FolderOpen,
 } from "lucide-react";
 import {
   Tooltip,
@@ -22,8 +24,13 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
+  ContextMenuSub,
+  ContextMenuSubTrigger,
+  ContextMenuSubContent,
+  ContextMenuSeparator,
 } from "./ui/context-menu";
 import { getWorkspaceTitle as getWorkspaceTitleFromUtils } from "../lib/workspace-utils";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 
 interface WorkspaceSidebarProps {
   repoPath?: string;
@@ -47,6 +54,51 @@ const StatusPill: React.FC<{ path: string }> = memo(() => {
   // Would need JJ status equivalent
   return null;
 });
+
+// Shared context menu items for both home repo and workspaces
+const PathContextMenuItems: React.FC<{
+  relativePath: string;
+  fullPath: string;
+  additionalItems?: React.ReactNode;
+}> = ({ relativePath, fullPath, additionalItems }) => {
+  return (
+    <>
+      <ContextMenuItem
+        onClick={() => {
+          navigator.clipboard.writeText(relativePath);
+        }}
+      >
+        <Copy className="w-4 h-4 mr-2" />
+        Copy relative path
+      </ContextMenuItem>
+      <ContextMenuItem
+        onClick={() => {
+          navigator.clipboard.writeText(fullPath);
+        }}
+      >
+        <Copy className="w-4 h-4 mr-2" />
+        Copy full path
+      </ContextMenuItem>
+      <ContextMenuSub>
+        <ContextMenuSubTrigger>
+          <FolderOpen className="w-4 h-4 mr-2" />
+          Open in...
+        </ContextMenuSubTrigger>
+        <ContextMenuSubContent>
+          <ContextMenuItem
+            onClick={() => {
+              revealItemInDir(fullPath);
+            }}
+          >
+            <FolderOpen className="w-4 h-4 mr-2" />
+            Open in Finder
+          </ContextMenuItem>
+        </ContextMenuSubContent>
+      </ContextMenuSub>
+      {additionalItems}
+    </>
+  );
+};
 
 export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
   ({
@@ -140,21 +192,40 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
             onClick={handleContainerClick}
           >
             {/* Main repository section */}
-            <div
-              className={`relative flex items-center text-sm tracking-wide px-2 py-1 rounded-md transition-colors cursor-pointer ${
-                selectedWorkspaceId === null ? "bg-primary/20" : "hover:bg-muted/50"
-              }`}
-              onClick={() => onWorkspaceClick?.(undefined as any)}
-            >
-              <Home className={`w-3 h-3 mr-1 shrink-0 ${selectedWorkspaceId === null ? "text-primary" : "text-muted-foreground"}`} />
-              <span
-                className={`flex-1 min-w-0 truncate font-mono ${selectedWorkspaceId === null ? "text-primary font-medium" : "text-muted-foreground"}`}
-                title={currentBranch || "Main"}
-              >
-                {currentBranch || "main"}
-              </span>
-              {repoPath && <StatusPill path={repoPath} />}
-            </div>
+            <ContextMenu>
+              <Tooltip>
+                <ContextMenuTrigger asChild>
+                  <TooltipTrigger asChild>
+                    <div
+                      className={`relative flex items-center text-sm tracking-wide px-2 py-1 rounded-md transition-colors cursor-pointer ${
+                        selectedWorkspaceId === null ? "bg-primary/20" : "hover:bg-muted/50"
+                      }`}
+                      onClick={() => onWorkspaceClick?.(undefined as any)}
+                    >
+                      <Home className={`w-3 h-3 mr-1 shrink-0 ${selectedWorkspaceId === null ? "text-primary" : "text-muted-foreground"}`} />
+                      <span
+                        className={`flex-1 min-w-0 truncate font-mono ${selectedWorkspaceId === null ? "text-primary font-medium" : "text-muted-foreground"}`}
+                        title={currentBranch || "Unknown"}
+                      >
+                        {currentBranch || "unknown"}
+                      </span>
+                    </div>
+                  </TooltipTrigger>
+                </ContextMenuTrigger>
+                <TooltipContent side="right" className="font-mono">
+                  <div className="flex items-center gap-1.5">
+                    <GitBranch className="w-3 h-3" />
+                    <span>{currentBranch || "Unknown"}</span>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+              <ContextMenuContent>
+                <PathContextMenuItems
+                  relativePath="."
+                  fullPath={repoPath || ""}
+                />
+              </ContextMenuContent>
+            </ContextMenu>
 
             {/* Divider */}
             {workspaces.length > 0 && (
@@ -215,13 +286,26 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                     </TooltipContent>
                   </Tooltip>
                   <ContextMenuContent>
-                    <ContextMenuItem
-                      className="text-destructive focus:text-destructive"
-                      onClick={() => onDeleteWorkspace?.(workspace)}
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Delete Workspace
-                    </ContextMenuItem>
+                    <PathContextMenuItems
+                      relativePath={
+                        repoPath && workspace.workspace_path.startsWith(repoPath)
+                          ? workspace.workspace_path.slice(repoPath.length + 1)
+                          : workspace.workspace_path
+                      }
+                      fullPath={workspace.workspace_path}
+                      additionalItems={
+                        <>
+                          <ContextMenuSeparator />
+                          <ContextMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => onDeleteWorkspace?.(workspace)}
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete Workspace
+                          </ContextMenuItem>
+                        </>
+                      }
+                    />
                   </ContextMenuContent>
                 </ContextMenu>
               ))}

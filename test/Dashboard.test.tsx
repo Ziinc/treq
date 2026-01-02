@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within, act } from "./test-utils";
+import { render, screen, waitFor, within, act, fireEvent } from "./test-utils";
 import userEvent from "@testing-library/user-event";
 import { Dashboard } from "../src/components/Dashboard";
 import * as api from "../src/lib/api";
@@ -1168,6 +1168,261 @@ describe("WorkspacesSidebar", () => {
 
       // Delete button should not appear
       expect(screen.queryByText(/delete.*workspaces?/i)).not.toBeInTheDocument();
+    });
+  });
+
+
+  describe("context menu and tooltip", () => {
+    it("should show tooltip when hovering over home repo", async () => {
+      const user = userEvent.setup();
+
+      render(<Dashboard />);
+
+      // Wait for dashboard to load
+      await screen.findByText("Code");
+
+      // Find home repo element in sidebar (by finding the element with both Home icon and "main" text)
+      // The sidebar has class w-[240px]
+      const sidebar = document.querySelector('.w-\\[240px\\]');
+      const homeRepoElements = within(sidebar as HTMLElement).getAllByText("main");
+      // The home repo element should be the one in the sidebar
+      const homeRepoElement = homeRepoElements[0].closest("div");
+      expect(homeRepoElement).toBeInTheDocument();
+
+      // Hover over home repo
+      await user.hover(homeRepoElement!);
+
+      // Tooltip should appear with repo path
+      await waitFor(() => {
+        const tooltips = screen.queryAllByText("/Users/test/repo");
+        expect(tooltips.length).toBeGreaterThan(0);
+      });
+    });
+
+    it("should copy relative path when right-clicking home repo and selecting Copy relative path", async () => {
+      render(<Dashboard />);
+
+      // Wait for dashboard to load
+      await screen.findByText("Code");
+
+      // Wait a bit for the UI to stabilize
+      await waitFor(() => {
+        expect(screen.getByText("main")).toBeInTheDocument();
+      });
+
+      // Find home repo element - has Home icon (lucide-home class)
+      const sidebar = document.querySelector('.w-\\[240px\\]');
+      const homeIcon = sidebar?.querySelector('.lucide-home');
+      const homeRepoElement = homeIcon?.closest('[class*="cursor-pointer"]') as HTMLElement;
+      expect(homeRepoElement).toBeInTheDocument();
+
+      // Right-click home repo
+      fireEvent.contextMenu(homeRepoElement!);
+
+      // Context menu should appear
+      await waitFor(() => {
+        expect(screen.getByText("Copy relative path")).toBeInTheDocument();
+      });
+
+      // Click "Copy relative path"
+      const copyRelativePathButton = screen.getByText("Copy relative path");
+      fireEvent.click(copyRelativePathButton);
+
+      // Verify clipboard was called with "."
+      await waitFor(() => {
+        expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(".");
+      });
+    });
+
+    it("should copy full path when right-clicking home repo and selecting Copy full path", async () => {
+      render(<Dashboard />);
+
+      // Wait for dashboard to load
+      await screen.findByText("Code");
+
+      // Find home repo element
+      const homeRepoElement = document.querySelector('.bg-primary\\/20') as HTMLElement;
+      expect(homeRepoElement).toBeInTheDocument();
+
+      // Right-click home repo
+      fireEvent.contextMenu(homeRepoElement!);
+
+      // Context menu should appear
+      await waitFor(() => {
+        expect(screen.getByText("Copy full path")).toBeInTheDocument();
+      });
+
+      // Click "Copy full path"
+      const copyFullPathButton = screen.getByText("Copy full path");
+      fireEvent.click(copyFullPathButton);
+
+      // Verify clipboard was called with the repo path
+      await waitFor(() => {
+        expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith("/Users/test/repo");
+      });
+    });
+
+    it("should open home repo in Finder when selecting Open in Finder", async () => {
+      const user = userEvent.setup();
+
+      render(<Dashboard />);
+
+      // Wait for dashboard to load
+      await screen.findByText("Code");
+
+      // Find home repo element
+      const homeRepoElement = document.querySelector('.bg-primary\\/20') as HTMLElement;
+      expect(homeRepoElement).toBeInTheDocument();
+
+      // Right-click home repo
+      fireEvent.contextMenu(homeRepoElement!);
+
+      // Context menu should appear with "Open in..."
+      await waitFor(() => {
+        expect(screen.getByText("Open in...")).toBeInTheDocument();
+      });
+
+      // Hover over "Open in..." to show submenu
+      const openInButton = screen.getByText("Open in...");
+      await user.hover(openInButton);
+
+      // Submenu should appear with "Open in Finder"
+      await waitFor(() => {
+        expect(screen.getByText("Open in Finder")).toBeInTheDocument();
+      });
+
+      // Click "Open in Finder"
+      const openInFinderButton = screen.getByText("Open in Finder");
+      fireEvent.click(openInFinderButton);
+
+      // Verify openPath was called with repo path
+      const { openPath } = await import("@tauri-apps/plugin-opener");
+      await waitFor(() => {
+        expect(openPath).toHaveBeenLastCalledWith("/Users/test/repo");
+      });
+    });
+
+    it("should copy workspace relative path from context menu", async () => {
+      // Setup a workspace
+      vi.mocked(api.getWorkspaces).mockResolvedValue([
+        {
+          id: 1,
+          repo_path: "/Users/test/repo",
+          workspace_name: "ws1",
+          workspace_path: "/Users/test/repo/.jj/repo/store/working_copies/ws1",
+          branch_name: "feature/test",
+          created_at: new Date().toISOString(),
+          has_conflicts: false,
+        },
+      ]);
+
+      render(<Dashboard />);
+
+      // Wait for workspace to appear
+      const workspaceElement = await screen.findByText("feature/test");
+
+      // Right-click workspace
+      fireEvent.contextMenu(workspaceElement);
+
+      // Context menu should appear
+      await waitFor(() => {
+        expect(screen.getByText("Copy relative path")).toBeInTheDocument();
+      });
+
+      // Click "Copy relative path"
+      const copyRelativePathButton = screen.getByText("Copy relative path");
+      fireEvent.click(copyRelativePathButton);
+
+      // Verify clipboard was called with relative path
+      await waitFor(() => {
+        expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(".jj/repo/store/working_copies/ws1");
+      });
+    });
+
+    it("should copy workspace full path from context menu", async () => {
+      // Setup a workspace
+      vi.mocked(api.getWorkspaces).mockResolvedValue([
+        {
+          id: 1,
+          repo_path: "/Users/test/repo",
+          workspace_name: "ws1",
+          workspace_path: "/Users/test/repo/.jj/repo/store/working_copies/ws1",
+          branch_name: "feature/test",
+          created_at: new Date().toISOString(),
+          has_conflicts: false,
+        },
+      ]);
+
+      render(<Dashboard />);
+
+      // Wait for workspace to appear
+      const workspaceElement = await screen.findByText("feature/test");
+
+      // Right-click workspace
+      fireEvent.contextMenu(workspaceElement);
+
+      // Context menu should appear
+      await waitFor(() => {
+        expect(screen.getByText("Copy full path")).toBeInTheDocument();
+      });
+
+      // Click "Copy full path"
+      const copyFullPathButton = screen.getByText("Copy full path");
+      fireEvent.click(copyFullPathButton);
+
+      // Verify clipboard was called with full path
+      await waitFor(() => {
+        expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith("/Users/test/repo/.jj/repo/store/working_copies/ws1");
+      });
+    });
+
+    it("should open workspace in Finder from context menu", async () => {
+      const user = userEvent.setup();
+
+      // Setup a workspace
+      vi.mocked(api.getWorkspaces).mockResolvedValue([
+        {
+          id: 1,
+          repo_path: "/Users/test/repo",
+          workspace_name: "ws1",
+          workspace_path: "/Users/test/repo/.jj/repo/store/working_copies/ws1",
+          branch_name: "feature/test",
+          created_at: new Date().toISOString(),
+          has_conflicts: false,
+        },
+      ]);
+
+      render(<Dashboard />);
+
+      // Wait for workspace to appear
+      const workspaceElement = await screen.findByText("feature/test");
+
+      // Right-click workspace
+      fireEvent.contextMenu(workspaceElement);
+
+      // Context menu should appear with "Open in..."
+      await waitFor(() => {
+        expect(screen.getByText("Open in...")).toBeInTheDocument();
+      });
+
+      // Hover over "Open in..." to show submenu
+      const openInButton = screen.getByText("Open in...");
+      await user.hover(openInButton);
+
+      // Submenu should appear with "Open in Finder"
+      await waitFor(() => {
+        expect(screen.getByText("Open in Finder")).toBeInTheDocument();
+      });
+
+      // Click "Open in Finder"
+      const openInFinderButton = screen.getByText("Open in Finder");
+      fireEvent.click(openInFinderButton);
+
+      // Verify openPath was called with workspace path
+      const { openPath } = await import("@tauri-apps/plugin-opener");
+      await waitFor(() => {
+        expect(openPath).toHaveBeenLastCalledWith("/Users/test/repo/.jj/repo/store/working_copies/ws1");
+      });
     });
   });
 });

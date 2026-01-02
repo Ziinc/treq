@@ -2,6 +2,11 @@
 
 Essential information for AI agents working with the Treq codebase.
 
+## Directives (IMPORTANT)
+
+- when instructed to TDD, do not write tests for styling, only logic
+- tests should be written for either UI or rust side.
+
 ## Project Overview
 
 Treq is a desktop application for managing JJ (Jujutsu) workspaces with integrated terminal, diff viewer, and AI editor. Built with Tauri 2.0 (Rust) and React/TypeScript.
@@ -30,21 +35,25 @@ npm run tauri dev            # Dev mode
 ### Backend (src-tauri/src/)
 
 **Core:**
+
 - **lib.rs** - Entry point, command registry, AppState
 - **main.rs** - Calls `treq_lib::run()`
 - **db.rs** - Global SQLite (settings, sessions, git_cache, file_views)
 - **local_db.rs** - Per-repo SQLite (workspaces, sessions, changed_files, workspace_files)
 
 **JJ Integration:**
+
 - **jj.rs** - JJ VCS operations (workspaces, diffs, commits, rebase, push/pull)
 - **auto_rebase.rs** - Auto-rebase for target branch tracking
 - **file_indexer.rs** - Workspace file indexing via `jj file list`
 
 **Infrastructure:**
+
 - **pty.rs** - PTY management with portable-pty
 - **binary_paths.rs** - Binary detection (git, jj, claude)
 
 **Commands (src-tauri/src/commands/):**
+
 - **workspace.rs** - Workspace CRUD, auto-rebase, indexing
 - **jj_commands.rs** - JJ command wrappers
 - **session.rs** - AI session management
@@ -58,27 +67,32 @@ npm run tauri dev            # Dev mode
 ### Frontend (src/)
 
 **Core:**
+
 - **App.tsx** - Root with providers (QueryClient, Theme, Terminal/Diff settings, Toast)
 - **Dashboard.tsx** - Main UI, auto-rebase on focus
 - **ShowWorkspace.tsx** - Workspace detail (Code/Review/Files tabs)
 
 **Navigation:**
+
 - **WorkspaceSidebar.tsx** - Workspace list, multi-select
 - **CommandPalette.tsx** - Cmd+K
 - **FilePicker.tsx** - Cmd+P
 - **BranchSwitcher.tsx** - Branch switching
 
 **Diff & Review:**
+
 - **ChangesDiffViewer.tsx** - Main diff viewer (2508 lines), code review
 - **ChangesSection.tsx** / **ConflictsSection.tsx** - File lists
 - **ReviewSummaryPanel.tsx** - Review summary
 - **FileBrowser.tsx** - File tree with virtualized code view
 
 **Terminal:**
+
 - **WorkspaceTerminalPane.tsx** - Terminal container
 - **terminal/** - ClaudeTerminalPanel, ShellTerminalPanel, ResizeDivider
 
 **Other:**
+
 - **lib/api.ts** - Type-safe Tauri wrappers
 - **hooks/** - Custom React hooks (theme, settings, keyboard, debounce)
 
@@ -95,12 +109,14 @@ npm run tauri dev            # Dev mode
 ### Database Schema
 
 **Local DB (`.treq/local.db`)** - Per repository:
+
 - **workspaces** - id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch, has_conflicts
 - **sessions** - id, workspace_id, name, created_at, last_accessed, model
 - **changed_files** - id, workspace_id, file_path, workspace_status, is_untracked, hunks_json, updated_at
 - **workspace_files** - id, workspace_id, file_path, relative_path, is_directory, parent_path, cached_at, mtime
 
 **Global DB (`treq.db`)** - App-wide:
+
 - **settings** - key, value (theme, last_repo_path, etc.)
 - **sessions** - id, workspace_id, type, name, created_at, last_accessed, model (legacy)
 - **git_cache** - id, workspace_path, file_path, cache_type, data, updated_at
@@ -139,6 +155,7 @@ npm run tauri dev            # Dev mode
 ## Code Style
 
 ### Rust
+
 - **Use rustdoc comments (`///`)** for public functions, structs, enums, modules
 - **No inline comments (`//`)** - code should be self-documenting
 - Include `# Arguments` and `# Returns` sections in rustdoc
@@ -161,6 +178,7 @@ pub fn create_workspace(repo_path: &str, workspace_name: &str, branch: &str) -> 
 ```
 
 ### TypeScript/JavaScript
+
 - **No JSDoc tags** (`@param`, `@returns`, `@type`) - TypeScript types are sufficient
 - **No inline comments (`//`)** - code should be self-documenting
 - Only comment complex business logic that isn't obvious
@@ -191,32 +209,38 @@ export async function createWorkspace(...) { ... }
 ## Implementation Notes
 
 **JJ Operations:**
+
 - Commands run in workspace/repo path
 - Uses `Workspace::init_external_git()` for colocated mode
 - No staging area - working copy only
 - `jj_commit` for direct commits, `jj_split` for partial
 
 **Terminal:**
+
 - Unique session IDs (workspace path or UUID)
 - Background threads with bidirectional communication
 - Store `MasterPty` reference for resizing
 
 **Cross-Platform:**
+
 - Shell: `$SHELL` on Unix, PowerShell on Windows
 - Paths: Platform-specific conversion
 - Launch: `open` (macOS), `start` (Windows), `xdg-open` (Linux)
 
 **Dependencies:**
+
 - **react-window** - Use v2 API (`List` with `rowComponent`, `rowHeight`, `rowCount`, `listRef`)
 - **Monaco Editor** - CDN loaded via `@monaco-editor/react`
 
 **Frontend:**
+
 - Lazy load `ShowWorkspace` with `Suspense`
 - Heavy memoization (`memo`, `useMemo`, `useCallback`)
 - Virtualization with `react-window`
 - View modes: `"session" | "show-workspace" | "settings"`
 
 **Keyboard:**
+
 - Cmd+K: Command Palette
 - Cmd+P: File Picker
 - Cmd+J: Toggle Terminal
@@ -225,16 +249,19 @@ export async function createWorkspace(...) { ... }
 ## Testing (Recommended, Not Mandatory)
 
 **Frameworks:**
+
 - Frontend: Vitest + Testing Library
 - Backend: Rust + mockall + tempfile
 
 **Organization:**
+
 - Frontend: `/test/*.test.{ts,tsx}`
 - Backend: `#[cfg(test)] mod tests` inline
 
 **Patterns:**
 
 Frontend:
+
 ```typescript
 import { render, screen, waitFor } from "../test/test-utils";
 import userEvent from "@testing-library/user-event";
@@ -253,6 +280,7 @@ test("component test", async () => {
 ```
 
 Backend:
+
 ```rust
 #[cfg(test)]
 mod tests {
@@ -269,6 +297,7 @@ mod tests {
 ```
 
 **Guidelines:**
+
 - Write tests before or alongside features
 - Frontend: `/test/` directory
 - Backend: `#[cfg(test)]` in same file
@@ -280,21 +309,25 @@ mod tests {
 ## Common Tasks
 
 **Add Tauri Command:**
+
 1. Define in command module with `#[tauri::command]`
 2. Export from module, ensure `commands/mod.rs` re-exports
 3. Add to `lib.rs` `invoke_handler`
 4. Add TypeScript wrapper in `src/lib/api.ts`
 
 **Add Component:**
+
 1. Create in `src/components/`
 2. Use Tailwind, explicit prop types, forwardRef if needed
 3. Consider test in `/test/`
 
 **Modify JJ Operations:**
+
 - Edit `src-tauri/src/jj.rs` or `src-tauri/src/commands/jj_commands.rs`
 - Return serde-serializable structs
 
 **Debug:**
+
 - Frontend: DevTools
 - Backend: `println!`/`eprintln!`
 - Database: SQLite CLI on `.treq/local.db` or `treq.db`

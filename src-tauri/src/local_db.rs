@@ -85,6 +85,7 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
 
     let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN target_branch TEXT", []);
     let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN has_conflicts BOOLEAN DEFAULT 0", []);
+    let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN archived BOOLEAN DEFAULT 0", []);
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS sessions (

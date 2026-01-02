@@ -1,7 +1,6 @@
 import { memo, useState, useCallback } from "react";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
-import { Save, X } from "lucide-react";
 
 interface ConflictComment {
   id: string;
@@ -16,12 +15,17 @@ interface ConflictCommentCardProps {
   conflictId: string;
   filePath: string;
   conflictNumber: number;
+  startLine: number;
+  endLine: number;
   comment?: ConflictComment;
   onSave: (text: string) => void;
   onClear: () => void;
 }
 
 export const ConflictCommentCard = memo<ConflictCommentCardProps>(({
+  filePath,
+  startLine,
+  endLine,
   comment,
   onSave,
   onClear,
@@ -32,40 +36,39 @@ export const ConflictCommentCard = memo<ConflictCommentCardProps>(({
     onSave(text);
   }, [text, onSave]);
 
-  const handleClear = useCallback(() => {
-    setText("");
+  const handleCancel = useCallback(() => {
+    setText(comment?.text || "");
     onClear();
-  }, [onClear]);
+  }, [comment?.text, onClear]);
+
+  const lineLabel = startLine === endLine ? `L${startLine}` : `L${startLine}-${endLine}`;
 
   return (
-    <div className="border-t border-border bg-muted/30 p-3">
-      <div className="mb-2 text-xs text-muted-foreground">
-        Describe how to resolve this conflict:
+    <div className="bg-muted/60 border-y border-border/40 px-4 py-3 font-sans text-base">
+      <div className="mb-2 text-md text-muted-foreground">
+        {filePath}:{lineLabel}
       </div>
       <Textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="e.g., 'Keep the changes from side 2, they have the correct implementation'"
-        className="min-h-[80px] text-sm mb-2"
+        placeholder="Add a comment..."
+        className="mb-2 font-sans"
+        autoFocus
       />
-      <div className="flex gap-2 justify-end">
+      <div className="flex justify-end gap-2">
         <Button
           variant="ghost"
+          onClick={handleCancel}
           size="sm"
-          onClick={handleClear}
-          disabled={!text.trim()}
         >
-          <X className="w-4 h-4 mr-1" />
-          Clear
+          Cancel
         </Button>
         <Button
-          variant="default"
-          size="sm"
           onClick={handleSave}
           disabled={!text.trim()}
+          size="sm"
         >
-          <Save className="w-4 h-4 mr-1" />
-          Save
+          Add Comment
         </Button>
       </div>
     </div>
