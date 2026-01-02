@@ -1,11 +1,21 @@
 import { useMemo } from "react";
 import { Command } from "cmdk";
+import { BranchSwitcher } from "./BranchSwitcher";
+import { WorkspaceDeletion } from "./WorkspaceDeletion";
+import { FilePicker } from "./FilePicker";
+import { CmdkFooter } from "./ui/cmdk-footer";
 import { Workspace, Session } from "../lib/api";
 import {
   Home,
   Settings,
   GitBranch,
   FileSearch,
+  Trash2,
+  Plus,
+  Terminal as TerminalIcon,
+  Maximize2,
+  ChevronsUpDown,
+  Bot,
 } from "lucide-react";
 
 interface CommandItem {
@@ -18,23 +28,50 @@ interface CommandItem {
 }
 
 interface CommandPaletteProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  // Command Palette
+  showCommandPalette: boolean;
+  onCommandPaletteChange: (open: boolean) => void;
   workspaces: Workspace[];
   sessions: Session[];
   onNavigateToDashboard: () => void;
   onNavigateToSettings: () => void;
   onOpenWorkspaceSession: (workspace: Workspace) => void;
   onOpenSession: (session: Session, workspace?: Workspace) => void;
-  onOpenBranchSwitcher?: () => void;
-  onOpenFilePicker?: () => void;
-  repoPath?: string;
+  onOpenBranchSwitcher: () => void;
+  onOpenFilePicker: () => void;
+  onOpenWorkspaceDeletion: () => void;
+  onCreateWorkspace: () => void;
+  onToggleTerminal?: () => void;
+  onMaximizeTerminal?: () => void;
+  onCreateAgentTerminal?: () => void;
+  onCreateShellTerminal?: () => void;
+  hasSelectedWorkspace: boolean;
+
+  // Branch Switcher
+  showBranchSwitcher: boolean;
+  onBranchSwitcherChange: (open: boolean) => void;
+  onBranchChanged: () => void;
+
+  // Workspace Deletion
+  showWorkspaceDeletion: boolean;
+  onWorkspaceDeletionChange: (open: boolean) => void;
+  currentWorkspace: Workspace | null;
+  onDeleteWorkspace: (workspace: Workspace) => void;
+
+  // File Picker
+  showFilePicker: boolean;
+  onFilePickerChange: (open: boolean) => void;
+  onFileSelected: (filePath: string) => void;
+  selectedWorkspaceId: number | null;
+
+  // Common
+  repoPath: string;
   workspaceChangeCounts?: Map<number, number>;
 }
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
-  open,
-  onOpenChange,
+  showCommandPalette,
+  onCommandPaletteChange,
   workspaces,
   sessions,
   onNavigateToDashboard,
@@ -43,6 +80,24 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onOpenSession,
   onOpenBranchSwitcher,
   onOpenFilePicker,
+  onOpenWorkspaceDeletion,
+  onCreateWorkspace,
+  onToggleTerminal,
+  onMaximizeTerminal,
+  onCreateAgentTerminal,
+  onCreateShellTerminal,
+  hasSelectedWorkspace,
+  showBranchSwitcher,
+  onBranchSwitcherChange,
+  onBranchChanged,
+  showWorkspaceDeletion,
+  onWorkspaceDeletionChange,
+  currentWorkspace,
+  onDeleteWorkspace,
+  showFilePicker,
+  onFilePickerChange,
+  onFileSelected,
+  selectedWorkspaceId,
   repoPath,
   workspaceChangeCounts,
 }) => {
@@ -50,16 +105,12 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const items = useMemo<CommandItem[]>(() => {
     const result: CommandItem[] = [];
 
-    // Actions
     result.push({
       id: "dashboard",
       type: "action",
       label: "Go to Home",
       icon: <Home className="w-4 h-4" />,
-      onSelect: () => {
-        onNavigateToDashboard();
-        onOpenChange(false);
-      },
+      onSelect: onNavigateToDashboard,
     });
 
     result.push({
@@ -67,13 +118,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       type: "action",
       label: "Go to Settings",
       icon: <Settings className="w-4 h-4" />,
-      onSelect: () => {
-        onNavigateToSettings();
-        onOpenChange(false);
-      },
+      onSelect: onNavigateToSettings,
     });
 
-    // Add Switch Branch action if we have a repo path
     if (repoPath && onOpenBranchSwitcher) {
       result.push({
         id: "switch-branch",
@@ -81,14 +128,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         label: "Switch Branch",
         description: "Checkout a different branch in main tree",
         icon: <GitBranch className="w-4 h-4" />,
-        onSelect: () => {
-          onOpenBranchSwitcher();
-          onOpenChange(false);
-        },
+        onSelect: onOpenBranchSwitcher,
       });
     }
 
-    // Add Search Files action if we have a repo path
     if (repoPath && onOpenFilePicker) {
       result.push({
         id: "search-files",
@@ -96,41 +139,128 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         label: "Search Files",
         description: "Jump to a file in the repository",
         icon: <FileSearch className="w-4 h-4" />,
-        onSelect: () => {
-          onOpenFilePicker();
-          onOpenChange(false);
-        },
+        onSelect: onOpenFilePicker,
       });
     }
 
-    // Workspaces
+    if (repoPath && onCreateWorkspace) {
+      result.push({
+        id: "create-workspace",
+        type: "action",
+        label: "Create Workspace",
+        description: "Create a new workspace",
+        icon: <Plus className="w-4 h-4" />,
+        onSelect: onCreateWorkspace,
+      });
+    }
+
+    if (repoPath && onOpenWorkspaceDeletion) {
+      result.push({
+        id: "delete-workspace",
+        type: "action",
+        label: "Delete Workspace",
+        description: "Delete a workspace",
+        icon: <Trash2 className="w-4 h-4" />,
+        onSelect: onOpenWorkspaceDeletion,
+      });
+    }
+
+    if (hasSelectedWorkspace) {
+      if (onToggleTerminal) {
+        result.push({
+          id: "toggle-terminal",
+          type: "action",
+          label: "Toggle Terminal",
+          description: "Show or hide the terminal pane",
+          icon: <ChevronsUpDown className="w-4 h-4" />,
+          onSelect: onToggleTerminal,
+        });
+      }
+
+      if (onMaximizeTerminal) {
+        result.push({
+          id: "maximize-terminal",
+          type: "action",
+          label: "Maximize Terminal",
+          description: "Toggle maximize/restore terminal pane",
+          icon: <Maximize2 className="w-4 h-4" />,
+          onSelect: onMaximizeTerminal,
+        });
+      }
+
+      if (onCreateAgentTerminal) {
+        result.push({
+          id: "new-agent-terminal",
+          type: "action",
+          label: "New Agent Terminal",
+          description: "Create a new Claude agent session",
+          icon: <Bot className="w-4 h-4" />,
+          onSelect: onCreateAgentTerminal,
+        });
+      }
+
+      if (onCreateShellTerminal) {
+        result.push({
+          id: "new-shell-terminal",
+          type: "action",
+          label: "New Shell Terminal",
+          description: "Create a new shell session",
+          icon: <TerminalIcon className="w-4 h-4" />,
+          onSelect: onCreateShellTerminal,
+        });
+      }
+    }
+
     for (const workspace of workspaces) {
-      const workspaceSessions = sessions.filter(s => s.workspace_id === workspace.id);
+      const workspaceSessions = sessions.filter(
+        (s) => s.workspace_id === workspace.id
+      );
       const agentCount = workspaceSessions.length;
       const changeCount = workspaceChangeCounts?.get(workspace.id) ?? 0;
 
-      // Build description: "N agents, N shells, N changes"
       const parts: string[] = [];
-      parts.push(`${agentCount} agent${agentCount !== 1 ? 's' : ''}`);
-      // Note: shells are not tracked in database, so we show 0 for now
+      parts.push(`${agentCount} agent${agentCount !== 1 ? "s" : ""}`);
       parts.push(`0 shells`);
-      parts.push(`${changeCount} change${changeCount !== 1 ? 's' : ''}`);
+      parts.push(`${changeCount} change${changeCount !== 1 ? "s" : ""}`);
 
       result.push({
         id: `workspace-${workspace.id}`,
         type: "workspace",
         label: workspace.branch_name,
-        description: parts.join(', '),
+        description: parts.join(", "),
         icon: <GitBranch className="w-4 h-4" />,
-        onSelect: () => {
-          onOpenWorkspaceSession(workspace);
-          onOpenChange(false);
-        },
+        onSelect: () => onOpenWorkspaceSession(workspace),
       });
     }
 
-    return result;
-  }, [workspaces, sessions, onNavigateToDashboard, onNavigateToSettings, onOpenWorkspaceSession, onOpenSession, onOpenBranchSwitcher, onOpenFilePicker, onOpenChange, repoPath, workspaceChangeCounts]);
+    // Wrap all onSelect handlers to close the dialog after execution
+    return result.map((item) => ({
+      ...item,
+      onSelect: () => {
+        item.onSelect();
+        onCommandPaletteChange(false);
+      },
+    }));
+  }, [
+    workspaces,
+    sessions,
+    onNavigateToDashboard,
+    onNavigateToSettings,
+    onOpenWorkspaceSession,
+    onOpenSession,
+    onOpenBranchSwitcher,
+    onOpenFilePicker,
+    onOpenWorkspaceDeletion,
+    onCreateWorkspace,
+    onToggleTerminal,
+    onMaximizeTerminal,
+    onCreateAgentTerminal,
+    onCreateShellTerminal,
+    repoPath,
+    workspaceChangeCounts,
+    hasSelectedWorkspace,
+    onCommandPaletteChange,
+  ]);
 
   // Render a command item
   const renderItem = (item: CommandItem) => (
@@ -153,42 +283,64 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   );
 
   return (
-    <Command.Dialog
-      open={open}
-      onOpenChange={onOpenChange}
-      label="Command Menu"
-      className="[&_[cmdk-root]]:bg-background [&_[cmdk-root]]:text-foreground"
-    >
-      <div className="bg-background text-foreground rounded-xl border border-border shadow-2xl w-[40vw] max-w-none overflow-hidden">
-        {/* Search Input */}
-        <div className="flex items-center border-b border-border px-3 bg-background">
-          <Command.Input
-            placeholder="Type a command or search..."
-            className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 h-12 flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground text-foreground"
-          />
-        </div>
-
-        {/* Results List */}
-        <Command.List className="max-h-[300px] overflow-y-auto py-2">
-          <Command.Empty>
-            <div className="px-4 py-8 text-center text-muted-foreground text-sm">
-              No results found
-            </div>
-          </Command.Empty>
-
-          {/* Flat list of all items */}
-          {items.map(renderItem)}
-        </Command.List>
-
-        {/* Footer with keyboard hints */}
-        <div className="border-t border-border px-3 py-2 flex items-center justify-between text-sm text-muted-foreground">
-          <div className="flex items-center gap-3">
-            <span><kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">↑↓</kbd> Navigate</span>
-            <span><kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">↵</kbd> Select</span>
-            <span><kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Esc</kbd> Close</span>
+    <>
+      {/* Command Palette */}
+      <Command.Dialog
+        open={showCommandPalette}
+        onOpenChange={onCommandPaletteChange}
+        label="Command Menu"
+        className="[&_[cmdk-root]]:bg-background [&_[cmdk-root]]:text-foreground"
+      >
+        <div className="bg-background text-foreground rounded-xl border border-border shadow-2xl w-[40vw] max-w-none overflow-hidden">
+          <div className="flex items-center border-b border-border px-3 bg-background">
+            <Command.Input
+              placeholder="Type a command or search..."
+              className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 h-12 flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground text-foreground"
+            />
           </div>
+
+          <Command.List className="max-h-[300px] overflow-y-auto py-2">
+            <Command.Empty>
+              <div className="px-4 py-8 text-center text-muted-foreground text-sm">
+                No results found
+              </div>
+            </Command.Empty>
+
+            {items.map(renderItem)}
+          </Command.List>
+
+          <CmdkFooter />
         </div>
-      </div>
-    </Command.Dialog>
+      </Command.Dialog>
+
+      {/* Other Modals */}
+      {repoPath && (
+        <>
+          <BranchSwitcher
+            open={showBranchSwitcher}
+            onOpenChange={onBranchSwitcherChange}
+            repoPath={repoPath}
+            onBranchChanged={onBranchChanged}
+          />
+
+          <WorkspaceDeletion
+            open={showWorkspaceDeletion}
+            onOpenChange={onWorkspaceDeletionChange}
+            workspaces={workspaces}
+            repoPath={repoPath}
+            currentWorkspace={currentWorkspace}
+            onDeleteWorkspace={onDeleteWorkspace}
+          />
+
+          <FilePicker
+            open={showFilePicker}
+            onOpenChange={onFilePickerChange}
+            repoPath={repoPath}
+            workspaceId={selectedWorkspaceId}
+            onFileSelect={onFileSelected}
+          />
+        </>
+      )}
+    </>
   );
 };
