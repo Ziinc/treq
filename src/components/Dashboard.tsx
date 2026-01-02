@@ -5,6 +5,7 @@ import {
   useMemo,
   Suspense,
   lazy,
+  useRef,
 } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
@@ -14,11 +15,9 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
 import { CreateWorkspaceFromRemoteDialog } from "./CreateWorkspaceFromRemoteDialog";
 import { CommandPalette } from "./CommandPalette";
-import { FilePicker } from "./FilePicker";
-import { BranchSwitcher } from "./BranchSwitcher";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { ErrorBoundary } from "./ErrorBoundary";
-import { WorkspaceTerminalPane } from "./WorkspaceTerminalPane";
+import { WorkspaceTerminalPane, type WorkspaceTerminalPaneHandle } from "./WorkspaceTerminalPane";
 import type { ClaudeSessionData } from "./terminal/types";
 import type { SessionCreationInfo } from "../types/sessions";
 
@@ -89,6 +88,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
   const [showFilePicker, setShowFilePicker] = useState(false);
+  const [showWorkspaceDeletion, setShowWorkspaceDeletion] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [sessionSelectedFile, setSessionSelectedFile] = useState<string | null>(
     null
@@ -102,6 +102,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   const [pendingClaudeSession, setPendingClaudeSession] = useState<
     SessionCreationInfo | null
   >(null);
+
+  const terminalPaneRef = useRef<WorkspaceTerminalPaneHandle>(null);
 
   const queryClient = useQueryClient();
   const { addToast } = useToast();
@@ -636,42 +638,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     addToast({ title: "Branch switched successfully", type: "success" });
   }, [repoPath, queryClient, addToast]);
 
-  // Render command palette for all views
-  const commandPaletteElement = (
-    <CommandPalette
-      open={showCommandPalette}
-      onOpenChange={setShowCommandPalette}
-      workspaces={workspaces}
-      sessions={sessions}
-      onNavigateToDashboard={handleReturnToDashboard}
-      onNavigateToSettings={() => setViewMode("settings")}
-      onOpenWorkspaceSession={(workspace) => {
-        handleOpenSession(workspace);
-      }}
-      onOpenSession={(session, workspace) => {
-        setActiveSessionId(session.id);
-        if (workspace) {
-          setSelectedWorkspace(workspace);
-          setViewMode("show-workspace");
-        } else {
-          setViewMode("session");
-        }
-      }}
-      onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
-      onOpenFilePicker={() => setShowFilePicker(true)}
-      repoPath={repoPath}
-    />
-  );
-
-  // Render branch switcher modal
-  const branchSwitcherElement = repoPath ? (
-    <BranchSwitcher
-      open={showBranchSwitcher}
-      onOpenChange={setShowBranchSwitcher}
-      repoPath={repoPath}
-      onBranchChanged={handleBranchChanged}
-    />
-  ) : null;
 
   const isSessionView =
     viewMode === "session" || viewMode === "show-workspace";
@@ -813,6 +779,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
           )}
           {/* Shared workspace terminal pane - always rendered to preserve state */}
           <WorkspaceTerminalPane
+            ref={terminalPaneRef}
             key={repoPath}
             workingDirectory={selectedWorkspace?.workspace_path || repoPath}
             isHidden={false}
@@ -959,20 +926,46 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         }}
       />
 
-      {commandPaletteElement}
-      {branchSwitcherElement}
-
-      {repoPath && (
-        <FilePicker
-          open={showFilePicker}
-          onOpenChange={setShowFilePicker}
-          repoPath={repoPath}
-          workspaceId={selectedWorkspace?.id ?? null}
-          onFileSelect={(filePath) => {
-            setSessionSelectedFile(filePath);
-          }}
-        />
-      )}
+      <CommandPalette
+        showCommandPalette={showCommandPalette}
+        onCommandPaletteChange={setShowCommandPalette}
+        workspaces={workspaces}
+        sessions={sessions}
+        onNavigateToDashboard={handleReturnToDashboard}
+        onNavigateToSettings={() => setViewMode("settings")}
+        onOpenWorkspaceSession={handleOpenSession}
+        onOpenSession={(session, workspace) => {
+          setActiveSessionId(session.id);
+          if (workspace) {
+            setSelectedWorkspace(workspace);
+            setViewMode("show-workspace");
+          } else {
+            setViewMode("session");
+          }
+        }}
+        onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
+        onOpenFilePicker={() => setShowFilePicker(true)}
+        onOpenWorkspaceDeletion={() => setShowWorkspaceDeletion(true)}
+        onCreateWorkspace={() => setShowCreateDialog(true)}
+        onToggleTerminal={() => terminalPaneRef.current?.toggleCollapse()}
+        onMaximizeTerminal={() => terminalPaneRef.current?.toggleMaximize()}
+        onCreateAgentTerminal={() => terminalPaneRef.current?.createAgentSession()}
+        onCreateShellTerminal={() => terminalPaneRef.current?.createShellSession()}
+        hasSelectedWorkspace={!!selectedWorkspace}
+        showBranchSwitcher={showBranchSwitcher}
+        onBranchSwitcherChange={setShowBranchSwitcher}
+        onBranchChanged={handleBranchChanged}
+        showWorkspaceDeletion={showWorkspaceDeletion}
+        onWorkspaceDeletionChange={setShowWorkspaceDeletion}
+        currentWorkspace={selectedWorkspace}
+        onDeleteWorkspace={handleDelete}
+        showFilePicker={showFilePicker}
+        onFilePickerChange={setShowFilePicker}
+        onFileSelected={(filePath) => setSessionSelectedFile(filePath)}
+        selectedWorkspaceId={selectedWorkspace?.id ?? null}
+        repoPath={repoPath}
+        workspaceChangeCounts={undefined}
+      />
     </div>
   );
 };
