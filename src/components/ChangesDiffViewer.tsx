@@ -2308,7 +2308,18 @@ export const ChangesDiffViewer = memo(
           markdown += "## Conflict Resolution\n\n";
           for (const comment of conflictComments.values()) {
             if (comment.text.trim()) {
-              markdown += `### ${comment.filePath} - Conflict ${comment.conflictNumber}\n`;
+              // Look up the conflict region for this comment
+              const regions = conflictRegionsByFile.get(comment.filePath);
+              const region = regions?.find(r => r.conflictNumber === comment.conflictNumber);
+
+              let header = `### ${comment.filePath} - Conflict ${comment.conflictNumber}`;
+
+              // Add line number range if we found the region
+              if (region) {
+                header += ` (lines ${region.startLine}-${region.endLine})`;
+              }
+
+              markdown += `${header}\n`;
               markdown += `> ${comment.text}\n\n`;
             }
           }
@@ -2355,7 +2366,7 @@ export const ChangesDiffViewer = memo(
         }
 
         return markdown;
-      }, [comments, conflictComments, finalReviewComment]);
+      }, [comments, conflictComments, finalReviewComment, conflictRegionsByFile]);
 
       // Send review to terminal
       const handleRequestChanges = useCallback(
