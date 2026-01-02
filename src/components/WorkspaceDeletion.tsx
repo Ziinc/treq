@@ -29,7 +29,7 @@ export const WorkspaceDeletion: React.FC<WorkspaceDeletionProps> = ({
     if (open) {
       setSearch("");
       if (currentWorkspace) {
-        setSelectedValue(`workspace-${currentWorkspace.id}`);
+        setSelectedValue(`workspace-${currentWorkspace.id}-${currentWorkspace.branch_name}`);
       } else {
         setSelectedValue("");
       }
@@ -42,7 +42,7 @@ export const WorkspaceDeletion: React.FC<WorkspaceDeletionProps> = ({
   }, [workspaces, repoPath]);
 
   const handleSelect = (value: string) => {
-    if (value === "current-default") {
+    if (value.startsWith("current-default")) {
       // User pressed enter without selecting - use current workspace
       if (currentWorkspace && currentWorkspace.workspace_path !== repoPath) {
         onDeleteWorkspace(currentWorkspace);
@@ -51,7 +51,8 @@ export const WorkspaceDeletion: React.FC<WorkspaceDeletionProps> = ({
       return;
     }
 
-    const workspaceId = parseInt(value.replace("workspace-", ""));
+    // Extract workspace ID from value format: workspace-{id}-{branch_name}
+    const workspaceId = parseInt(value.split("-")[1]);
     const workspace = deletableWorkspaces.find((w) => w.id === workspaceId);
     if (workspace) {
       onDeleteWorkspace(workspace);
@@ -101,7 +102,7 @@ export const WorkspaceDeletion: React.FC<WorkspaceDeletionProps> = ({
           {/* Current workspace as default (if not home repo) */}
           {hasCurrentWorkspace && (
             <Command.Item
-              value="current-default"
+              value={`current-default-${currentWorkspace.branch_name}`}
               onSelect={handleSelect}
               className="px-3 py-1.5 mx-2 rounded-md flex items-center gap-3 cursor-pointer text-foreground aria-selected:bg-accent/50 aria-selected:text-foreground data-[disabled]:opacity-50 data-[disabled]:pointer-events-none hover:bg-accent/30 transition-colors"
             >
@@ -125,7 +126,7 @@ export const WorkspaceDeletion: React.FC<WorkspaceDeletionProps> = ({
             return (
               <Command.Item
                 key={workspace.id}
-                value={`workspace-${workspace.id}`}
+                value={`workspace-${workspace.id}-${workspace.branch_name}`}
                 onSelect={handleSelect}
                 className="px-3 py-1.5 mx-2 rounded-md flex items-center gap-3 cursor-pointer text-foreground aria-selected:bg-accent/50 aria-selected:text-foreground data-[disabled]:opacity-50 data-[disabled]:pointer-events-none hover:bg-accent/30 transition-colors"
               >

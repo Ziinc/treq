@@ -169,6 +169,19 @@ const getLinePrefix = (line: string): string => {
   return " ";
 };
 
+// Helper to detect JJ conflict markers
+const isJjConflictMarker = (line: string): boolean => {
+  return /^(<{7}\s+Conflict|>{7}\s+Conflict|%{7}|\+{7}|-{7})/.test(line);
+};
+
+// Helper to get background color for conflict lines
+const getConflictLineBackground = (line: string): string => {
+  if (isJjConflictMarker(line)) return "";
+  if (line.startsWith("-")) return "bg-red-500/20";
+  if (line.startsWith("+")) return "bg-emerald-500/20";
+  return "";
+};
+
 const hunksEqual = (
   a?: JjDiffHunk[] | null,
   b?: JjDiffHunk[] | null
@@ -596,8 +609,15 @@ interface FileRowComponentProps {
   // Conflict-related props
   conflictRegions?: ConflictRegion[];
   conflictComments: Map<string, ConflictComment>;
+  openConflictComments: Set<string>;
+  editingConflictCommentId: string | null;
   saveConflictComment: (conflictId: string, filePath: string, conflictNumber: number, text: string) => void;
   clearConflictComment: (conflictId: string) => void;
+  toggleConflictComment: (conflictId: string) => void;
+  setOpenConflictComments: React.Dispatch<React.SetStateAction<Set<string>>>;
+  startEditConflictComment: (conflictId: string) => void;
+  cancelEditConflictComment: () => void;
+  saveEditConflictComment: (conflictId: string, newText: string) => void;
   conflictFileRefs: React.MutableRefObject<Map<string, HTMLDivElement>>;
 }
 
@@ -625,8 +645,15 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
     deleteComment,
     conflictRegions,
     conflictComments,
+    openConflictComments,
+    editingConflictCommentId,
     saveConflictComment,
     clearConflictComment,
+    toggleConflictComment,
+    setOpenConflictComments,
+    startEditConflictComment,
+    cancelEditConflictComment,
+    saveEditConflictComment,
     conflictFileRefs,
   } = props;
 
@@ -658,43 +685,152 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
     <>
       {/* Conflict Cards - shown before file diff if this file has conflicts */}
       {conflictRegions && conflictRegions.length > 0 && (
-        <Fragment>
-          {conflictRegions.map((region) => (
-            <div
-              key={region.id}
-              ref={(el) => {
-                if (el) {
-                  conflictFileRefs.current.set(filePath, el);
-                } else {
-                  conflictFileRefs.current.delete(filePath);
-                }
-              }}
-              className="border border-destructive/30 rounded-md overflow-hidden mb-4"
-            >
-              <div className="bg-destructive/10 px-3 py-2 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-sm">{filePath}</span>
-                  <span className="text-xs text-destructive uppercase font-medium">
-                    Conflict {region.conflictNumber} of {region.totalConflicts}
-                  </span>
+        <div
+          ref={(el) => {
+            if (el) {
+              conflictFileRefs.current.set(filePath, el);
+            } else {
+              conflictFileRefs.current.delete(filePath);
+            }
+          }}
+          className="border border-destructive/30 rounded-md overflow-hidden mb-4"
+        >
+          {/* Single header for the file */}
+          <div className="bg-destructive/10 px-3 py-2 flex items-center gap-2">
+            <span className="font-mono text-sm">{filePath}</span>
+          </div>
+
+          {/* Multiple conflict sections with dividers */}
+          {conflictRegions.map((region, index) => (
+            <Fragment key={region.id}>
+              {index > 0 && <div className="border-t border-border" />}
+
+              {/* Conflict section */}
+              <div>
+                <div className="p-0 relative">
+                  <pre className="text-sm font-mono overflow-x-auto bg-muted/30 p-3 rounded whitespace-pre-wrap break-all">
+                    {region.content.split('\n').map((line, idx) => {
+                      const isMarker = isJjConflictMarker(line);
+                      const bgClass = getConflictLineBackground(line);
+                      return (
+                        <div
+                          key={idx}
+                          className={cn(
+                            isMarker ? "text-muted-foreground" : "",
+                            bgClass
+                          )}
+                        >
+                          {line}
+                        </div>
+                      );
+                    })}
+                  </pre>
+
+                  {/* Add comment button below conflict content */}
+                  <div className="mt-2 flex justify-end absolute right-3 bottom-3">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => toggleConflictComment(region.id)}
+                      aria-label="Add comment"
+                    >
+                      Add comment
+                    </Button>
+                  </div>
                 </div>
+
+                {/* Display saved comment inline (always visible if exists) */}
+                {conflictComments.has(region.id) && (
+                  <div className="px-3 py-2 bg-muted/40 border-t border-border">
+                    <div className="text-muted-foreground mb-1">Resolution note:</div>
+                    {editingConflictCommentId === region.id ? (
+                      <div className="bg-background rounded-md p-[12px] border border-border/60">
+                        <CommentEditInput
+                          initialText={conflictComments.get(region.id)?.text || ""}
+                          onSave={(newText) =>
+                            saveEditConflictComment(region.id, newText)
+                          }
+                          onCancel={cancelEditConflictComment}
+                          onDiscard={() => {
+                            clearConflictComment(region.id);
+                            cancelEditConflictComment();
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div
+                              className="group bg-background rounded-md p-[12px] border border-border/60 cursor-pointer hover:shadow-md transition-shadow"
+                              onClick={() =>
+                                startEditConflictComment(region.id)
+                              }
+                            >
+                              <div className="flex items-start gap-2">
+                                <Pencil className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5" />
+                                <p className="text-sm whitespace-pre-wrap flex-1">
+                                  {conflictComments.get(region.id)?.text}
+                                </p>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        clearConflictComment(region.id);
+                                      }}
+                                      className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground flex-shrink-0"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    Delete comment
+                                  </TooltipContent>
+                                </Tooltip>
+                              </div>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Click to edit
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
+                )}
+
+                {/* Conflict comment input form (conditionally shown) */}
+                {openConflictComments.has(region.id) && (
+                  <ConflictCommentCard
+                    conflictId={region.id}
+                    filePath={region.filePath}
+                    conflictNumber={region.conflictNumber}
+                    startLine={region.startLine}
+                    endLine={region.endLine}
+                    comment={conflictComments.get(region.id)}
+                    onSave={(text) => {
+                      saveConflictComment(region.id, region.filePath, region.conflictNumber, text);
+                      setOpenConflictComments(prev => {
+                        const next = new Set(prev);
+                        next.delete(region.id);
+                        return next;
+                      });
+                    }}
+                    onClear={() => {
+                      clearConflictComment(region.id)
+                      setOpenConflictComments(prev => {
+                        const next = new Set(prev);
+                        next.delete(region.id);
+                        return next;
+                      });
+                    }}
+                  />
+                )}
               </div>
-              <div className="p-3">
-                <pre className="text-xs font-mono overflow-x-auto bg-muted/30 p-3 rounded whitespace-pre-wrap break-all">
-                  {region.content}
-                </pre>
-              </div>
-              <ConflictCommentCard
-                conflictId={region.id}
-                filePath={region.filePath}
-                conflictNumber={region.conflictNumber}
-                comment={conflictComments.get(region.id)}
-                onSave={(text) => saveConflictComment(region.id, region.filePath, region.conflictNumber, text)}
-                onClear={() => clearConflictComment(region.id)}
-              />
-            </div>
+            </Fragment>
           ))}
-        </Fragment>
+        </div>
       )}
 
       {/* Regular File Diff */}
@@ -908,7 +1044,7 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
                           {comment.lineContent.join("\n")}
                         </pre>
                       )}
-                      <p className="text-sm font-sans">{comment.text}</p>
+                      <p className="font-sans">{comment.text}</p>
                     </div>
                   ))}
                 </div>
@@ -1011,6 +1147,8 @@ export const ChangesDiffViewer = memo(
       // Review/comment state
       const [comments, setComments] = useState<LineComment[]>([]);
       const [conflictComments, setConflictComments] = useState<Map<string, ConflictComment>>(new Map());
+      const [openConflictComments, setOpenConflictComments] = useState<Set<string>>(new Set());
+      const [editingConflictCommentId, setEditingConflictCommentId] = useState<string | null>(null);
       const [showCommentInput, setShowCommentInput] = useState(false);
       const [reviewPopoverOpen, setReviewPopoverOpen] = useState(false);
       const [finalReviewComment, setFinalReviewComment] = useState("");
@@ -2220,6 +2358,46 @@ export const ChangesDiffViewer = memo(
         });
       }, []);
 
+      const startEditConflictComment = useCallback((conflictId: string) => {
+        setEditingConflictCommentId(conflictId);
+      }, []);
+
+      const cancelEditConflictComment = useCallback(() => {
+        setEditingConflictCommentId(null);
+      }, []);
+
+      const saveEditConflictComment = useCallback(
+        (conflictId: string, newText: string) => {
+          if (!newText.trim()) return;
+
+          setConflictComments((prev) => {
+            const next = new Map(prev);
+            const existingComment = prev.get(conflictId);
+            if (existingComment) {
+              next.set(conflictId, {
+                ...existingComment,
+                text: newText.trim(),
+              });
+            }
+            return next;
+          });
+          setEditingConflictCommentId(null);
+        },
+        []
+      );
+
+      const toggleConflictComment = useCallback((conflictId: string) => {
+        setOpenConflictComments((prev) => {
+          const next = new Set(prev);
+          if (next.has(conflictId)) {
+            next.delete(conflictId);
+          } else {
+            next.add(conflictId);
+          }
+          return next;
+        });
+      }, []);
+
       // Copy line location to clipboard
       const handleCopyLineLocation = useCallback(async () => {
         try {
@@ -2930,27 +3108,9 @@ export const ChangesDiffViewer = memo(
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={handleCopyReview}
-                      className="gap-2"
-                    >
-                      {copiedReview ? (
-                        <>
-                          <Check className="w-3 h-3" />
-                          Copied
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3 h-3" />
-                          Copy
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
                       onClick={() => setShowCancelDialog(true)}
                     >
-                      Cancel
+                      {hasConflicts ? "Reset" : "Discard"}
                     </Button>
                     <Popover
                       open={reviewPopoverOpen}
@@ -2986,38 +3146,61 @@ export const ChangesDiffViewer = memo(
                           placeholder="Add a summary comment (optional)..."
                           className="min-h-[80px] text-sm"
                         />
-                        <div className="flex justify-end gap-2">
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-8 w-8"
-                                  onClick={() => setReviewPopoverOpen(false)}
-                                  disabled={sendingReview}
-                                >
-                                  <X className="w-4 h-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Cancel</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                        <div className="flex justify-between gap-2">
+                          {/* Left-aligned Copy button */}
                           <Button
                             size="sm"
-                            variant="secondary"
-                            onClick={() => handleRequestChanges("plan")}
+                            variant="outline"
+                            onClick={handleCopyReview}
+                            className="gap-2"
                             disabled={sendingReview}
                           >
-                            Plan
+                            {copiedReview ? (
+                              <>
+                                <Check className="w-3 h-3" />
+                                Copied
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                Copy
+                              </>
+                            )}
                           </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => handleRequestChanges("acceptEdits")}
-                            disabled={sendingReview}
-                          >
-                            Edit
-                          </Button>
+                          {/* Right-aligned action buttons */}
+                          <div className="flex gap-2">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    onClick={() => setReviewPopoverOpen(false)}
+                                    disabled={sendingReview}
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Cancel</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => handleRequestChanges("plan")}
+                              disabled={sendingReview}
+                            >
+                              Plan
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => handleRequestChanges("acceptEdits")}
+                              disabled={sendingReview}
+                            >
+                              Edit
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </PopoverContent>
@@ -3161,8 +3344,15 @@ export const ChangesDiffViewer = memo(
                             deleteComment={deleteComment}
                             conflictRegions={conflictRegionsByFile.get(file.path)}
                             conflictComments={conflictComments}
+                            openConflictComments={openConflictComments}
+                            editingConflictCommentId={editingConflictCommentId}
                             saveConflictComment={saveConflictComment}
                             clearConflictComment={clearConflictComment}
+                            toggleConflictComment={toggleConflictComment}
+                            setOpenConflictComments={setOpenConflictComments}
+                            startEditConflictComment={startEditConflictComment}
+                            cancelEditConflictComment={cancelEditConflictComment}
+                            saveEditConflictComment={saveEditConflictComment}
                             conflictFileRefs={conflictFileRefs}
                           />
                         ))}

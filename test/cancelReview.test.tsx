@@ -64,9 +64,12 @@ describe("Cancel/Discard review feature", () => {
   };
 
   const clickDiscardButton = async () => {
+    // Find the Discard button specifically in the alert dialog (not the header bar button)
+    // The dialog button will be inside the AlertDialogContent
     const discardButtons = await screen.findAllByRole("button", { name: /discard/i });
-    const discardButton = discardButtons.find(btn => btn.textContent === "Discard");
-    if (discardButton) await userEvent.click(discardButton);
+    // The dialog action button should be the last one (header bar button is first)
+    const dialogDiscardButton = discardButtons[discardButtons.length - 1];
+    if (dialogDiscardButton) await userEvent.click(dialogDiscardButton);
   };
 
   beforeEach(() => {
@@ -97,9 +100,9 @@ describe("Cancel/Discard review feature", () => {
     renderComponent();
     await setupReviewMode();
 
-    // Should show cancel button
+    // Should show discard button (cancel button renamed to discard in normal mode)
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /^cancel$/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /^discard$/i })).toBeInTheDocument();
     });
   });
 
@@ -107,9 +110,9 @@ describe("Cancel/Discard review feature", () => {
     renderComponent();
     await setupReviewMode();
 
-    // Click cancel button
-    const cancelButton = screen.getByRole("button", { name: /^cancel$/i });
-    await userEvent.click(cancelButton);
+    // Click discard button
+    const discardButton = screen.getByRole("button", { name: /^discard$/i });
+    await userEvent.click(discardButton);
 
     // Should show confirmation dialog
     await waitFor(() => {
@@ -122,9 +125,9 @@ describe("Cancel/Discard review feature", () => {
     renderComponent();
     await setupReviewMode();
 
-    // Click cancel button
-    const cancelButton = await screen.findByRole("button", { name: /^cancel$/i });
-    await userEvent.click(cancelButton);
+    // Click discard button
+    const discardButton = await screen.findByRole("button", { name: /^discard$/i });
+    await userEvent.click(discardButton);
 
     // Click discard in dialog
     await clickDiscardButton();
@@ -139,9 +142,9 @@ describe("Cancel/Discard review feature", () => {
     renderComponent();
     await setupReviewMode();
 
-    // Click cancel button
-    const cancelButton = await screen.findByRole("button", { name: /^cancel$/i });
-    await userEvent.click(cancelButton);
+    // Click discard button
+    const discardButton = await screen.findByRole("button", { name: /^discard$/i });
+    await userEvent.click(discardButton);
 
     // Click "Keep reviewing" button
     const keepButton = await screen.findByRole("button", { name: /keep reviewing/i });
@@ -157,9 +160,9 @@ describe("Cancel/Discard review feature", () => {
     renderComponent();
     await setupReviewMode();
 
-    // Click cancel button
-    const cancelButton = await screen.findByRole("button", { name: /^cancel$/i });
-    await userEvent.click(cancelButton);
+    // Click discard button
+    const discardButton = await screen.findByRole("button", { name: /^discard$/i });
+    await userEvent.click(discardButton);
 
     // Verify dialog is shown
     await waitFor(() => {
@@ -186,15 +189,100 @@ describe("Cancel/Discard review feature", () => {
     // Clear mock calls
     vi.mocked(api.clearPendingReview).mockClear();
 
-    // Click cancel and confirm
-    const cancelButton = await screen.findByRole("button", { name: /^cancel$/i });
-    await userEvent.click(cancelButton);
+    // Click discard and confirm
+    const discardButton = await screen.findByRole("button", { name: /^discard$/i });
+    await userEvent.click(discardButton);
 
     await clickDiscardButton();
 
     // Verify clearPendingReview was called
     await waitFor(() => {
       expect(api.clearPendingReview).toHaveBeenCalledWith("/test/repo", 1);
+    });
+  });
+
+  describe("Cancel button text based on mode", () => {
+    it("should show 'Discard' button text in normal review mode (no conflicts)", async () => {
+      renderComponent();
+      await setupReviewMode();
+
+      // Should show "Discard" button in normal review mode
+      await waitFor(() => {
+        const discardButton = screen.getByRole("button", { name: /^discard$/i });
+        expect(discardButton).toBeInTheDocument();
+        expect(discardButton).toHaveTextContent("Discard");
+      });
+    });
+
+    it("should show 'Reset' button text in conflict resolution mode", async () => {
+      // Mock a file with conflicts
+      vi.mocked(api.jjGetChangedFiles).mockResolvedValue([
+        {
+          path: "conflict.txt",
+          status: "M",
+          previous_path: null,
+        },
+      ]);
+
+      vi.mocked(api.jjGetFileHunks).mockResolvedValue([
+        {
+          id: "hunk-1",
+          header: "@@ -1,7 +1,7 @@",
+          lines: [
+            "+<<<<<<< Conflict 1 of 1",
+            "+%%%%%%%",
+            "+-old line",
+            "++++++++",
+            "+new line",
+            "+>>>>>>> Conflict 1 of 1 ends",
+          ],
+          patch: "...",
+        },
+      ]);
+
+      const { container } = render(
+        <ChangesDiffViewer
+          workspacePath="/test/workspace"
+          repoPath="/test/repo"
+          workspaceId={1}
+          initialSelectedFile={null}
+          conflictedFiles={["conflict.txt"]}
+        />
+      );
+
+      // Wait for file to load
+      await waitFor(() => {
+        expect(screen.getByText(/conflict\.txt/i)).toBeInTheDocument();
+      });
+
+      // Expand the file to see conflicts
+      const fileElements = screen.getAllByText(/conflict\.txt/i);
+      await userEvent.click(fileElements[0]);
+
+      // Wait for conflict to be detected and add comment button
+      await waitFor(() => {
+        const buttons = screen.queryAllByRole("button", { name: /add comment/i });
+        expect(buttons.length).toBeGreaterThan(0);
+      });
+
+      // Click add comment to enter review mode
+      const addCommentButtons = screen.getAllByRole("button", { name: /add comment/i });
+      await userEvent.click(addCommentButtons[0]);
+
+      // Type comment
+      const textarea = screen.getByPlaceholderText(/keep the changes/i);
+      await userEvent.type(textarea, "Test comment");
+
+      // Submit comment (conflict card has "Save" button)
+      const saveButton = screen.getByRole("button", { name: /save/i });
+      await userEvent.click(saveButton);
+
+      // Should show "Reset" button in conflict mode
+      await waitFor(() => {
+        const resetButton = screen.getByRole("button", { name: /^reset$/i });
+        expect(resetButton).toBeInTheDocument();
+        expect(resetButton).toHaveTextContent("Reset");
+      });
     });
   });
 });
