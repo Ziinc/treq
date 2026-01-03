@@ -55,6 +55,11 @@ import {
   TooltipTrigger,
 } from "./ui/tooltip";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "./ui/popover";
+import {
   Loader2,
   GitBranch,
   GitMerge,
@@ -762,6 +767,25 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   // Display branch name as title: workspace branch if available, otherwise main repo branch
   const branchTitle = workspace?.branch_name || mainRepoBranch || "main";
 
+  // Extract intent from workspace metadata
+  const workspaceIntent = workspace?.metadata
+    ? (() => {
+        try {
+          const metadata = JSON.parse(workspace.metadata);
+          return metadata.intent || null;
+        } catch {
+          return null;
+        }
+      })()
+    : null;
+
+  // Truncate intent at 100 characters
+  const truncatedIntent = workspaceIntent && workspaceIntent.length > 100
+    ? workspaceIntent.substring(0, 100) + "..."
+    : workspaceIntent;
+
+  const isTruncated = workspaceIntent && workspaceIntent.length > 100;
+
   return (
     <div className="h-full w-full flex flex-col bg-background">
       <div className="border-b p-2 flex flex-col gap-1 flex-shrink-0">
@@ -860,6 +884,27 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
             </DropdownMenu>
           </div>
         </div>
+        {/* Row 2: Intent (if workspace and intent exists) */}
+        {workspace && workspaceIntent && (
+          <div className="flex items-center px-1">
+            {isTruncated ? (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <span className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+                    {truncatedIntent}
+                  </span>
+                </PopoverTrigger>
+                <PopoverContent className="w-96">
+                  <p className="text-sm">{workspaceIntent}</p>
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                {truncatedIntent}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex-1 flex overflow-hidden min-h-0">

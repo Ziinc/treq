@@ -11,9 +11,31 @@
     "core:window:allow-create",
     "core:window:allow-set-title",
     "core:webview:allow-create-webview-window",
-    "opener:default",
-    "opener:allow-open-url",
-    "opener:allow-open-path",
+    "opener:default",    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://**"
+        },
+        {
+          "url": "http://**"
+        },
+        {
+          "url": "vscode:*"
+        },
+        {
+          "url": "cursor:*"
+        }
+      ]
+    },
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
+    },
     "dialog:default",
     "dialog:allow-open",
     "log:default"

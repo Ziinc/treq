@@ -190,6 +190,21 @@ pub fn jj_push(workspace_path: String) -> Result<String, String> {
     jj::jj_push(&workspace_path).map_err(|e| e.to_string())
 }
 
+/// Fetch remote branches using jj git fetch (without rebasing)
+#[tauri::command]
+pub fn jj_git_fetch(repo_path: String) -> Result<String, String> {
+    jj::jj_git_fetch(&repo_path).map_err(|e| e.to_string())
+}
+
+/// Fetch remote branches in background (fire-and-forget)
+#[tauri::command]
+pub fn jj_git_fetch_background(repo_path: String) -> Result<(), String> {
+    std::thread::spawn(move || {
+        let _ = jj::jj_git_fetch(&repo_path);
+    });
+    Ok(())
+}
+
 /// Pull changes from remote using jj git fetch + rebase
 #[tauri::command]
 pub fn jj_pull(workspace_path: String) -> Result<String, String> {
@@ -232,4 +247,19 @@ pub fn jj_create_merge(
 ) -> Result<jj::JjMergeResult, String> {
     jj::jj_create_merge_commit(&workspace_path, &target_branch, &message)
         .map_err(|e| e.to_string())
+}
+
+/// Check if a branch exists locally and/or remotely
+#[tauri::command]
+pub fn jj_check_branch_exists(
+    repo_path: String,
+    branch_name: String,
+) -> Result<jj::BranchStatus, String> {
+    jj::check_branch_exists(&repo_path, &branch_name).map_err(|e| e.to_string())
+}
+
+/// Get list of branches in the repository
+#[tauri::command]
+pub fn jj_get_branches(repo_path: String) -> Result<Vec<jj::JjBranch>, String> {
+    jj::get_branches(&repo_path).map_err(|e| e.to_string())
 }

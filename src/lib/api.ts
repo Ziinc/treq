@@ -311,8 +311,27 @@ export const jjGetBranches = (repo_path: string): Promise<JjBranch[]> =>
 export const jjPush = (workspace_path: string): Promise<string> =>
   invoke("jj_push", { workspacePath: workspace_path });
 
+export const jjGitFetch = (repo_path: string): Promise<string> =>
+  invoke("jj_git_fetch", { repoPath: repo_path });
+
+export const jjGitFetchBackground = (repo_path: string): Promise<void> =>
+  invoke("jj_git_fetch_background", { repoPath: repo_path });
+
 export const jjPull = (workspace_path: string): Promise<string> =>
   invoke("jj_pull", { workspacePath: workspace_path });
+
+export interface BranchStatus {
+  local_exists: boolean;
+  remote_exists: boolean;
+  remote_name?: string;  // The remote name (e.g., "origin") if remote exists
+  remote_ref?: string;   // Full remote ref (e.g., "origin/branch") if remote exists
+}
+
+export const checkBranchExists = (
+  repo_path: string,
+  branch_name: string
+): Promise<BranchStatus> =>
+  invoke("jj_check_branch_exists", { repoPath: repo_path, branchName: branch_name });
 
 export const jjGetLog = (
   workspacePath: string,

@@ -7,7 +7,6 @@ import {
   Home,
   Search,
   GitBranch,
-  Cloud,
   Trash2,
   AlertTriangle,
   Copy,
@@ -42,7 +41,6 @@ interface WorkspaceSidebarProps {
   onBulkDelete?: () => void;
   onDeleteWorkspace?: (workspace: Workspace) => void;
   onCreateWorkspace?: () => void;
-  onCreateWorkspaceFromRemote?: () => void;
   openSettings?: (tab?: string) => void;
   navigateToDashboard?: () => void;
   onOpenCommandPalette?: () => void;
@@ -111,7 +109,6 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
     onBulkDelete,
     onDeleteWorkspace,
     onCreateWorkspace,
-    onCreateWorkspaceFromRemote,
     openSettings,
     navigateToDashboard: _navigateToDashboard,
     onOpenCommandPalette,
@@ -325,42 +322,22 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                 </button>
               ) : (
                 onCreateWorkspace && (
-                  <div className="flex gap-1 w-full">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          onClick={onCreateWorkspace}
-                          className="flex items-center justify-center gap-1 flex-1 px-2 py-1.5 text-muted-foreground hover:bg-muted rounded-md transition-colors"
-                          aria-label="Create new workspace"
-                        >
-                          <Plus className="w-3 h-3" />
-                          <span className="truncate">Workspace</span>
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom">
-                        Create new workspace
-                      </TooltipContent>
-                    </Tooltip>
-                    {onCreateWorkspaceFromRemote && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            onClick={onCreateWorkspaceFromRemote}
-                            className="flex items-center justify-center gap-1 flex-1 px-2 py-1.5 text-muted-foreground hover:bg-muted rounded-md transition-colors"
-                            aria-label="Create from remote branch"
-                          >
-                            <Cloud className="w-3 h-3" />
-                            <span className="truncate">Remote</span>
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">
-                          Create from remote branch
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                  </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={onCreateWorkspace}
+                        className="flex items-center justify-center gap-1 w-full px-2 py-1.5 text-muted-foreground hover:bg-muted rounded-md transition-colors"
+                        aria-label="Create new workspace"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span className="truncate">Workspace</span>
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      Create new workspace
+                    </TooltipContent>
+                  </Tooltip>
                 )
               )}
             </div>
