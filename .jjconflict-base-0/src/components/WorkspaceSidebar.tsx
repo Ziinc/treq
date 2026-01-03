@@ -1,6 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, memo } from "react";
+import { useCallback, memo, useMemo } from "react";
 import { Workspace, getWorkspaces } from "../lib/api";
+import {
+  buildWorkspaceTree,
+  flattenWorkspaceTree,
+} from "../lib/workspace-tree";
 import {
   Plus,
   Settings,
@@ -121,6 +125,12 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
       enabled: !!repoPath,
     });
 
+    // Build hierarchical tree and flatten for rendering
+    const flattenedNodes = useMemo(() => {
+      const tree = buildWorkspaceTree(workspaces);
+      return flattenWorkspaceTree(tree);
+    }, [workspaces]);
+
     const getWorkspaceTitle = useCallback((workspace: Workspace) => {
       return getWorkspaceTitleFromUtils(workspace);
     }, []);
@@ -232,81 +242,90 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 
             {/* Workspaces section */}
             <div className="space-y-1">
-              {workspaces.map((workspace) => (
-                <ContextMenu key={workspace.id}>
-                  <Tooltip>
-                    <ContextMenuTrigger asChild>
-                      <TooltipTrigger asChild>
-                        <div
-                          className={`relative flex items-center text-sm tracking-wide px-2 py-1 rounded-md transition-colors cursor-pointer ${
-                            selectedWorkspaceIds?.has(workspace.id)
-                              ? "bg-primary/20"
-                              : selectedWorkspaceId === workspace.id
-                                ? "bg-primary/20"
-                                : "hover:bg-muted/50"
-                          }`}
-                          onClick={(e) =>
-                            onWorkspaceMultiSelect
-                              ? onWorkspaceMultiSelect(workspace, e)
-                              : onWorkspaceClick?.(workspace)
-                          }
-                        >
-                          <GitBranch
-                            className={`w-3 h-3 mr-1 shrink-0 ${
-                              selectedWorkspaceIds?.has(workspace.id) ||
-                              selectedWorkspaceId === workspace.id
-                                ? "text-primary"
-                                : "text-muted-foreground"
+              {flattenedNodes.map((node) => {
+                const workspace = node.workspace;
+                const isSelected =
+                  selectedWorkspaceIds?.has(workspace.id) ||
+                  selectedWorkspaceId === workspace.id;
+                const indentStyle = { paddingLeft: `${8 + node.depth * 16}px` };
+
+                return (
+                  <ContextMenu key={workspace.id}>
+                    <Tooltip>
+                      <ContextMenuTrigger asChild>
+                        <TooltipTrigger asChild>
+                          <div
+                            style={indentStyle}
+                            className={`relative flex items-center text-sm tracking-wide py-1 pr-2 rounded-md transition-colors cursor-pointer ${
+                              isSelected ? "bg-primary/20" : "hover:bg-muted/50"
                             }`}
-                          />
-                          <span
-                            className={`flex-1 min-w-0 truncate font-mono ${
-                              selectedWorkspaceIds?.has(workspace.id) ||
-                              selectedWorkspaceId === workspace.id
-                                ? "text-primary font-medium"
-                                : "text-muted-foreground"
-                            }`}
+                            onClick={(e) =>
+                              onWorkspaceMultiSelect
+                                ? onWorkspaceMultiSelect(workspace, e)
+                                : onWorkspaceClick?.(workspace)
+                            }
                           >
-                            {getWorkspaceTitle(workspace)}
-                          </span>
-                          {workspace.has_conflicts && (
-                            <AlertTriangle className="w-3 h-3 text-destructive shrink-0" />
-                          )}
-                          <StatusPill path={workspace.workspace_path} />
+                            {node.depth === 0 ? (
+                              <GitBranch
+                                className={`w-3 h-3 mr-1 shrink-0 ${
+                                  isSelected ? "text-primary" : "text-muted-foreground"
+                                }`}
+                              />
+                            ) : (
+                              <span
+                                className={`text-[10px] mr-1 font-mono leading-none ${
+                                  isSelected ? "text-primary" : "text-muted-foreground"
+                                }`}
+                              >
+                                |\_
+                              </span>
+                            )}
+                            <span
+                              className={`flex-1 min-w-0 truncate font-mono ${
+                                isSelected ? "text-primary font-medium" : "text-muted-foreground"
+                              }`}
+                            >
+                              {getWorkspaceTitle(workspace)}
+                            </span>
+                            {workspace.has_conflicts && (
+                              <AlertTriangle className="w-3 h-3 text-destructive shrink-0" />
+                            )}
+                            <StatusPill path={workspace.workspace_path} />
+                          </div>
+                        </TooltipTrigger>
+                      </ContextMenuTrigger>
+                      <TooltipContent side="right" className="font-mono">
+                        <div className="flex items-center gap-1.5">
+                          <GitBranch className="w-3 h-3" />
+                          <span>{getWorkspaceTitle(workspace)}</span>
                         </div>
-                      </TooltipTrigger>
-                    </ContextMenuTrigger>
-                    <TooltipContent side="right" className="font-mono">
-                      <div className="flex items-center gap-1.5">
-                        <GitBranch className="w-3 h-3" />
-                        <span>{getWorkspaceTitle(workspace)}</span>
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                  <ContextMenuContent>
-                    <PathContextMenuItems
-                      relativePath={
-                        repoPath && workspace.workspace_path.startsWith(repoPath)
-                          ? workspace.workspace_path.slice(repoPath.length + 1)
-                          : workspace.workspace_path
-                      }
-                      fullPath={workspace.workspace_path}
-                      additionalItems={
-                        <>
-                          <ContextMenuSeparator />
-                          <ContextMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={() => onDeleteWorkspace?.(workspace)}
-                          >
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Delete Workspace
-                          </ContextMenuItem>
-                        </>
-                      }
-                    />
-                  </ContextMenuContent>
-                </ContextMenu>
-              ))}
+                      </TooltipContent>
+                    </Tooltip>
+                    <ContextMenuContent>
+                      <PathContextMenuItems
+                        relativePath={
+                          repoPath && workspace.workspace_path.startsWith(repoPath)
+                            ? workspace.workspace_path.slice(repoPath.length + 1)
+                            : workspace.workspace_path
+                        }
+                        fullPath={workspace.workspace_path}
+                        additionalItems={
+                          <>
+                            <ContextMenuSeparator />
+                            <ContextMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => onDeleteWorkspace?.(workspace)}
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Delete Workspace
+                            </ContextMenuItem>
+                          </>
+                        }
+                      />
+                    </ContextMenuContent>
+                  </ContextMenu>
+                );
+              })}
 
               {/* Show delete button when workspaces are selected, otherwise show create buttons */}
               {selectedWorkspaceIds && selectedWorkspaceIds.size > 0 ? (
