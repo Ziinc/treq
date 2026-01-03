@@ -19,7 +19,14 @@ import {
   checkBranchExists,
   jjGitFetchBackground,
   type BranchStatus,
+  jjGetBranches,
+  setWorkspaceTargetBranch,
+  getWorkspaces,
+  Workspace,
 } from "../lib/api";
+import { TargetBranchSelector } from "./TargetBranchSelector";
+import type { BranchListItem } from "./TargetBranchSelector";
+import { getValidTargets } from "../lib/workspace-tree";
 
 interface CreateWorkspaceDialogProps {
   open: boolean;
@@ -46,6 +53,10 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
     null
   );
   const [isCheckingBranch, setIsCheckingBranch] = useState(false);
+  const [targetBranch, setTargetBranch] = useState<string | null>(null);
+  const [availableBranches, setAvailableBranches] = useState<BranchListItem[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const { addToast } = useToast();
   const checkBranchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -69,6 +80,7 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
       setBranchName("");
       setIsEditingBranch(false);
       setError("");
+      setTargetBranch(null);
 
       // Fetch remote branches when dialog opens
       if (repoPath) {
@@ -80,6 +92,38 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
           // Don't show error to user - fetch failure shouldn't block dialog
         });
       }
+    }
+  }, [open, repoPath]);
+
+  // Load workspaces and branches when dialog opens
+  useEffect(() => {
+    if (open && repoPath) {
+      // Load workspaces
+      getWorkspaces(repoPath)
+        .then(setWorkspaces)
+        .catch((err) => {
+          console.error("Failed to load workspaces:", err);
+        });
+
+      // Load available branches
+      setBranchesLoading(true);
+      jjGetBranches(repoPath)
+        .then((branches) => {
+          setAvailableBranches(
+            branches.map((b) => ({
+              name: b.name,
+              full_name: b.name,
+              is_current: b.is_current,
+            }))
+          );
+        })
+        .catch((err) => {
+          console.error("Failed to load branches:", err);
+          setAvailableBranches([]);
+        })
+        .finally(() => {
+          setBranchesLoading(false);
+        });
     }
   }, [open, repoPath]);
 
@@ -174,9 +218,50 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
         branchPattern,
         branchStatus,
         repoPath,
+        targetBranch,
       });
 
-      // Prepare metadata (only include intent if provided)
+      // Step 1: If target branch selected, check if workspace exists for it
+      let targetWorkspacePath: string | undefined;
+      if (targetBranch) {
+        const existingTarget = workspaces.find(
+          (w) => w.branch_name === targetBranch
+        );
+
+        if (!existingTarget) {
+          console.log(
+            "[CreateWorkspaceDialog] Auto-creating workspace for target branch:",
+            targetBranch
+          );
+          // Auto-create workspace for target branch
+          const targetWorkspaceId = await createWorkspace(
+            repoPath,
+            targetBranch,
+            false, // Don't create new branch - it should already exist
+            undefined,
+            JSON.stringify({ intent: `Workspace for ${targetBranch}` })
+          );
+
+          // Fetch the created workspace to get its path
+          const updatedWorkspaces = await getWorkspaces(repoPath);
+          const createdTarget = updatedWorkspaces.find(
+            (w) => w.id === targetWorkspaceId
+          );
+          if (createdTarget) {
+            targetWorkspacePath = createdTarget.workspace_path;
+          }
+
+          addToast({
+            title: "Target workspace created",
+            description: `Created workspace for ${targetBranch}`,
+            type: "success",
+          });
+        } else {
+          targetWorkspacePath = existingTarget.workspace_path;
+        }
+      }
+
+      // Step 2: Prepare metadata (only include intent if provided)
       const metadata = intent.trim()
         ? JSON.stringify({ intent: intent.trim() })
         : JSON.stringify({});
@@ -199,7 +284,7 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
       }
       // else: new branch, use existing behavior
 
-      // Create workspace (jj + database) in single call
+      // Step 3: Create workspace (jj + database) in single call
       const workspaceId = await createWorkspace(
         repoPath,
         branchName,
@@ -213,6 +298,28 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
         workspaceId
       );
 
+      // Step 4: Set target branch if one was selected
+      if (targetBranch && targetWorkspacePath) {
+        // Get the created workspace's path
+        const updatedWorkspaces = await getWorkspaces(repoPath);
+        const createdWorkspace = updatedWorkspaces.find(
+          (w) => w.id === workspaceId
+        );
+
+        if (createdWorkspace) {
+          console.log(
+            "[CreateWorkspaceDialog] Setting target branch:",
+            targetBranch
+          );
+          await setWorkspaceTargetBranch(
+            repoPath,
+            createdWorkspace.workspace_path,
+            workspaceId,
+            targetBranch
+          );
+        }
+      }
+
       addToast({
         title: "Workspace created successfully",
         description: `Created workspace for branch ${branchName}`,
@@ -223,6 +330,7 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
       setIntent("");
       setBranchName("");
       setIsEditingBranch(false);
+      setTargetBranch(null);
 
       // Call success callback with workspace ID
       onSuccess(workspaceId);
@@ -325,7 +433,33 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
             )}
           </div>
 
-          {error && <div className="text-sm text-destructive">{error}</div>}
+          <div className="grid gap-2">
+            <Label>Target Branch (optional)</Label>
+            <TargetBranchSelector
+              branches={(() => {
+                // Filter out branches that would create circular references
+                if (!branchName) return availableBranches;
+
+                const validTargets = getValidTargets(workspaces, branchName);
+                return availableBranches.filter((b) =>
+                  validTargets.includes(b.name)
+                );
+              })()}
+              loading={branchesLoading}
+              targetBranch={targetBranch}
+              onSelect={setTargetBranch}
+              disabled={loading}
+            />
+            <p className="text-sm text-muted-foreground">
+              Select a target branch for this workspace to stack on
+            </p>
+          </div>
+
+          {error && (
+            <div className="text-sm text-destructive">
+              {error}
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-2">
