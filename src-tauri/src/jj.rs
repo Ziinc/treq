@@ -7,6 +7,7 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::binary_paths;
+use crate::local_db;
 
 /// Helper function to create Command for a binary using cached path
 fn command_for(binary: &str) -> Command {
@@ -436,37 +437,6 @@ pub fn get_workspace_branch(workspace_path: &str) -> Result<String, JjError> {
     }
 }
 
-/// Get the first local bookmark name from jj (used for workspaces in detached HEAD)
-fn get_branch_from_jj_bookmark(workspace_path: &str) -> Result<String, JjError> {
-    let output = command_for("jj")
-        .current_dir(workspace_path)
-        .args(["bookmark", "list", "--no-pager"])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
-
-    if !output.status.success() {
-        return Err(JjError::IoError(
-            String::from_utf8_lossy(&output.stderr).to_string(),
-        ));
-    }
-
-    let bookmarks = String::from_utf8_lossy(&output.stdout);
-    for line in bookmarks.lines() {
-        let line = line.trim();
-        // Skip empty lines and remote tracking bookmarks (contain @)
-        if line.is_empty() || line.contains('@') {
-            continue;
-        }
-        if let Some(name) = line.split(':').next() {
-            let name = name.trim();
-            if !name.is_empty() {
-                return Ok(name.to_string());
-            }
-        }
-    }
-
-    Err(JjError::IoError("No local bookmark found".to_string()))
-}
 
 /// Remove a workspace (jj workspace + files)
 pub fn remove_workspace(repo_path: &str, workspace_path: &str) -> Result<(), JjError> {
@@ -850,12 +820,15 @@ pub fn derive_repo_path_from_workspace(workspace_path: &str) -> Option<String> {
 
 /// Commit with message and create new working copy
 pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError> {
-    let is_workspace = derive_repo_path_from_workspace(workspace_path).is_some();
+    let repo_path = derive_repo_path_from_workspace(workspace_path);
 
     // Get branch name - different logic for workspaces vs main repo
-    let branch = if is_workspace {
-        // For workspaces: get from jj bookmark (detached HEAD is expected)
-        get_branch_from_jj_bookmark(workspace_path)?
+    let branch = if let Some(ref rp) = repo_path {
+        // For workspaces: get branch_name from the workspace record in db
+        let workspace = local_db::get_workspace_by_path(rp, workspace_path)
+            .map_err(|e| JjError::IoError(format!("Failed to query workspace: {}", e)))?
+            .ok_or_else(|| JjError::WorkspaceNotFound(workspace_path.to_string()))?;
+        workspace.branch_name
     } else {
         // For main repo: require git to be on a branch
         let git_branch = get_workspace_branch(workspace_path).map_err(|e| {
@@ -892,7 +865,7 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
         .map_err(|e| JjError::IoError(format!("Failed to advance bookmark '{}': {}", branch, e)))?;
 
     // Only checkout branch in git for main repo (not workspaces)
-    if !is_workspace {
+    if repo_path.is_none() {
         let checkout = command_for("git")
             .current_dir(workspace_path)
             .args(["checkout", &branch])
@@ -912,11 +885,15 @@ pub fn jj_split(
     message: &str,
     file_paths: Vec<String>,
 ) -> Result<String, JjError> {
-    let is_workspace = derive_repo_path_from_workspace(workspace_path).is_some();
+    let repo_path = derive_repo_path_from_workspace(workspace_path);
 
     // Get branch name - different logic for workspaces vs main repo
-    let branch = if is_workspace {
-        get_branch_from_jj_bookmark(workspace_path)?
+    let branch = if let Some(ref rp) = repo_path {
+        // For workspaces: get branch_name from the workspace record in db
+        let workspace = local_db::get_workspace_by_path(rp, workspace_path)
+            .map_err(|e| JjError::IoError(format!("Failed to query workspace: {}", e)))?
+            .ok_or_else(|| JjError::WorkspaceNotFound(workspace_path.to_string()))?;
+        workspace.branch_name
     } else {
         let git_branch = get_workspace_branch(workspace_path).map_err(|e| {
             JjError::IoError(format!(
@@ -955,7 +932,7 @@ pub fn jj_split(
         .map_err(|e| JjError::IoError(format!("Failed to advance bookmark '{}': {}", branch, e)))?;
 
     // Only checkout branch in git for main repo
-    if !is_workspace {
+    if repo_path.is_none() {
         let checkout = command_for("git")
             .current_dir(workspace_path)
             .args(["checkout", &branch])
