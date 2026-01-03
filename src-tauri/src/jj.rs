@@ -318,18 +318,28 @@ pub fn create_workspace(
     jj_cmd.current_dir(repo_path)
         .args(["workspace", "add", &workspace_path_str]);
 
-    // Determine revision to start from
-    let is_remote_source = if !new_branch {
+    // Determine revision to start from and extract remote name if applicable
+    // Convert git format (origin/branch) to jj format (branch@origin)
+    let remote_name = if !new_branch {
         // Existing bookmark: point to that bookmark's revision
         jj_cmd.args(["--revision", branch_name]);
-        false
+        None
     } else if let Some(source) = source_branch {
-        // New branch with source: start from source revision
-        jj_cmd.args(["--revision", source]);
-        // Check if source is a remote ref (contains @origin or similar)
-        source.contains("@origin") || source.contains("@")
+        // Check if source is a git remote ref format (e.g., "origin/branch")
+        if let Some(slash_pos) = source.find('/') {
+            let remote = &source[..slash_pos];
+            let remote_branch = &source[slash_pos + 1..];
+            // Convert to jj format: branch@remote
+            let jj_ref = format!("{}@{}", remote_branch, remote);
+            jj_cmd.args(["--revision", &jj_ref]);
+            Some(remote.to_string())
+        } else {
+            // Not a remote ref, use as-is (local branch or commit)
+            jj_cmd.args(["--revision", source]);
+            None
+        }
     } else {
-        false
+        None
     };
 
     let output = jj_cmd.output()
@@ -341,26 +351,18 @@ pub fn create_workspace(
         ));
     }
 
-    // If creating from a remote source, create a new working copy change on top
-    // to avoid trying to set bookmark on immutable commit
-    if is_remote_source {
-        let new_output = command_for("jj")
-            .current_dir(&workspace_path_str)
-            .args(["new"])
-            .output()
-            .map_err(|e| JjError::GitWorkspaceError(format!("Failed to execute jj new: {}", e)))?;
-
-        if !new_output.status.success() {
-            return Err(JjError::GitWorkspaceError(
-                format!("Failed to create new change: {}", String::from_utf8_lossy(&new_output.stderr))
-            ));
-        }
-    }
-
     // Create/set the bookmark on the new workspace's working copy
     if let Err(e) = jj_set_bookmark(&workspace_path_str, branch_name, "@") {
         eprintln!("Warning: Failed to set bookmark '{}': {}", branch_name, e);
         // Don't fail workspace creation for bookmark errors
+    }
+
+    // Track the remote bookmark if this workspace was created from a remote branch
+    if let Some(remote) = remote_name {
+        if let Err(e) = jj_bookmark_track(&workspace_path_str, branch_name, &remote) {
+            eprintln!("Warning: Failed to track bookmark '{}@{}': {}", branch_name, remote, e);
+            // Don't fail workspace creation for tracking errors
+        }
     }
 
     Ok(sanitized_name)
@@ -789,6 +791,29 @@ pub fn jj_set_bookmark(
     let output = command_for("jj")
         .current_dir(workspace_path)
         .args(["bookmark", "set", bookmark_name, "-r", revision])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !output.status.success() {
+        return Err(JjError::IoError(
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+/// Track a remote bookmark
+/// Uses: jj bookmark track <name>@<remote>
+pub fn jj_bookmark_track(
+    workspace_path: &str,
+    bookmark_name: &str,
+    remote_name: &str,
+) -> Result<(), JjError> {
+    let tracking_ref = format!("{}@{}", bookmark_name, remote_name);
+    let output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["bookmark", "track", &tracking_ref])
         .output()
         .map_err(|e| JjError::IoError(e.to_string()))?;
 
@@ -2020,5 +2045,176 @@ mod tests {
         let status_empty = "";
         let conflicts = parse_conflicted_files(status_empty).unwrap();
         assert_eq!(conflicts.len(), 0);
+    }
+
+    #[test]
+    fn test_workspace_from_remote_tracks_bookmark() {
+        // Test that creating a workspace from a remote branch
+        // automatically tracks the remote bookmark
+
+        let temp_dir = TempDir::new().unwrap();
+        let origin_repo = temp_dir.path().join("origin");
+        let local_repo = temp_dir.path().join("local");
+
+        // Create origin repository
+        fs::create_dir_all(&origin_repo).unwrap();
+
+        // Initialize git in origin
+        let git_init = command_for("git")
+            .current_dir(&origin_repo)
+            .args(["init", "--initial-branch=main"])
+            .output();
+
+        if git_init.is_err() {
+            eprintln!("Skipping test: git not available");
+            return;
+        }
+
+        // Configure git in origin
+        command_for("git")
+            .current_dir(&origin_repo)
+            .args(["config", "user.name", "Test User"])
+            .output()
+            .unwrap();
+        command_for("git")
+            .current_dir(&origin_repo)
+            .args(["config", "user.email", "test@example.com"])
+            .output()
+            .unwrap();
+
+        // Create initial commit in origin
+        let readme = origin_repo.join("README.md");
+        fs::write(&readme, "# Origin Repo").unwrap();
+        command_for("git")
+            .current_dir(&origin_repo)
+            .args(["add", "."])
+            .output()
+            .unwrap();
+        command_for("git")
+            .current_dir(&origin_repo)
+            .args(["commit", "-m", "Initial commit"])
+            .output()
+            .unwrap();
+
+        // Create a feature branch in origin
+        command_for("git")
+            .current_dir(&origin_repo)
+            .args(["checkout", "-b", "feature-branch"])
+            .output()
+            .unwrap();
+        let feature_file = origin_repo.join("feature.txt");
+        fs::write(&feature_file, "feature content").unwrap();
+        command_for("git")
+            .current_dir(&origin_repo)
+            .args(["add", "."])
+            .output()
+            .unwrap();
+        command_for("git")
+            .current_dir(&origin_repo)
+            .args(["commit", "-m", "Add feature"])
+            .output()
+            .unwrap();
+
+        // Clone to local repository
+        let clone_result = command_for("git")
+            .current_dir(temp_dir.path())
+            .args(["clone", origin_repo.to_str().unwrap(), local_repo.to_str().unwrap()])
+            .output()
+            .unwrap();
+
+        if !clone_result.status.success() {
+            eprintln!("Skipping test: git clone failed");
+            return;
+        }
+
+        let local_repo_str = local_repo.to_str().unwrap();
+
+        // Initialize jj in the local repo
+        let jj_init = command_for("jj")
+            .current_dir(&local_repo)
+            .args(["git", "init", "--colocate"])
+            .output();
+
+        if jj_init.is_err() {
+            eprintln!("Skipping test: jj not available");
+            return;
+        }
+
+        let jj_init_result = jj_init.unwrap();
+        if !jj_init_result.status.success() {
+            eprintln!("Skipping test: jj init failed: {}",
+                String::from_utf8_lossy(&jj_init_result.stderr));
+            return;
+        }
+
+        // Fetch remote branches
+        let fetch_result = jj_git_fetch(local_repo_str);
+        if fetch_result.is_err() {
+            eprintln!("Skipping test: jj git fetch failed: {:?}", fetch_result);
+            return;
+        }
+
+        eprintln!("✓ Repository setup complete");
+
+        // Create .treq/workspaces directory
+        fs::create_dir_all(local_repo.join(".treq/workspaces")).unwrap();
+
+        // Create workspace from remote branch
+        // Pass in git format (origin/branch) as the frontend would
+        let workspace_result = create_workspace(
+            local_repo_str,
+            "feature-workspace",
+            "feature-branch",
+            true,  // new_branch
+            Some("origin/feature-branch"),  // source from remote in git format
+            None,
+        );
+
+        if workspace_result.is_err() {
+            eprintln!("Workspace creation failed: {:?}", workspace_result);
+        }
+
+        assert!(
+            workspace_result.is_ok(),
+            "Workspace creation should succeed, got error: {:?}",
+            workspace_result
+        );
+
+        let workspace_name = workspace_result.unwrap();
+        let workspace_path = local_repo.join(".treq/workspaces").join(&workspace_name);
+        let workspace_path_str = workspace_path.to_str().unwrap();
+
+        eprintln!("✓ Workspace created at {}", workspace_path_str);
+
+        // Check that the bookmark is tracked
+        // Run: jj bookmark list in the workspace
+        let bookmark_list = command_for("jj")
+            .current_dir(&workspace_path)
+            .args(["bookmark", "list"])
+            .output()
+            .unwrap();
+
+        let bookmark_output = String::from_utf8_lossy(&bookmark_list.stdout);
+        eprintln!("Bookmark list output:\n{}", bookmark_output);
+
+        // The output should show that feature-branch is tracking origin
+        // Expected format: "feature-branch: <hash>" with tracking info
+        assert!(
+            bookmark_output.contains("feature-branch"),
+            "Bookmark 'feature-branch' should exist"
+        );
+
+        // Check for tracking status - jj shows tracked bookmarks with "@origin" or similar
+        // We need to verify the bookmark is associated with the remote
+        let has_tracking = bookmark_output.contains("@origin") ||
+                          bookmark_output.contains("tracked");
+
+        assert!(
+            has_tracking,
+            "Bookmark 'feature-branch' should be tracked from origin. Output was:\n{}",
+            bookmark_output
+        );
+
+        eprintln!("✓ Bookmark is properly tracked");
     }
 }
