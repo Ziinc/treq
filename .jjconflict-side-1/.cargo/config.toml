@@ -1,0 +1,53 @@
+# Cargo configuration for faster builds and optimized binaries
+# This file is automatically picked up by Cargo
+
+# =============================================================================
+# Parallel Compilation (Rust 1.83+)
+# =============================================================================
+# -C codegen-units: Controls parallel code generation (stable)
+# -Z threads: Parallelizes type checking, borrow checking, MIR optimization (nightly only)
+#
+# To use -Z threads, you need nightly Rust:
+#   rustup override set nightly
+# Or create a rust-toolchain.toml with: channel = "nightly"
+
+# Faster linker configuration for different platforms
+[target.x86_64-apple-darwin]
+rustflags = [
+    "-C", "link-arg=-fuse-ld=/usr/bin/ld",
+    "-C", "codegen-units=20",
+    "-Z", "threads=20",  # Parallel frontend (type check, borrow check, MIR opt)
+]
+
+[target.aarch64-apple-darwin]
+rustflags = [
+    "-C", "link-arg=-fuse-ld=/usr/bin/ld",
+    "-C", "codegen-units=20",
+    "-Z", "threads=20",  # Parallel frontend (type check, borrow check, MIR opt)
+]
+
+[target.x86_64-unknown-linux-gnu]
+rustflags = [
+    "-C", "link-arg=-fuse-ld=lld",
+    "-C", "codegen-units=20",
+    "-Z", "threads=20",
+]
+
+[target.x86_64-pc-windows-msvc]
+rustflags = [
+    "-C", "link-arg=/DEBUG:NONE",
+    "-C", "codegen-units=20",
+    "-Z", "threads=20",
+]
+
+# Build configuration
+[build]
+# Parallel compilation jobs (defaults to number of CPU cores)
+jobs = 20
+
+# Incremental compilation for faster rebuilds (enabled by default in dev)
+incremental = true
+
+# Use sccache for compilation caching
+rustc-wrapper = "sccache"
+
