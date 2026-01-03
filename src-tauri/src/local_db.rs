@@ -280,6 +280,32 @@ pub fn get_workspace_by_id(repo_path: &str, id: i64) -> Result<Option<Workspace>
     Ok(workspace)
 }
 
+pub fn get_workspace_by_path(repo_path: &str, workspace_path: &str) -> Result<Option<Workspace>, String> {
+    let conn = get_connection(repo_path)?;
+    let mut stmt = conn
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch, COALESCE(has_conflicts, 0) FROM workspaces WHERE workspace_path = ?1")
+        .map_err(|e| format!("Failed to prepare workspace query: {}", e))?;
+
+    let workspace = stmt
+        .query_row([workspace_path], |row| {
+            Ok(Workspace {
+                id: row.get(0)?,
+                repo_path: repo_path.to_string(),
+                workspace_name: row.get(1)?,
+                workspace_path: row.get(2)?,
+                branch_name: row.get(3)?,
+                created_at: row.get(4)?,
+                metadata: row.get(5)?,
+                target_branch: row.get(6)?,
+                has_conflicts: row.get::<_, i64>(7)? != 0,
+            })
+        })
+        .optional()
+        .map_err(|e| format!("Failed to query workspace: {}", e))?;
+
+    Ok(workspace)
+}
+
 pub fn add_workspace(
     repo_path: &str,
     workspace_name: String,
