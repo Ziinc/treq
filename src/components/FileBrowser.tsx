@@ -9,7 +9,7 @@ import {
   Check,
   Plus,
 } from "lucide-react";
-import { List } from "react-window";
+import { List, type ListImperativeAPI } from "react-window";
 import type { Workspace, DirectoryEntry } from "../lib/api";
 import {
   listDirectory,
@@ -231,7 +231,7 @@ interface FileContentViewProps {
   onCancelComment: () => void;
   scrollOffset: number;
   onScrollOffsetChange: (offset: number) => void;
-  listRef: React.RefObject<List>;
+  listRef: React.RefObject<ListImperativeAPI | null>;
   // Search props
   isSearchOpen: boolean;
   searchQuery: string;
@@ -383,7 +383,7 @@ const FileContentView = memo(function FileContentView({
       </TooltipProvider>
       <div className="flex-1 overflow-hidden relative">
         <List
-          ref={listRef}
+          listRef={listRef}
           style={{ height: window.innerHeight, width: "100%" }}
           className="px-4 pb-4"
           rowCount={lines.length}
@@ -659,7 +659,7 @@ export const FileBrowser = memo(function FileBrowser({
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const { addToast } = useToast();
   const { fontSize} = useTerminalSettings();
-  const listRef = useRef<List>(null);
+  const listRef = useRef<ListImperativeAPI | null>(null);
 
   // Ensure workspace is indexed on mount
   useEffect(() => {
@@ -735,7 +735,7 @@ export const FileBrowser = memo(function FileBrowser({
     // Scroll to the match
     const match = searchMatches[newIndex];
     if (match && listRef.current) {
-      listRef.current.scrollToItem(match.lineNumber, "center");
+      listRef.current.scrollToRow({ index: match.lineNumber, align: "center" });
     }
   }, [searchMatches, currentMatchIndex]);
 
@@ -747,7 +747,7 @@ export const FileBrowser = memo(function FileBrowser({
     // Scroll to the match
     const match = searchMatches[newIndex];
     if (match && listRef.current) {
-      listRef.current.scrollToItem(match.lineNumber, "center");
+      listRef.current.scrollToRow({ index: match.lineNumber, align: "center" });
     }
   }, [searchMatches, currentMatchIndex]);
 
