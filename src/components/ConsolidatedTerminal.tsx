@@ -13,6 +13,7 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { LigaturesAddon } from "@xterm/addon-ligatures";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { SearchAddon, ISearchOptions } from "@xterm/addon-search";
+import { ImageAddon } from "@xterm/addon-image";
 import {
   ptyCreateSession,
   ptyListen,
@@ -185,6 +186,9 @@ export const ConsolidatedTerminal = forwardRef<
       // Load LigaturesAddon after opening (requires DOM)
       xterm.loadAddon(new LigaturesAddon());
 
+      // Load ImageAddon for inline image rendering
+      xterm.loadAddon(new ImageAddon());
+
       // Load WebGL addon
       if (
         typeof window !== "undefined" &&
@@ -295,6 +299,33 @@ export const ConsolidatedTerminal = forwardRef<
       xterm.attachCustomKeyEventHandler(localHandleKeyEvent);
       xterm.onData(localHandleXtermData);
 
+      // Clipboard image paste handler
+      const handlePaste = (e: ClipboardEvent) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.type.startsWith("image/")) {
+            e.preventDefault();
+            const blob = item.getAsFile();
+            if (!blob) continue;
+
+            const reader = new FileReader();
+            reader.onload = () => {
+              const base64 = (reader.result as string).split(",")[1];
+              // iTerm2 inline image protocol: OSC 1337 ; File=inline=1:BASE64 BEL
+              const escapeSeq = `\x1b]1337;File=inline=1:${base64}\x07`;
+              xterm.write(escapeSeq);
+            };
+            reader.readAsDataURL(blob);
+            return; // Handle first image only
+          }
+        }
+      };
+
+      terminalRef.current?.addEventListener("paste", handlePaste);
+
       let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
 
       // Setup PTY
@@ -338,6 +369,8 @@ export const ConsolidatedTerminal = forwardRef<
           clearTimeout(idleTimeoutRef.current);
           idleTimeoutRef.current = null;
         }
+
+        terminalRef.current?.removeEventListener("paste", handlePaste);
 
         unlistenRef.current?.();
         unlistenRef.current = null;
@@ -464,6 +497,25 @@ export const ConsolidatedTerminal = forwardRef<
               "[&_.xterm-viewport::-webkit-scrollbar-thumb]:bg-border",
               "[&_.xterm-viewport::-webkit-scrollbar-thumb]:rounded"
             )}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "copy";
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              // Get file paths from the drop event
+              const files = Array.from(e.dataTransfer.files);
+              if (files.length > 0 && isPtyReadyRef.current) {
+                // In Tauri/Electron, files have a 'path' property
+                const paths = files
+                  .map((f: any) => f.path)
+                  .filter(Boolean)
+                  .join(" ");
+                if (paths) {
+                  ptyWrite(sessionId, paths).catch(console.error);
+                }
+              }
+            }}
           />
           {!isPtyReady && !terminalError && !skipLoadingState && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 text-sm text-muted-foreground z-10">
