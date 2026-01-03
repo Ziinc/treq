@@ -73,7 +73,7 @@ import {
   Search,
   Code2,
   GitCompareArrows,
-  FolderTree,
+  ChevronLeft,
 } from "lucide-react";
 import { TargetBranchSelector } from "./TargetBranchSelector";
 import { cn } from "../lib/utils";
@@ -139,6 +139,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 
   // Show overview tab by default for main repo, changes tab for workspaces
   const [activeTab, setActiveTab] = useState("overview");
+  const [showFileBrowserInCode, setShowFileBrowserInCode] = useState(false);
 
   // Files list expansion state
 
@@ -240,7 +241,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
       // Extract parent directory from file path
       const parentDir = initialSelectedFile.substring(0, initialSelectedFile.lastIndexOf('/'));
       setInitialExpandedDir(parentDir);
-      setActiveTab("files");
+      setShowFileBrowserInCode(true);
     }
   }, [initialSelectedFile]);
 
@@ -394,7 +395,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
         setInitialSelectedFileForBrowser(fullPath);
         setInitialExpandedDir(null);
       }
-      setActiveTab("files");
+      setShowFileBrowserInCode(true);
     },
     [workingDirectory]
   );
@@ -615,10 +616,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
               <GitCompareArrows className="w-4 h-4 mr-1.5" />
               Review
             </TabsTrigger>
-            <TabsTrigger value="files" className="inline-flex items-center">
-              <FolderTree className="w-4 h-4 mr-1.5" />
-              Files
-            </TabsTrigger>
           </TabsList>
         </Tabs>
         {(rebasing || refreshingFiles) && (
@@ -630,112 +627,136 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
       </div>
       <div className="flex-1 overflow-auto">
         {activeTab === "overview" ? (
-          <div className="flex h-full">
-            {/* LEFT: Files + README (4/5 width) */}
-            <div className="flex-[4] overflow-auto border-r border-border">
-              <div className="p-4 space-y-6">
-                {/* Conflicts Alert */}
-                {conflictedFiles.length > 0 && (
-                  <div
-                    role="alert"
-                    className="border border-destructive/30 rounded-md bg-destructive/5 p-4"
-                  >
-                    <div className="flex items-start gap-3">
-                      <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
-                      <div className="flex-1">
-                        <h3 className="font-medium text-destructive">
-                          {conflictedFiles.length} {conflictedFiles.length === 1 ? 'conflict' : 'conflicts'} detected
-                        </h3>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Some files have conflicts that need to be resolved
-                        </p>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setActiveTab("changes")}
-                        className="border-destructive/30 text-destructive hover:bg-destructive/10"
-                      >
-                        View conflicts
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                {/* File Search Input */}
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={onOpenFilePicker}
-                    className="flex items-center gap-3 px-4 py-2 border border-border rounded-lg bg-background hover:bg-muted/30 transition-colors text-left w-full max-w-xs"
-                  >
-                    <Search className="w-4 h-4 text-muted-foreground" />
-                    <span className="flex-1 text-sm text-muted-foreground">
-                      Go to file
-                    </span>
-                    <kbd className="px-2 py-1 bg-muted text-muted-foreground rounded text-xs font-mono">
-                      ⌘P
-                    </kbd>
-                  </button>
-                </div>
-                {/* File Listing */}
-                <div className="border rounded-lg divide-y divide-border">
-                  {displayedEntries.map((entry) => (
-                    <button
-                      key={entry.path}
-                      type="button"
-                      onClick={() => handleOverviewEntryClick(entry)}
-                      className="flex items-center gap-3 px-4 py-1 text-sm w-full hover:bg-muted/60 transition text-left"
-                    >
-                      {entry.is_directory ? (
-                        <Folder className="w-4 h-4 text-blue-500" />
-                      ) : (
-                        <File className="w-4 h-4 text-muted-foreground" />
-                      )}
-                      <span
-                        className="flex-1 font-mono"
-                        style={{ fontSize: `${fontSize}px` }}
-                      >
-                        {entry.name}
-                      </span>
-                      <StatusPip status={getEntryStatus(entry)} />
-                    </button>
-                  ))}
-                  {rootEntries.length === 0 && (
-                    <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                      No files found
-                    </div>
-                  )}
-                </div>
-
-                {/* README Section */}
-                <div className="border rounded-lg p-6">
-                  {readmeContent ? (
-                    <>
-                      <h2 className="text-lg font-semibold mb-4">README.md</h2>
-                      <div className="prose dark:prose-invert max-w-none prose-headings:font-semibold prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl prose-a:text-blue-500 prose-a:no-underline hover:prose-a:underline prose-strong:font-semibold prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-[''] prose-code:after:content-[''] prose-pre:bg-muted prose-pre:border prose-pre:border-border">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {readmeContent}
-                        </ReactMarkdown>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-muted-foreground text-sm text-center py-4">
-                      No README.md found
-                    </div>
-                  )}
-                </div>
+          showFileBrowserInCode ? (
+            <div className="flex flex-col h-full">
+              <div className="px-4 pt-3 pb-2 border-b border-border">
+                <button
+                  type="button"
+                  onClick={() => setShowFileBrowserInCode(false)}
+                  className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Back
+                </button>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <FileBrowser
+                  workspace={workspace}
+                  repoPath={effectiveRepoPath}
+                  initialSelectedFile={initialSelectedFileForBrowser}
+                  initialExpandedDir={initialExpandedDir}
+                  onCreateAgentWithComment={handleCreateAgentWithComment}
+                />
               </div>
             </div>
+          ) : (
+            <div className="flex h-full">
+              {/* LEFT: Files + README (4/5 width) */}
+              <div className="flex-[4] overflow-auto border-r border-border">
+                <div className="p-4 space-y-6">
+                  {/* Conflicts Alert */}
+                  {conflictedFiles.length > 0 && (
+                    <div
+                      role="alert"
+                      className="border border-destructive/30 rounded-md bg-destructive/5 p-4"
+                    >
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <h3 className="font-medium text-destructive">
+                            {conflictedFiles.length} {conflictedFiles.length === 1 ? 'conflict' : 'conflicts'} detected
+                          </h3>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Some files have conflicts that need to be resolved
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setActiveTab("changes")}
+                          className="border-destructive/30 text-destructive hover:bg-destructive/10"
+                        >
+                          View conflicts
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {/* File Search Input */}
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={onOpenFilePicker}
+                      className="flex items-center gap-3 px-4 py-2 border border-border rounded-lg bg-background hover:bg-muted/30 transition-colors text-left w-full max-w-xs"
+                    >
+                      <Search className="w-4 h-4 text-muted-foreground" />
+                      <span className="flex-1 text-sm text-muted-foreground">
+                        Go to file
+                      </span>
+                      <kbd className="px-2 py-1 bg-muted text-muted-foreground rounded text-xs font-mono">
+                        ⌘P
+                      </kbd>
+                    </button>
+                  </div>
+                  {/* File Listing */}
+                  <div className="border rounded-lg divide-y divide-border">
+                    {displayedEntries.map((entry) => (
+                      <button
+                        key={entry.path}
+                        type="button"
+                        onClick={() => handleOverviewEntryClick(entry)}
+                        className="flex items-center gap-3 px-4 py-1 text-sm w-full hover:bg-muted/60 transition text-left"
+                      >
+                        {entry.is_directory ? (
+                          <Folder className="w-4 h-4 text-blue-500" />
+                        ) : (
+                          <File className="w-4 h-4 text-muted-foreground" />
+                        )}
+                        <span
+                          className="flex-1 font-mono"
+                          style={{ fontSize: `${fontSize}px` }}
+                        >
+                          {entry.name}
+                        </span>
+                        <StatusPip status={getEntryStatus(entry)} />
+                      </button>
+                    ))}
+                    {rootEntries.length === 0 && (
+                      <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                        No files found
+                      </div>
+                    )}
+                  </div>
 
-            {/* RIGHT: Commit History (1/5 width) */}
-            <div className="flex-[1] bg-muted/20">
-              <LinearCommitHistory
-                workspacePath={workingDirectory}
-                targetBranch={targetBranch}
-              />
+                  {/* README Section */}
+                  <div className="border rounded-lg p-6">
+                    {readmeContent ? (
+                      <>
+                        <h2 className="text-lg font-semibold mb-4">README.md</h2>
+                        <div className="prose dark:prose-invert max-w-none prose-headings:font-semibold prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl prose-a:text-blue-500 prose-a:no-underline hover:prose-a:underline prose-strong:font-semibold prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-[''] prose-code:after:content-[''] prose-pre:bg-muted prose-pre:border prose-pre:border-border">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {readmeContent}
+                          </ReactMarkdown>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-muted-foreground text-sm text-center py-4">
+                        No README.md found
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT: Commit History (1/5 width) */}
+              <div className="flex-[1] bg-muted/20">
+                <LinearCommitHistory
+                  workspacePath={workingDirectory}
+                  targetBranch={targetBranch}
+                />
+              </div>
             </div>
-          </div>
-        ) : activeTab === "changes" ? (
+          )
+        ) : (
           <ChangesDiffViewer
             key={`changes-${workingDirectory}`}
             ref={changesDiffViewerRef}
@@ -746,14 +767,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
             initialSelectedFile={initialSelectedFile}
             conflictedFiles={conflictedFiles}
             onCreateAgentWithReview={handleCreateAgentWithReview}
-          />
-        ) : (
-          <FileBrowser
-            workspace={workspace}
-            repoPath={effectiveRepoPath}
-            initialSelectedFile={initialSelectedFileForBrowser}
-            initialExpandedDir={initialExpandedDir}
-            onCreateAgentWithComment={handleCreateAgentWithComment}
           />
         )}
       </div>
