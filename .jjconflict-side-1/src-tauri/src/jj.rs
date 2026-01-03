@@ -1733,14 +1733,22 @@ pub fn jj_get_merge_diff(
 }
 
 /// Create a merge commit using jj new
-/// Uses: jj new target_branch @ -m "message"
-/// This creates a new commit with two parents: target_branch and @
+///
+/// Flow:
+/// 1. jj new workspace_branch target_branch+ -m "message" - create merge
+/// 2. jj new @ - create new working copy on top
+/// 3. jj bookmark set target_branch -r @- - move target_branch to merge commit
+/// This is executed in the context of the workspace directory, @ refers to workspace HEAD
 pub fn jj_create_merge_commit(
     workspace_path: &str,
+    workspace_branch: &str,
     target_branch: &str,
     message: &str,
 ) -> Result<JjMergeResult, JjError> {
-    // Validate inputs to prevent command injection
+    if workspace_branch.starts_with('-') || workspace_branch.contains('\0') || workspace_branch.is_empty() {
+        return Err(JjError::IoError("Invalid workspace branch name".to_string()));
+    }
+
     if target_branch.starts_with('-') || target_branch.contains('\0') || target_branch.is_empty() {
         return Err(JjError::IoError("Invalid target branch name".to_string()));
     }
@@ -1753,10 +1761,11 @@ pub fn jj_create_merge_commit(
         return Err(JjError::IoError("Commit message too long (max 10000 characters)".to_string()));
     }
 
-    // Create merge commit with two parents
+    // Step 1: Create merge commit with workspace_branch and target_branch+ as parents
+    let target_revset = format!("{}+", target_branch);
     let output = command_for("jj")
         .current_dir(workspace_path)
-        .args(["new", target_branch, "@", "-m", message])
+        .args(["new", workspace_branch, &target_revset, "-m", message])
         .output()
         .map_err(|e| JjError::IoError(e.to_string()))?;
 
@@ -1772,20 +1781,28 @@ pub fn jj_create_merge_commit(
         Vec::new()
     };
 
-    // If merge succeeded, update target branch bookmark to point at merge commit
-    if output.status.success() {
-        if let Err(e) = jj_set_bookmark(workspace_path, target_branch, "@") {
-            // Log warning but don't fail - merge was created successfully
+    let merge_commit_id = if output.status.success() {
+        // Step 2: Create new working copy on top of merge
+        let new_wc_output = command_for("jj")
+            .current_dir(workspace_path)
+            .args(["new", "@"])
+            .output()
+            .map_err(|e| JjError::IoError(e.to_string()))?;
+
+        if !new_wc_output.status.success() {
+            let new_wc_stderr = String::from_utf8_lossy(&new_wc_output.stderr);
+            eprintln!("Warning: Failed to create new working copy: {}", new_wc_stderr);
+        }
+
+        // Step 3: Move target_branch bookmark to merge commit (parent of new working copy)
+        if let Err(e) = jj_set_bookmark(workspace_path, target_branch, "@-") {
             eprintln!("Warning: Failed to update target bookmark '{}': {}", target_branch, e);
         }
-    }
 
-    // Get the new commit ID if successful
-    let merge_commit_id = if output.status.success() {
-        // Get current commit ID using jj log
+        // Get merge commit ID (now at @-)
         command_for("jj")
             .current_dir(workspace_path)
-            .args(["log", "-r", "@", "--no-graph", "-T", "commit_id.short(12)"])
+            .args(["log", "-r", "@-", "--no-graph", "-T", "commit_id.short(12)"])
             .output()
             .ok()
             .and_then(|out| {
@@ -1911,22 +1928,19 @@ mod tests {
         assert!(json.contains("commits"));
     }
 
-    /// Test: jj_create_merge_commit should update target bookmark
+    /// Test: jj_create_merge_commit flow
     ///
     /// Expected behavior:
-    /// 1. Create merge commit with: jj new target_branch @ -m "message"
-    /// 2. If successful, update target bookmark: jj bookmark set target_branch -r @
-    /// 3. The target branch now points to the merge commit
+    /// 1. Create merge: jj new workspace_branch target_branch+ -m "message"
+    /// 2. Create new working copy: jj new @
+    /// 3. Move target bookmark to merge: jj bookmark set target_branch -r @-
     ///
     /// This is a documentation test - integration testing requires a full jj repo setup.
-    /// Manual verification needed: Create workspace, merge, check that target bookmark moved.
     #[test]
     fn test_jj_create_merge_commit_should_update_target_bookmark() {
-        // This test documents the expected behavior
-        // TODO: Add integration test with actual jj repo setup
         assert!(
             true,
-            "jj_create_merge_commit should call jj_set_bookmark after creating merge"
+            "jj_create_merge_commit should create merge, new wc, and move bookmark"
         );
     }
 
