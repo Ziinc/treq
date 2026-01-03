@@ -1,4 +1,4 @@
-# Treq - Coding Agent Orchestrator - test remote clone
+# Treq - Coding Agent Orchestrator - test 
 
 Treq transforms AI-generated code into local isolated pull requests.
 
