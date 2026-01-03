@@ -311,39 +311,29 @@ pub fn create_workspace(
         .join("workspaces")
         .join(&sanitized_name);
 
-    if workspace_dir.exists() {
-        return Err(JjError::WorkspaceExists(workspace_name.to_string()));
-    }
-
-    // Create the directory structure
-    if let Some(parent) = workspace_dir.parent() {
-        fs::create_dir_all(parent).map_err(|e| JjError::IoError(e.to_string()))?;
-    }
-
     let workspace_path_str = workspace_dir.to_string_lossy().to_string();
 
-    // Create git worktree first (gives each workspace isolated checkout)
-    let mut git_cmd = command_for("git");
-    git_cmd.current_dir(repo_path)
-        .arg("worktree")
-        .arg("add");
+    // Use jj workspace add for all cases (handles both new and existing bookmarks)
+    let mut jj_cmd = command_for("jj");
+    jj_cmd.current_dir(repo_path)
+        .args(["workspace", "add", &workspace_path_str]);
 
-    if new_branch {
-        git_cmd.arg("-b").arg(branch_name);
+    // Determine revision to start from
+    let is_remote_source = if !new_branch {
+        // Existing bookmark: point to that bookmark's revision
+        jj_cmd.args(["--revision", branch_name]);
+        false
+    } else if let Some(source) = source_branch {
+        // New branch with source: start from source revision
+        jj_cmd.args(["--revision", source]);
+        // Check if source is a remote ref (contains @origin or similar)
+        source.contains("@origin") || source.contains("@")
     } else {
-        git_cmd.arg("--no-track");
-    }
+        false
+    };
 
-    git_cmd.arg(&workspace_path_str);
-
-    if let Some(source) = source_branch {
-        git_cmd.arg(source);
-    } else if !new_branch {
-        git_cmd.arg(branch_name);
-    }
-
-    let output = git_cmd.output()
-        .map_err(|e| JjError::GitWorkspaceError(format!("Failed to execute git worktree: {}", e)))?;
+    let output = jj_cmd.output()
+        .map_err(|e| JjError::GitWorkspaceError(format!("Failed to execute jj workspace add: {}", e)))?;
 
     if !output.status.success() {
         return Err(JjError::GitWorkspaceError(
@@ -351,28 +341,25 @@ pub fn create_workspace(
         ));
     }
 
-    // Initialize jj for this workspace (colocated mode)
-    let settings = create_user_settings(repo_path)?;
-    let git_path = workspace_dir.join(".git");
+    // If creating from a remote source, create a new working copy change on top
+    // to avoid trying to set bookmark on immutable commit
+    if is_remote_source {
+        let new_output = command_for("jj")
+            .current_dir(&workspace_path_str)
+            .args(["new"])
+            .output()
+            .map_err(|e| JjError::GitWorkspaceError(format!("Failed to execute jj new: {}", e)))?;
 
-    let jj_result = Workspace::init_external_git(&settings, &workspace_dir, &git_path);
-
-    if let Err(e) = jj_result {
-        // Clean up: remove the git worktree we just created
-        let _ = command_for("git")
-            .current_dir(repo_path)
-            .args(&["worktree", "remove", "--force", &workspace_path_str])
-            .output();
-        let _ = fs::remove_dir_all(&workspace_dir);
-        return Err(JjError::InitFailed(format!(
-            "Failed to init jj workspace: {}",
-            e
-        )));
+        if !new_output.status.success() {
+            return Err(JjError::GitWorkspaceError(
+                format!("Failed to create new change: {}", String::from_utf8_lossy(&new_output.stderr))
+            ));
+        }
     }
 
-    // Create initial bookmark pointing at current working copy
+    // Create/set the bookmark on the new workspace's working copy
     if let Err(e) = jj_set_bookmark(&workspace_path_str, branch_name, "@") {
-        eprintln!("Warning: Failed to create initial bookmark '{}': {}", branch_name, e);
+        eprintln!("Warning: Failed to set bookmark '{}': {}", branch_name, e);
         // Don't fail workspace creation for bookmark errors
     }
 
@@ -479,23 +466,38 @@ fn get_branch_from_jj_bookmark(workspace_path: &str) -> Result<String, JjError> 
     Err(JjError::IoError("No local bookmark found".to_string()))
 }
 
-/// Remove a workspace (jj + git workspace + files)
+/// Remove a workspace (jj workspace + files)
 pub fn remove_workspace(repo_path: &str, workspace_path: &str) -> Result<(), JjError> {
     let workspace_dir = Path::new(workspace_path);
 
-    // If workspace doesn't exist, nothing to do - return success
-    if !workspace_dir.exists() {
-        return Ok(());
+    // Extract workspace name from path (last component)
+    let workspace_name = workspace_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+
+    // Always try to forget the jj workspace first
+    // This ensures jj stops tracking it even if directory is already gone
+    if !workspace_name.is_empty() {
+        let output = command_for("jj")
+            .current_dir(repo_path)
+            .args(&["workspace", "forget", workspace_name])
+            .output()
+            .map_err(|e| JjError::IoError(format!("Failed to execute jj workspace forget: {}", e)))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            // Only return error if it's not a "workspace not found" error
+            if !stderr.contains("No such workspace") {
+                return Err(JjError::IoError(
+                    format!("Failed to forget workspace: {}", stderr)
+                ));
+            }
+            // If workspace not found in jj, that's fine - continue with directory cleanup
+        }
     }
 
-    // Try to remove git workspace using git worktree command (best effort)
-    // Ignore errors from git worktree remove - we'll clean up the directory regardless
-    let _ = command_for("git")
-        .current_dir(repo_path)
-        .args(&["worktree", "remove", "--force", workspace_path])
-        .output();
-
-    // Always try to remove directory if it still exists
+    // Remove directory if it exists
     if workspace_dir.exists() {
         fs::remove_dir_all(workspace_dir).map_err(|e| JjError::IoError(e.to_string()))?;
     }
@@ -668,11 +670,11 @@ fn parse_git_diff_hunks(diff: &str) -> Result<Vec<JjDiffHunk>, JjError> {
             // Start new hunk
             current_hunk = Some((line.to_string(), Vec::new()));
         } else if let Some((_, ref mut lines)) = current_hunk {
-            // Skip diff metadata lines
-            if !line.starts_with("diff")
-                && !line.starts_with("index")
-                && !line.starts_with("---")
-                && !line.starts_with("+++")
+            // Skip diff metadata lines (be specific to avoid filtering conflict markers)
+            if !line.starts_with("diff --git")
+                && !line.starts_with("index ")
+                && !line.starts_with("--- ")
+                && !line.starts_with("+++ ")
             {
                 lines.push(line.to_string());
             }
@@ -1199,6 +1201,27 @@ pub fn jj_push(workspace_path: &str) -> Result<String, JjError> {
     Ok(format!("{}{}", stdout, stderr))
 }
 
+/// Fetch remote branches using jj git fetch (without rebasing)
+/// This updates remote tracking refs and makes remote branches available
+pub fn jj_git_fetch(repo_path: &str) -> Result<String, JjError> {
+    let output = command_for("jj")
+        .current_dir(repo_path)
+        .args(["git", "fetch"])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    // Note: jj git fetch may have warnings in stderr even on success
+    // So we only fail if the command itself failed
+    if !output.status.success() {
+        return Err(JjError::IoError(format!("{}{}", stdout, stderr)));
+    }
+
+    Ok(format!("{}{}", stdout, stderr))
+}
+
 /// Pull changes from remote using jj git fetch + rebase
 /// Fetches from origin and rebases current workspace onto tracking branch
 pub fn jj_pull(workspace_path: &str) -> Result<String, JjError> {
@@ -1249,6 +1272,115 @@ pub fn jj_pull(workspace_path: &str) -> Result<String, JjError> {
     }
 
     Ok(combined)
+}
+
+/// Branch status indicating whether a branch exists locally and/or remotely
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BranchStatus {
+    pub local_exists: bool,
+    pub remote_exists: bool,
+    pub remote_name: Option<String>,  // The remote name (e.g., "origin") if remote exists
+    pub remote_ref: Option<String>,   // Full remote ref (e.g., "origin/branch") if remote exists
+}
+
+/// Check if a branch exists locally and/or remotely
+/// Uses git rev-parse to check refs/heads/{branch} and refs/remotes/{remote}/{branch}
+/// Currently only checks 'origin' remote
+pub fn check_branch_exists(repo_path: &str, branch_name: &str) -> Result<BranchStatus, JjError> {
+    // Check local branch existence
+    let local_ref = format!("refs/heads/{}", branch_name);
+    let local_check = command_for("git")
+        .current_dir(repo_path)
+        .args(["rev-parse", "--verify", &local_ref])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    let local_exists = local_check.status.success();
+
+    // Check remote branch existence (origin)
+    // In the future, could check all remotes from `git remote` output
+    let remote_name = "origin";
+    let remote_ref = format!("refs/remotes/{}/{}", remote_name, branch_name);
+    let remote_check = command_for("git")
+        .current_dir(repo_path)
+        .args(["rev-parse", "--verify", &remote_ref])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    let remote_exists = remote_check.status.success();
+
+    let remote_ref_short = if remote_exists {
+        Some(format!("{}/{}", remote_name, branch_name))
+    } else {
+        None
+    };
+
+    Ok(BranchStatus {
+        local_exists,
+        remote_exists,
+        remote_name: if remote_exists { Some(remote_name.to_string()) } else { None },
+        remote_ref: remote_ref_short,
+    })
+}
+
+/// Information about a jj bookmark/branch
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct JjBranch {
+    pub name: String,
+    pub is_current: bool,
+}
+
+/// Get list of branches in the repository
+/// Uses jj bookmark list to get local bookmarks
+pub fn get_branches(repo_path: &str) -> Result<Vec<JjBranch>, JjError> {
+    let output = command_for("jj")
+        .current_dir(repo_path)
+        .args(["bookmark", "list"])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(JjError::IoError(format!(
+            "Failed to list branches: {}",
+            stderr
+        )));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut branches = Vec::new();
+
+    // Parse jj bookmark list output
+    // Format is typically: "branch_name: commit_id"
+    // or "branch_name (deleted)"
+    // Current bookmark might be marked with * or similar
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        // Check if this is the current bookmark (marked with *)
+        let is_current = line.starts_with('*');
+        let line = if is_current {
+            line.trim_start_matches('*').trim()
+        } else {
+            line
+        };
+
+        // Extract branch name (everything before the colon)
+        if let Some(colon_pos) = line.find(':') {
+            let branch_name = line[..colon_pos].trim().to_string();
+            if !branch_name.is_empty() {
+                branches.push(JjBranch {
+                    name: branch_name,
+                    is_current,
+                });
+            }
+        }
+    }
+
+    Ok(branches)
 }
 
 /// Get commit log from fork point to HEAD for a workspace

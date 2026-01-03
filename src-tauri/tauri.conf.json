@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Treq - Git Worktree Manager",
+        "title": "Treq - Coding Agent Manager",
         "width": 1400,
         "height": 900,
         "dragDropEnabled": true

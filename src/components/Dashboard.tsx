@@ -13,7 +13,6 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
-import { CreateWorkspaceFromRemoteDialog } from "./CreateWorkspaceFromRemoteDialog";
 import { CommandPalette } from "./CommandPalette";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -45,6 +44,7 @@ import {
   getSessions,
   setSessionModel,
   jjIsWorkspace,
+  jjGitFetch,
   checkAndRebaseWorkspaces,
   startFileWatcher,
   stopFileWatcher,
@@ -75,8 +75,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   const [repoPath, setRepoPath] = useState("");
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [showCreateFromRemoteDialog, setShowCreateFromRemoteDialog] =
-    useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
   const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(
     null
@@ -306,6 +304,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
       }
     };
     cleanup();
+  }, [repoPath]);
+
+  // Fetch remote branches on app startup when repo is loaded
+  useEffect(() => {
+    const fetchRemotes = async () => {
+      if (repoPath) {
+        try {
+          await jjGitFetch(repoPath);
+          console.log("[Dashboard] Fetched remote branches on startup");
+        } catch (error) {
+          console.error("[Dashboard] Failed to fetch remote branches:", error);
+          // Don't show error to user - fetch failure shouldn't block app
+        }
+      }
+    };
+    fetchRemotes();
   }, [repoPath]);
 
   // Rebuild workspaces from filesystem if database is empty
@@ -726,9 +740,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
           onBulkDelete={handleBulkDelete}
           onDeleteWorkspace={handleDelete}
           onCreateWorkspace={() => setShowCreateDialog(true)}
-          onCreateWorkspaceFromRemote={() =>
-            setShowCreateFromRemoteDialog(true)
-          }
           openSettings={openSettings}
           navigateToDashboard={handleReturnToDashboard}
           onOpenCommandPalette={() => setShowCommandPalette(true)}
@@ -889,26 +900,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
       <CreateWorkspaceDialog
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
-        repoPath={repoPath}
-        onSuccess={async (workspaceId) => {
-          // Invalidate and refetch workspaces
-          await queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
-          // Force refetch to get the latest data
-          const updatedWorkspaces = await queryClient.fetchQuery({
-            queryKey: ["workspaces", repoPath],
-            queryFn: () => getWorkspaces(repoPath),
-          });
-          // Find the newly created workspace and navigate to it
-          const newWorkspace = updatedWorkspaces.find((w) => w.id === workspaceId);
-          if (newWorkspace) {
-            handleOpenSession(newWorkspace);
-          }
-        }}
-      />
-
-      <CreateWorkspaceFromRemoteDialog
-        open={showCreateFromRemoteDialog}
-        onOpenChange={setShowCreateFromRemoteDialog}
         repoPath={repoPath}
         onSuccess={async (workspaceId) => {
           // Invalidate and refetch workspaces

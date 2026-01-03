@@ -10,7 +10,7 @@ import {
   useImperativeHandle,
 } from "react";
 import { type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { openPath } from "@tauri-apps/plugin-opener";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { v4 as uuidv4 } from "uuid";
@@ -951,7 +951,7 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
                   onSelect={async (e) => {
                     e.preventDefault();
                     try {
-                      await openPath(`${workspacePath}/${filePath}`);
+                      await openUrl(`cursor://file/${workspacePath}/${filePath}`);
                     } catch (err) {
                       const msg =
                         err instanceof Error ? err.message : String(err);
