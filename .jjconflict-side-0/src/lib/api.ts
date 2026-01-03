@@ -358,10 +358,11 @@ export const jjGetMergeDiff = (
 
 export const jjCreateMerge = (
   workspacePath: string,
+  workspaceBranch: string,
   targetBranch: string,
   message: string
 ): Promise<JjMergeResult> =>
-  invoke("jj_create_merge", { workspacePath, targetBranch, message });
+  invoke("jj_create_merge", { workspacePath, workspaceBranch, targetBranch, message });
 
 export const updateWorkspaceMetadata = (
   repo_path: string,

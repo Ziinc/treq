@@ -101,6 +101,7 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
       try {
         const result = await jjCreateMerge(
           workspace.workspace_path,
+          workspace.branch_name,
           targetBranch,
           commitMessage
         );
