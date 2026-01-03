@@ -1,6 +1,12 @@
 import { memo, useEffect, useState } from "react";
 import { jjGetLog, type JjLogCommit } from "../lib/api";
-import { cn } from "../lib/utils";
+import { cn, formatRelativeTime, formatFullTimestamp } from "../lib/utils";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "./ui/tooltip";
 
 interface LinearCommitHistoryProps {
   workspacePath: string;
@@ -20,8 +26,10 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
       setLoading(true);
       jjGetLog(workspacePath, targetBranch)
         .then(({commits}) => {
-          const filtered = commits.filter( ({is_working_copy}) => !is_working_copy)
-          setCommits(filtered);
+          // Filter out working copy commits
+          const filtered = commits.filter(({is_working_copy}) => !is_working_copy);
+          // Reverse to show oldest first, newest at bottom
+          setCommits(filtered.reverse());
         })
         .catch((err) => {
           console.error('Failed to fetch commit history:', err);
@@ -36,8 +44,9 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
       return <LoadingState />;
     }
 
+    // Hide entire graph if no commits after filtering
     if (commits.length === 0) {
-      return <EmptyState />;
+      return null;
     }
 
     return (
@@ -57,7 +66,6 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
                 <CommitItem
                   key={commit.commit_id}
                   commit={commit}
-                  isFirst={index === 0}
                   isLast={index === commits.length - 1}
                 />
               ))}
@@ -71,14 +79,12 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 
 interface CommitItemProps {
   commit: JjLogCommit;
-  isFirst: boolean;
   isLast: boolean;
 }
 
-function CommitItem({ commit, isFirst }: CommitItemProps) {
+function CommitItem({ commit, isLast }: CommitItemProps) {
   const firstLine = commit.description.split("\n")[0] || "(no message)";
-
-  const isHead = isFirst;
+  const hasStats = commit.insertions > 0 || commit.deletions > 0;
 
   return (
     <li className="relative flex items-start gap-3 py-2">
@@ -86,18 +92,44 @@ function CommitItem({ commit, isFirst }: CommitItemProps) {
         <div
           className={cn(
             "w-[14px] h-[14px] rounded-full border-2 border-background",
-            isHead ? "bg-primary" : "bg-muted-foreground"
+            isLast ? "bg-primary" : "bg-muted-foreground"
           )}
         />
       </div>
 
-      <div className="flex-1 min-w-0 pt-0.5">
+      <div
+        className={cn(
+          "flex-1 min-w-0 pt-0.5 rounded-md",
+          isLast && "bg-accent/50 p-2 -m-2 shadow-sm border border-accent"
+        )}
+      >
         <p className="text-sm truncate" title={firstLine}>
           {firstLine}
         </p>
-        <p className="text-xs text-muted-foreground font-mono mt-0.5">
-          {commit.short_id}
-        </p>
+        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          <p className="text-xs text-muted-foreground font-mono">
+            {commit.short_id}
+          </p>
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="text-xs text-muted-foreground">
+                  {formatRelativeTime(commit.timestamp)}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{formatFullTimestamp(commit.timestamp)}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          {hasStats && (
+            <span className="text-xs text-muted-foreground">
+              <span className="text-green-600">+{commit.insertions}</span>
+              {" "}
+              <span className="text-red-600">-{commit.deletions}</span>
+            </span>
+          )}
+        </div>
       </div>
     </li>
   );
@@ -107,14 +139,6 @@ function LoadingState() {
   return (
     <div className="h-full flex items-center justify-center p-4">
       <p className="text-sm text-muted-foreground">Loading commits...</p>
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="h-full flex items-center justify-center p-4">
-      <p className="text-sm text-muted-foreground">No commits</p>
     </div>
   );
 }
