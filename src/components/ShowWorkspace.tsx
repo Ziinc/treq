@@ -14,6 +14,7 @@ import {
   jjGetChangedFiles,
   createSession,
   checkAndRebaseWorkspaces,
+  jjPush,
 } from "../lib/api";
 import { getStatusBgColor } from "../lib/git-status-colors";
 import { parseJjChangedFiles, type ParsedFileChange } from "../lib/git-utils";
@@ -401,20 +402,47 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   );
 
   const handlePushToRemote = useCallback(async () => {
-    addToast({
-      title: "Not Implemented",
-      description: "Push operations need JJ equivalents",
-      type: "error",
-    });
-  }, [addToast]);
+    if (!workspace) return;
+    _setActionPending("push");
+    try {
+      await jjPush(workspace.workspace_path);
+      addToast({
+        title: "Pushed to remote",
+        description: "Changes pushed successfully",
+        type: "success",
+      });
+    } catch (error) {
+      addToast({
+        title: "Push failed",
+        description: String(error),
+        type: "error",
+      });
+    } finally {
+      _setActionPending(null);
+    }
+  }, [workspace, addToast]);
 
   const handleForcePush = useCallback(async () => {
-    addToast({
-      title: "Not Implemented",
-      description: "Force push operations need JJ equivalents",
-      type: "error",
-    });
-  }, [addToast]);
+    if (!workspace) return;
+    _setActionPending("forcePush");
+    try {
+      await jjPush(workspace.workspace_path, true);
+      addToast({
+        title: "Force pushed to remote",
+        description: "Changes force pushed successfully",
+        type: "success",
+      });
+      setShowForcePushDialog(false);
+    } catch (error) {
+      addToast({
+        title: "Force push failed",
+        description: String(error),
+        type: "error",
+      });
+    } finally {
+      _setActionPending(null);
+    }
+  }, [workspace, addToast]);
 
   const handleForceRebase = useCallback(async () => {
     if (!workspace || !targetBranch || !effectiveRepoPath) {

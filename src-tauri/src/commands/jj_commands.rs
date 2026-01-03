@@ -192,8 +192,8 @@ pub fn jj_get_current_branch(workspace_path: String) -> Result<String, String> {
 
 /// Push changes to remote using jj git push
 #[tauri::command]
-pub fn jj_push(workspace_path: String) -> Result<String, String> {
-    jj::jj_push(&workspace_path).map_err(|e| e.to_string())
+pub fn jj_push(workspace_path: String, force: Option<bool>) -> Result<String, String> {
+    jj::jj_push(&workspace_path, force.unwrap_or(false)).map_err(|e| e.to_string())
 }
 
 /// Fetch remote branches using jj git fetch (without rebasing)
