@@ -184,6 +184,12 @@ pub fn jj_get_default_branch(repo_path: String) -> Result<String, String> {
     jj::get_default_branch(&repo_path).map_err(|e| e.to_string())
 }
 
+/// Get the current branch of a workspace
+#[tauri::command]
+pub fn jj_get_current_branch(workspace_path: String) -> Result<String, String> {
+    jj::get_workspace_branch(&workspace_path).map_err(|e| e.to_string())
+}
+
 /// Push changes to remote using jj git push
 #[tauri::command]
 pub fn jj_push(workspace_path: String) -> Result<String, String> {

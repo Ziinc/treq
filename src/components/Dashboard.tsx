@@ -45,6 +45,7 @@ import {
   setSessionModel,
   jjIsWorkspace,
   jjGitFetch,
+  jjGetCurrentBranch,
   checkAndRebaseWorkspaces,
   startFileWatcher,
   stopFileWatcher,
@@ -216,9 +217,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
       return;
     }
 
-    // Load current branch for jj
-    // For now, we'll just set it to null since we don't have a jj equivalent yet
-    setCurrentBranch(null);
+    const fetchBranch = async () => {
+      try {
+        const branch = await jjGetCurrentBranch(repoPath);
+        setCurrentBranch(branch);
+      } catch (error) {
+        console.error("Failed to get current branch:", error);
+        setCurrentBranch(null);
+      }
+    };
+
+    fetchBranch();
   }, [repoPath]);
 
   // Manage file watcher lifecycle for selected workspace

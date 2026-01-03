@@ -302,6 +302,9 @@ export const jjGetConflictedFiles = (
 export const jjGetDefaultBranch = (repo_path: string): Promise<string> =>
   invoke("jj_get_default_branch", { repoPath: repo_path });
 
+export const jjGetCurrentBranch = (workspace_path: string): Promise<string> =>
+  invoke("jj_get_current_branch", { workspacePath: workspace_path });
+
 export interface JjBranch {
   name: string;
   is_current: boolean;
