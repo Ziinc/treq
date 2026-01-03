@@ -869,25 +869,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
                 setViewMode("show-workspace");
               }}
               onMergeComplete={async () => {
+                // Automatic workspace deletion on merge temporarily disabled
                 // Delete workspace after successful merge
-                try {
-                  await deleteWorkspace(
-                    mergeWorkspace.repo_path,
-                    mergeWorkspace.workspace_path,
-                    mergeWorkspace.id
-                  );
-                  // Invalidate workspace queries
-                  queryClient.invalidateQueries({ queryKey: ["workspaces"] });
-                } catch (error) {
-                  addToast({
-                    title: "Merge succeeded but workspace deletion failed",
-                    description: "Please manually delete the workspace from the sidebar",
-                    type: "warning",
-                  });
-                } finally {
+                // try {
+                //   await deleteWorkspace(
+                //     mergeWorkspace.repo_path,
+                //     mergeWorkspace.workspace_path,
+                //     mergeWorkspace.id
+                //   );
+                //   // Invalidate workspace queries
+                //   queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+                // } catch (error) {
+                //   addToast({
+                //     title: "Merge succeeded but workspace deletion failed",
+                //     description: "Please manually delete the workspace from the sidebar",
+                //     type: "warning",
+                //   });
+                // } finally {
                   setMergeWorkspace(null);
                   handleReturnToDashboard();
-                }
+                // }
               }}
             />
           )}

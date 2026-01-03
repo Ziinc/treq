@@ -88,30 +88,31 @@ pub fn rebase_workspaces_for_target(
                 all_success = all_success && result.success;
                 combined_messages.push(format!("Workspace '{}': {}", workspace.workspace_name, result.message));
 
+                // Automatic jj edit/sync temporarily disabled
                 // Export jj bookmarks to git branches to ensure sync
-                let _ = std::process::Command::new("jj")
-                    .current_dir(&workspace.workspace_path)
-                    .args(["git", "export"])
-                    .output();
+                // let _ = std::process::Command::new("jj")
+                //     .current_dir(&workspace.workspace_path)
+                //     .args(["git", "export"])
+                //     .output();
 
                 // Only perform git checkout on home repo, not nested workspaces
-                if !workspace.workspace_path.contains("/.treq/workspaces/") {
-                    // Checkout the branch in git to fix detached HEAD
-                    let checkout_result = std::process::Command::new("git")
-                        .current_dir(&workspace.workspace_path)
-                        .args(["checkout", &workspace.branch_name])
-                        .output();
+                // if !workspace.workspace_path.contains("/.treq/workspaces/") {
+                //     // Checkout the branch in git to fix detached HEAD
+                //     let checkout_result = std::process::Command::new("git")
+                //         .current_dir(&workspace.workspace_path)
+                //         .args(["checkout", &workspace.branch_name])
+                //         .output();
 
-                    if let Ok(output) = checkout_result {
-                        if !output.status.success() {
-                            eprintln!(
-                                "Warning: git checkout failed for workspace '{}': {}",
-                                workspace.workspace_name,
-                                String::from_utf8_lossy(&output.stderr)
-                            );
-                        }
-                    }
-                }
+                //     if let Ok(output) = checkout_result {
+                //         if !output.status.success() {
+                //             eprintln!(
+                //                 "Warning: git checkout failed for workspace '{}': {}",
+                //                 workspace.workspace_name,
+                //                 String::from_utf8_lossy(&output.stderr)
+                //             );
+                //         }
+                //     }
+                // }
 
                 // Update DB flags
                 local_db::update_workspace_has_conflicts(
@@ -241,30 +242,31 @@ pub fn check_and_rebase_all(repo_path: &str) -> Result<Vec<AutoRebaseResult>, St
                     all_success = all_success && result.success;
                     combined_messages.push(format!("Workspace '{}': {}", workspace.workspace_name, result.message));
 
+                    // Automatic jj edit/sync temporarily disabled
                     // Export jj bookmarks to git branches to ensure sync
-                    let _ = std::process::Command::new("jj")
-                        .current_dir(&workspace.workspace_path)
-                        .args(["git", "export"])
-                        .output();
+                    // let _ = std::process::Command::new("jj")
+                    //     .current_dir(&workspace.workspace_path)
+                    //     .args(["git", "export"])
+                    //     .output();
 
                     // Only perform git checkout on home repo, not nested workspaces
-                    if !workspace.workspace_path.contains("/.treq/workspaces/") {
-                        // Checkout the branch in git to fix detached HEAD
-                        let checkout_result = std::process::Command::new("git")
-                            .current_dir(&workspace.workspace_path)
-                            .args(["checkout", &workspace.branch_name])
-                            .output();
+                    // if !workspace.workspace_path.contains("/.treq/workspaces/") {
+                    //     // Checkout the branch in git to fix detached HEAD
+                    //     let checkout_result = std::process::Command::new("git")
+                    //         .current_dir(&workspace.workspace_path)
+                    //         .args(["checkout", &workspace.branch_name])
+                    //         .output();
 
-                        if let Ok(output) = checkout_result {
-                            if !output.status.success() {
-                                eprintln!(
-                                    "Warning: git checkout failed for workspace '{}': {}",
-                                    workspace.workspace_name,
-                                    String::from_utf8_lossy(&output.stderr)
-                                );
-                            }
-                        }
-                    }
+                    //     if let Ok(output) = checkout_result {
+                    //         if !output.status.success() {
+                    //             eprintln!(
+                    //                 "Warning: git checkout failed for workspace '{}': {}",
+                    //                 workspace.workspace_name,
+                    //                 String::from_utf8_lossy(&output.stderr)
+                    //             );
+                    //         }
+                    //     }
+                    // }
 
                     // Update DB flags
                     if let Err(e) = local_db::update_workspace_has_conflicts(
@@ -379,30 +381,31 @@ pub fn rebase_single_workspace(
     )
     .map_err(|e| format!("Rebase failed: {}", e))?;
 
+    // Automatic jj edit/sync temporarily disabled
     // Export jj bookmarks to git branches to ensure sync
-    let _ = std::process::Command::new("jj")
-        .current_dir(&workspace.workspace_path)
-        .args(["git", "export"])
-        .output();
+    // let _ = std::process::Command::new("jj")
+    //     .current_dir(&workspace.workspace_path)
+    //     .args(["git", "export"])
+    //     .output();
 
     // Only perform git checkout on home repo, not nested workspaces
-    if !workspace.workspace_path.contains("/.treq/workspaces/") {
-        // Checkout the branch in git to fix detached HEAD
-        let checkout_result = std::process::Command::new("git")
-            .current_dir(&workspace.workspace_path)
-            .args(["checkout", &workspace.branch_name])
-            .output();
+    // if !workspace.workspace_path.contains("/.treq/workspaces/") {
+    //     // Checkout the branch in git to fix detached HEAD
+    //     let checkout_result = std::process::Command::new("git")
+    //         .current_dir(&workspace.workspace_path)
+    //         .args(["checkout", &workspace.branch_name])
+    //         .output();
 
-        if let Ok(output) = checkout_result {
-            if !output.status.success() {
-                eprintln!(
-                    "Warning: git checkout failed for workspace '{}': {}",
-                    workspace.workspace_name,
-                    String::from_utf8_lossy(&output.stderr)
-                );
-            }
-        }
-    }
+    //     if let Ok(output) = checkout_result {
+    //         if !output.status.success() {
+    //             eprintln!(
+    //                 "Warning: git checkout failed for workspace '{}': {}",
+    //                 workspace.workspace_name,
+    //                 String::from_utf8_lossy(&output.stderr)
+    //             );
+    //         }
+    //     }
+    // }
 
     // Update DB flags
     local_db::update_workspace_has_conflicts(repo_path, workspace.id, rebase_result.has_conflicts)?;
