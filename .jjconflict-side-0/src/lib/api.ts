@@ -67,6 +67,8 @@ export interface JjLogCommit {
   parent_ids: string[];
   is_working_copy: boolean;
   bookmarks: string[];
+  insertions: number;
+  deletions: number;
 }
 
 export interface JjLogResult {

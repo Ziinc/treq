@@ -83,6 +83,8 @@ pub struct JjLogCommit {
     pub parent_ids: Vec<String>,
     pub is_working_copy: bool,
     pub bookmarks: Vec<String>,
+    pub insertions: u32,
+    pub deletions: u32,
 }
 
 /// The full log response including metadata
@@ -1387,13 +1389,58 @@ pub fn get_branches(repo_path: &str) -> Result<Vec<JjBranch>, JjError> {
 
 /// Get commit log from fork point to HEAD for a workspace
 /// Uses: jj log with custom template for machine-readable output
+/// Parse diff stat output from jj: "X files changed, Y insertions(+), Z deletions(-)"
+/// Returns (insertions, deletions) tuple
+fn parse_diff_stat(stat: &str) -> (u32, u32) {
+    let mut insertions = 0;
+    let mut deletions = 0;
+
+    // Look for "Y insertions(+)"
+    if let Some(ins_start) = stat.find("insertions(+)") {
+        let before = &stat[..ins_start].trim();
+        if let Some(last_space) = before.rfind(' ') {
+            if let Ok(num) = before[last_space + 1..].parse::<u32>() {
+                insertions = num;
+            }
+        }
+    } else if let Some(ins_start) = stat.find("insertion(+)") {
+        // Handle singular "insertion"
+        let before = &stat[..ins_start].trim();
+        if let Some(last_space) = before.rfind(' ') {
+            if let Ok(num) = before[last_space + 1..].parse::<u32>() {
+                insertions = num;
+            }
+        }
+    }
+
+    // Look for "Z deletions(-)"
+    if let Some(del_start) = stat.find("deletions(-)") {
+        let before = &stat[..del_start].trim();
+        if let Some(last_space) = before.rfind(' ') {
+            if let Ok(num) = before[last_space + 1..].parse::<u32>() {
+                deletions = num;
+            }
+        }
+    } else if let Some(del_start) = stat.find("deletion(-)") {
+        // Handle singular "deletion"
+        let before = &stat[..del_start].trim();
+        if let Some(last_space) = before.rfind(' ') {
+            if let Ok(num) = before[last_space + 1..].parse::<u32>() {
+                deletions = num;
+            }
+        }
+    }
+
+    (insertions, deletions)
+}
+
 pub fn jj_get_log(workspace_path: &str, target_branch: &str) -> Result<JjLogResult, JjError> {
     // Get workspace branch name
     let workspace_branch = get_workspace_branch(workspace_path)?;
 
-    // Build revset: ancestors(target_branch, 6) | target_branch::@
-    // This gives us: target branch + 6 ancestors + workspace commits
-    let revset = format!("ancestors({}, 7) | {}::@", target_branch, target_branch);
+    // Build revset: target_branch..@
+    // This shows only commits in workspace that are NOT in target branch (same as merge preview)
+    let revset = format!("{}..@", target_branch);
 
     // Build template for tab-separated output
     let template = concat!(
@@ -1404,7 +1451,8 @@ pub fn jj_get_log(workspace_path: &str, target_branch: &str) -> Result<JjLogResu
         "author.timestamp() ++ \"\\t\" ++ ",
         "parents.map(|p| p.commit_id().short(12)).join(\",\") ++ \"\\t\" ++ ",
         "if(working_copies, \"true\", \"false\") ++ \"\\t\" ++ ",
-        "bookmarks.map(|b| b.name()).join(\",\") ++ \"\\n\""
+        "bookmarks.map(|b| b.name()).join(\",\") ++ \"\\t\" ++ ",
+        "diff.stat() ++ \"\\n\""
     );
 
     let output = command_for("jj")
@@ -1436,7 +1484,7 @@ pub fn jj_get_log(workspace_path: &str, target_branch: &str) -> Result<JjLogResu
         }
 
         let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() < 8 {
+        if parts.len() < 9 {
             continue; // Skip malformed lines
         }
 
@@ -1448,6 +1496,7 @@ pub fn jj_get_log(workspace_path: &str, target_branch: &str) -> Result<JjLogResu
         let parent_ids_str = parts[5];
         let is_working_copy = parts[6] == "true";
         let bookmarks_str = parts[7];
+        let diff_stat = parts[8];
 
         // Parse parent IDs
         let parent_ids: Vec<String> = if parent_ids_str.is_empty() {
@@ -1463,6 +1512,9 @@ pub fn jj_get_log(workspace_path: &str, target_branch: &str) -> Result<JjLogResu
             bookmarks_str.split(',').map(|s| s.to_string()).collect()
         };
 
+        // Parse diff stats: "X files changed, Y insertions(+), Z deletions(-)"
+        let (insertions, deletions) = parse_diff_stat(diff_stat);
+
         commits.push(JjLogCommit {
             commit_id: short_id.clone(),
             short_id,
@@ -1473,6 +1525,8 @@ pub fn jj_get_log(workspace_path: &str, target_branch: &str) -> Result<JjLogResu
             parent_ids,
             is_working_copy,
             bookmarks,
+            insertions,
+            deletions,
         });
     }
 
@@ -1506,7 +1560,8 @@ pub fn jj_get_commits_ahead(
         "author.timestamp() ++ \"\\t\" ++ ",
         "parents.map(|p| p.commit_id().short(12)).join(\",\") ++ \"\\t\" ++ ",
         "if(working_copies, \"true\", \"false\") ++ \"\\t\" ++ ",
-        "bookmarks.map(|b| b.name()).join(\",\") ++ \"\\n\""
+        "bookmarks.map(|b| b.name()).join(\",\") ++ \"\\t\" ++ ",
+        "diff.stat() ++ \"\\n\""
     );
 
     let output = command_for("jj")
@@ -1531,7 +1586,7 @@ pub fn jj_get_commits_ahead(
         }
 
         let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() < 8 {
+        if parts.len() < 9 {
             continue;
         }
 
@@ -1543,6 +1598,7 @@ pub fn jj_get_commits_ahead(
         let parent_ids_str = parts[5];
         let is_working_copy = parts[6] == "true";
         let bookmarks_str = parts[7];
+        let diff_stat = parts[8];
 
         let parent_ids: Vec<String> = if parent_ids_str.is_empty() {
             Vec::new()
@@ -1556,6 +1612,9 @@ pub fn jj_get_commits_ahead(
             bookmarks_str.split(',').map(|s| s.to_string()).collect()
         };
 
+        // Parse diff stats
+        let (insertions, deletions) = parse_diff_stat(diff_stat);
+
         commits.push(JjLogCommit {
             commit_id: short_id.clone(),
             short_id,
@@ -1566,6 +1625,8 @@ pub fn jj_get_commits_ahead(
             parent_ids,
             is_working_copy,
             bookmarks,
+            insertions,
+            deletions,
         });
     }
 

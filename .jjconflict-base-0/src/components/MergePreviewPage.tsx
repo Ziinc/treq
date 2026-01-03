@@ -227,9 +227,18 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
                         <p className="text-sm font-medium truncate">
                           {commit.description || "(no description)"}
                         </p>
-                        <p className="text-xs text-muted-foreground">
-                          {commit.author_name} · {commit.timestamp}
-                        </p>
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          <span className="text-xs text-muted-foreground">
+                            {commit.author_name}
+                          </span>
+                          {commit.insertions > 0 || commit.deletions > 0 ? (
+                            <span className="text-xs text-muted-foreground">
+                              <span className="text-green-600">+{commit.insertions}</span>
+                              {" "}
+                              <span className="text-red-600">-{commit.deletions}</span>
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   </div>

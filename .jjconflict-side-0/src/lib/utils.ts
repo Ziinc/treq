@@ -67,3 +67,62 @@ export function escapeBashString(str: string): string {
     .replace(/\n/g, '\\n');      // escape newlines
 }
 
+/**
+ * Format timestamp as relative time (e.g., "5 minutes ago", "2 hours ago", "3 days ago")
+ * @param timestamp - Timestamp in jj format: "YYYY-MM-DD HH:MM:SS.mmm +TZ:TZ"
+ * @returns Relative time string
+ */
+export function formatRelativeTime(timestamp: string): string {
+  try {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSeconds = Math.floor(diffMs / 1000);
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    const diffHours = Math.floor(diffMinutes / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    const diffWeeks = Math.floor(diffDays / 7);
+    const diffMonths = Math.floor(diffDays / 30);
+    const diffYears = Math.floor(diffDays / 365);
+
+    if (diffSeconds < 10) return "just now";
+    if (diffSeconds < 60) return `${diffSeconds} seconds ago`;
+    if (diffMinutes === 1) return "1 minute ago";
+    if (diffMinutes < 60) return `${diffMinutes} minutes ago`;
+    if (diffHours === 1) return "1 hour ago";
+    if (diffHours < 24) return `${diffHours} hours ago`;
+    if (diffDays === 1) return "1 day ago";
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffWeeks === 1) return "1 week ago";
+    if (diffWeeks < 4) return `${diffWeeks} weeks ago`;
+    if (diffMonths === 1) return "1 month ago";
+    if (diffMonths < 12) return `${diffMonths} months ago`;
+    if (diffYears === 1) return "1 year ago";
+    return `${diffYears} years ago`;
+  } catch (e) {
+    return timestamp;
+  }
+}
+
+/**
+ * Format timestamp for display in tooltip
+ * @param timestamp - Timestamp in jj format: "YYYY-MM-DD HH:MM:SS.mmm +TZ:TZ"
+ * @returns Formatted timestamp string
+ */
+export function formatFullTimestamp(timestamp: string): string {
+  try {
+    const date = new Date(timestamp);
+    return date.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZoneName: 'short'
+    });
+  } catch (e) {
+    return timestamp;
+  }
+}
+
