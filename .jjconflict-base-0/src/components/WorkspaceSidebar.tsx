@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   Copy,
   FolderOpen,
+  CornerLeftUp,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import {
@@ -272,13 +273,11 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                                 }`}
                               />
                             ) : (
-                              <span
-                                className={`text-[10px] mr-1 font-mono leading-none ${
+                              <CornerLeftUp
+                                className={`w-3 h-3 mr-1 shrink-0 ${
                                   isSelected ? "text-primary" : "text-muted-foreground"
                                 }`}
-                              >
-                                |\_
-                              </span>
+                              />
                             )}
                             <span
                               className={`flex-1 min-w-0 truncate font-mono ${
