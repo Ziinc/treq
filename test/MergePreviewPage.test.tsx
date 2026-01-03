@@ -153,7 +153,7 @@ describe("MergePreviewPage", () => {
     );
 
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: /^merge$/i }));
+    await user.click(await screen.findByRole("button", { name: /^confirm merge$/i }));
 
     await waitFor(() => {
       expect(api.jjCreateMerge).toHaveBeenCalledWith(
@@ -187,7 +187,7 @@ describe("MergePreviewPage", () => {
       />
     );
 
-    await userEvent.setup().click(await screen.findByRole("button", { name: /^merge$/i }));
+    await userEvent.setup().click(await screen.findByRole("button", { name: /^confirm merge$/i }));
 
     await waitFor(() => {
       expect(onCancel).toHaveBeenCalled();
@@ -213,7 +213,7 @@ describe("MergePreviewPage", () => {
       />
     );
 
-    const mergeButton = await screen.findByRole("button", { name: /^merge$/i });
+    const mergeButton = await screen.findByRole("button", { name: /^confirm merge$/i });
     expect(mergeButton).toBeDisabled();
   });
 
@@ -290,7 +290,7 @@ describe("MergePreviewPage", () => {
 
     await user.clear(textarea);
 
-    const mergeButton = screen.getByRole("button", { name: /^merge$/i });
+    const mergeButton = screen.getByRole("button", { name: /^confirm merge$/i });
     expect(mergeButton).toBeDisabled();
   });
 });
