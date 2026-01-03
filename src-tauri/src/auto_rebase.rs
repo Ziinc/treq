@@ -88,6 +88,12 @@ pub fn rebase_workspaces_for_target(
                 all_success = all_success && result.success;
                 combined_messages.push(format!("Workspace '{}': {}", workspace.workspace_name, result.message));
 
+                // After rebase, ensure we're editing the working copy (not the bookmark commit)
+                if let Err(e) = jj::jj_edit_workspace_working_copy(&workspace.workspace_path, &workspace.branch_name) {
+                    eprintln!("Warning: Failed to edit working copy for workspace '{}': {}", workspace.workspace_name, e);
+                }
+
+                // Old jj edit/sync code (git export/checkout) replaced with jj_edit_workspace_working_copy above
                 // Automatic jj edit/sync temporarily disabled
                 // Export jj bookmarks to git branches to ensure sync
                 // let _ = std::process::Command::new("jj")
@@ -242,6 +248,12 @@ pub fn check_and_rebase_all(repo_path: &str) -> Result<Vec<AutoRebaseResult>, St
                     all_success = all_success && result.success;
                     combined_messages.push(format!("Workspace '{}': {}", workspace.workspace_name, result.message));
 
+                    // After rebase, ensure we're editing the working copy (not the bookmark commit)
+                    if let Err(e) = jj::jj_edit_workspace_working_copy(&workspace.workspace_path, &workspace.branch_name) {
+                        eprintln!("Warning: Failed to edit working copy for workspace '{}': {}", workspace.workspace_name, e);
+                    }
+
+                    // Old jj edit/sync code (git export/checkout) replaced with jj_edit_workspace_working_copy above
                     // Automatic jj edit/sync temporarily disabled
                     // Export jj bookmarks to git branches to ensure sync
                     // let _ = std::process::Command::new("jj")
@@ -381,14 +393,16 @@ pub fn rebase_single_workspace(
     )
     .map_err(|e| format!("Rebase failed: {}", e))?;
 
-    // Automatic jj edit/sync temporarily disabled
+    // After rebase, ensure we're editing the working copy (not the bookmark commit)
+    jj::jj_edit_workspace_working_copy(&workspace.workspace_path, &workspace.branch_name)
+        .map_err(|e| format!("Failed to edit working copy: {}", e))?;
+
+    // Old jj edit/sync code (git export/checkout) replaced with jj_edit_workspace_working_copy above
     // Export jj bookmarks to git branches to ensure sync
     // let _ = std::process::Command::new("jj")
     //     .current_dir(&workspace.workspace_path)
     //     .args(["git", "export"])
     //     .output();
-
-    // Only perform git checkout on home repo, not nested workspaces
     // if !workspace.workspace_path.contains("/.treq/workspaces/") {
     //     // Checkout the branch in git to fix detached HEAD
     //     let checkout_result = std::process::Command::new("git")

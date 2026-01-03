@@ -313,8 +313,8 @@ export interface JjBranch {
 export const jjGetBranches = (repo_path: string): Promise<JjBranch[]> =>
   invoke("jj_get_branches", { repoPath: repo_path });
 
-export const jjPush = (workspace_path: string): Promise<string> =>
-  invoke("jj_push", { workspacePath: workspace_path });
+export const jjPush = (workspace_path: string, force?: boolean): Promise<string> =>
+  invoke("jj_push", { workspacePath: workspace_path, force: force ?? false });
 
 export const jjGitFetch = (repo_path: string): Promise<string> =>
   invoke("jj_git_fetch", { repoPath: repo_path });

@@ -540,6 +540,57 @@ pub fn squash_to_workspace(
     }
 }
 
+/// Edit the working copy of a workspace branch
+/// Tries to edit <branch>+ (child of bookmark), falls back to <branch> + new if no child exists
+/// This ensures we're editing the working copy, not the bookmark commit itself
+pub fn jj_edit_workspace_working_copy(workspace_path: &str, branch_name: &str) -> Result<(), JjError> {
+    // 1. Try: jj edit <branch>+
+    let branch_plus = format!("{}+", branch_name);
+    let result = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["edit", &branch_plus])
+        .output();
+
+    if let Ok(output) = result {
+        if output.status.success() {
+            // Successfully edited the child of the bookmark
+            return Ok(());
+        }
+    }
+
+    // 2. Fallback: jj edit <branch> then jj new
+    // This happens when there's no child (e.g., new workspace or bookmark = working copy)
+    let edit_result = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["edit", branch_name])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !edit_result.status.success() {
+        return Err(JjError::IoError(format!(
+            "Failed to edit branch '{}': {}",
+            branch_name,
+            String::from_utf8_lossy(&edit_result.stderr)
+        )));
+    }
+
+    // Create a new working copy on top of the bookmark
+    let new_result = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["new"])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !new_result.status.success() {
+        return Err(JjError::IoError(format!(
+            "Failed to create new working copy: {}",
+            String::from_utf8_lossy(&new_result.stderr)
+        )));
+    }
+
+    Ok(())
+}
+
 // ============================================================================
 // Diff Operations using hybrid CLI approach
 // Uses jj CLI for file listing (faster) and git CLI for diffs (reliable)
@@ -762,7 +813,7 @@ pub fn jj_set_bookmark(
 ) -> Result<(), JjError> {
     let output = command_for("jj")
         .current_dir(workspace_path)
-        .args(["bookmark", "set", bookmark_name, "-r", revision])
+        .args(["bookmark", "set", bookmark_name, "-r", revision, "--allow-backwards"])
         .output()
         .map_err(|e| JjError::IoError(e.to_string()))?;
 
@@ -1188,10 +1239,17 @@ pub fn get_default_branch(repo_path: &str) -> Result<String, JjError> {
 }
 
 /// Push changes to remote using jj git push
-pub fn jj_push(workspace_path: &str) -> Result<String, JjError> {
-    let output = command_for("jj")
-        .current_dir(workspace_path)
-        .args(["git", "push"])
+pub fn jj_push(workspace_path: &str, force: bool) -> Result<String, JjError> {
+    let mut cmd = command_for("jj");
+    cmd.current_dir(workspace_path);
+
+    if force {
+        cmd.args(["git", "push", "--force"]);
+    } else {
+        cmd.args(["git", "push"]);
+    }
+
+    let output = cmd
         .output()
         .map_err(|e| JjError::IoError(e.to_string()))?;
 
