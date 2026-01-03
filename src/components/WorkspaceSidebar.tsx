@@ -12,6 +12,7 @@ import {
   Copy,
   FolderOpen,
 } from "lucide-react";
+import { Button } from "./ui/button";
 import {
   Tooltip,
   TooltipContent,
@@ -324,15 +325,17 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                 onCreateWorkspace && (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <button
+                      <Button
                         type="button"
                         onClick={onCreateWorkspace}
-                        className="flex items-center justify-center gap-1 w-full px-2 py-1.5 text-muted-foreground hover:bg-muted rounded-md transition-colors"
+                        variant="secondary"
+                        size="sm"
+                        className="w-full gap-1"
                         aria-label="Create new workspace"
                       >
                         <Plus className="w-3 h-3" />
                         <span className="truncate">Workspace</span>
-                      </button>
+                      </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom">
                       Create new workspace
