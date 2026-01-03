@@ -196,6 +196,12 @@ pub fn jj_push(workspace_path: String, force: Option<bool>) -> Result<String, St
     jj::jj_push(&workspace_path, force.unwrap_or(false)).map_err(|e| e.to_string())
 }
 
+/// Get sync status with remote (ahead/behind counts)
+#[tauri::command]
+pub fn jj_get_sync_status(workspace_path: String, branch_name: String) -> Result<(usize, usize), String> {
+    jj::jj_get_sync_status(&workspace_path, &branch_name).map_err(|e| e.to_string())
+}
+
 /// Fetch remote branches using jj git fetch (without rebasing)
 #[tauri::command]
 pub fn jj_git_fetch(repo_path: String) -> Result<String, String> {

@@ -15,6 +15,7 @@ import {
   createSession,
   checkAndRebaseWorkspaces,
   jjPush,
+  jjGetSyncStatus,
 } from "../lib/api";
 import { getStatusBgColor } from "../lib/git-status-colors";
 import { parseJjChangedFiles, type ParsedFileChange } from "../lib/git-utils";
@@ -125,6 +126,9 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   >(null);
   const [showForcePushDialog, setShowForcePushDialog] = useState(false);
 
+  // Sync status state (ahead/behind counts)
+  const [syncStatus, setSyncStatus] = useState<{ ahead: number; behind: number } | null>(null);
+
   // Target branch and conflicts state
   const [targetBranch, setTargetBranch] = useState<string | null>(null);
   const [defaultBranch, setDefaultBranch] = useState<string>("main");
@@ -193,6 +197,29 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
       setTargetBranch(value);
     }
   }, [workspace?.target_branch, defaultBranch]);
+
+  // Fetch sync status
+  const fetchSyncStatus = useCallback(async () => {
+    // For workspace: use workspace path and branch
+    // For home repo: use working directory and default branch
+    const path = workspace?.workspace_path || workingDirectory;
+    const branch = workspace?.branch_name || defaultBranch;
+
+    if (!path || !branch) return;
+
+    try {
+      const [ahead, behind] = await jjGetSyncStatus(path, branch);
+      setSyncStatus({ ahead, behind });
+    } catch (error) {
+      console.error("Failed to fetch sync status:", error);
+      setSyncStatus(null);
+    }
+  }, [workspace, workingDirectory, defaultBranch]);
+
+  // Fetch sync status on mount and when workspace changes
+  useEffect(() => {
+    fetchSyncStatus();
+  }, [fetchSyncStatus]);
 
   useEffect(() => {
     if (activeTab === "overview" && workingDirectory) {
@@ -402,16 +429,25 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   );
 
   const handlePushToRemote = useCallback(async () => {
-    if (!workspace) return;
+    // Use workspace path if available, otherwise use working directory (for home repo)
+    const pushPath = workspace?.workspace_path || workingDirectory;
+    if (!pushPath) return;
+
+    console.log("Push to remote started", pushPath);
     _setActionPending("push");
+
     try {
-      await jjPush(workspace.workspace_path);
+      const result = await jjPush(pushPath);
+      console.log("Push succeeded:", result);
       addToast({
         title: "Pushed to remote",
         description: "Changes pushed successfully",
         type: "success",
       });
+      // Refresh sync status after push
+      fetchSyncStatus();
     } catch (error) {
+      console.error("Push failed:", error);
       addToast({
         title: "Push failed",
         description: String(error),
@@ -420,19 +456,24 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
     } finally {
       _setActionPending(null);
     }
-  }, [workspace, addToast]);
+  }, [workspace, workingDirectory, addToast, fetchSyncStatus]);
 
   const handleForcePush = useCallback(async () => {
-    if (!workspace) return;
+    // Use workspace path if available, otherwise use working directory (for home repo)
+    const pushPath = workspace?.workspace_path || workingDirectory;
+    if (!pushPath) return;
+
     _setActionPending("forcePush");
     try {
-      await jjPush(workspace.workspace_path, true);
+      await jjPush(pushPath, true);
       addToast({
         title: "Force pushed to remote",
         description: "Changes force pushed successfully",
         type: "success",
       });
       setShowForcePushDialog(false);
+      // Refresh sync status after force push
+      fetchSyncStatus();
     } catch (error) {
       addToast({
         title: "Force push failed",
@@ -442,7 +483,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
     } finally {
       _setActionPending(null);
     }
-  }, [workspace, addToast]);
+  }, [workspace, workingDirectory, addToast, fetchSyncStatus]);
 
   const handleForceRebase = useCallback(async () => {
     if (!workspace || !targetBranch || !effectiveRepoPath) {
@@ -878,6 +919,21 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
             )}
           </div>
           <div className="flex items-center gap-2">
+            {/* Sync status indicator */}
+            {syncStatus && (syncStatus.ahead > 0 || syncStatus.behind > 0) && (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                {syncStatus.behind > 0 && (
+                  <span className="flex items-center">
+                    ↓{syncStatus.behind}
+                  </span>
+                )}
+                {syncStatus.ahead > 0 && (
+                  <span className="flex items-center">
+                    ↑{syncStatus.ahead}
+                  </span>
+                )}
+              </div>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button

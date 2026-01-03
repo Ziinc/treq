@@ -316,6 +316,14 @@ export const jjGetBranches = (repo_path: string): Promise<JjBranch[]> =>
 export const jjPush = (workspace_path: string, force?: boolean): Promise<string> =>
   invoke("jj_push", { workspacePath: workspace_path, force: force ?? false });
 
+export interface SyncStatus {
+  ahead: number;
+  behind: number;
+}
+
+export const jjGetSyncStatus = (workspace_path: string, branch_name: string): Promise<[number, number]> =>
+  invoke("jj_get_sync_status", { workspacePath: workspace_path, branchName: branch_name });
+
 export const jjGitFetch = (repo_path: string): Promise<string> =>
   invoke("jj_git_fetch", { repoPath: repo_path });
 

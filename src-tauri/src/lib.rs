@@ -308,6 +308,7 @@ pub fn run() {
             commands::jj_get_default_branch,
             commands::jj_get_current_branch,
             commands::jj_push,
+            commands::jj_get_sync_status,
             commands::jj_git_fetch,
             commands::jj_git_fetch_background,
             commands::jj_pull,

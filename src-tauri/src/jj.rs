@@ -1263,6 +1263,48 @@ pub fn jj_push(workspace_path: &str, force: bool) -> Result<String, JjError> {
     Ok(format!("{}{}", stdout, stderr))
 }
 
+/// Get sync status with remote (ahead/behind counts)
+/// Returns (ahead_count, behind_count)
+pub fn jj_get_sync_status(workspace_path: &str, branch_name: &str) -> Result<(usize, usize), JjError> {
+    let remote_branch = format!("{}@origin", branch_name);
+
+    // Count commits ahead (local has, remote doesn't)
+    // Using: jj log -r '<remote>..<local>' --no-graph -T 'commit_id\n'
+    let ahead_output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["log", "-r", &format!("{}..{}", remote_branch, branch_name), "--no-graph", "-T", "commit_id\n"])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    let ahead_count = if ahead_output.status.success() {
+        String::from_utf8_lossy(&ahead_output.stdout)
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .count()
+    } else {
+        0
+    };
+
+    // Count commits behind (remote has, local doesn't)
+    // Using: jj log -r '<local>..<remote>' --no-graph -T 'commit_id\n'
+    let behind_output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["log", "-r", &format!("{}..{}", branch_name, remote_branch), "--no-graph", "-T", "commit_id\n"])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    let behind_count = if behind_output.status.success() {
+        String::from_utf8_lossy(&behind_output.stdout)
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .count()
+    } else {
+        0
+    };
+
+    Ok((ahead_count, behind_count))
+}
+
 /// Fetch remote branches using jj git fetch (without rebasing)
 /// This updates remote tracking refs and makes remote branches available
 pub fn jj_git_fetch(repo_path: &str) -> Result<String, JjError> {
