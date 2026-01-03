@@ -204,7 +204,7 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
             ) : (
               <GitMerge className="w-4 h-4" />
             )}
-            {merging ? "Merging..." : "Merge"}
+            {merging ? "Merging..." : "Confirm merge"}
           </Button>
         </div>
 
