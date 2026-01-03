@@ -242,10 +242,11 @@ pub fn jj_get_merge_diff(
 #[tauri::command]
 pub fn jj_create_merge(
     workspace_path: String,
+    workspace_branch: String,
     target_branch: String,
     message: String,
 ) -> Result<jj::JjMergeResult, String> {
-    jj::jj_create_merge_commit(&workspace_path, &target_branch, &message)
+    jj::jj_create_merge_commit(&workspace_path, &workspace_branch, &target_branch, &message)
         .map_err(|e| e.to_string())
 }
 
