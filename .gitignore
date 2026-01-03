@@ -34,3 +34,6 @@ Thumbs.db
 .jj/
 .jj.backup/
 .treq/
+
+src-tauri/target/
+src-tauri/gen/
