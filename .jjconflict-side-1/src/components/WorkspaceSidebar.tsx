@@ -302,6 +302,15 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                       </TooltipContent>
                     </Tooltip>
                     <ContextMenuContent>
+                      <ContextMenuItem
+                        onClick={() => {
+                          navigator.clipboard.writeText(getWorkspaceTitle(workspace));
+                        }}
+                      >
+                        <GitBranch className="w-4 h-4 mr-2" />
+                        Copy branch name
+                      </ContextMenuItem>
+                      <ContextMenuSeparator />
                       <PathContextMenuItems
                         relativePath={
                           repoPath && workspace.workspace_path.startsWith(repoPath)
