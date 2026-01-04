@@ -342,6 +342,9 @@ pub fn run() {
             commands::clear_all_viewed_files,
             commands::start_file_watcher,
             commands::stop_file_watcher,
+            commands::load_pending_review,
+            commands::save_pending_review,
+            commands::clear_pending_review,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

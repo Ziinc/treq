@@ -656,8 +656,8 @@ export const gitGetCommitsBetweenBranches = (
 ): Promise<BranchCommitInfo[]> =>
   Promise.resolve([]);
 
-// Load pending review comments (stub implementation)
-export interface PendingReviewComment {
+// Pending review persistence
+export interface LineComment {
   id: string;
   filePath: string;
   hunkId: string;
@@ -668,18 +668,53 @@ export interface PendingReviewComment {
   createdAt: string;
 }
 
-export const loadPendingReview = (
-  _repoPath: string,
-  _workspaceId: number
-): Promise<PendingReviewComment[]> =>
-  Promise.resolve([]);
+export interface PendingReview {
+  id: number;
+  workspace_id: number;
+  comments: LineComment[];
+  viewed_files: string[];
+  summary_text: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
-// Clear pending review data (stub implementation)
+export const loadPendingReview = (
+  repoPath: string,
+  workspaceId: number
+): Promise<PendingReview | null> =>
+  invoke<{ id: number; workspace_id: number; comments: string; viewed_files: string | null; summary_text: string | null; created_at: string; updated_at: string } | null>("load_pending_review", { repoPath, workspaceId }).then((result) => {
+    if (!result) return null;
+    return {
+      id: result.id,
+      workspace_id: result.workspace_id,
+      comments: JSON.parse(result.comments),
+      viewed_files: result.viewed_files ? JSON.parse(result.viewed_files) : [],
+      summary_text: result.summary_text,
+      created_at: result.created_at,
+      updated_at: result.updated_at,
+    };
+  });
+
+export const savePendingReview = (
+  repoPath: string,
+  workspaceId: number,
+  comments: LineComment[],
+  viewedFiles?: string[],
+  summaryText?: string
+): Promise<number> =>
+  invoke("save_pending_review", {
+    repoPath,
+    workspaceId,
+    comments: JSON.stringify(comments),
+    viewedFiles: viewedFiles ? JSON.stringify(viewedFiles) : null,
+    summaryText: summaryText ?? null,
+  });
+
 export const clearPendingReview = (
-  _repoPath: string,
-  _workspaceId: number
+  repoPath: string,
+  workspaceId: number
 ): Promise<void> =>
-  Promise.resolve();
+  invoke("clear_pending_review", { repoPath, workspaceId });
 
 // File Watcher API
 export const startFileWatcher = (
