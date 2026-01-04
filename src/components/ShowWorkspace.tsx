@@ -74,8 +74,9 @@ import {
   Trash2,
   Search,
   Code2,
-  GitCompareArrows,
   ChevronLeft,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { TargetBranchSelector } from "./TargetBranchSelector";
 import { cn } from "../lib/utils";
@@ -133,6 +134,9 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   const [targetBranch, setTargetBranch] = useState<string | null>(null);
   const [defaultBranch, setDefaultBranch] = useState<string>("main");
   const [conflictedFiles, setConflictedFiles] = useState<string[]>([]);
+
+  // Committed changes toggle state
+  const [showCommittedChanges, setShowCommittedChanges] = useState(true);
 
   // Branch selection state
   const [availableBranches, setAvailableBranches] = useState<BranchListItem[]>(
@@ -682,7 +686,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
               Code
             </TabsTrigger>
             <TabsTrigger value="changes" className="inline-flex items-center">
-              <GitCompareArrows className="w-4 h-4 mr-1.5" />
               Review
             </TabsTrigger>
           </TabsList>
@@ -694,6 +697,32 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
           </div>
         )}
       </div>
+      {activeTab === "changes" && workspace && (
+        <div className="px-4 py-2 border-b border-border flex">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={showCommittedChanges ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setShowCommittedChanges(!showCommittedChanges)}
+                  className={showCommittedChanges ? "bg-blue-500/20 hover:bg-blue-500/30 text-blue-700 dark:text-blue-300" : ""}
+                >
+                  {showCommittedChanges ? (
+                    <Eye className="w-3.5 h-3.5 mr-1.5" />
+                  ) : (
+                    <EyeOff className="w-3.5 h-3.5 mr-1.5" />
+                  )}
+                  Committed
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{showCommittedChanges ? "Hide" : "Show"} committed changes</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      )}
       <div className="flex-1 overflow-auto">
         {activeTab === "overview" ? (
           showFileBrowserInCode ? (
@@ -836,6 +865,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
             initialSelectedFile={initialSelectedFile}
             conflictedFiles={conflictedFiles}
             onCreateAgentWithReview={handleCreateAgentWithReview}
+            showCommittedChanges={showCommittedChanges}
+            targetBranch={targetBranch}
           />
         )}
       </div>

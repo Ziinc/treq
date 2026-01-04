@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "./test-utils";
+import { render, screen, waitFor } from "../test-utils";
 import userEvent from "@testing-library/user-event";
-import { ChangesDiffViewer } from "../src/components/ChangesDiffViewer";
-import * as api from "../src/lib/api";
+import { ChangesDiffViewer } from "../../src/components/ChangesDiffViewer";
+import * as api from "../../src/lib/api";
 
 // Mock the API
-vi.mock("../src/lib/api", async () => {
-  const actual = await vi.importActual("../src/lib/api");
+vi.mock("../../src/lib/api", async () => {
+  const actual = await vi.importActual("../../src/lib/api");
   return {
     ...actual,
     jjGetChangedFiles: vi.fn(),
@@ -250,32 +250,24 @@ describe("Cancel/Discard review feature", () => {
         />
       );
 
-      // Wait for file to load
+      // Wait for conflict to be displayed
       await waitFor(() => {
-        expect(screen.getByText(/conflict\.txt/i)).toBeInTheDocument();
-      });
-
-      // Expand the file to see conflicts
-      const fileElements = screen.getAllByText(/conflict\.txt/i);
-      await userEvent.click(fileElements[0]);
-
-      // Wait for conflict to be detected and add comment button
-      await waitFor(() => {
-        const buttons = screen.queryAllByRole("button", { name: /add comment/i });
-        expect(buttons.length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/Conflict 1 of 1/).length).toBeGreaterThan(0);
       });
 
       // Click add comment to enter review mode
       const addCommentButtons = screen.getAllByRole("button", { name: /add comment/i });
-      await userEvent.click(addCommentButtons[0]);
+      const conflictButton = addCommentButtons.find(btn => btn.textContent === "Add comment");
+      await userEvent.click(conflictButton!);
 
       // Type comment
-      const textarea = screen.getByPlaceholderText(/keep the changes/i);
+      const textarea = screen.getByPlaceholderText(/add a comment/i);
       await userEvent.type(textarea, "Test comment");
 
-      // Submit comment (conflict card has "Save" button)
-      const saveButton = screen.getByRole("button", { name: /save/i });
-      await userEvent.click(saveButton);
+      // Submit comment
+      const submitButtons = screen.getAllByRole("button", { name: /add comment/i });
+      const submitButton = submitButtons.find(btn => btn.textContent === "Add Comment");
+      await userEvent.click(submitButton!);
 
       // Should show "Reset" button in conflict mode
       await waitFor(() => {

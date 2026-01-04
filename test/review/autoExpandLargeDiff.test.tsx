@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "./test-utils";
+import { render, screen, waitFor } from "../test-utils";
 import userEvent from "@testing-library/user-event";
-import * as api from "../src/lib/api";
-import { ChangesDiffViewer } from "../src/components/ChangesDiffViewer";
+import * as api from "../../src/lib/api";
+import { ChangesDiffViewer } from "../../src/components/ChangesDiffViewer";
 
-vi.mock("../src/lib/api", async () => {
-  const actual = await vi.importActual("../src/lib/api");
+vi.mock("../../src/lib/api", async () => {
+  const actual = await vi.importActual("../../src/lib/api");
   return {
     ...actual,
     jjGetChangedFiles: vi.fn(),
@@ -63,10 +63,9 @@ describe("Auto-expand large diffs when clicking file in file list", () => {
     const fileElements = screen.getAllByText(/large-file\.txt/);
     await userEvent.click(fileElements[0]);
 
-    await waitFor(() => {
-      expect(screen.getByText("added line 1")).toBeInTheDocument();
-    }, { timeout: 3000 });
-
+    await screen.findByText("added line 50")
+    await screen.findByText("added line 288")
+    
     expect(screen.queryByText(/Large diff/i)).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /view changes/i })

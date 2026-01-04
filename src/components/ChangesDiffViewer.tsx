@@ -26,7 +26,10 @@ import {
   unmarkFileViewed,
   loadPendingReview,
   clearPendingReview,
+  jjGetMergeDiff,
   type JjDiffHunk,
+  type JjFileChange,
+  type JjRevisionDiff,
 } from "../lib/api";
 import { useCachedWorkspaceChanges } from "../hooks/useCachedWorkspaceChanges";
 import { Button } from "./ui/button";
@@ -83,6 +86,7 @@ import {
 } from "../lib/git-utils";
 import { useDiffSettings } from "../hooks/useDiffSettings";
 import { ChangesSection } from "./ChangesSection";
+import { CommittedChangesSection } from "./CommittedChangesSection";
 import { ConflictsSection } from "./ConflictsSection";
 import { ConflictCommentCard } from "./ConflictCommentCard";
 import { MoveToWorkspaceDialog } from "./MoveToWorkspaceDialog";
@@ -101,6 +105,8 @@ interface ChangesDiffViewerProps {
     mode: "plan" | "acceptEdits"
   ) => Promise<void>;
   conflictedFiles?: string[];
+  showCommittedChanges?: boolean;
+  targetBranch?: string | null;
 }
 
 export interface ChangesDiffViewerHandle {
@@ -1078,6 +1084,8 @@ export const ChangesDiffViewer = memo(
         onReviewSubmitted,
         onCreateAgentWithReview,
         conflictedFiles: _conflictedFiles = [], // Not used - we detect conflicts from hunk content
+        showCommittedChanges = false,
+        targetBranch = null,
       },
       ref
     ) => {
@@ -1140,6 +1148,10 @@ export const ChangesDiffViewer = memo(
 
       // Active file tracking (for sidebar highlighting)
       const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+
+      // Committed changes state
+      const [committedFiles, setCommittedFiles] = useState<JjFileChange[]>([]);
+      const [committedSectionCollapsed, setCommittedSectionCollapsed] = useState(false);
 
       // Conflict resolution state
       const conflictFileRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -1446,6 +1458,54 @@ export const ChangesDiffViewer = memo(
         };
         loadComments();
       }, [repoPath, workspaceId]);
+
+      // Fetch committed changes when toggle is enabled
+      useEffect(() => {
+        const fetchCommittedChanges = async () => {
+          if (showCommittedChanges && targetBranch) {
+            try {
+              const mergeDiff: JjRevisionDiff = await jjGetMergeDiff(
+                workspacePath,
+                targetBranch
+              );
+              setCommittedFiles(mergeDiff.files);
+
+              // Store hunks by file path and add to allFileHunks for rendering
+              setAllFileHunks((prev) => {
+                const updated = new Map(prev);
+                for (const fileDiff of mergeDiff.hunks_by_file) {
+                  updated.set(fileDiff.path, {
+                    filePath: fileDiff.path,
+                    hunks: fileDiff.hunks,
+                    isLoading: false,
+                  });
+                }
+                return updated;
+              });
+            } catch (error) {
+              console.error("Failed to fetch committed changes:", error);
+              addToast?.({
+                title: "Failed to load committed changes",
+                description: error instanceof Error ? error.message : "Unknown error",
+                type: "error",
+              });
+            }
+          } else {
+            // Clear committed files when toggle is off
+            setCommittedFiles([]);
+            // Remove committed file hunks from allFileHunks
+            setAllFileHunks((prev) => {
+              const updated = new Map(prev);
+              committedFiles.forEach((file) => {
+                updated.delete(file.path);
+              });
+              return updated;
+            });
+          }
+        };
+
+        fetchCommittedChanges();
+      }, [showCommittedChanges, targetBranch, workspacePath, addToast]);
 
       // Clear stale viewed files when files change (file no longer in changed list = remove from viewed)
       // Also clear when content hash doesn't match (file was modified since being marked as viewed)
@@ -3034,7 +3094,7 @@ export const ChangesDiffViewer = memo(
             <CommitInput
               ref={commitInputRef}
               onCommit={handleCommit}
-              disabled={readOnly}
+              disabled={readOnly || files.length === 0}
               pending={commitPending}
               selectedFileCount={selectedUnstagedFiles.size}
               totalFileCount={files.length}
@@ -3053,14 +3113,14 @@ export const ChangesDiffViewer = memo(
                     onFileSelect={handleConflictFileSelect}
                     activeFilePath={activeFilePath}
                   />
-                  {files.length === 0 ? (
+                  {files.length === 0 && !(showCommittedChanges && committedFiles.length > 0) ? (
                     <div className="flex flex-col items-center justify-center h-full text-center py-12">
                       <CheckCircle2 className="w-12 h-12 text-muted-foreground/40 mb-3" />
                       <p className="text-sm text-muted-foreground">
                         No changes
                       </p>
                     </div>
-                  ) : (
+                  ) : files.length > 0 ? (
                     <ChangesSection
                       title="Changes"
                       files={files}
@@ -3080,6 +3140,28 @@ export const ChangesDiffViewer = memo(
                       onDiscardAll={handleDiscardAll}
                       onDiscard={handleDiscardFiles}
                       onDeselectAll={() => setSelectedUnstagedFiles(new Set())}
+                    />
+                  ) : null}
+
+                  {/* Committed Changes Section */}
+                  {showCommittedChanges && committedFiles.length > 0 && (
+                    <CommittedChangesSection
+                      files={committedFiles}
+                      isCollapsed={committedSectionCollapsed}
+                      onToggleCollapse={() =>
+                        setCommittedSectionCollapsed(!committedSectionCollapsed)
+                      }
+                      activeFilePath={activeFilePath}
+                      onFileSelect={(path, event) => {
+                        event.preventDefault();
+                        setActiveFilePath(path);
+
+                        // Scroll to the file in the diff view
+                        const fileElement = document.getElementById(`file-${path.replace(/\//g, "-")}`);
+                        if (fileElement) {
+                          fileElement.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }
+                      }}
                     />
                   )}
                 </>
@@ -3271,7 +3353,7 @@ export const ChangesDiffViewer = memo(
                   <Loader2 className="w-6 h-6 animate-spin" />
                   <span className="ml-2">Loading diffs...</span>
                 </div>
-              ) : files.length === 0 ? (
+              ) : files.length === 0 && !(showCommittedChanges && committedFiles.length > 0) ? (
                 <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
                   <CheckCircle2 className="w-12 h-12 mb-3 text-muted-foreground/40" />
                   <p className="text-sm">No changes to review</p>
@@ -3343,6 +3425,45 @@ export const ChangesDiffViewer = memo(
                             }
                             deleteComment={deleteComment}
                             conflictRegions={conflictRegionsByFile.get(file.path)}
+                            conflictComments={conflictComments}
+                            openConflictComments={openConflictComments}
+                            editingConflictCommentId={editingConflictCommentId}
+                            saveConflictComment={saveConflictComment}
+                            clearConflictComment={clearConflictComment}
+                            toggleConflictComment={toggleConflictComment}
+                            setOpenConflictComments={setOpenConflictComments}
+                            startEditConflictComment={startEditConflictComment}
+                            cancelEditConflictComment={cancelEditConflictComment}
+                            saveEditConflictComment={saveEditConflictComment}
+                            conflictFileRefs={conflictFileRefs}
+                          />
+                        ))}
+
+                        {/* Committed files */}
+                        {showCommittedChanges && committedFiles.map((file) => (
+                          <FileRowComponent
+                            key={`committed-${file.path}`}
+                            file={{ ...file, stagedStatus: "", workspaceStatus: file.status, isUntracked: false } as ParsedFileChange}
+                            allFileHunks={allFileHunks}
+                            collapsedFiles={collapsedFiles}
+                            viewedFiles={viewedFiles}
+                            expandedLargeDiffs={expandedLargeDiffs}
+                            diffFontSize={diffFontSize}
+                            readOnly={true}
+                            fileActionTarget={null}
+                            selectedUnstagedFiles={new Set()}
+                            workspacePath={workspacePath}
+                            toggleFileCollapse={toggleFileCollapse}
+                            toggleLargeDiff={toggleLargeDiff}
+                            handleMarkFileViewed={handleMarkFileViewed}
+                            handleUnmarkFileViewed={handleUnmarkFileViewed}
+                            handleDiscardFiles={handleDiscardFiles}
+                            handleContextMenu={handleContextMenu}
+                            renderHunkLines={renderHunkLines}
+                            addToast={addToast}
+                            getOutdatedCommentsForFile={() => []}
+                            deleteComment={deleteComment}
+                            conflictRegions={undefined}
                             conflictComments={conflictComments}
                             openConflictComments={openConflictComments}
                             editingConflictCommentId={editingConflictCommentId}
