@@ -132,13 +132,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     }
   }, [selectedWorkspace]);
 
-  const handleBranchChanged = useCallback(
-    (branchName: string) => {
-      setCurrentBranch(branchName);
-      queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
-    },
-    [repoPath, queryClient]
-  );
 
   // Keyboard shortcuts
   useKeyboardShortcut("n", true, () => {
@@ -669,7 +662,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   const handleBranchChanged = useCallback(() => {
     // Refresh workspace data
     queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
-    addToast({ title: "Branch switched successfully", type: "success" });
   }, [repoPath, queryClient, addToast]);
 
 
