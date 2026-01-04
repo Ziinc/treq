@@ -39,6 +39,7 @@ interface CommandPaletteProps {
   onOpenSession: (session: Session, workspace?: Workspace) => void;
   onOpenBranchSwitcher: () => void;
   onOpenFilePicker: () => void;
+  onOpenWorkspacePicker: () => void;
   onOpenWorkspaceDeletion: () => void;
   onCreateWorkspace: () => void;
   onToggleTerminal?: () => void;
@@ -73,13 +74,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   showCommandPalette,
   onCommandPaletteChange,
   workspaces,
-  sessions,
+  sessions: _sessions,
   onNavigateToDashboard,
   onNavigateToSettings,
-  onOpenWorkspaceSession,
-  onOpenSession,
+  onOpenWorkspaceSession: _onOpenWorkspaceSession,
+  onOpenSession: _onOpenSession,
   onOpenBranchSwitcher,
   onOpenFilePicker,
+  onOpenWorkspacePicker,
   onOpenWorkspaceDeletion,
   onCreateWorkspace,
   onToggleTerminal,
@@ -99,7 +101,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onFileSelected,
   selectedWorkspaceId,
   repoPath,
-  workspaceChangeCounts,
+  workspaceChangeCounts: _workspaceChangeCounts,
 }) => {
   // Build command items
   const items = useMemo<CommandItem[]>(() => {
@@ -140,6 +142,17 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         description: "Jump to a file in the repository",
         icon: <FileSearch className="w-4 h-4" />,
         onSelect: onOpenFilePicker,
+      });
+    }
+
+    if (repoPath && onOpenWorkspacePicker) {
+      result.push({
+        id: "go-to-workspace",
+        type: "action",
+        label: "Go to workspace",
+        description: "Open and filter workspaces",
+        icon: <GitBranch className="w-4 h-4" />,
+        onSelect: onOpenWorkspacePicker,
       });
     }
 
@@ -211,28 +224,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       }
     }
 
-    for (const workspace of workspaces) {
-      const workspaceSessions = sessions.filter(
-        (s) => s.workspace_id === workspace.id
-      );
-      const agentCount = workspaceSessions.length;
-      const changeCount = workspaceChangeCounts?.get(workspace.id) ?? 0;
-
-      const parts: string[] = [];
-      parts.push(`${agentCount} agent${agentCount !== 1 ? "s" : ""}`);
-      parts.push(`0 shells`);
-      parts.push(`${changeCount} change${changeCount !== 1 ? "s" : ""}`);
-
-      result.push({
-        id: `workspace-${workspace.id}`,
-        type: "workspace",
-        label: workspace.branch_name,
-        description: parts.join(", "),
-        icon: <GitBranch className="w-4 h-4" />,
-        onSelect: () => onOpenWorkspaceSession(workspace),
-      });
-    }
-
     // Wrap all onSelect handlers to close the dialog after execution
     return result.map((item) => ({
       ...item,
@@ -242,14 +233,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       },
     }));
   }, [
-    workspaces,
-    sessions,
     onNavigateToDashboard,
     onNavigateToSettings,
-    onOpenWorkspaceSession,
-    onOpenSession,
     onOpenBranchSwitcher,
     onOpenFilePicker,
+    onOpenWorkspacePicker,
     onOpenWorkspaceDeletion,
     onCreateWorkspace,
     onToggleTerminal,
@@ -257,7 +245,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     onCreateAgentTerminal,
     onCreateShellTerminal,
     repoPath,
-    workspaceChangeCounts,
     hasSelectedWorkspace,
     onCommandPaletteChange,
   ]);

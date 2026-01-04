@@ -558,8 +558,20 @@ pub fn jj_edit_workspace_working_copy(workspace_path: &str, branch_name: &str) -
         }
     }
 
-    // 2. Fallback: jj edit <branch> then jj new
-    // This happens when there's no child (e.g., new workspace or bookmark = working copy)
+    // 2. Check if bookmark points to @ (working copy)
+    // If so, we're already at the working copy, no need to create a new one
+    let bookmark_commit = jj_get_commit_id(workspace_path, branch_name);
+    let working_copy_commit = jj_get_commit_id(workspace_path, "@");
+
+    if let (Ok(bookmark_id), Ok(wc_id)) = (bookmark_commit, working_copy_commit) {
+        if bookmark_id == wc_id {
+            // Bookmark points to working copy, we're already in the right place
+            return Ok(());
+        }
+    }
+
+    // 3. Fallback: jj edit <branch> then jj new
+    // This happens when there's no child and bookmark != working copy
     let edit_result = command_for("jj")
         .current_dir(workspace_path)
         .args(["edit", branch_name])
