@@ -865,7 +865,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
             initialSelectedFile={initialSelectedFile}
             conflictedFiles={conflictedFiles}
             onCreateAgentWithReview={handleCreateAgentWithReview}
-            showCommittedChanges={showCommittedChanges}
+            showCommittedChanges={workspace ? showCommittedChanges : false}
             targetBranch={targetBranch}
           />
         )}
