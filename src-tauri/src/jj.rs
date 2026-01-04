@@ -1807,7 +1807,7 @@ fn parse_diff_summary(summary: &str) -> Result<Vec<JjFileChange>, JjError> {
 }
 
 /// Get combined diff of all changes between target branch and workspace HEAD
-/// Uses: jj diff --from target_branch --to @ --git
+/// Uses: jj diff --from target_branch --to @- --git
 pub fn jj_get_merge_diff(
     workspace_path: &str,
     target_branch: &str,
@@ -1820,7 +1820,7 @@ pub fn jj_get_merge_diff(
     // First get list of changed files
     let status_output = command_for("jj")
         .current_dir(workspace_path)
-        .args(["diff", "--from", target_branch, "--to", "@", "--summary"])
+        .args(["diff", "--from", target_branch, "--to", "@-", "--summary"])
         .output()
         .map_err(|e| JjError::IoError(e.to_string()))?;
 
@@ -1841,7 +1841,7 @@ pub fn jj_get_merge_diff(
             .args([
                 "diff",
                 "--from", target_branch,
-                "--to", "@",
+                "--to", "@-",
                 "--git",
                 "--no-pager",
                 "--",
@@ -2433,5 +2433,186 @@ mod tests {
         );
 
         eprintln!("✓ Bookmark is properly tracked");
+    }
+
+    #[test]
+    fn test_jj_get_merge_diff_empty_when_no_commits() {
+        // Test that when workspace branch = target branch (no commits),
+        // jj_get_merge_diff returns empty results (no committed files)
+        // Bug: Currently includes working copy changes
+
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().join("test_repo");
+        fs::create_dir_all(&repo_path).unwrap();
+
+        // Initialize git repo
+        let git_init = command_for("git")
+            .current_dir(&repo_path)
+            .args(["init"])
+            .output();
+        if git_init.is_err() {
+            eprintln!("Skipping test: git init failed");
+            return;
+        }
+
+        // Configure git
+        command_for("git")
+            .current_dir(&repo_path)
+            .args(["config", "user.name", "Test User"])
+            .output()
+            .unwrap();
+        command_for("git")
+            .current_dir(&repo_path)
+            .args(["config", "user.email", "test@example.com"])
+            .output()
+            .unwrap();
+
+        // Create initial commit
+        fs::write(repo_path.join("file1.txt"), "initial content").unwrap();
+        command_for("git")
+            .current_dir(&repo_path)
+            .args(["add", "."])
+            .output()
+            .unwrap();
+        command_for("git")
+            .current_dir(&repo_path)
+            .args(["commit", "-m", "initial"])
+            .output()
+            .unwrap();
+
+        // Initialize jj
+        let jj_init = command_for("jj")
+            .current_dir(&repo_path)
+            .args(["git", "init", "--colocate"])
+            .output();
+
+        let jj_init_result = jj_init.unwrap();
+        if !jj_init_result.status.success() {
+            eprintln!("Skipping test: jj init failed: {}",
+                String::from_utf8_lossy(&jj_init_result.stderr));
+            return;
+        }
+
+        // Add UNCOMMITTED changes (working copy only, no new commits)
+        fs::write(repo_path.join("uncommitted.txt"), "working copy changes").unwrap();
+
+        // Call jj_get_merge_diff comparing main to main (no commits)
+        // Since there are NO commits on main (main = main), the result should be EMPTY
+        let result = jj_get_merge_diff(
+            repo_path.to_str().unwrap(),
+            "main"
+        );
+
+        assert!(result.is_ok(), "jj_get_merge_diff should succeed");
+        let diff = result.unwrap();
+
+        // CRITICAL ASSERTION: Should be empty because there are NO COMMITTED changes
+        // Only working copy changes exist
+        // This test will FAIL with current implementation (bug: shows uncommitted files)
+        // After fix with @-, it should PASS (empty result)
+        assert_eq!(diff.files.len(), 0,
+            "Should have no committed files when workspace = target branch (no commits yet)");
+    }
+
+    #[test]
+    fn test_jj_get_merge_diff_excludes_working_copy_changes() {
+        // Test that jj_get_merge_diff returns only COMMITTED files,
+        // not working copy (uncommitted) changes
+        // Setup:
+        // - main branch (target)
+        // - workspace branch with COMMITTED changes
+        // - workspace with UNCOMMITTED changes in working copy
+
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().join("test_repo");
+        fs::create_dir_all(&repo_path).unwrap();
+
+        // Initialize git repo
+        let git_init = command_for("git")
+            .current_dir(&repo_path)
+            .args(["init"])
+            .output();
+        if git_init.is_err() {
+            eprintln!("Skipping test: git init failed");
+            return;
+        }
+
+        // Configure git
+        command_for("git")
+            .current_dir(&repo_path)
+            .args(["config", "user.name", "Test User"])
+            .output()
+            .unwrap();
+        command_for("git")
+            .current_dir(&repo_path)
+            .args(["config", "user.email", "test@example.com"])
+            .output()
+            .unwrap();
+
+        // Create initial commit
+        fs::write(repo_path.join("initial.txt"), "initial").unwrap();
+        command_for("git")
+            .current_dir(&repo_path)
+            .args(["add", "."])
+            .output()
+            .unwrap();
+        command_for("git")
+            .current_dir(&repo_path)
+            .args(["commit", "-m", "initial"])
+            .output()
+            .unwrap();
+
+        // Initialize jj
+        let jj_init = command_for("jj")
+            .current_dir(&repo_path)
+            .args(["git", "init", "--colocate"])
+            .output();
+
+        let jj_init_result = jj_init.unwrap();
+        if !jj_init_result.status.success() {
+            eprintln!("Skipping test: jj init failed");
+            return;
+        }
+
+        // Create a committed file (simulates a commit on current branch)
+        fs::write(repo_path.join("committed.txt"), "committed file").unwrap();
+
+        // Commit this file using jj
+        let jj_commit = command_for("jj")
+            .current_dir(&repo_path)
+            .args(["new", "-m", "Add committed file"])
+            .output();
+
+        if jj_commit.is_err() || !jj_commit.unwrap().status.success() {
+            eprintln!("Skipping test: jj new failed");
+            return;
+        }
+
+        // Now add UNCOMMITTED changes to a different file
+        fs::write(repo_path.join("working_copy.txt"), "uncommitted changes").unwrap();
+
+        // Call jj_get_merge_diff
+        let result = jj_get_merge_diff(
+            repo_path.to_str().unwrap(),
+            "main"
+        );
+
+        assert!(result.is_ok(), "jj_get_merge_diff should succeed");
+        let diff = result.unwrap();
+
+        // CRITICAL ASSERTION: Should include 'committed.txt' (the committed file)
+        // but NOT include 'working_copy.txt' (the uncommitted file)
+        // Bug: Current implementation with @ includes both (working copy changes too)
+        // Fix with @-: Should only include committed files
+        let file_paths: Vec<String> = diff.files.iter().map(|f| f.path.clone()).collect();
+
+        // At minimum, should not be completely empty (should have committed changes)
+        assert!(!file_paths.is_empty(),
+            "Should have some committed files between main and current");
+
+        // The working_copy.txt file should NOT be included (bug scenario)
+        assert!(!file_paths.iter().any(|p| p.contains("working_copy")),
+            "Working copy changes should NOT be included in committed diff. Files: {:?}",
+            file_paths);
     }
 }
