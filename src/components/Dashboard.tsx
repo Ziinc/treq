@@ -14,6 +14,7 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
 import { CommandPalette } from "./CommandPalette";
+import { WorkspacePicker } from "./WorkspacePicker";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { WorkspaceTerminalPane, type WorkspaceTerminalPaneHandle } from "./WorkspaceTerminalPane";
@@ -87,6 +88,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
   const [showFilePicker, setShowFilePicker] = useState(false);
+  const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
   const [showWorkspaceDeletion, setShowWorkspaceDeletion] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [sessionSelectedFile, setSessionSelectedFile] = useState<string | null>(
@@ -946,6 +948,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         }}
         onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
         onOpenFilePicker={() => setShowFilePicker(true)}
+        onOpenWorkspacePicker={() => setShowWorkspacePicker(true)}
         onOpenWorkspaceDeletion={() => setShowWorkspaceDeletion(true)}
         onCreateWorkspace={() => setShowCreateDialog(true)}
         onToggleTerminal={() => terminalPaneRef.current?.toggleCollapse()}
@@ -966,6 +969,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         selectedWorkspaceId={selectedWorkspace?.id ?? null}
         repoPath={repoPath}
         workspaceChangeCounts={undefined}
+      />
+
+      <WorkspacePicker
+        open={showWorkspacePicker}
+        onOpenChange={setShowWorkspacePicker}
+        workspaces={workspaces}
+        sessions={sessions}
+        workspaceChangeCounts={undefined}
+        onSelect={handleOpenSession}
       />
     </div>
   );
