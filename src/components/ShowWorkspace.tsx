@@ -309,23 +309,12 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 
         if (!mounted) return;
 
-        if (result.rebased) {
-          if (result.has_conflicts) {
-            addToast({
-              title: "Workspace rebased with conflicts",
-              description: `${result.conflicted_files.length} file(s) have conflicts. Resolve them in the Review tab.`,
-              type: "warning",
-            });
-            // Update local conflicted files state
-            setConflictedFiles(result.conflicted_files);
-          } else if (!result.success) {
-            addToast({
-              title: "Rebase failed",
-              description: result.message,
-              type: "error",
-            });
-          }
-          // Success case: no toast, status indicator shows progress
+        if (result.rebased && !result.success) {
+          addToast({
+            title: "Rebase failed",
+            description: result.message,
+            type: "error",
+          });
         }
       } catch (error) {
         if (!mounted) return;
@@ -365,13 +354,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
           branch
         );
 
-        if (result.has_conflicts) {
-          addToast({
-            title: "Rebase completed with conflicts",
-            description: `${result.conflicted_files.length} file(s) have conflicts. Resolve them in the Review tab.`,
-            type: "warning",
-          });
-        } else if (result.success) {
+        if (result.success) {
           addToast({
             title: "Rebased successfully",
             description: `Workspace rebased onto ${branch}`,
@@ -510,21 +493,13 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
       );
 
       if (result.rebased) {
-        if (result.has_conflicts) {
-          addToast({
-            title: "Workspace rebased with conflicts",
-            description: `${result.conflicted_files.length} file(s) have conflicts. Resolve them in the Review tab.`,
-            type: "warning",
-          });
-          setConflictedFiles(result.conflicted_files);
-        } else if (!result.success) {
+        if (!result.success) {
           addToast({
             title: "Rebase failed",
             description: result.message,
             type: "error",
           });
         }
-        // Success case: no toast, status indicator shows progress
 
         // Refresh changed files after rebase
         const files = await jjGetChangedFiles(workingDirectory);

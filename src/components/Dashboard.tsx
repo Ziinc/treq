@@ -261,14 +261,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     const handleFocus = async () => {
       try {
         // Trigger background rebase check for all workspaces
-        const result = await checkAndRebaseWorkspaces(repoPath);
-        if (result.rebased && result.has_conflicts) {
-          addToast({
-            title: "Some workspaces have conflicts",
-            description: "Check workspace details for more information",
-            type: "warning",
-          });
-        }
+        await checkAndRebaseWorkspaces(repoPath);
       } catch (error) {
         console.error("Auto-rebase failed:", error);
       }
@@ -424,19 +417,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   useEffect(() => {
     const listeners = [
       // Git config init error handler
-      listen<{ repo_path: string; error: string }>(
-        "git-config-init-error",
-        (event) => {
-          const { repo_path, error } = event.payload;
-          if (repoPath && repo_path === repoPath) {
-            addToast({
-              title: "Git configuration warning",
-              description: `Could not configure automatic remote tracking: ${error}`,
-              type: "warning",
-            });
-          }
-        }
-      ),
+      // listen<{ repo_path: string; error: string }>(
+      //   "git-config-init-error",
+      //   (event) => {
+      //     const { repo_path, error } = event.payload;
+      //     if (repoPath && repo_path === repoPath) {
+      //       addToast({
+      //         title: "Git configuration warning",
+      //         description: `Could not configure automatic remote tracking: ${error}`,
+      //         type: "warning",
+      //       });
+      //     }
+      //   }
+      // ),
       // Navigate to settings
       listen("navigate-to-settings", () => {
         setViewMode("settings");

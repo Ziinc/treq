@@ -66,7 +66,6 @@ pub fn rebase_workspaces_for_target(
     // Rebase each workspace individually from its workspace directory
     // This ensures the revset resolves correctly and includes the working copy
     let mut workspace_branches = Vec::new();
-    let mut any_conflicts = false;
     let mut all_success = true;
     let mut combined_messages = Vec::new();
 
@@ -84,7 +83,6 @@ pub fn rebase_workspaces_for_target(
         match rebase_result {
             Ok(result) => {
                 workspace_branches.push(workspace.branch_name.clone());
-                any_conflicts = any_conflicts || result.has_conflicts;
                 all_success = all_success && result.success;
                 combined_messages.push(format!("Workspace '{}': {}", workspace.workspace_name, result.message));
 
@@ -93,38 +91,17 @@ pub fn rebase_workspaces_for_target(
                     eprintln!("Warning: Failed to edit working copy for workspace '{}': {}", workspace.workspace_name, e);
                 }
 
-                // Old jj edit/sync code (git export/checkout) replaced with jj_edit_workspace_working_copy above
-                // Automatic jj edit/sync temporarily disabled
-                // Export jj bookmarks to git branches to ensure sync
-                // let _ = std::process::Command::new("jj")
-                //     .current_dir(&workspace.workspace_path)
-                //     .args(["git", "export"])
-                //     .output();
-
-                // Only perform git checkout on home repo, not nested workspaces
-                // if !workspace.workspace_path.contains("/.treq/workspaces/") {
-                //     // Checkout the branch in git to fix detached HEAD
-                //     let checkout_result = std::process::Command::new("git")
-                //         .current_dir(&workspace.workspace_path)
-                //         .args(["checkout", &workspace.branch_name])
-                //         .output();
-
-                //     if let Ok(output) = checkout_result {
-                //         if !output.status.success() {
-                //             eprintln!(
-                //                 "Warning: git checkout failed for workspace '{}': {}",
-                //                 workspace.workspace_name,
-                //                 String::from_utf8_lossy(&output.stderr)
-                //             );
-                //         }
-                //     }
-                // }
-
-                // Update DB flags
+                // Update DB flags - check for conflicts after rebase
+                let has_conflicts = jj::get_conflicted_files(
+                    &workspace.workspace_path,
+                    workspace.target_branch.as_deref()
+                )
+                    .map(|files| !files.is_empty())
+                    .unwrap_or(false);
                 local_db::update_workspace_has_conflicts(
                     repo_path,
                     workspace.id,
-                    result.has_conflicts,
+                    has_conflicts,
                 )?;
 
                 local_db::update_workspace_last_rebased_commit(
@@ -150,8 +127,6 @@ pub fn rebase_workspaces_for_target(
         rebase_result: jj::JjRebaseResult {
             success: all_success,
             message: combined_messages.join("\n"),
-            has_conflicts: any_conflicts,
-            conflicted_files: Vec::new(), // Individual workspace conflicts handled above
         },
     }))
 }
@@ -228,7 +203,6 @@ pub fn check_and_rebase_all(repo_path: &str) -> Result<Vec<AutoRebaseResult>, St
 
         // Rebase each workspace individually from its workspace directory
         let mut workspace_branches = Vec::new();
-        let mut any_conflicts = false;
         let mut all_success = true;
         let mut combined_messages = Vec::new();
 
@@ -244,7 +218,6 @@ pub fn check_and_rebase_all(repo_path: &str) -> Result<Vec<AutoRebaseResult>, St
             ) {
                 Ok(result) => {
                     workspace_branches.push(workspace.branch_name.clone());
-                    any_conflicts = any_conflicts || result.has_conflicts;
                     all_success = all_success && result.success;
                     combined_messages.push(format!("Workspace '{}': {}", workspace.workspace_name, result.message));
 
@@ -253,38 +226,17 @@ pub fn check_and_rebase_all(repo_path: &str) -> Result<Vec<AutoRebaseResult>, St
                         eprintln!("Warning: Failed to edit working copy for workspace '{}': {}", workspace.workspace_name, e);
                     }
 
-                    // Old jj edit/sync code (git export/checkout) replaced with jj_edit_workspace_working_copy above
-                    // Automatic jj edit/sync temporarily disabled
-                    // Export jj bookmarks to git branches to ensure sync
-                    // let _ = std::process::Command::new("jj")
-                    //     .current_dir(&workspace.workspace_path)
-                    //     .args(["git", "export"])
-                    //     .output();
-
-                    // Only perform git checkout on home repo, not nested workspaces
-                    // if !workspace.workspace_path.contains("/.treq/workspaces/") {
-                    //     // Checkout the branch in git to fix detached HEAD
-                    //     let checkout_result = std::process::Command::new("git")
-                    //         .current_dir(&workspace.workspace_path)
-                    //         .args(["checkout", &workspace.branch_name])
-                    //         .output();
-
-                    //     if let Ok(output) = checkout_result {
-                    //         if !output.status.success() {
-                    //             eprintln!(
-                    //                 "Warning: git checkout failed for workspace '{}': {}",
-                    //                 workspace.workspace_name,
-                    //                 String::from_utf8_lossy(&output.stderr)
-                    //             );
-                    //         }
-                    //     }
-                    // }
-
-                    // Update DB flags
+                    // Update DB flags - check for conflicts after rebase
+                    let has_conflicts = jj::get_conflicted_files(
+                        &workspace.workspace_path,
+                        workspace.target_branch.as_deref()
+                    )
+                        .map(|files| !files.is_empty())
+                        .unwrap_or(false);
                     if let Err(e) = local_db::update_workspace_has_conflicts(
                         repo_path,
                         workspace.id,
-                        result.has_conflicts,
+                        has_conflicts,
                     ) {
                         eprintln!(
                             "Warning: Failed to update conflicts flag for workspace '{}': {}",
@@ -321,8 +273,6 @@ pub fn check_and_rebase_all(repo_path: &str) -> Result<Vec<AutoRebaseResult>, St
                 rebase_result: jj::JjRebaseResult {
                     success: all_success,
                     message: combined_messages.join("\n"),
-                    has_conflicts: any_conflicts,
-                    conflicted_files: Vec::new(),
                 },
             });
         }
@@ -421,8 +371,14 @@ pub fn rebase_single_workspace(
     //     }
     // }
 
-    // Update DB flags
-    local_db::update_workspace_has_conflicts(repo_path, workspace.id, rebase_result.has_conflicts)?;
+    // Update DB flags - check for conflicts after rebase
+    let has_conflicts = jj::get_conflicted_files(
+        &workspace.workspace_path,
+        workspace.target_branch.as_deref()
+    )
+        .map(|files| !files.is_empty())
+        .unwrap_or(false);
+    local_db::update_workspace_has_conflicts(repo_path, workspace.id, has_conflicts)?;
 
     local_db::update_workspace_last_rebased_commit(
         repo_path,

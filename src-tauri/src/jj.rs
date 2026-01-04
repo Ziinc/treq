@@ -15,6 +15,18 @@ fn command_for(binary: &str) -> Command {
     Command::new(path)
 }
 
+/// Convert git remote branch format to jj bookmark format
+/// Examples: "origin/main" -> "main@origin", "main" -> "main"
+fn convert_git_branch_to_jj_format(branch: &str) -> String {
+    if let Some(slash_pos) = branch.find('/') {
+        let remote = &branch[..slash_pos];
+        let branch_name = &branch[slash_pos + 1..];
+        format!("{}@{}", branch_name, remote)
+    } else {
+        branch.to_string()
+    }
+}
+
 /// Error type for jj operations
 #[derive(Debug)]
 pub enum JjError {
@@ -67,8 +79,6 @@ pub struct JjFileLines {
 pub struct JjRebaseResult {
     pub success: bool,
     pub message: String,
-    pub has_conflicts: bool,
-    pub conflicted_files: Vec<String>,
 }
 
 /// A single commit in the log
@@ -1124,30 +1134,49 @@ pub fn jj_rebase_onto(
     let stderr = String::from_utf8_lossy(&output.stderr);
     let combined_message = format!("{}{}", stdout, stderr);
 
-    // Check for conflicts in output
-    let has_conflicts = combined_message.to_lowercase().contains("conflict");
-
-    // Get conflicted files if there are conflicts
-    let conflicted_files = if has_conflicts {
-        get_conflicted_files(workspace_path).unwrap_or_default()
-    } else {
-        Vec::new()
-    };
-
     Ok(JjRebaseResult {
         success: output.status.success(),
         message: combined_message,
-        has_conflicts,
-        conflicted_files,
     })
 }
 
-/// Get list of conflicted files from jj status
-/// Checks both working copy conflicts and any conflicted commits in the workspace
-pub fn get_conflicted_files(workspace_path: &str) -> Result<Vec<String>, JjError> {
+/// Get list of conflicted files in the workspace
+///
+/// If target_branch is provided, uses: jj diff --from <target_branch> --to @ --summary
+/// This checks for conflicts in changes between target branch and working copy (@)
+///
+/// If target_branch is None, falls back to: jj status --no-pager
+/// This checks for conflicts in the current working copy only
+pub fn get_conflicted_files(
+    workspace_path: &str,
+    target_branch: Option<&str>,
+) -> Result<Vec<String>, JjError> {
+    // New approach: use jj diff if target_branch is provided
+    if let Some(branch) = target_branch {
+        // Validate branch name to prevent injection
+        if !branch.starts_with('-') && !branch.contains('\0') && !branch.is_empty() {
+            // Convert git format to jj format (e.g., origin/main -> main@origin)
+            let jj_branch = convert_git_branch_to_jj_format(branch);
+
+            // Try jj diff approach
+            match get_conflicted_files_from_diff(workspace_path, &jj_branch) {
+                Ok(conflicts) => {
+                    return Ok(conflicts);
+                }
+                Err(e) => {
+                    eprintln!("Warning: jj diff failed ({}), falling back to status", e);
+                    // Fall through to status-based approach
+                }
+            }
+        } else {
+            eprintln!("Warning: Invalid target branch name, falling back to status");
+        }
+    }
+
+    // Fallback approach: use jj st to check for conflicts
     let output = command_for("jj")
         .current_dir(workspace_path)
-        .args(["status", "--no-pager"])
+        .args(["st"])
         .output()
         .map_err(|e| JjError::IoError(e.to_string()))?;
 
@@ -1156,55 +1185,84 @@ pub fn get_conflicted_files(workspace_path: &str) -> Result<Vec<String>, JjError
     }
 
     let status = String::from_utf8_lossy(&output.stdout);
-    let mut conflicts = parse_conflicted_files(&status)?;
-
-    // If no conflicts in working copy, check if there are conflicted commits in the workspace
-    if conflicts.is_empty() {
-        conflicts = get_conflicted_commits(workspace_path).unwrap_or_default();
-    }
+    let conflicts = parse_conflicted_files_from_status(&status)?;
 
     Ok(conflicts)
 }
 
-/// Get list of conflicted files from commits in the workspace
-/// Uses: jj log -r @ --no-graph -T 'conflict_keys'
-/// This catches conflicts that have been committed but not yet resolved
-fn get_conflicted_commits(workspace_path: &str) -> Result<Vec<String>, JjError> {
+/// Get conflicted files using jj diff approach
+/// Uses: jj diff --from <target_branch> --to @ --summary
+fn get_conflicted_files_from_diff(
+    workspace_path: &str,
+    jj_branch: &str,
+) -> Result<Vec<String>, JjError> {
     let output = command_for("jj")
         .current_dir(workspace_path)
-        .args(["log", "-r", "@", "--no-graph", "-T", "conflict_keys"])
+        .args(["diff", "--from", jj_branch, "--to", "@", "--summary"])
         .output()
         .map_err(|e| JjError::IoError(e.to_string()))?;
 
     if !output.status.success() {
+        return Err(JjError::IoError(
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        ));
+    }
+
+    let summary = String::from_utf8_lossy(&output.stdout);
+    let files = parse_diff_summary(&summary)?;
+    let conflicts = extract_conflicted_files_from_summary(files);
+
+    Ok(conflicts)
+}
+
+/// Parse jj st output to extract conflicted files
+///
+/// jj st output format with conflicts:
+/// ```
+/// Working copy changes:
+/// M src/file.ts
+/// Working copy  (@) : wsxupqkr 5a3c905b (conflict) (no description set)
+/// Parent commit (@-): tqkoqust 9d3dff68 (empty) (no description set)
+/// Warning: There are unresolved conflicts at these paths:
+/// src/file1.rs    2-sided conflict including 1 deletion
+/// src/file2.ts    2-sided conflict
+/// ```
+fn parse_conflicted_files_from_status(status: &str) -> Result<Vec<String>, JjError> {
+    // Step 1: Check if "Working copy" line contains "(conflict)" marker
+    let has_conflict_marker = status.lines()
+        .any(|line| {
+            line.trim().starts_with("Working copy") && line.contains("(conflict)")
+        });
+
+    if !has_conflict_marker {
         return Ok(Vec::new());
     }
 
-    let conflict_keys = String::from_utf8_lossy(&output.stdout).trim().to_string();
-
-    // Parse the conflict_keys output - it's a space-separated list of files with conflicts
-    if conflict_keys.is_empty() {
-        Ok(Vec::new())
-    } else {
-        Ok(conflict_keys
-            .split_whitespace()
-            .map(|s| s.to_string())
-            .collect())
-    }
-}
-
-/// Parse jj status output to extract conflicted files
-/// JJ shows conflicts with "C" prefix in status output
-fn parse_conflicted_files(status: &str) -> Result<Vec<String>, JjError> {
+    // Step 2: Parse "Warning:" section to extract file paths
     let mut conflicts = Vec::new();
+    let mut in_warning_section = false;
 
     for line in status.lines() {
         let trimmed = line.trim();
 
-        // Look for lines that start with "C " indicating conflicts
-        // This is the ONLY way jj marks conflicted files in status output
-        if let Some(rest) = trimmed.strip_prefix("C ") {
-            conflicts.push(rest.trim().to_string());
+        // Detect start of warning section
+        if trimmed.starts_with("Warning: There are unresolved conflicts at these paths:") {
+            in_warning_section = true;
+            continue;
+        }
+
+        // Parse conflict lines in warning section
+        if in_warning_section {
+            if trimmed.is_empty() {
+                break;  // End of warning section
+            }
+
+            // Format: "<file_path>    <conflict_description>"
+            if let Some(file_path) = trimmed.split_whitespace().next() {
+                if !file_path.is_empty() && !file_path.starts_with("Warning") {
+                    conflicts.push(file_path.to_string());
+                }
+            }
         }
     }
 
@@ -1317,17 +1375,6 @@ pub fn jj_rebase_with_revset(
     let stderr = String::from_utf8_lossy(&output.stderr);
     let combined_message = format!("{}{}", stdout, stderr);
 
-    // Check for conflicts in output
-    let has_conflicts = combined_message.to_lowercase().contains("conflict");
-
-    // Get conflicted files if there are conflicts
-    let conflicted_files = if has_conflicts {
-        get_conflicted_files(working_dir)
-            .unwrap_or_else(|_| Vec::new())
-    } else {
-        Vec::new()
-    };
-
     // Set jj bookmark after successful rebase
     if output.status.success() {
         jj_set_bookmark(working_dir, branch_name, "@")
@@ -1340,64 +1387,9 @@ pub fn jj_rebase_with_revset(
     Ok(JjRebaseResult {
         success: output.status.success(),
         message: combined_message,
-        has_conflicts,
-        conflicted_files,
     })
 }
 
-/// Rebase multiple workspaces onto their shared target branch
-/// Uses: jj rebase -s 'roots(target..branch1)' -s 'roots(target..branch2)' ... -d target
-pub fn jj_rebase_workspaces_onto_target(
-    repo_path: &str,
-    target_branch: &str,
-    workspace_branches: Vec<String>,
-) -> Result<JjRebaseResult, JjError> {
-    if workspace_branches.is_empty() {
-        return Ok(JjRebaseResult {
-            success: true,
-            message: "No workspaces to rebase".to_string(),
-            has_conflicts: false,
-            conflicted_files: Vec::new(),
-        });
-    }
-
-    let mut args = vec!["rebase".to_string()];
-
-    // Add -s argument for each workspace
-    for branch in &workspace_branches {
-        args.push("-s".to_string());
-        args.push(format!("roots({}..{})", target_branch, branch));
-    }
-
-    // Add destination
-    args.push("-d".to_string());
-    args.push(target_branch.to_string());
-
-    let output = command_for("jj")
-        .current_dir(repo_path)
-        .args(&args)
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let combined_message = format!("{}{}", stdout, stderr);
-
-    // Check for conflicts in output
-    let has_conflicts = combined_message.to_lowercase().contains("conflict");
-
-    // Get conflicted files if there are conflicts
-    // Note: For multi-workspace rebase, we'd need to check each workspace individually
-    // For now, we'll return an empty list since this is a bulk operation
-    let conflicted_files = Vec::new();
-
-    Ok(JjRebaseResult {
-        success: output.status.success(),
-        message: combined_message,
-        has_conflicts,
-        conflicted_files,
-    })
-}
 
 /// Get the default branch of the repository (main/master)
 /// Checks git symbolic-ref for origin/HEAD, falls back to checking for main/master
@@ -2001,6 +1993,15 @@ fn parse_diff_summary(summary: &str) -> Result<Vec<JjFileChange>, JjError> {
     Ok(files)
 }
 
+/// Extract only conflicted files from diff summary
+/// Filters files with status 'C' (conflict)
+fn extract_conflicted_files_from_summary(files: Vec<JjFileChange>) -> Vec<String> {
+    files.into_iter()
+        .filter(|f| f.status == "C")
+        .map(|f| f.path)
+        .collect()
+}
+
 /// Get combined diff of all changes between target branch and workspace HEAD
 /// Uses: jj diff --from target_branch --to @- --git
 pub fn jj_get_merge_diff(
@@ -2109,7 +2110,7 @@ pub fn jj_create_merge_commit(
     let has_conflicts = combined.to_lowercase().contains("conflict");
 
     let conflicted_files = if has_conflicts {
-        get_conflicted_files(workspace_path).unwrap_or_default()
+        get_conflicted_files(workspace_path, None).unwrap_or_default()
     } else {
         Vec::new()
     };
@@ -2421,41 +2422,106 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_conflicted_files_only_matches_c_prefix() {
-        // Test that parse_conflicted_files only detects files with "C " prefix
-        // and does NOT match status messages containing "conflict"
+    fn test_parse_conflicted_files_from_status() {
+        // Test with conflicts
+        let status_with_conflicts = r#"Working copy changes:
+M src/normal-file.ts
+Working copy  (@) : wsxupqkr 5a3c905b (conflict) (no description set)
+Parent commit (@-): tqkoqust 9d3dff68 (empty) (no description set)
+Warning: There are unresolved conflicts at these paths:
+src/conflicted-file1.ts    2-sided conflict including 1 deletion
+src/conflicted-file2.rs    2-sided conflict
+"#;
 
-        // Actual jj status output with a real conflict
-        let status_with_conflict = "Working copy: qpvuntsm 70db4c90 (no description set)\n\
-            C src/conflicted-file.ts\n\
-            Working copy : qpvuntsm 70db4c90 (no description set)";
+        let conflicts = parse_conflicted_files_from_status(status_with_conflicts).unwrap();
+        assert_eq!(conflicts.len(), 2);
+        assert_eq!(conflicts[0], "src/conflicted-file1.ts");
+        assert_eq!(conflicts[1], "src/conflicted-file2.rs");
 
-        let conflicts = parse_conflicted_files(status_with_conflict).unwrap();
-        assert_eq!(conflicts.len(), 1);
-        assert_eq!(conflicts[0], "src/conflicted-file.ts");
+        // Test without conflicts
+        let status_no_conflicts = r#"Working copy changes:
+M src/file.ts
+Working copy  (@) : qpvuntsm 70db4c90 (no description set)
+Parent commit (@-): sktxnswn 130dbfd1 main | (no description set)
+"#;
 
-        // Status message that contains "conflict" but is NOT a conflict
-        // This simulates false positive scenarios
-        let status_no_conflict = "Working copy: qpvuntsm 70db4c90 (conflict in description: fixed)\n\
-            M src/file.ts\n\
-            Working copy : qpvuntsm 70db4c90 (no description set)";
-
-        let conflicts = parse_conflicted_files(status_no_conflict).unwrap();
+        let conflicts = parse_conflicted_files_from_status(status_no_conflicts).unwrap();
         assert_eq!(conflicts.len(), 0, "Should not detect false positive conflicts");
 
-        // Multiple conflicts
-        let status_multiple = "C src/file1.ts\n\
-            C src/file2.ts\n\
-            M src/normal.ts";
-
-        let conflicts = parse_conflicted_files(status_multiple).unwrap();
-        assert_eq!(conflicts.len(), 2);
-        assert!(conflicts.contains(&"src/file1.ts".to_string()));
-        assert!(conflicts.contains(&"src/file2.ts".to_string()));
-
-        // Empty status
+        // Test with empty status
         let status_empty = "";
-        let conflicts = parse_conflicted_files(status_empty).unwrap();
+        let conflicts = parse_conflicted_files_from_status(status_empty).unwrap();
+        assert_eq!(conflicts.len(), 0);
+
+        // Test with conflict marker but no Warning section (edge case)
+        let status_marker_only = r#"Working copy  (@) : wsxupqkr 5a3c905b (conflict) (no description set)
+Parent commit (@-): tqkoqust 9d3dff68 (empty) (no description set)
+"#;
+
+        let conflicts = parse_conflicted_files_from_status(status_marker_only).unwrap();
+        assert_eq!(conflicts.len(), 0, "Should handle missing Warning section gracefully");
+
+        // Test with complex paths
+        let status_complex_paths = r#"Working copy  (@) : wsxupqkr 5a3c905b (conflict) (no description set)
+Warning: There are unresolved conflicts at these paths:
+src/deeply/nested/path/file.ts    2-sided conflict
+target/debug/deps/lib.so    2-sided conflict including 1 deletion and an executable
+"#;
+
+        let conflicts = parse_conflicted_files_from_status(status_complex_paths).unwrap();
+        assert_eq!(conflicts.len(), 2);
+        assert_eq!(conflicts[0], "src/deeply/nested/path/file.ts");
+        assert_eq!(conflicts[1], "target/debug/deps/lib.so");
+    }
+
+    #[test]
+    fn test_extract_conflicted_files_from_summary() {
+        let files = vec![
+            JjFileChange {
+                path: "src/file1.ts".to_string(),
+                status: "M".to_string(),
+                previous_path: None,
+            },
+            JjFileChange {
+                path: "src/conflict.ts".to_string(),
+                status: "C".to_string(),
+                previous_path: None,
+            },
+            JjFileChange {
+                path: "src/another_conflict.rs".to_string(),
+                status: "C".to_string(),
+                previous_path: None,
+            },
+            JjFileChange {
+                path: "src/added.ts".to_string(),
+                status: "A".to_string(),
+                previous_path: None,
+            },
+        ];
+
+        let conflicts = extract_conflicted_files_from_summary(files);
+
+        assert_eq!(conflicts.len(), 2);
+        assert!(conflicts.contains(&"src/conflict.ts".to_string()));
+        assert!(conflicts.contains(&"src/another_conflict.rs".to_string()));
+    }
+
+    #[test]
+    fn test_extract_conflicted_files_from_summary_no_conflicts() {
+        let files = vec![
+            JjFileChange {
+                path: "src/file1.ts".to_string(),
+                status: "M".to_string(),
+                previous_path: None,
+            },
+            JjFileChange {
+                path: "src/added.ts".to_string(),
+                status: "A".to_string(),
+                previous_path: None,
+            },
+        ];
+
+        let conflicts = extract_conflicted_files_from_summary(files);
         assert_eq!(conflicts.len(), 0);
     }
 

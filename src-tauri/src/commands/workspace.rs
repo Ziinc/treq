@@ -206,8 +206,10 @@ pub fn list_conflicted_workspace_ids(repo_path: String) -> Result<Vec<i64>, Stri
 
     for workspace in workspaces {
         // Check actual conflict status from jj directly
-        let conflicted_files = jj::get_conflicted_files(&workspace.workspace_path)
-            .unwrap_or_default();
+        let conflicted_files = jj::get_conflicted_files(
+            &workspace.workspace_path,
+            workspace.target_branch.as_deref()
+        ).unwrap_or_default();
 
         if !conflicted_files.is_empty() {
             conflicted_ids.push(workspace.id);
@@ -260,16 +262,13 @@ pub fn set_workspace_target_branch(
     let rebase_result =
         jj::jj_rebase_onto(&workspace_path, &jj_branch_name).map_err(|e| e.to_string())?;
 
-    // If rebase succeeded (even with conflicts), save the target branch (in Git format for UI)
-    if rebase_result.success || rebase_result.has_conflicts {
+    // If rebase succeeded, save the target branch (in Git format for UI)
+    if rebase_result.success {
         local_db::update_workspace_target_branch(&repo_path, id, &target_branch)?;
 
-        // Update conflict status in database
-        local_db::update_workspace_has_conflicts(
-            &repo_path,
-            id,
-            rebase_result.has_conflicts
-        )?;
+        // Check for conflicts after rebase and update status in database
+        let conflicted_files = jj::get_conflicted_files(&workspace_path, Some(&target_branch)).unwrap_or_default();
+        local_db::update_workspace_has_conflicts(&repo_path, id, !conflicted_files.is_empty())?;
     }
 
     Ok(rebase_result)
@@ -280,8 +279,6 @@ pub fn set_workspace_target_branch(
 pub struct SingleRebaseResult {
     pub rebased: bool,
     pub success: bool,
-    pub has_conflicts: bool,
-    pub conflicted_files: Vec<String>,
     pub message: String,
 }
 
@@ -302,15 +299,11 @@ pub fn check_and_rebase_workspaces(
             Some(auto_result) => Ok(SingleRebaseResult {
                 rebased: true,
                 success: auto_result.rebase_result.success,
-                has_conflicts: auto_result.rebase_result.has_conflicts,
-                conflicted_files: auto_result.rebase_result.conflicted_files,
                 message: auto_result.rebase_result.message,
             }),
             None => Ok(SingleRebaseResult {
                 rebased: false,
                 success: true,
-                has_conflicts: false,
-                conflicted_files: vec![],
                 message: "No rebase needed".to_string(),
             }),
         }
@@ -320,7 +313,6 @@ pub fn check_and_rebase_workspaces(
 
         // Aggregate results
         let rebased_count: usize = results.iter().map(|r| r.workspaces_rebased.len()).sum();
-        let any_conflicts = results.iter().any(|r| r.rebase_result.has_conflicts);
         let all_success = results.iter().all(|r| r.rebase_result.success);
 
         let mut summary = String::new();
@@ -344,8 +336,6 @@ pub fn check_and_rebase_workspaces(
         Ok(SingleRebaseResult {
             rebased: rebased_count > 0,
             success: all_success,
-            has_conflicts: any_conflicts,
-            conflicted_files: vec![], // Not aggregated for bulk operations
             message: summary,
         })
     }
