@@ -4,7 +4,6 @@ mod commands;
 mod db;
 mod file_indexer;
 mod jj;
-mod jj_lib_ops;
 mod local_db;
 mod pty;
 
@@ -33,6 +32,7 @@ pub fn emit_to_focused<S: serde::Serialize + Clone>(app: &AppHandle, event: &str
     // Fallback: emit globally if no focused window found
     let _ = app.emit(event, payload);
 }
+
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -281,6 +281,7 @@ pub fn run() {
             commands::rebuild_workspaces,
             commands::update_workspace_metadata,
             commands::update_workspace_conflicts,
+            commands::list_conflicted_workspace_ids,
             commands::set_workspace_target_branch,
             commands::check_and_rebase_workspaces,
             commands::ensure_workspace_indexed,
@@ -319,6 +320,7 @@ pub fn run() {
             commands::jj_check_branch_exists,
             commands::jj_get_branches,
             commands::jj_edit_bookmark,
+            commands::jj_track_workspace_bookmarks,
             commands::pty_create_session,
             commands::pty_session_exists,
             commands::pty_write,

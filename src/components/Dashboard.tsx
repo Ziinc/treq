@@ -50,7 +50,8 @@ import {
   checkAndRebaseWorkspaces,
   startFileWatcher,
   stopFileWatcher,
-  jjGetBranches,
+  jjTrackWorkspaceBookmarks,
+  listConflictedWorkspaceIds,
 } from "../lib/api";
 import { Loader2 } from "lucide-react";
 
@@ -319,6 +320,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     cleanup();
   }, [repoPath]);
 
+  // Fetch actual conflicted workspace IDs on startup
+  useEffect(() => {
+    const fetchConflictedIds = async () => {
+      console.log("[Dashboard] Attempting to fetch conflicted workspace IDs, repoPath:", repoPath);
+      if (!repoPath) {
+        console.log("[Dashboard] No repoPath, skipping conflicted IDs fetch");
+        return;
+      }
+      try {
+        console.log("[Dashboard] Calling listConflictedWorkspaceIds for:", repoPath);
+        const conflictedIds = await listConflictedWorkspaceIds(repoPath);
+        console.log(`[Dashboard] Found ${conflictedIds.length} workspace(s) with conflicts`, conflictedIds);
+        // Cache the result so sidebar can use it
+        queryClient.setQueryData(["conflicted-workspace-ids", repoPath], conflictedIds);
+      } catch (error) {
+        console.error("Failed to fetch conflicted workspace IDs:", error);
+      }
+    };
+    fetchConflictedIds();
+  }, [repoPath, queryClient]);
+
   // Fetch remote branches on app startup when repo is loaded
   useEffect(() => {
     const fetchRemotes = async () => {
@@ -326,6 +348,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         try {
           await jjGitFetch(repoPath);
           console.log("[Dashboard] Fetched remote branches on startup");
+
+          // Track remote bookmarks for all workspaces
+          try {
+            const trackingResult = await jjTrackWorkspaceBookmarks(repoPath);
+            if (trackingResult.tracked.length > 0) {
+              console.log(
+                `[Dashboard] Tracked ${trackingResult.tracked.length} remote bookmark(s):`,
+                trackingResult.tracked
+              );
+            }
+            if (trackingResult.failed.length > 0) {
+              console.warn(
+                `[Dashboard] Failed to track ${trackingResult.failed.length} bookmark(s):`,
+                trackingResult.failed
+              );
+            }
+          } catch (error) {
+            console.error("[Dashboard] Failed to track workspace bookmarks:", error);
+            // Don't show error to user - bookmark tracking failure shouldn't block app
+          }
         } catch (error) {
           console.error("[Dashboard] Failed to fetch remote branches:", error);
           // Don't show error to user - fetch failure shouldn't block app
@@ -789,6 +831,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
                     onOpenFilePicker={() => setShowFilePicker(true)}
                     onOpenMergePreview={handleOpenMergePreview}
                     onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
+                    queryClient={queryClient}
                     onSessionCreated={(sessionData) => {
                       queryClient.invalidateQueries({
                         queryKey: ["sessions"],

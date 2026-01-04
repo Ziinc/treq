@@ -197,6 +197,26 @@ pub fn update_workspace_conflicts(
     local_db::update_workspace_has_conflicts(&repo_path, workspace_id, has_conflicts)
 }
 
+/// Get list of workspace IDs that currently have conflicts
+/// Checks directly against jj, does not use stale database state
+#[tauri::command]
+pub fn list_conflicted_workspace_ids(repo_path: String) -> Result<Vec<i64>, String> {
+    let workspaces = local_db::get_workspaces(&repo_path)?;
+    let mut conflicted_ids = Vec::new();
+
+    for workspace in workspaces {
+        // Check actual conflict status from jj directly
+        let conflicted_files = jj::get_conflicted_files(&workspace.workspace_path)
+            .unwrap_or_default();
+
+        if !conflicted_files.is_empty() {
+            conflicted_ids.push(workspace.id);
+        }
+    }
+
+    Ok(conflicted_ids)
+}
+
 #[tauri::command]
 pub fn ensure_workspace_indexed(
     repo_path: String,
@@ -243,6 +263,13 @@ pub fn set_workspace_target_branch(
     // If rebase succeeded (even with conflicts), save the target branch (in Git format for UI)
     if rebase_result.success || rebase_result.has_conflicts {
         local_db::update_workspace_target_branch(&repo_path, id, &target_branch)?;
+
+        // Update conflict status in database
+        local_db::update_workspace_has_conflicts(
+            &repo_path,
+            id,
+            rebase_result.has_conflicts
+        )?;
     }
 
     Ok(rebase_result)

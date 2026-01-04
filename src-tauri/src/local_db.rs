@@ -235,6 +235,63 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
     )
     .map_err(|e| format!("Failed to create pending_reviews workspace index: {}", e))?;
 
+    // Migration: Rename pending_reviews columns from old schema to new schema
+    // Old columns: comments_json, overall_comment, viewed_files_json
+    // New columns: comments, summary_text, viewed_files
+    let has_old_columns: Result<i64, _> = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('pending_reviews') WHERE name IN ('comments_json', 'overall_comment', 'viewed_files_json')",
+        [],
+        |row| row.get(0),
+    );
+
+    if let Ok(count) = has_old_columns {
+        if count > 0 {
+            // Create new table with correct schema
+            conn.execute(
+                "CREATE TABLE pending_reviews_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    workspace_id INTEGER NOT NULL UNIQUE,
+                    comments TEXT NOT NULL,
+                    viewed_files TEXT,
+                    summary_text TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+                )",
+                [],
+            )
+            .map_err(|e| format!("Failed to create pending_reviews_new table: {}", e))?;
+
+            // Migrate data from old table to new table
+            // Map old columns to new columns:
+            // comments_json -> comments
+            // viewed_files_json -> viewed_files
+            // overall_comment -> summary_text
+            conn.execute(
+                "INSERT INTO pending_reviews_new
+                 SELECT id, workspace_id, comments_json, viewed_files_json, overall_comment, created_at, updated_at
+                 FROM pending_reviews",
+                [],
+            )
+            .map_err(|e| format!("Failed to migrate pending_reviews data: {}", e))?;
+
+            // Drop old table
+            conn.execute("DROP TABLE pending_reviews", [])
+                .map_err(|e| format!("Failed to drop old pending_reviews table: {}", e))?;
+
+            // Rename new table to original name
+            conn.execute("ALTER TABLE pending_reviews_new RENAME TO pending_reviews", [])
+                .map_err(|e| format!("Failed to rename pending_reviews_new to pending_reviews: {}", e))?;
+
+            // Recreate the index (was dropped with old table)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_pending_reviews_workspace ON pending_reviews(workspace_id)",
+                [],
+            )
+            .map_err(|e| format!("Failed to recreate pending_reviews workspace index: {}", e))?;
+        }
+    }
+
     Ok(())
 }
 
@@ -1415,6 +1472,441 @@ mod tests {
         assert_eq!(updated_review.created_at, first_created_at);
         // updated_at should be different
         assert_ne!(updated_review.updated_at, first_created_at);
+
+        if let Some(initialized) = INITIALIZED_DBS.get() {
+            initialized.lock().unwrap().remove(repo_path);
+        }
+    }
+
+    #[test]
+    fn test_pending_review_migration_from_old_schema() {
+        use rusqlite::Connection;
+
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let db_path = temp_dir.path().join(".treq").join("old_schema.db");
+        fs::create_dir_all(db_path.parent().unwrap()).expect("Failed to create .treq dir");
+
+        // Create database with old schema
+        let conn = Connection::open(&db_path).expect("Failed to open database");
+
+        // Create workspaces table (needed for foreign key)
+        conn.execute(
+            "CREATE TABLE workspaces (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_name TEXT NOT NULL,
+                workspace_path TEXT NOT NULL,
+                branch_name TEXT NOT NULL,
+                metadata TEXT,
+                target_branch TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .expect("Failed to create workspaces table");
+
+        let workspace_id = 1;
+        conn.execute(
+            "INSERT INTO workspaces (workspace_name, workspace_path, branch_name, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?)",
+            ["test-ws", "/path/to/ws", "test-branch", "2025-01-15T10:00:00Z", "2025-01-15T10:00:00Z"],
+        )
+        .expect("Failed to insert workspace");
+
+        // Create pending_reviews table with OLD schema
+        conn.execute(
+            "CREATE TABLE pending_reviews (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL UNIQUE,
+                comments_json TEXT NOT NULL,
+                overall_comment TEXT NOT NULL,
+                viewed_files_json TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+            )",
+            [],
+        )
+        .expect("Failed to create old pending_reviews table");
+
+        // Insert test data with old column names
+        let test_comments = r#"[{"id":"c1","filePath":"test.txt","text":"Test comment"}]"#;
+        let test_viewed_files = r#"["file1.txt","file2.txt"]"#;
+        let test_summary = "Overall test comment";
+        let test_created = "2025-01-15T10:00:00Z";
+        let test_updated = "2025-01-15T11:00:00Z";
+
+        conn.execute(
+            "INSERT INTO pending_reviews (workspace_id, comments_json, overall_comment, viewed_files_json, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?)",
+            [workspace_id.to_string().as_str(), test_comments, test_summary, test_viewed_files, test_created, test_updated],
+        )
+        .expect("Failed to insert old data");
+
+        drop(conn); // Close connection before calling init_local_db
+
+        // Now rename the database to the expected location
+        let repo_path = temp_dir.path().to_str().unwrap();
+        let expected_db_path = get_local_db_path(repo_path);
+        fs::create_dir_all(expected_db_path.parent().unwrap()).expect("Failed to create .treq dir");
+        fs::rename(&db_path, &expected_db_path).expect("Failed to move database");
+
+        // Clear the cache so init_local_db will process the old database
+        if let Some(initialized) = INITIALIZED_DBS.get() {
+            initialized.lock().unwrap().remove(repo_path);
+        }
+
+        // Call init_local_db to trigger migration
+        init_local_db(repo_path).expect("init_local_db should succeed");
+
+        // Verify the table has new column names
+        let conn = Connection::open(&expected_db_path).expect("Failed to open database");
+
+        // Check that new columns exist
+        let mut stmt = conn
+            .prepare("SELECT comments, viewed_files, summary_text, created_at, updated_at FROM pending_reviews WHERE workspace_id = 1")
+            .expect("Should be able to query new columns");
+
+        let review = stmt
+            .query_row([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                ))
+            })
+            .expect("Should find the migrated row");
+
+        assert_eq!(review.0, test_comments, "comments should match");
+        assert_eq!(review.1, Some(test_viewed_files.to_string()), "viewed_files should match");
+        assert_eq!(review.2, Some(test_summary.to_string()), "summary_text should match");
+        assert_eq!(review.3, test_created, "created_at should match");
+        assert_eq!(review.4, test_updated, "updated_at should match");
+
+        // Verify old columns don't exist
+        let old_columns: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('pending_reviews') WHERE name IN ('comments_json', 'overall_comment', 'viewed_files_json')",
+                [],
+                |row| row.get(0),
+            )
+            .expect("Should be able to count old columns");
+        assert_eq!(old_columns, 0, "Old columns should not exist after migration");
+
+        if let Some(initialized) = INITIALIZED_DBS.get() {
+            initialized.lock().unwrap().remove(repo_path);
+        }
+    }
+
+    #[test]
+    fn test_pending_review_migration_idempotent() {
+        use rusqlite::Connection;
+
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let db_path = temp_dir.path().join(".treq").join("idempotent.db");
+        fs::create_dir_all(db_path.parent().unwrap()).expect("Failed to create .treq dir");
+
+        // Create database with old schema
+        let conn = Connection::open(&db_path).expect("Failed to open database");
+
+        // Create workspaces table
+        conn.execute(
+            "CREATE TABLE workspaces (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_name TEXT NOT NULL,
+                workspace_path TEXT NOT NULL,
+                branch_name TEXT NOT NULL,
+                metadata TEXT,
+                target_branch TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .expect("Failed to create workspaces table");
+
+        let workspace_id = 1;
+        conn.execute(
+            "INSERT INTO workspaces (workspace_name, workspace_path, branch_name, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?)",
+            ["ws1", "/path/to/ws1", "branch1", "2025-01-15T10:00:00Z", "2025-01-15T10:00:00Z"],
+        )
+        .expect("Failed to insert workspace");
+
+        // Create old schema table
+        conn.execute(
+            "CREATE TABLE pending_reviews (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL UNIQUE,
+                comments_json TEXT NOT NULL,
+                overall_comment TEXT NOT NULL,
+                viewed_files_json TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+            )",
+            [],
+        )
+        .expect("Failed to create old pending_reviews table");
+
+        // Insert test data
+        conn.execute(
+            "INSERT INTO pending_reviews (workspace_id, comments_json, overall_comment, viewed_files_json, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?)",
+            [workspace_id.to_string().as_str(), r#"[{"id":"c1"}]"#, "Test", r#"["f1"]"#, "2025-01-15T10:00:00Z", "2025-01-15T11:00:00Z"],
+        )
+        .expect("Failed to insert data");
+
+        drop(conn);
+
+        // Move database to expected location
+        let repo_path = temp_dir.path().to_str().unwrap();
+        let expected_db_path = get_local_db_path(repo_path);
+        fs::create_dir_all(expected_db_path.parent().unwrap()).expect("Failed to create .treq dir");
+        fs::rename(&db_path, &expected_db_path).expect("Failed to move database");
+
+        if let Some(initialized) = INITIALIZED_DBS.get() {
+            initialized.lock().unwrap().remove(repo_path);
+        }
+
+        // First migration
+        init_local_db(repo_path).expect("First init_local_db should succeed");
+
+        // Get row count after first migration
+        let conn = Connection::open(&expected_db_path).expect("Failed to open database");
+        let count_after_first: i64 = conn
+            .query_row("SELECT COUNT(*) FROM pending_reviews", [], |row| row.get(0))
+            .expect("Should count rows");
+        assert_eq!(count_after_first, 1, "Should have exactly 1 row after first migration");
+
+        drop(conn);
+
+        // Second migration (should be idempotent)
+        if let Some(initialized) = INITIALIZED_DBS.get() {
+            initialized.lock().unwrap().remove(repo_path);
+        }
+        init_local_db(repo_path).expect("Second init_local_db should succeed");
+
+        // Verify data and count after second migration
+        let conn = Connection::open(&expected_db_path).expect("Failed to open database");
+        let count_after_second: i64 = conn
+            .query_row("SELECT COUNT(*) FROM pending_reviews", [], |row| row.get(0))
+            .expect("Should count rows");
+        assert_eq!(count_after_second, 1, "Should still have exactly 1 row after second migration");
+
+        // Verify data integrity
+        let review = conn
+            .query_row(
+                "SELECT comments FROM pending_reviews WHERE workspace_id = 1",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .expect("Should find row");
+        assert_eq!(review, r#"[{"id":"c1"}]"#, "Data should be intact");
+
+        if let Some(initialized) = INITIALIZED_DBS.get() {
+            initialized.lock().unwrap().remove(repo_path);
+        }
+    }
+
+    #[test]
+    fn test_pending_review_migration_empty_table() {
+        use rusqlite::Connection;
+
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let db_path = temp_dir.path().join(".treq").join("empty.db");
+        fs::create_dir_all(db_path.parent().unwrap()).expect("Failed to create .treq dir");
+
+        // Create database with old schema but no data
+        let conn = Connection::open(&db_path).expect("Failed to open database");
+
+        conn.execute(
+            "CREATE TABLE workspaces (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_name TEXT NOT NULL,
+                workspace_path TEXT NOT NULL,
+                branch_name TEXT NOT NULL,
+                metadata TEXT,
+                target_branch TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .expect("Failed to create workspaces table");
+
+        // Create old schema table with no data
+        conn.execute(
+            "CREATE TABLE pending_reviews (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL UNIQUE,
+                comments_json TEXT NOT NULL,
+                overall_comment TEXT NOT NULL,
+                viewed_files_json TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+            )",
+            [],
+        )
+        .expect("Failed to create old pending_reviews table");
+
+        drop(conn);
+
+        // Move database to expected location
+        let repo_path = temp_dir.path().to_str().unwrap();
+        let expected_db_path = get_local_db_path(repo_path);
+        fs::create_dir_all(expected_db_path.parent().unwrap()).expect("Failed to create .treq dir");
+        fs::rename(&db_path, &expected_db_path).expect("Failed to move database");
+
+        if let Some(initialized) = INITIALIZED_DBS.get() {
+            initialized.lock().unwrap().remove(repo_path);
+        }
+
+        // Call init_local_db to trigger migration
+        init_local_db(repo_path).expect("init_local_db should succeed with empty table");
+
+        // Verify the table still exists and has new schema
+        let conn = Connection::open(&expected_db_path).expect("Failed to open database");
+
+        // Try to query new columns (should succeed with no rows)
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM pending_reviews", [], |row| row.get(0))
+            .expect("Should be able to count rows");
+        assert_eq!(count, 0, "Table should be empty after migration");
+
+        // Verify new columns exist
+        let mut stmt = conn
+            .prepare("SELECT comments, viewed_files, summary_text FROM pending_reviews LIMIT 0")
+            .expect("Should be able to query new columns");
+        let _ = stmt.query([]).expect("Should execute query with new columns");
+
+        if let Some(initialized) = INITIALIZED_DBS.get() {
+            initialized.lock().unwrap().remove(repo_path);
+        }
+    }
+
+    #[test]
+    fn test_pending_review_migration_multiple_workspaces() {
+        use rusqlite::Connection;
+
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let db_path = temp_dir.path().join(".treq").join("multi.db");
+        fs::create_dir_all(db_path.parent().unwrap()).expect("Failed to create .treq dir");
+
+        // Create database with old schema
+        let conn = Connection::open(&db_path).expect("Failed to open database");
+
+        // Create workspaces table
+        conn.execute(
+            "CREATE TABLE workspaces (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_name TEXT NOT NULL,
+                workspace_path TEXT NOT NULL,
+                branch_name TEXT NOT NULL,
+                metadata TEXT,
+                target_branch TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .expect("Failed to create workspaces table");
+
+        // Create 3 workspaces
+        for i in 1..=3 {
+            conn.execute(
+                "INSERT INTO workspaces (workspace_name, workspace_path, branch_name, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?)",
+                [
+                    &format!("ws{}", i),
+                    &format!("/path/to/ws{}", i),
+                    &format!("branch{}", i),
+                    "2025-01-15T10:00:00Z",
+                    "2025-01-15T10:00:00Z",
+                ],
+            )
+            .expect("Failed to insert workspace");
+        }
+
+        // Create old schema table
+        conn.execute(
+            "CREATE TABLE pending_reviews (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL UNIQUE,
+                comments_json TEXT NOT NULL,
+                overall_comment TEXT NOT NULL,
+                viewed_files_json TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+            )",
+            [],
+        )
+        .expect("Failed to create old pending_reviews table");
+
+        // Insert pending reviews for all 3 workspaces
+        for i in 1..=3 {
+            conn.execute(
+                "INSERT INTO pending_reviews (workspace_id, comments_json, overall_comment, viewed_files_json, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                    &i.to_string(),
+                    &format!(r#"[{{"id":"c{}","text":"comment{}"}}]"#, i, i),
+                    &format!("Summary {}", i),
+                    &format!(r#"["file{}.txt"]"#, i),
+                    "2025-01-15T10:00:00Z",
+                    "2025-01-15T11:00:00Z",
+                ],
+            )
+            .expect("Failed to insert pending review");
+        }
+
+        drop(conn);
+
+        // Move database to expected location
+        let repo_path = temp_dir.path().to_str().unwrap();
+        let expected_db_path = get_local_db_path(repo_path);
+        fs::create_dir_all(expected_db_path.parent().unwrap()).expect("Failed to create .treq dir");
+        fs::rename(&db_path, &expected_db_path).expect("Failed to move database");
+
+        if let Some(initialized) = INITIALIZED_DBS.get() {
+            initialized.lock().unwrap().remove(repo_path);
+        }
+
+        // Call init_local_db to trigger migration
+        init_local_db(repo_path).expect("init_local_db should succeed");
+
+        // Verify all 3 reviews were migrated correctly
+        let conn = Connection::open(&expected_db_path).expect("Failed to open database");
+
+        for i in 1..=3 {
+            let review = conn
+                .query_row(
+                    "SELECT comments, summary_text, viewed_files FROM pending_reviews WHERE workspace_id = ?",
+                    [i],
+                    |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, Option<String>>(1)?,
+                            row.get::<_, Option<String>>(2)?,
+                        ))
+                    },
+                )
+                .expect(&format!("Should find pending review for workspace {}", i));
+
+            assert_eq!(review.0, format!(r#"[{{"id":"c{}","text":"comment{}"}}]"#, i, i));
+            assert_eq!(review.1, Some(format!("Summary {}", i)));
+            assert_eq!(review.2, Some(format!(r#"["file{}.txt"]"#, i)));
+        }
+
+        // Verify total count
+        let total_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM pending_reviews", [], |row| row.get(0))
+            .expect("Should count rows");
+        assert_eq!(total_count, 3, "Should have exactly 3 reviews");
 
         if let Some(initialized) = INITIALIZED_DBS.get() {
             initialized.lock().unwrap().remove(repo_path);

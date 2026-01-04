@@ -282,3 +282,92 @@ pub fn jj_get_branches(repo_path: String) -> Result<Vec<jj::JjBranch>, String> {
 pub fn jj_edit_bookmark(repo_path: String, bookmark_name: String) -> Result<String, String> {
     jj::jj_edit_bookmark(&repo_path, &bookmark_name).map_err(|e| e.to_string())
 }
+
+#[derive(Debug, serde::Serialize)]
+pub struct BookmarkTrackingResult {
+    pub tracked: Vec<String>,
+    pub failed: Vec<(String, String)>,
+    pub already_tracked: Vec<String>,
+}
+
+/// Track remote bookmarks for all workspaces in a repository
+/// Used on app startup to ensure bookmarks are properly tracked with origin
+#[tauri::command]
+pub fn jj_track_workspace_bookmarks(
+    repo_path: String,
+    state: State<AppState>,
+) -> Result<BookmarkTrackingResult, String> {
+
+    let remote = "origin";
+
+    // Get currently tracked bookmarks
+    let tracked_bookmarks = match jj::is_bookmark_tracked(&repo_path, "", remote) {
+        Ok(_) => {
+            // If we got here, use bookmark list command to get all tracked ones
+            match std::process::Command::new("jj")
+                .current_dir(&repo_path)
+                .args(["bookmark", "list", "--tracked", "--remote", remote])
+                .output()
+            {
+                Ok(output) if output.status.success() => {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    stdout
+                        .lines()
+                        .filter_map(|line| {
+                            let trimmed = line.trim();
+                            if !trimmed.is_empty() && !trimmed.starts_with("@") {
+                                if let Some(colon_pos) = trimmed.find(':') {
+                                    let name = trimmed[..colon_pos].trim().trim_start_matches('*');
+                                    return Some(name.to_string());
+                                }
+                            }
+                            None
+                        })
+                        .collect::<std::collections::HashSet<_>>()
+                }
+                _ => std::collections::HashSet::new(),
+            }
+        }
+        Err(_) => std::collections::HashSet::new(),
+    };
+
+    // Get all workspace branches from database
+    let workspace_branches: Vec<String> = {
+        match state.db.lock() {
+            Ok(db) => {
+                match crate::local_db::get_workspaces(&repo_path) {
+                    Ok(workspaces) => workspaces.into_iter().map(|ws| ws.branch_name).collect(),
+                    Err(_) => Vec::new(),
+                }
+            }
+            Err(_) => Vec::new(),
+        }
+    };
+
+    let mut result = BookmarkTrackingResult {
+        tracked: Vec::new(),
+        failed: Vec::new(),
+        already_tracked: Vec::new(),
+    };
+
+    // Track each untracked workspace bookmark
+    for branch_name in workspace_branches {
+        if tracked_bookmarks.contains(&branch_name) {
+            result.already_tracked.push(branch_name.clone());
+            continue;
+        }
+
+        match jj::jj_bookmark_track(&repo_path, &branch_name, remote) {
+            Ok(_) => {
+                eprintln!("[BookmarkTracking] Tracked {branch_name}@{remote}");
+                result.tracked.push(branch_name);
+            }
+            Err(e) => {
+                eprintln!("[BookmarkTracking] Failed to track {branch_name}@{remote}: {}", e);
+                result.failed.push((branch_name, e.to_string()));
+            }
+        }
+    }
+
+    Ok(result)
+}
