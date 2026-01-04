@@ -46,6 +46,17 @@ pub struct CachedWorkspaceFile {
     pub mtime: Option<i64>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PendingReview {
+    pub id: i64,
+    pub workspace_id: i64,
+    pub comments: String,           // JSON string
+    pub viewed_files: Option<String>, // JSON string
+    pub summary_text: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 pub fn get_local_db_path(repo_path: &str) -> PathBuf {
     Path::new(repo_path).join(".treq").join("local.db")
 }
@@ -202,6 +213,27 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
         [],
     )
     .map_err(|e| format!("Failed to create workspace_files parent index: {}", e))?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS pending_reviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            workspace_id INTEGER NOT NULL UNIQUE,
+            comments TEXT NOT NULL,
+            viewed_files TEXT,
+            summary_text TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+        )",
+        [],
+    )
+    .map_err(|e| format!("Failed to create pending_reviews table: {}", e))?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pending_reviews_workspace ON pending_reviews(workspace_id)",
+        [],
+    )
+    .map_err(|e| format!("Failed to create pending_reviews workspace index: {}", e))?;
 
     Ok(())
 }
@@ -840,6 +872,82 @@ pub fn sync_workspace_files(
     Ok(())
 }
 
+// ============================================================================
+// Pending Review Functions
+// ============================================================================
+
+/// Get pending review for a workspace
+pub fn get_pending_review(
+    repo_path: &str,
+    workspace_id: i64,
+) -> Result<Option<PendingReview>, String> {
+    let conn = get_connection(repo_path)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, workspace_id, comments, viewed_files, summary_text, created_at, updated_at
+             FROM pending_reviews
+             WHERE workspace_id = ?1",
+        )
+        .map_err(|e| format!("Failed to prepare query: {}", e))?;
+
+    let review = stmt
+        .query_row([workspace_id], |row| {
+            Ok(PendingReview {
+                id: row.get(0)?,
+                workspace_id: row.get(1)?,
+                comments: row.get(2)?,
+                viewed_files: row.get(3)?,
+                summary_text: row.get(4)?,
+                created_at: row.get(5)?,
+                updated_at: row.get(6)?,
+            })
+        })
+        .optional()
+        .map_err(|e| format!("Failed to get pending review: {}", e))?;
+
+    Ok(review)
+}
+
+/// Save or update pending review for a workspace
+pub fn save_pending_review(
+    repo_path: &str,
+    workspace_id: i64,
+    comments: &str,
+    viewed_files: Option<&str>,
+    summary_text: Option<&str>,
+) -> Result<i64, String> {
+    let conn = get_connection(repo_path)?;
+    let now = Utc::now().to_rfc3339();
+
+    // Use INSERT OR REPLACE to handle both insert and update
+    conn.execute(
+        "INSERT OR REPLACE INTO pending_reviews (workspace_id, comments, viewed_files, summary_text, created_at, updated_at)
+         VALUES (
+             ?1,
+             ?2,
+             ?3,
+             ?4,
+             COALESCE((SELECT created_at FROM pending_reviews WHERE workspace_id = ?1), ?5),
+             ?5
+         )",
+        params![workspace_id, comments, viewed_files, summary_text, now],
+    )
+    .map_err(|e| format!("Failed to save pending review: {}", e))?;
+
+    Ok(conn.last_insert_rowid())
+}
+
+/// Clear pending review for a workspace
+pub fn clear_pending_review(repo_path: &str, workspace_id: i64) -> Result<(), String> {
+    let conn = get_connection(repo_path)?;
+    conn.execute(
+        "DELETE FROM pending_reviews WHERE workspace_id = ?1",
+        [workspace_id],
+    )
+    .map_err(|e| format!("Failed to clear pending review: {}", e))?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1104,6 +1212,209 @@ mod tests {
 
         let workspaces = get_workspaces(repo_path).expect("get_workspaces should succeed");
         assert_eq!(workspaces[0].has_conflicts, false);
+
+        if let Some(initialized) = INITIALIZED_DBS.get() {
+            initialized.lock().unwrap().remove(repo_path);
+        }
+    }
+
+    #[test]
+    fn test_save_and_load_pending_review() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let repo_path = temp_dir.path().to_str().unwrap();
+
+        // Create a workspace first
+        let workspace_id = add_workspace(
+            repo_path,
+            "test".to_string(),
+            format!("{}/.treq/workspaces/test", repo_path),
+            "test-branch".to_string(),
+            None,
+        )
+        .expect("add_workspace should succeed");
+
+        // Save a pending review
+        let comments = r#"[{"id":"c1","filePath":"test.txt","hunkId":"h1","startLine":1,"endLine":1,"lineContent":["+new"],"text":"Comment","createdAt":"2025-01-15T10:00:00Z"}]"#;
+        let viewed_files = r#"["file1.txt","file2.txt"]"#;
+        let summary = "Overall summary";
+
+        let id = save_pending_review(
+            repo_path,
+            workspace_id,
+            comments,
+            Some(viewed_files),
+            Some(summary),
+        )
+        .expect("save_pending_review should succeed");
+        assert!(id > 0, "Review ID should be positive");
+
+        // Load it back
+        let review = get_pending_review(repo_path, workspace_id)
+            .expect("get_pending_review should succeed");
+        assert!(review.is_some(), "Review should exist");
+
+        let review = review.unwrap();
+        assert_eq!(review.workspace_id, workspace_id);
+        assert_eq!(review.comments, comments);
+        assert_eq!(review.viewed_files, Some(viewed_files.to_string()));
+        assert_eq!(review.summary_text, Some(summary.to_string()));
+
+        if let Some(initialized) = INITIALIZED_DBS.get() {
+            initialized.lock().unwrap().remove(repo_path);
+        }
+    }
+
+    #[test]
+    fn test_pending_review_unique_constraint() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let repo_path = temp_dir.path().to_str().unwrap();
+
+        // Create a workspace
+        let workspace_id = add_workspace(
+            repo_path,
+            "test".to_string(),
+            format!("{}/.treq/workspaces/test", repo_path),
+            "test-branch".to_string(),
+            None,
+        )
+        .expect("add_workspace should succeed");
+
+        // Save first review
+        let comments1 = r#"[{"id":"c1","text":"First comment"}]"#;
+        save_pending_review(repo_path, workspace_id, comments1, None, None)
+            .expect("First save should succeed");
+
+        // Save again with different data - should update, not create duplicate
+        let comments2 = r#"[{"id":"c2","text":"Second comment"}]"#;
+        save_pending_review(repo_path, workspace_id, comments2, None, Some("New summary"))
+            .expect("Second save should succeed");
+
+        // Verify only one review exists with updated data
+        let review = get_pending_review(repo_path, workspace_id)
+            .expect("get should succeed");
+        assert!(review.is_some());
+
+        let review = review.unwrap();
+        assert_eq!(review.comments, comments2);
+        assert_eq!(review.summary_text, Some("New summary".to_string()));
+
+        if let Some(initialized) = INITIALIZED_DBS.get() {
+            initialized.lock().unwrap().remove(repo_path);
+        }
+    }
+
+    #[test]
+    fn test_clear_pending_review() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let repo_path = temp_dir.path().to_str().unwrap();
+
+        // Create a workspace
+        let workspace_id = add_workspace(
+            repo_path,
+            "test".to_string(),
+            format!("{}/.treq/workspaces/test", repo_path),
+            "test-branch".to_string(),
+            None,
+        )
+        .expect("add_workspace should succeed");
+
+        // Save a review
+        save_pending_review(repo_path, workspace_id, r#"[{"id":"c1"}]"#, None, None)
+            .expect("save should succeed");
+
+        // Verify it exists
+        let review = get_pending_review(repo_path, workspace_id).expect("get should succeed");
+        assert!(review.is_some());
+
+        // Clear it
+        clear_pending_review(repo_path, workspace_id).expect("clear should succeed");
+
+        // Verify it's gone
+        let review = get_pending_review(repo_path, workspace_id).expect("get should succeed");
+        assert!(review.is_none(), "Review should be cleared");
+
+        if let Some(initialized) = INITIALIZED_DBS.get() {
+            initialized.lock().unwrap().remove(repo_path);
+        }
+    }
+
+    #[test]
+    fn test_pending_review_cascade_delete() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let repo_path = temp_dir.path().to_str().unwrap();
+
+        // Create a workspace
+        let workspace_id = add_workspace(
+            repo_path,
+            "test".to_string(),
+            format!("{}/.treq/workspaces/test", repo_path),
+            "test-branch".to_string(),
+            None,
+        )
+        .expect("add_workspace should succeed");
+
+        // Save a review
+        save_pending_review(repo_path, workspace_id, r#"[{"id":"c1"}]"#, None, None)
+            .expect("save should succeed");
+
+        // Verify it exists
+        let review = get_pending_review(repo_path, workspace_id).expect("get should succeed");
+        assert!(review.is_some());
+
+        // Delete the workspace
+        delete_workspace(repo_path, workspace_id).expect("delete_workspace should succeed");
+
+        // Verify the review is also deleted (CASCADE)
+        let review = get_pending_review(repo_path, workspace_id).expect("get should succeed");
+        assert!(
+            review.is_none(),
+            "Review should be deleted when workspace is deleted"
+        );
+
+        if let Some(initialized) = INITIALIZED_DBS.get() {
+            initialized.lock().unwrap().remove(repo_path);
+        }
+    }
+
+    #[test]
+    fn test_pending_review_preserves_created_at_on_update() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let repo_path = temp_dir.path().to_str().unwrap();
+
+        // Create a workspace
+        let workspace_id = add_workspace(
+            repo_path,
+            "test".to_string(),
+            format!("{}/.treq/workspaces/test", repo_path),
+            "test-branch".to_string(),
+            None,
+        )
+        .expect("add_workspace should succeed");
+
+        // Save first review
+        save_pending_review(repo_path, workspace_id, r#"[{"id":"c1"}]"#, None, None)
+            .expect("save should succeed");
+
+        let first_review = get_pending_review(repo_path, workspace_id)
+            .expect("get should succeed")
+            .expect("review should exist");
+        let first_created_at = first_review.created_at.clone();
+
+        // Wait a moment
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        // Update the review
+        save_pending_review(repo_path, workspace_id, r#"[{"id":"c2"}]"#, None, None)
+            .expect("update should succeed");
+
+        let updated_review = get_pending_review(repo_path, workspace_id)
+            .expect("get should succeed")
+            .expect("review should exist");
+
+        // created_at should be the same
+        assert_eq!(updated_review.created_at, first_created_at);
+        // updated_at should be different
+        assert_ne!(updated_review.updated_at, first_created_at);
 
         if let Some(initialized) = INITIALIZED_DBS.get() {
             initialized.lock().unwrap().remove(repo_path);

@@ -25,12 +25,14 @@ import {
   markFileViewed,
   unmarkFileViewed,
   loadPendingReview,
+  savePendingReview,
   clearPendingReview,
   jjGetMergeDiff,
   type JjDiffHunk,
   type JjFileChange,
   type JjRevisionDiff,
 } from "../lib/api";
+import { useDebounce } from "../hooks/useDebounce";
 import { useCachedWorkspaceChanges } from "../hooks/useCachedWorkspaceChanges";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
@@ -1253,8 +1255,68 @@ export const ChangesDiffViewer = memo(
           console.error('Error computing conflicted files:', error);
         }
 
+        // Also check committed files for conflicts
+        if (showCommittedChanges && committedFiles && Array.isArray(committedFiles)) {
+          try {
+            for (const file of committedFiles) {
+              // Skip if file or path is invalid
+              if (!file || !file.path) {
+                continue;
+              }
+
+              const fileHunksData = allFileHunks.get(file.path);
+              if (!fileHunksData || fileHunksData.isLoading || !fileHunksData.hunks) {
+                continue;
+              }
+
+              // Reconstruct file content from hunks
+              const lines: string[] = [];
+              let hasConflictMarkers = false;
+
+              for (const hunk of fileHunksData.hunks) {
+                if (!hunk || !hunk.lines) continue;
+
+                for (const line of hunk.lines) {
+                  if (!line) continue;
+
+                  // For additions (+), include them as they represent the current state
+                  if (line.startsWith('+')) {
+                    const content = line.substring(1);
+                    lines.push(content);
+                    // Check for conflict markers
+                    if (content.includes('<<<<<<< Conflict') || content.includes('>>>>>>> Conflict')) {
+                      hasConflictMarkers = true;
+                    }
+                  } else if (line.startsWith(' ')) {
+                    const content = line.substring(1); // Context lines
+                    lines.push(content);
+                    // Check for conflict markers
+                    if (content.includes('<<<<<<< Conflict') || content.includes('>>>>>>> Conflict')) {
+                      hasConflictMarkers = true;
+                    }
+                  }
+                  // Skip removal lines (-)
+                }
+              }
+
+              // If this file has conflicts, parse the regions
+              if (hasConflictMarkers) {
+                const content = lines.join('\n');
+                const regions = parseConflictMarkers(content, file.path);
+
+                if (regions.length > 0) {
+                  conflicted.push(file.path);
+                  regionsByFile.set(file.path, regions);
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error computing committed file conflicts:', error);
+          }
+        }
+
         return { actualConflictedFiles: conflicted, conflictRegionsByFile: regionsByFile };
-      }, [files, allFileHunks]);
+      }, [files, allFileHunks, showCommittedChanges, committedFiles]);
 
       // Track stale files that changed while user is in review mode
       const [staleFiles, setStaleFiles] = useState<Set<string>>(new Set());
@@ -1441,22 +1503,28 @@ export const ChangesDiffViewer = memo(
 
       // Load pending review comments on mount
       useEffect(() => {
-        const loadComments = async () => {
+        const loadReview = async () => {
           if (repoPath && workspaceId !== undefined) {
             try {
-              const loadedComments = await loadPendingReview(
-                repoPath,
-                workspaceId
-              );
-              if (loadedComments.length > 0) {
-                setComments(loadedComments);
+              const pendingReview = await loadPendingReview(repoPath, workspaceId);
+              if (pendingReview) {
+                setComments(pendingReview.comments);
+                if (pendingReview.summary_text) {
+                  setFinalReviewComment(pendingReview.summary_text);
+                }
+                setHasUserAddedComments(pendingReview.comments.length > 0);
+
+              const loadedComments = await loadPendingReview(repoPath, workspaceId);
+               if (loadedComments &&loadedComments.comments.length > 0) {
+                 setComments(loadedComments.comments);
               }
+            }
             } catch (error) {
               console.error("Failed to load pending review:", error);
             }
           }
         };
-        loadComments();
+        loadReview();
       }, [repoPath, workspaceId]);
 
       // Fetch committed changes when toggle is enabled
@@ -1506,6 +1574,35 @@ export const ChangesDiffViewer = memo(
 
         fetchCommittedChanges();
       }, [showCommittedChanges, targetBranch, workspacePath, addToast]);
+
+      // Debounce comments and summary for auto-save
+      const debouncedComments = useDebounce(comments, 500);
+      const debouncedSummary = useDebounce(finalReviewComment, 500);
+
+      // Auto-save pending review when comments or summary change
+      useEffect(() => {
+        const saveReview = async () => {
+          if (!repoPath || workspaceId === undefined) return;
+
+          // Only save if there's actual content
+          if (debouncedComments.length === 0 && !debouncedSummary.trim()) {
+            return;
+          }
+
+          try {
+            await savePendingReview(
+              repoPath,
+              workspaceId,
+              debouncedComments,
+              undefined, // viewed_files handled separately
+              debouncedSummary.trim() || undefined
+            );
+          } catch (error) {
+            console.error("Failed to auto-save review:", error);
+          }
+        };
+        saveReview();
+      }, [debouncedComments, debouncedSummary, repoPath, workspaceId]);
 
       // Clear stale viewed files when files change (file no longer in changed list = remove from viewed)
       // Also clear when content hash doesn't match (file was modified since being marked as viewed)
@@ -2649,14 +2746,25 @@ export const ChangesDiffViewer = memo(
           } finally {
             setSendingReview(false);
           }
-        },
-        [
-          onCreateAgentWithReview,
-          formatReviewMarkdown,
-          addToast,
-          onReviewSubmitted,
-        ]
-      );
+ 
+           // Clear review state
+           setComments([]);
+           setHasUserAddedComments(false);
+           setFinalReviewComment("");
+           setReviewPopoverOpen(false);
+
+          // Clear persisted review from database
+          if (repoPath && workspaceId !== undefined) {
+            await clearPendingReview(repoPath, workspaceId);
+          }
+       }, [
+         onCreateAgentWithReview,
+         formatReviewMarkdown,
+         addToast,
+         onReviewSubmitted,
+         repoPath,
+         workspaceId,
+       ]);
 
       // Cancel review handler
       const handleCancelReview = useCallback(async () => {
@@ -3463,7 +3571,7 @@ export const ChangesDiffViewer = memo(
                             addToast={addToast}
                             getOutdatedCommentsForFile={() => []}
                             deleteComment={deleteComment}
-                            conflictRegions={undefined}
+                            conflictRegions={conflictRegionsByFile.get(file.path)}
                             conflictComments={conflictComments}
                             openConflictComments={openConflictComments}
                             editingConflictCommentId={editingConflictCommentId}
