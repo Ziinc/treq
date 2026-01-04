@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { QueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import {
   Workspace,
@@ -93,6 +94,7 @@ interface ShowWorkspaceProps {
   onSessionCreated?: (session: SessionCreationInfo) => void;
   onOpenMergePreview?: () => void;
   onOpenBranchSwitcher?: () => void;
+  queryClient?: QueryClient;
 }
 
 export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
@@ -105,6 +107,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   onSessionCreated,
   onOpenMergePreview,
   onOpenBranchSwitcher,
+  queryClient,
 }) {
   const workingDirectory = workspace?.workspace_path || repositoryPath || "";
   const effectiveRepoPath = workspace?.repo_path || repositoryPath || "";

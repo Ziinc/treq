@@ -319,6 +319,17 @@ export const jjEditBookmark = (
 ): Promise<string> =>
   invoke("jj_edit_bookmark", { repoPath: repo_path, bookmarkName: bookmark_name });
 
+export interface BookmarkTrackingResult {
+  tracked: string[];
+  failed: [string, string][];
+  already_tracked: string[];
+}
+
+export const jjTrackWorkspaceBookmarks = (
+  repo_path: string
+): Promise<BookmarkTrackingResult> =>
+  invoke("jj_track_workspace_bookmarks", { repoPath: repo_path });
+
 export const jjPush = (workspace_path: string, force?: boolean): Promise<string> =>
   invoke("jj_push", { workspacePath: workspace_path, force: force ?? false });
 
@@ -401,6 +412,13 @@ export const updateWorkspaceConflicts = (
     repoPath: repo_path,
     workspaceId: workspace_id,
     hasConflicts: has_conflicts,
+  });
+
+export const listConflictedWorkspaceIds = (
+  repo_path: string
+): Promise<number[]> =>
+  invoke("list_conflicted_workspace_ids", {
+    repoPath: repo_path,
   });
 
 export const setWorkspaceTargetBranch = (

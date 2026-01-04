@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, memo, useMemo } from "react";
-import { Workspace, getWorkspaces } from "../lib/api";
+import { Workspace, getWorkspaces, listConflictedWorkspaceIds } from "../lib/api";
 import {
   buildWorkspaceTree,
   flattenWorkspaceTree,
@@ -123,6 +123,12 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
     const { data: workspaces = [] } = useQuery({
       queryKey: ["workspaces", repoPath],
       queryFn: () => getWorkspaces(repoPath || ""),
+      enabled: !!repoPath,
+    });
+
+    const { data: conflictedIds = [] } = useQuery<number[]>({
+      queryKey: ["conflicted-workspace-ids", repoPath],
+      queryFn: () => listConflictedWorkspaceIds(repoPath || ""),
       enabled: !!repoPath,
     });
 
@@ -286,7 +292,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                             >
                               {getWorkspaceTitle(workspace)}
                             </span>
-                            {workspace.has_conflicts && (
+                            {conflictedIds.includes(workspace.id) && (
                               <AlertTriangle className="w-3 h-3 text-destructive shrink-0" />
                             )}
                             <StatusPill path={workspace.workspace_path} />
