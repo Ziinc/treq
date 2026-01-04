@@ -175,7 +175,7 @@ pub fn jj_rebase_onto(
 /// Get list of conflicted files in workspace
 #[tauri::command]
 pub fn jj_get_conflicted_files(workspace_path: String) -> Result<Vec<String>, String> {
-    jj::get_conflicted_files(&workspace_path).map_err(|e| e.to_string())
+    jj::get_conflicted_files(&workspace_path, None).map_err(|e| e.to_string())
 }
 
 /// Get the default branch of the repository (main/master)

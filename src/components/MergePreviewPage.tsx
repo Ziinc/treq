@@ -115,17 +115,6 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
           return;
         }
 
-        if (result.has_conflicts) {
-          addToast({
-            title: "Merge created with conflicts",
-            description: `${result.conflicted_files?.length ?? 0} file(s) have conflicts`,
-            type: "error",
-          });
-          // Don't delete workspace if there are conflicts
-          onCancel();
-          return;
-        }
-
         addToast({
           title: "Merge successful",
           description: `Merged ${workspace.branch_name} into ${targetBranch}`,

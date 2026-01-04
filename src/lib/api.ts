@@ -53,8 +53,6 @@ export interface JjFileLines {
 export interface JjRebaseResult {
   success: boolean;
   message: string;
-  has_conflicts: boolean;
-  conflicted_files: string[];
 }
 
 export interface JjLogCommit {
@@ -447,8 +445,6 @@ export const jjSetWorkspaceTarget = (
 export interface SingleRebaseResult {
   rebased: boolean;
   success: boolean;
-  has_conflicts: boolean;
-  conflicted_files: string[];
   message: string;
 }
 
