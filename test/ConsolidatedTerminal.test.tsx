@@ -4,12 +4,17 @@ import { ConsolidatedTerminal } from "../src/components/ConsolidatedTerminal";
 import * as api from "../src/lib/api";
 
 // Mock xterm addons to avoid DOM issues in tests
+// Store the key handler for testing
+let globalKeyHandler: ((event: KeyboardEvent) => boolean) | null = null;
+
 vi.mock("@xterm/xterm", () => {
   class MockTerminal {
     loadAddon = vi.fn();
     open = vi.fn();
     dispose = vi.fn();
-    attachCustomKeyEventHandler = vi.fn();
+    attachCustomKeyEventHandler = vi.fn((handler: (event: KeyboardEvent) => boolean) => {
+      globalKeyHandler = handler;
+    });
     onData = vi.fn();
     write = vi.fn();
     element = document.createElement("div");
@@ -23,6 +28,11 @@ vi.mock("@xterm/xterm", () => {
     Terminal: MockTerminal,
   };
 });
+
+// Export function to get the captured handler
+export function getGlobalKeyHandler() {
+  return globalKeyHandler;
+}
 
 vi.mock("@xterm/addon-fit", () => {
   class MockFitAddon {
@@ -182,5 +192,142 @@ describe("ConsolidatedTerminal autoCommand behavior", () => {
 
     // Verify autoCommand was NOT sent on remount
     expect(mockPtyWrite).not.toHaveBeenCalled();
+  });
+});
+
+describe("ConsolidatedTerminal global shortcuts", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalKeyHandler = null;
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    globalKeyHandler = null;
+  });
+
+  it("dispatches Cmd+K to window when terminal receives it", async () => {
+    // Setup mocks
+    const mockPtySessionExists = vi.spyOn(api, "ptySessionExists").mockResolvedValue(true);
+    const mockPtyListen = vi.spyOn(api, "ptyListen").mockResolvedValue(() => {});
+
+    // Setup window event listener spy
+    const windowKeydownSpy = vi.fn();
+    window.addEventListener("keydown", windowKeydownSpy);
+
+    render(
+      <ConsolidatedTerminal
+        sessionId="test-session-shortcuts-k"
+        workingDirectory="/test/dir"
+      />
+    );
+
+    await waitFor(() => expect(mockPtyListen).toHaveBeenCalled());
+    expect(globalKeyHandler).not.toBeNull();
+
+    // Simulate Cmd+K in terminal
+    const event = new KeyboardEvent("keydown", { key: "k", metaKey: true });
+    const result = globalKeyHandler!(event);
+
+    // Verify handler returned false (don't process in xterm)
+    expect(result).toBe(false);
+
+    // Verify event was dispatched to window
+    expect(windowKeydownSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "k", metaKey: true })
+    );
+
+    window.removeEventListener("keydown", windowKeydownSpy);
+  });
+
+  it("dispatches Cmd+P to window when terminal receives it", async () => {
+    // Setup mocks
+    const mockPtySessionExists = vi.spyOn(api, "ptySessionExists").mockResolvedValue(true);
+    const mockPtyListen = vi.spyOn(api, "ptyListen").mockResolvedValue(() => {});
+
+    const windowKeydownSpy = vi.fn();
+    window.addEventListener("keydown", windowKeydownSpy);
+
+    render(
+      <ConsolidatedTerminal
+        sessionId="test-session-shortcuts-p"
+        workingDirectory="/test/dir"
+      />
+    );
+
+    await waitFor(() => expect(mockPtyListen).toHaveBeenCalled());
+    expect(globalKeyHandler).not.toBeNull();
+
+    // Simulate Cmd+P in terminal
+    const event = new KeyboardEvent("keydown", { key: "p", metaKey: true });
+    const result = globalKeyHandler!(event);
+
+    expect(result).toBe(false);
+    expect(windowKeydownSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "p", metaKey: true })
+    );
+
+    window.removeEventListener("keydown", windowKeydownSpy);
+  });
+
+  it("dispatches Escape to window when terminal receives it", async () => {
+    // Setup mocks
+    const mockPtySessionExists = vi.spyOn(api, "ptySessionExists").mockResolvedValue(true);
+    const mockPtyListen = vi.spyOn(api, "ptyListen").mockResolvedValue(() => {});
+
+    const windowKeydownSpy = vi.fn();
+    window.addEventListener("keydown", windowKeydownSpy);
+
+    render(
+      <ConsolidatedTerminal
+        sessionId="test-session-shortcuts-esc"
+        workingDirectory="/test/dir"
+      />
+    );
+
+    await waitFor(() => expect(mockPtyListen).toHaveBeenCalled());
+    expect(globalKeyHandler).not.toBeNull();
+
+    // Simulate Escape in terminal
+    const event = new KeyboardEvent("keydown", { key: "Escape" });
+    const result = globalKeyHandler!(event);
+
+    expect(result).toBe(false);
+    expect(windowKeydownSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "Escape" })
+    );
+
+    window.removeEventListener("keydown", windowKeydownSpy);
+  });
+
+  it("does NOT dispatch regular keys to window", async () => {
+    // Setup mocks
+    const mockPtySessionExists = vi.spyOn(api, "ptySessionExists").mockResolvedValue(true);
+    const mockPtyListen = vi.spyOn(api, "ptyListen").mockResolvedValue(() => {});
+
+    const windowKeydownSpy = vi.fn();
+    window.addEventListener("keydown", windowKeydownSpy);
+
+    render(
+      <ConsolidatedTerminal
+        sessionId="test-session-shortcuts-regular"
+        workingDirectory="/test/dir"
+      />
+    );
+
+    await waitFor(() => expect(mockPtyListen).toHaveBeenCalled());
+    expect(globalKeyHandler).not.toBeNull();
+
+    // Simulate regular key (letter 'a' without modifiers)
+    const event = new KeyboardEvent("keydown", { key: "a" });
+    const result = globalKeyHandler!(event);
+
+    // Handler should allow xterm to process this key
+    expect(result).toBe(true);
+
+    // Verify event was NOT dispatched to window
+    expect(windowKeydownSpy).not.toHaveBeenCalled();
+
+    window.removeEventListener("keydown", windowKeydownSpy);
   });
 });

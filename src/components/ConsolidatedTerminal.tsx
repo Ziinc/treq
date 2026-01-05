@@ -242,10 +242,21 @@ export const ConsolidatedTerminal = forwardRef<
       const localHandleKeyEvent = (event: KeyboardEvent): boolean => {
         // Allow global shortcuts to propagate (don't let XTerm consume them)
         const isGlobalShortcut =
-          ((event.metaKey || event.ctrlKey) && ['k', 'j', 'n'].includes(event.key.toLowerCase())) ||
+          ((event.metaKey || event.ctrlKey) && ['k', 'j', 'n', 'p'].includes(event.key.toLowerCase())) ||
           event.key === 'Escape';
 
         if (isGlobalShortcut) {
+          // Dispatch to window so global handlers can receive it
+          // (xterm captures events and they don't bubble to window naturally)
+          window.dispatchEvent(new KeyboardEvent('keydown', {
+            key: event.key,
+            code: event.code,
+            metaKey: event.metaKey,
+            ctrlKey: event.ctrlKey,
+            shiftKey: event.shiftKey,
+            altKey: event.altKey,
+            bubbles: true,
+          }));
           return false; // Let event propagate to window listeners
         }
 
