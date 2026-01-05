@@ -136,9 +136,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
 
   // Keyboard shortcuts
   useKeyboardShortcut("n", true, () => {
-    if (repoPath && viewMode === "session" && !selectedWorkspace) {
-      setShowCreateDialog(true);
-    }
+    setShowCreateDialog(true);
   });
 
   useKeyboardShortcut("k", true, () => {
@@ -146,14 +144,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   });
 
   useKeyboardShortcut("p", true, () => {
-    if (repoPath) {
-      setShowFilePicker(true);
-    }
+    setShowFilePicker(true);
   });
 
   useKeyboardShortcut("Escape", false, () => {
     if (showCreateDialog) setShowCreateDialog(false);
     if (showCommandPalette) setShowCommandPalette(false);
+    if (showFilePicker) setShowFilePicker(false);
   });
 
   // Load repo path from URL params (for new windows) or saved settings

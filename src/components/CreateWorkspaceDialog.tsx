@@ -353,6 +353,10 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
       e.preventDefault();
       handleCreate();
     }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      onOpenChange(false);
+    }
   };
 
   return (
