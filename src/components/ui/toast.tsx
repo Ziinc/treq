@@ -37,7 +37,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ toasts, addToast, removeToast }}>
       {children}
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+      <div className="fixed bottom-4 left-4 z-50 flex flex-col gap-2">
         {toasts.map((toast) => (
           <ToastItem key={toast.id} toast={toast} onClose={() => removeToast(toast.id)} />
         ))}
@@ -48,29 +48,29 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
 function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
   const typeStyles = {
-    success: "bg-green-600 text-white",
-    error: "bg-red-600 text-white",
-    warning: "bg-orange-600 text-white",
-    info: "bg-blue-600 text-white",
+    success: "bg-green-600 dark:bg-green-700 border border-green-500/30 dark:border-green-600/30 text-white",
+    error: "bg-destructive dark:bg-destructive/90 border border-destructive/30 text-destructive-foreground",
+    warning: "bg-orange-600 dark:bg-orange-700 border border-orange-500/30 dark:border-orange-600/30 text-white",
+    info: "bg-primary dark:bg-primary/90 border border-primary/30 text-primary-foreground",
   }
 
   return (
     <div
       className={cn(
-        "min-w-[300px] rounded-lg p-4 shadow-lg animate-in slide-in-from-right",
+        "min-w-[300px] rounded-xl py-2.5 px-4 shadow-lg animate-in slide-in-from-left",
         typeStyles[toast.type]
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1">
-          <div className="font-semibold">{toast.title}</div>
+          <div className="text-base font-medium">{toast.title}</div>
           {toast.description && (
-            <div className="text-sm opacity-90 mt-1">{toast.description}</div>
+            <div className="text-base opacity-90 mt-0.5">{toast.description}</div>
           )}
         </div>
         <button
           onClick={onClose}
-          className="text-white/80 hover:text-white transition-colors"
+          className="text-current/70 hover:text-current hover:bg-white/20 dark:hover:bg-white/10 rounded transition-colors p-0.5"
         >
           <X className="w-4 h-4" />
         </button>
