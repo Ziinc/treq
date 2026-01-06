@@ -241,9 +241,10 @@ export const ConsolidatedTerminal = forwardRef<
       // Local key event handler
       const localHandleKeyEvent = (event: KeyboardEvent): boolean => {
         // Allow global shortcuts to propagate (don't let XTerm consume them)
+        // Note: Escape is NOT included - it should always go to the terminal
+        // for things like canceling Claude operations, exiting vim modes, etc.
         const isGlobalShortcut =
-          ((event.metaKey || event.ctrlKey) && ['k', 'j', 'n', 'p'].includes(event.key.toLowerCase())) ||
-          event.key === 'Escape';
+          (event.metaKey || event.ctrlKey) && ['k', 'j', 'n', 'p'].includes(event.key.toLowerCase());
 
         if (isGlobalShortcut) {
           // Dispatch to window so global handlers can receive it

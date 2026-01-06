@@ -9,10 +9,11 @@ export interface CommittedChangesSectionProps {
   onToggleCollapse: () => void;
   activeFilePath: string | null;
   onFileSelect: (path: string, event: React.MouseEvent) => void;
+  workspacePath?: string;
 }
 
 export const CommittedChangesSection = memo<CommittedChangesSectionProps>(
-  ({ files, isCollapsed, onToggleCollapse, activeFilePath, onFileSelect }) => {
+  ({ files, isCollapsed, onToggleCollapse, activeFilePath, onFileSelect, workspacePath }) => {
     // Don't render if no files
     if (files.length === 0) {
       return null;
@@ -46,6 +47,7 @@ export const CommittedChangesSection = memo<CommittedChangesSectionProps>(
                 isLastSelected={false}
                 readOnly={true}
                 onFileClick={onFileSelect}
+                workspacePath={workspacePath}
               />
             ))}
           </div>

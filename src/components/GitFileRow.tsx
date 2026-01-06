@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { Undo2, Plus, Minus } from "lucide-react";
 import { cn } from "../lib/utils";
+import { FileContextMenu } from "./FileContextMenu";
 
 export interface JjFileChange {
   path: string;
@@ -19,6 +20,7 @@ export interface GitFileRowProps {
   onStage?: (path: string) => void;
   onUnstage?: (path: string) => void;
   isStaged?: boolean;
+  workspacePath?: string;
 }
 
 function formatFileLabel(filePath: string) {
@@ -39,78 +41,84 @@ export const GitFileRow = memo<GitFileRowProps>(({
   onStage,
   onUnstage,
   isStaged = false,
+  workspacePath,
 }) => {
   const label = formatFileLabel(file.path);
   const status = file.status;
 
   return (
-    <div
-      className={cn(
-        "group/row relative py-1 text-sm flex items-center gap-1 cursor-pointer border-l-2",
-        isSelected
-          ? "bg-blue-500/60 border-blue-600 font-semibold text-white"
-          : "border-transparent hover:bg-accent/20"
-      )}
-      onClick={(e) => {
-        onFileClick?.(file.path, e);
-      }}
-      title={file.path}
+    <FileContextMenu
+      filePath={file.path}
+      workspacePath={workspacePath || ""}
     >
-      <div className="ml-1 flex-1 flex items-center gap-2 min-w-0 font-sans">
-        <span className={cn("font-medium truncate flex-shrink-0", isActive && "text-blue-500")}>{label.name}</span>
-        {label.directory && (
-          <span className={cn("text-muted-foreground/60 truncate text-xs", isActive && "text-blue-400")}>{label.directory}</span>
+      <div
+        className={cn(
+          "group/row relative py-1 text-sm flex items-center gap-1 cursor-pointer border-l-2",
+          isSelected
+            ? "bg-blue-500/60 border-blue-600 font-semibold text-white"
+            : "border-transparent hover:bg-accent/20"
         )}
+        onClick={(e) => {
+          onFileClick?.(file.path, e);
+        }}
+        title={file.path}
+      >
+        <div className="ml-1 flex-1 flex items-center gap-2 min-w-0 font-sans">
+          <span className={cn("font-medium truncate flex-shrink-0", isActive && "text-blue-500")}>{label.name}</span>
+          {label.directory && (
+            <span className={cn("text-muted-foreground/60 truncate text-xs", isActive && "text-blue-400")}>{label.directory}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <span
+            className="text-sm font-sans min-w-[1ch] text-muted-foreground"
+          >
+            {status ?? ""}
+          </span>
+          {/* Stage button - show only on last selected file */}
+          {isLastSelected && isSelected && !readOnly && onStage && !isStaged && (
+            <button
+              type="button"
+              className="p-0.5 opacity-0 group-hover/row:opacity-100 hover:text-foreground hover:bg-accent rounded transition-opacity transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                onStage(file.path);
+              }}
+              title="Stage file(s) for commit"
+            >
+              <Plus className="w-3 h-3" />
+            </button>
+          )}
+          {/* Unstage button - show on hover */}
+          {!readOnly && onUnstage && isStaged && (
+            <button
+              type="button"
+              className="p-0.5 opacity-0 group-hover/row:opacity-100 hover:text-foreground hover:bg-accent rounded transition-opacity transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                onUnstage(file.path);
+              }}
+              title="Unstage file"
+            >
+              <Minus className="w-3 h-3" />
+            </button>
+          )}
+          {isLastSelected && isSelected && !readOnly && onDiscard && (
+            <button
+              type="button"
+              className="p-0.5 hover:text-foreground hover:bg-red-500/20 text-red-600 dark:text-red-400 rounded transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDiscard(file.path);
+              }}
+              title="Discard selected files"
+            >
+              <Undo2 className="w-3 h-3" />
+            </button>
+          )}
+        </div>
       </div>
-      <div className="flex items-center gap-1 flex-shrink-0">
-        <span
-          className="text-sm font-sans min-w-[1ch] text-muted-foreground"
-        >
-          {status ?? ""}
-        </span>
-        {/* Stage button - show only on last selected file */}
-        {isLastSelected && isSelected && !readOnly && onStage && !isStaged && (
-          <button
-            type="button"
-            className="p-0.5 opacity-0 group-hover/row:opacity-100 hover:text-foreground hover:bg-accent rounded transition-opacity transition-colors"
-            onClick={(e) => {
-              e.stopPropagation();
-              onStage(file.path);
-            }}
-            title="Stage file(s) for commit"
-          >
-            <Plus className="w-3 h-3" />
-          </button>
-        )}
-        {/* Unstage button - show on hover */}
-        {!readOnly && onUnstage && isStaged && (
-          <button
-            type="button"
-            className="p-0.5 opacity-0 group-hover/row:opacity-100 hover:text-foreground hover:bg-accent rounded transition-opacity transition-colors"
-            onClick={(e) => {
-              e.stopPropagation();
-              onUnstage(file.path);
-            }}
-            title="Unstage file"
-          >
-            <Minus className="w-3 h-3" />
-          </button>
-        )}
-        {isLastSelected && isSelected && !readOnly && onDiscard && (
-          <button
-            type="button"
-            className="p-0.5 hover:text-foreground hover:bg-red-500/20 text-red-600 dark:text-red-400 rounded transition-colors"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDiscard(file.path);
-            }}
-            title="Discard selected files"
-          >
-            <Undo2 className="w-3 h-3" />
-          </button>
-        )}
-      </div>
-    </div>
+    </FileContextMenu>
   );
 });
 
