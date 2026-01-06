@@ -3,6 +3,7 @@ import { render, screen, waitFor, within, act, fireEvent } from "./test-utils";
 import userEvent from "@testing-library/user-event";
 import { Dashboard } from "../src/components/Dashboard";
 import * as api from "../src/lib/api";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 // Mock Tauri APIs
 vi.mock("@tauri-apps/api/event", () => ({
@@ -83,6 +84,7 @@ vi.mock("../src/lib/api", async () => {
     preloadWorkspaceGitData: vi.fn().mockResolvedValue(undefined),
     invalidateGitCache: vi.fn().mockResolvedValue(undefined),
     jjGetDefaultBranch: vi.fn().mockResolvedValue("main"),
+    jjGetCurrentBranch: vi.fn().mockResolvedValue("main"),
     jjGetChangedFiles: vi.fn().mockResolvedValue([]),
     jjGetConflictedFiles: vi.fn().mockResolvedValue([]),
     jjCreateWorkspace: vi.fn().mockResolvedValue("/Users/test/repo/.treq/workspaces/test"),
@@ -91,6 +93,7 @@ vi.mock("../src/lib/api", async () => {
     setSetting: vi.fn().mockResolvedValue(undefined),
     jjRemoveWorkspace: vi.fn().mockResolvedValue(undefined),
     deleteWorkspaceFromDb: vi.fn().mockResolvedValue(undefined),
+    checkAndRebaseWorkspaces: vi.fn().mockResolvedValue(undefined),
   };
 });
 
@@ -1424,5 +1427,46 @@ describe("WorkspacesSidebar", () => {
         expect(openPath).toHaveBeenLastCalledWith("/Users/test/repo/.jj/repo/store/working_copies/ws1");
       });
     });
+  });
+});
+
+describe("Window Focus - Branch Update", () => {
+  beforeEach(() => {
+    vi.mocked(api.getSetting).mockResolvedValue("/Users/test/repo");
+    vi.mocked(api.getWorkspaces).mockResolvedValue([]);
+    vi.mocked(api.listDirectory).mockResolvedValue([
+      { name: "README.md", path: "/Users/test/repo/README.md", is_directory: false },
+    ]);
+    vi.mocked(api.readFile).mockResolvedValue("# Test README");
+  });
+
+  it("should update branch name when window regains focus after external branch change", async () => {
+    vi.mocked(api.jjGetCurrentBranch).mockResolvedValue("main");
+
+    let focusCallback: ((event: { payload: boolean }) => void) | null = null;
+    vi.mocked(getCurrentWindow).mockReturnValue({
+      setTitle: vi.fn(),
+      onFocusChanged: vi.fn((callback) => {
+        focusCallback = callback;
+        return Promise.resolve(() => {});
+      }),
+    } as any);
+
+    render(<Dashboard />);
+
+    await waitFor(() => screen.getByText("main"));
+
+    vi.mocked(api.jjGetCurrentBranch).mockClear();
+    vi.mocked(api.jjGetCurrentBranch).mockResolvedValue("feature-branch");
+
+    await act(async () => {
+      focusCallback!({ payload: true });
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByText("feature-branch").length).toBeGreaterThan(0);
+    });
+
+    expect(api.jjGetCurrentBranch).toHaveBeenCalledWith("/Users/test/repo");
   });
 });

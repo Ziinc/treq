@@ -257,6 +257,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
 
     const handleFocus = async () => {
       try {
+        // Re-fetch current branch in case it changed externally
+        const branch = await jjGetCurrentBranch(repoPath);
+        setCurrentBranch(branch);
+
         // Trigger background rebase check for all workspaces
         await checkAndRebaseWorkspaces(repoPath);
       } catch (error) {
