@@ -206,4 +206,66 @@ describe("Copy button in Finish Review popover", () => {
       expect(reviewCopiedButton).toBeInTheDocument();
     });
   });
+
+  it("should show close button at top-right of popover with 'Close' tooltip", async () => {
+    renderComponent();
+    await setupReviewMode();
+    const finishButton = await screen.findByRole("button", { name: /finish review/i });
+    await userEvent.click(finishButton);
+
+    // Find close button with X icon at top-right of popover
+    await waitFor(() => {
+      const allButtons = screen.getAllByRole("button");
+      // The close button has an X icon and is positioned absolutely at top-right
+      const closeButton = allButtons.find(btn => {
+        const svg = btn.querySelector('svg.lucide-x');
+        return svg !== null;
+      });
+      expect(closeButton).toBeInTheDocument();
+    });
+  });
+
+  it("should not show toast when copying review", async () => {
+    vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+    renderComponent();
+    await setupReviewMode();
+    const finishButton = await screen.findByRole("button", { name: /finish review/i });
+    await userEvent.click(finishButton);
+
+    const copyButtons = await screen.findAllByRole("button", { name: /copy/i });
+    const reviewCopyButton = copyButtons.find(btn => btn.textContent?.includes("Copy"))!;
+    await userEvent.click(reviewCopyButton);
+
+    // No toast should appear
+    expect(screen.queryByText("Copied to clipboard")).not.toBeInTheDocument();
+  });
+
+  it("should include conflicted files in review markdown", async () => {
+    // Setup with conflict markers in mock data
+    vi.mocked(api.jjGetFileHunks).mockResolvedValue([{
+      id: "hunk-1",
+      header: "@@ -1,3 +1,3 @@",
+      lines: [
+        "+<<<<<<< Conflict 1 of 1",
+        "+local content",
+        "+>>>>>>> Conflict 1 of 1 ends",
+      ],
+      patch: "...",
+    }]);
+
+    const clipboardSpy = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+    renderComponent();
+
+    // Add summary and copy
+    const finishButton = await screen.findByRole("button", { name: /resolve conflicts/i });
+    await userEvent.click(finishButton);
+    const textarea = screen.getByPlaceholderText(/summary/i);
+    await userEvent.type(textarea, "Keep local");
+    const copyButtons = await screen.findAllByRole("button", { name: /copy/i });
+    await userEvent.click(copyButtons.find(btn => btn.textContent?.includes("Copy"))!);
+
+    expect(clipboardSpy.mock.calls[0][0]).toContain("## Code Review");
+    expect(clipboardSpy.mock.calls[0][0]).toContain("### Conflicted Files");
+    expect(clipboardSpy.mock.calls[0][0]).toContain("test.txt");
+  });
 });
