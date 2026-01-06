@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { ArrowRight, ChevronDown, ChevronRight, Undo2 } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, Undo2, Minus } from "lucide-react";
 import { GitFileRow } from "./GitFileRow";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "./ui/tooltip";
 import type { ParsedFileChange } from "../lib/git-utils";
@@ -18,8 +18,13 @@ export interface ChangesSectionProps {
   onFileSelect?: (path: string, event: React.MouseEvent) => void;
   onMoveToWorkspace?: () => void;
   onDiscardAll?: () => void;
+  discardAllLabel?: string;
   onDiscard?: (path: string) => void;
   onDeselectAll?: () => void;
+  onStage?: (path: string) => void;
+  onUnstage?: (path: string) => void;
+  onUnstageAll?: () => void;
+  isStaged?: boolean;
 }
 
 export const ChangesSection = memo<ChangesSectionProps>(({
@@ -34,14 +39,30 @@ export const ChangesSection = memo<ChangesSectionProps>(({
   onFileSelect,
   onMoveToWorkspace,
   onDiscardAll,
+  discardAllLabel = "Discard all changes",
   onDiscard,
   onDeselectAll,
+  onStage,
+  onUnstage,
+  onUnstageAll,
+  isStaged = false,
 }) => {
   const hasFiles = files.length > 0;
   const hasSelectedFiles = selectedFiles && selectedFiles.size > 0;
 
   return (
-    <div className="mt-4">
+    <div
+      className="mt-4"
+      onClick={(e) => {
+        // Deselect files when clicking on the section header or empty area
+        if (
+          e.target === e.currentTarget ||
+          (e.target as HTMLElement)?.closest(".flex.items-center.justify-between")
+        ) {
+          onDeselectAll?.();
+        }
+      }}
+    >
       <div className="flex items-center justify-between w-full text-sm uppercase tracking-wide text-muted-foreground">
         <button
           type="button"
@@ -72,7 +93,7 @@ export const ChangesSection = memo<ChangesSectionProps>(({
                       <Undo2 className="w-3 h-3" />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom">Discard all changes</TooltipContent>
+                  <TooltipContent side="bottom">{discardAllLabel}</TooltipContent>
                 </Tooltip>
                 {hasSelectedFiles && (
                   <Tooltip>
@@ -91,6 +112,23 @@ export const ChangesSection = memo<ChangesSectionProps>(({
                     <TooltipContent side="bottom">
                       Move {selectedFiles?.size} file(s) to new workspace
                     </TooltipContent>
+                  </Tooltip>
+                )}
+                {isStaged && hasFiles && onUnstageAll && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="p-1 hover:text-foreground hover:bg-muted rounded transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUnstageAll();
+                        }}
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">Unselect all changes</TooltipContent>
                   </Tooltip>
                 )}
               </>
@@ -118,6 +156,9 @@ export const ChangesSection = memo<ChangesSectionProps>(({
               readOnly={readOnly}
               onFileClick={onFileSelect}
               onDiscard={onDiscard}
+              onStage={onStage}
+              onUnstage={onUnstage}
+              isStaged={isStaged}
             />
           ))}
         </div>

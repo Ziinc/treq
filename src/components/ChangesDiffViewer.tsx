@@ -556,7 +556,7 @@ const CommitInput = memo(
           >
             {pending ? (
               <Loader2 className="w-4 h-4 animate-spin" />
-            ) : selectedFileCount > 0 && selectedFileCount < totalFileCount ? (
+            ) : selectedFileCount > 0 ? (
               `Commit ${selectedFileCount} file${
                 selectedFileCount !== 1 ? "s" : ""
               }`
@@ -1351,6 +1351,13 @@ export const ChangesDiffViewer = memo(
         number | null
       >(null);
       const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+
+      // Staging area state
+      const [stagedFiles, setStagedFiles] = useState<Set<string>>(new Set());
+      const [selectedStagedFiles, setSelectedStagedFiles] = useState<Set<string>>(new Set());
+      const [lastSelectedStagedIndex, setLastSelectedStagedIndex] = useState<
+        number | null
+      >(null);
 
       const applyChangedFiles = useCallback(
         (parsed: ParsedFileChange[], forceApply = false) => {
@@ -2163,6 +2170,103 @@ export const ChangesDiffViewer = memo(
         [lastSelectedFileIndex, files, scrollToFileIfNeeded]
       );
 
+      // Stage files handler
+      const handleStageFiles = useCallback((paths: string[]) => {
+        setStagedFiles((prev) => {
+          const next = new Set(prev);
+          paths.forEach((p) => next.add(p));
+          return next;
+        });
+        // Clear UI selection after staging
+        setSelectedUnstagedFiles(new Set());
+      }, []);
+
+      // Stage single or multi-selected files
+      const handleStageFile = useCallback(
+        (path: string) => {
+          // If other files are selected, stage all selected files
+          if (
+            selectedUnstagedFiles.size > 1 &&
+            selectedUnstagedFiles.has(path)
+          ) {
+            handleStageFiles(Array.from(selectedUnstagedFiles));
+          } else {
+            handleStageFiles([path]);
+          }
+        },
+        [selectedUnstagedFiles, handleStageFiles]
+      );
+
+      // Unstage files handler
+      const handleUnstageFile = useCallback((path: string) => {
+        setStagedFiles((prev) => {
+          const next = new Set(prev);
+          next.delete(path);
+          return next;
+        });
+        // Clear staged selection after unstaging
+        setSelectedStagedFiles(new Set());
+      }, []);
+
+      // Discard selected staged files
+      const handleDiscardSelectedStagedFiles = useCallback(() => {
+        selectedStagedFiles.forEach((path) => {
+          setStagedFiles((prev) => {
+            const next = new Set(prev);
+            next.delete(path);
+            return next;
+          });
+        });
+        setSelectedStagedFiles(new Set());
+      }, [selectedStagedFiles]);
+
+      // Unstage all files
+      const handleUnstageAllFiles = useCallback(() => {
+        setStagedFiles(new Set());
+        setSelectedStagedFiles(new Set());
+      }, []);
+
+      // Selection handler for staged section
+      const handleStagedFileSelect = useCallback(
+        (path: string, event: React.MouseEvent) => {
+          const stagedFilesArray = files.filter((f) =>
+            stagedFiles.has(f.path)
+          );
+          const fileIndex = stagedFilesArray.findIndex((f) => f.path === path);
+          if (fileIndex === -1) return;
+
+          const isMetaKey = event.metaKey || event.ctrlKey;
+          const isShiftKey = event.shiftKey;
+
+          setSelectedStagedFiles((prev) => {
+            const next = new Set(prev);
+            if (isShiftKey && lastSelectedStagedIndex !== null) {
+              next.clear();
+              const start = Math.min(lastSelectedStagedIndex, fileIndex);
+              const end = Math.max(lastSelectedStagedIndex, fileIndex);
+              for (let i = start; i <= end; i++) {
+                next.add(stagedFilesArray[i].path);
+              }
+            } else if (isMetaKey) {
+              if (next.has(path)) {
+                next.delete(path);
+              } else {
+                next.add(path);
+              }
+            } else {
+              if (next.size === 1 && next.has(path)) {
+                return prev;
+              }
+              next.clear();
+              next.add(path);
+            }
+            return next;
+          });
+          setLastSelectedStagedIndex(fileIndex);
+        },
+        [stagedFiles, files, lastSelectedStagedIndex]
+      );
+
       // Handler for when files are successfully moved to workspace
       const handleMoveToWorkspaceSuccess = useCallback(
         (_workspaceInfo: {
@@ -2320,8 +2424,9 @@ export const ChangesDiffViewer = memo(
           return;
         }
 
-        // Clear file selection
+        // Clear file selection in both Changes and Selected sections
         setSelectedUnstagedFiles(new Set());
+        setSelectedStagedFiles(new Set());
       }, []);
 
       const handleContextMenu = useCallback(
@@ -2660,9 +2765,18 @@ export const ChangesDiffViewer = memo(
           }
         }
 
-        // Add code review section if there are review comments or final comment
-        if (comments.length > 0 || finalReviewComment.trim()) {
+        // Add code review section if there are review comments, final comment, or conflicted files
+        if (comments.length > 0 || finalReviewComment.trim() || actualConflictedFiles.length > 0) {
           markdown += "## Code Review\n\n";
+
+          // List conflicted files if any
+          if (actualConflictedFiles.length > 0) {
+            markdown += "### Conflicted Files\n\n";
+            for (const filePath of actualConflictedFiles) {
+              markdown += `- ${filePath}\n`;
+            }
+            markdown += "\n";
+          }
 
           if (finalReviewComment.trim()) {
             markdown += "### Summary\n";
@@ -2701,7 +2815,7 @@ export const ChangesDiffViewer = memo(
         }
 
         return markdown;
-      }, [comments, conflictComments, finalReviewComment, conflictRegionsByFile]);
+      }, [comments, conflictComments, finalReviewComment, conflictRegionsByFile, actualConflictedFiles]);
 
       // Send review to terminal
       const handleRequestChanges = useCallback(
@@ -2805,11 +2919,6 @@ export const ChangesDiffViewer = memo(
           await navigator.clipboard.writeText(markdown);
           setCopiedReview(true);
           setTimeout(() => setCopiedReview(false), 2000);
-          addToast({
-            title: "Copied to clipboard",
-            description: "Review comments copied",
-            type: "success",
-          });
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);
@@ -2843,15 +2952,16 @@ export const ChangesDiffViewer = memo(
 
           setCommitPending(true);
           try {
-            const selectedPaths = Array.from(selectedUnstagedFiles);
-            const isPartialCommit =
-              selectedPaths.length > 0 && selectedPaths.length < files.length;
+            const stagedPaths = Array.from(stagedFiles);
+            const hasStagedFiles = stagedPaths.length > 0;
 
             let result: string;
-            if (isPartialCommit) {
-              result = await jjSplit(workspacePath, commitMsg, selectedPaths);
-              setSelectedUnstagedFiles(new Set()); // Clear selection after split
+            if (hasStagedFiles) {
+              // Commit only staged files
+              result = await jjSplit(workspacePath, commitMsg, stagedPaths);
+              setStagedFiles(new Set()); // Clear staging after commit
             } else {
+              // No staged files, commit all
               result = await jjCommit(workspacePath, commitMsg);
             }
 
@@ -2874,13 +2984,7 @@ export const ChangesDiffViewer = memo(
             setCommitPending(false);
           }
         },
-        [
-          workspacePath,
-          addToast,
-          invalidateCache,
-          selectedUnstagedFiles,
-          files.length,
-        ]
+        [workspacePath, addToast, invalidateCache, stagedFiles, files.length]
       );
 
       const toggleSectionCollapse = useCallback((sectionId: string) => {
@@ -3191,6 +3295,10 @@ export const ChangesDiffViewer = memo(
         );
       };
 
+      // Derive unstaged and staged file lists
+      const unstagedFiles = files.filter((f) => !stagedFiles.has(f.path));
+      const stagedFilesList = files.filter((f) => stagedFiles.has(f.path));
+
       // Note: FileRowComponent extracted outside for performance
 
       return (
@@ -3204,7 +3312,7 @@ export const ChangesDiffViewer = memo(
               onCommit={handleCommit}
               disabled={readOnly || files.length === 0}
               pending={commitPending}
-              selectedFileCount={selectedUnstagedFiles.size}
+              selectedFileCount={stagedFiles.size}
               totalFileCount={files.length}
             />
             <div className="flex-1 overflow-y-auto px-4 pb-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full">
@@ -3229,26 +3337,55 @@ export const ChangesDiffViewer = memo(
                       </p>
                     </div>
                   ) : files.length > 0 ? (
-                    <ChangesSection
-                      title="Changes"
-                      files={files}
-                      isCollapsed={collapsedSections.has("changes")}
-                      onToggleCollapse={() => toggleSectionCollapse("changes")}
-                      fileActionTarget={fileActionTarget}
-                      activeFilePath={activeFilePath}
-                      selectedFiles={selectedUnstagedFiles}
-                      lastSelectedPath={
-                        lastSelectedFileIndex !== null &&
-                        files[lastSelectedFileIndex]
-                          ? files[lastSelectedFileIndex].path
-                          : null
-                      }
-                      onFileSelect={handleFileSelect}
-                      onMoveToWorkspace={() => setMoveDialogOpen(true)}
-                      onDiscardAll={handleDiscardAll}
-                      onDiscard={handleDiscardFiles}
-                      onDeselectAll={() => setSelectedUnstagedFiles(new Set())}
-                    />
+                    <>
+                      {/* Selected section - only show when files are staged */}
+                      {stagedFilesList.length > 0 && (
+                        <ChangesSection
+                          title="Selected"
+                          files={stagedFilesList}
+                          isCollapsed={collapsedSections.has("staged")}
+                          onToggleCollapse={() => toggleSectionCollapse("staged")}
+                          activeFilePath={activeFilePath}
+                          selectedFiles={selectedStagedFiles}
+                          lastSelectedPath={
+                            lastSelectedStagedIndex !== null &&
+                            stagedFilesList[lastSelectedStagedIndex]
+                              ? stagedFilesList[lastSelectedStagedIndex].path
+                              : null
+                          }
+                          onFileSelect={handleStagedFileSelect}
+                          onDiscardAll={handleDiscardSelectedStagedFiles}
+                          discardAllLabel="Discard selected changes"
+                          onUnstage={handleUnstageFile}
+                          onUnstageAll={handleUnstageAllFiles}
+                          onDeselectAll={() => setSelectedStagedFiles(new Set())}
+                          isStaged={true}
+                        />
+                      )}
+
+                      {/* Changes section - show unstaged files */}
+                      <ChangesSection
+                        title="Changes"
+                        files={unstagedFiles}
+                        isCollapsed={collapsedSections.has("changes")}
+                        onToggleCollapse={() => toggleSectionCollapse("changes")}
+                        fileActionTarget={fileActionTarget}
+                        activeFilePath={activeFilePath}
+                        selectedFiles={selectedUnstagedFiles}
+                        lastSelectedPath={
+                          lastSelectedFileIndex !== null &&
+                          files[lastSelectedFileIndex]
+                            ? files[lastSelectedFileIndex].path
+                            : null
+                        }
+                        onFileSelect={handleFileSelect}
+                        onMoveToWorkspace={() => setMoveDialogOpen(true)}
+                        onDiscardAll={handleDiscardAll}
+                        onDiscard={handleDiscardFiles}
+                        onDeselectAll={() => setSelectedUnstagedFiles(new Set())}
+                        onStage={handleStageFile}
+                      />
+                    </>
                   ) : null}
 
                   {/* Committed Changes Section */}
@@ -3316,7 +3453,23 @@ export const ChangesDiffViewer = memo(
                           {hasConflicts ? "Resolve conflicts..." : "Finish review"}
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent align="end" side="bottom" className="w-80">
+                      <PopoverContent align="end" side="bottom" className="w-80 relative">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 absolute top-2 right-2"
+                                onClick={() => setReviewPopoverOpen(false)}
+                                disabled={sendingReview}
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Close</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                         <div className="space-y-3">
                           <div>
                             <h4 className="font-medium text-sm mb-1">
@@ -3359,22 +3512,6 @@ export const ChangesDiffViewer = memo(
                           </Button>
                           {/* Right-aligned action buttons */}
                           <div className="flex gap-2">
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8"
-                                    onClick={() => setReviewPopoverOpen(false)}
-                                    disabled={sendingReview}
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Cancel</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
                             <Button
                               size="sm"
                               variant="secondary"

@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Undo2 } from "lucide-react";
+import { Undo2, Plus, Minus } from "lucide-react";
 import { cn } from "../lib/utils";
 
 export interface JjFileChange {
@@ -16,6 +16,9 @@ export interface GitFileRowProps {
   readOnly?: boolean;
   onFileClick?: (path: string, event: React.MouseEvent) => void;
   onDiscard?: (path: string) => void;
+  onStage?: (path: string) => void;
+  onUnstage?: (path: string) => void;
+  isStaged?: boolean;
 }
 
 function formatFileLabel(filePath: string) {
@@ -33,6 +36,9 @@ export const GitFileRow = memo<GitFileRowProps>(({
   readOnly = false,
   onFileClick,
   onDiscard,
+  onStage,
+  onUnstage,
+  isStaged = false,
 }) => {
   const label = formatFileLabel(file.path);
   const status = file.status;
@@ -40,8 +46,10 @@ export const GitFileRow = memo<GitFileRowProps>(({
   return (
     <div
       className={cn(
-        "group/row relative  py-1 text-sm flex items-center gap-1 cursor-pointer",
-        isSelected ? "bg-accent/40" : "hover:bg-accent/30"
+        "group/row relative py-1 text-sm flex items-center gap-1 cursor-pointer border-l-2",
+        isSelected
+          ? "bg-blue-500/60 border-blue-600 font-semibold text-white"
+          : "border-transparent hover:bg-accent/20"
       )}
       onClick={(e) => {
         onFileClick?.(file.path, e);
@@ -60,6 +68,34 @@ export const GitFileRow = memo<GitFileRowProps>(({
         >
           {status ?? ""}
         </span>
+        {/* Stage button - show only on last selected file */}
+        {isLastSelected && isSelected && !readOnly && onStage && !isStaged && (
+          <button
+            type="button"
+            className="p-0.5 opacity-0 group-hover/row:opacity-100 hover:text-foreground hover:bg-accent rounded transition-opacity transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              onStage(file.path);
+            }}
+            title="Stage file(s) for commit"
+          >
+            <Plus className="w-3 h-3" />
+          </button>
+        )}
+        {/* Unstage button - show on hover */}
+        {!readOnly && onUnstage && isStaged && (
+          <button
+            type="button"
+            className="p-0.5 opacity-0 group-hover/row:opacity-100 hover:text-foreground hover:bg-accent rounded transition-opacity transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              onUnstage(file.path);
+            }}
+            title="Unstage file"
+          >
+            <Minus className="w-3 h-3" />
+          </button>
+        )}
         {isLastSelected && isSelected && !readOnly && onDiscard && (
           <button
             type="button"
