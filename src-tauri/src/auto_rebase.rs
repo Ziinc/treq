@@ -10,17 +10,9 @@ pub struct AutoRebaseResult {
     pub rebase_result: JjRebaseResult,
 }
 
-/// Convert git remote branch format to jj format
-/// "origin/main" -> "main@origin"
-fn convert_to_jj_branch_format(branch: &str) -> String {
-    // Convert remote prefix format (e.g., "origin/main" -> "main@origin")
-    if let Some(slash_pos) = branch.find('/') {
-        let remote = &branch[..slash_pos];
-        let branch_name = &branch[slash_pos + 1..];
-        format!("{}@{}", branch_name, remote)
-    } else {
-        branch.to_string()
-    }
+/// Convert git remote branch format to jj format using centralized logic
+fn convert_to_jj_branch_format(branch: &str, repo_path: &str) -> String {
+    jj::convert_git_branch_to_jj_format_public(branch, repo_path)
 }
 
 /// Rebase workspaces targeting a specific branch if they have changes
@@ -42,7 +34,7 @@ pub fn rebase_workspaces_for_target(
     }
 
     // Convert target branch to jj format (origin/main -> main@origin)
-    let jj_target_branch = convert_to_jj_branch_format(target_branch);
+    let jj_target_branch = convert_to_jj_branch_format(target_branch, repo_path);
 
     // Get current target commit
     let current_target_commit = jj::jj_get_commit_id(repo_path, &jj_target_branch)
@@ -172,7 +164,7 @@ pub fn check_and_rebase_all(repo_path: &str) -> Result<Vec<AutoRebaseResult>, St
         }
 
         // Convert target branch to jj format (origin/main -> main@origin)
-        let jj_target_branch = convert_to_jj_branch_format(&target_branch);
+        let jj_target_branch = convert_to_jj_branch_format(&target_branch, repo_path);
 
         // Get current target commit
         let current_target_commit = match jj::jj_get_commit_id(repo_path, &jj_target_branch) {
@@ -312,7 +304,7 @@ pub fn rebase_single_workspace(
     }
 
     // Convert target branch to jj format
-    let jj_target_branch = convert_to_jj_branch_format(&target_branch);
+    let jj_target_branch = convert_to_jj_branch_format(&target_branch, repo_path);
 
     // Get current target commit
     let current_target_commit = jj::jj_get_commit_id(repo_path, &jj_target_branch)

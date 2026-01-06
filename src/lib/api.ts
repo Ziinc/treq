@@ -363,9 +363,10 @@ export const checkBranchExists = (
 
 export const jjGetLog = (
   workspacePath: string,
-  targetBranch: string
+  targetBranch: string,
+  isHomeRepo?: boolean
 ): Promise<JjLogResult> =>
-  invoke("jj_get_log", { workspacePath, targetBranch });
+  invoke("jj_get_log", { workspacePath, targetBranch, isHomeRepo: isHomeRepo ?? null });
 
 export const jjInit = (repo_path: string): Promise<string> =>
   invoke("jj_init", { repoPath: repo_path });

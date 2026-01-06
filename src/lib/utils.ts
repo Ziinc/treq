@@ -126,3 +126,35 @@ export function formatFullTimestamp(timestamp: string): string {
   }
 }
 
+/**
+ * Generate stacked workspace intent from parent workspace/branch
+ * @param parentIntent - Parent workspace intent (if exists)
+ * @param parentBranch - Parent branch name
+ * @returns Generated intent string
+ */
+export function generateStackedIntent(
+  parentIntent: string | null,
+  parentBranch: string
+): string {
+  if (parentIntent) {
+    return `${parentIntent}\n\nStacked from ${parentBranch}`;
+  }
+  return `Stacked from ${parentBranch}`;
+}
+
+/**
+ * Generate stacked workspace branch name with enumeration
+ * @param branchPattern - Branch naming pattern (e.g., "treq/{name}")
+ * @param parentBranch - Parent branch name
+ * @param index - Index for uniqueness (always added, starts from 1)
+ * @returns Generated branch name (e.g., "treq/main-stack-1", "treq/main-stack-2")
+ */
+export function generateStackedBranchName(
+  branchPattern: string,
+  parentBranch: string,
+  index: number = 1
+): string {
+  const baseName = `${parentBranch}-stack-${index}`;
+  return applyBranchNamePattern(branchPattern, baseName);
+}
+

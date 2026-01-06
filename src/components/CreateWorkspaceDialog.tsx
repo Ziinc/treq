@@ -12,6 +12,7 @@ import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Label } from "./ui/label";
 import { useToast } from "./ui/toast";
+import { GitBranchPlusIcon } from "./ui/icons";
 import { applyBranchNamePattern } from "../lib/utils";
 import {
   createWorkspace,
@@ -475,8 +476,9 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
           >
             Cancel
           </Button>
-          <Button onClick={handleCreate} disabled={loading} tabIndex={2}>
-            {loading ? "Creating..." : "Create Workspace"}
+          <Button onClick={handleCreate} disabled={loading} tabIndex={2} variant="ghost" className="gap-2">
+            <GitBranchPlusIcon />
+            {loading ? "Creating..." : "Create workspace"}
           </Button>
         </div>
       </DialogContent>

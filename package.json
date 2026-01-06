@@ -41,7 +41,7 @@
     "cmdk": "^1.1.1",
     "echarts": "^6.0.0",
     "echarts-for-react": "^3.0.5",
-    "lucide-react": "^0.294.0",
+    "lucide-react": "^0.562.0",
     "monaco-editor": "^0.45.0",
     "prism-themes": "^1.9.0",
     "prismjs": "^1.30.0",

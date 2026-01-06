@@ -11,10 +11,11 @@ import {
 interface LinearCommitHistoryProps {
   workspacePath: string;
   targetBranch: string | null;
+  isHomeRepo?: boolean;
 }
 
 export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
-  function LinearCommitHistory({ workspacePath, targetBranch }) {
+  function LinearCommitHistory({ workspacePath, targetBranch, isHomeRepo }) {
     const [commits, setCommits] = useState<JjLogCommit[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -24,12 +25,12 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
         return;
       }
       setLoading(true);
-      jjGetLog(workspacePath, targetBranch)
+      jjGetLog(workspacePath, targetBranch, isHomeRepo)
         .then(({commits}) => {
           // Filter out working copy commits
           const filtered = commits.filter(({is_working_copy}) => !is_working_copy);
-          // Reverse to show oldest first, newest at bottom
-          setCommits(filtered.reverse());
+          // For home repo, show newest first; for workspace, show oldest first
+          setCommits(isHomeRepo ? filtered : filtered.reverse());
         })
         .catch((err) => {
           console.error('Failed to fetch commit history:', err);
@@ -38,7 +39,7 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
         .finally(() => {
           setLoading(false);
         });
-    }, [workspacePath, targetBranch]);
+    }, [workspacePath, targetBranch, isHomeRepo]);
 
     if (loading) {
       return <LoadingState />;

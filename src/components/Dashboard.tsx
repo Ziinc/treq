@@ -29,6 +29,7 @@ import { SettingsPage } from "./SettingsPage";
 import { MergePreviewPage } from "./MergePreviewPage";
 import { useToast } from "./ui/toast";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
+import { useCreateStackedWorkspace } from "../hooks/useCreateStackedWorkspace";
 import {
   getWorkspaces,
   rebuildWorkspaces,
@@ -110,6 +111,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
 
   const queryClient = useQueryClient();
   const { addToast } = useToast();
+  const { createStackedWorkspace } = useCreateStackedWorkspace();
 
   const handleReturnToDashboard = useCallback(() => {
     // Navigate to main repo ShowWorkspace > Code
@@ -133,11 +135,52 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     }
   }, [selectedWorkspace]);
 
+  const handleCreateStackedWorkspace = useCallback(async () => {
+    if (!repoPath) return;
+
+    const parentBranch = selectedWorkspace?.branch_name || currentBranch;
+    if (!parentBranch) {
+      addToast({
+        title: "Cannot create stacked workspace",
+        description: "No parent branch available",
+        type: "error",
+      });
+      return;
+    }
+
+    const workspaceId = await createStackedWorkspace({
+      repoPath,
+      parentBranch,
+      parentWorkspace: selectedWorkspace,
+    });
+
+    const updatedWorkspaces = await queryClient.fetchQuery({
+      queryKey: ["workspaces", repoPath],
+      queryFn: () => getWorkspaces(repoPath),
+    });
+
+    const newWorkspace = updatedWorkspaces.find((w) => w.id === workspaceId);
+    if (newWorkspace) {
+      setSelectedWorkspace(newWorkspace);
+      setViewMode("show-workspace");
+    }
+  }, [
+    repoPath,
+    selectedWorkspace,
+    currentBranch,
+    createStackedWorkspace,
+    queryClient,
+    addToast,
+  ]);
 
   // Keyboard shortcuts
   useKeyboardShortcut("n", true, () => {
     setShowCreateDialog(true);
   });
+
+  useKeyboardShortcut("n", true, () => {
+    handleCreateStackedWorkspace();
+  }, [selectedWorkspace, currentBranch, createStackedWorkspace], { shift: true });
 
   useKeyboardShortcut("k", true, () => {
     setShowCommandPalette(true);
@@ -825,6 +868,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
                     onOpenFilePicker={() => setShowFilePicker(true)}
                     onOpenMergePreview={handleOpenMergePreview}
                     onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
+                    onCreateStackedWorkspace={handleCreateStackedWorkspace}
                     queryClient={queryClient}
                     onSessionCreated={(sessionData) => {
                       queryClient.invalidateQueries({
