@@ -228,8 +228,9 @@ pub fn jj_pull(workspace_path: String) -> Result<String, String> {
 pub fn jj_get_log(
     workspace_path: String,
     target_branch: String,
+    is_home_repo: Option<bool>,
 ) -> Result<jj::JjLogResult, String> {
-    jj::jj_get_log(&workspace_path, &target_branch).map_err(|e| e.to_string())
+    jj::jj_get_log(&workspace_path, &target_branch, is_home_repo).map_err(|e| e.to_string())
 }
 
 /// Get commits ahead of target branch (commits to be merged)

@@ -252,11 +252,7 @@ pub fn set_workspace_target_branch(
     target_branch: String,
 ) -> Result<JjRebaseResult, String> {
     // Convert Git remote branch format (origin/main) to jj format (main@origin)
-    let jj_branch_name = if target_branch.starts_with("origin/") {
-        target_branch.replace("origin/", "") + "@origin"
-    } else {
-        target_branch.clone()
-    };
+    let jj_branch_name = crate::jj::convert_git_branch_to_jj_format_public(&target_branch, &repo_path);
 
     // Perform rebase
     let rebase_result =

@@ -16,15 +16,30 @@ fn command_for(binary: &str) -> Command {
 }
 
 /// Convert git remote branch format to jj bookmark format
-/// Examples: "origin/main" -> "main@origin", "main" -> "main"
-fn convert_git_branch_to_jj_format(branch: &str) -> String {
+/// Examples: "origin/main" -> "main@origin" (if origin is a remote)
+///           "treq/test" -> "treq/test" (if treq is not a remote)
+fn convert_git_branch_to_jj_format(branch: &str, repo_path: &str) -> String {
     if let Some(slash_pos) = branch.find('/') {
-        let remote = &branch[..slash_pos];
-        let branch_name = &branch[slash_pos + 1..];
-        format!("{}@{}", branch_name, remote)
+        let prefix = &branch[..slash_pos];
+        let suffix = &branch[slash_pos + 1..];
+
+        let remotes = get_git_remotes(repo_path);
+
+        if remotes.contains(prefix) {
+            // This is a remote reference, convert to jj format
+            format!("{}@{}", suffix, prefix)
+        } else {
+            // This is a local bookmark with namespace pattern
+            branch.to_string()
+        }
     } else {
         branch.to_string()
     }
+}
+
+/// Public wrapper for use by auto_rebase and other modules
+pub fn convert_git_branch_to_jj_format_public(branch: &str, repo_path: &str) -> String {
+    convert_git_branch_to_jj_format(branch, repo_path)
 }
 
 /// Error type for jj operations
@@ -338,19 +353,19 @@ pub fn create_workspace(
         jj_cmd.args(["--revision", branch_name]);
         None
     } else if let Some(source) = source_branch {
-        // Check if source is a git remote ref format (e.g., "origin/branch")
-        if let Some(slash_pos) = source.find('/') {
-            let remote = &source[..slash_pos];
-            let remote_branch = &source[slash_pos + 1..];
-            // Convert to jj format: branch@remote
-            let jj_ref = format!("{}@{}", remote_branch, remote);
-            jj_cmd.args(["--revision", &jj_ref]);
-            Some(remote.to_string())
+        // Convert source branch format - only treat as remote if prefix is actual remote
+        let jj_ref = convert_git_branch_to_jj_format(source, repo_path);
+
+        // Check if conversion happened (contains @)
+        let remote_name = if jj_ref.contains('@') && jj_ref != source {
+            // Extract remote name from jj_ref (format: branch@remote)
+            jj_ref.split('@').nth(1).map(|s| s.to_string())
         } else {
-            // Not a remote ref, use as-is (local branch or commit)
-            jj_cmd.args(["--revision", source]);
             None
-        }
+        };
+
+        jj_cmd.args(["--revision", &jj_ref]);
+        remote_name
     } else {
         None
     };
@@ -1156,7 +1171,9 @@ pub fn get_conflicted_files(
         // Validate branch name to prevent injection
         if !branch.starts_with('-') && !branch.contains('\0') && !branch.is_empty() {
             // Convert git format to jj format (e.g., origin/main -> main@origin)
-            let jj_branch = convert_git_branch_to_jj_format(branch);
+            // Derive repo path from workspace path for remote detection
+            let repo_path = derive_repo_path_from_workspace(workspace_path).unwrap_or_else(|| workspace_path.to_string());
+            let jj_branch = convert_git_branch_to_jj_format(branch, &repo_path);
 
             // Try jj diff approach
             match get_conflicted_files_from_diff(workspace_path, &jj_branch) {
@@ -1652,6 +1669,42 @@ pub fn check_branch_exists(repo_path: &str, branch_name: &str) -> Result<BranchS
     })
 }
 
+/// Get list of git remotes in the repository with graceful fallback
+/// Uses jj git remote list which returns format: "<remote_name> <remote_url>"
+pub fn get_git_remotes(repo_path: &str) -> std::collections::HashSet<String> {
+    let output = match command_for("jj")
+        .current_dir(repo_path)
+        .args(["git", "remote", "list"])
+        .output()
+    {
+        Ok(output) => output,
+        Err(e) => {
+            eprintln!("Warning: Failed to execute jj git remote list: {}", e);
+            return std::collections::HashSet::new();
+        }
+    };
+
+    if !output.status.success() {
+        eprintln!("Warning: jj git remote list failed: {}", String::from_utf8_lossy(&output.stderr));
+        return std::collections::HashSet::new();
+    }
+
+    // Parse output: "origin git@github.com:user/repo.git"
+    // Extract just the remote name (first word on each line)
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            if line.is_empty() {
+                None
+            } else {
+                // Take first word (remote name)
+                line.split_whitespace().next().map(|s| s.to_string())
+            }
+        })
+        .collect()
+}
+
 /// Information about a jj bookmark/branch
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct JjBranch {
@@ -1759,13 +1812,23 @@ fn parse_diff_stat(stat: &str) -> (u32, u32) {
     (insertions, deletions)
 }
 
-pub fn jj_get_log(workspace_path: &str, target_branch: &str) -> Result<JjLogResult, JjError> {
+/// Build the revset string for jj_get_log based on context
+fn build_jj_get_log_revset(target_branch: &str, is_home_repo: bool) -> String {
+    if is_home_repo {
+        // For home repo: show last 10 commits of current branch
+        "latest(::@, 10)".to_string()
+    } else {
+        // For workspace: show commits ahead of target branch
+        format!("{}..@", target_branch)
+    }
+}
+
+pub fn jj_get_log(workspace_path: &str, target_branch: &str, is_home_repo: Option<bool>) -> Result<JjLogResult, JjError> {
     // Get workspace branch name
     let workspace_branch = get_workspace_branch(workspace_path)?;
 
-    // Build revset: target_branch..@
-    // This shows only commits in workspace that are NOT in target branch (same as merge preview)
-    let revset = format!("{}..@", target_branch);
+    // Build revset based on context (home repo vs workspace)
+    let revset = build_jj_get_log_revset(target_branch, is_home_repo.unwrap_or(false));
 
     // Build template for tab-separated output
     let template = concat!(
@@ -3458,5 +3521,113 @@ target/debug/deps/lib.so    2-sided conflict including 1 deletion and an executa
         }
 
         eprintln!("✓ jj_push() executed without crash");
+    }
+
+    #[test]
+    fn test_jj_get_log_revset_construction() {
+        // Happy path 1: Home repo should use latest(::@, 10) revset
+        let revset_home = build_jj_get_log_revset("main", true);
+        assert_eq!(revset_home, "latest(::@, 10)", "Home repo should use latest revset");
+
+        // Happy path 2: Workspace should use target_branch..@ revset
+        let revset_workspace = build_jj_get_log_revset("main", false);
+        assert_eq!(revset_workspace, "main..@", "Workspace should use diff revset");
+    }
+
+    // ============ New TDD Tests for Remote Detection ============
+
+    /// Helper to create test repo with jj and a remote
+    fn setup_test_repo_with_remote() -> (TempDir, String) {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().to_str().unwrap().to_string();
+
+        // Initialize git repo
+        command_for("git")
+            .current_dir(&repo_path)
+            .args(["init"])
+            .output()
+            .expect("Failed to init git");
+
+        // Initialize jj colocated
+        let jj_init = command_for("jj")
+            .current_dir(&repo_path)
+            .args(["git", "init", "--colocate"])
+            .output();
+
+        if let Ok(output) = jj_init {
+            if !output.status.success() {
+                eprintln!("Skipping test: jj init failed");
+                return (temp_dir, repo_path);
+            }
+        }
+
+        // Add a remote
+        command_for("git")
+            .current_dir(&repo_path)
+            .args(["remote", "add", "origin", "https://github.com/test/test.git"])
+            .output()
+            .expect("Failed to add remote");
+
+        (temp_dir, repo_path)
+    }
+
+    #[test]
+    fn test_get_git_remotes_returns_origin() {
+        let (_temp, repo_path) = setup_test_repo_with_remote();
+        let remotes = get_git_remotes(&repo_path);
+
+        assert!(remotes.contains("origin"), "Should contain origin remote");
+    }
+
+    #[test]
+    fn test_get_git_remotes_empty_for_no_remotes() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().to_str().unwrap();
+
+        // Initialize git but no remotes
+        command_for("git")
+            .current_dir(&repo_path)
+            .args(["init"])
+            .output()
+            .expect("Failed to init git");
+
+        command_for("jj")
+            .current_dir(&repo_path)
+            .args(["git", "init", "--colocate"])
+            .output()
+            .ok();
+
+        let remotes = get_git_remotes(&repo_path);
+        assert!(remotes.is_empty(), "Should have no remotes");
+    }
+
+    #[test]
+    fn test_convert_remote_ref_with_valid_remote() {
+        let (_temp, repo_path) = setup_test_repo_with_remote();
+        let result = convert_git_branch_to_jj_format("origin/main", &repo_path);
+
+        assert_eq!(result, "main@origin", "Should convert origin/main to main@origin");
+    }
+
+    #[test]
+    fn test_convert_local_bookmark_with_slash() {
+        let (_temp, repo_path) = setup_test_repo_with_remote();
+        let result = convert_git_branch_to_jj_format("treq/test-toast", &repo_path);
+
+        assert_eq!(result, "treq/test-toast", "Should NOT convert local bookmark with slash");
+    }
+
+    #[test]
+    fn test_convert_branch_without_slash() {
+        let (_temp, repo_path) = setup_test_repo_with_remote();
+        let result = convert_git_branch_to_jj_format("main", &repo_path);
+
+        assert_eq!(result, "main", "Should keep branch without slash unchanged");
+    }
+
+    #[test]
+    fn test_get_git_remotes_graceful_on_invalid_path() {
+        let remotes = get_git_remotes("/nonexistent/path");
+        assert!(remotes.is_empty(), "Should return empty set for invalid path");
     }
 }

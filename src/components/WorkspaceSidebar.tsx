@@ -6,7 +6,6 @@ import {
   flattenWorkspaceTree,
 } from "../lib/workspace-tree";
 import {
-  Plus,
   Settings,
   Home,
   Search,
@@ -18,6 +17,7 @@ import {
   CornerLeftUp,
 } from "lucide-react";
 import { Button } from "./ui/button";
+import { GitBranchPlusIcon } from "./ui/icons";
 import {
   Tooltip,
   TooltipContent,
@@ -254,7 +254,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                 const isSelected =
                   selectedWorkspaceIds?.has(workspace.id) ||
                   selectedWorkspaceId === workspace.id;
-                const indentStyle = { paddingLeft: `${8 + node.depth * 16}px` };
+                const indentStyle = { paddingLeft: `${16 + (node.depth - 1) * 6}px`};
 
                 return (
                   <ContextMenu key={workspace.id}>
@@ -263,9 +263,9 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                         <TooltipTrigger asChild>
                           <div
                             style={indentStyle}
-                            className={`relative flex items-center text-sm tracking-wide py-1 pr-2 rounded-md transition-colors cursor-pointer ${
+                            className={`relative flex items-center text-sm tracking-wide  pr-2 rounded-md transition-colors cursor-pointer ${
                               isSelected ? "bg-primary/20" : "hover:bg-muted/50"
-                            }`}
+                            } ${node.depth > 0 ? 'pt-0.5' : 'py-1 '}`}
                             onClick={(e) =>
                               onWorkspaceMultiSelect
                                 ? onWorkspaceMultiSelect(workspace, e)
@@ -361,12 +361,12 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                       <Button
                         type="button"
                         onClick={onCreateWorkspace}
-                        variant="secondary"
+                        variant="ghost"
                         size="sm"
-                        className="w-full gap-1"
+                        className="w-full gap-1 bg-secondary/50 hover:bg-secondary"
                         aria-label="Create new workspace"
                       >
-                        <Plus className="w-3 h-3" />
+                        <GitBranchPlusIcon className="w-3.5 h-3.5" />
                         <span className="truncate">Workspace</span>
                       </Button>
                     </TooltipTrigger>

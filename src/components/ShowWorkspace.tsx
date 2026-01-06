@@ -65,7 +65,7 @@ import {
 import {
   Loader2,
   GitBranch,
-  GitMerge,
+  GitCompareArrows,
   MoreVertical,
   Upload,
   AlertTriangle,
@@ -78,6 +78,8 @@ import {
   ChevronLeft,
   Eye,
   EyeOff,
+  Layers,
+  FileDiff,
 } from "lucide-react";
 import { TargetBranchSelector } from "./TargetBranchSelector";
 import { cn } from "../lib/utils";
@@ -94,6 +96,7 @@ interface ShowWorkspaceProps {
   onSessionCreated?: (session: SessionCreationInfo) => void;
   onOpenMergePreview?: () => void;
   onOpenBranchSwitcher?: () => void;
+  onCreateStackedWorkspace?: () => void;
   queryClient?: QueryClient;
 }
 
@@ -107,7 +110,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   onSessionCreated,
   onOpenMergePreview,
   onOpenBranchSwitcher,
-  queryClient,
+  onCreateStackedWorkspace,
 }) {
   const workingDirectory = workspace?.workspace_path || repositoryPath || "";
   const effectiveRepoPath = workspace?.repo_path || repositoryPath || "";
@@ -666,6 +669,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
               Code
             </TabsTrigger>
             <TabsTrigger value="changes" className="inline-flex items-center">
+              <FileDiff className="w-4 h-4 mr-1.5" />
               Review
             </TabsTrigger>
           </TabsList>
@@ -830,6 +834,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
                 <LinearCommitHistory
                   workspacePath={workingDirectory}
                   targetBranch={targetBranch}
+                  isHomeRepo={!workspace}
                 />
               </div>
             </div>
@@ -887,12 +892,35 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
           <div className="flex items-center gap-2">
             <GitBranch className="w-4 h-4 text-muted-foreground" />
             {!workspace ? (
-              <button
-                onClick={onOpenBranchSwitcher}
-                className="text-sm font-semibold font-mono hover:underline cursor-pointer"
-              >
-                {branchTitle}
-              </button>
+              <>
+                <button
+                  onClick={onOpenBranchSwitcher}
+                  className="text-sm font-semibold font-mono hover:underline cursor-pointer"
+                >
+                  {branchTitle}
+                </button>
+                {/* Stack button for home repo */}
+                {onCreateStackedWorkspace && (
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={onCreateStackedWorkspace}
+                          className="gap-1"
+                        >
+                          <Layers className="w-3.5 h-3.5" />
+                          Stack
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Create stacked workspace from {branchTitle}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </>
             ) : (
               <span className="text-sm font-semibold font-mono">
                 {branchTitle}
@@ -908,33 +936,33 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
                   onSelect={handleTargetBranchSelect}
                   disabled={rebasing}
                 />
-                <div className="flex-1" />
-                <TooltipProvider delayDuration={200}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      {/* Wrapper div needed for tooltip on disabled button */}
-                      <div className="inline-flex">
+                {/* Stack button for workspace */}
+                {onCreateStackedWorkspace && (
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
                         <Button
                           variant="default"
                           size="sm"
-                          onClick={onOpenMergePreview}
+                          onClick={onCreateStackedWorkspace}
                           disabled={rebasing || conflictedFiles.length > 0}
-                          className="gap-2"
+                          className="gap-1"
                         >
-                          <GitMerge className="w-4 h-4" />
-                          Merge...
+                          <Layers className="w-3.5 h-3.5" />
+                          Stack
                         </Button>
-                      </div>
-                    </TooltipTrigger>
-                    {(rebasing || conflictedFiles.length > 0) && (
+                      </TooltipTrigger>
                       <TooltipContent>
                         {rebasing
                           ? "Rebasing in progress..."
-                          : `Cannot merge: ${conflictedFiles.length} conflict${conflictedFiles.length === 1 ? '' : 's'} detected`}
+                          : conflictedFiles.length > 0
+                          ? `Cannot stack: ${conflictedFiles.length} conflict${conflictedFiles.length === 1 ? '' : 's'} detected`
+                          : `Create stacked workspace from ${branchTitle}`}
                       </TooltipContent>
-                    )}
-                  </Tooltip>
-                </TooltipProvider>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                <div className="flex-1" />
               </>
             )}
           </div>
@@ -953,6 +981,34 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
                   </span>
                 )}
               </div>
+            )}
+            {/* Merge button moved here */}
+            {workspace && workspace.branch_name !== defaultBranch && (
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="inline-flex">
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={onOpenMergePreview}
+                        disabled={rebasing || conflictedFiles.length > 0}
+                        className="gap-1 bg-green-600 hover:bg-green-700"
+                      >
+                        <GitCompareArrows className="w-3.5 h-3.5" />
+                        Merge...
+                      </Button>
+                    </div>
+                  </TooltipTrigger>
+                  {(rebasing || conflictedFiles.length > 0) && (
+                    <TooltipContent>
+                      {rebasing
+                        ? "Rebasing in progress..."
+                        : `Cannot merge: ${conflictedFiles.length} conflict${conflictedFiles.length === 1 ? '' : 's'} detected`}
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
