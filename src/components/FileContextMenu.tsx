@@ -1,0 +1,165 @@
+import { memo, useCallback } from "react";
+import { Copy, FolderOpen } from "lucide-react";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+  ContextMenuSub,
+  ContextMenuSubTrigger,
+  ContextMenuSubContent,
+  ContextMenuSeparator,
+} from "./ui/context-menu";
+import { revealItemInDir, openUrl } from "@tauri-apps/plugin-opener";
+import { useToast } from "./ui/toast";
+
+interface FileContextMenuProps {
+  filePath: string;
+  workspacePath: string;
+  children: React.ReactNode;
+}
+
+export const FileContextMenu = memo(function FileContextMenu({
+  filePath,
+  workspacePath,
+  children,
+}: FileContextMenuProps) {
+  const { addToast } = useToast();
+
+  const getRelativePath = useCallback(
+    (fullPath: string): string => {
+      if (workspacePath && fullPath.startsWith(workspacePath + "/")) {
+        return fullPath.slice(workspacePath.length + 1);
+      }
+      return fullPath;
+    },
+    [workspacePath]
+  );
+
+  const getFullPath = useCallback(
+    (path: string): string => {
+      // If path is already absolute, return it
+      if (path.startsWith("/")) return path;
+      // Otherwise, join with workspace path
+      return `${workspacePath}/${path}`;
+    },
+    [workspacePath]
+  );
+
+  const fullPath = getFullPath(filePath);
+  const relativePath = getRelativePath(fullPath);
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        {children}
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem
+          data-testid="copy-relative-path"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(relativePath);
+              addToast({
+                title: "Copied",
+                description: `Copied relative path: ${relativePath}`,
+                type: "success",
+              });
+            } catch (err) {
+              addToast({
+                title: "Copy Failed",
+                description: err instanceof Error ? err.message : String(err),
+                type: "error",
+              });
+            }
+          }}
+        >
+          <Copy className="w-4 h-4 mr-2" />
+          Copy relative path
+        </ContextMenuItem>
+
+        <ContextMenuItem
+          data-testid="copy-full-path"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(fullPath);
+              addToast({
+                title: "Copied",
+                description: `Copied full path: ${fullPath}`,
+                type: "success",
+              });
+            } catch (err) {
+              addToast({
+                title: "Copy Failed",
+                description: err instanceof Error ? err.message : String(err),
+                type: "error",
+              });
+            }
+          }}
+        >
+          <Copy className="w-4 h-4 mr-2" />
+          Copy full path
+        </ContextMenuItem>
+
+        <ContextMenuSeparator />
+
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>
+            <FolderOpen className="w-4 h-4 mr-2" />
+            Open in...
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent>
+            <ContextMenuItem
+              onClick={async () => {
+                try {
+                  await revealItemInDir(fullPath);
+                } catch (err) {
+                  addToast({
+                    title: "Open Failed",
+                    description: err instanceof Error ? err.message : String(err),
+                    type: "error",
+                  });
+                }
+              }}
+            >
+              <FolderOpen className="w-4 h-4 mr-2" />
+              Open in Finder
+            </ContextMenuItem>
+
+            <ContextMenuItem
+              onClick={async () => {
+                try {
+                  await openUrl(`cursor://file/${fullPath}`);
+                } catch (err) {
+                  addToast({
+                    title: "Open Failed",
+                    description: err instanceof Error ? err.message : String(err),
+                    type: "error",
+                  });
+                }
+              }}
+            >
+              Open in Cursor
+            </ContextMenuItem>
+
+            <ContextMenuItem
+              onClick={async () => {
+                try {
+                  await openUrl(`vscode://file/${fullPath}`);
+                } catch (err) {
+                  addToast({
+                    title: "Open Failed",
+                    description: err instanceof Error ? err.message : String(err),
+                    type: "error",
+                  });
+                }
+              }}
+            >
+              Open in VSCode
+            </ContextMenuItem>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+});

@@ -31,6 +31,17 @@ import { parseJjChangedFiles, type ParsedFileChange } from "../lib/git-utils";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { SearchOverlay } from "./SearchOverlay";
 import { findMatches, highlightInHtml, type SearchMatch } from "../lib/text-search";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+  ContextMenuSub,
+  ContextMenuSubTrigger,
+  ContextMenuSubContent,
+  ContextMenuSeparator,
+} from "./ui/context-menu";
+import { revealItemInDir, openUrl } from "@tauri-apps/plugin-opener";
 
 // Helper to check if file is binary
 function isBinaryFile(path: string): boolean {
@@ -87,6 +98,8 @@ interface TreeNodeProps {
   onFileClick: (path: string) => void;
   getDirectoryChangeStatus: (path: string) => ParsedFileChange | undefined;
   renderChildren: (entry: DirectoryEntry, depth: number) => JSX.Element;
+  getRelativePath: (fullPath: string) => string;
+  addToast: ReturnType<typeof useToast>['addToast'];
 }
 
 // CodeLine component - memoized individual line to prevent re-renders
@@ -514,6 +527,134 @@ const FileContentView = memo(function FileContentView({
   );
 });
 
+// FileTreeContextMenu component for file/directory context menu
+const FileTreeContextMenu = memo(function FileTreeContextMenu({
+  entry,
+  children,
+  getRelativePath,
+  addToast,
+}: {
+  entry: DirectoryEntry;
+  children: React.ReactNode;
+  getRelativePath: (path: string) => string;
+  addToast: ReturnType<typeof useToast>['addToast'];
+}) {
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        {children}
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem
+          data-testid="copy-relative-path"
+          onClick={async () => {
+            try {
+              const relativePath = getRelativePath(entry.path);
+              await navigator.clipboard.writeText(relativePath);
+              addToast({
+                title: "Copied",
+                description: `Copied relative path: ${relativePath}`,
+                type: "success",
+              });
+            } catch (err) {
+              addToast({
+                title: "Copy Failed",
+                description: err instanceof Error ? err.message : String(err),
+                type: "error",
+              });
+            }
+          }}
+        >
+          <Copy className="w-4 h-4 mr-2" />
+          Copy relative path
+        </ContextMenuItem>
+
+        <ContextMenuItem
+          data-testid="copy-full-path"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(entry.path);
+              addToast({
+                title: "Copied",
+                description: `Copied full path: ${entry.path}`,
+                type: "success",
+              });
+            } catch (err) {
+              addToast({
+                title: "Copy Failed",
+                description: err instanceof Error ? err.message : String(err),
+                type: "error",
+              });
+            }
+          }}
+        >
+          <Copy className="w-4 h-4 mr-2" />
+          Copy full path
+        </ContextMenuItem>
+
+        <ContextMenuSeparator />
+
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>
+            <FolderOpen className="w-4 h-4 mr-2" />
+            Open in...
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent>
+            <ContextMenuItem
+              onClick={async () => {
+                try {
+                  await revealItemInDir(entry.path);
+                } catch (err) {
+                  addToast({
+                    title: "Open Failed",
+                    description: err instanceof Error ? err.message : String(err),
+                    type: "error",
+                  });
+                }
+              }}
+            >
+              <FolderOpen className="w-4 h-4 mr-2" />
+              Open in Finder
+            </ContextMenuItem>
+
+            <ContextMenuItem
+              onClick={async () => {
+                try {
+                  await openUrl(`cursor://file/${entry.path}`);
+                } catch (err) {
+                  addToast({
+                    title: "Open Failed",
+                    description: err instanceof Error ? err.message : String(err),
+                    type: "error",
+                  });
+                }
+              }}
+            >
+              Open in Cursor
+            </ContextMenuItem>
+
+            <ContextMenuItem
+              onClick={async () => {
+                try {
+                  await openUrl(`vscode://file/${entry.path}`);
+                } catch (err) {
+                  addToast({
+                    title: "Open Failed",
+                    description: err instanceof Error ? err.message : String(err),
+                    type: "error",
+                  });
+                }
+              }}
+            >
+              Open in VSCode
+            </ContextMenuItem>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+});
+
 const TreeNode = memo(function TreeNode({
   entry,
   depth,
@@ -526,61 +667,70 @@ const TreeNode = memo(function TreeNode({
   onFileClick,
   getDirectoryChangeStatus,
   renderChildren,
+  getRelativePath,
+  addToast,
 }: TreeNodeProps) {
   if (entry.is_directory) {
     return (
-      <div key={entry.path} className="text-sm">
-        <button
-          type="button"
-          className={cn(
-            "flex items-center gap-2 w-full px-2 py-1 rounded-md hover:bg-muted/60 transition",
-            "text-left"
-          )}
-          style={{ paddingLeft: `${depth * 16 + 8}px` }}
-          onClick={() => onDirectoryClick(entry.path)}
-        >
-          {isExpanded ? (
-            <FolderOpen className="w-4 h-4 flex-shrink-0" />
-          ) : (
-            <Folder className="w-4 h-4 flex-shrink-0" />
-          )}
-          <span
+      <FileTreeContextMenu
+        key={entry.path}
+        entry={entry}
+        getRelativePath={getRelativePath}
+        addToast={addToast}
+      >
+        <div className="text-sm">
+          <button
+            type="button"
             className={cn(
-              "font-medium truncate font-mono text-sm",
-              getFileStatusTextColor(getDirectoryChangeStatus(entry.path)?.workspaceStatus)
+              "flex items-center gap-2 w-full px-2 py-1 rounded-md hover:bg-muted/60 transition",
+              "text-left"
             )}
+            style={{ paddingLeft: `${depth * 16 + 8}px` }}
+            onClick={() => onDirectoryClick(entry.path)}
           >
-            {entry.name}
-          </span>
-          {hasChanges && (
+            {isExpanded ? (
+              <FolderOpen className="w-4 h-4 flex-shrink-0" />
+            ) : (
+              <Folder className="w-4 h-4 flex-shrink-0" />
+            )}
             <span
-              className="w-2 h-2 rounded-full flex-shrink-0 bg-yellow-500 ml-auto"
-              title="Contains modified files"
-            />
+              className={cn(
+                "font-medium truncate font-mono text-sm",
+                getFileStatusTextColor(getDirectoryChangeStatus(entry.path)?.workspaceStatus)
+              )}
+            >
+              {entry.name}
+            </span>
+            {hasChanges && (
+              <span
+                className="w-2 h-2 rounded-full flex-shrink-0 bg-yellow-500 ml-auto"
+                title="Contains modified files"
+              />
+            )}
+          </button>
+          {isExpanded && children.length > 0 && (
+            <div>
+              {children
+                .sort((a, b) => {
+                  // Directories first, then alphabetically
+                  if (a.is_directory === b.is_directory) {
+                    return a.name.localeCompare(b.name);
+                  }
+                  return a.is_directory ? -1 : 1;
+                })
+                .map((child) => renderChildren(child, depth + 1))}
+            </div>
           )}
-        </button>
-        {isExpanded && children.length > 0 && (
-          <div>
-            {children
-              .sort((a, b) => {
-                // Directories first, then alphabetically
-                if (a.is_directory === b.is_directory) {
-                  return a.name.localeCompare(b.name);
-                }
-                return a.is_directory ? -1 : 1;
-              })
-              .map((child) => renderChildren(child, depth + 1))}
-          </div>
-        )}
-        {isExpanded && children.length === 0 && (
-          <div
-            className="text-sm text-muted-foreground px-2 py-1"
-            style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
-          >
-            Empty directory
-          </div>
-        )}
-      </div>
+          {isExpanded && children.length === 0 && (
+            <div
+              className="text-sm text-muted-foreground px-2 py-1"
+              style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
+            >
+              Empty directory
+            </div>
+          )}
+        </div>
+      </FileTreeContextMenu>
     );
   }
 
@@ -588,28 +738,34 @@ const TreeNode = memo(function TreeNode({
   const fileStatus = changedFiles.get(entry.path);
   const status = fileStatus?.workspaceStatus;
   return (
-    <button
+    <FileTreeContextMenu
       key={entry.path}
-      type="button"
-      onClick={() => onFileClick(entry.path)}
-      className={cn(
-        "w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm transition",
-        "hover:bg-muted/60 text-left",
-        selectedFile === entry.path && "bg-primary/10"
-      )}
-      style={{ paddingLeft: `${depth * 16 + 8}px` }}
+      entry={entry}
+      getRelativePath={getRelativePath}
+      addToast={addToast}
     >
-      <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-      <span className={cn("truncate font-mono text-sm", getFileStatusTextColor(status))}>
-        {entry.name}
-      </span>
-      {status && (
-        <span
-          className={cn("w-2 h-2 rounded-full flex-shrink-0 ml-auto", getStatusBgColor(status))}
-          title={status === "M" ? "Modified" : status === "A" ? "Added" : status === "D" ? "Deleted" : "Changed"}
-        />
-      )}
-    </button>
+      <button
+        type="button"
+        onClick={() => onFileClick(entry.path)}
+        className={cn(
+          "w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm transition",
+          "hover:bg-muted/60 text-left",
+          selectedFile === entry.path && "bg-primary/10"
+        )}
+        style={{ paddingLeft: `${depth * 16 + 8}px` }}
+      >
+        <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+        <span className={cn("truncate font-mono text-sm", getFileStatusTextColor(status))}>
+          {entry.name}
+        </span>
+        {status && (
+          <span
+            className={cn("w-2 h-2 rounded-full flex-shrink-0 ml-auto", getStatusBgColor(status))}
+            title={status === "M" ? "Modified" : status === "A" ? "Added" : status === "D" ? "Deleted" : "Changed"}
+          />
+        )}
+      </button>
+    </FileTreeContextMenu>
   );
 });
 
@@ -756,6 +912,17 @@ export const FileBrowser = memo(function FileBrowser({
     setSearchQuery("");
     setCurrentMatchIndex(0);
   }, []);
+
+  // Helper function to calculate relative path
+  const getRelativePath = useCallback(
+    (fullPath: string): string => {
+      if (basePath && fullPath.startsWith(basePath + "/")) {
+        return fullPath.slice(basePath.length + 1);
+      }
+      return fullPath;
+    },
+    [basePath]
+  );
 
   // Reset search when file changes
   useEffect(() => {
@@ -1097,6 +1264,8 @@ export const FileBrowser = memo(function FileBrowser({
           onFileClick={handleFileClick}
           getDirectoryChangeStatus={getDirectoryChangeStatus}
           renderChildren={renderTreeNode}
+          getRelativePath={getRelativePath}
+          addToast={addToast}
         />
       );
     },
@@ -1109,6 +1278,8 @@ export const FileBrowser = memo(function FileBrowser({
       handleDirectoryClick,
       handleFileClick,
       getDirectoryChangeStatus,
+      getRelativePath,
+      addToast,
     ]
   );
 

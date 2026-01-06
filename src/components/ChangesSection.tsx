@@ -25,6 +25,7 @@ export interface ChangesSectionProps {
   onUnstage?: (path: string) => void;
   onUnstageAll?: () => void;
   isStaged?: boolean;
+  workspacePath?: string;
 }
 
 export const ChangesSection = memo<ChangesSectionProps>(({
@@ -46,6 +47,7 @@ export const ChangesSection = memo<ChangesSectionProps>(({
   onUnstage,
   onUnstageAll,
   isStaged = false,
+  workspacePath,
 }) => {
   const hasFiles = files.length > 0;
   const hasSelectedFiles = selectedFiles && selectedFiles.size > 0;
@@ -159,6 +161,7 @@ export const ChangesSection = memo<ChangesSectionProps>(({
               onStage={onStage}
               onUnstage={onUnstage}
               isStaged={isStaged}
+              workspacePath={workspacePath}
             />
           ))}
         </div>
