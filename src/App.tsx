@@ -4,6 +4,7 @@ import { ToastProvider } from "./components/ui/toast";
 import { ThemeProvider } from "./hooks/useTheme";
 import { TerminalSettingsProvider } from "./hooks/useTerminalSettings";
 import { DiffSettingsProvider } from "./hooks/useDiffSettings";
+import { EditorAppsProvider } from "./hooks/useEditorApps";
 import { useSettingsPreloader } from "./hooks/useSettingsPreloader";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { PrismThemeLoader } from "./components/PrismThemeLoader";
@@ -45,9 +46,11 @@ function App() {
         <PrismThemeLoader />
         <TerminalSettingsProvider>
           <DiffSettingsProvider>
-            <ToastProvider>
-              <AppContent />
-            </ToastProvider>
+            <EditorAppsProvider>
+              <ToastProvider>
+                <AppContent />
+              </ToastProvider>
+            </EditorAppsProvider>
           </DiffSettingsProvider>
         </TerminalSettingsProvider>
       </ThemeProvider>

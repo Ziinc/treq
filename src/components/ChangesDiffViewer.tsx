@@ -87,6 +87,7 @@ import {
   type ParsedFileChange,
 } from "../lib/git-utils";
 import { useDiffSettings } from "../hooks/useDiffSettings";
+import { useEditorApps } from "../hooks/useEditorApps";
 import { ChangesSection } from "./ChangesSection";
 import { CommittedChangesSection } from "./CommittedChangesSection";
 import { ConflictsSection } from "./ConflictsSection";
@@ -497,7 +498,6 @@ const CommitInput = memo(
         disabled,
         pending,
         selectedFileCount = 0,
-        totalFileCount = 0,
       },
       ref
     ) => {
@@ -665,6 +665,8 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
     saveEditConflictComment,
     conflictFileRefs,
   } = props;
+
+  const editorApps = useEditorApps();
 
   const filePath = file.path;
   const fileData = allFileHunks.get(filePath);
@@ -942,39 +944,86 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" sideOffset={4}>
                     {(file.workspaceStatus || file.stagedStatus) && (
+                      <>
+                        <DropdownMenuItem
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            handleDiscardFiles(filePath);
+                          }}
+                          disabled={fileActionTarget === filePath}
+                          className="text-red-700 dark:text-red-300 focus:text-red-700 dark:focus:text-red-300"
+                        >
+                          {selectedUnstagedFiles.has(filePath) &&
+                          selectedUnstagedFiles.size > 1
+                            ? `Discard ${selectedUnstagedFiles.size} files`
+                            : "Discard file"}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                      </>
+                    )}
+
+                    {editorApps.cursor && (
                       <DropdownMenuItem
-                        onSelect={(e) => {
+                        onSelect={async (e) => {
                           e.preventDefault();
-                          handleDiscardFiles(filePath);
+                          try {
+                            await openUrl(`cursor://file/${workspacePath}/${filePath}`);
+                          } catch (err) {
+                            const msg =
+                              err instanceof Error ? err.message : String(err);
+                            addToast({
+                              title: "Open Failed",
+                              description: msg,
+                              type: "error",
+                            });
+                          }
                         }}
-                        disabled={fileActionTarget === filePath}
-                        className="text-red-700 dark:text-red-300 focus:text-red-700 dark:focus:text-red-300"
                       >
-                        {selectedUnstagedFiles.has(filePath) &&
-                        selectedUnstagedFiles.size > 1
-                          ? `Discard ${selectedUnstagedFiles.size} files`
-                          : "Discard file"}
+                        Open in Cursor
                       </DropdownMenuItem>
                     )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onSelect={async (e) => {
-                        e.preventDefault();
-                        try {
-                          await openUrl(`cursor://file/${workspacePath}/${filePath}`);
-                        } catch (err) {
-                          const msg =
-                            err instanceof Error ? err.message : String(err);
-                          addToast({
-                            title: "Open Failed",
-                            description: msg,
-                            type: "error",
-                          });
-                        }
-                      }}
-                    >
-                      Edit file
-                    </DropdownMenuItem>
+
+                    {editorApps.vscode && (
+                      <DropdownMenuItem
+                        onSelect={async (e) => {
+                          e.preventDefault();
+                          try {
+                            await openUrl(`vscode://file/${workspacePath}/${filePath}`);
+                          } catch (err) {
+                            const msg =
+                              err instanceof Error ? err.message : String(err);
+                            addToast({
+                              title: "Open Failed",
+                              description: msg,
+                              type: "error",
+                            });
+                          }
+                        }}
+                      >
+                        Open in VSCode
+                      </DropdownMenuItem>
+                    )}
+
+                    {editorApps.zed && (
+                      <DropdownMenuItem
+                        onSelect={async (e) => {
+                          e.preventDefault();
+                          try {
+                            await openUrl(`zed://file/${workspacePath}/${filePath}`);
+                          } catch (err) {
+                            const msg =
+                              err instanceof Error ? err.message : String(err);
+                            addToast({
+                              title: "Open Failed",
+                              description: msg,
+                              type: "error",
+                            });
+                          }
+                        }}
+                      >
+                        Open in Zed
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
