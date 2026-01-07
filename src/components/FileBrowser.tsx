@@ -42,6 +42,7 @@ import {
   ContextMenuSeparator,
 } from "./ui/context-menu";
 import { revealItemInDir, openUrl } from "@tauri-apps/plugin-opener";
+import { useEditorApps } from "../hooks/useEditorApps";
 
 // Helper to check if file is binary
 function isBinaryFile(path: string): boolean {
@@ -244,7 +245,7 @@ interface FileContentViewProps {
   onCancelComment: () => void;
   scrollOffset: number;
   onScrollOffsetChange: (offset: number) => void;
-  listRef: React.RefObject<ListImperativeAPI | null>;
+  listRef: React.RefObject<ListImperativeAPI>;
   // Search props
   isSearchOpen: boolean;
   searchQuery: string;
@@ -539,6 +540,8 @@ const FileTreeContextMenu = memo(function FileTreeContextMenu({
   getRelativePath: (path: string) => string;
   addToast: ReturnType<typeof useToast>['addToast'];
 }) {
+  const editorApps = useEditorApps();
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -617,37 +620,59 @@ const FileTreeContextMenu = memo(function FileTreeContextMenu({
               Open in Finder
             </ContextMenuItem>
 
-            <ContextMenuItem
-              onClick={async () => {
-                try {
-                  await openUrl(`cursor://file/${entry.path}`);
-                } catch (err) {
-                  addToast({
-                    title: "Open Failed",
-                    description: err instanceof Error ? err.message : String(err),
-                    type: "error",
-                  });
-                }
-              }}
-            >
-              Open in Cursor
-            </ContextMenuItem>
+            {editorApps.cursor && (
+              <ContextMenuItem
+                onClick={async () => {
+                  try {
+                    await openUrl(`cursor://file/${entry.path}`);
+                  } catch (err) {
+                    addToast({
+                      title: "Open Failed",
+                      description: err instanceof Error ? err.message : String(err),
+                      type: "error",
+                    });
+                  }
+                }}
+              >
+                Open in Cursor
+              </ContextMenuItem>
+            )}
 
-            <ContextMenuItem
-              onClick={async () => {
-                try {
-                  await openUrl(`vscode://file/${entry.path}`);
-                } catch (err) {
-                  addToast({
-                    title: "Open Failed",
-                    description: err instanceof Error ? err.message : String(err),
-                    type: "error",
-                  });
-                }
-              }}
-            >
-              Open in VSCode
-            </ContextMenuItem>
+            {editorApps.vscode && (
+              <ContextMenuItem
+                onClick={async () => {
+                  try {
+                    await openUrl(`vscode://file/${entry.path}`);
+                  } catch (err) {
+                    addToast({
+                      title: "Open Failed",
+                      description: err instanceof Error ? err.message : String(err),
+                      type: "error",
+                    });
+                  }
+                }}
+              >
+                Open in VSCode
+              </ContextMenuItem>
+            )}
+
+            {editorApps.zed && (
+              <ContextMenuItem
+                onClick={async () => {
+                  try {
+                    await openUrl(`zed://file/${entry.path}`);
+                  } catch (err) {
+                    addToast({
+                      title: "Open Failed",
+                      description: err instanceof Error ? err.message : String(err),
+                      type: "error",
+                    });
+                  }
+                }}
+              >
+                Open in Zed
+              </ContextMenuItem>
+            )}
           </ContextMenuSubContent>
         </ContextMenuSub>
       </ContextMenuContent>
@@ -815,7 +840,7 @@ export const FileBrowser = memo(function FileBrowser({
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const { addToast } = useToast();
   const { fontSize} = useTerminalSettings();
-  const listRef = useRef<ListImperativeAPI | null>(null);
+  const listRef = useRef<ListImperativeAPI>(null);
 
   // Ensure workspace is indexed on mount
   useEffect(() => {

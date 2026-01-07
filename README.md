@@ -1,18 +1,11 @@
-# Treq - Coding Agent Orchestrator
+# Treq
 
-Treq transforms AI-generated code into local isolated pull requests.
+Treq is your AI Code Review Manager, accelerating AI-assisted software development while maintaining high quality code. Treq is an open-source Graphite alternative with a focus on paralleized development using AI agents.
 
-## What is Treq?
-
-AI agents can create results fast, but they don’t organize anything. Their outputs stack on top of each other, overwrite previous work, and make it hard to see what changed or what should happen next.
-
-**Treq fixes that by adding structure.**
-
-It gives each agent result its own space, shows it clearly to the developer for review, and guides the agent to the next step.
-
-Now, instead of a messy pile of AI output, you get a clean, organized workflow you can control.
+_Treq was used to build Treq._
 
 ## Features
+
 
 ### Code Reviews
 
@@ -23,14 +16,24 @@ Inspect and iterate on each change for a human-in-the-loop agentic workflow.
 - Review the code diffs just like a familiar Github PR, annotate and comment on code, and then send it to an agent for changes.
 - Spotted an issue when browsing files? Send it to an agent for adjustments in the background.
 
-### Isolated Workspaces
+### Workspaces
 
 Coding agents work in isolated copies of the codebase, ensuring changes are independent from each other while keeping your current repository clean for planning.
 
 <!-- insert gif of worktree creation -->
 
-- Workspaces are isolated but interlinked - move changes around workspaces, or split and stack workspaces as needed.
+- Workspaces are isolated but and automatically rebased, meaning code never goes stale.
+
 - Got a code conflict? No problem! Let the agent handle it the grunt work.
+
+#### Stacked Workspaces
+
+Got a large feature but need to break it up for easier human review? Split developement into stacks, where features can be built incrementally over smaller branches and shipped in bite sized chunks.
+
+<!-- insert gif of stacking -->
+
+Workspaces can stack on top of each other, automatically rebasing as the underlying code changes.
+
 
 ## License
 

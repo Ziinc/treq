@@ -250,7 +250,17 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
           }
         });
 
-      // Refresh changed files
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [activeTab, workingDirectory]);
+
+  useEffect(() => {
+    if (workingDirectory) {
+      let isMounted = true;
+
+      // Refresh changed files whenever workspace changes (for badge count)
       jjGetChangedFiles(workingDirectory)
         .then((jjFiles) => {
           if (!isMounted) return;
@@ -272,7 +282,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
         isMounted = false;
       };
     }
-  }, [activeTab, workingDirectory]);
+  }, [workingDirectory]);
 
   // Handle file selection from Cmd+P (or other external sources)
   useEffect(() => {
@@ -668,9 +678,21 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
               <Code2 className="w-4 h-4 mr-1.5" />
               Code
             </TabsTrigger>
-            <TabsTrigger value="changes" className="inline-flex items-center">
-              <FileDiff className="w-4 h-4 mr-1.5" />
-              Review
+            <TabsTrigger value="changes" className="inline-flex items-center gap-1.5">
+              <FileDiff className="w-4 h-4" />
+              <span>Review</span>
+              {changedFiles.size > 0 && (
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-xs font-medium transition-colors",
+                    conflictedFiles.length > 0
+                      ? "bg-destructive text-destructive-foreground"
+                      : "bg-muted text-muted-foreground"
+                  )}
+                >
+                  {changedFiles.size}
+                </span>
+              )}
             </TabsTrigger>
           </TabsList>
         </Tabs>

@@ -2,7 +2,8 @@ use jj_lib::config::{ConfigLayer, ConfigSource, StackedConfig};
 use jj_lib::settings::UserSettings;
 use jj_lib::workspace::Workspace;
 use serde::{Deserialize, Serialize};
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::Path;
 use std::process::Command;
 
@@ -233,9 +234,58 @@ username = "{}"
 
 /// Ensure .jj and .treq directories are in .gitignore
 /// This is idempotent - entries won't be duplicated
+pub fn ensure_gitignore_entries(repo_path: &str) -> Result<(), JjError> {
+    let gitignore_path = Path::new(repo_path).join(".gitignore");
+    let entries_to_add = [".jj/", ".treq/"];
+
+    // Read existing .gitignore content
+    let existing_content = if gitignore_path.exists() {
+        fs::read_to_string(&gitignore_path)
+            .map_err(|e| JjError::InitFailed(format!("Failed to read .gitignore: {}", e)))?
+    } else {
+        String::new()
+    };
+
+    let existing_entries: std::collections::HashSet<&str> = existing_content
+        .lines()
+        .map(|l| l.trim())
+        .collect();
+
+    // Find entries that need to be added
+    let entries_needed: Vec<&str> = entries_to_add
+        .iter()
+        .filter(|entry| !existing_entries.contains(*entry))
+        .copied()
+        .collect();
+
+    if entries_needed.is_empty() {
+        return Ok(());
+    }
+
+    // Append missing entries to .gitignore
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&gitignore_path)
+        .map_err(|e| JjError::InitFailed(format!("Failed to open .gitignore: {}", e)))?;
+
+    // Add a newline before our entries if file doesn't end with newline
+    if !existing_content.is_empty() && !existing_content.ends_with('\n') {
+        writeln!(file)
+            .map_err(|e| JjError::InitFailed(format!("Failed to write to .gitignore: {}", e)))?;
+    }
+
+    // Add entries (no comment)
+    for entry in entries_needed {
+        writeln!(file, "{}", entry)
+            .map_err(|e| JjError::InitFailed(format!("Failed to write to .gitignore: {}", e)))?;
+    }
+
+    Ok(())
+}
+
 /// Initialize jj for an existing git repository (colocated mode)
 /// This creates a .jj/ directory alongside the existing .git/ directory
-/// Note: .gitignore entries are handled separately by ensure_gitignore_entries()
 pub fn init_jj_for_git_repo(repo_path: &str) -> Result<(), JjError> {
     let path = Path::new(repo_path);
 
@@ -257,6 +307,9 @@ pub fn init_jj_for_git_repo(repo_path: &str) -> Result<(), JjError> {
 
     Workspace::init_external_git(&settings, path, &git_repo_path)
         .map_err(|e| JjError::InitFailed(e.to_string()))?;
+
+    // Ensure .gitignore entries
+    ensure_gitignore_entries(repo_path)?;
 
     Ok(())
 }

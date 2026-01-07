@@ -190,6 +190,16 @@ export const getRepoSetting = (repo_path: string, key: string): Promise<string |
 export const setRepoSetting = (repo_path: string, key: string, value: string): Promise<void> =>
   invoke("set_repo_setting", { repoPath: repo_path, key, value });
 
+// Editor Apps API
+export interface EditorAppsResponse {
+  cursor: boolean;
+  vscode: boolean;
+  zed: boolean;
+}
+
+export const detectEditorApps = (): Promise<EditorAppsResponse> =>
+  invoke("detect_editor_apps");
+
 // JJ Workspace API
 export const jjCreateWorkspace = (
   repo_path: string,

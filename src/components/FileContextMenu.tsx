@@ -12,6 +12,7 @@ import {
 } from "./ui/context-menu";
 import { revealItemInDir, openUrl } from "@tauri-apps/plugin-opener";
 import { useToast } from "./ui/toast";
+import { useEditorApps } from "../hooks/useEditorApps";
 
 interface FileContextMenuProps {
   filePath: string;
@@ -25,6 +26,7 @@ export const FileContextMenu = memo(function FileContextMenu({
   children,
 }: FileContextMenuProps) {
   const { addToast } = useToast();
+  const editorApps = useEditorApps();
 
   const getRelativePath = useCallback(
     (fullPath: string): string => {
@@ -126,37 +128,59 @@ export const FileContextMenu = memo(function FileContextMenu({
               Open in Finder
             </ContextMenuItem>
 
-            <ContextMenuItem
-              onClick={async () => {
-                try {
-                  await openUrl(`cursor://file/${fullPath}`);
-                } catch (err) {
-                  addToast({
-                    title: "Open Failed",
-                    description: err instanceof Error ? err.message : String(err),
-                    type: "error",
-                  });
-                }
-              }}
-            >
-              Open in Cursor
-            </ContextMenuItem>
+            {editorApps.cursor && (
+              <ContextMenuItem
+                onClick={async () => {
+                  try {
+                    await openUrl(`cursor://file/${fullPath}`);
+                  } catch (err) {
+                    addToast({
+                      title: "Open Failed",
+                      description: err instanceof Error ? err.message : String(err),
+                      type: "error",
+                    });
+                  }
+                }}
+              >
+                Open in Cursor
+              </ContextMenuItem>
+            )}
 
-            <ContextMenuItem
-              onClick={async () => {
-                try {
-                  await openUrl(`vscode://file/${fullPath}`);
-                } catch (err) {
-                  addToast({
-                    title: "Open Failed",
-                    description: err instanceof Error ? err.message : String(err),
-                    type: "error",
-                  });
-                }
-              }}
-            >
-              Open in VSCode
-            </ContextMenuItem>
+            {editorApps.vscode && (
+              <ContextMenuItem
+                onClick={async () => {
+                  try {
+                    await openUrl(`vscode://file/${fullPath}`);
+                  } catch (err) {
+                    addToast({
+                      title: "Open Failed",
+                      description: err instanceof Error ? err.message : String(err),
+                      type: "error",
+                    });
+                  }
+                }}
+              >
+                Open in VSCode
+              </ContextMenuItem>
+            )}
+
+            {editorApps.zed && (
+              <ContextMenuItem
+                onClick={async () => {
+                  try {
+                    await openUrl(`zed://file/${fullPath}`);
+                  } catch (err) {
+                    addToast({
+                      title: "Open Failed",
+                      description: err instanceof Error ? err.message : String(err),
+                      type: "error",
+                    });
+                  }
+                }}
+              >
+                Open in Zed
+              </ContextMenuItem>
+            )}
           </ContextMenuSubContent>
         </ContextMenuSub>
       </ContextMenuContent>

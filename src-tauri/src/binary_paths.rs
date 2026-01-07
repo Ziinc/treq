@@ -74,6 +74,41 @@ pub fn get_binary_path(name: &str) -> Option<String> {
     BINARY_PATHS_CACHE.get()?.get(name).cloned()
 }
 
+/// Detect installed editor applications using mdfind
+pub fn detect_editor_app(app_name: &str) -> bool {
+    let search_pattern = "kMDItemKind == 'Application'";
+
+    let output = Command::new("mdfind")
+        .arg(search_pattern)
+        .output()
+        .ok();
+
+    if let Some(output) = output {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let app_file = format!("/{}.app", app_name);
+            return stdout.lines().any(|line| line.ends_with(&app_file));
+        }
+    }
+
+    false
+}
+
+static EDITOR_APPS_CACHE: OnceLock<HashMap<String, bool>> = OnceLock::new();
+
+/// Initialize editor apps cache
+pub fn init_editor_apps_cache(apps: HashMap<String, bool>) {
+    let _ = EDITOR_APPS_CACHE.set(apps);
+}
+
+/// Get cached editor app availability
+pub fn get_editor_app(name: &str) -> bool {
+    EDITOR_APPS_CACHE
+        .get()
+        .and_then(|cache| cache.get(name).copied())
+        .unwrap_or(false)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

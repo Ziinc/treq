@@ -69,6 +69,10 @@ pub fn run() {
             let binary_paths = commands::load_cached_binary_paths(&db);
             binary_paths::init_binary_paths_cache(binary_paths);
 
+            // Load cached editor apps and initialize in-memory cache
+            let editor_apps = commands::load_cached_editor_apps(&db);
+            binary_paths::init_editor_apps_cache(editor_apps);
+
             let pty_manager = PtyManager::new();
 
             // Initialize file watcher
@@ -272,6 +276,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::detect_binaries,
+            commands::detect_editor_apps,
             commands::get_workspaces,
             commands::add_workspace_to_db,
             commands::create_workspace,

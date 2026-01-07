@@ -35,7 +35,8 @@ import {
   ContextMenuSeparator,
 } from "./ui/context-menu";
 import { getWorkspaceTitle as getWorkspaceTitleFromUtils } from "../lib/workspace-utils";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { revealItemInDir, openUrl } from "@tauri-apps/plugin-opener";
+import { useEditorApps } from "../hooks/useEditorApps";
 
 interface WorkspaceSidebarProps {
   repoPath?: string;
@@ -65,6 +66,8 @@ const PathContextMenuItems: React.FC<{
   fullPath: string;
   additionalItems?: React.ReactNode;
 }> = ({ relativePath, fullPath, additionalItems }) => {
+  const editorApps = useEditorApps();
+
   return (
     <>
       <ContextMenuItem
@@ -97,6 +100,48 @@ const PathContextMenuItems: React.FC<{
             <FolderOpen className="w-4 h-4 mr-2" />
             Open in Finder
           </ContextMenuItem>
+
+          {editorApps.cursor && (
+            <ContextMenuItem
+              onClick={async () => {
+                try {
+                  await openUrl(`cursor://file/${fullPath}`);
+                } catch (err) {
+                  console.error("Failed to open in Cursor:", err);
+                }
+              }}
+            >
+              Open in Cursor
+            </ContextMenuItem>
+          )}
+
+          {editorApps.vscode && (
+            <ContextMenuItem
+              onClick={async () => {
+                try {
+                  await openUrl(`vscode://file/${fullPath}`);
+                } catch (err) {
+                  console.error("Failed to open in VSCode:", err);
+                }
+              }}
+            >
+              Open in VSCode
+            </ContextMenuItem>
+          )}
+
+          {editorApps.zed && (
+            <ContextMenuItem
+              onClick={async () => {
+                try {
+                  await openUrl(`zed://file/${fullPath}`);
+                } catch (err) {
+                  console.error("Failed to open in Zed:", err);
+                }
+              }}
+            >
+              Open in Zed
+            </ContextMenuItem>
+          )}
         </ContextMenuSubContent>
       </ContextMenuSub>
       {additionalItems}
