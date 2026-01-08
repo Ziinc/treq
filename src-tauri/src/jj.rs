@@ -158,7 +158,6 @@ impl std::fmt::Display for JjError {
             JjError::NotGitRepository => write!(f, "Not a git repository"),
             JjError::InitFailed(e) => write!(f, "Failed to initialize jj: {}", e),
             JjError::ConfigError(e) => write!(f, "Configuration error: {}", e),
-            JjError::WorkspaceExists(name) => write!(f, "Workspace '{}' already exists", name),
             JjError::WorkspaceNotFound(name) => write!(f, "Workspace '{}' not found", name),
             JjError::GitWorkspaceError(e) => write!(f, "Git workspace error: {}", e),
             JjError::IoError(e) => write!(f, "IO error: {}", e),
