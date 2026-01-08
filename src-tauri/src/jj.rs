@@ -50,7 +50,6 @@ pub enum JjError {
     NotGitRepository,
     InitFailed(String),
     ConfigError(String),
-    WorkspaceExists(String),
     WorkspaceNotFound(String),
     GitWorkspaceError(String),
     IoError(String),
@@ -401,7 +400,7 @@ pub fn create_workspace(
 
     // Determine revision to start from and extract remote name if applicable
     // Convert git format (origin/branch) to jj format (branch@origin)
-    let remote_name = if !new_branch {
+    let _remote_name = if !new_branch {
         // Existing bookmark: point to that bookmark's revision
         jj_cmd.args(["--revision", branch_name]);
         None

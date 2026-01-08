@@ -117,7 +117,7 @@ pub fn start_file_watcher(
 #[tauri::command]
 pub fn stop_file_watcher(
     state: State<AppState>,
-    workspace_id: i64,
+    _workspace_id: i64,
     workspace_path: String,
 ) -> Result<(), String> {
     state.watcher_manager.stop_watching(&workspace_path)

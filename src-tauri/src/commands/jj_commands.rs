@@ -335,7 +335,7 @@ pub fn jj_track_workspace_bookmarks(
     // Get all workspace branches from database
     let workspace_branches: Vec<String> = {
         match state.db.lock() {
-            Ok(db) => {
+            Ok(_db) => {
                 match crate::local_db::get_workspaces(&repo_path) {
                     Ok(workspaces) => workspaces.into_iter().map(|ws| ws.branch_name).collect(),
                     Err(_) => Vec::new(),
