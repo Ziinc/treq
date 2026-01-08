@@ -5,7 +5,19 @@ on:
 
 jobs:
   release:
-    runs-on: macos-latest
+    strategy:
+    fail-fast: false
+    matrix:
+      include:
+        - platform: 'macos-latest' # for Arm based macs (M1 and above).
+          args: '--target aarch64-apple-darwin'
+        - platform: 'macos-latest' # for Intel based macs.
+          args: '--target x86_64-apple-darwin'
+        # - platform: 'ubuntu-22.04'
+        #   args: ''
+        # - platform: 'windows-latest'
+        #   args: ''
+    runs-on: ${{ matrix.platform }}
     environment: prod
     steps:
       - uses: actions/checkout@v4
@@ -17,6 +29,9 @@ jobs:
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Install dependencies
         run: npm install
@@ -36,7 +51,8 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: treq-v__VERSION__
-          releaseName: 'Treq v__VERSION__'
+          releaseName: 'v__VERSION__'
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: true
           prerelease: false
+          args: ${{ matrix.args }}

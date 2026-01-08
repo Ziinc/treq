@@ -101,13 +101,6 @@ pub fn init_editor_apps_cache(apps: HashMap<String, bool>) {
     let _ = EDITOR_APPS_CACHE.set(apps);
 }
 
-/// Get cached editor app availability
-pub fn get_editor_app(name: &str) -> bool {
-    EDITOR_APPS_CACHE
-        .get()
-        .and_then(|cache| cache.get(name).copied())
-        .unwrap_or(false)
-}
 
 #[cfg(test)]
 mod tests {
