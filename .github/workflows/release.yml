@@ -8,10 +8,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - platform: 'macos-latest' # for Arm based macs (M1 and above).
-            args: '--target aarch64-apple-darwin'
-          - platform: 'macos-latest' # for Intel based macs.
-            args: '--target x86_64-apple-darwin'
+          - platform: 'macos-latest'
+            args: '--target universal-apple-darwin'
           # - platform: 'ubuntu-22.04'
           #   args: ''
           # - platform: 'windows-latest'
@@ -26,14 +24,20 @@ jobs:
         with:
           node-version: '20'
 
+
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
+      - name: Add Rust targets for macOS
+        if: matrix.platform == 'macos-latest'
+        run: |
+          rustup target add aarch64-apple-darwin
+          rustup target add x86_64-apple-darwin
+
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Extract version
         id: version
