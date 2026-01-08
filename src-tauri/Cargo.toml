@@ -32,7 +32,6 @@ sha2 = "0.10"
 ignore = "0.4"
 walkdir = "2"
 globset = "0.4"
-git2 = { version = "0.20.2", features = ["https", "ssh"] }
 jj-lib = "0.36.0"
 notify = { version = "6.1", default-features = false, features = ["macos_fsevent"] }
 notify-debouncer-full = "0.3"
