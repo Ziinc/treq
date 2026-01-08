@@ -175,7 +175,7 @@ pub fn run() {
                     .item(&learn_more_item)
                     .build()?;
 
-                let menu_builder = MenuBuilder::new(app)
+                let mut menu_builder = MenuBuilder::new(app)
                     .item(&app_menu)
                     .item(&file_menu)
                     .item(&edit_menu)

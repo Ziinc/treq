@@ -24,19 +24,13 @@ tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.32", features = ["bundled"] }
-# Tokio with only needed features (instead of "full") for faster compilation
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-util", "process", "fs", "sync"] }
 portable-pty = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 sha2 = "0.10"
 ignore = "0.4"
-walkdir = "2"
-globset = "0.4"
 jj-lib = "0.36.0"
 notify = { version = "6.1", default-features = false, features = ["macos_fsevent"] }
 notify-debouncer-full = "0.3"
-crossbeam-channel = "0.5"
-rayon = "1.10"
 tauri-plugin-log = "2"
 log = "0.4"
 
