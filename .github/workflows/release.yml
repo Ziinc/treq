@@ -6,6 +6,7 @@ on:
 jobs:
   release:
     runs-on: macos-latest
+    environment: prod
     steps:
       - uses: actions/checkout@v4
 
