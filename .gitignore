@@ -39,3 +39,12 @@ Thumbs.db
 
 src-tauri/target/
 src-tauri/gen/
+
+# Code Signing Certificates (for local notarization)
+# Never commit production credentials or certificates
+/certs/*.p12
+/certs/*.cer
+/certs/*.p8
+/certs/.env.prod
+
+!/certs/.env
