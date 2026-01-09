@@ -19,8 +19,9 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
-tauri-plugin-opener = "2"
-tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2.5.2"
+tauri-plugin-dialog = "2.5.0"
+tauri-plugin-log = "2.8.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.32", features = ["bundled"] }
@@ -31,7 +32,6 @@ ignore = "0.4"
 jj-lib = "0.36.0"
 notify = { version = "6.1", default-features = false, features = ["macos_fsevent"] }
 notify-debouncer-full = "0.3"
-tauri-plugin-log = "2"
 log = "0.4"
 
 [dev-dependencies]
