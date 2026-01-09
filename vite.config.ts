@@ -21,6 +21,7 @@ export default defineConfig(async () => ({
             '@xterm/addon-ligatures',
             '@xterm/addon-unicode11',
             '@xterm/addon-clipboard',
+            '@xterm/addon-image',
           ],
           'vendor': ['react', 'react-dom', '@tanstack/react-query'],
         },
