@@ -635,6 +635,10 @@ pub fn squash_to_workspace(
 /// Edit the working copy of a workspace branch
 /// Tries to edit <branch>+ (child of bookmark), falls back to <branch> + new if no child exists
 /// This ensures we're editing the working copy, not the bookmark commit itself
+///
+/// Note: This function is kept for potential future use. After the fix for stale working copies,
+/// we no longer edit working copies from outside their workspace directories.
+#[allow(dead_code)]
 pub fn jj_edit_workspace_working_copy(workspace_path: &str, branch_name: &str) -> Result<(), JjError> {
     // 1. Try: jj edit <branch>+
     let branch_plus = format!("{}+", branch_name);
@@ -1431,7 +1435,7 @@ pub fn jj_rebase_with_revset(
     working_dir: &str,
     revset: &str,
     target_branch: &str,
-    branch_name: &str,
+    _branch_name: &str,  // No longer used after switching to bookmark-only rebasing
 ) -> Result<JjRebaseResult, JjError> {
     let output = command_for("jj")
         .current_dir(working_dir)
@@ -1443,14 +1447,10 @@ pub fn jj_rebase_with_revset(
     let stderr = String::from_utf8_lossy(&output.stderr);
     let combined_message = format!("{}{}", stdout, stderr);
 
-    // Set jj bookmark after successful rebase
-    if output.status.success() {
-        jj_set_bookmark(working_dir, branch_name, "@")
-            .map_err(|e| JjError::IoError(format!(
-                "Rebase succeeded but failed to set bookmark '{}': {}",
-                branch_name, e
-            )))?;
-    }
+    // After rebase with -s <revset> -d <target>, jj automatically updates bookmarks
+    // that are included in the revset to point to the rebased commits.
+    // We don't need to manually set the bookmark to @ (which is the working copy).
+    // Working only with committed bookmarks ensures working copies stay isolated.
 
     Ok(JjRebaseResult {
         success: output.status.success(),
