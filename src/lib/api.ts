@@ -430,6 +430,13 @@ export const listConflictedWorkspaceIds = (
     repoPath: repo_path,
   });
 
+export const listWorkspacesWithChanges = (
+  repo_path: string
+): Promise<number[]> =>
+  invoke("list_workspaces_with_changes", {
+    repoPath: repo_path,
+  });
+
 export const setWorkspaceTargetBranch = (
   repo_path: string,
   workspace_path: string,
