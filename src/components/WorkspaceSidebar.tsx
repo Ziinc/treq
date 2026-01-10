@@ -52,6 +52,7 @@ interface WorkspaceSidebarProps {
   openSettings?: (tab?: string) => void;
   navigateToDashboard?: () => void;
   onOpenCommandPalette?: () => void;
+  onOpenBranchSwitcher?: () => void;
   currentPage?: "settings" | "session" | null;
 }
 
@@ -164,6 +165,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
     openSettings,
     navigateToDashboard: _navigateToDashboard,
     onOpenCommandPalette,
+    onOpenBranchSwitcher,
     currentPage,
   }) => {
     const { data: workspaces = [] } = useQuery({
@@ -287,6 +289,15 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                 </TooltipContent>
               </Tooltip>
               <ContextMenuContent>
+                {onOpenBranchSwitcher && (
+                  <>
+                    <ContextMenuItem onClick={onOpenBranchSwitcher}>
+                      <GitBranch className="w-4 h-4 mr-2" />
+                      Switch Branch...
+                    </ContextMenuItem>
+                    <ContextMenuSeparator />
+                  </>
+                )}
                 <PathContextMenuItems
                   relativePath="."
                   fullPath={repoPath || ""}
