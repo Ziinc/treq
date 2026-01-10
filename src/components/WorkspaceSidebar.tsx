@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, memo, useMemo } from "react";
-import { Workspace, getWorkspaces, listConflictedWorkspaceIds } from "../lib/api";
+import { Workspace, getWorkspaces, listConflictedWorkspaceIds, listWorkspacesWithChanges } from "../lib/api";
 import {
   buildWorkspaceTree,
   flattenWorkspaceTree,
@@ -12,6 +12,7 @@ import {
   GitBranch,
   Trash2,
   AlertTriangle,
+  CircleDot,
   Copy,
   FolderOpen,
   CornerLeftUp,
@@ -177,6 +178,12 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
       enabled: !!repoPath,
     });
 
+    const { data: changedIds = [] } = useQuery<number[]>({
+      queryKey: ["workspaces-with-changes", repoPath],
+      queryFn: () => listWorkspacesWithChanges(repoPath || ""),
+      enabled: !!repoPath,
+    });
+
     // Build hierarchical tree and flatten for rendering
     const flattenedNodes = useMemo(() => {
       const tree = buildWorkspaceTree(workspaces);
@@ -337,9 +344,12 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                             >
                               {getWorkspaceTitle(workspace)}
                             </span>
-                            {conflictedIds.includes(workspace.id) && (
+                            {/* Indicators: Conflict takes priority over changes */}
+                            {conflictedIds.includes(workspace.id) ? (
                               <AlertTriangle className="w-3 h-3 text-destructive shrink-0" />
-                            )}
+                            ) : changedIds.includes(workspace.id) ? (
+                              <CircleDot className="w-3 h-3 text-slate-400 fill-slate-400 shrink-0" />
+                            ) : null}
                             <StatusPill path={workspace.workspace_path} />
                           </div>
                         </TooltipTrigger>

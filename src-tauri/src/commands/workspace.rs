@@ -219,6 +219,26 @@ pub fn list_conflicted_workspace_ids(repo_path: String) -> Result<Vec<i64>, Stri
     Ok(conflicted_ids)
 }
 
+/// Get list of workspace IDs that currently have uncommitted changes
+/// Checks directly against jj, does not use stale database state
+#[tauri::command]
+pub fn list_workspaces_with_changes(repo_path: String) -> Result<Vec<i64>, String> {
+    let workspaces = local_db::get_workspaces(&repo_path)?;
+    let mut changed_ids = Vec::new();
+
+    for workspace in workspaces {
+        // Check actual change status from jj directly
+        let changed_files = jj::jj_get_changed_files(&workspace.workspace_path)
+            .unwrap_or_default();
+
+        if !changed_files.is_empty() {
+            changed_ids.push(workspace.id);
+        }
+    }
+
+    Ok(changed_ids)
+}
+
 #[tauri::command]
 pub fn ensure_workspace_indexed(
     repo_path: String,

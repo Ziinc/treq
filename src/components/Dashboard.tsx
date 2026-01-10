@@ -314,6 +314,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
       queryClient.invalidateQueries({
         queryKey: ["workspaces", repoPath],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["workspaces-with-changes", repoPath],
+      });
     };
 
     const unlistenFocus = getCurrentWindow().onFocusChanged(
@@ -376,6 +379,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
       }
     };
     fetchConflictedIds();
+  }, [repoPath, queryClient]);
+
+  // Listen for file changes to update change indicators in real-time
+  useEffect(() => {
+    if (!repoPath) return;
+
+    const unlistenFileChanges = listen<{
+      workspace_id: number;
+      changed_paths: string[];
+    }>("workspace-files-changed", () => {
+      // Invalidate query to refresh all workspace indicators
+      queryClient.invalidateQueries({
+        queryKey: ["workspaces-with-changes", repoPath],
+      });
+    });
+
+    return () => {
+      unlistenFileChanges.then((fn) => fn());
+    };
   }, [repoPath, queryClient]);
 
   // Fetch remote branches on app startup when repo is loaded
