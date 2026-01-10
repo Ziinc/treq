@@ -761,9 +761,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
 
   // Handle branch change after switching
   const handleBranchChanged = useCallback(() => {
+    // Refresh current branch display
+    if (repoPath) {
+      jjGetCurrentBranch(repoPath).then(branch => {
+        setCurrentBranch(branch);
+      }).catch(error => {
+        console.error("Failed to refresh current branch:", error);
+      });
+    }
+
     // Refresh workspace data
     queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
-  }, [repoPath, queryClient, addToast]);
+  }, [repoPath, queryClient]);
 
 
   const isSessionView =
@@ -856,6 +865,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
           openSettings={openSettings}
           navigateToDashboard={handleReturnToDashboard}
           onOpenCommandPalette={() => setShowCommandPalette(true)}
+          onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
           currentPage={
             viewMode === "settings"
               ? "settings"
