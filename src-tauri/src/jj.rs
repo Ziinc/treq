@@ -260,6 +260,9 @@ pub fn ensure_gitignore_entries(repo_path: &str) -> Result<(), JjError> {
         return Ok(());
     }
 
+    // Check if the comment already exists
+    let has_comment = existing_entries.contains("# Added by Treq");
+
     // Append missing entries to .gitignore
     let mut file = OpenOptions::new()
         .create(true)
@@ -273,7 +276,13 @@ pub fn ensure_gitignore_entries(repo_path: &str) -> Result<(), JjError> {
             .map_err(|e| JjError::InitFailed(format!("Failed to write to .gitignore: {}", e)))?;
     }
 
-    // Add entries (no comment)
+    // Add comment only if it doesn't exist
+    if !has_comment {
+        writeln!(file, "# Added by Treq")
+            .map_err(|e| JjError::InitFailed(format!("Failed to write to .gitignore: {}", e)))?;
+    }
+
+    // Add collocated entries
     for entry in entries_needed {
         writeln!(file, "{}", entry)
             .map_err(|e| JjError::InitFailed(format!("Failed to write to .gitignore: {}", e)))?;
@@ -2326,6 +2335,49 @@ mod tests {
         let workspace_path = temp_dir.path().join("test_workspace");
         fs::create_dir_all(&workspace_path).unwrap();
         (temp_dir, workspace_path)
+    }
+
+    #[test]
+    fn test_ensure_gitignore_entries_adds_to_empty_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let gitignore_path = temp_dir.path().join(".gitignore");
+
+        ensure_gitignore_entries(temp_dir.path().to_str().unwrap()).unwrap();
+        let content = fs::read_to_string(&gitignore_path).unwrap();
+
+        assert!(content.contains("# Added by Treq"));
+        assert!(content.contains(".jj/"));
+        assert!(content.contains(".treq/"));
+    }
+
+    #[test]
+    fn test_ensure_gitignore_entries_only_adds_missing() {
+        let temp_dir = TempDir::new().unwrap();
+        let gitignore_path = temp_dir.path().join(".gitignore");
+
+        // Test: Only .jj/ is missing
+        fs::write(&gitignore_path, "# Added by Treq\n.treq/\n").unwrap();
+        ensure_gitignore_entries(temp_dir.path().to_str().unwrap()).unwrap();
+        let content = fs::read_to_string(&gitignore_path).unwrap();
+        assert_eq!(content.matches(".jj/").count(), 1);
+        assert_eq!(content.matches(".treq/").count(), 1);
+        assert_eq!(content.matches("# Added by Treq").count(), 1);
+
+        // Test: Only .treq/ is missing
+        fs::write(&gitignore_path, "# Added by Treq\n.jj/\n").unwrap();
+        ensure_gitignore_entries(temp_dir.path().to_str().unwrap()).unwrap();
+        let content = fs::read_to_string(&gitignore_path).unwrap();
+        assert_eq!(content.matches(".jj/").count(), 1);
+        assert_eq!(content.matches(".treq/").count(), 1);
+        assert_eq!(content.matches("# Added by Treq").count(), 1);
+
+        // Test: Both exist - no changes
+        fs::write(&gitignore_path, "# Added by Treq\n.jj/\n.treq/\n").unwrap();
+        ensure_gitignore_entries(temp_dir.path().to_str().unwrap()).unwrap();
+        let content = fs::read_to_string(&gitignore_path).unwrap();
+        assert_eq!(content.matches(".jj/").count(), 1);
+        assert_eq!(content.matches(".treq/").count(), 1);
+        assert_eq!(content.matches("# Added by Treq").count(), 1);
     }
 
     #[test]
