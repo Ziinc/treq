@@ -11,6 +11,22 @@ static INDEXED_WORKSPACES: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
 #[tauri::command]
 pub fn get_workspaces(repo_path: String) -> Result<Vec<Workspace>, String> {
+    // Auto-recover stale workspaces when loading a repo
+    match check_and_update_stale_workspaces(repo_path.clone()) {
+        Ok(updated) if !updated.is_empty() => {
+            log::info!(
+                "Auto-recovered {} stale workspace(s) on repo open: {:?}",
+                updated.len(),
+                updated
+            );
+        }
+        Err(e) => {
+            log::warn!("Failed to check/update stale workspaces: {}", e);
+            // Don't fail the repo open operation
+        }
+        _ => {} // No stale workspaces found
+    }
+
     local_db::get_workspaces(&repo_path)
 }
 
@@ -172,6 +188,55 @@ pub fn cleanup_stale_workspaces(repo_path: String) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+/// Check all workspaces in a repo and update any with stale working copies
+/// Returns list of workspace names that were updated
+/// Called automatically when a repo is opened, or manually via UI command
+pub fn check_and_update_stale_workspaces(
+    repo_path: String,
+) -> Result<Vec<String>, String> {
+    let workspaces = local_db::get_workspaces(&repo_path)?;
+    let mut updated_workspaces = Vec::new();
+
+    for workspace in workspaces {
+        match jj::is_workspace_stale(&workspace.workspace_path) {
+            Ok(true) => {
+                // Workspace is stale, try to update it
+                match jj::jj_workspace_update_stale(&workspace.workspace_path) {
+                    Ok(msg) => {
+                        log::info!(
+                            "Updated stale workspace '{}': {}",
+                            workspace.workspace_name,
+                            msg
+                        );
+                        updated_workspaces.push(workspace.workspace_name);
+                    }
+                    Err(e) => {
+                        log::warn!(
+                            "Failed to update stale workspace '{}': {}",
+                            workspace.workspace_name,
+                            e
+                        );
+                        // Continue with other workspaces even if one fails
+                    }
+                }
+            }
+            Ok(false) => {
+                // Not stale, skip
+            }
+            Err(e) => {
+                log::warn!(
+                    "Failed to check staleness for workspace '{}': {}",
+                    workspace.workspace_name,
+                    e
+                );
+                // Continue with other workspaces
+            }
+        }
+    }
+
+    Ok(updated_workspaces)
 }
 
 #[tauri::command]
