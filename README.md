@@ -1,11 +1,16 @@
-# Treq
+<div align="center">
+
+![treq](./assets/combined-horizontal.png)
+
+</div>
+
+# treq
 
 Treq is your AI Code Review Manager, accelerating AI-assisted software development while maintaining high quality code. Treq is an open-source Graphite alternative with a focus on paralleized development using AI agents.
 
 _Treq was used to build Treq._
 
 ## Features
-
 
 ### Code Reviews
 
@@ -33,7 +38,6 @@ Got a large feature but need to break it up for easier human review? Split devel
 <!-- insert gif of stacking -->
 
 Workspaces can stack on top of each other, automatically rebasing as the underlying code changes.
-
 
 ## License
 
