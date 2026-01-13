@@ -126,7 +126,7 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
                       value={branch.name}
                       onSelect={() => handleSelectBranch(branch)}
                       disabled={switching}
-                      className="px-3 py-2 flex items-center gap-3 cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground data-[disabled]:opacity-50 data-[disabled]:pointer-events-none"
+                      className="px-3 py-2 flex items-center gap-3 cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground data-[disabled='true']:opacity-50 data-[disabled='true']:pointer-events-none"
                     >
                       <Check className="w-4 h-4 text-green-500" />
                       <div className="flex-1 min-w-0">
@@ -147,7 +147,7 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
                       value={branch.name}
                       onSelect={() => handleSelectBranch(branch)}
                       disabled={switching}
-                      className="px-3 py-2 flex items-center gap-3 cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground data-[disabled]:opacity-50 data-[disabled]:pointer-events-none"
+                      className="px-3 py-2 flex items-center gap-3 cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground data-[disabled='true']:opacity-50 data-[disabled='true']:pointer-events-none"
                     >
                       <GitBranch className="w-4 h-4 text-muted-foreground" />
                       <div className="flex-1 min-w-0">
@@ -167,7 +167,7 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
                       value={branch.name}
                       onSelect={() => handleSelectBranch(branch)}
                       disabled={switching}
-                      className="px-3 py-2 flex items-center gap-3 cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground data-[disabled]:opacity-50 data-[disabled]:pointer-events-none"
+                      className="px-3 py-2 flex items-center gap-3 cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground data-[disabled='true']:opacity-50 data-[disabled='true']:pointer-events-none"
                     >
                       <ArrowRight className="w-4 h-4 text-muted-foreground" />
                       <div className="flex-1 min-w-0">

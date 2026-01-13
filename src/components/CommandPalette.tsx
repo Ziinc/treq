@@ -255,7 +255,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       key={item.id}
       value={item.label}
       onSelect={item.onSelect}
-      className="px-3 py-1.5 mx-2 rounded-md flex items-center gap-3 cursor-pointer text-foreground aria-selected:bg-accent/50 aria-selected:text-foreground data-[disabled]:opacity-50 data-[disabled]:pointer-events-none hover:bg-accent/30 transition-colors"
+      className="px-3 py-1.5 mx-2 rounded-md flex items-center gap-3 cursor-pointer text-foreground aria-selected:bg-accent/50 aria-selected:text-foreground data-[disabled='true']:opacity-50 data-[disabled='true']:pointer-events-none hover:bg-accent/30 transition-colors"
     >
       <span className="text-muted-foreground">{item.icon}</span>
       <div className="flex-1 min-w-0">
