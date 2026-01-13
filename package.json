@@ -13,7 +13,8 @@
     "test:run": "vitest run",
     "test:ui": "vitest --ui",
     "check": "tsc",
-    "lint": "oxlint && eslint ."
+    "lint": "oxlint && eslint .",
+    "icons:generate": "node scripts/generate-icons.js && npx @tauri-apps/cli icon assets/logo-white.imageset/logo-white-rounded.svg"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
