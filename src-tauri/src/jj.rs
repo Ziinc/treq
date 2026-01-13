@@ -700,6 +700,44 @@ pub fn jj_edit_workspace_working_copy(workspace_path: &str, branch_name: &str) -
 }
 
 // ============================================================================
+// Stale Working Copy Detection and Recovery
+// ============================================================================
+
+/// Check if a workspace has a stale working copy
+/// Returns true if the workspace is stale
+pub fn is_workspace_stale(workspace_path: &str) -> Result<bool, JjError> {
+    let output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["status", "--no-pager"])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    // Check for stale working copy error messages
+    Ok(stderr.contains("stale") || stderr.contains("not updated since operation"))
+}
+
+/// Update a stale working copy using jj workspace update-stale
+pub fn jj_workspace_update_stale(workspace_path: &str) -> Result<String, JjError> {
+    let output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["workspace", "update-stale"])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{}{}", stdout, stderr);
+
+    if !output.status.success() {
+        return Err(JjError::IoError(combined));
+    }
+
+    Ok(combined)
+}
+
+// ============================================================================
 // Diff Operations using hybrid CLI approach
 // Uses jj CLI for file listing (faster) and git CLI for diffs (reliable)
 // ============================================================================
@@ -3680,5 +3718,49 @@ target/debug/deps/lib.so    2-sided conflict including 1 deletion and an executa
     fn test_get_git_remotes_graceful_on_invalid_path() {
         let remotes = get_git_remotes("/nonexistent/path");
         assert!(remotes.is_empty(), "Should return empty set for invalid path");
+    }
+
+    #[test]
+    fn test_stale_detection_identifies_stale_error() {
+        // Test that stale error messages are detected
+        let stderr = "Error: The working copy is stale (not updated since operation abc123)";
+        assert!(stderr.contains("stale"));
+        assert!(stderr.contains("not updated since operation"));
+    }
+
+    #[test]
+    fn test_stale_detection_identifies_working_copy_modified() {
+        // Test various stale working copy error message formats
+        let messages = vec![
+            "The working copy is stale (not updated since operation 138380c1c86d)",
+            "working copy is stale",
+            "not updated since operation xyz",
+        ];
+
+        for msg in messages {
+            assert!(
+                msg.contains("stale") || msg.contains("not updated since operation"),
+                "Should detect stale marker in: {}",
+                msg
+            );
+        }
+    }
+
+    #[test]
+    fn test_stale_detection_ignores_clean_workspace() {
+        // Clean workspaces should not be detected as stale
+        let clean_messages = vec![
+            "Working copy clean",
+            "At commit abc123",
+            "No conflicts",
+        ];
+
+        for msg in clean_messages {
+            assert!(
+                !msg.contains("stale") && !msg.contains("not updated since operation"),
+                "Should not detect as stale: {}",
+                msg
+            );
+        }
     }
 }
