@@ -104,7 +104,7 @@ export const WorkspaceDeletion: React.FC<WorkspaceDeletionProps> = ({
             <Command.Item
               value={`current-default-${currentWorkspace.branch_name}`}
               onSelect={handleSelect}
-              className="px-3 py-1.5 mx-2 rounded-md flex items-center gap-3 cursor-pointer text-foreground aria-selected:bg-accent/50 aria-selected:text-foreground data-[disabled]:opacity-50 data-[disabled]:pointer-events-none hover:bg-accent/30 transition-colors"
+              className="px-3 py-1.5 mx-2 rounded-md flex items-center gap-3 cursor-pointer text-foreground aria-selected:bg-accent/50 aria-selected:text-foreground data-[disabled='true']:opacity-50 data-[disabled='true']:pointer-events-none hover:bg-accent/30 transition-colors"
             >
               <span className="text-muted-foreground">
                 <GitBranch className="w-4 h-4" />
@@ -128,7 +128,7 @@ export const WorkspaceDeletion: React.FC<WorkspaceDeletionProps> = ({
                 key={workspace.id}
                 value={`workspace-${workspace.id}-${workspace.branch_name}`}
                 onSelect={handleSelect}
-                className="px-3 py-1.5 mx-2 rounded-md flex items-center gap-3 cursor-pointer text-foreground aria-selected:bg-accent/50 aria-selected:text-foreground data-[disabled]:opacity-50 data-[disabled]:pointer-events-none hover:bg-accent/30 transition-colors"
+                className="px-3 py-1.5 mx-2 rounded-md flex items-center gap-3 cursor-pointer text-foreground aria-selected:bg-accent/50 aria-selected:text-foreground data-[disabled='true']:opacity-50 data-[disabled='true']:pointer-events-none hover:bg-accent/30 transition-colors"
               >
                 <span className="text-muted-foreground">
                   <GitBranch className="w-4 h-4" />
