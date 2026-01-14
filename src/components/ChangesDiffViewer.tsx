@@ -2893,12 +2893,34 @@ export const ChangesDiffViewer = memo(
               return;
             }
 
+            // CRITICAL FIX: Apply pending file changes BEFORE clearing review state
+            if (pendingFilesData) {
+              // Apply pending files with forceApply=true to bypass review mode check
+              applyChangedFiles(pendingFilesData, true);
+            }
+
+            // Apply pending hunks data if present
+            if (pendingHunksData) {
+              setAllFileHunks(pendingHunksData);
+            }
+
+            // Clear pending state
+            setPendingFilesData(null);
+            setPendingHunksData(null);
+            setStaleFiles(new Set());
+
             // Clear review state
             setComments([]);
             setConflictComments(new Map());
             setHasUserAddedComments(false);
             setFinalReviewComment("");
             setReviewPopoverOpen(false);
+
+            // Clear persisted review from database
+            if (repoPath && workspaceId !== undefined) {
+              await clearPendingReview(repoPath, workspaceId);
+            }
+
             // Notify parent that review was submitted
             onReviewSubmitted?.();
           } catch (error) {
@@ -2912,17 +2934,6 @@ export const ChangesDiffViewer = memo(
           } finally {
             setSendingReview(false);
           }
- 
-           // Clear review state
-           setComments([]);
-           setHasUserAddedComments(false);
-           setFinalReviewComment("");
-           setReviewPopoverOpen(false);
-
-          // Clear persisted review from database
-          if (repoPath && workspaceId !== undefined) {
-            await clearPendingReview(repoPath, workspaceId);
-          }
        }, [
          onCreateAgentWithReview,
          formatReviewMarkdown,
@@ -2930,6 +2941,9 @@ export const ChangesDiffViewer = memo(
          onReviewSubmitted,
          repoPath,
          workspaceId,
+         pendingFilesData,
+         pendingHunksData,
+         applyChangedFiles,
        ]);
 
       // Cancel review handler
@@ -3374,13 +3388,7 @@ export const ChangesDiffViewer = memo(
                 </div>
               ) : (
                 <>
-                  <ConflictsSection
-                    files={actualConflictedFiles}
-                    isCollapsed={collapsedSections.has("conflicts")}
-                    onToggleCollapse={() => toggleSectionCollapse("conflicts")}
-                    onFileSelect={handleConflictFileSelect}
-                    activeFilePath={activeFilePath}
-                  />
+                  {/* ConflictsSection removed - conflicts shown only in detailed inline cards */}
                   {files.length === 0 && !(showCommittedChanges && committedFiles.length > 0) ? (
                     <div className="flex flex-col items-center justify-center h-full text-center py-12">
                       <CheckCircle2 className="w-12 h-12 text-muted-foreground/40 mb-3" />

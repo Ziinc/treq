@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import {
   Workspace,
@@ -255,6 +255,48 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
       };
     }
   }, [activeTab, workingDirectory]);
+
+  // Periodic conflict check when workspace is active
+  useEffect(() => {
+    if (!workspace || !workingDirectory) return;
+
+    let isMounted = true;
+    const intervalId = setInterval(async () => {
+      if (!isMounted) return;
+
+      try {
+        const files = await jjGetConflictedFiles(workingDirectory);
+        if (isMounted) {
+          setConflictedFiles((prev) => {
+            // Only update if changed to prevent unnecessary re-renders
+            if (prev.length !== files.length ||
+                !prev.every((f, i) => f === files[i])) {
+              return files;
+            }
+            return prev;
+          });
+        }
+      } catch (error) {
+        console.error("Failed to check conflicts:", error);
+      }
+    }, 2000); // Check every 2 seconds
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [workspace, workingDirectory]);
+
+  // Invalidate sidebar query when conflicts change
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (workspace) {
+      // Invalidate conflicted workspace IDs query so sidebar updates
+      queryClient.invalidateQueries({
+        queryKey: ["conflicted-workspace-ids", effectiveRepoPath],
+      });
+    }
+  }, [conflictedFiles, workspace, effectiveRepoPath, queryClient]);
 
   useEffect(() => {
     if (workingDirectory) {
