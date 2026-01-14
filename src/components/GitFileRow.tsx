@@ -75,6 +75,20 @@ export const GitFileRow = memo<GitFileRowProps>(({
           >
             {status ?? ""}
           </span>
+          {/* Discard button - moved before stage/unstage to avoid misclicks */}
+          {isLastSelected && isSelected && !readOnly && onDiscard && (
+            <button
+              type="button"
+              className="p-0.5 hover:text-foreground hover:bg-red-500/20 text-red-600 dark:text-red-400 rounded transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDiscard(file.path);
+              }}
+              title="Discard selected files"
+            >
+              <Undo2 className="w-3 h-3" />
+            </button>
+          )}
           {/* Stage button - show only on last selected file */}
           {isLastSelected && isSelected && !readOnly && onStage && !isStaged && (
             <button
@@ -101,19 +115,6 @@ export const GitFileRow = memo<GitFileRowProps>(({
               title="Unstage file"
             >
               <Minus className="w-3 h-3" />
-            </button>
-          )}
-          {isLastSelected && isSelected && !readOnly && onDiscard && (
-            <button
-              type="button"
-              className="p-0.5 hover:text-foreground hover:bg-red-500/20 text-red-600 dark:text-red-400 rounded transition-colors"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDiscard(file.path);
-              }}
-              title="Discard selected files"
-            >
-              <Undo2 className="w-3 h-3" />
             </button>
           )}
         </div>
