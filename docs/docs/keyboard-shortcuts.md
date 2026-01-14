@@ -4,38 +4,29 @@ sidebar_position: 3
 
 # Keyboard Shortcuts
 
-Master Treq's keyboard shortcuts to work faster and more efficiently.
-
 ## Global Shortcuts
 
-| Shortcut | Action |
-|----------|--------|
-| `Cmd/Ctrl+N` | New worktree |
-| `Cmd/Ctrl+F` | Search |
-| `Escape` | Close dialog |
+| Shortcut      | Action                   |
+| ------------- | ------------------------ |
+| `Cmd+N`       | New workspace            |
+| `Cmd+Shift+N` | Create stacked workspace |
+| `Cmd+K`       | Command Palette          |
+| `Cmd+P`       | File Search              |
+| `Escape`      | Close dialog             |
 
 ## Terminal
 
-| Shortcut | Action |
-|----------|--------|
-| `Cmd/Ctrl+C` | Copy selection (or interrupt) |
-| `Cmd/Ctrl+V` | Paste |
+| Shortcut     | Action                        |
+| ------------ | ----------------------------- |
+| `Cmd+J`      | Toggle terminal pane          |
+| `Cmd+Ctrl+J` | Maximize/restore terminal     |
+| `Cmd+]`      | New agent terminal            |
+| `Cmd+\`      | New shell terminal            |
+| `Cmd+C`      | Copy selection (or interrupt) |
+| `Cmd+V`      | Paste                         |
 
-## Platform Differences
+## File Browser
 
-- **macOS**: `Cmd` is primary modifier
-- **Windows/Linux**: `Ctrl` is primary modifier
-
-## Quick Reference Card
-
-Print or save this for easy access:
-
-```
-ESSENTIAL SHORTCUTS
-
-Create:     Cmd+N      New worktree
-Search:     Cmd+F      Search
-Close:      Escape     Close dialog (if open)
-
-Remember: Cmd (Mac) = Ctrl (Win/Linux)
-```
+| Shortcut | Action         |
+| -------- | -------------- |
+| `Cmd+F`  | Search in file |
