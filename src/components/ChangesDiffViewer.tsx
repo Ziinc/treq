@@ -127,6 +127,7 @@ interface LineComment {
   lineContent: string[];
   text: string;
   createdAt: string;
+  lineSide?: "old" | "new";
 }
 
 interface ConflictRegion {
@@ -1388,6 +1389,7 @@ export const ChangesDiffViewer = memo(
         startLine: number; // Actual file line number (1-indexed)
         endLine: number; // Actual file line number (1-indexed)
         lineContent: string[];
+        lineSide: "old" | "new";
       } | null>(null);
 
       // Viewed files state - maps file path to { viewed_at, content_hash }
@@ -2551,6 +2553,7 @@ export const ChangesDiffViewer = memo(
             lineContent: pendingComment.lineContent,
             text: text.trim(),
             createdAt: new Date().toISOString(),
+            lineSide: pendingComment.lineSide,
           };
 
           setComments((prev) => [...prev, newComment]);
@@ -2577,6 +2580,8 @@ export const ChangesDiffViewer = memo(
         let maxLineNum = -Infinity;
         let lastHunkId = "";
         let lastLineIndex = 0;
+        let hasOldLines = false;
+        let hasNewLines = false;
 
         for (const line of diffLineSelection.lines) {
           const hunk = fileData.hunks[line.hunkIndex];
@@ -2587,13 +2592,27 @@ export const ChangesDiffViewer = memo(
             lineNumbers[line.lineIndex]?.new ??
             lineNumbers[line.lineIndex]?.old ??
             line.lineIndex + 1;
+          const lineNumObj = lineNumbers[line.lineIndex];
 
           minLineNum = Math.min(minLineNum, lineNum);
           maxLineNum = Math.max(maxLineNum, lineNum);
           lineContents.push(line.content);
           lastHunkId = hunk.id;
           lastLineIndex = line.lineIndex;
+
+          // Track which sides are present
+          if (lineNumObj?.old !== undefined) hasOldLines = true;
+          if (lineNumObj?.new !== undefined) hasNewLines = true;
         }
+
+        // Discard comment if it spans both old and new lines
+        if (hasOldLines && hasNewLines) {
+          setContextMenuPosition(null);
+          return;
+        }
+
+        // Determine comment side - if only old lines, use "old"; otherwise "new"
+        const commentLineSide: "old" | "new" = hasOldLines ? "old" : "new";
 
         // Set pending comment data with position for inline display
         setPendingComment({
@@ -2603,6 +2622,7 @@ export const ChangesDiffViewer = memo(
           startLine: minLineNum,
           endLine: maxLineNum,
           lineContent: lineContents,
+          lineSide: commentLineSide,
         });
         setShowCommentInput(true);
         setContextMenuPosition(null);
@@ -3094,11 +3114,22 @@ export const ChangesDiffViewer = memo(
           const lineNumbers = computeHunkLineNumbers(hunk);
           const hasMatchingLine = lineNumbers.some((ln) => {
             const actualNum = ln.new ?? ln.old;
-            return (
+            const inRange =
               actualNum &&
               actualNum >= comment.startLine &&
-              actualNum <= comment.endLine
-            );
+              actualNum <= comment.endLine;
+
+            if (!inRange) return false;
+
+            // Check line side compatibility
+            if (comment.lineSide) {
+              const lineSide: "old" | "new" =
+                ln.old !== undefined && ln.new === undefined ? "old" : "new";
+
+              return comment.lineSide === lineSide;
+            }
+
+            return true; // Backward compatibility
           });
 
           return !hasMatchingLine;
@@ -3118,14 +3149,16 @@ export const ChangesDiffViewer = memo(
 
       // Get comments for a specific line in a specific hunk
       const getCommentsForLine = useCallback(
-        (filePath: string, hunkId: string, actualLineNum: number) => {
+        (filePath: string, hunkId: string, actualLineNum: number, currentLineSide: "old" | "new") => {
           return comments.filter(
             (c) =>
               c.filePath === filePath &&
               c.hunkId === hunkId &&
               actualLineNum >= c.startLine &&
               actualLineNum <= c.endLine &&
-              !isCommentOutdated(c) // Exclude outdated comments
+              !isCommentOutdated(c) && // Exclude outdated comments
+              (c.lineSide === undefined ||        // Backward compatibility
+               c.lineSide === currentLineSide)    // Matching side
           );
         },
         [comments, isCommentOutdated]
@@ -3170,10 +3203,13 @@ export const ChangesDiffViewer = memo(
               const lineNum = lineNumbers[lineIndex];
               const actualLineNum =
                 lineNum?.new ?? lineNum?.old ?? lineIndex + 1;
+              const currentLineSide: "old" | "new" =
+                lineNum?.old !== undefined && lineNum?.new === undefined ? "old" : "new";
               const lineComments = getCommentsForLine(
                 filePath,
                 hunk.id,
-                actualLineNum
+                actualLineNum,
+                currentLineSide
               );
               const showCommentInputHere =
                 showCommentInput &&
@@ -3243,6 +3279,8 @@ export const ChangesDiffViewer = memo(
                           ) {
                             handleAddCommentFromSelection();
                           } else {
+                            const lineSide: "old" | "new" =
+                              lineNum?.old !== undefined && lineNum?.new === undefined ? "old" : "new";
                             setPendingComment({
                               filePath,
                               hunkId: hunk.id,
@@ -3250,6 +3288,7 @@ export const ChangesDiffViewer = memo(
                               startLine: actualLineNum,
                               endLine: actualLineNum,
                               lineContent: [line],
+                              lineSide,
                             });
                             setShowCommentInput(true);
                           }

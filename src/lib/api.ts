@@ -698,6 +698,7 @@ export interface LineComment {
   lineContent: string[];
   text: string;
   createdAt: string;
+  lineSide?: "old" | "new";
 }
 
 export interface PendingReview {
