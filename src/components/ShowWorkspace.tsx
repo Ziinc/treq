@@ -17,6 +17,7 @@ import {
   checkAndRebaseWorkspaces,
   jjPush,
   jjGetSyncStatus,
+  jjGitFetch,
 } from "../lib/api";
 import { getStatusBgColor } from "../lib/git-status-colors";
 import { parseJjChangedFiles, type ParsedFileChange } from "../lib/git-utils";
@@ -80,6 +81,7 @@ import {
   EyeOff,
   Layers,
   FileDiff,
+  RefreshCw,
 } from "lucide-react";
 import { TargetBranchSelector } from "./TargetBranchSelector";
 import { cn } from "../lib/utils";
@@ -255,6 +257,36 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
       };
     }
   }, [activeTab, workingDirectory]);
+
+  // Auto-fetch remote updates periodically and on window focus
+  useEffect(() => {
+    const repoPath = repositoryPath || workingDirectory;
+    if (!repoPath) return;
+
+    const performBackgroundFetch = async () => {
+      try {
+        await jjGitFetch(repoPath);
+        fetchSyncStatus();
+      } catch (error) {
+        // Silent failure for background operations
+        console.debug("Background fetch failed:", error);
+      }
+    };
+
+    // Fetch every 5 minutes
+    const intervalId = setInterval(performBackgroundFetch, 5 * 60 * 1000);
+
+    // Fetch on window focus
+    const handleFocus = () => {
+      performBackgroundFetch();
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [repositoryPath, workingDirectory, fetchSyncStatus]);
 
   // Periodic conflict check when workspace is active
   useEffect(() => {
@@ -531,6 +563,42 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
       _setActionPending(null);
     }
   }, [workspace, workingDirectory, addToast, fetchSyncStatus]);
+
+  const handleSync = useCallback(async () => {
+    const syncPath = workspace?.workspace_path || workingDirectory;
+    const syncRepoPath = repositoryPath || workingDirectory;
+    if (!syncPath || !syncRepoPath) return;
+
+    _setActionPending("sync");
+    try {
+      // First, fetch from remote to update remote refs
+      await jjGitFetch(syncRepoPath);
+
+      // Then push local commits
+      await jjPush(syncPath);
+
+      addToast({
+        title: "Synced with remote",
+        description: "Fetched and pushed changes",
+        type: "success",
+      });
+
+      // Refresh sync status after operations
+      fetchSyncStatus();
+
+      // Refresh UI state
+      queryClient?.invalidateQueries();
+    } catch (error) {
+      console.error("Sync failed:", error);
+      addToast({
+        title: "Sync failed",
+        description: String(error),
+        type: "error",
+      });
+    } finally {
+      _setActionPending(null);
+    }
+  }, [workspace, workingDirectory, repositoryPath, addToast, fetchSyncStatus, queryClient]);
 
   const handleForceRebase = useCallback(async () => {
     if (!workspace || !targetBranch || !effectiveRepoPath) {
@@ -1045,6 +1113,30 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
                   </span>
                 )}
               </div>
+            )}
+            {/* Sync button - show when there are changes to sync */}
+            {syncStatus && (syncStatus.ahead > 0 || syncStatus.behind > 0) && (
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0"
+                      onClick={handleSync}
+                      disabled={!!actionPending}
+                    >
+                      <RefreshCw className={cn(
+                        "w-3.5 h-3.5",
+                        actionPending === "sync" && "animate-spin"
+                      )} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Sync with remote (fetch and push)
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
             {/* Merge button moved here */}
             {workspace && workspace.branch_name !== defaultBranch && (
