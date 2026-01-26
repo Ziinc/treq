@@ -167,88 +167,49 @@ fn test_can_create_workspace_from_remote_branch() {
 fn test_can_create_stacked_workspace() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
-    // Ensure workspaces directory exists
-    repo.ensure_workspaces_dir().expect("Failed to create workspaces dir");
 
     // Create first workspace
-    let workspace1_name = treq_lib::jj::create_workspace(
+    let base: Workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
-        "feature-base",
-        "feature-base",
-        true,
+        "feat/base",
+        Some("feature-base"),
         None,
     )
     .expect("Failed to create base workspace");
 
-    let workspace1_path = repo.workspaces_dir().join(&workspace1_name);
-    let workspace1_path_str = workspace1_path.to_str().unwrap();
+    let workspace1_path = repo.workspaces_dir().join(&base.workspace_path);
 
-    // Add workspace to database (required for jj_commit to work)
-    treq_lib::local_db::add_workspace(
-        &repo.repo_path,
-        workspace1_name.clone(),
-        workspace1_path_str.to_string(),
-        "feature-base".to_string(),
-        None,
-    )
-    .expect("Failed to add workspace to DB");
 
-    // Add a commit to the first workspace
+    // make an edit to the base workspace.
     let base_file = workspace1_path.join("base.txt");
     fs::write(&base_file, "base content").expect("Failed to write base file");
 
-    treq_lib::jj::jj_commit(workspace1_path_str, "Add base file")
-        .expect("Failed to commit in base workspace");
 
     // Create stacked workspace based on the first workspace's branch
-    let workspace2_name = treq_lib::jj::create_workspace(
+    let stacked: Workspace = treq_lib::core::stack_workspace(
         &repo.repo_path,
-        "feature-stacked",
-        "feature-stacked",
-        true,
-        Some("feature-base"), // source_branch
+        Some(&base.branch_name),
+        Some("feat/stacked")
     )
     .expect("Failed to create stacked workspace");
 
     // Verify stacked workspace exists
-    let workspace2_path = repo.workspaces_dir().join(&workspace2_name);
+    let stacked_path = repo.workspaces_dir().join(&stacked.workspace_path);
     assert!(
-        workspace2_path.exists(),
+        stacked_path.exists(),
         "Stacked workspace should exist"
     );
 
     // Verify it has the base file from the source branch
     assert!(
-        workspace2_path.join("base.txt").exists(),
+        stacked_path.join("base.txt").exists(),
         "Stacked workspace should have file from source branch"
     );
 
-    // JJ VERIFICATION: Both workspaces should be in jj list
-    let jj_workspaces = JjVerifier::list_workspaces(&repo.repo_path)
-        .expect("Failed to list jj workspaces");
-    assert!(
-        jj_workspaces.contains(&workspace1_name),
-        "Base workspace should be in jj list"
-    );
-    assert!(
-        jj_workspaces.contains(&workspace2_name),
-        "Stacked workspace should be in jj list"
-    );
+    let workspaces = treq_lib::core::list_workspaces(&repo.repo_path).expect("Failed to list workspaces");
+    assert_eq!(workspaces.len(), 2, "Should have 2 workspaces, got {}", workspaces.len());
 
-    // JJ VERIFICATION: Stacked workspace should have base.txt
-    assert!(
-        JjVerifier::file_exists_in_workspace(workspace2_path.to_str().unwrap(), "base.txt"),
-        "Stacked workspace should have inherited base.txt from source"
-    );
 
-    // JJ VERIFICATION: Check log shows ancestry from source
-    let log = JjVerifier::get_log(workspace2_path.to_str().unwrap(), 5)
-        .expect("Failed to get jj log");
-    assert!(
-        log.contains("Add base file") || log.contains("base"),
-        "Stacked workspace history should include source commit, got: {}",
-        log
-    );
 }
 
 // =============================================================================
