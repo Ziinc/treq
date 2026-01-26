@@ -210,6 +210,7 @@ fn test_can_create_stacked_workspace() {
     assert_eq!(workspaces.len(), 2, "Should have 2 workspaces, got {}", workspaces.len());
 
 
+    
 }
 
 // =============================================================================
