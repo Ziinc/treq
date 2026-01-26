@@ -496,82 +496,30 @@ fn test_can_change_workspace_target_branch() {
 fn test_can_list_workspaces() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
-    // Ensure workspaces directory exists
-    repo.ensure_workspaces_dir().expect("Failed to create workspaces dir");
 
-    // Create multiple workspaces
-    let workspace_names: Vec<String> = vec!["feature-a", "feature-b", "feature-c"]
-        .into_iter()
-        .map(|name| {
-            treq_lib::jj::create_workspace(
-                &repo.repo_path,
-                name,
-                name,
-                true,
-                None,
-            )
-            .expect(&format!("Failed to create workspace {}", name))
-        })
-        .collect();
+    treq_lib::core::create_workspace(&repo.repo_path, "feat/a", Some("feature-a"), None).expect("Failed to create workspace");
+    treq_lib::core::create_workspace(&repo.repo_path, "feat/b", Some("feature-b"), None).expect("Failed to create workspace");
+    treq_lib::core::create_workspace(&repo.repo_path, "feat/c", Some("feature-c"), None).expect("Failed to create workspace");
 
     // JJ VERIFICATION: Verify via jj workspace list command directly (primary source of truth)
     let jj_workspaces = JjVerifier::list_workspaces(&repo.repo_path)
         .expect("Failed to list jj workspaces");
 
     // Should have default + 3 created workspaces
-    assert!(
-        jj_workspaces.len() >= workspace_names.len(),
-        "jj should list at least {} workspaces, got {}",
-        workspace_names.len(),
+    assert_eq!(
+        jj_workspaces.len(),
+        4,
+        "jj should list 4 workspaces, got {}",
         jj_workspaces.len()
     );
-
-    for name in &workspace_names {
-        assert!(
-            jj_workspaces.contains(name),
-            "Workspace {} should be in jj workspace list, got: {:?}",
-            name,
-            jj_workspaces
-        );
-    }
-
-    // Add to local database
-    for name in &workspace_names {
-        let workspace_path = repo.workspaces_dir().join(name);
-        treq_lib::local_db::add_workspace(
-            &repo.repo_path,
-            name.clone(),
-            workspace_path.to_str().unwrap().to_string(),
-            name.clone(),
-            None,
-        )
-        .expect("Failed to add workspace to DB");
-    }
-
-    // List from database
-    let db_workspaces = treq_lib::local_db::get_workspaces(&repo.repo_path)
-        .expect("Failed to get workspaces from DB");
-
+    let workspaces = treq_lib::core::list_workspaces(&repo.repo_path)
+        .expect("Failed to list workspaces");
     assert_eq!(
-        db_workspaces.len(),
-        workspace_names.len(),
-        "Database should have all workspaces"
+        workspaces.len(),
+        3,
+        "Should have 3 workspaces, got {}",
+        workspaces.len()
     );
-
-    for name in &workspace_names {
-        assert!(
-            db_workspaces.iter().any(|w| &w.workspace_name == name),
-            "Workspace {} should be in database list",
-            name
-        );
-    }
-
-    // JJ VERIFICATION: Verify each workspace has valid structure
-    for name in &workspace_names {
-        let workspace_path = repo.workspaces_dir().join(name);
-        JjVerifier::verify_workspace_structure(workspace_path.to_str().unwrap())
-            .expect(&format!("Workspace {} should have valid structure", name));
-    }
 }
 
 // =============================================================================

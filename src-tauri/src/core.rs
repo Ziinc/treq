@@ -77,3 +77,18 @@ pub fn delete_workspace(repo_path: &str, workspace_id: &i64) -> Result<bool, Str
         _ => Err(format!("Workspace not found in database: {}", workspace_id)),
     }
 }
+
+
+/// Lists all workspaces in the repository.
+/// # Arguments
+/// * `repo_path` - Path to the repository root
+///
+/// # Returns
+/// Returns a vector of workspaces if successful, otherwise an error message.
+pub fn list_workspaces(repo_path: &str) -> Result<Vec<local_db::Workspace>, String> {
+    let workspaces = local_db::get_workspaces(repo_path).map_err(|e| format!("Failed to get workspaces from db: {}", e));
+    match workspaces {
+        Ok(workspaces) => Ok(workspaces),
+        _ => Err(format!("Failed to get workspaces from db")),
+    }
+}
