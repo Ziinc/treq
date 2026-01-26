@@ -1,12 +1,12 @@
 mod auto_rebase;
 mod binary_paths;
 mod commands;
+pub mod core;
 pub mod db;
 mod file_indexer;
 pub mod jj;
 pub mod local_db;
 mod pty;
-pub mod core;
 
 use commands::file_watcher::WatcherManager;
 use db::Database;
@@ -33,7 +33,6 @@ pub fn emit_to_focused<S: serde::Serialize + Clone>(app: &AppHandle, event: &str
     // Fallback: emit globally if no focused window found
     let _ = app.emit(event, payload);
 }
-
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -150,10 +149,12 @@ pub fn run() {
                 // Developer menu (only in debug mode)
                 #[cfg(debug_assertions)]
                 let developer_menu = {
-                    let force_rebase_item =
-                        MenuItemBuilder::with_id("force_rebase_workspace", "Force Rebase Workspace")
-                            .accelerator("CmdOrCtrl+Shift+R")
-                            .build(app)?;
+                    let force_rebase_item = MenuItemBuilder::with_id(
+                        "force_rebase_workspace",
+                        "Force Rebase Workspace",
+                    )
+                    .accelerator("CmdOrCtrl+Shift+R")
+                    .build(app)?;
 
                     SubmenuBuilder::new(app, "Developer")
                         .item(&force_rebase_item)
@@ -189,10 +190,7 @@ pub fn run() {
                     menu_builder = menu_builder.item(&developer_menu);
                 }
 
-                let menu = menu_builder
-                    .item(&window_menu)
-                    .item(&help_menu)
-                    .build()?;
+                let menu = menu_builder.item(&window_menu).item(&help_menu).build()?;
 
                 app.set_menu(menu)?;
             }
@@ -231,19 +229,19 @@ pub fn run() {
                 // Developer menu (only in debug mode)
                 #[cfg(debug_assertions)]
                 let developer_menu = {
-                    let force_rebase_item =
-                        MenuItemBuilder::with_id("force_rebase_workspace", "Force Rebase Workspace")
-                            .accelerator("CmdOrCtrl+Shift+R")
-                            .build(app)?;
+                    let force_rebase_item = MenuItemBuilder::with_id(
+                        "force_rebase_workspace",
+                        "Force Rebase Workspace",
+                    )
+                    .accelerator("CmdOrCtrl+Shift+R")
+                    .build(app)?;
 
                     SubmenuBuilder::new(app, "Developer")
                         .item(&force_rebase_item)
                         .build()?
                 };
 
-                let mut menu_builder = MenuBuilder::new(app)
-                    .item(&file_menu)
-                    .item(&go_menu);
+                let mut menu_builder = MenuBuilder::new(app).item(&file_menu).item(&go_menu);
 
                 // Add Developer menu in debug mode
                 #[cfg(debug_assertions)]

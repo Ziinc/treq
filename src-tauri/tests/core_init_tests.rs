@@ -18,7 +18,10 @@ fn test_repo_initialization() {
     // --- JJ Initialization ---
     assert!(Path::new(&repo.repo_path).join(".git").exists());
     assert!(Path::new(&repo.repo_path).join(".jj").exists());
-    assert!(repo.is_jj_initialized(), ".jj directory should exist after init");
+    assert!(
+        repo.is_jj_initialized(),
+        ".jj directory should exist after init"
+    );
 
     // workspaces directory
     assert!(
@@ -26,8 +29,8 @@ fn test_repo_initialization() {
         "Workspaces directory should exist"
     );
 
-    let jj_workspaces = JjVerifier::list_workspaces(&repo.repo_path)
-        .expect("Failed to list jj workspaces");
+    let jj_workspaces =
+        JjVerifier::list_workspaces(&repo.repo_path).expect("Failed to list jj workspaces");
     assert_eq!(
         jj_workspaces.len(),
         1,
@@ -40,25 +43,33 @@ fn test_repo_initialization() {
         jj_workspaces
     );
 
-    let status = JjVerifier::get_status(&repo.repo_path)
-        .expect("Failed to get jj status");
-    assert!(!status.is_empty(), "jj status should return output after init");
-
-
-    let gitignore_content = repo.read_gitignore().expect("Failed to read .gitignore");
-    assert_eq!(gitignore_content.matches(".jj/").count(), 1, ".jj/ should appear exactly once");
-    assert_eq!(gitignore_content.matches(".treq/").count(), 1, ".treq/ should appear exactly once");
-    assert!(!gitignore_content.contains("# Added by Treq"), ".gitignore should not contain Treq comment");
-
-    let db_path = Path::new(&repo.repo_path).join(".treq").join("local.db");
+    let status = JjVerifier::get_status(&repo.repo_path).expect("Failed to get jj status");
     assert!(
-        db_path.exists(),
-        ".treq/local.db should exist"
+        !status.is_empty(),
+        "jj status should return output after init"
     );
 
+    let gitignore_content = repo.read_gitignore().expect("Failed to read .gitignore");
+    assert_eq!(
+        gitignore_content.matches(".jj/").count(),
+        1,
+        ".jj/ should appear exactly once"
+    );
+    assert_eq!(
+        gitignore_content.matches(".treq/").count(),
+        1,
+        ".treq/ should appear exactly once"
+    );
+    assert!(
+        !gitignore_content.contains("# Added by Treq"),
+        ".gitignore should not contain Treq comment"
+    );
+
+    let db_path = Path::new(&repo.repo_path).join(".treq").join("local.db");
+    assert!(db_path.exists(), ".treq/local.db should exist");
+
     // verify that db exists and is queryable
-    let conn = rusqlite::Connection::open(&db_path)
-        .expect("Failed to open .treq/local.db");
+    let conn = rusqlite::Connection::open(&db_path).expect("Failed to open .treq/local.db");
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM workspaces", [], |row| row.get(0))
         .expect("Failed to query workspaces count");
@@ -68,5 +79,8 @@ fn test_repo_initialization() {
     // verify workspaces dir created
     let workspaces_dir = Path::new(&repo.repo_path).join(".treq").join("workspaces");
     assert!(workspaces_dir.exists(), "workspaces dir should exist");
-    assert!(workspaces_dir.is_dir(), "workspaces dir should be a directory");
+    assert!(
+        workspaces_dir.is_dir(),
+        "workspaces dir should be a directory"
+    );
 }

@@ -11,11 +11,11 @@ pub fn get_extended_path() -> String {
 
     // Common binary locations to add
     let additional_paths = vec![
-        "/opt/homebrew/bin",      // macOS ARM Homebrew
-        "/usr/local/bin",          // macOS Intel Homebrew, common
-        "~/.cargo/bin",            // Rust tools
-        "/usr/bin",                // System binaries
-        "/bin",                    // System binaries
+        "/opt/homebrew/bin", // macOS ARM Homebrew
+        "/usr/local/bin",    // macOS Intel Homebrew, common
+        "~/.cargo/bin",      // Rust tools
+        "/usr/bin",          // System binaries
+        "/bin",              // System binaries
     ];
 
     // Expand ~ to home directory
@@ -78,10 +78,7 @@ pub fn get_binary_path(name: &str) -> Option<String> {
 pub fn detect_editor_app(app_name: &str) -> bool {
     let search_pattern = "kMDItemKind == 'Application'";
 
-    let output = Command::new("mdfind")
-        .arg(search_pattern)
-        .output()
-        .ok();
+    let output = Command::new("mdfind").arg(search_pattern).output().ok();
 
     if let Some(output) = output {
         if output.status.success() {
@@ -100,7 +97,6 @@ static EDITOR_APPS_CACHE: OnceLock<HashMap<String, bool>> = OnceLock::new();
 pub fn init_editor_apps_cache(apps: HashMap<String, bool>) {
     let _ = EDITOR_APPS_CACHE.set(apps);
 }
-
 
 #[cfg(test)]
 mod tests {

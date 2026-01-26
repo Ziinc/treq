@@ -26,11 +26,7 @@ impl WatcherManager {
         *app_handle = Some(handle);
     }
 
-    pub fn start_watching(
-        &self,
-        workspace_id: i64,
-        workspace_path: String,
-    ) -> Result<(), String> {
+    pub fn start_watching(&self, workspace_id: i64, workspace_path: String) -> Result<(), String> {
         let mut watchers = self.watchers.lock().unwrap();
 
         // Stop existing watcher for this workspace if any

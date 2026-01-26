@@ -103,7 +103,7 @@ pub fn create_workspace(
     local_db::update_workspace_last_rebased_commit(
         &repo_path,
         workspace_id,
-        "",  // Empty = will trigger rebase
+        "", // Empty = will trigger rebase
     )?;
 
     Ok(workspace_id)
@@ -192,9 +192,7 @@ pub fn cleanup_stale_workspaces(repo_path: String) -> Result<(), String> {
 /// Check all workspaces in a repo and update any with stale working copies
 /// Returns list of workspace names that were updated
 /// Called automatically when a repo is opened, or manually via UI command
-pub fn check_and_update_stale_workspaces(
-    repo_path: String,
-) -> Result<Vec<String>, String> {
+pub fn check_and_update_stale_workspaces(repo_path: String) -> Result<Vec<String>, String> {
     let workspaces = local_db::get_workspaces(&repo_path)?;
     let mut updated_workspaces = Vec::new();
 
@@ -272,8 +270,9 @@ pub fn list_conflicted_workspace_ids(repo_path: String) -> Result<Vec<i64>, Stri
         // Check actual conflict status from jj directly
         let conflicted_files = jj::get_conflicted_files(
             &workspace.workspace_path,
-            workspace.target_branch.as_deref()
-        ).unwrap_or_default();
+            workspace.target_branch.as_deref(),
+        )
+        .unwrap_or_default();
 
         if !conflicted_files.is_empty() {
             conflicted_ids.push(workspace.id);
@@ -292,8 +291,7 @@ pub fn list_workspaces_with_changes(repo_path: String) -> Result<Vec<i64>, Strin
 
     for workspace in workspaces {
         // Check actual change status from jj directly
-        let changed_files = jj::jj_get_changed_files(&workspace.workspace_path)
-            .unwrap_or_default();
+        let changed_files = jj::jj_get_changed_files(&workspace.workspace_path).unwrap_or_default();
 
         if !changed_files.is_empty() {
             changed_ids.push(workspace.id);
@@ -336,7 +334,8 @@ pub fn set_workspace_target_branch(
     target_branch: String,
 ) -> Result<JjRebaseResult, String> {
     // Convert Git remote branch format (origin/main) to jj format (main@origin)
-    let jj_branch_name = crate::jj::convert_git_branch_to_jj_format_public(&target_branch, &repo_path);
+    let jj_branch_name =
+        crate::jj::convert_git_branch_to_jj_format_public(&target_branch, &repo_path);
 
     // Perform rebase
     let rebase_result =
@@ -347,7 +346,8 @@ pub fn set_workspace_target_branch(
         local_db::update_workspace_target_branch(&repo_path, id, &target_branch)?;
 
         // Check for conflicts after rebase and update status in database
-        let conflicted_files = jj::get_conflicted_files(&workspace_path, Some(&target_branch)).unwrap_or_default();
+        let conflicted_files =
+            jj::get_conflicted_files(&workspace_path, Some(&target_branch)).unwrap_or_default();
         local_db::update_workspace_has_conflicts(&repo_path, id, !conflicted_files.is_empty())?;
     }
 
@@ -373,7 +373,8 @@ pub fn check_and_rebase_workspaces(
     if let Some(id) = workspace_id {
         let default_branch = default_branch.unwrap_or_else(|| "main".to_string());
         let force = force.unwrap_or(false);
-        let result = crate::auto_rebase::rebase_single_workspace(&repo_path, id, &default_branch, force)?;
+        let result =
+            crate::auto_rebase::rebase_single_workspace(&repo_path, id, &default_branch, force)?;
 
         match result {
             Some(auto_result) => Ok(SingleRebaseResult {
@@ -550,7 +551,8 @@ mod tests {
             workspace_path.clone(),
             "test-branch".to_string(),
             None,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Get the workspace ID
         let workspaces = local_db::get_workspaces(repo_path).unwrap();
@@ -558,21 +560,28 @@ mod tests {
         let workspace_id = workspaces[0].id;
 
         // Act: Delete the workspace
-        let result = delete_workspace(
-            repo_path.to_string(),
-            workspace_path.clone(),
-            workspace_id,
-        );
+        let result = delete_workspace(repo_path.to_string(), workspace_path.clone(), workspace_id);
 
         // Assert: Should succeed
-        assert!(result.is_ok(), "delete_workspace should succeed: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "delete_workspace should succeed: {:?}",
+            result
+        );
 
         // Assert: Directory should be removed
-        assert!(!workspace_dir.exists(), "Workspace directory should be removed");
+        assert!(
+            !workspace_dir.exists(),
+            "Workspace directory should be removed"
+        );
 
         // Assert: DB entry should be removed
         let workspaces_after = local_db::get_workspaces(repo_path).unwrap();
-        assert_eq!(workspaces_after.len(), 0, "Workspace should be removed from database");
+        assert_eq!(
+            workspaces_after.len(),
+            0,
+            "Workspace should be removed from database"
+        );
     }
 
     #[test]
@@ -584,7 +593,12 @@ mod tests {
         let repo_path = temp_dir.path().to_str().unwrap();
 
         // Don't create the workspace directory (simulating already deleted or never created)
-        let workspace_path = temp_dir.path().join("nonexistent_workspace").to_str().unwrap().to_string();
+        let workspace_path = temp_dir
+            .path()
+            .join("nonexistent_workspace")
+            .to_str()
+            .unwrap()
+            .to_string();
 
         // Setup: Initialize database and add workspace (orphaned entry)
         let db_path = temp_dir.path().join(".treq").join("local.db");
@@ -596,25 +610,30 @@ mod tests {
             workspace_path.clone(),
             "test-branch".to_string(),
             None,
-        ).unwrap();
+        )
+        .unwrap();
 
         let workspaces = local_db::get_workspaces(repo_path).unwrap();
         assert_eq!(workspaces.len(), 1);
         let workspace_id = workspaces[0].id;
 
         // Act: Delete the workspace (directory doesn't exist)
-        let result = delete_workspace(
-            repo_path.to_string(),
-            workspace_path,
-            workspace_id,
-        );
+        let result = delete_workspace(repo_path.to_string(), workspace_path, workspace_id);
 
         // Assert: Should still succeed
-        assert!(result.is_ok(), "delete_workspace should succeed even when directory missing: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "delete_workspace should succeed even when directory missing: {:?}",
+            result
+        );
 
         // Assert: DB entry should be removed
         let workspaces_after = local_db::get_workspaces(repo_path).unwrap();
-        assert_eq!(workspaces_after.len(), 0, "Workspace should be removed from database even if directory was missing");
+        assert_eq!(
+            workspaces_after.len(),
+            0,
+            "Workspace should be removed from database even if directory was missing"
+        );
     }
 
     #[test]
@@ -648,7 +667,8 @@ mod tests {
             workspace1_dir.to_str().unwrap().to_string(),
             "branch1".to_string(),
             None,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Verify all 3 directories exist before cleanup
         assert!(workspace1_dir.exists(), "workspace1 should exist");
@@ -662,11 +682,20 @@ mod tests {
         assert!(result.is_ok(), "cleanup should succeed: {:?}", result);
 
         // Assert: workspace1 (in DB) should still exist
-        assert!(workspace1_dir.exists(), "workspace1 should still exist (it's in DB)");
+        assert!(
+            workspace1_dir.exists(),
+            "workspace1 should still exist (it's in DB)"
+        );
 
         // Assert: workspace2 and workspace3 (not in DB) should be removed
-        assert!(!workspace2_dir.exists(), "workspace2 should be removed (stale)");
-        assert!(!workspace3_dir.exists(), "workspace3 should be removed (stale)");
+        assert!(
+            !workspace2_dir.exists(),
+            "workspace2 should be removed (stale)"
+        );
+        assert!(
+            !workspace3_dir.exists(),
+            "workspace3 should be removed (stale)"
+        );
     }
 
     #[test]
@@ -681,7 +710,11 @@ mod tests {
         let result = cleanup_stale_workspaces(repo_path.to_string());
 
         // Assert: Should succeed with no errors
-        assert!(result.is_ok(), "cleanup should succeed with empty directory: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "cleanup should succeed with empty directory: {:?}",
+            result
+        );
     }
 
     #[test]
@@ -694,6 +727,10 @@ mod tests {
         let result = cleanup_stale_workspaces(repo_path.to_string());
 
         // Assert: Should succeed gracefully
-        assert!(result.is_ok(), "cleanup should succeed when workspaces dir missing: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "cleanup should succeed when workspaces dir missing: {:?}",
+            result
+        );
     }
 }

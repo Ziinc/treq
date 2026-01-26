@@ -6,7 +6,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Workspace {
     pub id: i64,
@@ -50,7 +49,7 @@ pub struct CachedWorkspaceFile {
 pub struct PendingReview {
     pub id: i64,
     pub workspace_id: i64,
-    pub comments: String,           // JSON string
+    pub comments: String,             // JSON string
     pub viewed_files: Option<String>, // JSON string
     pub summary_text: Option<String>,
     pub created_at: String,
@@ -98,8 +97,14 @@ pub fn init_local_db(repo_path: &str) -> Result<PathBuf, String> {
     .map_err(|e| format!("Failed to create workspaces branch index: {}", e))?;
 
     let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN target_branch TEXT", []);
-    let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN has_conflicts BOOLEAN DEFAULT 0", []);
-    let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN archived BOOLEAN DEFAULT 0", []);
+    let _ = conn.execute(
+        "ALTER TABLE workspaces ADD COLUMN has_conflicts BOOLEAN DEFAULT 0",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE workspaces ADD COLUMN archived BOOLEAN DEFAULT 0",
+        [],
+    );
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS sessions (
@@ -283,8 +288,16 @@ pub fn init_local_db(repo_path: &str) -> Result<PathBuf, String> {
                 .map_err(|e| format!("Failed to drop old pending_reviews table: {}", e))?;
 
             // Rename new table to original name
-            conn.execute("ALTER TABLE pending_reviews_new RENAME TO pending_reviews", [])
-                .map_err(|e| format!("Failed to rename pending_reviews_new to pending_reviews: {}", e))?;
+            conn.execute(
+                "ALTER TABLE pending_reviews_new RENAME TO pending_reviews",
+                [],
+            )
+            .map_err(|e| {
+                format!(
+                    "Failed to rename pending_reviews_new to pending_reviews: {}",
+                    e
+                )
+            })?;
 
             // Recreate the index (was dropped with old table)
             conn.execute(
@@ -372,7 +385,10 @@ pub fn get_workspace_by_id(repo_path: &str, id: i64) -> Result<Option<Workspace>
     Ok(workspace)
 }
 
-pub fn get_workspace_by_path(repo_path: &str, workspace_path: &str) -> Result<Option<Workspace>, String> {
+pub fn get_workspace_by_path(
+    repo_path: &str,
+    workspace_path: &str,
+) -> Result<Option<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
         .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch, COALESCE(has_conflicts, 0) FROM workspaces WHERE workspace_path = ?1")
@@ -534,9 +550,11 @@ pub fn update_workspace_last_rebased_commit(
     let conn = get_connection(repo_path)?;
 
     let current_metadata: Option<String> = conn
-        .query_row("SELECT metadata FROM workspaces WHERE id = ?1", [id], |row| {
-            row.get(0)
-        })
+        .query_row(
+            "SELECT metadata FROM workspaces WHERE id = ?1",
+            [id],
+            |row| row.get(0),
+        )
         .ok();
 
     let mut meta: serde_json::Value = current_metadata
@@ -545,8 +563,8 @@ pub fn update_workspace_last_rebased_commit(
 
     meta["last_rebased_target_commit"] = serde_json::Value::String(commit_id.to_string());
 
-    let new_metadata = serde_json::to_string(&meta)
-        .map_err(|e| format!("Failed to serialize metadata: {}", e))?;
+    let new_metadata =
+        serde_json::to_string(&meta).map_err(|e| format!("Failed to serialize metadata: {}", e))?;
 
     conn.execute(
         "UPDATE workspaces SET metadata = ?1 WHERE id = ?2",
@@ -1027,10 +1045,7 @@ mod tests {
         fs::create_dir_all(&workspace_dir).expect("Failed to create workspace dir");
         let workspace_path = workspace_dir.to_str().unwrap().to_string();
 
-        assert!(
-            workspace_dir.exists(),
-            "Workspace directory should exist"
-        );
+        assert!(workspace_dir.exists(), "Workspace directory should exist");
 
         let id = add_workspace(
             repo_path,
@@ -1134,10 +1149,7 @@ mod tests {
             "Workspace should persist after reload (BUG: this fails!)"
         );
         assert_eq!(workspaces_after_reload[0].id, id);
-        assert_eq!(
-            workspaces_after_reload[0].workspace_name,
-            "test-workspace"
-        );
+        assert_eq!(workspaces_after_reload[0].workspace_name, "test-workspace");
 
         if let Some(initialized) = INITIALIZED_DBS.get() {
             initialized.lock().unwrap().remove(repo_path);
@@ -1261,14 +1273,12 @@ mod tests {
         let workspaces = get_workspaces(repo_path).expect("get_workspaces should succeed");
         assert_eq!(workspaces[0].has_conflicts, false);
 
-        update_workspace_has_conflicts(repo_path, id, true)
-            .expect("update should succeed");
+        update_workspace_has_conflicts(repo_path, id, true).expect("update should succeed");
 
         let workspaces = get_workspaces(repo_path).expect("get_workspaces should succeed");
         assert_eq!(workspaces[0].has_conflicts, true);
 
-        update_workspace_has_conflicts(repo_path, id, false)
-            .expect("update should succeed");
+        update_workspace_has_conflicts(repo_path, id, false).expect("update should succeed");
 
         let workspaces = get_workspaces(repo_path).expect("get_workspaces should succeed");
         assert_eq!(workspaces[0].has_conflicts, false);
@@ -1309,8 +1319,8 @@ mod tests {
         assert!(id > 0, "Review ID should be positive");
 
         // Load it back
-        let review = get_pending_review(repo_path, workspace_id)
-            .expect("get_pending_review should succeed");
+        let review =
+            get_pending_review(repo_path, workspace_id).expect("get_pending_review should succeed");
         assert!(review.is_some(), "Review should exist");
 
         let review = review.unwrap();
@@ -1346,12 +1356,17 @@ mod tests {
 
         // Save again with different data - should update, not create duplicate
         let comments2 = r#"[{"id":"c2","text":"Second comment"}]"#;
-        save_pending_review(repo_path, workspace_id, comments2, None, Some("New summary"))
-            .expect("Second save should succeed");
+        save_pending_review(
+            repo_path,
+            workspace_id,
+            comments2,
+            None,
+            Some("New summary"),
+        )
+        .expect("Second save should succeed");
 
         // Verify only one review exists with updated data
-        let review = get_pending_review(repo_path, workspace_id)
-            .expect("get should succeed");
+        let review = get_pending_review(repo_path, workspace_id).expect("get should succeed");
         assert!(review.is_some());
 
         let review = review.unwrap();
@@ -1583,8 +1598,16 @@ mod tests {
             .expect("Should find the migrated row");
 
         assert_eq!(review.0, test_comments, "comments should match");
-        assert_eq!(review.1, Some(test_viewed_files.to_string()), "viewed_files should match");
-        assert_eq!(review.2, Some(test_summary.to_string()), "summary_text should match");
+        assert_eq!(
+            review.1,
+            Some(test_viewed_files.to_string()),
+            "viewed_files should match"
+        );
+        assert_eq!(
+            review.2,
+            Some(test_summary.to_string()),
+            "summary_text should match"
+        );
         assert_eq!(review.3, test_created, "created_at should match");
         assert_eq!(review.4, test_updated, "updated_at should match");
 
@@ -1596,7 +1619,10 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("Should be able to count old columns");
-        assert_eq!(old_columns, 0, "Old columns should not exist after migration");
+        assert_eq!(
+            old_columns, 0,
+            "Old columns should not exist after migration"
+        );
 
         if let Some(initialized) = INITIALIZED_DBS.get() {
             initialized.lock().unwrap().remove(repo_path);
@@ -1682,7 +1708,10 @@ mod tests {
         let count_after_first: i64 = conn
             .query_row("SELECT COUNT(*) FROM pending_reviews", [], |row| row.get(0))
             .expect("Should count rows");
-        assert_eq!(count_after_first, 1, "Should have exactly 1 row after first migration");
+        assert_eq!(
+            count_after_first, 1,
+            "Should have exactly 1 row after first migration"
+        );
 
         drop(conn);
 
@@ -1697,7 +1726,10 @@ mod tests {
         let count_after_second: i64 = conn
             .query_row("SELECT COUNT(*) FROM pending_reviews", [], |row| row.get(0))
             .expect("Should count rows");
-        assert_eq!(count_after_second, 1, "Should still have exactly 1 row after second migration");
+        assert_eq!(
+            count_after_second, 1,
+            "Should still have exactly 1 row after second migration"
+        );
 
         // Verify data integrity
         let review = conn
@@ -1784,7 +1816,9 @@ mod tests {
         let mut stmt = conn
             .prepare("SELECT comments, viewed_files, summary_text FROM pending_reviews LIMIT 0")
             .expect("Should be able to query new columns");
-        let _ = stmt.query([]).expect("Should execute query with new columns");
+        let _ = stmt
+            .query([])
+            .expect("Should execute query with new columns");
 
         if let Some(initialized) = INITIALIZED_DBS.get() {
             initialized.lock().unwrap().remove(repo_path);
@@ -1900,7 +1934,10 @@ mod tests {
                 )
                 .expect(&format!("Should find pending review for workspace {}", i));
 
-            assert_eq!(review.0, format!(r#"[{{"id":"c{}","text":"comment{}"}}]"#, i, i));
+            assert_eq!(
+                review.0,
+                format!(r#"[{{"id":"c{}","text":"comment{}"}}]"#, i, i)
+            );
             assert_eq!(review.1, Some(format!("Summary {}", i)));
             assert_eq!(review.2, Some(format!(r#"["file{}.txt"]"#, i)));
         }

@@ -67,23 +67,32 @@ pub fn rebase_workspaces_for_target(
         let revset = format!("roots({}..{})", jj_target_branch, workspace.branch_name);
 
         let rebase_result = jj::jj_rebase_with_revset(
-            &workspace.workspace_path,  // Run from workspace directory
+            &workspace.workspace_path, // Run from workspace directory
             &revset,
             &jj_target_branch,
-            &workspace.branch_name,  // Set bookmark after rebase
+            &workspace.branch_name, // Set bookmark after rebase
         );
 
         match rebase_result {
             Ok(result) => {
                 workspace_branches.push(workspace.branch_name.clone());
                 all_success = all_success && result.success;
-                combined_messages.push(format!("Workspace '{}': {}", workspace.workspace_name, result.message));
+                combined_messages.push(format!(
+                    "Workspace '{}': {}",
+                    workspace.workspace_name, result.message
+                ));
 
                 // Auto-sync working copy to bookmark if safe (empty working copy)
                 // This runs FROM the workspace directory to avoid staleness
-                match jj::jj_sync_working_copy_if_safe(&workspace.workspace_path, &workspace.branch_name) {
+                match jj::jj_sync_working_copy_if_safe(
+                    &workspace.workspace_path,
+                    &workspace.branch_name,
+                ) {
                     Ok(true) => {
-                        log::info!("Auto-synced working copy for workspace '{}'", workspace.workspace_name);
+                        log::info!(
+                            "Auto-synced working copy for workspace '{}'",
+                            workspace.workspace_name
+                        );
                     }
                     Ok(false) => {
                         // Skipped (already synced or has uncommitted changes) - this is fine
@@ -100,15 +109,11 @@ pub fn rebase_workspaces_for_target(
                 // Update DB flags - check for conflicts after rebase
                 let has_conflicts = jj::get_conflicted_files(
                     &workspace.workspace_path,
-                    workspace.target_branch.as_deref()
+                    workspace.target_branch.as_deref(),
                 )
-                    .map(|files| !files.is_empty())
-                    .unwrap_or(false);
-                local_db::update_workspace_has_conflicts(
-                    repo_path,
-                    workspace.id,
-                    has_conflicts,
-                )?;
+                .map(|files| !files.is_empty())
+                .unwrap_or(false);
+                local_db::update_workspace_has_conflicts(repo_path, workspace.id, has_conflicts)?;
 
                 local_db::update_workspace_last_rebased_commit(
                     repo_path,
@@ -122,7 +127,10 @@ pub fn rebase_workspaces_for_target(
                     workspace.workspace_name, e
                 );
                 all_success = false;
-                combined_messages.push(format!("Workspace '{}': Failed - {}", workspace.workspace_name, e));
+                combined_messages.push(format!(
+                    "Workspace '{}': Failed - {}",
+                    workspace.workspace_name, e
+                ));
             }
         }
     }
@@ -221,18 +229,27 @@ pub fn check_and_rebase_all(repo_path: &str) -> Result<Vec<AutoRebaseResult>, St
                 &workspace.workspace_path,
                 &revset,
                 &jj_target_branch,
-                &workspace.branch_name,  // Set bookmark after rebase
+                &workspace.branch_name, // Set bookmark after rebase
             ) {
                 Ok(result) => {
                     workspace_branches.push(workspace.branch_name.clone());
                     all_success = all_success && result.success;
-                    combined_messages.push(format!("Workspace '{}': {}", workspace.workspace_name, result.message));
+                    combined_messages.push(format!(
+                        "Workspace '{}': {}",
+                        workspace.workspace_name, result.message
+                    ));
 
                     // Auto-sync working copy to bookmark if safe (empty working copy)
                     // This runs FROM the workspace directory to avoid staleness
-                    match jj::jj_sync_working_copy_if_safe(&workspace.workspace_path, &workspace.branch_name) {
+                    match jj::jj_sync_working_copy_if_safe(
+                        &workspace.workspace_path,
+                        &workspace.branch_name,
+                    ) {
                         Ok(true) => {
-                            log::info!("Auto-synced working copy for workspace '{}'", workspace.workspace_name);
+                            log::info!(
+                                "Auto-synced working copy for workspace '{}'",
+                                workspace.workspace_name
+                            );
                         }
                         Ok(false) => {} // Skipped - this is fine
                         Err(e) => {
@@ -246,10 +263,10 @@ pub fn check_and_rebase_all(repo_path: &str) -> Result<Vec<AutoRebaseResult>, St
                     // Update DB flags - check for conflicts after rebase
                     let has_conflicts = jj::get_conflicted_files(
                         &workspace.workspace_path,
-                        workspace.target_branch.as_deref()
+                        workspace.target_branch.as_deref(),
                     )
-                        .map(|files| !files.is_empty())
-                        .unwrap_or(false);
+                    .map(|files| !files.is_empty())
+                    .unwrap_or(false);
                     if let Err(e) = local_db::update_workspace_has_conflicts(
                         repo_path,
                         workspace.id,
@@ -278,7 +295,10 @@ pub fn check_and_rebase_all(repo_path: &str) -> Result<Vec<AutoRebaseResult>, St
                         workspace.workspace_name, e
                     );
                     all_success = false;
-                    combined_messages.push(format!("Workspace '{}': Failed - {}", workspace.workspace_name, e));
+                    combined_messages.push(format!(
+                        "Workspace '{}': Failed - {}",
+                        workspace.workspace_name, e
+                    ));
                 }
             }
         }
@@ -353,10 +373,10 @@ pub fn rebase_single_workspace(
     // Use workspace bookmark instead of @ to work only with committed changes
     let revset = format!("roots({}..{})", jj_target_branch, workspace.branch_name);
     let rebase_result = jj::jj_rebase_with_revset(
-        &workspace.workspace_path,  // Run from workspace directory
+        &workspace.workspace_path, // Run from workspace directory
         &revset,
         &jj_target_branch,
-        &workspace.branch_name,  // Set bookmark after rebase
+        &workspace.branch_name, // Set bookmark after rebase
     )
     .map_err(|e| format!("Rebase failed: {}", e))?;
 
@@ -364,7 +384,10 @@ pub fn rebase_single_workspace(
     // This runs FROM the workspace directory to avoid staleness
     match jj::jj_sync_working_copy_if_safe(&workspace.workspace_path, &workspace.branch_name) {
         Ok(true) => {
-            log::info!("Auto-synced working copy for workspace '{}'", workspace.workspace_name);
+            log::info!(
+                "Auto-synced working copy for workspace '{}'",
+                workspace.workspace_name
+            );
         }
         Ok(false) => {} // Skipped - this is fine
         Err(e) => {
@@ -404,10 +427,10 @@ pub fn rebase_single_workspace(
     // Update DB flags - check for conflicts after rebase
     let has_conflicts = jj::get_conflicted_files(
         &workspace.workspace_path,
-        workspace.target_branch.as_deref()
+        workspace.target_branch.as_deref(),
     )
-        .map(|files| !files.is_empty())
-        .unwrap_or(false);
+    .map(|files| !files.is_empty())
+    .unwrap_or(false);
     local_db::update_workspace_has_conflicts(repo_path, workspace.id, has_conflicts)?;
 
     local_db::update_workspace_last_rebased_commit(
@@ -433,7 +456,10 @@ mod tests {
         // it should use the default branch (e.g., "main"), not return None
 
         // ✅ IMPLEMENTED: rebase_single_workspace now accepts default_branch parameter
-        assert!(true, "rebase_single_workspace accepts default_branch parameter");
+        assert!(
+            true,
+            "rebase_single_workspace accepts default_branch parameter"
+        );
     }
 
     #[test]
@@ -460,7 +486,10 @@ mod tests {
         // - This ensures first view triggers rebase
         //
         // ✅ TO BE IMPLEMENTED: Initialize flag in create_workspace()
-        assert!(true, "Test documents expected behavior for flag initialization");
+        assert!(
+            true,
+            "Test documents expected behavior for flag initialization"
+        );
     }
 
     #[test]
@@ -473,7 +502,10 @@ mod tests {
         let revset = format!("roots({}..{})", target, bookmark);
 
         assert_eq!(revset, "roots(main@origin..treq/feature-stack)");
-        assert!(!revset.contains("..@"), "Revset should not reference working copy @");
+        assert!(
+            !revset.contains("..@"),
+            "Revset should not reference working copy @"
+        );
     }
 
     #[test]

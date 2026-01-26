@@ -225,7 +225,13 @@ mod tests {
         let files = get_jj_tracked_files(&repo_path).expect("Should get files");
 
         // Should include BOTH committed (unchanged) and changed files
-        assert!(files.contains(&"committed.txt".to_string()), "Should include committed file");
-        assert!(files.contains(&"changed.txt".to_string()), "Should include changed file");
+        assert!(
+            files.contains(&"committed.txt".to_string()),
+            "Should include committed file"
+        );
+        assert!(
+            files.contains(&"changed.txt".to_string()),
+            "Should include changed file"
+        );
     }
 }
