@@ -20,6 +20,12 @@ fn test_repo_initialization() {
     assert!(Path::new(&repo.repo_path).join(".jj").exists());
     assert!(repo.is_jj_initialized(), ".jj directory should exist after init");
 
+    // workspaces directory
+    assert!(
+        &repo.workspaces_dir().exists(),
+        "Workspaces directory should exist"
+    );
+
     let jj_workspaces = JjVerifier::list_workspaces(&repo.repo_path)
         .expect("Failed to list jj workspaces");
     assert_eq!(
@@ -58,4 +64,9 @@ fn test_repo_initialization() {
         .expect("Failed to query workspaces count");
 
     assert_eq!(count, 0, "workspaces table should be empty after init");
+
+    // verify workspaces dir created
+    let workspaces_dir = Path::new(&repo.repo_path).join(".treq").join("workspaces");
+    assert!(workspaces_dir.exists(), "workspaces dir should exist");
+    assert!(workspaces_dir.is_dir(), "workspaces dir should be a directory");
 }

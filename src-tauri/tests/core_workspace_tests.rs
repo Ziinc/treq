@@ -1,5 +1,6 @@
 mod e2e_test_helpers;
 
+use std::process::Command;
 use e2e_test_helpers::{JjVerifier, TestRepo};
 use std::fs;
 use std::path::Path;
@@ -13,38 +14,68 @@ use std::path::Path;
 fn test_can_create_workspace() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
-    // Ensure workspaces directory exists
-    repo.ensure_workspaces_dir().expect("Failed to create workspaces dir");
+    assert!(
+        &repo.workspaces_dir().exists(),
+        "Workspaces directory should exist"
+    );
+
 
     // Create workspace (new branch)
-    let workspace_name = treq_lib::jj::create_workspace(
+    let workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
-        "feature-test",
-        "feature-test",
-        true,  // new_branch
+        "feat/test",
+        Some("new feature"),
         None,  // source_branch (defaults to current)
     )
     .expect("Failed to create workspace");
 
-    // Verify workspace was created
-    let workspace_path = repo.workspaces_dir().join(&workspace_name);
+    // Verify workspace was created with correct fields
+    assert!(workspace.id > 0, "Workspace should have valid database ID");
+    assert_eq!(workspace.branch_name, "feat/test", "Branch name should match");
+    assert_eq!(workspace.repo_path, repo.repo_path, "Repo path should match");
+    assert_eq!(workspace.workspace_path, "feat-test", "Workspace path should be generated and sanitised correctly");
+   
     assert!(
-        workspace_path.exists(),
-        "Workspace directory should exist: {:?}",
-        workspace_path
+        Path::new(&repo.workspaces_dir().join(&workspace.workspace_path)).exists(),
+        "Workspace directory should exist"
     );
 
+    let workspace_path = &repo.workspaces_dir().join(&workspace.workspace_path);
     // JJ VERIFICATION: Verify workspace structure (may not have .git in jj-native mode)
-    JjVerifier::verify_workspace_structure(workspace_path.to_str().unwrap())
-        .expect("Workspace should have valid structure");
+    // assert!(
+    //     workspace_path.join(".git").exists(),
+    //     ".git directory should exist in workspace"
+    // );
+    assert!(
+        workspace_path.join(".jj").exists(),
+        ".jj directory should exist in workspace"
+    );
+    assert!(
+        workspace_path.join("README.md").exists(),
+        "README.md should exist in workspace"
+    );
+    assert!(
+        !workspace_path.join(".treq").exists(),
+        ".treq directory should not exist in workspace"
+    );
 
+    // verify workspace is valid jj workspace
+    let jj_works = Command::new("jj")
+    .current_dir(workspace_path)
+    .args(["status"])
+    .output()
+    .map(|o| o.status.success())
+    .unwrap_or(false);
+    assert!(jj_works, "Workspace should be valid jj workspace, got: {}", jj_works);
+
+    eprintln!("workspace: {:?}", workspace);
     // JJ VERIFICATION: Verify workspace via jj workspace list (primary source of truth)
     let jj_workspaces = JjVerifier::list_workspaces(&repo.repo_path)
         .expect("Failed to list jj workspaces");
     assert!(
-        jj_workspaces.contains(&workspace_name),
+        jj_workspaces.contains(&workspace.workspace_name),
         "jj workspace list should contain '{}', got: {:?}",
-        workspace_name,
+        workspace.branch_name,  
         jj_workspaces
     );
 
@@ -52,15 +83,12 @@ fn test_can_create_workspace() {
     let bookmarks = JjVerifier::list_bookmarks(workspace_path.to_str().unwrap())
         .expect("Failed to list bookmarks");
     assert!(
-        bookmarks.iter().any(|b| b == "feature-test"),
-        "Bookmark 'feature-test' should exist in workspace, got: {:?}",
+        bookmarks.iter().any(|b| b == &workspace.branch_name),
+        "Bookmark '{}' should exist in workspace, got: {:?}",
+        workspace.branch_name,
         bookmarks
     );
-
-    // JJ VERIFICATION: Verify jj status works in the workspace
-    let status = JjVerifier::get_status(workspace_path.to_str().unwrap())
-        .expect("jj status should work in workspace");
-    assert!(!status.is_empty(), "jj status should return output");
+    
 }
 
 // =============================================================================
