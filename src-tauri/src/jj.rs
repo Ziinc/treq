@@ -373,7 +373,6 @@ pub fn create_workspace(
     branch_name: &str,
     new_branch: bool,
     source_branch: Option<&str>,
-    _inclusion_patterns: Option<Vec<String>>,
 ) -> Result<String, JjError> {
     let repo_path_buf = Path::new(repo_path);
 
