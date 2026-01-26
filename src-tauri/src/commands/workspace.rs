@@ -58,19 +58,19 @@ pub fn create_workspace(
     metadata: Option<String>,
 ) -> Result<i64, String> {
     // Load inclusion patterns from database
-    let inclusion_patterns = {
-        let db = state.db.lock().unwrap();
-        db.get_repo_setting(&repo_path, "included_copy_files")
-            .ok()
-            .flatten()
-            .map(|patterns_str| {
-                patterns_str
-                    .lines()
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-                    .collect::<Vec<String>>()
-            })
-    };
+    // let inclusion_patterns = {
+    //     let db = state.db.lock().unwrap();
+    //     db.get_repo_setting(&repo_path, "included_copy_files")
+    //         .ok()
+    //         .flatten()
+    //         .map(|patterns_str| {
+    //             patterns_str
+    //                 .lines()
+    //                 .map(|s| s.trim().to_string())
+    //                 .filter(|s| !s.is_empty())
+    //                 .collect::<Vec<String>>()
+    //         })
+    // };
 
     // Create the jj workspace (returns sanitized workspace name)
     let workspace_name = jj::create_workspace(
@@ -79,7 +79,6 @@ pub fn create_workspace(
         &branch_name,
         new_branch,
         source_branch.as_deref(),
-        inclusion_patterns,
     )
     .map_err(|e| e.to_string())?;
 
