@@ -269,9 +269,9 @@ impl JjVerifier {
     }
 
     /// Get list of all bookmarks in workspace
-    pub fn list_bookmarks(workspace_path: &str) -> Result<Vec<String>, String> {
+    pub fn list_bookmarks(repo_path: &str) -> Result<Vec<String>, String> {
         let output = Command::new("jj")
-            .current_dir(workspace_path)
+            .current_dir(repo_path)
             .args(["bookmark", "list", "--all"])
             .output()
             .map_err(|e| format!("Failed to execute jj bookmark list: {}", e))?;
