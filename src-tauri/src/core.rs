@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::db::Database;
 use crate::jj;
 use crate::local_db;
@@ -5,6 +7,7 @@ use crate::local_db;
 /// Initializes a repository for use with Treq.
 ///
 /// Sets up both the local database (per-repo) and ensures JJ is initialized.
+/// Creates the .treq/workspaces directory if it doesn't exist.
 ///
 /// # Arguments
 /// * `repo_path` - Path to the repository root
@@ -14,8 +17,38 @@ use crate::local_db;
 pub fn init(repo_path: &str) -> Result<bool, String> {
     let db_path = local_db::init_local_db(repo_path)?;
     let db = Database::new(db_path).map_err(|e| format!("Failed to open database: {}", e))?;
+
+    let workspaces_dir = Path::new(repo_path).join(".treq").join("workspaces");
+    std::fs::create_dir_all(&workspaces_dir)
+        .map_err(|e| format!("Failed to create workspaces directory: {}", e))?;
+
     match jj::ensure_jj_initialized(&db, repo_path) {
         Ok(_already_initialized) => Ok(true),
         Err(_) => Ok(false),
+    }
+}
+
+/// Creates a new workspace in the repository.
+///
+/// # Arguments
+/// * `repo_path` - Path to the repository root
+/// * `branch_name` - Name of the branch to create
+/// * `intent` - Intent for the workspace
+/// * `source_branch` - Source branch to create the workspace from
+///
+/// # Returns the workspace
+pub fn create_workspace(repo_path: &str, branch_name: &str, intent: Option<&str>, source_branch: Option<&str>) -> Result<local_db::Workspace, String> {
+    let branches = jj::get_branches(repo_path).map_err(|e| format!("Failed to get branches: {}", e))?;
+
+    let branch_exists : bool = branches.iter().any(|b| b.name == branch_name);
+    let new_branch : bool = !branch_exists;
+    let workspace_path = jj::create_workspace(repo_path, branch_name, branch_name, new_branch, source_branch).map_err(|e| format!("Failed to create workspace: {}", e))?;
+
+    let workspace_id = local_db::add_workspace(repo_path, workspace_path.to_string(), workspace_path.to_string(), branch_name.to_string(), Some(intent.unwrap_or("").to_string()))
+        .map_err(|e| format!("Failed to add workspace to db: {}", e))?;
+    let workspace = local_db::get_workspace_by_id(repo_path, workspace_id).map_err(|e| format!("Failed to get workspace from db: {}", e))?;
+    match workspace {
+        Some(workspace) => Ok(workspace),
+        _ => Err(format!("Workspace not found in database after creation: {}", workspace_id)),
     }
 }
