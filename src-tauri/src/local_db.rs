@@ -65,14 +65,17 @@ pub fn get_local_db_path(repo_path: &str) -> PathBuf {
 ///
 /// Creates tables for workspaces, sessions, changed_files, and workspace_files.
 /// Handles schema migrations for backward compatibility.
-pub fn init_local_db(repo_path: &str) -> Result<(), String> {
+///
+/// # Returns
+/// The path to the created/opened database file.
+pub fn init_local_db(repo_path: &str) -> Result<PathBuf, String> {
     let db_path = get_local_db_path(repo_path);
     if let Some(parent) = db_path.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create .treq directory: {}", e))?;
     }
 
-    let conn = Connection::open(db_path).map_err(|e| format!("Failed to open local db: {}", e))?;
+    let conn = Connection::open(&db_path).map_err(|e| format!("Failed to open local db: {}", e))?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS workspaces (
@@ -292,7 +295,7 @@ pub fn init_local_db(repo_path: &str) -> Result<(), String> {
         }
     }
 
-    Ok(())
+    Ok(db_path)
 }
 
 /// Get a database connection for a repository.

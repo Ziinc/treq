@@ -12,16 +12,6 @@ Git uses a two-stage commit process: changes move from the working directory (un
 
 Open the diff viewer from the dashboard by clicking any changed file in the Git Changes section, or from a worktree session by clicking the Staging tab. The top section shows your file tree organized by staging status, and the bottom section displays the actual diff with Monaco Editor syntax highlighting.
 
-## Staging Changes
-
-**Staging files**: Click the + icon next to any unstaged file, or right-click and select "Stage File." Stage all files at once with the "Stage All" button or `Cmd+Shift+S`.
-
-**Staging hunks**: A hunk is a contiguous block of changes. Click anywhere in a hunk and press the "Stage Hunk" button or `H` to stage just that section.
-
-**Staging lines**: For fine-grained control, click a line number (or Shift+click to select a range), then click "Stage Selected Lines." This creates a partial patch—the file will appear in both staged and unstaged sections, showing what's ready to commit versus what remains.
-
-To unstage, click the − icon on staged files, or use "Unstage All" (`Cmd+Shift+U`).
-
 ## Creating Commits
 
 After staging, write your commit message in the text area. Follow conventional commit format: `type(scope): description`. Common types include `feat` for features, `fix` for bugs, `docs` for documentation, and `refactor` for restructuring. Keep the first line under 72 characters.

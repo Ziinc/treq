@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { ArrowRight, ChevronDown, ChevronRight, Undo2, Minus } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, Undo2, Minus, CheckSquare, Plus } from "lucide-react";
 import { GitFileRow } from "./GitFileRow";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "./ui/tooltip";
 import type { ParsedFileChange } from "../lib/git-utils";
@@ -21,7 +21,9 @@ export interface ChangesSectionProps {
   discardAllLabel?: string;
   onDiscard?: (path: string) => void;
   onDeselectAll?: () => void;
+  onSelectAll?: () => void;
   onStage?: (path: string) => void;
+  onStageAll?: () => void;
   onUnstage?: (path: string) => void;
   onUnstageAll?: () => void;
   isStaged?: boolean;
@@ -43,7 +45,9 @@ export const ChangesSection = memo<ChangesSectionProps>(({
   discardAllLabel = "Discard all changes",
   onDiscard,
   onDeselectAll,
+  onSelectAll,
   onStage,
+  onStageAll,
   onUnstage,
   onUnstageAll,
   isStaged = false,
@@ -86,7 +90,7 @@ export const ChangesSection = memo<ChangesSectionProps>(({
                   <TooltipTrigger asChild>
                     <button
                       type="button"
-                      className="p-1 hover:text-foreground hover:bg-muted rounded transition-colors"
+                      className="p-1 rounded transition-colors bg-transparent hover:bg-foreground/10 text-muted-foreground"
                       onClick={(e) => {
                         e.stopPropagation();
                         onDiscardAll?.();
@@ -97,6 +101,26 @@ export const ChangesSection = memo<ChangesSectionProps>(({
                   </TooltipTrigger>
                   <TooltipContent side="bottom">{discardAllLabel}</TooltipContent>
                 </Tooltip>
+                {hasFiles && onSelectAll && !isStaged && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="p-1 rounded transition-colors bg-transparent hover:bg-foreground/10 text-muted-foreground"
+                        title={selectedFiles?.size === files.length ? "Deselect all" : selectedFiles ? "Select all" : `Select all ${files.length} ${files.length === 1 ? "file" : "files"}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectAll();
+                        }}
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      {selectedFiles?.size === files.length ? "Deselect all" : selectedFiles ? "Select all" : `Select all ${files.length} ${files.length === 1 ? "file" : "files"}`}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
                 {hasSelectedFiles && (
                   <Tooltip>
                     <TooltipTrigger asChild>

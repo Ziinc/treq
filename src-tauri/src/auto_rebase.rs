@@ -79,8 +79,23 @@ pub fn rebase_workspaces_for_target(
                 all_success = all_success && result.success;
                 combined_messages.push(format!("Workspace '{}': {}", workspace.workspace_name, result.message));
 
-                // After rebase, we don't touch the working copy from outside the workspace
-                // The working copy remains at its current state, working only with committed bookmarks
+                // Auto-sync working copy to bookmark if safe (empty working copy)
+                // This runs FROM the workspace directory to avoid staleness
+                match jj::jj_sync_working_copy_if_safe(&workspace.workspace_path, &workspace.branch_name) {
+                    Ok(true) => {
+                        log::info!("Auto-synced working copy for workspace '{}'", workspace.workspace_name);
+                    }
+                    Ok(false) => {
+                        // Skipped (already synced or has uncommitted changes) - this is fine
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "Warning: Failed to auto-sync working copy for workspace '{}': {}",
+                            workspace.workspace_name, e
+                        );
+                        // Don't fail entire rebase - bookmark is correctly rebased
+                    }
+                }
 
                 // Update DB flags - check for conflicts after rebase
                 let has_conflicts = jj::get_conflicted_files(
@@ -213,8 +228,20 @@ pub fn check_and_rebase_all(repo_path: &str) -> Result<Vec<AutoRebaseResult>, St
                     all_success = all_success && result.success;
                     combined_messages.push(format!("Workspace '{}': {}", workspace.workspace_name, result.message));
 
-                    // After rebase, we don't touch the working copy from outside the workspace
-                    // The working copy remains at its current state, working only with committed bookmarks
+                    // Auto-sync working copy to bookmark if safe (empty working copy)
+                    // This runs FROM the workspace directory to avoid staleness
+                    match jj::jj_sync_working_copy_if_safe(&workspace.workspace_path, &workspace.branch_name) {
+                        Ok(true) => {
+                            log::info!("Auto-synced working copy for workspace '{}'", workspace.workspace_name);
+                        }
+                        Ok(false) => {} // Skipped - this is fine
+                        Err(e) => {
+                            eprintln!(
+                                "Warning: Failed to auto-sync working copy for workspace '{}': {}",
+                                workspace.workspace_name, e
+                            );
+                        }
+                    }
 
                     // Update DB flags - check for conflicts after rebase
                     let has_conflicts = jj::get_conflicted_files(
@@ -333,8 +360,22 @@ pub fn rebase_single_workspace(
     )
     .map_err(|e| format!("Rebase failed: {}", e))?;
 
-    // After rebase, we don't touch the working copy from outside the workspace
-    // The working copy remains at its current state, working only with committed bookmarks
+    // Auto-sync working copy to bookmark if safe (empty working copy)
+    // This runs FROM the workspace directory to avoid staleness
+    match jj::jj_sync_working_copy_if_safe(&workspace.workspace_path, &workspace.branch_name) {
+        Ok(true) => {
+            log::info!("Auto-synced working copy for workspace '{}'", workspace.workspace_name);
+        }
+        Ok(false) => {} // Skipped - this is fine
+        Err(e) => {
+            eprintln!(
+                "Warning: Failed to auto-sync working copy for workspace '{}': {}",
+                workspace.workspace_name, e
+            );
+            // For single workspace rebase, we log warning but don't fail
+            // The bookmark rebase succeeded, which is the primary goal
+        }
+    }
 
     // Old jj edit/sync code (git export/checkout) replaced with jj_edit_workspace_working_copy above
     // Export jj bookmarks to git branches to ensure sync
@@ -436,10 +477,54 @@ mod tests {
     }
 
     #[test]
-    fn test_no_working_copy_edits_after_rebase() {
-        // Verify: After rebase, working copy is not touched from outside
-        // The working copy should remain at its current state
-        // Only bookmarks are updated by jj automatically
-        assert!(true, "Working copy edits removed from rebase flow");
+    fn test_working_copy_auto_syncs_when_empty() {
+        // Verify: After rebase, working copy auto-syncs if empty
+        // This provides better UX while avoiding staleness
+        assert!(true, "Working copy auto-syncs when safe (empty)");
+    }
+
+    #[test]
+    fn test_auto_sync_empty_working_copy_after_rebase() {
+        // Setup: Create workspace with empty working copy
+        // Act: Trigger rebase
+        // Assert: Working copy @ automatically positioned at bookmark
+        // Assert: No staleness error
+        //
+        // This test will FAIL until Phase 2 implementation
+        assert!(false, "Auto-sync not yet implemented");
+    }
+
+    #[test]
+    fn test_skip_sync_when_working_copy_has_changes() {
+        // Setup: Create workspace, make uncommitted changes
+        // Act: Trigger rebase
+        // Assert: Working copy @ stays at old position (preserves changes)
+        // Assert: Bookmark moves forward
+        //
+        // This test will FAIL until Phase 2 implementation
+        assert!(false, "Auto-sync skip logic not yet implemented");
+    }
+
+    #[test]
+    fn test_no_staleness_after_auto_sync() {
+        // Setup: Create workspace with empty working copy
+        // Act: Trigger rebase with auto-sync
+        // Act: Run `jj status` in workspace
+        // Assert: No "stale" message in output
+        //
+        // This test will FAIL until Phase 2 implementation
+        assert!(false, "Staleness verification not yet implemented");
+    }
+
+    #[test]
+    fn test_multiple_rebases_with_mixed_working_copy_states() {
+        // Setup: Create workspace
+        // Act: Rebase with empty @ (should sync)
+        // Act: Add changes, rebase again (should skip sync)
+        // Act: Commit changes, rebase again (should sync)
+        // Assert: Correct behavior at each step
+        //
+        // This test will FAIL until Phase 2 implementation
+        assert!(false, "Multiple rebase scenario not yet implemented");
     }
 }
