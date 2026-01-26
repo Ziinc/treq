@@ -13,9 +13,6 @@ use std::path::Path;
 fn test_can_create_workspace() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
-    // Initialize jj
-    treq_lib::core::init(&repo.repo_path).expect("Failed to initialize jj");
-
     // Ensure workspaces directory exists
     repo.ensure_workspaces_dir().expect("Failed to create workspaces dir");
 
@@ -72,7 +69,7 @@ fn test_can_create_workspace() {
 
 #[test]
 fn test_can_create_workspace_from_remote_branch() {
-    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+    let repo = TestRepo::with_remote_with_init().expect("Failed to create test repo with remote");
 
     // Create a branch on the remote
     repo.commit_file("feature.txt", "feature content", "Add feature")
@@ -88,8 +85,6 @@ fn test_can_create_workspace_from_remote_branch() {
     TestRepo::run_git(&repo.repo_path, &["checkout", "main"])
         .expect("Failed to checkout main");
 
-    // Initialize jj
-    treq_lib::core::init(&repo.repo_path).expect("Failed to initialize jj");
 
     // Fetch to ensure jj knows about remote branches
     let _ = treq_lib::jj::jj_git_fetch(&repo.repo_path);
@@ -145,10 +140,7 @@ fn test_can_create_workspace_from_remote_branch() {
 
 #[test]
 fn test_can_create_stacked_workspace() {
-    let repo = TestRepo::new().expect("Failed to create test repo");
-
-    // Initialize jj
-    treq_lib::core::init(&repo.repo_path).expect("Failed to initialize jj");
+    let repo = TestRepo::new_with_init().expect("Failed to create test repo");
 
     // Ensure workspaces directory exists
     repo.ensure_workspaces_dir().expect("Failed to create workspaces dir");
@@ -240,10 +232,7 @@ fn test_can_create_stacked_workspace() {
 
 #[test]
 fn test_can_merge_workspace() {
-    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
-
-    // Initialize jj
-    treq_lib::core::init(&repo.repo_path).expect("Failed to initialize jj");
+    let repo = TestRepo::with_remote_with_init().expect("Failed to create test repo with remote");
 
     // Ensure workspaces directory exists
     repo.ensure_workspaces_dir().expect("Failed to create workspaces dir");
@@ -327,10 +316,7 @@ fn test_can_merge_workspace() {
 
 #[test]
 fn test_can_delete_workspace() {
-    let repo = TestRepo::new().expect("Failed to create test repo");
-
-    // Initialize jj
-    treq_lib::core::init(&repo.repo_path).expect("Failed to initialize jj");
+    let repo = TestRepo::new_with_init().expect("Failed to create test repo");
 
     // Ensure workspaces directory exists
     repo.ensure_workspaces_dir().expect("Failed to create workspaces dir");
@@ -405,7 +391,7 @@ fn test_can_delete_workspace() {
 
 #[test]
 fn test_can_change_workspace_target_branch() {
-    let repo = TestRepo::new().expect("Failed to create test repo");
+    let repo = TestRepo::new_with_init().expect("Failed to create test repo");
 
     // Create another branch to use as target
     repo.commit_file("develop.txt", "develop content", "Develop commit")
@@ -416,9 +402,6 @@ fn test_can_change_workspace_target_branch() {
 
     TestRepo::run_git(&repo.repo_path, &["checkout", "main"])
         .expect("Failed to checkout main");
-
-    // Initialize jj
-    treq_lib::core::init(&repo.repo_path).expect("Failed to initialize jj");
 
     // Ensure workspaces directory exists
     repo.ensure_workspaces_dir().expect("Failed to create workspaces dir");
@@ -510,10 +493,7 @@ fn test_can_change_workspace_target_branch() {
 
 #[test]
 fn test_can_list_workspaces() {
-    let repo = TestRepo::new().expect("Failed to create test repo");
-
-    // Initialize jj
-    treq_lib::core::init(&repo.repo_path).expect("Failed to initialize jj");
+    let repo = TestRepo::new_with_init().expect("Failed to create test repo");
 
     // Ensure workspaces directory exists
     repo.ensure_workspaces_dir().expect("Failed to create workspaces dir");
@@ -599,14 +579,11 @@ fn test_can_list_workspaces() {
 
 #[test]
 fn test_workspace_conflict_detection() {
-    let repo = TestRepo::new().expect("Failed to create test repo");
+    let repo = TestRepo::new_with_init().expect("Failed to create test repo");
 
     // Create a file and commit
     repo.commit_file("conflict.txt", "original content", "Original commit")
         .expect("Failed to commit");
-
-    // Initialize jj
-    treq_lib::core::init(&repo.repo_path).expect("Failed to initialize jj");
 
     // Ensure workspaces directory exists
     repo.ensure_workspaces_dir().expect("Failed to create workspaces dir");

@@ -11,7 +11,7 @@ use std::path::Path;
 
 #[test]
 fn test_repo_initialization() {
-    let repo = TestRepo::new().expect("Failed to create test repo");
+    let repo = TestRepo::new_without_init().expect("Failed to create test repo");
     treq_lib::core::init(&repo.repo_path).ok();
     treq_lib::core::init(&repo.repo_path).ok();
 

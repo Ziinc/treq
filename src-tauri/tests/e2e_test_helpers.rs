@@ -11,7 +11,17 @@ pub struct TestRepo {
 impl TestRepo {
     /// Creates a new temporary Git repository for testing.
     /// Simulates cloning a git repo by initializing with proper git config.
+    /// Calls `core::init()` to initialize jj and local db.
     pub fn new() -> Result<Self, String> {
+        Self::create(true)
+    }
+
+    /// Creates a new temporary Git repository without jj/db initialization.
+    pub fn new_without_init() -> Result<Self, String> {
+        Self::create(false)
+    }
+
+    fn create(init: bool) -> Result<Self, String> {
         let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
         let repo_path = temp_dir.path().to_string_lossy().to_string();
 
@@ -33,6 +43,9 @@ impl TestRepo {
         // Create main branch if not already on it
         let _ = Self::run_git(&repo_path, &["branch", "-M", "main"]);
 
+        if init {
+            treq_lib::core::init(&repo_path)?;
+        }
 
         Ok(TestRepo {
             temp_dir,
@@ -41,8 +54,18 @@ impl TestRepo {
     }
 
     /// Creates a test repo with a remote origin for testing remote branch operations.
+    /// Calls `core::init()` to initialize jj and local db.
     pub fn with_remote() -> Result<Self, String> {
-        let repo = Self::new()?;
+        Self::with_remote_create(true)
+    }
+
+    /// Creates a test repo with a remote origin, without jj/db initialization.
+    pub fn with_remote_without_init() -> Result<Self, String> {
+        Self::with_remote_create(false)
+    }
+
+    fn with_remote_create(init: bool) -> Result<Self, String> {
+        let repo = Self::create(init)?;
 
         // Create a "remote" repository
         let remote_dir = repo.temp_dir.path().join("remote.git");
