@@ -36,7 +36,8 @@ pub fn init(repo_path: &str) -> Result<bool, String> {
 /// * `intent` - Intent for the workspace
 /// * `source_branch` - Source branch to create the workspace from
 ///
-/// # Returns the workspace
+/// # Returns
+/// Returns the workspace if successful, otherwise an error message.
 pub fn create_workspace(repo_path: &str, branch_name: &str, intent: Option<&str>, source_branch: Option<&str>) -> Result<local_db::Workspace, String> {
     let branches = jj::get_branches(repo_path).map_err(|e| format!("Failed to get branches: {}", e))?;
 
@@ -50,5 +51,29 @@ pub fn create_workspace(repo_path: &str, branch_name: &str, intent: Option<&str>
     match workspace {
         Some(workspace) => Ok(workspace),
         _ => Err(format!("Workspace not found in database after creation: {}", workspace_id)),
+    }
+}
+
+
+/// Deletes a workspace from the repository.
+/// # Arguments
+/// * `repo_path` - Path to the repository root
+/// * `workspace_id` - ID of the workspace to delete
+///
+/// # Returns
+/// Returns true if successful, false if workspace not found in database.
+pub fn delete_workspace(repo_path: &str, workspace_id: &i64) -> Result<bool, String> {
+    let workspace = local_db::get_workspace_by_id(repo_path, *workspace_id).map_err(|e| format!("Failed to get workspace from db: {}", e))?;
+
+    match workspace {
+        Some(workspace) => {
+            let workspace_path = Path::new(repo_path).join(".treq").join("workspaces").join(&workspace.workspace_path);
+            jj::remove_workspace(repo_path, &workspace_path.to_str().unwrap())
+                .map_err(|e| format!("Failed to remove workspace: {}", e))?;
+            local_db::delete_workspace(repo_path,  *workspace_id)
+                .map_err(|e| format!("Failed to delete workspace from db: {}", e))?;
+            Ok(true)
+        }
+        _ => Err(format!("Workspace not found in database: {}", workspace_id)),
     }
 }

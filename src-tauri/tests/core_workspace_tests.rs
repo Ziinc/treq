@@ -5,6 +5,8 @@ use e2e_test_helpers::{JjVerifier, TestRepo};
 use std::fs;
 use std::path::Path;
 
+use treq_lib::local_db::Workspace;
+
 // =============================================================================
 // Test: All treq_lib::core functionality - main entrypoint for core app functionality
 // All glue code should only interact with treq_lib::core APIs.
@@ -41,11 +43,6 @@ fn test_can_create_workspace() {
     );
 
     let workspace_path = &repo.workspaces_dir().join(&workspace.workspace_path);
-    // JJ VERIFICATION: Verify workspace structure (may not have .git in jj-native mode)
-    // assert!(
-    //     workspace_path.join(".git").exists(),
-    //     ".git directory should exist in workspace"
-    // );
     assert!(
         workspace_path.join(".jj").exists(),
         ".jj directory should exist in workspace"
@@ -88,7 +85,7 @@ fn test_can_create_workspace() {
         workspace.branch_name,
         bookmarks
     );
-    
+
 }
 
 // =============================================================================
@@ -346,55 +343,31 @@ fn test_can_merge_workspace() {
 fn test_can_delete_workspace() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
-    // Ensure workspaces directory exists
-    repo.ensure_workspaces_dir().expect("Failed to create workspaces dir");
+    let workspace: Workspace = treq_lib::core::create_workspace(&repo.repo_path, "feat/delete", Some("delete feature"), None).expect("Failed to create workspace");
+    let workspace_name = workspace.workspace_name;
 
-    // Create workspace
-    let workspace_name = treq_lib::jj::create_workspace(
-        &repo.repo_path,
-        "feature-delete",
-        "feature-delete",
-        true,
-        None,
-    )
-    .expect("Failed to create workspace");
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
 
-    let workspace_path = repo.workspaces_dir().join(&workspace_name);
-    let workspace_path_str = workspace_path.to_str().unwrap().to_string();
+    let result = treq_lib::core::delete_workspace(&repo.repo_path, &workspace.id).expect("Failed to delete workspace");
+    assert_eq!(result, true, "Workspace should be deleted");
+    
 
-    // Add to local database
-    let workspace_id = treq_lib::local_db::add_workspace(
-        &repo.repo_path,
-        workspace_name.clone(),
-        workspace_path_str.clone(),
-        "feature-delete".to_string(),
-        None,
-    )
-    .expect("Failed to add workspace to DB");
+    assert!(!workspace_path.exists(), "Workspace directory should be removed");
+    
 
-    // Verify workspace exists
-    assert!(workspace_path.exists(), "Workspace should exist before deletion");
+    // bookmark is preserved
 
-    // JJ VERIFICATION: Workspace should be in jj list before deletion
-    let jj_workspaces_before = JjVerifier::list_workspaces(&repo.repo_path)
-        .expect("Failed to list jj workspaces");
+    let bookmarks = JjVerifier::list_bookmarks(&repo.repo_path)
+        .expect("Failed to list bookmarks");
+    eprintln!("bookmarks: {:?}", bookmarks);
     assert!(
-        jj_workspaces_before.contains(&workspace_name),
-        "Workspace should be in jj list before deletion"
+        bookmarks.iter().any(|b| b == &workspace.branch_name),
+        "Bookmark '{}' should exist in workspace, got: {:?}",
+        workspace.branch_name,
+        bookmarks
     );
 
-    // Delete workspace via jj
-    treq_lib::jj::remove_workspace(&repo.repo_path, &workspace_path_str)
-        .expect("Failed to remove workspace");
-
-    // Delete from database
-    treq_lib::local_db::delete_workspace(&repo.repo_path, workspace_id)
-        .expect("Failed to delete workspace from DB");
-
-    // Verify workspace directory is removed
-    assert!(!workspace_path.exists(), "Workspace directory should be removed");
-
-    // JJ VERIFICATION: Workspace should NOT be in jj list after deletion
+    // jj workspace is removed
     let jj_workspaces_after = JjVerifier::list_workspaces(&repo.repo_path)
         .expect("Failed to list jj workspaces after deletion");
     assert!(
@@ -408,7 +381,7 @@ fn test_can_delete_workspace() {
         .expect("Failed to get workspaces");
 
     assert!(
-        !workspaces.iter().any(|w| w.id == workspace_id),
+        !workspaces.iter().any(|w| w.id == workspace.id),
         "Workspace should be removed from database"
     );
 }
