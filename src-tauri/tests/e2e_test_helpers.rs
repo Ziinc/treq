@@ -111,14 +111,18 @@ impl TestRepo {
                 .map_err(|e| format!("Failed to create parent dirs: {}", e))?;
         }
 
-        fs::write(&file_path, content)
-            .map_err(|e| format!("Failed to write file: {}", e))?;
+        fs::write(&file_path, content).map_err(|e| format!("Failed to write file: {}", e))?;
 
         Ok(file_path)
     }
 
     /// Create a commit with a file change.
-    pub fn commit_file(&self, relative_path: &str, content: &str, message: &str) -> Result<(), String> {
+    pub fn commit_file(
+        &self,
+        relative_path: &str,
+        content: &str,
+        message: &str,
+    ) -> Result<(), String> {
         self.create_file(relative_path, content)?;
         Self::run_git(&self.repo_path, &["add", relative_path])?;
         Self::run_git(&self.repo_path, &["commit", "-m", message])?;
@@ -144,7 +148,8 @@ impl TestRepo {
         let db_path = treq_dir.join("test.db");
         let db = treq_lib::db::Database::new(db_path)
             .map_err(|e| format!("Failed to create database: {}", e))?;
-        db.init().map_err(|e| format!("Failed to init database: {}", e))?;
+        db.init()
+            .map_err(|e| format!("Failed to init database: {}", e))?;
         Ok(db)
     }
 
@@ -157,8 +162,7 @@ impl TestRepo {
     /// Call this before creating workspaces.
     pub fn ensure_workspaces_dir(&self) -> Result<(), String> {
         let dir = self.workspaces_dir();
-        fs::create_dir_all(&dir)
-            .map_err(|e| format!("Failed to create workspaces dir: {}", e))
+        fs::create_dir_all(&dir).map_err(|e| format!("Failed to create workspaces dir: {}", e))
     }
 
     /// Check if jj is initialized for this repo.
@@ -177,11 +181,9 @@ impl TestRepo {
         if !gitignore_path.exists() {
             return Ok(String::new());
         }
-        fs::read_to_string(&gitignore_path)
-            .map_err(|e| format!("Failed to read .gitignore: {}", e))
+        fs::read_to_string(&gitignore_path).map_err(|e| format!("Failed to read .gitignore: {}", e))
     }
 }
-
 
 /// Helpers for verifying jj state
 pub struct JjVerifier;
@@ -349,7 +351,16 @@ impl JjVerifier {
     pub fn get_parent_info(workspace_path: &str) -> Result<String, String> {
         let output = Command::new("jj")
             .current_dir(workspace_path)
-            .args(["log", "-r", "@-", "-n", "1", "--no-graph", "-T", "description"])
+            .args([
+                "log",
+                "-r",
+                "@-",
+                "-n",
+                "1",
+                "--no-graph",
+                "-T",
+                "description",
+            ])
             .output()
             .map_err(|e| format!("Failed to execute jj log: {}", e))?;
 
@@ -374,7 +385,10 @@ impl JjVerifier {
         }
 
         if !path.is_dir() {
-            return Err(format!("Workspace path is not a directory: {}", workspace_path));
+            return Err(format!(
+                "Workspace path is not a directory: {}",
+                workspace_path
+            ));
         }
 
         // jj workspaces might have .git file/dir or be jj-native
@@ -400,4 +414,3 @@ impl JjVerifier {
         Ok(())
     }
 }
-

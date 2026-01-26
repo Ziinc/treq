@@ -198,7 +198,10 @@ pub fn jj_push(workspace_path: String, force: Option<bool>) -> Result<String, St
 
 /// Get sync status with remote (ahead/behind counts)
 #[tauri::command]
-pub fn jj_get_sync_status(workspace_path: String, branch_name: String) -> Result<(usize, usize), String> {
+pub fn jj_get_sync_status(
+    workspace_path: String,
+    branch_name: String,
+) -> Result<(usize, usize), String> {
     jj::jj_get_sync_status(&workspace_path, &branch_name).map_err(|e| e.to_string())
 }
 
@@ -298,7 +301,6 @@ pub fn jj_track_workspace_bookmarks(
     repo_path: String,
     state: State<AppState>,
 ) -> Result<BookmarkTrackingResult, String> {
-
     let remote = "origin";
 
     // Get currently tracked bookmarks
@@ -335,12 +337,10 @@ pub fn jj_track_workspace_bookmarks(
     // Get all workspace branches from database
     let workspace_branches: Vec<String> = {
         match state.db.lock() {
-            Ok(_db) => {
-                match crate::local_db::get_workspaces(&repo_path) {
-                    Ok(workspaces) => workspaces.into_iter().map(|ws| ws.branch_name).collect(),
-                    Err(_) => Vec::new(),
-                }
-            }
+            Ok(_db) => match crate::local_db::get_workspaces(&repo_path) {
+                Ok(workspaces) => workspaces.into_iter().map(|ws| ws.branch_name).collect(),
+                Err(_) => Vec::new(),
+            },
             Err(_) => Vec::new(),
         }
     };
@@ -364,7 +364,10 @@ pub fn jj_track_workspace_bookmarks(
                 result.tracked.push(branch_name);
             }
             Err(e) => {
-                eprintln!("[BookmarkTracking] Failed to track {branch_name}@{remote}: {}", e);
+                eprintln!(
+                    "[BookmarkTracking] Failed to track {branch_name}@{remote}: {}",
+                    e
+                );
                 result.failed.push((branch_name, e.to_string()));
             }
         }
