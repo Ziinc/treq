@@ -1,11 +1,12 @@
 mod auto_rebase;
 mod binary_paths;
 mod commands;
-mod db;
+pub mod db;
 mod file_indexer;
-mod jj;
-mod local_db;
+pub mod jj;
+pub mod local_db;
 mod pty;
+pub mod core;
 
 use commands::file_watcher::WatcherManager;
 use db::Database;

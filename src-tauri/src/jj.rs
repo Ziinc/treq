@@ -260,9 +260,6 @@ pub fn ensure_gitignore_entries(repo_path: &str) -> Result<(), JjError> {
         return Ok(());
     }
 
-    // Check if the comment already exists
-    let has_comment = existing_entries.contains("# Added by Treq");
-
     // Append missing entries to .gitignore
     let mut file = OpenOptions::new()
         .create(true)
@@ -276,13 +273,6 @@ pub fn ensure_gitignore_entries(repo_path: &str) -> Result<(), JjError> {
             .map_err(|e| JjError::InitFailed(format!("Failed to write to .gitignore: {}", e)))?;
     }
 
-    // Add comment only if it doesn't exist
-    if !has_comment {
-        writeln!(file, "# Added by Treq")
-            .map_err(|e| JjError::InitFailed(format!("Failed to write to .gitignore: {}", e)))?;
-    }
-
-    // Add collocated entries
     for entry in entries_needed {
         writeln!(file, "{}", entry)
             .map_err(|e| JjError::InitFailed(format!("Failed to write to .gitignore: {}", e)))?;
@@ -293,7 +283,7 @@ pub fn ensure_gitignore_entries(repo_path: &str) -> Result<(), JjError> {
 
 /// Initialize jj for an existing git repository (colocated mode)
 /// This creates a .jj/ directory alongside the existing .git/ directory
-pub fn init_jj_for_git_repo(repo_path: &str) -> Result<(), JjError> {
+fn init_jj_for_git_repo(repo_path: &str) -> Result<(), JjError> {
     let path = Path::new(repo_path);
 
     // Check if .jj already exists
@@ -323,7 +313,7 @@ pub fn init_jj_for_git_repo(repo_path: &str) -> Result<(), JjError> {
 
 /// Ensure jj is initialized for a repository
 /// This is idempotent - safe to call multiple times
-/// Returns true if initialization was performed, false if already initialized
+/// Returns true on success, false only if initialization failed
 pub fn ensure_jj_initialized(db: &crate::db::Database, repo_path: &str) -> Result<bool, JjError> {
     // Check database flag first (avoid filesystem check if already configured)
     let flag_key = "jj_initialized";
@@ -335,14 +325,14 @@ pub fn ensure_jj_initialized(db: &crate::db::Database, repo_path: &str) -> Resul
         .unwrap_or(false);
 
     if already_configured {
-        return Ok(false);
+        return Ok(true);
     }
 
     // Double-check filesystem in case flag got out of sync
     if is_jj_workspace(repo_path) {
         // Update flag and return
         let _ = db.set_repo_setting(repo_path, flag_key, "true");
-        return Ok(false);
+        return Ok(true);
     }
 
     // Check if it's actually a git repo before trying to initialize
@@ -768,6 +758,72 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
 
     let status_output = String::from_utf8_lossy(&output.stdout);
     parse_jj_status(&status_output)
+}
+
+/// Checks if the working copy is empty (no uncommitted changes)
+pub fn jj_is_working_copy_empty(workspace_path: &str) -> Result<bool, JjError> {
+    let changed_files = jj_get_changed_files(workspace_path)?;
+    Ok(changed_files.is_empty())
+}
+
+/// Checks if working copy needs syncing with bookmark
+pub fn jj_working_copy_needs_sync(workspace_path: &str, branch_name: &str) -> Result<bool, JjError> {
+    let bookmark_commit = jj_get_commit_id(workspace_path, branch_name)?;
+    let working_copy_commit = jj_get_commit_id(workspace_path, "@")?;
+    Ok(bookmark_commit != working_copy_commit)
+}
+
+/// Safely syncs working copy to bookmark (only if empty)
+///
+/// Returns:
+/// - Ok(true) if sync was performed
+/// - Ok(false) if sync was skipped (working copy not empty or already synced)
+/// - Err if sync failed
+pub fn jj_sync_working_copy_if_safe(
+    workspace_path: &str,
+    branch_name: &str,
+) -> Result<bool, JjError> {
+    // Check if sync is needed
+    if !jj_working_copy_needs_sync(workspace_path, branch_name)? {
+        return Ok(false); // Already synced
+    }
+
+    // Check if working copy is empty
+    if !jj_is_working_copy_empty(workspace_path)? {
+        return Ok(false); // Skip: working copy has uncommitted changes
+    }
+
+    // Safe to sync: working copy is empty and needs updating
+    // Run FROM the workspace directory to avoid staleness
+    let result = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["edit", branch_name])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !result.status.success() {
+        return Err(JjError::IoError(format!(
+            "Failed to sync working copy: {}",
+            String::from_utf8_lossy(&result.stderr)
+        )));
+    }
+
+    // Create a new empty working copy so we don't manipulate the bookmark's commit directly
+    // (the bookmark's commit may be immutable)
+    let result = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["new"])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !result.status.success() {
+        return Err(JjError::IoError(format!(
+            "Failed to create new working copy: {}",
+            String::from_utf8_lossy(&result.stderr)
+        )));
+    }
+
+    Ok(true) // Sync performed successfully
 }
 
 /// Parse jj status output into file changes
@@ -1612,7 +1668,7 @@ pub fn jj_get_sync_status(workspace_path: &str, branch_name: &str) -> Result<(us
     // Using: jj log -r '<remote>..<local>' --no-graph -T 'commit_id\n'
     let ahead_output = command_for("jj")
         .current_dir(workspace_path)
-        .args(["log", "-r", &format!("{}..{}", remote_branch, branch_name), "--no-graph", "-T", "commit_id\n"])
+        .args(["log", "-r", &format!("{}..{}", remote_branch, branch_name), "--no-graph", "-T", r#"commit_id ++ "\n""#])
         .output()
         .map_err(|e| JjError::IoError(e.to_string()))?;
 
@@ -1622,6 +1678,8 @@ pub fn jj_get_sync_status(workspace_path: &str, branch_name: &str) -> Result<(us
             .filter(|line| !line.trim().is_empty())
             .count()
     } else {
+        let stderr = String::from_utf8_lossy(&ahead_output.stderr);
+        eprintln!("[sync_status] Failed to get ahead count: {}", stderr);
         0
     };
 
@@ -1629,7 +1687,7 @@ pub fn jj_get_sync_status(workspace_path: &str, branch_name: &str) -> Result<(us
     // Using: jj log -r '<local>..<remote>' --no-graph -T 'commit_id\n'
     let behind_output = command_for("jj")
         .current_dir(workspace_path)
-        .args(["log", "-r", &format!("{}..{}", branch_name, remote_branch), "--no-graph", "-T", "commit_id\n"])
+        .args(["log", "-r", &format!("{}..{}", branch_name, remote_branch), "--no-graph", "-T", r#"commit_id ++ "\n""#])
         .output()
         .map_err(|e| JjError::IoError(e.to_string()))?;
 
@@ -1639,6 +1697,8 @@ pub fn jj_get_sync_status(workspace_path: &str, branch_name: &str) -> Result<(us
             .filter(|line| !line.trim().is_empty())
             .count()
     } else {
+        let stderr = String::from_utf8_lossy(&behind_output.stderr);
+        eprintln!("[sync_status] Failed to get behind count: {}", stderr);
         0
     };
 
@@ -2024,7 +2084,8 @@ pub fn jj_get_log(workspace_path: &str, target_branch: &str, is_home_repo: Optio
 }
 
 /// Get commits that are in workspace but not in target branch
-/// Uses revset: target_branch..@ (commits reachable from @ but not from target)
+/// Uses revset: target_branch..@- (commits reachable from @- but not from target)
+/// Note: Uses @- (parent of working copy) to exclude the empty working copy commit
 pub fn jj_get_commits_ahead(
     workspace_path: &str,
     target_branch: &str,
@@ -2034,8 +2095,9 @@ pub fn jj_get_commits_ahead(
         return Err(JjError::IoError("Invalid target branch name".to_string()));
     }
 
-    // Revset: commits reachable from @ but not from target_branch
-    let revset = format!("{}..@", target_branch);
+    // Revset: commits reachable from @- but not from target_branch
+    // Uses @- to exclude the empty working copy commit
+    let revset = format!("{}..@-", target_branch);
 
     // Use same template as jj_get_log
     let template = concat!(
@@ -2345,7 +2407,6 @@ mod tests {
         ensure_gitignore_entries(temp_dir.path().to_str().unwrap()).unwrap();
         let content = fs::read_to_string(&gitignore_path).unwrap();
 
-        assert!(content.contains("# Added by Treq"));
         assert!(content.contains(".jj/"));
         assert!(content.contains(".treq/"));
     }
@@ -2356,28 +2417,25 @@ mod tests {
         let gitignore_path = temp_dir.path().join(".gitignore");
 
         // Test: Only .jj/ is missing
-        fs::write(&gitignore_path, "# Added by Treq\n.treq/\n").unwrap();
+        fs::write(&gitignore_path, ".treq/\n").unwrap();
         ensure_gitignore_entries(temp_dir.path().to_str().unwrap()).unwrap();
         let content = fs::read_to_string(&gitignore_path).unwrap();
         assert_eq!(content.matches(".jj/").count(), 1);
         assert_eq!(content.matches(".treq/").count(), 1);
-        assert_eq!(content.matches("# Added by Treq").count(), 1);
 
         // Test: Only .treq/ is missing
-        fs::write(&gitignore_path, "# Added by Treq\n.jj/\n").unwrap();
+        fs::write(&gitignore_path, ".jj/\n").unwrap();
         ensure_gitignore_entries(temp_dir.path().to_str().unwrap()).unwrap();
         let content = fs::read_to_string(&gitignore_path).unwrap();
         assert_eq!(content.matches(".jj/").count(), 1);
         assert_eq!(content.matches(".treq/").count(), 1);
-        assert_eq!(content.matches("# Added by Treq").count(), 1);
 
         // Test: Both exist - no changes
-        fs::write(&gitignore_path, "# Added by Treq\n.jj/\n.treq/\n").unwrap();
+        fs::write(&gitignore_path, ".jj/\n.treq/\n").unwrap();
         ensure_gitignore_entries(temp_dir.path().to_str().unwrap()).unwrap();
         let content = fs::read_to_string(&gitignore_path).unwrap();
         assert_eq!(content.matches(".jj/").count(), 1);
         assert_eq!(content.matches(".treq/").count(), 1);
-        assert_eq!(content.matches("# Added by Treq").count(), 1);
     }
 
     #[test]

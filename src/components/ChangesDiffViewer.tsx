@@ -2238,7 +2238,6 @@ export const ChangesDiffViewer = memo(
       // Stage single or multi-selected files
       const handleStageFile = useCallback(
         (path: string) => {
-          // If other files are selected, stage all selected files
           if (
             selectedUnstagedFiles.size > 1 &&
             selectedUnstagedFiles.has(path)
@@ -3404,6 +3403,53 @@ export const ChangesDiffViewer = memo(
       const unstagedFiles = files.filter((f) => !stagedFiles.has(f.path));
       const stagedFilesList = files.filter((f) => stagedFiles.has(f.path));
 
+      const handleStageAllFiles = useCallback(() => {
+        const unstagedPaths = unstagedFiles.map(f => f.path);
+        if (unstagedPaths.length === 0) return;
+
+        setStagedFiles((prev) => {
+          const next = new Set(prev);
+          unstagedPaths.forEach((path) => next.add(path));
+          return next;
+        });
+
+        // Clear selection after staging all (consistent with handleStageFiles pattern)
+        setSelectedUnstagedFiles(new Set());
+        setLastSelectedFileIndex(null);
+      }, [unstagedFiles]);
+
+      // Select all unstaged files (toggle behavior)
+      const handleSelectAllUnstaged = useCallback(() => {
+        setSelectedUnstagedFiles((prev) => {
+          // Toggle: if all selected, deselect all
+          if (prev.size === unstagedFiles.length && unstagedFiles.length > 0) {
+            return new Set();
+          }
+          // Otherwise select all
+          return new Set(unstagedFiles.map(f => f.path));
+        });
+        // Update last selected index for shift-select continuity
+        if (unstagedFiles.length > 0) {
+          setLastSelectedFileIndex(files.findIndex(f => f.path === unstagedFiles[unstagedFiles.length - 1].path));
+        }
+      }, [unstagedFiles, files]);
+
+      // Select all staged files (toggle behavior)
+      const handleSelectAllStaged = useCallback(() => {
+        setSelectedStagedFiles((prev) => {
+          // Toggle: if all selected, deselect all
+          if (prev.size === stagedFilesList.length && stagedFilesList.length > 0) {
+            return new Set();
+          }
+          // Otherwise select all
+          return new Set(stagedFilesList.map(f => f.path));
+        });
+        // Update last selected index for shift-select continuity
+        if (stagedFilesList.length > 0) {
+          setLastSelectedStagedIndex(stagedFilesList.length - 1);
+        }
+      }, [files, stagedFilesList]);
+
       // Note: FileRowComponent extracted outside for performance
 
       return (
@@ -3455,6 +3501,7 @@ export const ChangesDiffViewer = memo(
                           onFileSelect={handleStagedFileSelect}
                           onDiscardAll={handleDiscardSelectedStagedFiles}
                           discardAllLabel="Discard selected changes"
+                          onSelectAll={handleSelectAllStaged}
                           onUnstage={handleUnstageFile}
                           onUnstageAll={handleUnstageAllFiles}
                           onDeselectAll={() => setSelectedStagedFiles(new Set())}
@@ -3483,7 +3530,9 @@ export const ChangesDiffViewer = memo(
                         onDiscardAll={handleDiscardAll}
                         onDiscard={handleDiscardFiles}
                         onDeselectAll={() => setSelectedUnstagedFiles(new Set())}
+                        onSelectAll={handleSelectAllUnstaged}
                         onStage={handleStageFile}
+                        onStageAll={handleStageAllFiles}
                         workspacePath={workspacePath}
                       />
                     </>
