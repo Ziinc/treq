@@ -92,3 +92,22 @@ pub fn list_workspaces(repo_path: &str) -> Result<Vec<local_db::Workspace>, Stri
         _ => Err(format!("Failed to get workspaces from db")),
     }
 }
+
+
+
+pub fn stack_workspace(repo_path: &str, source_branch: Option<&str>, target_branch: Option<&str>) -> Result<local_db::Workspace, String> {
+
+    let base = match source_branch {
+        Some(branch) => branch.to_string(),
+        None => "main".to_string(),
+    };
+
+
+    let target = match target_branch {
+        Some(branch) => branch.to_string(),
+        None => format!("{}-1", base),
+    };
+
+
+    return create_workspace(repo_path, &target, None, Some(&base))
+}
