@@ -1338,7 +1338,14 @@ pub fn get_conflicted_files(
     workspace_path: &str,
     target_branch: Option<&str>,
 ) -> Result<Vec<String>, JjError> {
-    // New approach: use jj diff if target_branch is provided
+    // 1. Proactively check and update if stale
+    if let Ok(true) = is_workspace_stale(workspace_path) {
+        if let Err(update_err) = jj_workspace_update_stale(workspace_path) {
+            eprintln!("Failed to update stale workspace in get_conflicted_files: {}", update_err);
+        }
+    }
+
+    // 2. Try jj diff approach with retry on stale errors
     if let Some(branch) = target_branch {
         // Validate branch name to prevent injection
         if !branch.starts_with('-') && !branch.contains('\0') && !branch.is_empty() {
@@ -1348,41 +1355,131 @@ pub fn get_conflicted_files(
                 .unwrap_or_else(|| workspace_path.to_string());
             let jj_branch = convert_git_branch_to_jj_format(branch, &repo_path);
 
-            // Try jj diff approach
-            match get_conflicted_files_from_diff(workspace_path, &jj_branch) {
+            // Try jj diff approach with retry
+            match get_conflicted_files_from_diff_with_retry(workspace_path, &jj_branch) {
                 Ok(conflicts) => {
-                    return Ok(conflicts);
+                    // If diff succeeded but returned empty, still check status as fallback
+                    if !conflicts.is_empty() {
+                        return Ok(conflicts);
+                    }
+                    // Fall through to status-based approach
                 }
-                Err(e) => {
-                    eprintln!("Warning: jj diff failed ({}), falling back to status", e);
+                Err(_e) => {
                     // Fall through to status-based approach
                 }
             }
-        } else {
-            eprintln!("Warning: Invalid target branch name, falling back to status");
         }
     }
 
-    // Fallback approach: use jj st to check for conflicts
+    // 3. Fallback to jj status with retry on stale errors
+    get_conflicted_files_from_status_with_retry(workspace_path)
+}
+
+/// Get conflicted files using jj diff approach with retry on stale errors
+/// Wraps get_conflicted_files_from_diff() with stale error detection and retry
+fn get_conflicted_files_from_diff_with_retry(
+    workspace_path: &str,
+    jj_branch: &str,
+) -> Result<Vec<String>, JjError> {
+    match get_conflicted_files_from_diff(workspace_path, jj_branch) {
+        Ok(conflicts) => Ok(conflicts),
+        Err(e) => {
+            let err_str = e.to_string();
+            if err_str.contains("stale") || err_str.contains("not updated since operation") {
+                if let Err(update_err) = jj_workspace_update_stale(workspace_path) {
+                    eprintln!("Failed to update stale workspace in diff retry: {}", update_err);
+                    return Err(e);
+                }
+                // Retry once
+                get_conflicted_files_from_diff(workspace_path, jj_branch)
+            } else {
+                Err(e)
+            }
+        }
+    }
+}
+
+/// Get conflicted files using jj status approach with retry on stale errors
+/// Extracts the status-based conflict detection logic and adds stale error detection and retry
+fn get_conflicted_files_from_status_with_retry(workspace_path: &str) -> Result<Vec<String>, JjError> {
     let output = command_for("jj")
         .current_dir(workspace_path)
-        .args(["st"])
+        .args(["status"])
         .output()
         .map_err(|e| JjError::IoError(e.to_string()))?;
 
     if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let err_str = stderr.to_string();
+
+        if err_str.contains("stale") || err_str.contains("not updated since operation") {
+            if let Err(update_err) = jj_workspace_update_stale(workspace_path) {
+                eprintln!("Failed to update stale workspace in status retry: {}", update_err);
+                return Ok(Vec::new());
+            }
+            // Retry once
+            let retry_output = command_for("jj")
+                .current_dir(workspace_path)
+                .args(["status"])
+                .output()
+                .map_err(|e| JjError::IoError(e.to_string()))?;
+
+            if !retry_output.status.success() {
+                return Ok(Vec::new());
+            }
+
+            let status = String::from_utf8_lossy(&retry_output.stdout);
+            return parse_conflicted_files_from_status(&status);
+        }
+
         return Ok(Vec::new());
     }
 
     let status = String::from_utf8_lossy(&output.stdout);
-    let conflicts = parse_conflicted_files_from_status(&status)?;
+    let mut conflicts = parse_conflicted_files_from_status(&status)?;
+
+    // Check for bookmark conflicts in the status output
+    if conflicts.is_empty() && status.contains("Warning: These bookmarks have conflicts:") {
+        // Extract conflicted bookmark names
+        let mut in_conflict_section = false;
+        for line in status.lines() {
+            if line.contains("Warning: These bookmarks have conflicts:") {
+                in_conflict_section = true;
+                continue;
+            }
+            if in_conflict_section {
+                let trimmed = line.trim();
+                if trimmed.is_empty() || trimmed.starts_with("Hint:") || trimmed.starts_with("Use `") {
+                    break; // End of conflict section
+                }
+                if !trimmed.is_empty() && !trimmed.starts_with("Warning") {
+                    // Bookmark name is the conflicted bookmark
+                    conflicts.push(format!("(bookmark conflict: {})", trimmed));
+                }
+            }
+        }
+    }
+
+    // If no conflicts found in status output, check if current branch is marked as (conflicted)
+    if conflicts.is_empty() {
+        // Check if the current branch is marked as conflicted
+        if let Ok(branches) = get_branches(workspace_path) {
+            // Look for any branch marked as (conflicted)
+            for branch in &branches {
+                if branch.name.contains("(conflicted)") || branch.name.contains("(conflict)") {
+                    // If a branch is conflicted, return a marker
+                    conflicts.push(format!("(branch conflict: {})", branch.name.replace(" (conflicted)", "").replace(" (conflict)", "")));
+                }
+            }
+        }
+    }
 
     Ok(conflicts)
 }
 
 /// Get conflicted files using jj diff approach
 /// Uses: jj diff --from <target_branch> --to @ --summary
-fn get_conflicted_files_from_diff(
+pub fn get_conflicted_files_from_diff(
     workspace_path: &str,
     jj_branch: &str,
 ) -> Result<Vec<String>, JjError> {
@@ -2697,7 +2794,7 @@ mod tests {
             "test-branch",
             true, // new_branch
             Some("main"),
-            None,
+            // None,
         );
 
         if workspace_result.is_err() {
@@ -3017,7 +3114,7 @@ target/debug/deps/lib.so    2-sided conflict including 1 deletion and an executa
             "feature-branch",
             true,                          // new_branch
             Some("origin/feature-branch"), // source from remote in git format
-            None,
+            // None,
         );
 
         if workspace_result.is_err() {
@@ -3653,7 +3750,7 @@ target/debug/deps/lib.so    2-sided conflict including 1 deletion and an executa
             "test-local-branch",
             true,
             Some("main"),
-            None,
+            // None,
         );
 
         if workspace_name.is_err() {
@@ -3775,7 +3872,6 @@ target/debug/deps/lib.so    2-sided conflict including 1 deletion and an executa
             "test-branch",
             true,
             Some("main"),
-            None,
         );
 
         // The workspace should be created successfully despite any tracking issues

@@ -15,19 +15,19 @@ pub fn jj_create_workspace(
     source_branch: Option<String>,
 ) -> Result<String, String> {
     // Load inclusion patterns from database
-    let inclusion_patterns = {
-        let db = state.db.lock().unwrap();
-        db.get_repo_setting(&repo_path, "included_copy_files")
-            .ok()
-            .flatten()
-            .map(|patterns_str| {
-                patterns_str
-                    .lines()
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-                    .collect::<Vec<String>>()
-            })
-    };
+    // let inclusion_patterns = {
+    //     let db = state.db.lock().unwrap();
+    //     db.get_repo_setting(&repo_path, "included_copy_files")
+    //         .ok()
+    //         .flatten()
+    //         .map(|patterns_str| {
+    //             patterns_str
+    //                 .lines()
+    //                 .map(|s| s.trim().to_string())
+    //                 .filter(|s| !s.is_empty())
+    //                 .collect::<Vec<String>>()
+    //         })
+    // };
 
     jj::create_workspace(
         &repo_path,
