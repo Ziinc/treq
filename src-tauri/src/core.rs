@@ -44,6 +44,12 @@ pub fn create_workspace(
     intent: Option<&str>,
     source_branch: Option<&str>,
 ) -> Result<local_db::Workspace, String> {
+
+    // snapshot working copy of repo
+    let _ = jj::jj_get_changed_files(repo_path);
+
+
+
     let branches =
         jj::get_branches(repo_path).map_err(|e| format!("Failed to get branches: {}", e))?;
 
@@ -112,27 +118,90 @@ pub fn delete_workspace(repo_path: &str, workspace_id: &i64) -> Result<bool, Str
 /// Returns a vector of workspaces if successful, otherwise an error message.
 pub fn list_workspaces(repo_path: &str) -> Result<Vec<local_db::Workspace>, String> {
     let workspaces = local_db::get_workspaces(repo_path)
-        .map_err(|e| format!("Failed to get workspaces from db: {}", e));
-    match workspaces {
-        Ok(workspaces) => Ok(workspaces),
-        _ => Err(format!("Failed to get workspaces from db")),
-    }
+        .map_err(|e| format!("Failed to get workspaces from db: {}", e))?;
+
+    let updated_workspaces: Vec<local_db::Workspace> = workspaces
+        .into_iter()
+        .map(|mut workspace| {
+            let workspace_path = Path::new(repo_path).join(".treq").join("workspaces").join(&workspace.workspace_path).to_str().expect("not a valid path").to_string();
+            
+            let files = match jj::jj_get_changed_files(&workspace_path) {
+                Ok(files) => files,
+                Err(jj::JjError::IoError(e)) if e.contains("stale") || e.contains("not updated since operation") => {
+                    eprintln!("Stale working copy detected, updating: {}", workspace_path);
+                    if let Err(update_err) = jj::jj_workspace_update_stale(&workspace_path) {
+                        eprintln!("Failed to update stale workspace: {}", update_err);
+                    }
+                    jj::jj_get_changed_files(&workspace_path).unwrap_or_default()
+                }
+                Err(e) => {
+                    eprintln!("Failed to get changed files: {}", e);
+                    vec![]
+                }
+            };
+
+            // Ensure workspace is fresh before conflict detection
+            if let Ok(true) = jj::is_workspace_stale(&workspace_path) {
+                let _ = jj::jj_workspace_update_stale(&workspace_path);
+            }
+
+            let conflicts = jj::get_conflicted_files(
+                &workspace_path,
+                workspace.target_branch.as_deref(),
+            )
+            .unwrap_or_default();
+
+            let has_conflicts = !conflicts.is_empty();
+
+            if workspace.has_conflicts != has_conflicts {
+                let _ = local_db::update_workspace_has_conflicts(
+                    repo_path,
+                    workspace.id,
+                    has_conflicts,
+                );
+                workspace.has_conflicts = has_conflicts;
+            }
+
+            workspace
+        })
+        .collect();
+
+    Ok(updated_workspaces)
 }
 
 pub fn stack_workspace(
     repo_path: &str,
-    source_branch: Option<&str>,
-    target_branch: Option<&str>,
+    source_workspace: Option<&local_db::Workspace>,
+    branch_name: Option<&str>,
 ) -> Result<local_db::Workspace, String> {
-    let base = match source_branch {
-        Some(branch) => branch.to_string(),
+    let base = match source_workspace {
+        Some(workspace) => {
+            let workspace_path = Path::new(repo_path)
+                .join(".treq")
+                .join("workspaces")
+                .join(&workspace.workspace_path)
+                .to_str()
+                .expect("not a valid path")
+                .to_string();
+            let _ = jj::jj_get_changed_files(&workspace_path);
+            workspace.branch_name.clone()
+        }
         None => "main".to_string(),
     };
 
-    let target = match target_branch {
+    let target = match branch_name {
         Some(branch) => branch.to_string(),
         None => format!("{}-1", base),
     };
 
-    return create_workspace(repo_path, &target, None, Some(&base));
+    let mut workspace = create_workspace(repo_path, &target, None, Some(&base))?;
+
+    // Set the target_branch to the parent workspace's branch for conflict detection
+    local_db::update_workspace_target_branch(repo_path, workspace.id, &base)
+        .map_err(|e| format!("Failed to set target branch: {}", e))?;
+
+    // Update the workspace object to reflect the change
+    workspace.target_branch = Some(base);
+
+    Ok(workspace)
 }

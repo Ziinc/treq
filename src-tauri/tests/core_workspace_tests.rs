@@ -192,7 +192,7 @@ fn test_can_create_stacked_workspace() {
     // Create stacked workspace based on the first workspace's branch
     let stacked: Workspace = treq_lib::core::stack_workspace(
         &repo.repo_path,
-        Some(&base.branch_name),
+        Some(&base),
         Some("feat/stacked"),
     )
     .expect("Failed to create stacked workspace");
@@ -495,102 +495,36 @@ fn test_can_list_workspaces() {
 // =============================================================================
 
 #[test]
-// TODO: not yet refactored
 fn test_workspace_conflict_detection() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
-    // Create a file and commit
-    repo.commit_file("conflict.txt", "original content", "Original commit")
-        .expect("Failed to commit");
 
-    // Ensure workspaces directory exists
-    repo.ensure_workspaces_dir()
-        .expect("Failed to create workspaces dir");
+    let workspace = treq_lib::core::create_workspace(&repo.repo_path, "base", Some("feature-base"), None).expect("Failed to create base workspace");
+    
 
-    // Create workspace
-    let workspace_name = treq_lib::jj::create_workspace(
-        &repo.repo_path,
-        "feature-conflict",
-        "feature-conflict",
-        true,
-        None,
-    )
-    .expect("Failed to create workspace");
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let file_path = workspace_path.join("README.md");
+    fs::write(&file_path, "some content").expect("Failed to write base file");
 
-    let workspace_path = repo.workspaces_dir().join(&workspace_name);
-    let workspace_path_str = workspace_path.to_str().unwrap();
 
-    // Add workspace to database (required for jj_commit to work)
-    treq_lib::local_db::add_workspace(
-        &repo.repo_path,
-        workspace_name.clone(),
-        workspace_path_str.to_string(),
-        "feature-conflict".to_string(),
-        None,
-    )
-    .expect("Failed to add workspace to DB");
+    let stacked_workspace = treq_lib::core::stack_workspace(&repo.repo_path, Some(&workspace), Some("feat/stacked")).expect("Failed to create stacked workspace");
+    // before, not conflicted
+    let workspaces = treq_lib::core::list_workspaces(&repo.repo_path).expect("Failed to list workspaces");
+    assert_eq!(workspaces[0].has_conflicts, false, "Workspace should not be marked as conflicted");
+    assert_eq!(workspaces[1].has_conflicts, false, "Workspace should not be marked as conflicted");
 
-    // Modify file in workspace
-    fs::write(workspace_path.join("conflict.txt"), "workspace content")
-        .expect("Failed to write in workspace");
 
-    treq_lib::jj::jj_commit(workspace_path_str, "Workspace change")
-        .expect("Failed to commit workspace change");
+    let stacked_workspace_path = repo.workspaces_dir().join(&stacked_workspace.workspace_path);
+    fs::write(&stacked_workspace_path.join("README.md"), "different stacked content").expect("Failed to write  file");
 
-    // Modify same file on main (create conflict scenario)
-    fs::write(
-        Path::new(&repo.repo_path).join("conflict.txt"),
-        "main content",
-    )
-    .expect("Failed to write on main");
 
-    TestRepo::run_git(&repo.repo_path, &["add", "."]).expect("Failed to git add");
-    TestRepo::run_git(&repo.repo_path, &["commit", "-m", "Main change"])
-        .expect("Failed to git commit");
+    fs::remove_file(&workspace_path.join("README.md")).expect("Failed to delete workspace file");
 
-    // Get conflicted files (should be empty before rebase)
-    let conflicts_before =
-        treq_lib::jj::get_conflicted_files(workspace_path_str, Some("main")).unwrap_or_default();
 
-    // JJ VERIFICATION: Check jj status before rebase
-    let status_before =
-        JjVerifier::get_status(workspace_path_str).expect("Failed to get status before rebase");
-    let has_conflict_before = status_before.to_lowercase().contains("conflict");
-
-    // After rebase, there may or may not be conflicts depending on jj's behavior
-    let _rebase_result = treq_lib::jj::jj_rebase_onto(workspace_path_str, "main");
-
-    // Check for conflicts after rebase
-    let conflicts_after =
-        treq_lib::jj::get_conflicted_files(workspace_path_str, Some("main")).unwrap_or_default();
-
-    // JJ VERIFICATION: Check jj status after rebase
-    let status_after =
-        JjVerifier::get_status(workspace_path_str).expect("Failed to get status after rebase");
-
-    // Verify conflict detection functions work
-    // Note: "Conflicted files" or "conflict" at start of line indicates real conflicts
-    // We need to avoid matching branch names like "feature-conflict"
-    let jj_shows_conflict = status_after.lines().any(|line| {
-        let lower = line.to_lowercase();
-        lower.starts_with("conflict") || lower.contains("conflicted")
-    });
-    let treq_shows_conflict = !conflicts_after.is_empty();
-
-    // Both should be consistent
-    if jj_shows_conflict && !treq_shows_conflict {
-        panic!(
-            "treq should detect conflicts when jj shows them. jj status: {}",
-            status_after
-        );
-    }
-
-    // Just log for debugging - conflicts depend on jj's resolution behavior
-    eprintln!(
-        "Conflict detection test: jj_conflict={}, treq_conflict={}, had_conflict_before={}",
-        jj_shows_conflict, treq_shows_conflict, has_conflict_before
-    );
-
-    // Use variables to suppress warnings
-    let _ = conflicts_before;
+    let workspaces = treq_lib::core::list_workspaces(&repo.repo_path).expect("Failed to list workspaces");
+    let stacked = workspaces.iter().find(|w| w.workspace_path == stacked_workspace.workspace_path)
+        .expect("Stacked workspace should exist");
+    assert_eq!(stacked.has_conflicts, true, "Stacked workspace should be marked as conflicted");
 }
+
+
