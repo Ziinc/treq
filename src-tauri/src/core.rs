@@ -44,23 +44,36 @@ pub fn create_workspace(
     intent: Option<&str>,
     source_branch: Option<&str>,
 ) -> Result<local_db::Workspace, String> {
-
     // snapshot working copy of repo
     let _ = jj::jj_get_changed_files(repo_path);
-
-
 
     let branches =
         jj::get_branches(repo_path).map_err(|e| format!("Failed to get branches: {}", e))?;
 
     let branch_exists: bool = branches.iter().any(|b| b.name == branch_name);
+
+    // If branch doesn't exist locally and source_branch is None, check remotes
+    let resolved_source_branch = if !branch_exists && source_branch.is_none() {
+        // Check if branch exists on origin remote
+        let remote_ref = format!("{}@origin", branch_name);
+        if jj::check_remote_branch_exists(repo_path, &remote_ref)
+            .map_err(|e| format!("Failed to check remote branch: {}", e))?
+        {
+            Some(remote_ref)
+        } else {
+            None
+        }
+    } else {
+        source_branch.map(|s| s.to_string())
+    };
+
     let new_branch: bool = !branch_exists;
     let workspace_path = jj::create_workspace(
         repo_path,
         branch_name,
         branch_name,
         new_branch,
-        source_branch,
+        resolved_source_branch.as_deref(),
     )
     .map_err(|e| format!("Failed to create workspace: {}", e))?;
 
@@ -123,11 +136,19 @@ pub fn list_workspaces(repo_path: &str) -> Result<Vec<local_db::Workspace>, Stri
     let updated_workspaces: Vec<local_db::Workspace> = workspaces
         .into_iter()
         .map(|mut workspace| {
-            let workspace_path = Path::new(repo_path).join(".treq").join("workspaces").join(&workspace.workspace_path).to_str().expect("not a valid path").to_string();
-            
+            let workspace_path = Path::new(repo_path)
+                .join(".treq")
+                .join("workspaces")
+                .join(&workspace.workspace_path)
+                .to_str()
+                .expect("not a valid path")
+                .to_string();
+
             let files = match jj::jj_get_changed_files(&workspace_path) {
                 Ok(files) => files,
-                Err(jj::JjError::IoError(e)) if e.contains("stale") || e.contains("not updated since operation") => {
+                Err(jj::JjError::IoError(e))
+                    if e.contains("stale") || e.contains("not updated since operation") =>
+                {
                     eprintln!("Stale working copy detected, updating: {}", workspace_path);
                     if let Err(update_err) = jj::jj_workspace_update_stale(&workspace_path) {
                         eprintln!("Failed to update stale workspace: {}", update_err);
@@ -145,11 +166,9 @@ pub fn list_workspaces(repo_path: &str) -> Result<Vec<local_db::Workspace>, Stri
                 let _ = jj::jj_workspace_update_stale(&workspace_path);
             }
 
-            let conflicts = jj::get_conflicted_files(
-                &workspace_path,
-                workspace.target_branch.as_deref(),
-            )
-            .unwrap_or_default();
+            let conflicts =
+                jj::get_conflicted_files(&workspace_path, workspace.target_branch.as_deref())
+                    .unwrap_or_default();
 
             let has_conflicts = !conflicts.is_empty();
 

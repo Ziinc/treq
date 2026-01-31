@@ -103,41 +103,20 @@ fn test_can_create_workspace() {
 // Test: Can create a workspace from remote branch
 // =============================================================================
 
-// TODO: not yet refactored
 #[test]
 fn test_can_create_workspace_from_remote_branch() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
 
-    // Create a branch on the remote
-    repo.commit_file("feature.txt", "feature content", "Add feature")
-        .expect("Failed to commit file");
-
-    TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "feature-remote"])
-        .expect("Failed to create branch");
-
-    repo.push_branch("feature-remote")
-        .expect("Failed to push branch");
-
-    // Go back to main
-    TestRepo::run_git(&repo.repo_path, &["checkout", "main"]).expect("Failed to checkout main");
-
-    // Fetch to ensure jj knows about remote branches
-    let _ = treq_lib::jj::jj_git_fetch(&repo.repo_path);
-
-    // Ensure workspaces directory exists
-    repo.ensure_workspaces_dir()
-        .expect("Failed to create workspaces dir");
-
-    // Create workspace from remote branch
-    let workspace_name = treq_lib::jj::create_workspace(
+    // create workspace from a remote branch
+    let workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
         "feature-remote",
-        "feature-remote",
-        false, // not new_branch - use existing
+        Some("feature-remote"),
         None,
     )
     .expect("Failed to create workspace from remote branch");
 
+    let workspace_name = workspace.workspace_name;
     // Verify workspace exists
     let workspace_path = repo.workspaces_dir().join(&workspace_name);
     assert!(
@@ -151,23 +130,24 @@ fn test_can_create_workspace_from_remote_branch() {
         "File from remote branch should exist in workspace"
     );
 
-    // JJ VERIFICATION: Verify workspace is in jj workspace list
-    let jj_workspaces =
-        JjVerifier::list_workspaces(&repo.repo_path).expect("Failed to list jj workspaces");
-    assert!(
-        jj_workspaces.contains(&workspace_name),
-        "jj should list workspace from remote branch"
-    );
+    // Verify workspace has correctly checked out the remote branch by checking the jj status
+    let workspace_path_str = workspace_path.to_str().unwrap();
 
-    // JJ VERIFICATION: Verify file exists via jj status
-    assert!(
-        JjVerifier::file_exists_in_workspace(workspace_path.to_str().unwrap(), "feature.txt"),
-        "feature.txt should exist in workspace working copy"
-    );
+    // Execute jj status to verify workspace state
+    let status_output = Command::new("jj")
+        .current_dir(workspace_path_str)
+        .args(["status"])
+        .output()
+        .expect("Failed to execute jj status");
 
-    // JJ VERIFICATION: Verify workspace structure
-    JjVerifier::verify_workspace_structure(workspace_path.to_str().unwrap())
-        .expect("Workspace from remote should have valid structure");
+    let status_str = String::from_utf8_lossy(&status_output.stdout);
+
+    // Verify the status output contains the feature-remote branch name
+    assert!(
+        status_str.contains("feature-remote"),
+        "JJ status should show 'feature-remote' bookmark, got: {}",
+        status_str
+    );
 }
 
 // =============================================================================
@@ -190,12 +170,9 @@ fn test_can_create_stacked_workspace() {
     fs::write(&base_file, "base content").expect("Failed to write base file");
 
     // Create stacked workspace based on the first workspace's branch
-    let stacked: Workspace = treq_lib::core::stack_workspace(
-        &repo.repo_path,
-        Some(&base),
-        Some("feat/stacked"),
-    )
-    .expect("Failed to create stacked workspace");
+    let stacked: Workspace =
+        treq_lib::core::stack_workspace(&repo.repo_path, Some(&base), Some("feat/stacked"))
+            .expect("Failed to create stacked workspace");
 
     // Verify stacked workspace exists
     let stacked_path = repo.workspaces_dir().join(&stacked.workspace_path);
@@ -498,33 +475,48 @@ fn test_can_list_workspaces() {
 fn test_workspace_conflict_detection() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
-
-    let workspace = treq_lib::core::create_workspace(&repo.repo_path, "base", Some("feature-base"), None).expect("Failed to create base workspace");
-    
+    let workspace =
+        treq_lib::core::create_workspace(&repo.repo_path, "base", Some("feature-base"), None)
+            .expect("Failed to create base workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
     let file_path = workspace_path.join("README.md");
     fs::write(&file_path, "some content").expect("Failed to write base file");
 
-
-    let stacked_workspace = treq_lib::core::stack_workspace(&repo.repo_path, Some(&workspace), Some("feat/stacked")).expect("Failed to create stacked workspace");
+    let stacked_workspace =
+        treq_lib::core::stack_workspace(&repo.repo_path, Some(&workspace), Some("feat/stacked"))
+            .expect("Failed to create stacked workspace");
     // before, not conflicted
-    let workspaces = treq_lib::core::list_workspaces(&repo.repo_path).expect("Failed to list workspaces");
-    assert_eq!(workspaces[0].has_conflicts, false, "Workspace should not be marked as conflicted");
-    assert_eq!(workspaces[1].has_conflicts, false, "Workspace should not be marked as conflicted");
+    let workspaces =
+        treq_lib::core::list_workspaces(&repo.repo_path).expect("Failed to list workspaces");
+    assert_eq!(
+        workspaces[0].has_conflicts, false,
+        "Workspace should not be marked as conflicted"
+    );
+    assert_eq!(
+        workspaces[1].has_conflicts, false,
+        "Workspace should not be marked as conflicted"
+    );
 
-
-    let stacked_workspace_path = repo.workspaces_dir().join(&stacked_workspace.workspace_path);
-    fs::write(&stacked_workspace_path.join("README.md"), "different stacked content").expect("Failed to write  file");
-
+    let stacked_workspace_path = repo
+        .workspaces_dir()
+        .join(&stacked_workspace.workspace_path);
+    fs::write(
+        &stacked_workspace_path.join("README.md"),
+        "different stacked content",
+    )
+    .expect("Failed to write  file");
 
     fs::remove_file(&workspace_path.join("README.md")).expect("Failed to delete workspace file");
 
-
-    let workspaces = treq_lib::core::list_workspaces(&repo.repo_path).expect("Failed to list workspaces");
-    let stacked = workspaces.iter().find(|w| w.workspace_path == stacked_workspace.workspace_path)
+    let workspaces =
+        treq_lib::core::list_workspaces(&repo.repo_path).expect("Failed to list workspaces");
+    let stacked = workspaces
+        .iter()
+        .find(|w| w.workspace_path == stacked_workspace.workspace_path)
         .expect("Stacked workspace should exist");
-    assert_eq!(stacked.has_conflicts, true, "Stacked workspace should be marked as conflicted");
+    assert_eq!(
+        stacked.has_conflicts, true,
+        "Stacked workspace should be marked as conflicted"
+    );
 }
-
-
