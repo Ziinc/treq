@@ -1,6 +1,7 @@
 mod e2e_test_helpers;
 
 use e2e_test_helpers::{JjVerifier, TestRepo};
+use tauri::path::BaseDirectory;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -191,6 +192,82 @@ fn test_can_create_stacked_workspace() {
         2,
         "Should have 2 workspaces, got {}",
         workspaces.len()
+    );
+
+    // Fetch workspace status for both workspaces
+    let base_status = treq_lib::core::workspace_status(workspace1_path.to_str().unwrap())
+        .expect("Failed to get base workspace status");
+    let stacked_status = treq_lib::core::workspace_status(stacked_path.to_str().unwrap())
+        .expect("Failed to get stacked workspace status");
+
+    // Both should have the same DAG (shows full hierarchy)
+    assert_eq!(
+        base_status.dag_nodes.len(),
+        stacked_status.dag_nodes.len(),
+        "DAG should be the same for all workspaces in hierarchy"
+    );
+    assert_eq!(
+        base_status.dag_nodes.len(),
+        2,
+        "DAG should contain 2 workspaces (base + stacked)"
+    );
+
+    // Base workspace should show stacked as a child
+    assert_eq!(
+        base_status.children.len(),
+        1,
+        "Base workspace should have 1 child"
+    );
+    assert_eq!(
+        base_status.children[0].branch_name,
+        "feat/stacked",
+        "Child should be the stacked workspace"
+    );
+    assert!(
+        base_status.target.is_none(),
+        "Base workspace should have no target"
+    );
+
+    // Stacked workspace should show base as target
+    assert!(
+        stacked_status.target.is_some(),
+        "Stacked workspace should have a target"
+    );
+    assert_eq!(
+        stacked_status.target.as_ref().unwrap().branch_name,
+        "feat/base",
+        "Target should be the base workspace"
+    );
+    assert_eq!(
+        stacked_status.children.len(),
+        0,
+        "Stacked workspace should have no children"
+    );
+
+    // Verify DAG structure
+    let base_node = base_status
+        .dag_nodes
+        .iter()
+        .find(|n| n.workspace.branch_name == "feat/base")
+        .expect("Base should be in DAG");
+    let stacked_node = base_status
+        .dag_nodes
+        .iter()
+        .find(|n| n.workspace.branch_name == "feat/stacked")
+        .expect("Stacked should be in DAG");
+
+    assert_eq!(base_node.depth, 0, "Base should be at depth 0");
+    assert_eq!(stacked_node.depth, 1, "Stacked should be at depth 1");
+    assert!(base_node.parent_id.is_none(), "Base has no parent");
+    assert_eq!(
+        stacked_node.parent_id,
+        Some(base.id),
+        "Stacked parent_id should point to base"
+    );
+    assert_eq!(
+        base_node.child_ids,
+        vec![stacked.id],
+        "Base child_ids should contain stacked"
     );
 }
 
@@ -518,5 +595,42 @@ fn test_workspace_conflict_detection() {
     assert_eq!(
         stacked.has_conflicts, true,
         "Stacked workspace should be marked as conflicted"
+    );
+
+    // Fetch workspace status
+    let status = treq_lib::core::workspace_status(workspace_path.to_str().unwrap())
+        .expect("Failed to get workspace status");
+
+    // Workspace list in status should correctly indicate conflicts
+    assert_eq!(
+        status.conflicted_workspace_ids.len(),
+        1,
+        "Should have 1 conflicted workspace"
+    );
+    assert!(
+        status.conflicted_workspace_ids.contains(&stacked_workspace.id),
+        "Stacked workspace should be marked as conflicted"
+    );
+
+    // Verify DAG reflects conflict status
+    let stacked_node = status
+        .dag_nodes
+        .iter()
+        .find(|n| n.workspace.id == stacked_workspace.id)
+        .expect("Stacked workspace should be in DAG");
+    assert!(
+        stacked_node.workspace.has_conflicts,
+        "Stacked workspace node should have has_conflicts = true"
+    );
+
+    // Base workspace should not be conflicted
+    let base_node = status
+        .dag_nodes
+        .iter()
+        .find(|n| n.workspace.id == workspace.id)
+        .expect("Base workspace should be in DAG");
+    assert!(
+        !base_node.workspace.has_conflicts,
+        "Base workspace should not have conflicts"
     );
 }
