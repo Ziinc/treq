@@ -1,8 +1,27 @@
 use std::path::Path;
+use std::collections::{HashMap, HashSet};
+use serde::{Deserialize, Serialize};
 
 use crate::db::Database;
 use crate::jj;
 use crate::local_db;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WorkspaceStatus {
+    pub current: local_db::Workspace,
+    pub target: Option<local_db::Workspace>,
+    pub children: Vec<local_db::Workspace>,
+    pub dag_nodes: Vec<WorkspaceNode>,
+    pub conflicted_workspace_ids: Vec<i64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WorkspaceNode {
+    pub workspace: local_db::Workspace,
+    pub parent_id: Option<i64>,
+    pub child_ids: Vec<i64>,
+    pub depth: usize,
+}
 
 /// Initializes a repository for use with Treq.
 ///
@@ -223,4 +242,140 @@ pub fn stack_workspace(
     workspace.target_branch = Some(base);
 
     Ok(workspace)
+}
+
+/// Gets the status of a workspace, including parent, children, and full DAG hierarchy.
+///
+/// # Arguments
+/// * `workspace_path` - Full path to the workspace directory
+///
+/// # Returns
+/// Returns a WorkspaceStatus containing the current workspace, parent, children, DAG nodes, and conflicted workspace IDs.
+pub fn workspace_status(workspace_path: &str) -> Result<WorkspaceStatus, String> {
+    // Extract workspace name from path (last component)
+    let path = Path::new(workspace_path);
+    let workspace_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or("Invalid workspace path")?;
+
+    // Derive repo_path by going up 3 levels (.../workspaces/name -> ../../..)
+    let repo_path = path
+        .parent() // .../workspaces
+        .and_then(|p| p.parent()) // .../.treq
+        .and_then(|p| p.parent()) // ...
+        .ok_or("Invalid workspace path structure")?
+        .to_str()
+        .ok_or("Failed to convert repo path")?
+        .to_string();
+
+    // Get all workspaces in the repo
+    let all_workspaces = local_db::get_workspaces(&repo_path)
+        .map_err(|e| format!("Failed to get workspaces: {}", e))?;
+
+    // Find current workspace by workspace_path
+    let current_workspace = all_workspaces
+        .iter()
+        .find(|w| w.workspace_path == workspace_name)
+        .cloned()
+        .ok_or("Workspace not found")?;
+
+    // Build branch_name → Workspace lookup map
+    let branch_map: HashMap<String, &local_db::Workspace> = all_workspaces
+        .iter()
+        .map(|w| (w.branch_name.clone(), w))
+        .collect();
+
+    // Find root of hierarchy by tracing upward
+    let mut root_workspace = current_workspace.clone();
+    let mut visited = HashSet::new();
+    visited.insert(root_workspace.id);
+
+    while let Some(target_branch) = &root_workspace.target_branch {
+        if let Some(parent) = branch_map.get(target_branch) {
+            if visited.contains(&parent.id) {
+                // Circular dependency detected, stop tracing
+                break;
+            }
+            visited.insert(parent.id);
+            root_workspace = (*parent).clone();
+        } else {
+            // No parent found, this is a root
+            break;
+        }
+    }
+
+    // Build complete DAG recursively from root
+    let mut dag_nodes = Vec::new();
+    let mut visited = HashSet::new();
+    build_dag_recursive(
+        &root_workspace,
+        &repo_path,
+        None,
+        0,
+        &mut dag_nodes,
+        &mut visited,
+    )?;
+
+    // Find direct parent (workspace whose branch_name matches current.target_branch)
+    let target = current_workspace
+        .target_branch
+        .as_ref()
+        .and_then(|target| branch_map.get(target).map(|w| (*w).clone()));
+
+    // Find direct children (workspaces where target_branch matches current.branch_name)
+    let children: Vec<local_db::Workspace> = local_db::get_workspaces_by_target_branch(
+        &repo_path,
+        &current_workspace.branch_name,
+    )
+    .unwrap_or_default();
+
+    // Collect conflicted workspace IDs from DAG nodes
+    let conflicted_workspace_ids: Vec<i64> = dag_nodes
+        .iter()
+        .filter(|node| node.workspace.has_conflicts)
+        .map(|node| node.workspace.id)
+        .collect();
+
+    Ok(WorkspaceStatus {
+        current: current_workspace,
+        target,
+        children,
+        dag_nodes,
+        conflicted_workspace_ids,
+    })
+}
+
+fn build_dag_recursive(
+    workspace: &local_db::Workspace,
+    repo_path: &str,
+    parent_id: Option<i64>,
+    depth: usize,
+    dag_nodes: &mut Vec<WorkspaceNode>,
+    visited: &mut HashSet<i64>,
+) -> Result<(), String> {
+    if visited.contains(&workspace.id) {
+        return Ok(());
+    }
+
+    visited.insert(workspace.id);
+
+    // Find children of this workspace
+    let children = local_db::get_workspaces_by_target_branch(repo_path, &workspace.branch_name)
+        .unwrap_or_default();
+    let child_ids: Vec<i64> = children.iter().map(|c| c.id).collect();
+
+    dag_nodes.push(WorkspaceNode {
+        workspace: workspace.clone(),
+        parent_id,
+        child_ids: child_ids.clone(),
+        depth,
+    });
+
+    // Recursively process children
+    for child in children {
+        build_dag_recursive(&child, repo_path, Some(workspace.id), depth + 1, dag_nodes, visited)?;
+    }
+
+    Ok(())
 }
