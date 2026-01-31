@@ -81,6 +81,28 @@ impl TestRepo {
         // Push main branch to remote
         Self::run_git(&repo.repo_path, &["push", "-u", "origin", "main"])?;
 
+        // Create a remote branch with a commit for testing
+        // The test expects a "feature.txt" file in the remote branch
+        Self::run_git(&repo.repo_path, &["checkout", "-b", "feature-remote"])?;
+
+        let feature_file = repo.temp_dir.path().join("feature.txt");
+        fs::write(&feature_file, "This is a feature from remote branch")
+            .map_err(|e| format!("Failed to write feature file: {}", e))?;
+
+        Self::run_git(&repo.repo_path, &["add", "feature.txt"])?;
+        Self::run_git(&repo.repo_path, &["commit", "-m", "Add feature.txt"])?;
+
+        // Push the feature branch to remote
+        Self::run_git(&repo.repo_path, &["push", "-u", "origin", "feature-remote"])?;
+
+        // Return to main branch
+        Self::run_git(&repo.repo_path, &["checkout", "main"])?;
+
+        // Fetch to ensure jj knows about the remote branch
+        if init {
+            let _ = treq_lib::jj::jj_git_fetch(&repo.repo_path);
+        }
+
         Ok(repo)
     }
 

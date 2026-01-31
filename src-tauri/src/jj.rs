@@ -1341,7 +1341,10 @@ pub fn get_conflicted_files(
     // 1. Proactively check and update if stale
     if let Ok(true) = is_workspace_stale(workspace_path) {
         if let Err(update_err) = jj_workspace_update_stale(workspace_path) {
-            eprintln!("Failed to update stale workspace in get_conflicted_files: {}", update_err);
+            eprintln!(
+                "Failed to update stale workspace in get_conflicted_files: {}",
+                update_err
+            );
         }
     }
 
@@ -1387,7 +1390,10 @@ fn get_conflicted_files_from_diff_with_retry(
             let err_str = e.to_string();
             if err_str.contains("stale") || err_str.contains("not updated since operation") {
                 if let Err(update_err) = jj_workspace_update_stale(workspace_path) {
-                    eprintln!("Failed to update stale workspace in diff retry: {}", update_err);
+                    eprintln!(
+                        "Failed to update stale workspace in diff retry: {}",
+                        update_err
+                    );
                     return Err(e);
                 }
                 // Retry once
@@ -1401,7 +1407,9 @@ fn get_conflicted_files_from_diff_with_retry(
 
 /// Get conflicted files using jj status approach with retry on stale errors
 /// Extracts the status-based conflict detection logic and adds stale error detection and retry
-fn get_conflicted_files_from_status_with_retry(workspace_path: &str) -> Result<Vec<String>, JjError> {
+fn get_conflicted_files_from_status_with_retry(
+    workspace_path: &str,
+) -> Result<Vec<String>, JjError> {
     let output = command_for("jj")
         .current_dir(workspace_path)
         .args(["status"])
@@ -1414,7 +1422,10 @@ fn get_conflicted_files_from_status_with_retry(workspace_path: &str) -> Result<V
 
         if err_str.contains("stale") || err_str.contains("not updated since operation") {
             if let Err(update_err) = jj_workspace_update_stale(workspace_path) {
-                eprintln!("Failed to update stale workspace in status retry: {}", update_err);
+                eprintln!(
+                    "Failed to update stale workspace in status retry: {}",
+                    update_err
+                );
                 return Ok(Vec::new());
             }
             // Retry once
@@ -1449,7 +1460,10 @@ fn get_conflicted_files_from_status_with_retry(workspace_path: &str) -> Result<V
             }
             if in_conflict_section {
                 let trimmed = line.trim();
-                if trimmed.is_empty() || trimmed.starts_with("Hint:") || trimmed.starts_with("Use `") {
+                if trimmed.is_empty()
+                    || trimmed.starts_with("Hint:")
+                    || trimmed.starts_with("Use `")
+                {
                     break; // End of conflict section
                 }
                 if !trimmed.is_empty() && !trimmed.starts_with("Warning") {
@@ -1468,7 +1482,13 @@ fn get_conflicted_files_from_status_with_retry(workspace_path: &str) -> Result<V
             for branch in &branches {
                 if branch.name.contains("(conflicted)") || branch.name.contains("(conflict)") {
                     // If a branch is conflicted, return a marker
-                    conflicts.push(format!("(branch conflict: {})", branch.name.replace(" (conflicted)", "").replace(" (conflict)", "")));
+                    conflicts.push(format!(
+                        "(branch conflict: {})",
+                        branch
+                            .name
+                            .replace(" (conflicted)", "")
+                            .replace(" (conflict)", "")
+                    ));
                 }
             }
         }
@@ -2058,6 +2078,25 @@ pub fn get_branches(repo_path: &str) -> Result<Vec<JjBranch>, JjError> {
     }
 
     Ok(branches)
+}
+
+/// Check if a remote branch exists in jj
+///
+/// # Arguments
+/// * `repo_path` - Path to the repository
+/// * `branch_ref` - Branch reference in jj format (e.g., "feature@origin")
+///
+/// # Returns
+/// Returns true if the remote branch exists, false otherwise
+pub fn check_remote_branch_exists(repo_path: &str, branch_ref: &str) -> Result<bool, JjError> {
+    let output = command_for("jj")
+        .current_dir(repo_path)
+        .args(["log", "-r", branch_ref, "-T", "commit_id", "-n", "1"])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    // If the revision exists, command succeeds
+    Ok(output.status.success() && !output.stdout.is_empty())
 }
 
 /// Get commit log from fork point to HEAD for a workspace
@@ -3112,9 +3151,9 @@ target/debug/deps/lib.so    2-sided conflict including 1 deletion and an executa
             local_repo_str,
             "feature-workspace",
             "feature-branch",
-            true,                          // new_branch
+            true, // new_branch
             Some("origin/feature-branch"), // source from remote in git format
-            // None,
+                  // None,
         );
 
         if workspace_result.is_err() {
