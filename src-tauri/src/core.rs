@@ -1,10 +1,17 @@
-use std::path::Path;
-use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
+use std::path::Path;
 
 use crate::db::Database;
 use crate::jj;
 use crate::local_db;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WorkspaceCommit {
+    pub hash: String,
+    pub timestamp: String,
+    pub message: String,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WorkspaceStatus {
@@ -13,6 +20,7 @@ pub struct WorkspaceStatus {
     pub children: Vec<local_db::Workspace>,
     pub dag_nodes: Vec<WorkspaceNode>,
     pub conflicted_workspace_ids: Vec<i64>,
+    pub commits_ahead_of_target: Vec<WorkspaceCommit>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -87,7 +95,7 @@ pub fn create_workspace(
     };
 
     let new_branch: bool = !branch_exists;
-    let workspace_path = jj::create_workspace(
+    let workspace_full_path = jj::create_workspace(
         repo_path,
         branch_name,
         branch_name,
@@ -96,10 +104,17 @@ pub fn create_workspace(
     )
     .map_err(|e| format!("Failed to create workspace: {}", e))?;
 
+    // Extract just the sanitized workspace name from the full path
+    let workspace_path = Path::new(&workspace_full_path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or("Failed to extract workspace name from path")?
+        .to_string();
+
     let workspace_id = local_db::add_workspace(
         repo_path,
-        workspace_path.to_string(),
-        workspace_path.to_string(),
+        workspace_path.clone(),
+        workspace_path.clone(),
         branch_name.to_string(),
         Some(intent.unwrap_or("").to_string()),
     )
@@ -324,11 +339,9 @@ pub fn workspace_status(workspace_path: &str) -> Result<WorkspaceStatus, String>
         .and_then(|target| branch_map.get(target).map(|w| (*w).clone()));
 
     // Find direct children (workspaces where target_branch matches current.branch_name)
-    let children: Vec<local_db::Workspace> = local_db::get_workspaces_by_target_branch(
-        &repo_path,
-        &current_workspace.branch_name,
-    )
-    .unwrap_or_default();
+    let children: Vec<local_db::Workspace> =
+        local_db::get_workspaces_by_target_branch(&repo_path, &current_workspace.branch_name)
+            .unwrap_or_default();
 
     // Collect conflicted workspace IDs from DAG nodes
     let conflicted_workspace_ids: Vec<i64> = dag_nodes
@@ -337,12 +350,43 @@ pub fn workspace_status(workspace_path: &str) -> Result<WorkspaceStatus, String>
         .map(|node| node.workspace.id)
         .collect();
 
+    // Calculate commits ahead of target
+    let commits_ahead_of_target = if let Some(target_workspace) = &target {
+        match jj::jj_get_commits_ahead(workspace_path, &target_workspace.branch_name) {
+            Ok(commits_ahead) => commits_ahead
+                .commits
+                .iter()
+                .map(|c| WorkspaceCommit {
+                    hash: c.commit_id.clone(),
+                    timestamp: c.timestamp.clone(),
+                    message: c.description.clone(),
+                })
+                .collect(),
+            Err(_) => Vec::new(),
+        }
+    } else {
+        // No target branch, commits are ahead of main
+        match jj::jj_get_commits_ahead(workspace_path, "main") {
+            Ok(commits_ahead) => commits_ahead
+                .commits
+                .iter()
+                .map(|c| WorkspaceCommit {
+                    hash: c.commit_id.clone(),
+                    timestamp: c.timestamp.clone(),
+                    message: c.description.clone(),
+                })
+                .collect(),
+            Err(_) => Vec::new(),
+        }
+    };
+
     Ok(WorkspaceStatus {
         current: current_workspace,
         target,
         children,
         dag_nodes,
         conflicted_workspace_ids,
+        commits_ahead_of_target,
     })
 }
 
@@ -374,8 +418,72 @@ fn build_dag_recursive(
 
     // Recursively process children
     for child in children {
-        build_dag_recursive(&child, repo_path, Some(workspace.id), depth + 1, dag_nodes, visited)?;
+        build_dag_recursive(
+            &child,
+            repo_path,
+            Some(workspace.id),
+            depth + 1,
+            dag_nodes,
+            visited,
+        )?;
     }
+
+    Ok(())
+}
+
+/// Merges a workspace's commits into the home repository and cleans up the workspace.
+///
+/// # Arguments
+/// * `repo_path` - Path to the repository root
+/// * `workspace_id` - ID of the workspace to merge
+/// * `message` - Commit message for the merge
+///
+/// # Returns
+/// Returns Ok(()) on success, or an error message on failure.
+pub fn merge_workspace(repo_path: &str, workspace_id: i64, message: &str) -> Result<(), String> {
+    // Get the workspace from the database
+    let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
+        .map_err(|e| format!("Failed to get workspace from db: {}", e))?
+        .ok_or("Workspace not found in database")?;
+
+    let workspace_path = Path::new(repo_path)
+        .join(".treq")
+        .join("workspaces")
+        .join(&workspace.workspace_path);
+
+    let workspace_path_str = workspace_path
+        .to_str()
+        .ok_or("Failed to convert workspace path to string")?;
+
+    // Get target branch for comparison
+    let target_branch = workspace.target_branch.as_deref().unwrap_or("main");
+
+    // Get commits ahead of target
+    let commits_ahead = jj::jj_get_commits_ahead(workspace_path_str, target_branch)
+        .map_err(|e| format!("Failed to get commits: {}", e))?;
+
+    if commits_ahead.commits.is_empty() {
+        return Err("No commits to merge".to_string());
+    }
+
+    // Create a merge commit between the workspace branch and target branch
+    jj::jj_create_merge_commit(repo_path, &workspace.branch_name, target_branch, message)
+        .map_err(|e| format!("Failed to create merge commit: {}", e))?;
+
+    // Update the home repo state to pick up the merged commits
+    jj::jj_status(repo_path).map_err(|e| format!("Failed to update home repo status: {}", e))?;
+
+    // Checkout the target branch to ensure we're not in detached HEAD state
+    jj::checkout_branch(repo_path, target_branch)
+        .map_err(|e| format!("Failed to checkout target branch: {}", e))?;
+
+    // Remove the workspace from jj (also deletes the workspace directory)
+    jj::remove_workspace(repo_path, workspace_path_str)
+        .map_err(|e| format!("Failed to remove workspace from jj: {}", e))?;
+
+    // Remove from database
+    local_db::delete_workspace(repo_path, workspace_id)
+        .map_err(|e| format!("Failed to delete workspace from db: {}", e))?;
 
     Ok(())
 }

@@ -1190,8 +1190,15 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
 
     // Get branch name - different logic for workspaces vs main repo
     let branch = if let Some(ref rp) = repo_path {
-        // For workspaces: get branch_name from the workspace record in db
-        let workspace = local_db::get_workspace_by_path(rp, workspace_path)
+        // For workspaces: extract just the workspace name from the full path
+        let path = Path::new(workspace_path);
+        let workspace_name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| JjError::IoError("Invalid workspace path".to_string()))?;
+
+        // Get branch_name from the workspace record in db
+        let workspace = local_db::get_workspace_by_path(rp, workspace_name)
             .map_err(|e| JjError::IoError(format!("Failed to query workspace: {}", e)))?
             .ok_or_else(|| JjError::WorkspaceNotFound(workspace_path.to_string()))?;
         workspace.branch_name
@@ -2571,6 +2578,57 @@ pub fn jj_create_merge_commit(
         conflicted_files,
         merge_commit_id,
     })
+}
+
+/// Updates the home repo's state by running jj st
+///
+/// # Arguments
+/// * `repo_path` - Path to the home repository
+///
+/// # Returns
+/// Returns Ok(()) on success, or a JjError on failure.
+pub fn jj_status(repo_path: &str) -> Result<(), JjError> {
+    let output = command_for("jj")
+        .current_dir(repo_path)
+        .args(["st"])
+        .output()
+        .map_err(|e| JjError::IoError(format!("Failed to run jj st: {}", e)))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(JjError::IoError(format!(
+            "jj st failed: {}",
+            stderr
+        )));
+    }
+
+    Ok(())
+}
+
+/// Checks out a branch in the repository using git
+///
+/// # Arguments
+/// * `repo_path` - Path to the repository
+/// * `branch_name` - Name of the branch to check out
+///
+/// # Returns
+/// Returns Ok(()) on success, or a JjError on failure.
+pub fn checkout_branch(repo_path: &str, branch_name: &str) -> Result<(), JjError> {
+    let output = command_for("git")
+        .current_dir(repo_path)
+        .args(["checkout", branch_name])
+        .output()
+        .map_err(|e| JjError::IoError(format!("Failed to checkout branch: {}", e)))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(JjError::IoError(format!(
+            "git checkout failed: {}",
+            stderr
+        )));
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

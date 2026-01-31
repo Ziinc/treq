@@ -1,7 +1,6 @@
 mod e2e_test_helpers;
 
 use e2e_test_helpers::{JjVerifier, TestRepo};
-use tauri::path::BaseDirectory;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -151,6 +150,8 @@ fn test_can_create_workspace_from_remote_branch() {
     );
 }
 
+// TODO: create a workspace from non-default home repo branch
+
 // =============================================================================
 // Test: Can create a stacked workspace (workspace based on another workspace's branch)
 // =============================================================================
@@ -219,8 +220,7 @@ fn test_can_create_stacked_workspace() {
         "Base workspace should have 1 child"
     );
     assert_eq!(
-        base_status.children[0].branch_name,
-        "feat/stacked",
+        base_status.children[0].branch_name, "feat/stacked",
         "Child should be the stacked workspace"
     );
     assert!(
@@ -276,85 +276,145 @@ fn test_can_create_stacked_workspace() {
 // =============================================================================
 
 #[test]
-// TODO: not yet refactored
-fn test_can_merge_workspace() {
-    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
-
-    // Ensure workspaces directory exists
-    repo.ensure_workspaces_dir()
-        .expect("Failed to create workspaces dir");
+fn test_can_merge_workspace_into_home_repo() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
 
     // Create workspace
-    let workspace_name = treq_lib::jj::create_workspace(
+    let workspace: Workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
         "feature-merge",
-        "feature-merge",
-        true,
+        Some("merging feature"),
         None,
     )
     .expect("Failed to create workspace");
 
-    let workspace_path = repo.workspaces_dir().join(&workspace_name);
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
     let workspace_path_str = workspace_path.to_str().unwrap();
 
-    // Add workspace to database (required for jj_commit to work)
-    treq_lib::local_db::add_workspace(
-        &repo.repo_path,
-        workspace_name.clone(),
-        workspace_path_str.to_string(),
-        "feature-merge".to_string(),
-        None,
-    )
-    .expect("Failed to add workspace to DB");
-
-    // Add a file to the workspace
+    // Add a file to the workspace and commit
     let feature_file = workspace_path.join("merge-feature.txt");
     fs::write(&feature_file, "merge feature content").expect("Failed to write feature file");
-
-    // Commit the changes
     treq_lib::jj::jj_commit(workspace_path_str, "Add merge feature").expect("Failed to commit");
 
-    // Get commits ahead to verify there's something to merge
-    let commits_ahead = treq_lib::jj::jj_get_commits_ahead(workspace_path_str, "main")
-        .expect("Failed to get commits ahead");
-
+    // Get workspace status - should show commits ahead of target
+    let status = treq_lib::core::workspace_status(workspace_path_str)
+        .expect("Failed to get workspace status");
+    assert_eq!(
+        status.commits_ahead_of_target.len(),
+        1,
+        "Status should show 1 commit ahead of target"
+    );
     assert!(
-        commits_ahead.total_count > 0,
-        "Should have commits ahead of main"
+        !status.commits_ahead_of_target[0].timestamp.is_empty(),
+        "Commit timestamp should be a non-empty string"
+    );
+    assert_ne!(
+        status.commits_ahead_of_target[0].timestamp,
+        "NaN",
+        "Commit timestamp should not be NaN"
     );
 
-    // JJ VERIFICATION: Check jj log before merge
-    let log_before =
-        JjVerifier::get_log(workspace_path_str, 5).expect("Failed to get log before merge");
     assert!(
-        log_before.contains("Add merge feature"),
-        "Commit should appear in log before merge"
+        !status.commits_ahead_of_target[0].hash.is_empty(),
+        "Commit hash should be a non-empty string"
     );
+    assert!(
+        !status.commits_ahead_of_target[0].message.is_empty(),
+        "Commit message should be a non-empty string"
+    );
+    
 
-    // Create merge commit
-    let merge_result = treq_lib::jj::jj_create_merge_commit(
-        workspace_path_str,
-        "feature-merge",
-        "main",
+    // Get the current branch before merge (should be on main)
+    let initial_branch = Command::new("git")
+        .current_dir(&repo.repo_path)
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .expect("Failed to get current branch");
+    let initial_branch_str = String::from_utf8_lossy(&initial_branch.stdout).trim().to_string();
+
+    // Perform the merge
+    treq_lib::core::merge_workspace(
+        &repo.repo_path,
+        workspace.id,
         "Merge feature-merge into main",
     )
-    .expect("Failed to create merge commit");
+    .expect("Failed to merge workspace");
 
+    // Verify the file is now present in the main repo
+    let main_feature_file = Path::new(&repo.repo_path).join("merge-feature.txt");
     assert!(
-        merge_result.success,
-        "Merge should succeed: {}",
-        merge_result.message
+        main_feature_file.exists(),
+        "Feature file should exist in main repo after merge"
     );
 
-    // JJ VERIFICATION: Check jj log after merge shows merge commit
-    let log_after =
-        JjVerifier::get_log(workspace_path_str, 5).expect("Failed to get log after merge");
+    // Verify jj picks up the merge commit
+    let log = JjVerifier::get_log(&repo.repo_path, 5).expect("Failed to get jj log");
     assert!(
-        log_after.contains("Merge") || log_after.contains("merge"),
-        "Merge commit should appear in jj log, got: {}",
-        log_after
+        log.contains("Merge feature-merge into main") || log.contains("merge"),
+        "JJ log should contain merge commit, got: {}",
+        log
+    );
+
+    // Verify git picks up the merge commit
+    let git_log = Command::new("git")
+        .current_dir(&repo.repo_path)
+        .args(["log", "--oneline", "-5"])
+        .output()
+        .expect("Failed to run git log");
+    let git_log_str = String::from_utf8_lossy(&git_log.stdout);
+    assert!(
+        git_log_str.contains("Merge") || git_log_str.contains("merge"),
+        "Git log should contain merge commit, got: {}",
+        git_log_str
+    );
+
+    // Verify workspace directory is deleted
+    assert!(
+        !workspace_path.exists(),
+        "Workspace directory should be deleted after merge"
+    );
+
+    // Verify workspace is removed from database (not in list_workspaces)
+    let workspaces =
+        treq_lib::core::list_workspaces(&repo.repo_path).expect("Failed to list workspaces");
+    assert!(
+        !workspaces.iter().any(|w| w.id == workspace.id),
+        "Merged workspace should not appear in list_workspaces"
+    );
+
+    // Verify workspace is not in jj workspace list
+    let jj_workspaces =
+        JjVerifier::list_workspaces(&repo.repo_path).expect("Failed to list jj workspaces");
+    assert!(
+        !jj_workspaces.contains(&workspace.workspace_name),
+        "Merged workspace should not appear in jj workspace list, got: {:?}",
+        jj_workspaces
+    );
+
+    // Verify home repo is correctly checked out to the branch it was at prior to the merge
+    // and is not in detached HEAD state
+    let final_branch = Command::new("git")
+        .current_dir(&repo.repo_path)
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .expect("Failed to get current branch after merge");
+    let final_branch_str = String::from_utf8_lossy(&final_branch.stdout).trim().to_string();
+
+    assert_eq!(
+        final_branch_str, initial_branch_str,
+        "Home repo should remain on the same branch after merge, was on '{}', now on '{}'",
+        initial_branch_str, final_branch_str
+    );
+
+    assert!(
+        final_branch_str != "HEAD",
+        "Home repo should not be in detached HEAD state after merge"
     );
 }
+
+// TODO: rolling merge for stacked workspaces
+
+// TODO: merge individual workspace into another workspace
 
 // =============================================================================
 // Test: Can delete a workspace
@@ -427,10 +487,12 @@ fn test_can_change_workspace_target_branch() {
     repo.commit_file("develop.txt", "develop content", "Develop commit")
         .expect("Failed to commit");
 
-    TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "develop"])
+    let create_branch_args: &[&str] = &["checkout", "-b", "develop"];
+    TestRepo::run_git(&repo.repo_path, create_branch_args)
         .expect("Failed to create develop branch");
 
-    TestRepo::run_git(&repo.repo_path, &["checkout", "main"]).expect("Failed to checkout main");
+    let checkout_args: &[&str] = &["checkout", "main"];
+    TestRepo::run_git(&repo.repo_path, checkout_args).expect("Failed to checkout main");
 
     // Ensure workspaces directory exists
     repo.ensure_workspaces_dir()
@@ -608,7 +670,9 @@ fn test_workspace_conflict_detection() {
         "Should have 1 conflicted workspace"
     );
     assert!(
-        status.conflicted_workspace_ids.contains(&stacked_workspace.id),
+        status
+            .conflicted_workspace_ids
+            .contains(&stacked_workspace.id),
         "Stacked workspace should be marked as conflicted"
     );
 
