@@ -3505,7 +3505,7 @@ target/debug/deps/lib.so    2-sided conflict including 1 deletion and an executa
             return;
         }
 
-        let local_repo_str = local_repo.to_str().unwrap();
+        let _local_repo_str = local_repo.to_str().unwrap();
 
         // Initialize jj in the local repo
         let jj_init = command_for("jj")
@@ -3649,7 +3649,7 @@ target/debug/deps/lib.so    2-sided conflict including 1 deletion and an executa
             return;
         }
 
-        let local_repo_str = local_repo.to_str().unwrap();
+        let _local_repo_str = local_repo.to_str().unwrap();
 
         // Initialize jj in the local repo
         let jj_init = command_for("jj")

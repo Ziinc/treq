@@ -210,6 +210,7 @@ impl TestRepo {
 /// Helpers for verifying jj state
 pub struct JjVerifier;
 
+#[allow(dead_code)]
 impl JjVerifier {
     /// Get list of jj workspaces via `jj workspace list`
     pub fn list_workspaces(repo_path: &str) -> Result<Vec<String>, String> {

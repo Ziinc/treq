@@ -50,27 +50,13 @@ pub fn add_workspace_to_db(
 /// Combined command: creates jj workspace + adds to database atomically
 #[tauri::command]
 pub fn create_workspace(
-    state: State<AppState>,
+    _state: State<AppState>,
     repo_path: String,
     branch_name: String,
     new_branch: bool,
     source_branch: Option<String>,
     metadata: Option<String>,
 ) -> Result<i64, String> {
-    // Load inclusion patterns from database
-    // let inclusion_patterns = {
-    //     let db = state.db.lock().unwrap();
-    //     db.get_repo_setting(&repo_path, "included_copy_files")
-    //         .ok()
-    //         .flatten()
-    //         .map(|patterns_str| {
-    //             patterns_str
-    //                 .lines()
-    //                 .map(|s| s.trim().to_string())
-    //                 .filter(|s| !s.is_empty())
-    //                 .collect::<Vec<String>>()
-    //         })
-    // };
 
     // Create the jj workspace (returns sanitized workspace name)
     let workspace_name = jj::create_workspace(
