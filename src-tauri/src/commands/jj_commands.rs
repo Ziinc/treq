@@ -6,7 +6,7 @@ use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub fn jj_create_workspace(
-    state: State<AppState>,
+    _state: State<AppState>,
     _app: AppHandle,
     repo_path: String,
     workspace_name: String,

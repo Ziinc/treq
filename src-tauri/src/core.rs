@@ -184,7 +184,7 @@ pub fn list_workspaces(repo_path: &str) -> Result<Vec<local_db::Workspace>, Stri
                 .expect("not a valid path")
                 .to_string();
 
-            let files = match jj::jj_get_changed_files(&workspace_path) {
+            let _files = match jj::jj_get_changed_files(&workspace_path) {
                 Ok(files) => files,
                 Err(jj::JjError::IoError(e))
                     if e.contains("stale") || e.contains("not updated since operation") =>
@@ -494,6 +494,9 @@ pub fn merge_workspace(repo_path: &str, workspace_id: i64, message: &str) -> Res
     Ok(())
 }
 
+/// Updates a workspace's target branch and/or intent.
+/// Rebases the workspace to the target branch and updates metadata.
+/// The workspace's branch name remains unchanged.
 pub fn update_workspace(
     repo_path: &str,
     workspace_id: i64,

@@ -163,7 +163,6 @@ pub fn index_workspace_files(
 mod tests {
     use super::*;
     use std::fs;
-    use std::process::Command;
     use tempfile::TempDir;
 
     fn setup_jj_repo(temp_dir: &TempDir) -> String {

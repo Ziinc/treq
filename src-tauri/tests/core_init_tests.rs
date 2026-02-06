@@ -1,7 +1,6 @@
 mod e2e_test_helpers;
 
 use e2e_test_helpers::{JjVerifier, TestRepo};
-use std::fs;
 use std::path::Path;
 
 // =============================================================================
