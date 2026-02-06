@@ -17,6 +17,7 @@ pub struct Workspace {
     pub metadata: Option<String>,
     pub target_branch: Option<String>,
     pub has_conflicts: bool,
+    pub intent: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -58,6 +59,19 @@ pub struct PendingReview {
 
 pub fn get_local_db_path(repo_path: &str) -> PathBuf {
     Path::new(repo_path).join(".treq").join("local.db")
+}
+
+/// Extract intent from workspace metadata
+fn extract_intent_from_metadata(metadata: &Option<String>) -> Option<String> {
+    metadata.as_ref().and_then(|m| {
+        serde_json::from_str::<serde_json::Value>(m)
+            .ok()
+            .and_then(|v| {
+                v.get("intent")
+                    .and_then(|i| i.as_str())
+                    .map(|s| s.to_string())
+            })
+    })
 }
 
 /// Initialize the local database for a repository.
@@ -340,6 +354,8 @@ pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
 
     let workspaces = stmt
         .query_map([], |row| {
+            let metadata: Option<String> = row.get(5)?;
+            let intent = extract_intent_from_metadata(&metadata);
             Ok(Workspace {
                 id: row.get(0)?,
                 repo_path: repo_path.to_string(),
@@ -347,9 +363,10 @@ pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
                 workspace_path: row.get(2)?,
                 branch_name: row.get(3)?,
                 created_at: row.get(4)?,
-                metadata: row.get(5)?,
+                metadata,
                 target_branch: row.get(6)?,
                 has_conflicts: row.get::<_, i64>(7)? != 0,
+                intent,
             })
         })
         .map_err(|e| format!("Failed to query workspaces: {}", e))?;
@@ -367,6 +384,8 @@ pub fn get_workspace_by_id(repo_path: &str, id: i64) -> Result<Option<Workspace>
 
     let workspace = stmt
         .query_row([id], |row| {
+            let metadata: Option<String> = row.get(5)?;
+            let intent = extract_intent_from_metadata(&metadata);
             Ok(Workspace {
                 id: row.get(0)?,
                 repo_path: repo_path.to_string(),
@@ -374,9 +393,10 @@ pub fn get_workspace_by_id(repo_path: &str, id: i64) -> Result<Option<Workspace>
                 workspace_path: row.get(2)?,
                 branch_name: row.get(3)?,
                 created_at: row.get(4)?,
-                metadata: row.get(5)?,
+                metadata,
                 target_branch: row.get(6)?,
                 has_conflicts: row.get::<_, i64>(7)? != 0,
+                intent,
             })
         })
         .optional()
@@ -396,6 +416,8 @@ pub fn get_workspace_by_path(
 
     let workspace = stmt
         .query_row([workspace_path], |row| {
+            let metadata: Option<String> = row.get(5)?;
+            let intent = extract_intent_from_metadata(&metadata);
             Ok(Workspace {
                 id: row.get(0)?,
                 repo_path: repo_path.to_string(),
@@ -403,9 +425,10 @@ pub fn get_workspace_by_path(
                 workspace_path: row.get(2)?,
                 branch_name: row.get(3)?,
                 created_at: row.get(4)?,
-                metadata: row.get(5)?,
+                metadata,
                 target_branch: row.get(6)?,
                 has_conflicts: row.get::<_, i64>(7)? != 0,
+                intent,
             })
         })
         .optional()
@@ -471,6 +494,20 @@ pub fn update_workspace_target_branch(
     Ok(())
 }
 
+pub fn update_workspace_branch_name(
+    repo_path: &str,
+    id: i64,
+    branch_name: &str,
+) -> Result<(), String> {
+    let conn = get_connection(repo_path)?;
+    conn.execute(
+        "UPDATE workspaces SET branch_name = ?1 WHERE id = ?2",
+        params![branch_name, id],
+    )
+    .map_err(|e| format!("Failed to update workspace branch name: {}", e))?;
+    Ok(())
+}
+
 /// Get all workspaces targeting a specific branch
 pub fn get_workspaces_by_target_branch(
     repo_path: &str,
@@ -483,6 +520,8 @@ pub fn get_workspaces_by_target_branch(
 
     let workspaces = stmt
         .query_map([target_branch], |row| {
+            let metadata: Option<String> = row.get(5)?;
+            let intent = extract_intent_from_metadata(&metadata);
             Ok(Workspace {
                 id: row.get(0)?,
                 repo_path: repo_path.to_string(),
@@ -490,9 +529,10 @@ pub fn get_workspaces_by_target_branch(
                 workspace_path: row.get(2)?,
                 branch_name: row.get(3)?,
                 created_at: row.get(4)?,
-                metadata: row.get(5)?,
+                metadata,
                 target_branch: row.get(6)?,
                 has_conflicts: row.get::<_, i64>(7)? != 0,
+                intent,
             })
         })
         .map_err(|e| format!("Failed to query workspaces: {}", e))?;
@@ -646,6 +686,7 @@ pub fn rebuild_workspaces_from_filesystem(repo_path: &str) -> Result<Vec<Workspa
             metadata: None,
             target_branch: None,
             has_conflicts: false,
+            intent: None,
         });
     }
 

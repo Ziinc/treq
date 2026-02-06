@@ -13,6 +13,12 @@ pub struct WorkspaceCommit {
     pub message: String,
 }
 
+pub enum MaybeEmptyParam<T> {
+    EmptyValue,
+    Omitted,
+    Some(T),
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WorkspaceStatus {
     pub current: local_db::Workspace,
@@ -486,4 +492,64 @@ pub fn merge_workspace(repo_path: &str, workspace_id: i64, message: &str) -> Res
         .map_err(|e| format!("Failed to delete workspace from db: {}", e))?;
 
     Ok(())
+}
+
+pub fn update_workspace(
+    repo_path: &str,
+    workspace_id: i64,
+    target_branch: MaybeEmptyParam<String>,
+    intent: MaybeEmptyParam<String>,
+) -> Result<local_db::Workspace, String> {
+    let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
+        .map_err(|e| format!("Failed to get workspace from db: {}", e))?
+        .ok_or("Workspace not found in database")?;
+
+    let workspace_path = Path::new(repo_path)
+        .join(".treq")
+        .join("workspaces")
+        .join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path
+        .to_str()
+        .ok_or("Failed to convert workspace path to string")?;
+
+    match target_branch {
+        MaybeEmptyParam::EmptyValue => {
+            local_db::update_workspace_target_branch(repo_path, workspace_id, "main")
+                .map_err(|e| format!("Failed to update target branch: {}", e))?;
+            jj::jj_rebase_onto(workspace_path_str, "main")
+                .map_err(|e| format!("Failed to rebase workspace: {}", e))?;
+        }
+        MaybeEmptyParam::Some(branch) => {
+            // // First, fetch in the main repo to ensure git branches are available
+            let _ = jj::jj_git_fetch(repo_path);
+
+            // Rebase workspace onto the target commit
+            let rebase_result = jj::jj_rebase_onto(workspace_path_str, &branch)
+                .map_err(|e| format!("Failed to rebase workspace: {}", e))?;
+
+            if !rebase_result.success {
+                return Err(format!("Rebase failed: {}", rebase_result.message));
+            }
+
+            // Update database with new target branch
+            local_db::update_workspace_target_branch(repo_path, workspace_id, &branch)
+                .map_err(|e| format!("Failed to update target branch: {}", e))?;
+        }
+        MaybeEmptyParam::Omitted => {}
+    }
+
+    if let MaybeEmptyParam::Some(intent_str) = intent {
+        let current_metadata = workspace.metadata.as_deref().unwrap_or("{}");
+        let mut meta: serde_json::Value =
+            serde_json::from_str(current_metadata).unwrap_or(serde_json::json!({}));
+        meta["intent"] = serde_json::Value::String(intent_str.to_string());
+        let new_metadata = serde_json::to_string(&meta)
+            .map_err(|e| format!("Failed to serialize metadata: {}", e))?;
+        local_db::update_workspace_metadata(repo_path, workspace_id, &new_metadata)
+            .map_err(|e| format!("Failed to update metadata: {}", e))?;
+    }
+
+    local_db::get_workspace_by_id(repo_path, workspace_id)
+        .map_err(|e| format!("Failed to get updated workspace: {}", e))?
+        .ok_or_else(|| "Workspace not found after update".to_string())
 }
