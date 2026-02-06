@@ -2596,10 +2596,7 @@ pub fn jj_status(repo_path: &str) -> Result<(), JjError> {
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(JjError::IoError(format!(
-            "jj st failed: {}",
-            stderr
-        )));
+        return Err(JjError::IoError(format!("jj st failed: {}", stderr)));
     }
 
     Ok(())
@@ -2622,10 +2619,7 @@ pub fn checkout_branch(repo_path: &str, branch_name: &str) -> Result<(), JjError
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(JjError::IoError(format!(
-            "git checkout failed: {}",
-            stderr
-        )));
+        return Err(JjError::IoError(format!("git checkout failed: {}", stderr)));
     }
 
     Ok(())

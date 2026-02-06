@@ -5,6 +5,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
+use treq_lib::core::MaybeEmptyParam;
 use treq_lib::local_db::Workspace;
 
 // =============================================================================
@@ -309,8 +310,7 @@ fn test_can_merge_workspace_into_home_repo() {
         "Commit timestamp should be a non-empty string"
     );
     assert_ne!(
-        status.commits_ahead_of_target[0].timestamp,
-        "NaN",
+        status.commits_ahead_of_target[0].timestamp, "NaN",
         "Commit timestamp should not be NaN"
     );
 
@@ -322,7 +322,6 @@ fn test_can_merge_workspace_into_home_repo() {
         !status.commits_ahead_of_target[0].message.is_empty(),
         "Commit message should be a non-empty string"
     );
-    
 
     // Get the current branch before merge (should be on main)
     let initial_branch = Command::new("git")
@@ -330,7 +329,9 @@ fn test_can_merge_workspace_into_home_repo() {
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .output()
         .expect("Failed to get current branch");
-    let initial_branch_str = String::from_utf8_lossy(&initial_branch.stdout).trim().to_string();
+    let initial_branch_str = String::from_utf8_lossy(&initial_branch.stdout)
+        .trim()
+        .to_string();
 
     // Perform the merge
     treq_lib::core::merge_workspace(
@@ -398,7 +399,9 @@ fn test_can_merge_workspace_into_home_repo() {
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .output()
         .expect("Failed to get current branch after merge");
-    let final_branch_str = String::from_utf8_lossy(&final_branch.stdout).trim().to_string();
+    let final_branch_str = String::from_utf8_lossy(&final_branch.stdout)
+        .trim()
+        .to_string();
 
     assert_eq!(
         final_branch_str, initial_branch_str,
@@ -479,95 +482,101 @@ fn test_can_delete_workspace() {
 // =============================================================================
 
 #[test]
-// TODO: not yet refactored
-fn test_can_change_workspace_target_branch() {
+fn test_can_update_workspace() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
-    // Create another branch to use as target
-    repo.commit_file("develop.txt", "develop content", "Develop commit")
-        .expect("Failed to commit");
-
-    let create_branch_args: &[&str] = &["checkout", "-b", "develop"];
-    TestRepo::run_git(&repo.repo_path, create_branch_args)
-        .expect("Failed to create develop branch");
-
-    let checkout_args: &[&str] = &["checkout", "main"];
-    TestRepo::run_git(&repo.repo_path, checkout_args).expect("Failed to checkout main");
-
-    // Ensure workspaces directory exists
-    repo.ensure_workspaces_dir()
-        .expect("Failed to create workspaces dir");
-
-    // Create workspace
-    let workspace_name = treq_lib::jj::create_workspace(
+    let workspace: Workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
-        "feature-target",
-        "feature-target",
-        true,
+        "feat/update-test",
+        Some("initial feature"),
         None,
     )
     .expect("Failed to create workspace");
 
-    let workspace_path = repo.workspaces_dir().join(&workspace_name);
-    let workspace_path_str = workspace_path.to_str().unwrap();
-
-    // Add to local database with initial target branch
-    let workspace_id = treq_lib::local_db::add_workspace(
+    let updated = treq_lib::core::update_workspace(
         &repo.repo_path,
-        workspace_name.clone(),
-        workspace_path_str.to_string(),
-        "feature-target".to_string(),
+        workspace.id,
+        MaybeEmptyParam::Omitted,
+        MaybeEmptyParam::Some("develop different feature".to_string()),
+    )
+    .expect("Failed to update workspace");
+
+    // correctly updates intent
+    assert_eq!(
+        updated.intent,
+        Some("develop different feature".to_string()),
+        "Workspace intent should be updated"
+    );
+    assert_eq!(
+        updated.branch_name, workspace.branch_name,
+        "Workspace branch name should remain unchanged after update"
+    );
+}
+
+#[test]
+fn test_update_workspace_target_branch_perform_rebase() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    // base is
+    let workspace: Workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/initial",
+        Some("initial feature"),
         None,
     )
-    .expect("Failed to add workspace to DB");
+    .expect("Failed to create workspace");
 
-    // Set initial target branch
-    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, workspace_id, "main")
-        .expect("Failed to set initial target branch");
+    // create the develop branch
+    let create_branch_args: &[&str] = &["checkout", "-b", "develop"];
+    TestRepo::run_git(&repo.repo_path, create_branch_args)
+        .expect("Failed to create develop branch");
 
-    // Verify initial target branch
-    let workspaces =
-        treq_lib::local_db::get_workspaces(&repo.repo_path).expect("Failed to get workspaces");
+    // add a commit to the develop branch
+    repo.commit_file("develop.txt", "develop content", "Develop commit")
+        .expect("Failed to commit");
 
-    let workspace = workspaces.iter().find(|w| w.id == workspace_id).unwrap();
-    assert_eq!(workspace.target_branch.as_deref(), Some("main"));
+    // check out main branch on the home repo
 
-    // JJ VERIFICATION: Get parent before rebase
-    let parent_before = JjVerifier::get_parent_info(workspace_path_str).unwrap_or_default();
+    let checkout_args: &[&str] = &["checkout", "main"];
+    TestRepo::run_git(&repo.repo_path, checkout_args).expect("Failed to checkout main");
 
-    // Rebase onto develop branch
-    let rebase_result =
-        treq_lib::jj::jj_rebase_onto(workspace_path_str, "develop").expect("Failed to rebase");
+    // change the target branch of the workspace to the develop branch
+    let updated = treq_lib::core::update_workspace(
+        &repo.repo_path,
+        workspace.id,
+        MaybeEmptyParam::Some("develop".to_string()),
+        MaybeEmptyParam::Omitted,
+    )
+    .expect("Failed to update workspace");
 
-    assert!(rebase_result.success, "Rebase should succeed");
-
-    // JJ VERIFICATION: After rebase, the file from develop branch should be accessible
-    // (workspace is now based on develop)
-    let log_after =
-        JjVerifier::get_log(workspace_path_str, 5).expect("Failed to get log after rebase");
-    assert!(
-        log_after.contains("Develop") || log_after.contains("develop"),
-        "Log should show develop branch history after rebase, got: {}",
-        log_after
-    );
-
-    // Update target branch
-    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, workspace_id, "develop")
-        .expect("Failed to update target branch");
-
-    // Verify target branch was changed
-    let workspaces =
-        treq_lib::local_db::get_workspaces(&repo.repo_path).expect("Failed to get workspaces");
-
-    let workspace = workspaces.iter().find(|w| w.id == workspace_id).unwrap();
     assert_eq!(
-        workspace.target_branch.as_deref(),
-        Some("develop"),
-        "Target branch should be updated to develop"
+        updated.target_branch,
+        Some("develop".to_string()),
+        "Workspace target branch should be updated to develop"
+    );
+    assert_eq!(
+        updated.branch_name,
+        "feat/initial".to_string(),
+        "Workspace branch name should remain unchanged after update"
+    );
+    assert_eq!(updated.intent, None, "Workspace intent should be unchanged");
+
+    // verify that the workspace is rebased onto the develop branch, check that develop.txt is present in workspace
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let develop_file_path = workspace_path.join("develop.txt");
+    assert!(
+        develop_file_path.exists(),
+        "develop.txt should exist in workspace after rebase"
     );
 
-    // Use parent_before to suppress warning
-    let _ = parent_before;
+    // verify jj that Develop commit is in jj log
+    let log = JjVerifier::get_log_previous_commit(&workspace_path.to_str().unwrap())
+        .expect("Failed to get jj log");
+    assert!(
+        log.contains("Develop commit"),
+        "JJ log should contain develop commit, got: {}",
+        log
+    );
 }
 
 // =============================================================================

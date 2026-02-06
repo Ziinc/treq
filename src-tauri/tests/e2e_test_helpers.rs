@@ -260,6 +260,23 @@ impl JjVerifier {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
 
+    /// Get jj log output for a workspace
+    pub fn get_log_previous_commit(workspace_path: &str) -> Result<String, String> {
+        let output = Command::new("jj")
+            .current_dir(workspace_path)
+            .args(["log", "-n", "1", "--no-graph", "-r", "@-"])
+            .output()
+            .map_err(|e| format!("Failed to execute jj log: {}", e))?;
+
+        if !output.status.success() {
+            return Err(format!(
+                "jj log failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
     /// Get current bookmark (branch) for a workspace
     pub fn get_current_bookmark(workspace_path: &str) -> Result<Option<String>, String> {
         let output = Command::new("jj")
