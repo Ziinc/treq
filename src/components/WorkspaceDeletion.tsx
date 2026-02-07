@@ -1,5 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { Command } from "cmdk";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { Workspace } from "../lib/api";
 import { GitBranch, Home, AlertTriangle } from "lucide-react";
 import { CmdkFooter } from "./ui/cmdk-footer";
@@ -72,6 +74,10 @@ export const WorkspaceDeletion: React.FC<WorkspaceDeletionProps> = ({
       onValueChange={setSelectedValue}
       className="[&_[cmdk-root]]:bg-background [&_[cmdk-root]]:text-foreground"
     >
+      <VisuallyHidden.Root>
+        <DialogPrimitive.Title>Delete Workspace</DialogPrimitive.Title>
+        <DialogPrimitive.Description>Delete workspace</DialogPrimitive.Description>
+      </VisuallyHidden.Root>
       <div className="bg-background text-foreground rounded-xl border border-border shadow-2xl w-[40vw] max-w-none overflow-hidden">
         {/* Header with warning */}
         <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-destructive/10">

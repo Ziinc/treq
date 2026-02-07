@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { Command } from "cmdk";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { GitBranch, Check, ArrowRight } from "lucide-react";
 import { jjGetBranches, jjEditBookmark } from "../lib/api";
 
@@ -84,6 +86,10 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
       onOpenChange={onOpenChange}
       label="Switch Branch"
     >
+      <VisuallyHidden.Root>
+        <DialogPrimitive.Title>Switch Branch</DialogPrimitive.Title>
+        <DialogPrimitive.Description>Switch branch</DialogPrimitive.Description>
+      </VisuallyHidden.Root>
       <div className="bg-popover text-popover-foreground rounded-xl border border-border/50 shadow-2xl w-[40vw] max-w-none overflow-hidden">
         {/* Search Input */}
         <div className="flex items-center border-b border-border px-3">

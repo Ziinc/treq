@@ -1,5 +1,7 @@
 import { useMemo } from "react";
 import { Command } from "cmdk";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { BranchSwitcher } from "./BranchSwitcher";
 import { WorkspaceDeletion } from "./WorkspaceDeletion";
 import { FilePicker } from "./FilePicker";
@@ -278,6 +280,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         label="Command Menu"
         className="[&_[cmdk-root]]:bg-background [&_[cmdk-root]]:text-foreground"
       >
+        <VisuallyHidden.Root>
+          <DialogPrimitive.Title>Command Menu</DialogPrimitive.Title>
+          <DialogPrimitive.Description>Command menu</DialogPrimitive.Description>
+        </VisuallyHidden.Root>
         <div className="bg-background text-foreground rounded-xl border border-border shadow-2xl w-[40vw] max-w-none overflow-hidden">
           <div className="flex items-center border-b border-border px-3 bg-background">
             <Command.Input
