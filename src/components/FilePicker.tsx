@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { Command } from "cmdk";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { FileText } from "lucide-react";
 import { searchWorkspaceFiles, FileSearchResult } from "../lib/api";
 import { useDebounce } from "../hooks/useDebounce";
@@ -71,6 +73,10 @@ export const FilePicker: React.FC<FilePickerProps> = ({
       label="Jump to File"
       className="[&_[cmdk-root]]:bg-background [&_[cmdk-root]]:text-foreground"
     >
+      <VisuallyHidden.Root>
+        <DialogPrimitive.Title>Jump to File</DialogPrimitive.Title>
+        <DialogPrimitive.Description>Jump to file</DialogPrimitive.Description>
+      </VisuallyHidden.Root>
       <div className="bg-background text-foreground rounded-xl border border-border shadow-2xl w-[40vw] max-w-none overflow-hidden">
         {/* Search Input */}
         <div className="flex items-center border-b border-border px-3 bg-background">
