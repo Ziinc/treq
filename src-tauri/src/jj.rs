@@ -1737,7 +1737,7 @@ pub fn get_default_branch(repo_path: &str) -> Result<String, JjError> {
 }
 
 /// Push changes to remote using jj git push
-pub fn jj_push(workspace_path: &str, force: bool) -> Result<String, JjError> {
+pub fn jj_push(workspace_path: &str) -> Result<String, JjError> {
     // Get current branch name to check/ensure tracking
     let branch_name = get_workspace_branch(workspace_path)?;
 
@@ -1777,12 +1777,7 @@ pub fn jj_push(workspace_path: &str, force: bool) -> Result<String, JjError> {
     // Execute the push
     let mut cmd = command_for("jj");
     cmd.current_dir(workspace_path);
-
-    if force {
-        cmd.args(["git", "push", "--force"]);
-    } else {
-        cmd.args(["git", "push"]);
-    }
+    cmd.args(["git", "push"]);
 
     let output = cmd.output().map_err(|e| JjError::IoError(e.to_string()))?;
 
@@ -1801,9 +1796,13 @@ pub fn jj_push(workspace_path: &str, force: bool) -> Result<String, JjError> {
 
 /// Get sync status with remote (ahead/behind counts)
 /// Returns (ahead_count, behind_count)
+///
+/// If the branch is not on remote and not_on_remote is false, logs an error.
+/// If the branch is not on remote and not_on_remote is true, silently returns (0, 0).
 pub fn jj_get_sync_status(
     workspace_path: &str,
     branch_name: &str,
+    not_on_remote: bool,
 ) -> Result<(usize, usize), JjError> {
     let remote_branch = format!("{}@origin", branch_name);
 
@@ -1829,7 +1828,10 @@ pub fn jj_get_sync_status(
             .count()
     } else {
         let stderr = String::from_utf8_lossy(&ahead_output.stderr);
-        eprintln!("[sync_status] Failed to get ahead count: {}", stderr);
+        // Only log if branch should be on remote (not_on_remote is false)
+        if !not_on_remote {
+            eprintln!("[sync_status] Failed to get ahead count: {}", stderr);
+        }
         0
     };
 
@@ -1855,7 +1857,10 @@ pub fn jj_get_sync_status(
             .count()
     } else {
         let stderr = String::from_utf8_lossy(&behind_output.stderr);
-        eprintln!("[sync_status] Failed to get behind count: {}", stderr);
+        // Only log if branch should be on remote (not_on_remote is false)
+        if !not_on_remote {
+            eprintln!("[sync_status] Failed to get behind count: {}", stderr);
+        }
         0
     };
 
@@ -4050,7 +4055,7 @@ target/debug/deps/lib.so    2-sided conflict including 1 deletion and an executa
             .unwrap();
 
         // Call jj_push - it should not panic regardless of success/failure
-        let push_result = jj_push(repo_str, false);
+        let push_result = jj_push(repo_str);
 
         // The important thing is the function doesn't crash
         match push_result {

@@ -18,6 +18,7 @@ import {
   jjPush,
   jjGetSyncStatus,
   jjGitFetch,
+  pushWorkspaceToRemote,
 } from "../lib/api";
 import { getStatusBgColor } from "../lib/git-status-colors";
 import { parseJjChangedFiles, type ParsedFileChange } from "../lib/git-utils";
@@ -45,13 +46,6 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "./ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "./ui/dialog";
 import {
   Tooltip,
   TooltipContent,
@@ -133,9 +127,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 
   const changesDiffViewerRef = useRef<ChangesDiffViewerHandle>(null);
   const [actionPending, _setActionPending] = useState<
-    "push" | "merge" | "forcePush" | null
+    "push" | "merge" | "sync" | null
   >(null);
-  const [showForcePushDialog, setShowForcePushDialog] = useState(false);
 
   // Sync status state (ahead/behind counts)
   const [syncStatus, setSyncStatus] = useState<{ ahead: number; behind: number } | null>(null);
@@ -222,7 +215,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
     if (!path || !branch) return;
 
     try {
-      const [ahead, behind] = await jjGetSyncStatus(path, branch);
+      const notOnRemote = workspace?.not_on_remote ?? false;
+      const [ahead, behind] = await jjGetSyncStatus(path, branch, notOnRemote);
       setSyncStatus({ ahead, behind });
     } catch (error) {
       console.error("Failed to fetch sync status:", error);
@@ -508,16 +502,18 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   );
 
   const handlePushToRemote = useCallback(async () => {
-    // Use workspace path if available, otherwise use working directory (for home repo)
-    const pushPath = workspace?.workspace_path || workingDirectory;
-    if (!pushPath) return;
+    if (!effectiveRepoPath) return;
 
-    console.log("Push to remote started", pushPath);
+    console.log("Push to remote started");
     _setActionPending("push");
 
     try {
-      const result = await jjPush(pushPath);
+      const result = await pushWorkspaceToRemote(
+        effectiveRepoPath,
+        workspace?.id ?? null
+      );
       console.log("Push succeeded:", result);
+
       addToast({
         title: "Pushed to remote",
         description: "Changes pushed successfully",
@@ -535,36 +531,9 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
     } finally {
       _setActionPending(null);
     }
-  }, [workspace, workingDirectory, addToast, fetchSyncStatus]);
+  }, [workspace, effectiveRepoPath, addToast, fetchSyncStatus]);
 
-  const handleForcePush = useCallback(async () => {
-    // Use workspace path if available, otherwise use working directory (for home repo)
-    const pushPath = workspace?.workspace_path || workingDirectory;
-    if (!pushPath) return;
-
-    _setActionPending("forcePush");
-    try {
-      await jjPush(pushPath, true);
-      addToast({
-        title: "Force pushed to remote",
-        description: "Changes force pushed successfully",
-        type: "success",
-      });
-      setShowForcePushDialog(false);
-      // Refresh sync status after force push
-      fetchSyncStatus();
-    } catch (error) {
-      addToast({
-        title: "Force push failed",
-        description: String(error),
-        type: "error",
-      });
-    } finally {
-      _setActionPending(null);
-    }
-  }, [workspace, workingDirectory, addToast, fetchSyncStatus]);
-
-  const handleSync = useCallback(async () => {
+const handleSync = useCallback(async () => {
     const syncPath = workspace?.workspace_path || workingDirectory;
     const syncRepoPath = repositoryPath || workingDirectory;
     if (!syncPath || !syncRepoPath) return;
@@ -1099,8 +1068,31 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
             )}
           </div>
           <div className="flex items-center gap-2">
-            {/* Sync status indicator */}
-            {syncStatus && (syncStatus.ahead > 0 || syncStatus.behind > 0) && (
+            {/* Push to remote button - shown when branch not on remote */}
+            {workspace && workspace.not_on_remote && (
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handlePushToRemote}
+                      disabled={!!actionPending}
+                      className="gap-1 bg-blue-600 hover:bg-blue-700"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      Push to remote
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    This branch doesn't exist on remote yet. Push to create it.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+
+            {/* Sync status indicator - shown when branch is on remote */}
+            {workspace && !workspace.not_on_remote && syncStatus && (syncStatus.ahead > 0 || syncStatus.behind > 0) && (
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 {syncStatus.behind > 0 && (
                   <span className="flex items-center">
@@ -1114,8 +1106,9 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
                 )}
               </div>
             )}
+
             {/* Sync button - show when there are changes to sync */}
-            {syncStatus && (syncStatus.ahead > 0 || syncStatus.behind > 0) && (
+            {workspace && !workspace.not_on_remote && syncStatus && (syncStatus.ahead > 0 || syncStatus.behind > 0) && (
               <TooltipProvider delayDuration={200}>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -1187,16 +1180,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
                   <Upload className="w-4 h-4 mr-2" />
                   Push to remote
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    setShowForcePushDialog(true);
-                  }}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <AlertTriangle className="w-4 h-4 mr-2" />
-                  Push to remote (force)
-                </DropdownMenuItem>
                 {workspace && onDeleteWorkspace && (
                   <>
                     <DropdownMenuSeparator />
@@ -1242,40 +1225,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
         </div>
       </div>
 
-      {/* Force Push Confirmation Dialog */}
-      <Dialog open={showForcePushDialog} onOpenChange={setShowForcePushDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-destructive" />
-              Force Push Warning
-            </DialogTitle>
-            <DialogDescription className="pt-2">
-              Force pushing will overwrite the remote branch history. This
-              action cannot be undone and may cause issues for other
-              collaborators who have pulled from this branch.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end gap-2 mt-4">
-            <Button
-              variant="outline"
-              onClick={() => setShowForcePushDialog(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleForcePush}
-              disabled={!!actionPending}
-            >
-              {actionPending === "forcePush" ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : null}
-              Force Push
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 });

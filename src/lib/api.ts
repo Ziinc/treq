@@ -12,6 +12,7 @@ export interface Workspace {
   metadata?: string;
   target_branch?: string | null;
   has_conflicts: boolean;
+  not_on_remote: boolean;
 }
 
 export interface Session {
@@ -338,16 +339,16 @@ export const jjTrackWorkspaceBookmarks = (
 ): Promise<BookmarkTrackingResult> =>
   invoke("jj_track_workspace_bookmarks", { repoPath: repo_path });
 
-export const jjPush = (workspace_path: string, force?: boolean): Promise<string> =>
-  invoke("jj_push", { workspacePath: workspace_path, force: force ?? false });
+export const jjPush = (workspace_path: string): Promise<string> =>
+  invoke("jj_push", { workspacePath: workspace_path });
 
 export interface SyncStatus {
   ahead: number;
   behind: number;
 }
 
-export const jjGetSyncStatus = (workspace_path: string, branch_name: string): Promise<[number, number]> =>
-  invoke("jj_get_sync_status", { workspacePath: workspace_path, branchName: branch_name });
+export const jjGetSyncStatus = (workspace_path: string, branch_name: string, not_on_remote: boolean = false): Promise<[number, number]> =>
+  invoke("jj_get_sync_status", { workspacePath: workspace_path, branchName: branch_name, notOnRemote: not_on_remote });
 
 export const jjGitFetch = (repo_path: string): Promise<string> =>
   invoke("jj_git_fetch", { repoPath: repo_path });
@@ -421,6 +422,26 @@ export const updateWorkspaceConflicts = (
     repoPath: repo_path,
     workspaceId: workspace_id,
     hasConflicts: has_conflicts,
+  });
+
+export const updateWorkspaceNotOnRemote = (
+  repo_path: string,
+  workspace_id: number,
+  not_on_remote: boolean
+): Promise<void> =>
+  invoke("update_workspace_not_on_remote", {
+    repoPath: repo_path,
+    workspaceId: workspace_id,
+    notOnRemote: not_on_remote,
+  });
+
+export const pushWorkspaceToRemote = (
+  repo_path: string,
+  workspace_id: number | null
+): Promise<string> =>
+  invoke("push_workspace_to_remote", {
+    repoPath: repo_path,
+    workspaceId: workspace_id,
   });
 
 export const listConflictedWorkspaceIds = (
