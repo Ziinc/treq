@@ -5,7 +5,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use treq_lib::core::MaybeEmptyParam;
+use treq_lib::core::{MaybeEmptyParam, MergeCommit};
 use treq_lib::local_db::Workspace;
 
 // =============================================================================
@@ -338,6 +338,7 @@ fn test_can_merge_workspace_into_home_repo() {
         &repo.repo_path,
         workspace.id,
         "Merge feature-merge into main",
+        MergeCommit::Merge,
     )
     .expect("Failed to merge workspace");
 
@@ -412,6 +413,66 @@ fn test_can_merge_workspace_into_home_repo() {
     assert!(
         final_branch_str != "HEAD",
         "Home repo should not be in detached HEAD state after merge"
+    );
+}
+
+#[test]
+fn test_can_squash_merge_workspace_into_home_repo() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace: Workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feature-squash",
+        Some("squashing feature"),
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().unwrap();
+
+    let feature_file = workspace_path.join("squash-feature.txt");
+    fs::write(&feature_file, "squash feature content").expect("Failed to write feature file");
+    treq_lib::jj::jj_commit(workspace_path_str, "Add squash feature")
+        .expect("Failed to commit");
+
+    treq_lib::core::merge_workspace(
+        &repo.repo_path,
+        workspace.id,
+        "Squash feature-squash into main",
+        MergeCommit::Squash,
+    )
+    .expect("Failed to squash merge workspace");
+
+    let main_feature_file = Path::new(&repo.repo_path).join("squash-feature.txt");
+    assert!(
+        main_feature_file.exists(),
+        "Feature file should exist in main repo after squash merge"
+    );
+
+    let git_log = Command::new("git")
+        .current_dir(&repo.repo_path)
+        .args(["log", "-1", "--pretty=%s"])
+        .output()
+        .expect("Failed to run git log");
+    let git_log_str = String::from_utf8_lossy(&git_log.stdout);
+    assert_eq!(
+        git_log_str.trim(),
+        "Squash feature-squash into main",
+        "Git log should contain the squash commit message, got: {}",
+        git_log_str
+    );
+
+    assert!(
+        !workspace_path.exists(),
+        "Workspace directory should be deleted after squash merge"
+    );
+
+    let workspaces =
+        treq_lib::core::list_workspaces(&repo.repo_path).expect("Failed to list workspaces");
+    assert!(
+        !workspaces.iter().any(|w| w.id == workspace.id),
+        "Squashed workspace should not appear in list_workspaces"
     );
 }
 
