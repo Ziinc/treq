@@ -13,6 +13,13 @@ pub struct WorkspaceCommit {
     pub message: String,
 }
 
+/// Defines how a workspace is merged into its target branch.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+pub enum MergeCommit {
+    Merge,
+    Squash,
+}
+
 pub enum MaybeEmptyParam<T> {
     EmptyValue,
     Omitted,
@@ -496,7 +503,12 @@ fn build_dag_recursive(
 ///
 /// # Returns
 /// Returns Ok(()) on success, or an error message on failure.
-pub fn merge_workspace(repo_path: &str, workspace_id: i64, message: &str) -> Result<(), String> {
+pub fn merge_workspace(
+    repo_path: &str,
+    workspace_id: i64,
+    message: &str,
+    merge_strategy: MergeCommit,
+) -> Result<(), String> {
     // Get the workspace from the database
     let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
         .map_err(|e| format!("Failed to get workspace from db: {}", e))?
@@ -522,9 +534,21 @@ pub fn merge_workspace(repo_path: &str, workspace_id: i64, message: &str) -> Res
         return Err("No commits to merge".to_string());
     }
 
-    // Create a merge commit between the workspace branch and target branch
-    jj::jj_create_merge_commit(repo_path, &workspace.branch_name, target_branch, message)
-        .map_err(|e| format!("Failed to create merge commit: {}", e))?;
+    match merge_strategy {
+        MergeCommit::Merge => {
+            jj::jj_create_merge_commit(repo_path, &workspace.branch_name, target_branch, message)
+                .map_err(|e| format!("Failed to create merge commit: {}", e))?;
+        }
+        MergeCommit::Squash => {
+            jj::jj_squash_merge_commit(
+                repo_path,
+                &workspace.branch_name,
+                target_branch,
+                message,
+            )
+            .map_err(|e| format!("Failed to squash merge workspace: {}", e))?;
+        }
+    }
 
     // Update the home repo state to pick up the merged commits
     jj::jj_status(repo_path).map_err(|e| format!("Failed to update home repo status: {}", e))?;

@@ -2585,6 +2585,36 @@ pub fn jj_create_merge_commit(
     })
 }
 
+/// Squashes a workspace branch into the target branch and updates the description.
+///
+/// # Arguments
+/// * `workspace_path` - Path to the workspace directory
+/// * `workspace_branch` - Name of the workspace branch to squash
+/// * `target_branch` - Name of the target branch to squash into
+/// * `message` - Commit message for the squashed change
+///
+/// # Returns
+/// Returns Ok(()) on success, or a JjError on failure.
+pub fn jj_squash_merge_commit(
+    workspace_path: &str,
+    workspace_branch: &str,
+    target_branch: &str,
+    message: &str,
+) -> Result<(), JjError> {
+    let squash_output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["squash", "--from", workspace_branch, "--into", target_branch, "-m", message])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !squash_output.status.success() {
+        let stderr = String::from_utf8_lossy(&squash_output.stderr);
+        return Err(JjError::IoError(format!("jj squash failed: {}", stderr)));
+    }
+
+    Ok(())
+}
+
 /// Updates the home repo's state by running jj st
 ///
 /// # Arguments
