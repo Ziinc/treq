@@ -90,7 +90,6 @@ import { useDiffSettings } from "../hooks/useDiffSettings";
 import { useEditorApps } from "../hooks/useEditorApps";
 import { ChangesSection } from "./ChangesSection";
 import { CommittedChangesSection } from "./CommittedChangesSection";
-import { ConflictsSection } from "./ConflictsSection";
 import { ConflictCommentCard } from "./ConflictCommentCard";
 import { MoveToWorkspaceDialog } from "./MoveToWorkspaceDialog";
 import { FileContextMenu } from "./FileContextMenu";
@@ -3083,21 +3082,6 @@ export const ChangesDiffViewer = memo(
           return next;
         });
       }, []);
-
-      // Handle clicking on a conflicting file
-      // Load conflict file content
-      const handleConflictFileSelect = useCallback(
-        (filePath: string) => {
-          setActiveFilePath(filePath);
-
-          // Scroll to the conflict file section
-          const ref = conflictFileRefs.current.get(filePath);
-          if (ref) {
-            ref.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-        },
-        []
-      );
 
       // Check if a comment is outdated (its referenced line no longer exists)
       const isCommentOutdated = useCallback(

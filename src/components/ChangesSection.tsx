@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { ArrowRight, ChevronDown, ChevronRight, Undo2, Minus, CheckSquare, Plus } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, Undo2, Minus, Plus } from "lucide-react";
 import { GitFileRow } from "./GitFileRow";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "./ui/tooltip";
 import type { ParsedFileChange } from "../lib/git-utils";
@@ -47,7 +47,6 @@ export const ChangesSection = memo<ChangesSectionProps>(({
   onDeselectAll,
   onSelectAll,
   onStage,
-  onStageAll,
   onUnstage,
   onUnstageAll,
   isStaged = false,
