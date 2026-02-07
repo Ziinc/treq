@@ -116,6 +116,15 @@ pub fn delete_workspace(repo_path: String, workspace_path: String, id: i64) -> R
     local_db::delete_workspace(&repo_path, id)
 }
 
+/// Push workspace to remote and update not_on_remote flag
+#[tauri::command]
+pub fn push_workspace_to_remote(
+    repo_path: String,
+    workspace_id: Option<i64>,
+) -> Result<String, String> {
+    crate::core::push_workspace_to_remote(&repo_path, workspace_id)
+}
+
 /// Clean up stale workspace directories that don't have corresponding database entries
 /// This should be called on app startup to clean up any orphaned directories
 #[tauri::command]
@@ -243,6 +252,15 @@ pub fn update_workspace_conflicts(
     has_conflicts: bool,
 ) -> Result<(), String> {
     local_db::update_workspace_has_conflicts(&repo_path, workspace_id, has_conflicts)
+}
+
+#[tauri::command]
+pub fn update_workspace_not_on_remote(
+    repo_path: String,
+    workspace_id: i64,
+    not_on_remote: bool,
+) -> Result<(), String> {
+    local_db::update_workspace_not_on_remote(&repo_path, workspace_id, not_on_remote)
 }
 
 /// Get list of workspace IDs that currently have conflicts

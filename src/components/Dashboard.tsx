@@ -251,7 +251,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     if (repoName) {
       getCurrentWindow().setTitle(`Treq - ${repoName}`);
     } else {
-      getCurrentWindow().setTitle("Treq - Git Workspace Manager");
+      getCurrentWindow().setTitle("Treq");
     }
   }, [repoName]);
 

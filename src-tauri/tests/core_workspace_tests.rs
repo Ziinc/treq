@@ -707,3 +707,117 @@ fn test_workspace_conflict_detection() {
         "Base workspace should not have conflicts"
     );
 }
+
+// =============================================================================
+// Test: Push workspace to remote
+// =============================================================================
+
+#[test]
+fn test_push_workspace_to_remote() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+
+    // Test 1: Invalid workspace_id fails
+    let result = treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(99999));
+    assert!(
+        result.is_err(),
+        "Push with invalid workspace_id should fail"
+    );
+    assert!(
+        result.unwrap_err().to_lowercase().contains("not found"),
+        "Error should indicate workspace not found"
+    );
+
+    // Test 2: Create workspace and verify it's marked as not_on_remote
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "test-workspace",
+        Some("test workspace"),
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    assert!(
+        workspace.not_on_remote,
+        "New workspace should be marked as not_on_remote"
+    );
+
+    // Test 3: Add a file and commit to the workspace
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let test_file = workspace_path.join("test-push.txt");
+    fs::write(&test_file, "test push content").expect("Failed to write test file");
+    treq_lib::jj::jj_commit(workspace_path.to_str().unwrap(), "Add test push file")
+        .expect("Failed to commit");
+
+    // Test 4: Push workspace to remote (should succeed now)
+    let result_push = treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id));
+    assert!(
+        result_push.is_ok(),
+        "Push should succeed with proper remote setup, got: {:?}",
+        result_push.err()
+    );
+
+    // Test 5: Verify file was pushed to remote by checking remote branch
+    let remote_dir = repo.temp_dir.path().join("remote.git");
+    let verify_file = Command::new("git")
+        .current_dir(&remote_dir)
+        .args(["show", &format!("{}:test-push.txt", workspace.branch_name)])
+        .output()
+        .expect("Failed to verify file in remote");
+    assert!(
+        verify_file.status.success(),
+        "File should exist in remote branch"
+    );
+    let remote_file_content = String::from_utf8_lossy(&verify_file.stdout);
+    assert!(
+        remote_file_content.contains("test push content"),
+        "Remote file should contain correct content, got: {}",
+        remote_file_content
+    );
+
+    // Test 6: Verify not_on_remote flag was cleared after successful push
+    let workspace_after_push = treq_lib::local_db::get_workspace_by_id(&repo.repo_path, workspace.id)
+        .expect("Failed to get workspace from db")
+        .expect("Workspace should exist after push");
+    assert!(
+        !workspace_after_push.not_on_remote,
+        "not_on_remote flag should be cleared after successful push"
+    );
+}
+
+#[test]
+fn test_push_home_repo_to_remote() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+
+    // Test 1: Create a workspace to verify home repo push doesn't affect workspace flags
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "workspace-for-home-test",
+        Some("test"),
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    assert!(
+        workspace.not_on_remote,
+        "Workspace should be marked as not_on_remote"
+    );
+
+    // Test 2: Test push home repo (None workspace_id) succeeds with remote setup
+    let result_push = treq_lib::core::push_workspace_to_remote(&repo.repo_path, None);
+    assert!(
+        result_push.is_ok(),
+        "Push home repo to remote should succeed with proper remote setup, got: {:?}",
+        result_push.err()
+    );
+
+    // Test 3: Verify home repo push didn't affect workspace flags
+    let workspace_after_push = treq_lib::local_db::get_workspace_by_id(&repo.repo_path, workspace.id)
+        .expect("Failed to get workspace from db")
+        .expect("Workspace should exist after push");
+
+    assert!(
+        workspace_after_push.not_on_remote,
+        "Workspace not_on_remote flag should NOT be modified by home repo push"
+    );
+
+}

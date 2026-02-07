@@ -85,13 +85,14 @@ pub fn create_workspace(
 
     let branch_exists: bool = branches.iter().any(|b| b.name == branch_name);
 
-    // If branch doesn't exist locally and source_branch is None, check remotes
+    // Always check if branch exists on remote
+    let remote_ref = format!("{}@origin", branch_name);
+    let branch_exists_on_remote = jj::check_remote_branch_exists(repo_path, &remote_ref)
+        .map_err(|e| format!("Failed to check remote branch: {}", e))?;
+
     let resolved_source_branch = if !branch_exists && source_branch.is_none() {
-        // Check if branch exists on origin remote
-        let remote_ref = format!("{}@origin", branch_name);
-        if jj::check_remote_branch_exists(repo_path, &remote_ref)
-            .map_err(|e| format!("Failed to check remote branch: {}", e))?
-        {
+        // New branch, check if we should create from remote
+        if branch_exists_on_remote {
             Some(remote_ref)
         } else {
             None
@@ -125,6 +126,12 @@ pub fn create_workspace(
         Some(intent.unwrap_or("").to_string()),
     )
     .map_err(|e| format!("Failed to add workspace to db: {}", e))?;
+
+    // Set not_on_remote flag if branch doesn't exist on remote
+    if !branch_exists_on_remote {
+        local_db::update_workspace_not_on_remote(repo_path, workspace_id, true)?;
+    }
+
     let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
         .map_err(|e| format!("Failed to get workspace from db: {}", e))?;
     match workspace {
@@ -161,6 +168,49 @@ pub fn delete_workspace(repo_path: &str, workspace_id: &i64) -> Result<bool, Str
         }
         _ => Err(format!("Workspace not found in database: {}", workspace_id)),
     }
+}
+
+/// Push workspace to remote and update not_on_remote flag if successful.
+/// # Arguments
+/// * `repo_path` - Path to the repository root
+/// * `workspace_id` - ID of the workspace (None to push home repo)
+/// * `force` - Whether to force push
+///
+/// # Returns
+/// Returns the push result message if successful, otherwise an error message.
+pub fn push_workspace_to_remote(
+    repo_path: &str,
+    workspace_id: Option<i64>,
+) -> Result<String, String> {
+    // Determine the push path based on workspace_id
+    let push_path = if let Some(id) = workspace_id {
+        // For workspace, look up the path from database
+        let workspace = local_db::get_workspace_by_id(repo_path, id)
+            .map_err(|e| format!("Failed to get workspace: {}", e))?
+            .ok_or_else(|| format!("Workspace not found: {}", id))?;
+        let workspace_dir = Path::new(repo_path)
+            .join(".treq")
+            .join("workspaces")
+            .join(&workspace.workspace_path);
+        workspace_dir
+            .to_str()
+            .ok_or("Failed to convert workspace path to string")?
+            .to_string()
+    } else {
+        // For home repo, use repo_path directly
+        repo_path.to_string()
+    };
+
+    // Perform the push
+    let result = jj::jj_push(&push_path)
+        .map_err(|e| format!("Push failed: {}", e))?;
+
+    // Clear the not_on_remote flag after successful push (only for workspaces)
+    if let Some(id) = workspace_id {
+        local_db::update_workspace_not_on_remote(repo_path, id, false)?;
+    }
+
+    Ok(result)
 }
 
 /// Lists all workspaces in the repository.

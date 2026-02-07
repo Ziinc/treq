@@ -18,6 +18,7 @@ pub struct Workspace {
     pub target_branch: Option<String>,
     pub has_conflicts: bool,
     pub intent: Option<String>,
+    pub not_on_remote: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -117,6 +118,10 @@ pub fn init_local_db(repo_path: &str) -> Result<PathBuf, String> {
     );
     let _ = conn.execute(
         "ALTER TABLE workspaces ADD COLUMN archived BOOLEAN DEFAULT 0",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE workspaces ADD COLUMN not_on_remote BOOLEAN DEFAULT 0",
         [],
     );
 
@@ -349,7 +354,7 @@ fn get_connection(repo_path: &str) -> Result<Connection, String> {
 pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch, COALESCE(has_conflicts, 0) FROM workspaces ORDER BY branch_name COLLATE NOCASE ASC")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch, COALESCE(has_conflicts, 0), COALESCE(not_on_remote, 0) FROM workspaces ORDER BY branch_name COLLATE NOCASE ASC")
         .map_err(|e| format!("Failed to prepare workspaces query: {}", e))?;
 
     let workspaces = stmt
@@ -366,6 +371,7 @@ pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
                 metadata,
                 target_branch: row.get(6)?,
                 has_conflicts: row.get::<_, i64>(7)? != 0,
+                not_on_remote: row.get::<_, i64>(8)? != 0,
                 intent,
             })
         })
@@ -379,7 +385,7 @@ pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
 pub fn get_workspace_by_id(repo_path: &str, id: i64) -> Result<Option<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch, COALESCE(has_conflicts, 0) FROM workspaces WHERE id = ?1")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch, COALESCE(has_conflicts, 0), COALESCE(not_on_remote, 0) FROM workspaces WHERE id = ?1")
         .map_err(|e| format!("Failed to prepare workspace query: {}", e))?;
 
     let workspace = stmt
@@ -396,6 +402,7 @@ pub fn get_workspace_by_id(repo_path: &str, id: i64) -> Result<Option<Workspace>
                 metadata,
                 target_branch: row.get(6)?,
                 has_conflicts: row.get::<_, i64>(7)? != 0,
+                not_on_remote: row.get::<_, i64>(8)? != 0,
                 intent,
             })
         })
@@ -411,7 +418,7 @@ pub fn get_workspace_by_path(
 ) -> Result<Option<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch, COALESCE(has_conflicts, 0) FROM workspaces WHERE workspace_path = ?1")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch, COALESCE(has_conflicts, 0), COALESCE(not_on_remote, 0) FROM workspaces WHERE workspace_path = ?1")
         .map_err(|e| format!("Failed to prepare workspace query: {}", e))?;
 
     let workspace = stmt
@@ -428,6 +435,7 @@ pub fn get_workspace_by_path(
                 metadata,
                 target_branch: row.get(6)?,
                 has_conflicts: row.get::<_, i64>(7)? != 0,
+                not_on_remote: row.get::<_, i64>(8)? != 0,
                 intent,
             })
         })
@@ -515,7 +523,7 @@ pub fn get_workspaces_by_target_branch(
 ) -> Result<Vec<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch, COALESCE(has_conflicts, 0) FROM workspaces WHERE target_branch = ?1 ORDER BY branch_name COLLATE NOCASE ASC")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch, COALESCE(has_conflicts, 0), COALESCE(not_on_remote, 0) FROM workspaces WHERE target_branch = ?1 ORDER BY branch_name COLLATE NOCASE ASC")
         .map_err(|e| format!("Failed to prepare workspaces query: {}", e))?;
 
     let workspaces = stmt
@@ -532,6 +540,7 @@ pub fn get_workspaces_by_target_branch(
                 metadata,
                 target_branch: row.get(6)?,
                 has_conflicts: row.get::<_, i64>(7)? != 0,
+                not_on_remote: row.get::<_, i64>(8)? != 0,
                 intent,
             })
         })
@@ -554,6 +563,21 @@ pub fn update_workspace_has_conflicts(
         params![has_conflicts as i64, id],
     )
     .map_err(|e| format!("Failed to update workspace has_conflicts: {}", e))?;
+    Ok(())
+}
+
+/// Update the not_on_remote flag for a workspace
+pub fn update_workspace_not_on_remote(
+    repo_path: &str,
+    id: i64,
+    not_on_remote: bool,
+) -> Result<(), String> {
+    let conn = get_connection(repo_path)?;
+    conn.execute(
+        "UPDATE workspaces SET not_on_remote = ?1 WHERE id = ?2",
+        params![not_on_remote as i64, id],
+    )
+    .map_err(|e| format!("Failed to update workspace not_on_remote: {}", e))?;
     Ok(())
 }
 
@@ -686,6 +710,7 @@ pub fn rebuild_workspaces_from_filesystem(repo_path: &str) -> Result<Vec<Workspa
             metadata: None,
             target_branch: None,
             has_conflicts: false,
+            not_on_remote: false,
             intent: None,
         });
     }
