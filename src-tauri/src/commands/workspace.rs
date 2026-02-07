@@ -125,6 +125,26 @@ pub fn push_workspace_to_remote(
     crate::core::push_workspace_to_remote(&repo_path, workspace_id)
 }
 
+/// Merge a workspace into its target branch with a specified merge strategy
+#[tauri::command]
+pub fn merge_workspace(
+    repo_path: String,
+    workspace_id: i64,
+    message: String,
+    merge_strategy: String,
+) -> Result<(), String> {
+    use crate::core::MergeCommit;
+
+    // Convert string to enum
+    let strategy = match merge_strategy.as_str() {
+        "merge" => MergeCommit::Merge,
+        "squash" => MergeCommit::Squash,
+        _ => return Err(format!("Invalid merge strategy: {}", merge_strategy)),
+    };
+
+    crate::core::merge_workspace(&repo_path, workspace_id, &message, strategy)
+}
+
 /// Clean up stale workspace directories that don't have corresponding database entries
 /// This should be called on app startup to clean up any orphaned directories
 #[tauri::command]

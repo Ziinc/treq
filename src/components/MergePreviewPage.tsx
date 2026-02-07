@@ -1,18 +1,28 @@
 import { memo, useCallback, useEffect, useState } from "react";
 import {
   type Workspace,
+  type MergeStrategy,
   jjGetCommitsAhead,
   jjGetMergeDiff,
-  jjCreateMerge,
+  mergeWorkspace,
   type JjCommitsAhead,
   type JjRevisionDiff,
 } from "../lib/api";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { useToast } from "./ui/toast";
+import { Card } from "./ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 import {
   ArrowLeft,
   GitMerge,
+  GitCommitHorizontal,
   Loader2,
   FileText,
   ChevronRight,
@@ -45,6 +55,7 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
     const [commitMessage, setCommitMessage] = useState("");
     const [merging, setMerging] = useState(false);
     const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+    const [mergeStrategy, setMergeStrategy] = useState<MergeStrategy>("merge");
 
     const targetBranch = workspace.target_branch || "main";
 
@@ -87,6 +98,33 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
       });
     }, [workspace.workspace_path, workspace.branch_name, targetBranch, addToast]);
 
+    // Update commit message when merge strategy changes
+    useEffect(() => {
+      let intent = "";
+      if (workspace.metadata) {
+        try {
+          const metadata = JSON.parse(workspace.metadata);
+          intent = metadata.intent || "";
+        } catch {
+          // If metadata is not valid JSON, intent stays empty
+        }
+      }
+
+      if (mergeStrategy === "squash") {
+        // For squash merge, use just the intent
+        if (intent) {
+          setCommitMessage(intent);
+        }
+      } else if (mergeStrategy === "merge") {
+        // For merge commit, format as "Merge <branch> into <target>\n\n<intent>"
+        if (intent) {
+          setCommitMessage(`Merge ${workspace.branch_name} into ${targetBranch}\n\n${intent}`);
+        } else {
+          setCommitMessage(`Merge ${workspace.branch_name} into ${targetBranch}`);
+        }
+      }
+    }, [mergeStrategy, workspace.metadata, workspace.branch_name, targetBranch]);
+
     // Handle merge
     const handleMerge = useCallback(async () => {
       if (!commitMessage.trim()) {
@@ -99,30 +137,24 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
 
       setMerging(true);
       try {
-        const result = await jjCreateMerge(
-          workspace.workspace_path,
-          workspace.branch_name,
-          targetBranch,
-          commitMessage
+        // Use new high-level API with merge strategy
+        await mergeWorkspace(
+          workspace.repo_path,
+          workspace.id,
+          commitMessage,
+          mergeStrategy
         );
 
-        if (!result.success) {
-          addToast({
-            title: "Merge failed",
-            description: result.message,
-            type: "error",
-          });
-          return;
-        }
+        await onMergeComplete();
 
         addToast({
-          title: "Merge successful",
-          description: `Merged ${workspace.branch_name} into ${targetBranch}`,
+          title:
+            mergeStrategy === "squash"
+              ? "Workspace squashed"
+              : "Workspace merged",
+          description: `Successfully merged ${workspace.branch_name} into ${targetBranch}`,
           type: "success",
         });
-
-        // Delete workspace and return to dashboard
-        await onMergeComplete();
       } catch (error) {
         addToast({
           title: "Merge failed",
@@ -136,9 +168,9 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
       workspace,
       targetBranch,
       commitMessage,
+      mergeStrategy,
       addToast,
       onMergeComplete,
-      onCancel,
     ]);
 
     // Toggle file expansion
@@ -184,22 +216,105 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
               {workspace.branch_name} → {targetBranch}
             </p>
           </div>
-          <Button
-            onClick={handleMerge}
-            disabled={!canMerge || merging}
-            className="gap-2"
-          >
-            {merging ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <GitMerge className="w-4 h-4" />
-            )}
-            {merging ? "Merging..." : "Confirm merge"}
-          </Button>
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-auto p-4 space-y-6">
+          {/* Commit message and button group - centered card */}
+          <div className="flex justify-center px-4">
+            <Card className="w-full md:w-3/4 p-6">
+              <div className="flex flex-col gap-4">
+                <div>
+                  <h2 className="text-sm font-semibold mb-3">
+                    Merge Commit Message
+                  </h2>
+                  <Textarea
+                    value={commitMessage}
+                    onChange={(e) => setCommitMessage(e.target.value)}
+                    placeholder="Enter merge commit message..."
+                    rows={3}
+                    maxLength={10000}
+                    className="font-mono text-sm"
+                  />
+                </div>
+
+                {/* Button group - aligned to left */}
+                <div className="flex justify-start">
+                  <div className="inline-flex items-center rounded-md overflow-hidden">
+                    <Button
+                      onClick={handleMerge}
+                      disabled={!canMerge || merging}
+                      className="gap-2 rounded-none"
+                      style={{
+                        backgroundColor: "hsl(142, 76%, 36%)",
+                      }}
+                    >
+                      {merging ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <GitMerge className="w-4 h-4" />
+                      )}
+                      {merging
+                        ? "Merging..."
+                        : mergeStrategy === "squash"
+                          ? "Squash and merge"
+                          : "Confirm merge"}
+                    </Button>
+                    <div className="w-px opacity-30" style={{ backgroundColor: "currentColor" }} />
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          disabled={!canMerge || merging}
+                          className="rounded-none px-2"
+                          style={{
+                            backgroundColor: "hsl(142, 76%, 36%)",
+                          }}
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-64">
+                        <DropdownMenuRadioGroup
+                          value={mergeStrategy}
+                          onValueChange={(value) =>
+                            setMergeStrategy(value as MergeStrategy)
+                          }
+                        >
+                          <DropdownMenuRadioItem
+                            value="merge"
+                            className="flex-col items-start py-3"
+                          >
+                            <div className="font-semibold flex items-center gap-2">
+                              <GitMerge className="h-4 w-4" />
+                              Create a merge commit
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-1 pl-6">
+                              All commits from this branch will be added to the base
+                              branch via a merge commit
+                            </div>
+                          </DropdownMenuRadioItem>
+                          <DropdownMenuRadioItem
+                            value="squash"
+                            className="flex-col items-start py-3"
+                          >
+                            <div className="font-semibold flex items-center gap-2">
+                              <GitCommitHorizontal className="h-4 w-4" />
+                              Squash and merge
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-1 pl-6">
+                              The {commitsAhead?.commits.length || "multiple"} commits
+                              from this branch will be combined into one commit
+                            </div>
+                          </DropdownMenuRadioItem>
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+
           {/* Commits to be merged */}
           <section>
             <h2 className="text-sm font-semibold mb-3">
@@ -239,21 +354,6 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
                 No commits ahead of {targetBranch}
               </div>
             )}
-          </section>
-
-          {/* Commit message */}
-          <section>
-            <h2 className="text-sm font-semibold mb-3">
-              Merge Commit Message
-            </h2>
-            <Textarea
-              value={commitMessage}
-              onChange={(e) => setCommitMessage(e.target.value)}
-              placeholder="Enter merge commit message..."
-              rows={3}
-              maxLength={10000}
-              className="font-mono text-sm"
-            />
           </section>
 
           {/* Combined diff */}

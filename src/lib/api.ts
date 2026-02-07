@@ -89,6 +89,8 @@ export interface JjMergeResult {
   merge_commit_id: string | null;
 }
 
+export type MergeStrategy = "merge" | "squash";
+
 export interface JjFileDiff {
   path: string;
   hunks: JjDiffHunk[];
@@ -401,6 +403,14 @@ export const jjCreateMerge = (
   message: string
 ): Promise<JjMergeResult> =>
   invoke("jj_create_merge", { workspacePath, workspaceBranch, targetBranch, message });
+
+export const mergeWorkspace = (
+  repoPath: string,
+  workspaceId: number,
+  message: string,
+  mergeStrategy: MergeStrategy
+): Promise<void> =>
+  invoke("merge_workspace", { repoPath, workspaceId, message, mergeStrategy });
 
 export const updateWorkspaceMetadata = (
   repo_path: string,
