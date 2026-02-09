@@ -645,6 +645,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     [getOrCreateSession]
   );
 
+  // Navigate to workspace without creating an agent session
+  const handleSelectWorkspace = useCallback(
+    (workspace: Workspace | null) => {
+      setSelectedWorkspace(workspace);
+      setSessionSelectedFile(null);
+      setViewMode(workspace ? "show-workspace" : "session");
+    },
+    []
+  );
+
   const handleCreateSessionFromSidebar = useCallback(
     async (workspaceId: number | null) => {
       const workspace = workspaceId
@@ -692,13 +702,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         });
         setLastSelectedWorkspaceIndex(workspaceIndex);
       } else {
-        // Regular click - clear multi-select, open workspace
+        // Regular click - clear multi-select, navigate to workspace
         setSelectedWorkspaceIds(new Set());
         setLastSelectedWorkspaceIndex(workspaceIndex);
-        handleOpenSession(workspace);
+        handleSelectWorkspace(workspace);
       }
     },
-    [workspaces, lastSelectedWorkspaceIndex, handleOpenSession]
+    [workspaces, lastSelectedWorkspaceIndex, handleSelectWorkspace]
   );
 
   const handleBulkDelete = async () => {
@@ -783,6 +793,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         ptySessionId: `session-${session.id}`,
         workspacePath: sessionWorkspace?.workspace_path ?? null,
         repoPath: sessionWorkspace?.repo_path ?? repoPath,
+        workspaceName: sessionWorkspace?.branch_name ?? null,
       };
     });
 
@@ -792,12 +803,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         (session) => session.sessionId === pendingClaudeSession.sessionId
       )
     ) {
+      const pendingWorkspace = pendingClaudeSession.workspaceId
+        ? workspaceMap.get(pendingClaudeSession.workspaceId) ?? null
+        : null;
       paneSessions.push({
         sessionId: pendingClaudeSession.sessionId,
         sessionName: pendingClaudeSession.sessionName,
         ptySessionId: `session-${pendingClaudeSession.sessionId}`,
         workspacePath: pendingClaudeSession.workspacePath,
         repoPath: pendingClaudeSession.repoPath,
+        workspaceName: pendingWorkspace?.branch_name ?? null,
         pendingPrompt: pendingClaudeSession.pendingPrompt,
         permissionMode: pendingClaudeSession.permissionMode,
       });
@@ -847,7 +862,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
           currentBranch={currentBranch}
           selectedWorkspaceId={selectedWorkspace?.id ?? null}
           selectedWorkspaceIds={selectedWorkspaceIds}
-          onWorkspaceClick={(workspace) => handleOpenSession(workspace)}
+          onWorkspaceClick={(workspace) => handleSelectWorkspace(workspace)}
           onWorkspaceMultiSelect={handleWorkspaceMultiSelect}
           onBulkDelete={handleBulkDelete}
           onDeleteWorkspace={handleDelete}
@@ -891,6 +906,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
                     onOpenMergePreview={handleOpenMergePreview}
                     onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
                     onCreateStackedWorkspace={handleCreateStackedWorkspace}
+                    onNavigateToWorkspace={(ws) => handleOpenSession(ws)}
                     queryClient={queryClient}
                     onSessionCreated={(sessionData) => {
                       queryClient.invalidateQueries({
@@ -910,6 +926,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
             key={repoPath}
             workingDirectory={selectedWorkspace?.workspace_path || repoPath}
             isHidden={false}
+            currentBranch={currentBranch}
             claudeSessions={claudeSessionsForPane}
             activeClaudeSessionId={isSessionView ? activeSessionId : null}
             onClaudeTerminalOutput={() => {
@@ -952,6 +969,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
                     error instanceof Error ? error.message : String(error),
                   type: "error",
                 });
+              }
+            }}
+            onNavigateToWorkspace={(workspaceKey, isMainRepo) => {
+              if (isMainRepo) {
+                handleSelectWorkspace(null);
+              } else {
+                const ws = workspaces.find((w) => w.workspace_path === workspaceKey);
+                if (ws) {
+                  handleSelectWorkspace(ws);
+                }
               }
             }}
           />

@@ -6,7 +6,7 @@ pub mod db;
 mod file_indexer;
 pub mod jj;
 pub mod local_db;
-mod pty;
+pub mod pty;
 
 use commands::file_watcher::WatcherManager;
 use db::Database;
@@ -288,6 +288,7 @@ pub fn run() {
             commands::update_workspace_metadata,
             commands::update_workspace_not_on_remote,
             commands::list_workspace_statuses,
+            commands::get_workspace_status,
             commands::set_workspace_target_branch,
             commands::check_and_rebase_workspaces,
             commands::ensure_workspace_indexed,

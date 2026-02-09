@@ -20,6 +20,24 @@ export interface WorkspacePartialStatus {
   has_changes: boolean;
 }
 
+export interface WorkspaceNode {
+  status: WorkspacePartialStatus;
+  parent_id: number | null;
+  child_ids: number[];
+  depth: number;
+}
+
+export interface WorkspaceStatus {
+  current: Workspace;
+  has_conflicts: boolean;
+  has_changes: boolean;
+  target: Workspace | null;
+  children: Workspace[];
+  dag_nodes: WorkspaceNode[];
+  conflicted_workspace_ids: number[];
+  commits_ahead_of_target: { hash: string; timestamp: string; message: string }[];
+}
+
 export interface Session {
   id: number;
   workspace_id: number | null;
@@ -449,6 +467,13 @@ export const listWorkspaceStatuses = (
 ): Promise<WorkspacePartialStatus[]> =>
   invoke("list_workspace_statuses", {
     repoPath: repo_path,
+  });
+
+export const getWorkspaceStatus = (
+  workspace_path: string
+): Promise<WorkspaceStatus> =>
+  invoke("get_workspace_status", {
+    workspacePath: workspace_path,
   });
 
 export const setWorkspaceTargetBranch = (

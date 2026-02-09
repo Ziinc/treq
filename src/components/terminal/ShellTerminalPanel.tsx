@@ -10,7 +10,6 @@ import {
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
 import {
-  MIN_TERMINAL_WIDTH,
   type ShellTerminalData,
   type TerminalRefsMap,
 } from "./types";
@@ -18,6 +17,8 @@ import {
 interface ShellTerminalPanelProps {
   terminalData: ShellTerminalData;
   collapsed: boolean;
+  isActive?: boolean;
+  onFocus?: () => void;
   onClose?: () => void;
   canClose: boolean;
   onSessionError?: (message: string) => void;
@@ -29,6 +30,8 @@ export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
   function ShellTerminalPanel({
     terminalData,
     collapsed,
+    isActive,
+    onFocus,
     onClose,
     canClose,
     onSessionError,
@@ -45,12 +48,15 @@ export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
           width == null && "flex-1"
         )}
         style={{
-          minWidth: MIN_TERMINAL_WIDTH,
           width: width != null ? width : undefined,
         }}
+        onMouseDown={onFocus}
       >
         {/* Header */}
-        <div className="h-7 min-h-[28px] flex items-center justify-between px-2 bg-background border-b border-r border-border flex-shrink-0">
+        <div className={cn(
+          "h-7 min-h-[28px] flex items-center justify-between px-2 border-b border-r border-border flex-shrink-0",
+          isActive ? "bg-primary/20" : "bg-background"
+        )}>
           <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground min-w-0">
             <Terminal className="w-3 h-3 flex-shrink-0" />
             <span className="truncate">Shell</span>
