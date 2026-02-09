@@ -55,6 +55,7 @@ import {
   listConflictedWorkspaceIds,
 } from "../lib/api";
 import { Loader2 } from "lucide-react";
+import { getFullWorkspacePath } from "../lib/utils";
 
 // Loading spinner component for Suspense fallback
 const LoadingSpinner = () => (
@@ -280,7 +281,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     if (!selectedWorkspace) return;
 
     const workspaceId = selectedWorkspace.id;
-    const workspacePath = selectedWorkspace.workspace_path;
+    const workspacePath = getFullWorkspacePath(selectedWorkspace);
 
     startFileWatcher(workspaceId, workspacePath).catch((err) => {
       console.error("Failed to start file watcher:", err);
@@ -292,31 +293,42 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         console.error("Failed to stop file watcher:", err);
       });
     };
-  }, [selectedWorkspace?.id, selectedWorkspace?.workspace_path]);
+  }, [selectedWorkspace?.id, selectedWorkspace?.repo_path, selectedWorkspace?.workspace_path]);
 
   // Listen for window focus to refresh workspace data
   useEffect(() => {
     if (!repoPath) return;
 
-    const handleFocus = async () => {
-      try {
-        // Re-fetch current branch in case it changed externally
-        const branch = await jjGetCurrentBranch(repoPath);
-        setCurrentBranch(branch);
+    let lastFocusTime = 0;
+    const FOCUS_DEBOUNCE_MS = 2000; // Debounce rapid focus events
 
-        // Trigger background rebase check for all workspaces
-        await checkAndRebaseWorkspaces(repoPath);
-      } catch (error) {
-        console.error("Auto-rebase failed:", error);
-      }
+    // Fire-and-forget pattern: no awaits to prevent UI blocking
+    const handleFocus = () => {
+      const now = Date.now();
+      if (now - lastFocusTime < FOCUS_DEBOUNCE_MS) return;
+      lastFocusTime = now;
 
-      // Invalidate queries to refresh workspace data
-      queryClient.invalidateQueries({
-        queryKey: ["workspaces", repoPath],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["workspaces-with-changes", repoPath],
-      });
+      // Fire branch update independently
+      jjGetCurrentBranch(repoPath)
+        .then((branch) => setCurrentBranch(branch))
+        .catch((error) =>
+          console.error("Failed to get current branch:", error)
+        );
+
+      // Fire rebase in background after a short delay to avoid IPC storm
+      // This is the heaviest operation, so give lighter ops time to complete
+      setTimeout(() => {
+        checkAndRebaseWorkspaces(repoPath)
+          .then(() => {
+            queryClient.invalidateQueries({
+              queryKey: ["workspaces", repoPath],
+            });
+            queryClient.invalidateQueries({
+              queryKey: ["workspaces-with-changes", repoPath],
+            });
+          })
+          .catch((error) => console.error("Auto-rebase failed:", error));
+      }, 100);
     };
 
     const unlistenFocus = getCurrentWindow().onFocusChanged(

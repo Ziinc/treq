@@ -1530,10 +1530,20 @@ export const ChangesDiffViewer = memo(
 
       // Refresh changed files when window regains focus
       useEffect(() => {
+        let lastFocusTime = 0;
+        const FOCUS_DEBOUNCE_MS = 2000; // Debounce rapid focus events
+
         const unlistenFocus = getCurrentWindow().onFocusChanged(
           ({ payload: focused }) => {
             if (focused) {
-              loadChangedFiles();
+              const now = Date.now();
+              if (now - lastFocusTime < FOCUS_DEBOUNCE_MS) return;
+              lastFocusTime = now;
+
+              // Delay slightly to stagger with other focus handlers
+              setTimeout(() => {
+                loadChangedFiles();
+              }, 200);
             }
           }
         );
@@ -1541,7 +1551,7 @@ export const ChangesDiffViewer = memo(
         return () => {
           unlistenFocus.then((fn) => fn());
         };
-      }, []);
+      }, [loadChangedFiles]);
 
       // Listen for workspace file changes
       useEffect(() => {
