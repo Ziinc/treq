@@ -2,9 +2,9 @@ use crate::jj::{self, JjRebaseResult};
 use crate::local_db::{self, Workspace};
 use crate::AppState;
 use std::collections::HashSet;
-use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 use tauri::State;
+use serde_json;
 
 // Track which workspaces have been indexed this session
 static INDEXED_WORKSPACES: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
@@ -22,61 +22,73 @@ pub fn add_workspace_to_db(
     branch_name: String,
     metadata: Option<String>,
 ) -> Result<i64, String> {
+    // Parse metadata JSON to extract intent and moved_files fields directly
+    let (intent, moved_files) = metadata
+        .and_then(|m| {
+            serde_json::from_str::<serde_json::Value>(&m).ok().and_then(|obj| {
+                let intent = obj.get("intent").and_then(|v| v.as_str()).map(String::from);
+                let moved_files = obj.get("moved_files").and_then(|v| v.as_array()).map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect::<Vec<_>>()
+                });
+                // Only return Some if moved_files has actual items
+                let moved_files = moved_files.filter(|v| !v.is_empty());
+                Some((intent, moved_files))
+            })
+        })
+        .unwrap_or((None, None));
+
     local_db::add_workspace(
         &repo_path,
         workspace_name,
         workspace_path,
         branch_name,
-        metadata,
+        intent,
+        moved_files,
     )
 }
 
 /// Combined command: creates jj workspace + adds to database atomically
+/// Delegates to core::create_workspace() for all workspace creation logic
 #[tauri::command]
 pub fn create_workspace(
     _state: State<AppState>,
     repo_path: String,
     branch_name: String,
-    new_branch: bool,
     source_branch: Option<String>,
     metadata: Option<String>,
 ) -> Result<i64, String> {
+    // Parse metadata JSON to extract intent and moved_files fields directly
+    let (intent, moved_files) = metadata
+        .and_then(|m| {
+            serde_json::from_str::<serde_json::Value>(&m).ok().and_then(|obj| {
+                let intent = obj.get("intent").and_then(|v| v.as_str()).map(String::from);
+                let moved_files = obj.get("moved_files").and_then(|v| v.as_array()).map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect::<Vec<_>>()
+                });
+                // Only return Some if moved_files has actual items
+                let moved_files = moved_files.filter(|v| !v.is_empty());
+                Some((intent, moved_files))
+            })
+        })
+        .unwrap_or((None, None));
 
-    // Create the jj workspace (returns sanitized workspace name)
-    let workspace_name = jj::create_workspace(
+    // Delegate to core layer for all workspace creation
+    let workspace = crate::core::create_workspace(
         &repo_path,
-        &branch_name, // Use branch name as workspace name
         &branch_name,
-        new_branch,
+        intent,
+        moved_files,
         source_branch.as_deref(),
-    )
-    .map_err(|e| e.to_string())?;
-
-    // Derive workspace path
-    let workspace_path = Path::new(&repo_path)
-        .join(".treq")
-        .join("workspaces")
-        .join(&workspace_name)
-        .to_string_lossy()
-        .to_string();
-
-    // Add to database
-    let workspace_id = local_db::add_workspace(
-        &repo_path,
-        workspace_name,
-        workspace_path,
-        branch_name,
-        metadata,
     )?;
 
-    // Initialize rebase flag to empty string (will trigger rebase on first view)
-    local_db::update_workspace_last_rebased_commit(
-        &repo_path,
-        workspace_id,
-        "", // Empty = will trigger rebase
-    )?;
+    // Initialize rebase flag to trigger rebase on first view
+    local_db::update_workspace_last_rebased_commit(&repo_path, workspace.id, "")?;
 
-    Ok(workspace_id)
+    Ok(workspace.id)
 }
 
 #[tauri::command]

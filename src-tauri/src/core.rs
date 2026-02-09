@@ -44,6 +44,22 @@ pub struct WorkspaceNode {
     pub depth: usize,
 }
 
+/// Metadata for workspace creation, supporting both simple intent and complex metadata with files.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WorkspaceMetadata {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub intent: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub moved_files: Option<Vec<String>>,
+}
+
+impl WorkspaceMetadata {
+    /// Serialize metadata to JSON string for storage
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(self).unwrap_or_else(|_| "{}".to_string())
+    }
+}
+
 /// Initializes a repository for use with Treq.
 ///
 /// Sets up both the local database (per-repo) and ensures JJ is initialized.
@@ -81,7 +97,8 @@ pub fn init(repo_path: &str) -> Result<bool, String> {
 pub fn create_workspace(
     repo_path: &str,
     branch_name: &str,
-    intent: Option<&str>,
+    intent: Option<String>,
+    moved_files: Option<Vec<String>>,
     source_branch: Option<&str>,
 ) -> Result<local_db::Workspace, String> {
     // snapshot working copy of repo
@@ -130,7 +147,8 @@ pub fn create_workspace(
         workspace_path.clone(),
         workspace_path.clone(),
         branch_name.to_string(),
-        Some(intent.unwrap_or("").to_string()),
+        intent,
+        moved_files.clone(),
     )
     .map_err(|e| format!("Failed to add workspace to db: {}", e))?;
 
@@ -141,13 +159,53 @@ pub fn create_workspace(
 
     let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
         .map_err(|e| format!("Failed to get workspace from db: {}", e))?;
-    match workspace {
-        Some(workspace) => Ok(workspace),
-        _ => Err(format!(
-            "Workspace not found in database after creation: {}",
-            workspace_id
-        )),
+    let workspace = match workspace {
+        Some(workspace) => workspace,
+        _ => {
+            return Err(format!(
+                "Workspace not found in database after creation: {}",
+                workspace_id
+            ))
+        }
+    };
+
+    // If moved_files are specified, perform the squash operation
+    if let Some(files) = moved_files.clone() {
+        if !files.is_empty() {
+            let source_workspace_path = if let Some(src_branch) = source_branch {
+                // For stacked workspaces, squash from the source workspace
+                let source_ws = local_db::get_workspace_by_branch(repo_path, src_branch)
+                    .map_err(|e| format!("Failed to get source workspace: {}", e))?;
+                match source_ws {
+                    Some(ws) => {
+                        let workspace_dir = Path::new(repo_path)
+                            .join(".treq")
+                            .join("workspaces")
+                            .join(&ws.workspace_path);
+                        workspace_dir.to_string_lossy().to_string()
+                    }
+                    None => repo_path.to_string(),
+                }
+            } else {
+                // For regular workspaces, squash from the repo root
+                repo_path.to_string()
+            };
+
+            // Perform the squash operation
+            jj::squash_to_workspace(&source_workspace_path, &workspace.workspace_name, Some(files))
+                .map_err(|e| format!("Failed to squash files to workspace: {}", e))?;
+
+            // Update the workspace's working copy to reflect the squash
+            let workspace_dir = Path::new(repo_path)
+                .join(".treq")
+                .join("workspaces")
+                .join(&workspace.workspace_path);
+            jj::update_stale_workspace(&workspace_dir.to_string_lossy())
+                .map_err(|e| format!("Failed to update workspace working copy: {}", e))?;
+        }
     }
+
+    Ok(workspace)
 }
 
 /// Deletes a workspace from the repository.
@@ -310,7 +368,7 @@ pub fn stack_workspace(
         None => format!("{}-1", base),
     };
 
-    let mut workspace = create_workspace(repo_path, &target, None, Some(&base))?;
+    let mut workspace = create_workspace(repo_path, &target, None, None, Some(&base))?;
 
     // Set the target_branch to the parent workspace's branch for conflict detection
     local_db::update_workspace_target_branch(repo_path, workspace.id, &base)
@@ -616,14 +674,8 @@ pub fn update_workspace(
     }
 
     if let MaybeEmptyParam::Some(intent_str) = intent {
-        let current_metadata = workspace.metadata.as_deref().unwrap_or("{}");
-        let mut meta: serde_json::Value =
-            serde_json::from_str(current_metadata).unwrap_or(serde_json::json!({}));
-        meta["intent"] = serde_json::Value::String(intent_str.to_string());
-        let new_metadata = serde_json::to_string(&meta)
-            .map_err(|e| format!("Failed to serialize metadata: {}", e))?;
-        local_db::update_workspace_metadata(repo_path, workspace_id, &new_metadata)
-            .map_err(|e| format!("Failed to update metadata: {}", e))?;
+        local_db::update_workspace_intent(repo_path, workspace_id, &intent_str)
+            .map_err(|e| format!("Failed to update intent: {}", e))?;
     }
 
     local_db::get_workspace_by_id(repo_path, workspace_id)

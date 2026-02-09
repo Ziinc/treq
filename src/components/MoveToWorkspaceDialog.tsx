@@ -13,10 +13,9 @@ import { Label } from "./ui/label";
 import { useToast } from "./ui/toast";
 import { applyBranchNamePattern, sanitizeForBranchName } from "../lib/utils";
 import {
-  jjCreateWorkspace,
-  jjSquashToWorkspace,
-  addWorkspaceToDb,
+  createWorkspace,
   getRepoSetting,
+  getWorkspaces,
 } from "../lib/api";
 import { ChevronDown, ChevronRight, FileText } from "lucide-react";
 
@@ -111,37 +110,34 @@ export const MoveToWorkspaceDialog: React.FC<MoveToWorkspaceDialogProps> = ({
     setLoading(true);
     setError("");
 
-    let workspacePath: string | null = null;
-
     try {
-      // Step 1: Create new jj workspace
+      // Step 1: Create workspace with metadata (handles remote detection and DB registration)
       addToast({
         title: "Creating workspace...",
         description: `Creating branch ${branchName}`,
         type: "info",
       });
 
-      workspacePath = await jjCreateWorkspace(repoPath, branchName, branchName, true);
-
-      // Step 2: Get the workspace name from the path (last component)
-      const workspaceName = workspacePath.split("/").pop() || branchName;
-
-      // Step 3: Move changes using jj squash
-      addToast({
-        title: "Moving files...",
-        description: "Squashing changes to new workspace",
-        type: "info",
-      });
-
-      await jjSquashToWorkspace(repoPath, workspaceName, selectedFiles);
-
-      // Step 4: Add workspace to database with metadata
+      // Create metadata struct (will be JSON stringified before sending to backend)
       const metadata = JSON.stringify({
         intent: intent.trim(),
-        movedFiles: selectedFiles,
+        moved_files: selectedFiles,
       });
 
-      const workspaceId = await addWorkspaceToDb(repoPath, branchName, workspacePath, branchName, metadata);
+      const workspaceId = await createWorkspace(
+        repoPath,
+        branchName,
+        undefined,       // sourceBranch (let core auto-detect)
+        metadata
+      );
+
+      // createWorkspace now handles file movement internally when moved_files are provided
+      // Get workspace info to confirm successful creation
+      const workspaces = await getWorkspaces(repoPath);
+      const workspace = workspaces.find(w => w.id === workspaceId);
+      if (!workspace) {
+        throw new Error("Workspace not found after creation");
+      }
 
       addToast({
         title: "Files moved successfully",
@@ -151,9 +147,9 @@ export const MoveToWorkspaceDialog: React.FC<MoveToWorkspaceDialogProps> = ({
 
       onSuccess({
         id: workspaceId,
-        workspaceName: branchName,
-        workspacePath,
-        branchName,
+        workspaceName: workspace.workspace_name,
+        workspacePath: workspace.workspace_path,
+        branchName: workspace.branch_name,
         metadata,
       });
       onOpenChange(false);

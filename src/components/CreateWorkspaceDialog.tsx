@@ -238,7 +238,6 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
           const targetWorkspaceId = await createWorkspace(
             repoPath,
             targetBranch,
-            false, // Don't create new branch - it should already exist
             undefined,
             JSON.stringify({ intent: `Workspace for ${targetBranch}` })
           );
@@ -289,7 +288,6 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
       const workspaceId = await createWorkspace(
         repoPath,
         branchName,
-        newBranch,
         effectiveSourceBranch,
         metadata
       );

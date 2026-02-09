@@ -229,28 +229,28 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
     fetchSyncStatus();
   }, [fetchSyncStatus]);
 
-  useEffect(() => {
-    if (activeTab === "overview" && workingDirectory) {
-      let isMounted = true;
+  // useEffect(() => {
+  //   if (activeTab === "overview" && workingDirectory) {
+  //     let isMounted = true;
 
-      // Refresh conflicted files when switching to overview tab
-      jjGetConflictedFiles(workingDirectory)
-        .then((files) => {
-          if (isMounted) {
-            setConflictedFiles(files);
-          }
-        })
-        .catch(() => {
-          if (isMounted) {
-            setConflictedFiles([]);
-          }
-        });
+  //     // Refresh conflicted files when switching to overview tab
+  //     jjGetConflictedFiles(workingDirectory)
+  //       .then((files) => {
+  //         if (isMounted) {
+  //           setConflictedFiles(files);
+  //         }
+  //       })
+  //       .catch(() => {
+  //         if (isMounted) {
+  //           setConflictedFiles([]);
+  //         }
+  //       });
 
-      return () => {
-        isMounted = false;
-      };
-    }
-  }, [activeTab, workingDirectory]);
+  //     return () => {
+  //       isMounted = false;
+  //     };
+  //   }
+  // }, [activeTab, workingDirectory]);
 
   // Auto-fetch remote updates periodically and on window focus
   useEffect(() => {
@@ -292,16 +292,16 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 
       try {
         const files = await jjGetConflictedFiles(workingDirectory);
-        if (isMounted) {
-          setConflictedFiles((prev) => {
-            // Only update if changed to prevent unnecessary re-renders
-            if (prev.length !== files.length ||
-                !prev.every((f, i) => f === files[i])) {
-              return files;
-            }
-            return prev;
-          });
-        }
+        // if (isMounted) {
+        //   setConflictedFiles((prev) => {
+        //     // Only update if changed to prevent unnecessary re-renders
+        //     if (prev.length !== files.length ||
+        //         !prev.every((f, i) => f === files[i])) {
+        //       return files;
+        //     }
+        //     return prev;
+        //   });
+        // }
       } catch (error) {
         console.error("Failed to check conflicts:", error);
       }
