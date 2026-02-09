@@ -471,7 +471,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
 
   const deleteWorkspaceMutation = useMutation({
     mutationFn: async (workspace: Workspace) => {
-      await deleteWorkspace(workspace.repo_path, workspace.workspace_path, workspace.id);
+      await deleteWorkspace(workspace.repo_path, workspace.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
@@ -736,7 +736,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
       try {
         // Delete all workspaces without triggering individual onSuccess callbacks
         for (const workspace of workspacesToDelete) {
-          await deleteWorkspace(workspace.repo_path, workspace.workspace_path, workspace.id);
+          await deleteWorkspace(workspace.repo_path, workspace.id);
         }
         // Show single toast and refresh after all deletions
         queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });

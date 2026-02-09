@@ -98,18 +98,11 @@ pub fn delete_workspace_from_db(repo_path: String, id: i64) -> Result<(), String
 }
 
 /// Unified delete workspace command that handles both filesystem and DB cleanup
-/// This is the new recommended way to delete workspaces - it ensures cleanup happens
-/// even if individual steps fail
+/// Delegates to core::delete_workspace which correctly constructs the full workspace path
 #[tauri::command]
-pub fn delete_workspace(repo_path: String, workspace_path: String, id: i64) -> Result<(), String> {
-    // Step 1: Try to remove workspace files (best effort - log but don't fail)
-    if let Err(e) = jj::remove_workspace(&repo_path, &workspace_path) {
-        eprintln!("Warning: Failed to remove workspace directory: {}", e);
-        // Continue anyway - we still want to clean up DB
-    }
-
-    // Step 2: Always delete from database (cascade deletes sessions via foreign key)
-    local_db::delete_workspace(&repo_path, id)
+pub fn delete_workspace(repo_path: String, id: i64) -> Result<(), String> {
+    crate::core::delete_workspace(&repo_path, &id)
+        .map(|_| ())
 }
 
 /// Push workspace to remote and update not_on_remote flag
@@ -498,32 +491,26 @@ mod tests {
     }
     */
 
-    // New tests for unified delete_workspace command
+    // Unit tests for delete_workspace command (DB cleanup only - no jj repo).
+    // Full directory + DB cleanup is tested in e2e test: test_can_delete_workspace
     #[test]
-    fn test_delete_workspace_removes_directory_and_db_entry() {
+    fn test_delete_workspace_cleans_up_db_entry() {
         use crate::local_db;
 
-        // Setup: Create a temp directory with a fake workspace
+        // Setup: Create a temp directory with a fake workspace under .treq/workspaces/
         let temp_dir = TempDir::new().unwrap();
         let repo_path = temp_dir.path().to_str().unwrap();
-        let workspace_dir = temp_dir.path().join("test_workspace");
+        let workspaces_dir = temp_dir.path().join(".treq").join("workspaces");
+        let workspace_dir = workspaces_dir.join("test_workspace");
         fs::create_dir_all(&workspace_dir).unwrap();
-        let workspace_path = workspace_dir.to_str().unwrap().to_string();
 
-        // Create a test file to ensure directory removal is tested
-        let test_file = workspace_dir.join("test.txt");
-        fs::write(&test_file, "test").unwrap();
-
-        // Setup: Initialize database and add workspace
-        let db_path = temp_dir.path().join(".treq").join("local.db");
-        fs::create_dir_all(db_path.parent().unwrap()).unwrap();
-
-        // Add workspace to DB
+        // Add workspace to DB with just the directory name (matching production behavior)
         local_db::add_workspace(
             repo_path,
             "test".to_string(),
-            workspace_path.clone(),
+            "test_workspace".to_string(),
             "test-branch".to_string(),
+            None,
             None,
         )
         .unwrap();
@@ -533,20 +520,15 @@ mod tests {
         assert_eq!(workspaces.len(), 1);
         let workspace_id = workspaces[0].id;
 
-        // Act: Delete the workspace
-        let result = delete_workspace(repo_path.to_string(), workspace_path.clone(), workspace_id);
+        // Act: Delete the workspace (delegates to core::delete_workspace)
+        // Note: jj workspace forget will fail (no jj repo) but is best-effort
+        let result = delete_workspace(repo_path.to_string(), workspace_id);
 
-        // Assert: Should succeed
+        // Assert: Should succeed (jj errors are non-fatal)
         assert!(
             result.is_ok(),
             "delete_workspace should succeed: {:?}",
             result
-        );
-
-        // Assert: Directory should be removed
-        assert!(
-            !workspace_dir.exists(),
-            "Workspace directory should be removed"
         );
 
         // Assert: DB entry should be removed
@@ -566,23 +548,17 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let repo_path = temp_dir.path().to_str().unwrap();
 
-        // Don't create the workspace directory (simulating already deleted or never created)
-        let workspace_path = temp_dir
-            .path()
-            .join("nonexistent_workspace")
-            .to_str()
-            .unwrap()
-            .to_string();
+        // Create .treq/workspaces/ but NOT the workspace directory itself
+        let workspaces_dir = temp_dir.path().join(".treq").join("workspaces");
+        fs::create_dir_all(&workspaces_dir).unwrap();
 
-        // Setup: Initialize database and add workspace (orphaned entry)
-        let db_path = temp_dir.path().join(".treq").join("local.db");
-        fs::create_dir_all(db_path.parent().unwrap()).unwrap();
-
+        // Add workspace to DB with just the directory name (orphaned entry - directory doesn't exist)
         local_db::add_workspace(
             repo_path,
             "test".to_string(),
-            workspace_path.clone(),
+            "nonexistent_workspace".to_string(),
             "test-branch".to_string(),
+            None,
             None,
         )
         .unwrap();
@@ -592,9 +568,9 @@ mod tests {
         let workspace_id = workspaces[0].id;
 
         // Act: Delete the workspace (directory doesn't exist)
-        let result = delete_workspace(repo_path.to_string(), workspace_path, workspace_id);
+        let result = delete_workspace(repo_path.to_string(), workspace_id);
 
-        // Assert: Should still succeed
+        // Assert: Should still succeed (core::delete_workspace handles missing directories)
         assert!(
             result.is_ok(),
             "delete_workspace should succeed even when directory missing: {:?}",
@@ -640,6 +616,7 @@ mod tests {
             "workspace1".to_string(),
             workspace1_dir.to_str().unwrap().to_string(),
             "branch1".to_string(),
+            None,
             None,
         )
         .unwrap();

@@ -225,8 +225,11 @@ pub fn delete_workspace(repo_path: &str, workspace_id: &i64) -> Result<bool, Str
                 .join(".treq")
                 .join("workspaces")
                 .join(&workspace.workspace_path);
-            jj::remove_workspace(repo_path, &workspace_path.to_str().unwrap())
-                .map_err(|e| format!("Failed to remove workspace: {}", e))?;
+            // Best effort: log but don't fail if jj/directory removal fails
+            // The DB cleanup must always proceed
+            if let Err(e) = jj::remove_workspace(repo_path, &workspace_path.to_str().unwrap()) {
+                eprintln!("Warning: Failed to remove workspace directory: {}", e);
+            }
             local_db::delete_workspace(repo_path, *workspace_id)
                 .map_err(|e| format!("Failed to delete workspace from db: {}", e))?;
             Ok(true)
