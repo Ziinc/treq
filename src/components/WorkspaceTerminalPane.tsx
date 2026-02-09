@@ -36,7 +36,7 @@ interface WorkspaceTerminalPaneProps {
   onClaudeTerminalIdle?: (sessionId: number) => void;
   // Callbacks for session management
   onActiveSessionChange?: (sessionId: number | null) => void;
-  onCreateNewSession?: () => void;
+  onCreateNewSession?: (activeWorkspacePath?: string | null) => void;
   onCloseSession?: (sessionId: number) => void;
   onRenameSession?: (sessionId: number, newName: string) => void;
   onNavigateToWorkspace?: (workspaceKey: string, isMainRepo: boolean) => void;
@@ -82,9 +82,21 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
     const [height, setHeight] = useState(33); // percentage
     const [isResizingHeight, setIsResizingHeight] = useState(false);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const paneRef = useRef<HTMLDivElement>(null);
 
     // Track which terminal is focused (last-clicked)
     const [activePtySessionId, setActivePtySessionId] = useState<string | null>(null);
+
+    // Clear active terminal when clicking outside the pane
+    useEffect(() => {
+      const handleMouseDown = (e: MouseEvent) => {
+        if (activePtySessionId && paneRef.current && !paneRef.current.contains(e.target as Node)) {
+          setActivePtySessionId(null);
+        }
+      };
+      document.addEventListener("mousedown", handleMouseDown);
+      return () => document.removeEventListener("mousedown", handleMouseDown);
+    }, [activePtySessionId]);
 
     // Track scroll container width for computing 40% min terminal width
     const [containerWidth, setContainerWidth] = useState(0);
@@ -125,6 +137,19 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
       new Map()
     );
 
+    // Scroll a specific terminal element into view after render
+    const scrollToTerminal = useCallback((terminalId: string) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const el = scrollContainerRef.current?.querySelector(
+            `[data-terminal-id="${CSS.escape(terminalId)}"]`
+          );
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+          }
+        });
+      });
+    }, []);
 
     // Auto-mount active session when it changes (after creation or selection)
     useEffect(() => {
@@ -147,43 +172,49 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
       setCollapsed(false);
 
       // Scroll to the new terminal after it's rendered
-      // Use double requestAnimationFrame to ensure DOM updates and layout are complete
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollLeft =
-              scrollContainerRef.current.scrollWidth;
-          }
-        });
-      });
+      scrollToTerminal(claudeTerminalId);
     }, [activeClaudeSessionId]);
 
-    // Scroll to the right when new terminal is added
-    useEffect(() => {
-      if (scrollContainerRef.current) {
-        scrollContainerRef.current.scrollLeft =
-          scrollContainerRef.current.scrollWidth;
-      }
-    }, [shellTerminals.length, mountedClaudeSessions.size]);
+    // Derive the working directory for new terminals based on the active terminal's workspace.
+    // Falls back to the sidebar-selected workspace (workingDirectory prop).
+    const activeWorkspaceDir = useMemo(() => {
+      if (!activePtySessionId) return null;
 
-    // Add new shell terminal
+      // Check claude sessions
+      const activeClaude = claudeSessions.find(s => s.ptySessionId === activePtySessionId);
+      if (activeClaude) {
+        return activeClaude.workspacePath || activeClaude.repoPath;
+      }
+
+      // Check shell terminals
+      const activeShell = shellTerminals.find(s => s.id === activePtySessionId);
+      if (activeShell) {
+        return activeShell.workingDirectory;
+      }
+
+      return null;
+    }, [activePtySessionId, claudeSessions, shellTerminals]);
+
+    // Add new shell terminal in the active terminal's workspace, or sidebar-selected workspace
     const handleAddShell = useCallback(() => {
-      const newId = `shell-${workingDirectory.replace(
+      const dir = activeWorkspaceDir || workingDirectory;
+      const newId = `shell-${dir.replace(
         /[^a-zA-Z0-9]/g,
         "-"
       )}-${Date.now()}`;
-      setShellTerminals((prev) => [...prev, { id: newId, workingDirectory }]);
+      setShellTerminals((prev) => [...prev, { id: newId, workingDirectory: dir }]);
       // Add to terminal order (rightmost position)
       setTerminalOrder((prev) => [...prev, newId]);
       if (collapsed) {
         setCollapsed(false);
       }
-    }, [workingDirectory, collapsed]);
+      scrollToTerminal(newId);
+    }, [activeWorkspaceDir, workingDirectory, collapsed, scrollToTerminal]);
 
-    // Create Agent session - creates a new Claude session
+    // Create Agent session in the active terminal's workspace, or sidebar-selected workspace
     const handleCreateAgentSession = useCallback(() => {
-      onCreateNewSession?.();
-    }, [onCreateNewSession]);
+      onCreateNewSession?.(activeWorkspaceDir);
+    }, [onCreateNewSession, activeWorkspaceDir]);
 
     // Close shell terminal
     const handleCloseShell = useCallback((terminalId: string) => {
@@ -539,7 +570,7 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
     const totalTerminals = allTerminals.length;
 
     return (
-      <>
+      <div ref={paneRef} style={{ display: 'contents' }}>
         {/* Resize handle - only when expanded and not maximized */}
         {!collapsed && !maximized && (
           <div
@@ -826,7 +857,7 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
             </div>
           )}
         </div>
-      </>
+      </div>
     );
   }
 );
