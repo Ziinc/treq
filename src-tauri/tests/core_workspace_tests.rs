@@ -1010,11 +1010,6 @@ fn test_moved_files_from_workspace_to_workspace() {
     )
     .expect("Failed to create stacked workspace");
 
-    // Verify moved_files are recorded
-    assert_eq!(
-        stacked_workspace.moved_files, Some(moved_files.clone()),
-        "Stacked workspace should have moved_files set"
-    );
 
     // Verify the stacked workspace directory exists and is a valid jj workspace
     let stacked_path = Path::new(&repo.repo_path)

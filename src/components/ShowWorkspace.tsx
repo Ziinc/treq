@@ -18,10 +18,12 @@ import {
   jjPush,
   jjGetSyncStatus,
   jjGitFetch,
+  jjGitFetchBackground,
   pushWorkspaceToRemote,
 } from "../lib/api";
 import { getStatusBgColor } from "../lib/git-status-colors";
 import { parseJjChangedFiles, type ParsedFileChange } from "../lib/git-utils";
+import { getFullWorkspacePath } from "../lib/utils";
 
 // Define BranchListItem locally since git API was removed
 export interface BranchListItem {
@@ -108,7 +110,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   onOpenBranchSwitcher,
   onCreateStackedWorkspace,
 }) {
-  const workingDirectory = workspace?.workspace_path || repositoryPath || "";
+  const workingDirectory = workspace ? getFullWorkspacePath(workspace) : (repositoryPath || "");
   const effectiveRepoPath = workspace?.repo_path || repositoryPath || "";
 
   const { addToast } = useToast();
@@ -136,7 +138,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   // Target branch and conflicts state
   const [targetBranch, setTargetBranch] = useState<string | null>(null);
   const [defaultBranch, setDefaultBranch] = useState<string>("main");
-  const [conflictedFiles, setConflictedFiles] = useState<string[]>([]);
+  const [conflictedFiles] = useState<string[]>([]);
 
   // Committed changes toggle state
   const [showCommittedChanges, setShowCommittedChanges] = useState(true);
@@ -207,9 +209,9 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 
   // Fetch sync status
   const fetchSyncStatus = useCallback(async () => {
-    // For workspace: use workspace path and branch
+    // For workspace: use full workspace path and branch
     // For home repo: use working directory and default branch
-    const path = workspace?.workspace_path || workingDirectory;
+    const path = workspace ? getFullWorkspacePath(workspace) : workingDirectory;
     const branch = workspace?.branch_name || defaultBranch;
 
     if (!path || !branch) return;
@@ -257,6 +259,9 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
     const repoPath = repositoryPath || workingDirectory;
     if (!repoPath) return;
 
+    let lastFocusFetch = 0;
+    const FOCUS_DEBOUNCE_MS = 2000; // Debounce rapid focus events
+
     const performBackgroundFetch = async () => {
       try {
         await jjGitFetch(repoPath);
@@ -270,19 +275,34 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
     // Fetch every 5 minutes
     const intervalId = setInterval(performBackgroundFetch, 5 * 60 * 1000);
 
-    // Fetch on window focus
+    // Fetch on window focus - fire-and-forget with debouncing
     const handleFocus = () => {
-      performBackgroundFetch();
+      const now = Date.now();
+      if (now - lastFocusFetch < FOCUS_DEBOUNCE_MS) return;
+      lastFocusFetch = now;
+
+      // Fire background fetch (returns immediately, work happens in separate thread)
+      jjGitFetchBackground(repoPath).catch((error) =>
+        console.debug("Background fetch failed:", error)
+      );
+
+      // Fire sync status update independently after a small delay
+      // to let the background fetch get started
+      setTimeout(() => {
+        fetchSyncStatus();
+      }, 500);
     };
-    window.addEventListener('focus', handleFocus);
+    window.addEventListener("focus", handleFocus);
 
     return () => {
       clearInterval(intervalId);
-      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener("focus", handleFocus);
     };
   }, [repositoryPath, workingDirectory, fetchSyncStatus]);
 
   // Periodic conflict check when workspace is active
+  const lastConflictErrorRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!workspace || !workingDirectory) return;
 
@@ -291,7 +311,9 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
       if (!isMounted) return;
 
       try {
-        const files = await jjGetConflictedFiles(workingDirectory);
+        await jjGetConflictedFiles(workingDirectory);
+        // Clear error cache on successful check
+        lastConflictErrorRef.current = null;
         // if (isMounted) {
         //   setConflictedFiles((prev) => {
         //     // Only update if changed to prevent unnecessary re-renders
@@ -303,7 +325,12 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
         //   });
         // }
       } catch (error) {
-        console.error("Failed to check conflicts:", error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        // Only log if error has changed to avoid spam
+        if (lastConflictErrorRef.current !== errorMessage) {
+          lastConflictErrorRef.current = errorMessage;
+          console.error("Failed to check conflicts:", error);
+        }
       }
     }, 2000); // Check every 2 seconds
 
@@ -534,7 +561,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   }, [workspace, effectiveRepoPath, addToast, fetchSyncStatus]);
 
 const handleSync = useCallback(async () => {
-    const syncPath = workspace?.workspace_path || workingDirectory;
+    const syncPath = workspace ? getFullWorkspacePath(workspace) : workingDirectory;
     const syncRepoPath = repositoryPath || workingDirectory;
     if (!syncPath || !syncRepoPath) return;
 
@@ -933,7 +960,7 @@ const handleSync = useCallback(async () => {
               {/* RIGHT: Commit History (1/5 width) */}
               <div className="flex-[1] bg-muted/20">
                 <LinearCommitHistory
-                  workspacePath={workingDirectory}
+                  workspacePath={workspace ? getFullWorkspacePath(workspace) : workingDirectory}
                   targetBranch={targetBranch}
                   isHomeRepo={!workspace}
                 />

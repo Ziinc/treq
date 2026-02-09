@@ -158,3 +158,14 @@ export function generateStackedBranchName(
   return applyBranchNamePattern(branchPattern, baseName);
 }
 
+/**
+ * Construct the full workspace path from a Workspace object
+ * The workspace_path in the database is just the directory name,
+ * so we need to reconstruct the full path: {repo_path}/.treq/workspaces/{workspace_path}
+ */
+export function getFullWorkspacePath(
+  workspace: { repo_path: string; workspace_path: string }
+): string {
+  return `${workspace.repo_path}/.treq/workspaces/${workspace.workspace_path}`;
+}
+

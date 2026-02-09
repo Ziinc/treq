@@ -773,6 +773,17 @@ pub fn jj_workspace_update_stale(workspace_path: &str) -> Result<String, JjError
 /// Get list of changed files in working copy using jj status
 /// This is faster than git status for large repos
 pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, JjError> {
+    // Validate workspace path exists and is a directory
+    let path = std::path::Path::new(workspace_path);
+    if !path.exists() {
+        return Ok(Vec::new()); // Return empty list if workspace doesn't exist
+    }
+    if !path.is_dir() {
+        return Err(JjError::IoError(
+            format!("Workspace path is not a directory: {}", workspace_path),
+        ));
+    }
+
     let output = command_for("jj")
         .current_dir(workspace_path)
         .args(["status", "--no-pager"])
@@ -780,9 +791,8 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
         .map_err(|e| JjError::IoError(e.to_string()))?;
 
     if !output.status.success() {
-        return Err(JjError::IoError(
-            String::from_utf8_lossy(&output.stderr).to_string(),
-        ));
+        // Return empty list on error instead of failing - workspace might not be initialized yet
+        return Ok(Vec::new());
     }
 
     let status_output = String::from_utf8_lossy(&output.stdout);
@@ -1364,12 +1374,32 @@ pub fn get_conflicted_files(
     workspace_path: &str,
     target_branch: Option<&str>,
 ) -> Result<Vec<String>, JjError> {
+    // Validate workspace path
+    if workspace_path.is_empty() {
+        return Err(JjError::IoError(
+            "Workspace path is empty".to_string(),
+        ));
+    }
+
+    let path = std::path::Path::new(workspace_path);
+    if !path.exists() {
+        return Err(JjError::IoError(
+            format!("Workspace path does not exist: {}", workspace_path),
+        ));
+    }
+
+    if !path.is_dir() {
+        return Err(JjError::IoError(
+            format!("Workspace path is not a directory: {}", workspace_path),
+        ));
+    }
+
     // 1. Proactively check and update if stale
     if let Ok(true) = is_workspace_stale(workspace_path) {
         if let Err(update_err) = jj_workspace_update_stale(workspace_path) {
             eprintln!(
-                "Failed to update stale workspace in get_conflicted_files: {}",
-                update_err
+                "Failed to update stale workspace in get_conflicted_files for {}: {}",
+                workspace_path, update_err
             );
         }
     }
