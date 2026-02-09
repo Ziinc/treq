@@ -953,8 +953,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
                 }
               }
             }}
-            onCreateNewSession={() => {
-              handleCreateSessionFromSidebar(selectedWorkspace?.id ?? null);
+            onCreateNewSession={(activeWorkspacePath) => {
+              if (activeWorkspacePath) {
+                const ws = workspaces.find(w => w.workspace_path === activeWorkspacePath);
+                handleCreateSessionFromSidebar(ws?.id ?? null);
+              } else {
+                handleCreateSessionFromSidebar(selectedWorkspace?.id ?? null);
+              }
             }}
             onRenameSession={async (sessionId, newName) => {
               try {
