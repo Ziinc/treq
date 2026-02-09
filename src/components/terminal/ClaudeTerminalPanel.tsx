@@ -31,12 +31,14 @@ import {
 import { ModelSelector } from "../ModelSelector";
 import { Input } from "../ui/input";
 import { useToast } from "../ui/toast";
-import { MIN_TERMINAL_WIDTH, type ClaudeSessionData } from "./types";
+import { type ClaudeSessionData } from "./types";
 
 // Claude terminal panel with header
 export interface ClaudeTerminalPanelProps {
   sessionData: ClaudeSessionData;
   collapsed: boolean;
+  isActive?: boolean;
+  onFocus?: () => void;
   onClose?: () => void;
   onRename?: (newName: string) => void;
   onSessionError?: (message: string) => void;
@@ -52,6 +54,8 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
   function ClaudeTerminalPanel({
     sessionData,
     collapsed,
+    isActive,
+    onFocus,
     onClose,
     onRename,
     onSessionError,
@@ -282,12 +286,15 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
           width == null && "flex-1"
         )}
         style={{
-          minWidth: MIN_TERMINAL_WIDTH,
           width: width != null ? width : undefined,
         }}
+        onMouseDown={onFocus}
       >
         {/* Header */}
-        <div className="h-7 min-h-[28px] flex items-center justify-between px-2 bg-background border-b border-r border-border flex-shrink-0">
+        <div className={cn(
+          "h-7 min-h-[28px] flex items-center justify-between px-2 border-b border-r border-border flex-shrink-0",
+          isActive ? "bg-primary/20" : "bg-background"
+        )}>
           <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground min-w-0">
             <Bot className="w-3 h-3 flex-shrink-0" />
             {isEditingName ? (

@@ -80,6 +80,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { TargetBranchSelector } from "./TargetBranchSelector";
+import { WorkspaceStackTree } from "./WorkspaceStackTree";
 import { cn } from "../lib/utils";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import type { SessionCreationInfo } from "../types/sessions";
@@ -95,6 +96,7 @@ interface ShowWorkspaceProps {
   onOpenMergePreview?: () => void;
   onOpenBranchSwitcher?: () => void;
   onCreateStackedWorkspace?: () => void;
+  onNavigateToWorkspace?: (workspace: Workspace) => void;
   queryClient?: QueryClient;
 }
 
@@ -109,6 +111,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   onOpenMergePreview,
   onOpenBranchSwitcher,
   onCreateStackedWorkspace,
+  onNavigateToWorkspace,
 }) {
   const workingDirectory = workspace ? getFullWorkspacePath(workspace) : (repositoryPath || "");
   const effectiveRepoPath = workspace?.repo_path || repositoryPath || "";
@@ -1223,6 +1226,14 @@ const handleSync = useCallback(async () => {
             </DropdownMenu>
           </div>
         </div>
+        {/* Stack tree: show DAG hierarchy for stacked workspaces */}
+        {workspace && onNavigateToWorkspace && (
+          <WorkspaceStackTree
+            workspacePath={workingDirectory}
+            currentWorkspaceId={workspace.id}
+            onNavigateToWorkspace={onNavigateToWorkspace}
+          />
+        )}
         {/* Row 2: Intent (if workspace and intent exists) */}
         {workspace && workspaceIntent && (
           <div className="flex items-center px-1">

@@ -195,6 +195,11 @@ pub fn cleanup_stale_workspaces(repo_path: String) -> Result<(), String> {
 
 
 #[tauri::command]
+pub fn get_workspace_status(workspace_path: String) -> Result<crate::core::WorkspaceStatus, String> {
+    crate::core::workspace_status(&workspace_path)
+}
+
+#[tauri::command]
 pub fn rebuild_workspaces(repo_path: String) -> Result<Vec<Workspace>, String> {
     local_db::rebuild_workspaces_from_filesystem(&repo_path)
 }

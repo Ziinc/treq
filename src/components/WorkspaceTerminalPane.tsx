@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useRef, useState, useImperativeHandle, forwardRef } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState, useImperativeHandle, forwardRef } from "react";
 import {
   type ConsolidatedTerminalHandle,
 } from "./ConsolidatedTerminal";
@@ -11,12 +11,11 @@ import {
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
 import { ptyClose } from "../lib/api";
-import { ChevronDown, ChevronUp, Bot, Terminal, Maximize2, Minimize2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Bot, Terminal, Maximize2, Minimize2, GitBranch, Home } from "lucide-react";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { ClaudeTerminalPanel } from "./terminal/ClaudeTerminalPanel";
 import { ResizeDivider } from "./terminal/ResizeDivider";
 import { ShellTerminalPanel } from "./terminal/ShellTerminalPanel";
-import { MIN_TERMINAL_WIDTH } from "./terminal/types";
 import { type ClaudeSessionData } from "./terminal/types";
 
 // Shell terminal data
@@ -29,6 +28,7 @@ interface WorkspaceTerminalPaneProps {
   workingDirectory: string;
   isHidden?: boolean;
   onSessionError?: (message: string) => void;
+  currentBranch?: string | null;
   // Claude terminal integration
   claudeSessions?: ClaudeSessionData[];
   activeClaudeSessionId?: number | null;
@@ -39,6 +39,7 @@ interface WorkspaceTerminalPaneProps {
   onCreateNewSession?: () => void;
   onCloseSession?: (sessionId: number) => void;
   onRenameSession?: (sessionId: number, newName: string) => void;
+  onNavigateToWorkspace?: (workspaceKey: string, isMainRepo: boolean) => void;
 }
 
 export interface WorkspaceTerminalPaneHandle {
@@ -48,11 +49,23 @@ export interface WorkspaceTerminalPaneHandle {
   createShellSession: () => void;
 }
 
+// Workspace group for rendering terminals grouped by workspace
+interface WorkspaceGroup {
+  workspaceKey: string;
+  workspaceName: string;
+  isMainRepo: boolean;
+  terminals: Array<
+    | { type: "shell"; data: ShellTerminalData }
+    | { type: "claude"; data: ClaudeSessionData }
+  >;
+}
+
 const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, WorkspaceTerminalPaneProps>(
   function WorkspaceTerminalPane({
     workingDirectory,
     isHidden = false,
     onSessionError,
+    currentBranch,
     claudeSessions = [],
     activeClaudeSessionId = null,
     onClaudeTerminalOutput,
@@ -61,6 +74,7 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
     onCreateNewSession,
     onCloseSession,
     onRenameSession,
+    onNavigateToWorkspace,
   }, ref) {
     // Shared pane state
     const [collapsed, setCollapsed] = useState(true);
@@ -68,6 +82,25 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
     const [height, setHeight] = useState(33); // percentage
     const [isResizingHeight, setIsResizingHeight] = useState(false);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+    // Track which terminal is focused (last-clicked)
+    const [activePtySessionId, setActivePtySessionId] = useState<string | null>(null);
+
+    // Track scroll container width for computing 40% min terminal width
+    const [containerWidth, setContainerWidth] = useState(0);
+    useEffect(() => {
+      const el = scrollContainerRef.current;
+      if (!el) return;
+      // Set immediately so sticky headers work from first render
+      setContainerWidth(el.clientWidth);
+      const ro = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          setContainerWidth(entry.contentRect.width);
+        }
+      });
+      ro.observe(el);
+      return () => ro.disconnect();
+    }, [collapsed]);
 
     // Shell terminals - start empty (agent sessions are opened by default instead)
     const [shellTerminals, setShellTerminals] = useState<ShellTerminalData[]>(
@@ -133,33 +166,6 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
       }
     }, [shellTerminals.length, mountedClaudeSessions.size]);
 
-    // Collapse pane when switching to a workspace with no terminals
-    useEffect(() => {
-      // Calculate terminals for this workspace. Treat the active session as mounted
-      // immediately so the pane stays open while the terminal boots.
-      const claudeForWorkspace = claudeSessions.filter((s) => {
-        const isActive = activeClaudeSessionId === s.sessionId;
-        if (!isActive && !mountedClaudeSessions.has(s.sessionId)) {
-          return false;
-        }
-        const sessionWorkingDir = s.workspacePath || s.repoPath;
-        return sessionWorkingDir === workingDirectory;
-      });
-      const shellsForWorkspace = shellTerminals.filter(
-        (t) => t.workingDirectory === workingDirectory
-      );
-
-      if (claudeForWorkspace.length === 0 && shellsForWorkspace.length === 0) {
-        setCollapsed(true);
-      }
-    }, [
-      workingDirectory,
-      claudeSessions,
-      shellTerminals,
-      mountedClaudeSessions,
-      activeClaudeSessionId,
-    ]);
-
     // Add new shell terminal
     const handleAddShell = useCallback(() => {
       const newId = `shell-${workingDirectory.replace(
@@ -185,7 +191,10 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
       terminalRefs.current.delete(terminalId);
       setShellTerminals((prev) => prev.filter((t) => t.id !== terminalId));
       setTerminalOrder((prev) => prev.filter((id) => id !== terminalId));
-    }, []);
+      if (activePtySessionId === terminalId) {
+        setActivePtySessionId(null);
+      }
+    }, [activePtySessionId]);
 
     // Close Claude session
     const handleCloseClaudeSession = useCallback(
@@ -210,8 +219,11 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
         if (activeClaudeSessionId === sessionId) {
           _onActiveSessionChange?.(null);
         }
+        if (activePtySessionId === claudeTerminalId) {
+          setActivePtySessionId(null);
+        }
       },
-      [claudeSessions, onCloseSession, activeClaudeSessionId, _onActiveSessionChange]
+      [claudeSessions, onCloseSession, activeClaudeSessionId, _onActiveSessionChange, activePtySessionId]
     );
 
     // Expose methods via ref for command palette
@@ -281,6 +293,9 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
           const container = scrollContainerRef.current;
           if (!container) return prev;
 
+          // Minimum width is 2/5 of scroll container viewport
+          const minWidth = containerWidth * 0.4 || 300;
+
           // Get current widths - if null, calculate from actual element width
           const leftEl = container.querySelector(
             `[data-terminal-id="${leftId}"]`
@@ -301,22 +316,19 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
           let newRightWidth = rightCurrentWidth - deltaX;
 
           // Enforce minimum widths
-          if (newLeftWidth < MIN_TERMINAL_WIDTH) {
-            const diff = MIN_TERMINAL_WIDTH - newLeftWidth;
-            newLeftWidth = MIN_TERMINAL_WIDTH;
+          if (newLeftWidth < minWidth) {
+            const diff = minWidth - newLeftWidth;
+            newLeftWidth = minWidth;
             newRightWidth -= diff;
           }
-          if (newRightWidth < MIN_TERMINAL_WIDTH) {
-            const diff = MIN_TERMINAL_WIDTH - newRightWidth;
-            newRightWidth = MIN_TERMINAL_WIDTH;
+          if (newRightWidth < minWidth) {
+            const diff = minWidth - newRightWidth;
+            newRightWidth = minWidth;
             newLeftWidth -= diff;
           }
 
           // Don't update if either would be below minimum
-          if (
-            newLeftWidth < MIN_TERMINAL_WIDTH ||
-            newRightWidth < MIN_TERMINAL_WIDTH
-          ) {
+          if (newLeftWidth < minWidth || newRightWidth < minWidth) {
             return prev;
           }
 
@@ -329,42 +341,24 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
       []
     );
 
-    // Get Claude sessions that should be rendered (mounted ones for this workspace)
+    // Show ALL mounted Claude sessions (no workspace filtering)
     const claudeSessionsToRender = claudeSessions.filter((s) => {
       const isActiveSession = activeClaudeSessionId === s.sessionId;
-      if (!isActiveSession && !mountedClaudeSessions.has(s.sessionId)) {
-        return false;
-      }
-      // Filter by workspace: match workspacePath if set, otherwise match repoPath
-      const sessionWorkingDir = s.workspacePath || s.repoPath;
-      return sessionWorkingDir === workingDirectory;
+      return isActiveSession || mountedClaudeSessions.has(s.sessionId);
     });
 
-    // Filter shell terminals for this workspace
-    const shellTerminalsForWorkspace = shellTerminals.filter(
-      (t) => t.workingDirectory === workingDirectory
-    );
+    // Show all shell terminals (no workspace filtering)
+    const allShellTerminals = shellTerminals;
 
-    const hasAnyTerminals =
-      claudeSessionsToRender.length > 0 ||
-      shellTerminalsForWorkspace.length > 0;
-
-    // Cmd+J: Toggle bottom terminal pane or create first agent session
+    // Cmd+J: Toggle bottom terminal pane
     useKeyboardShortcut(
       "j",
       true,
       () => {
         if (isHidden) return;
-
-        if (collapsed && !hasAnyTerminals) {
-          setCollapsed(false);
-          onCreateNewSession?.();
-          return;
-        }
-
         setCollapsed((prev) => !prev);
       },
-      [isHidden, collapsed, hasAnyTerminals, onCreateNewSession]
+      [isHidden]
     );
 
     // Cmd+Control+J: Toggle maximize/restore terminal pane
@@ -411,7 +405,7 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
 
     // Build ordered list of all terminals for rendering based on terminalOrder
     const shellTerminalMap = new Map(
-      shellTerminalsForWorkspace.map((t) => [t.id, t])
+      allShellTerminals.map((t) => [t.id, t])
     );
     const claudeSessionMap = new Map(
       claudeSessionsToRender.map((s) => [`claude-${s.sessionId}`, s])
@@ -447,11 +441,74 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
 
     const allTerminals = [...orderedTerminals, ...missingClaudeTerminals];
 
+    // Group terminals by workspace
+    const workspaceGroups = useMemo((): WorkspaceGroup[] => {
+      const groupMap = new Map<string, WorkspaceGroup>();
+
+      for (const terminal of allTerminals) {
+        let workspaceKey: string;
+        let workspaceName: string;
+
+        if (terminal.type === "claude") {
+          workspaceKey = terminal.data.workspacePath || terminal.data.repoPath;
+          workspaceName = terminal.data.workspaceName || "Main Repository";
+        } else {
+          // Shell terminal - derive workspace info from workingDirectory
+          // Try to find a matching Claude session's workspace info for this directory
+          const matchingClaude = claudeSessions.find((s) => {
+            const sessionDir = s.workspacePath || s.repoPath;
+            return sessionDir === terminal.data.workingDirectory;
+          });
+          workspaceKey = terminal.data.workingDirectory;
+          workspaceName = matchingClaude?.workspaceName || "Main Repository";
+        }
+
+        if (!groupMap.has(workspaceKey)) {
+          groupMap.set(workspaceKey, {
+            workspaceKey,
+            workspaceName,
+            isMainRepo: workspaceName === "Main Repository",
+            terminals: [],
+          });
+        }
+        groupMap.get(workspaceKey)!.terminals.push(terminal);
+      }
+
+      return Array.from(groupMap.values());
+    }, [allTerminals, claudeSessions]);
+
+    // Scroll to workspace group and focus first terminal when workingDirectory changes
+    useEffect(() => {
+      if (collapsed || isHidden || !scrollContainerRef.current) return;
+      const matchingGroup = workspaceGroups.find(
+        (g) => g.workspaceKey === workingDirectory
+      );
+      if (!matchingGroup || matchingGroup.terminals.length === 0) return;
+
+      // Scroll the group element into view
+      requestAnimationFrame(() => {
+        const groupEl = scrollContainerRef.current?.querySelector(
+          `[data-workspace-group="${CSS.escape(matchingGroup.workspaceKey)}"]`
+        );
+        if (groupEl) {
+          groupEl.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
+        }
+      });
+
+      // Set the first terminal in the group as active
+      const firstTerminal = matchingGroup.terminals[0];
+      if (firstTerminal.type === "shell") {
+        setActivePtySessionId(firstTerminal.data.id);
+      } else {
+        setActivePtySessionId(firstTerminal.data.ptySessionId);
+      }
+    }, [workingDirectory]); // eslint-disable-line react-hooks/exhaustive-deps
+
     // When completely hidden, render terminals in hidden div to keep PTY sessions alive
     if (isHidden) {
       return (
         <div className="hidden">
-          {shellTerminalsForWorkspace.map((terminal) => (
+          {allShellTerminals.map((terminal) => (
             <ShellTerminalPanel
               key={terminal.id}
               terminalData={terminal}
@@ -648,88 +705,123 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
                 backgroundColor: "#1e1e1e",
               }}
             >
-              {allTerminals.map((terminal, index) => {
-                const isLastTerminal = index === allTerminals.length - 1;
-                const nextTerminal = allTerminals[index + 1];
+              {workspaceGroups.map((group, groupIndex) => {
+                // Each terminal gets min 40% of scroll container viewport width
+                const minTerminalPx = containerWidth * 0.4 || 300;
+                const groupMinWidth = group.terminals.length * minTerminalPx;
+                return (
+                <div key={group.workspaceKey} data-workspace-group={group.workspaceKey} className={cn("flex flex-col min-h-0 flex-shrink-0", groupIndex > 0 && "border-l-2 border-border")} style={{ minWidth: groupMinWidth, flex: "1 0 auto" }}>
+                  {/* Horizontal workspace indicator header - sticky so it stays visible when scrolling */}
+                  <div
+                    className="h-8 flex items-center gap-2 px-2 border-b border-border bg-muted/20 flex-shrink-0 sticky left-0 z-10 overflow-hidden cursor-pointer hover:bg-muted/40 transition-colors"
+                    style={{ width: containerWidth > 0 ? containerWidth : undefined }}
+                    onClick={() => onNavigateToWorkspace?.(group.workspaceKey, group.isMainRepo)}
+                  >
+                    {group.isMainRepo ? (
+                      <Home className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    ) : (
+                      <GitBranch className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    )}
+                    <span
+                      className="text-sm text-muted-foreground font-mono truncate"
+                      title={group.isMainRepo ? (currentBranch || "main") : group.workspaceName}
+                    >
+                      {group.isMainRepo ? (currentBranch || "main") : group.workspaceName}
+                    </span>
+                  </div>
+                  {/* Terminals in this group */}
+                  <div className="flex min-h-0 flex-1">
+                    {group.terminals.map((terminal, index) => {
+                      const isLastInGroup = index === group.terminals.length - 1;
+                      const nextTerminal = group.terminals[index + 1];
 
-                if (terminal.type === "shell") {
-                  const terminalId = terminal.data.id;
-                  return (
-                    <React.Fragment key={terminalId}>
-                      <ShellTerminalPanel
-                        terminalData={terminal.data}
-                        collapsed={collapsed}
-                        onClose={() => handleCloseShell(terminalId)}
-                        canClose={true}
-                        onSessionError={onSessionError}
-                        terminalRefs={terminalRefs}
-                        width={terminalWidths.get(terminalId)}
-                      />
-                      {!isLastTerminal && nextTerminal && (
-                        <ResizeDivider
-                          onResize={(deltaX) => {
-                            const nextId =
-                              nextTerminal.type === "shell"
-                                ? nextTerminal.data.id
-                                : `claude-${nextTerminal.data.sessionId}`;
-                            handleTerminalResize(terminalId, nextId, deltaX);
-                          }}
-                        />
-                      )}
-                    </React.Fragment>
-                  );
-                } else {
-                  const terminalId = `claude-${terminal.data.sessionId}`;
-                  return (
-                    <React.Fragment key={terminalId}>
-                      <ClaudeTerminalPanel
-                        sessionData={terminal.data}
-                        collapsed={collapsed}
-                        onClose={() =>
-                          handleCloseClaudeSession(terminal.data.sessionId)
-                        }
-                        onRename={
-                          onRenameSession
-                            ? (newName) =>
-                                onRenameSession(
-                                  terminal.data.sessionId,
-                                  newName
-                                )
-                            : undefined
-                        }
-                        onSessionError={onSessionError}
-                        onTerminalOutput={
-                          onClaudeTerminalOutput
-                            ? (output) =>
-                                onClaudeTerminalOutput(
-                                  terminal.data.sessionId,
-                                  output
-                                )
-                            : undefined
-                        }
-                        onTerminalIdle={
-                          onClaudeTerminalIdle
-                            ? () =>
-                                onClaudeTerminalIdle(terminal.data.sessionId)
-                            : undefined
-                        }
-                        terminalRefs={terminalRefs}
-                        width={terminalWidths.get(terminalId)}
-                      />
-                      {!isLastTerminal && nextTerminal && (
-                        <ResizeDivider
-                          onResize={(deltaX) => {
-                            const nextId =
-                              nextTerminal.type === "shell"
-                                ? nextTerminal.data.id
-                                : `claude-${nextTerminal.data.sessionId}`;
-                            handleTerminalResize(terminalId, nextId, deltaX);
-                          }}
-                        />
-                      )}
-                    </React.Fragment>
-                  );
-                }
+                      if (terminal.type === "shell") {
+                        const terminalId = terminal.data.id;
+                        return (
+                          <React.Fragment key={terminalId}>
+                            <ShellTerminalPanel
+                              terminalData={terminal.data}
+                              collapsed={collapsed}
+                              isActive={activePtySessionId === terminalId}
+                              onFocus={() => setActivePtySessionId(terminalId)}
+                              onClose={() => handleCloseShell(terminalId)}
+                              canClose={true}
+                              onSessionError={onSessionError}
+                              terminalRefs={terminalRefs}
+                              width={terminalWidths.get(terminalId)}
+                            />
+                            {!isLastInGroup && nextTerminal && (
+                              <ResizeDivider
+                                onResize={(deltaX) => {
+                                  const nextId =
+                                    nextTerminal.type === "shell"
+                                      ? nextTerminal.data.id
+                                      : `claude-${nextTerminal.data.sessionId}`;
+                                  handleTerminalResize(terminalId, nextId, deltaX);
+                                }}
+                              />
+                            )}
+                          </React.Fragment>
+                        );
+                      } else {
+                        const terminalId = `claude-${terminal.data.sessionId}`;
+                        const ptyId = terminal.data.ptySessionId;
+                        return (
+                          <React.Fragment key={terminalId}>
+                            <ClaudeTerminalPanel
+                              sessionData={terminal.data}
+                              collapsed={collapsed}
+                              isActive={activePtySessionId === ptyId}
+                              onFocus={() => setActivePtySessionId(ptyId)}
+                              onClose={() =>
+                                handleCloseClaudeSession(terminal.data.sessionId)
+                              }
+                              onRename={
+                                onRenameSession
+                                  ? (newName) =>
+                                      onRenameSession(
+                                        terminal.data.sessionId,
+                                        newName
+                                      )
+                                  : undefined
+                              }
+                              onSessionError={onSessionError}
+                              onTerminalOutput={
+                                onClaudeTerminalOutput
+                                  ? (output) =>
+                                      onClaudeTerminalOutput(
+                                        terminal.data.sessionId,
+                                        output
+                                      )
+                                  : undefined
+                              }
+                              onTerminalIdle={
+                                onClaudeTerminalIdle
+                                  ? () =>
+                                      onClaudeTerminalIdle(terminal.data.sessionId)
+                                  : undefined
+                              }
+                              terminalRefs={terminalRefs}
+                              width={terminalWidths.get(terminalId)}
+                            />
+                            {!isLastInGroup && nextTerminal && (
+                              <ResizeDivider
+                                onResize={(deltaX) => {
+                                  const nextId =
+                                    nextTerminal.type === "shell"
+                                      ? nextTerminal.data.id
+                                      : `claude-${nextTerminal.data.sessionId}`;
+                                  handleTerminalResize(terminalId, nextId, deltaX);
+                                }}
+                              />
+                            )}
+                          </React.Fragment>
+                        );
+                      }
+                    })}
+                  </div>
+                </div>
+                );
               })}
             </div>
           )}
