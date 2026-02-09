@@ -1240,6 +1240,7 @@ mod tests {
             format!("{}/.treq/workspaces/workspace-1", repo_path),
             "branch-a".to_string(),
             None,
+            None,
         )
         .expect("add_workspace 1 should succeed");
 
@@ -1248,6 +1249,7 @@ mod tests {
             "workspace-2".to_string(),
             format!("{}/.treq/workspaces/workspace-2", repo_path),
             "branch-b".to_string(),
+            None,
             None,
         )
         .expect("add_workspace 2 should succeed");
@@ -1363,6 +1365,7 @@ mod tests {
             format!("{}/.treq/workspaces/workspace-1", repo_path),
             "branch-a".to_string(),
             None,
+            None,
         )
         .expect("add_workspace 1 should succeed");
         update_workspace_target_branch(repo_path, id1, "main")
@@ -1374,6 +1377,7 @@ mod tests {
             format!("{}/.treq/workspaces/workspace-2", repo_path),
             "branch-b".to_string(),
             None,
+            None,
         )
         .expect("add_workspace 2 should succeed");
         update_workspace_target_branch(repo_path, id2, "develop")
@@ -1384,6 +1388,7 @@ mod tests {
             "workspace-3".to_string(),
             format!("{}/.treq/workspaces/workspace-3", repo_path),
             "branch-c".to_string(),
+            None,
             None,
         )
         .expect("add_workspace 3 should succeed");
