@@ -69,7 +69,6 @@ export function useCreateStackedWorkspace() {
         const workspaceId = await createWorkspace(
           repoPath,
           branchName,
-          true, // newBranch = true
           parentBranch, // sourceBranch = parent's branch
           metadata
         );

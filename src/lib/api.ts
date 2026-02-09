@@ -138,14 +138,12 @@ export const addWorkspaceToDb = (
 export const createWorkspace = (
   repo_path: string,
   branch_name: string,
-  new_branch: boolean,
   source_branch?: string,
   metadata?: string
 ): Promise<number> =>
   invoke("create_workspace", {
     repoPath: repo_path,
     branchName: branch_name,
-    newBranch: new_branch,
     sourceBranch: source_branch ?? null,
     metadata: metadata ?? null,
   });

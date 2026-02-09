@@ -18,6 +18,7 @@ pub struct Workspace {
     pub target_branch: Option<String>,
     pub has_conflicts: bool,
     pub intent: Option<String>,
+    pub moved_files: Option<Vec<String>>,
     pub not_on_remote: bool,
 }
 
@@ -124,6 +125,8 @@ pub fn init_local_db(repo_path: &str) -> Result<PathBuf, String> {
         "ALTER TABLE workspaces ADD COLUMN not_on_remote BOOLEAN DEFAULT 0",
         [],
     );
+    let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN intent TEXT", []);
+    let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN moved_files TEXT", []);
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS sessions (
@@ -354,13 +357,16 @@ fn get_connection(repo_path: &str) -> Result<Connection, String> {
 pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch, COALESCE(has_conflicts, 0), COALESCE(not_on_remote, 0) FROM workspaces ORDER BY branch_name COLLATE NOCASE ASC")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, target_branch, COALESCE(has_conflicts, 0), COALESCE(not_on_remote, 0), intent, moved_files FROM workspaces ORDER BY branch_name COLLATE NOCASE ASC")
         .map_err(|e| format!("Failed to prepare workspaces query: {}", e))?;
 
     let workspaces = stmt
         .query_map([], |row| {
-            let metadata: Option<String> = row.get(5)?;
-            let intent = extract_intent_from_metadata(&metadata);
+            let intent: Option<String> = row.get(8)?;
+            let moved_files_json: Option<String> = row.get(9)?;
+            let moved_files = moved_files_json.and_then(|json| {
+                serde_json::from_str::<Vec<String>>(&json).ok()
+            });
             Ok(Workspace {
                 id: row.get(0)?,
                 repo_path: repo_path.to_string(),
@@ -368,11 +374,12 @@ pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
                 workspace_path: row.get(2)?,
                 branch_name: row.get(3)?,
                 created_at: row.get(4)?,
-                metadata,
-                target_branch: row.get(6)?,
-                has_conflicts: row.get::<_, i64>(7)? != 0,
-                not_on_remote: row.get::<_, i64>(8)? != 0,
+                metadata: None,
+                target_branch: row.get(5)?,
+                has_conflicts: row.get::<_, i64>(6)? != 0,
+                not_on_remote: row.get::<_, i64>(7)? != 0,
                 intent,
+                moved_files,
             })
         })
         .map_err(|e| format!("Failed to query workspaces: {}", e))?;
@@ -385,13 +392,16 @@ pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
 pub fn get_workspace_by_id(repo_path: &str, id: i64) -> Result<Option<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch, COALESCE(has_conflicts, 0), COALESCE(not_on_remote, 0) FROM workspaces WHERE id = ?1")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, target_branch, COALESCE(has_conflicts, 0), COALESCE(not_on_remote, 0), intent, moved_files FROM workspaces WHERE id = ?1")
         .map_err(|e| format!("Failed to prepare workspace query: {}", e))?;
 
     let workspace = stmt
         .query_row([id], |row| {
-            let metadata: Option<String> = row.get(5)?;
-            let intent = extract_intent_from_metadata(&metadata);
+            let intent: Option<String> = row.get(8)?;
+            let moved_files_json: Option<String> = row.get(9)?;
+            let moved_files = moved_files_json.and_then(|json| {
+                serde_json::from_str::<Vec<String>>(&json).ok()
+            });
             Ok(Workspace {
                 id: row.get(0)?,
                 repo_path: repo_path.to_string(),
@@ -399,11 +409,12 @@ pub fn get_workspace_by_id(repo_path: &str, id: i64) -> Result<Option<Workspace>
                 workspace_path: row.get(2)?,
                 branch_name: row.get(3)?,
                 created_at: row.get(4)?,
-                metadata,
-                target_branch: row.get(6)?,
-                has_conflicts: row.get::<_, i64>(7)? != 0,
-                not_on_remote: row.get::<_, i64>(8)? != 0,
+                metadata: None,
+                target_branch: row.get(5)?,
+                has_conflicts: row.get::<_, i64>(6)? != 0,
+                not_on_remote: row.get::<_, i64>(7)? != 0,
                 intent,
+                moved_files,
             })
         })
         .optional()
@@ -418,13 +429,16 @@ pub fn get_workspace_by_path(
 ) -> Result<Option<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch, COALESCE(has_conflicts, 0), COALESCE(not_on_remote, 0) FROM workspaces WHERE workspace_path = ?1")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, target_branch, COALESCE(has_conflicts, 0), COALESCE(not_on_remote, 0), intent, moved_files FROM workspaces WHERE workspace_path = ?1")
         .map_err(|e| format!("Failed to prepare workspace query: {}", e))?;
 
     let workspace = stmt
         .query_row([workspace_path], |row| {
-            let metadata: Option<String> = row.get(5)?;
-            let intent = extract_intent_from_metadata(&metadata);
+            let intent: Option<String> = row.get(8)?;
+            let moved_files_json: Option<String> = row.get(9)?;
+            let moved_files = moved_files_json.and_then(|json| {
+                serde_json::from_str::<Vec<String>>(&json).ok()
+            });
             Ok(Workspace {
                 id: row.get(0)?,
                 repo_path: repo_path.to_string(),
@@ -432,15 +446,53 @@ pub fn get_workspace_by_path(
                 workspace_path: row.get(2)?,
                 branch_name: row.get(3)?,
                 created_at: row.get(4)?,
-                metadata,
-                target_branch: row.get(6)?,
-                has_conflicts: row.get::<_, i64>(7)? != 0,
-                not_on_remote: row.get::<_, i64>(8)? != 0,
+                metadata: None,
+                target_branch: row.get(5)?,
+                has_conflicts: row.get::<_, i64>(6)? != 0,
+                not_on_remote: row.get::<_, i64>(7)? != 0,
                 intent,
+                moved_files,
             })
         })
         .optional()
         .map_err(|e| format!("Failed to query workspace: {}", e))?;
+
+    Ok(workspace)
+}
+
+pub fn get_workspace_by_branch(
+    repo_path: &str,
+    branch_name: &str,
+) -> Result<Option<Workspace>, String> {
+    let conn = get_connection(repo_path)?;
+    let mut stmt = conn
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, target_branch, COALESCE(has_conflicts, 0), COALESCE(not_on_remote, 0), intent, moved_files FROM workspaces WHERE branch_name = ?1")
+        .map_err(|e| format!("Failed to prepare workspace query: {}", e))?;
+
+    let workspace = stmt
+        .query_row([branch_name], |row| {
+            let intent: Option<String> = row.get(8)?;
+            let moved_files_json: Option<String> = row.get(9)?;
+            let moved_files = moved_files_json.and_then(|json| {
+                serde_json::from_str::<Vec<String>>(&json).ok()
+            });
+            Ok(Workspace {
+                id: row.get(0)?,
+                repo_path: repo_path.to_string(),
+                workspace_name: row.get(1)?,
+                workspace_path: row.get(2)?,
+                branch_name: row.get(3)?,
+                created_at: row.get(4)?,
+                metadata: None,
+                target_branch: row.get(5)?,
+                has_conflicts: row.get::<_, i64>(6)? != 0,
+                not_on_remote: row.get::<_, i64>(7)? != 0,
+                intent,
+                moved_files,
+            })
+        })
+        .optional()
+        .map_err(|e| format!("Failed to query workspace by branch: {}", e))?;
 
     Ok(workspace)
 }
@@ -450,20 +502,31 @@ pub fn add_workspace(
     workspace_name: String,
     workspace_path: String,
     branch_name: String,
-    metadata: Option<String>,
+    intent: Option<String>,
+    moved_files: Option<Vec<String>>,
 ) -> Result<i64, String> {
     let conn = get_connection(repo_path)?;
     let created_at = Utc::now().to_rfc3339();
 
+    // Convert moved_files Vec to JSON string for storage, store NULL if empty
+    let moved_files_json = moved_files.and_then(|files| {
+        if files.is_empty() {
+            None
+        } else {
+            serde_json::to_string(&files).ok()
+        }
+    });
+
     conn.execute(
-        "INSERT INTO workspaces (workspace_name, workspace_path, branch_name, created_at, metadata)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
+        "INSERT INTO workspaces (workspace_name, workspace_path, branch_name, created_at, intent, moved_files)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         params![
             workspace_name,
             workspace_path,
             branch_name,
             created_at,
-            metadata
+            intent,
+            moved_files_json
         ],
     )
     .map_err(|e| format!("Failed to insert workspace: {}", e))?;
@@ -485,6 +548,16 @@ pub fn update_workspace_metadata(repo_path: &str, id: i64, metadata: &str) -> Re
         params![metadata, id],
     )
     .map_err(|e| format!("Failed to update workspace metadata: {}", e))?;
+    Ok(())
+}
+
+pub fn update_workspace_intent(repo_path: &str, id: i64, intent: &str) -> Result<(), String> {
+    let conn = get_connection(repo_path)?;
+    conn.execute(
+        "UPDATE workspaces SET intent = ?1 WHERE id = ?2",
+        params![intent, id],
+    )
+    .map_err(|e| format!("Failed to update workspace intent: {}", e))?;
     Ok(())
 }
 
@@ -523,13 +596,16 @@ pub fn get_workspaces_by_target_branch(
 ) -> Result<Vec<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch, COALESCE(has_conflicts, 0), COALESCE(not_on_remote, 0) FROM workspaces WHERE target_branch = ?1 ORDER BY branch_name COLLATE NOCASE ASC")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, target_branch, COALESCE(has_conflicts, 0), COALESCE(not_on_remote, 0), intent, moved_files FROM workspaces WHERE target_branch = ?1 ORDER BY branch_name COLLATE NOCASE ASC")
         .map_err(|e| format!("Failed to prepare workspaces query: {}", e))?;
 
     let workspaces = stmt
         .query_map([target_branch], |row| {
-            let metadata: Option<String> = row.get(5)?;
-            let intent = extract_intent_from_metadata(&metadata);
+            let intent: Option<String> = row.get(8)?;
+            let moved_files_json: Option<String> = row.get(9)?;
+            let moved_files = moved_files_json.and_then(|json| {
+                serde_json::from_str::<Vec<String>>(&json).ok()
+            });
             Ok(Workspace {
                 id: row.get(0)?,
                 repo_path: repo_path.to_string(),
@@ -537,11 +613,12 @@ pub fn get_workspaces_by_target_branch(
                 workspace_path: row.get(2)?,
                 branch_name: row.get(3)?,
                 created_at: row.get(4)?,
-                metadata,
-                target_branch: row.get(6)?,
-                has_conflicts: row.get::<_, i64>(7)? != 0,
-                not_on_remote: row.get::<_, i64>(8)? != 0,
+                metadata: None,
+                target_branch: row.get(5)?,
+                has_conflicts: row.get::<_, i64>(6)? != 0,
+                not_on_remote: row.get::<_, i64>(7)? != 0,
                 intent,
+                moved_files,
             })
         })
         .map_err(|e| format!("Failed to query workspaces: {}", e))?;
@@ -698,6 +775,7 @@ pub fn rebuild_workspaces_from_filesystem(repo_path: &str) -> Result<Vec<Workspa
             workspace_path.clone(),
             branch_name.clone(),
             None,
+            None,
         )?;
 
         workspaces.push(Workspace {
@@ -712,6 +790,7 @@ pub fn rebuild_workspaces_from_filesystem(repo_path: &str) -> Result<Vec<Workspa
             has_conflicts: false,
             not_on_remote: false,
             intent: None,
+            moved_files: None,
         });
     }
 
@@ -1118,7 +1197,8 @@ mod tests {
             "test-workspace".to_string(),
             workspace_path.clone(),
             "test-branch".to_string(),
-            Some(r#"{"intent":"test intent"}"#.to_string()),
+            Some("test intent".to_string()),
+            None,
         )
         .expect("add_workspace should succeed");
 
@@ -1196,6 +1276,7 @@ mod tests {
             format!("{}/.treq/workspaces/test-workspace", repo_path),
             "test-branch".to_string(),
             None,
+            None,
         )
         .expect("add_workspace should succeed");
 
@@ -1240,6 +1321,7 @@ mod tests {
             "test-workspace".to_string(),
             workspace_path.clone(),
             "test-branch".to_string(),
+            None,
             None,
         )
         .expect("add_workspace should succeed");
@@ -1333,6 +1415,7 @@ mod tests {
             format!("{}/.treq/workspaces/test-workspace", repo_path),
             "test-branch".to_string(),
             None,
+            None,
         )
         .expect("add_workspace should succeed");
 
@@ -1365,6 +1448,7 @@ mod tests {
             "test".to_string(),
             format!("{}/.treq/workspaces/test", repo_path),
             "test-branch".to_string(),
+            None,
             None,
         )
         .expect("add_workspace should succeed");
@@ -1412,6 +1496,7 @@ mod tests {
             format!("{}/.treq/workspaces/test", repo_path),
             "test-branch".to_string(),
             None,
+            None,
         )
         .expect("add_workspace should succeed");
 
@@ -1456,6 +1541,7 @@ mod tests {
             format!("{}/.treq/workspaces/test", repo_path),
             "test-branch".to_string(),
             None,
+            None,
         )
         .expect("add_workspace should succeed");
 
@@ -1490,6 +1576,7 @@ mod tests {
             "test".to_string(),
             format!("{}/.treq/workspaces/test", repo_path),
             "test-branch".to_string(),
+            None,
             None,
         )
         .expect("add_workspace should succeed");
@@ -1528,6 +1615,7 @@ mod tests {
             "test".to_string(),
             format!("{}/.treq/workspaces/test", repo_path),
             "test-branch".to_string(),
+            None,
             None,
         )
         .expect("add_workspace should succeed");

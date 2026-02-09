@@ -638,6 +638,25 @@ pub fn squash_to_workspace(
     }
 }
 
+/// Update a stale workspace working copy
+/// Runs: jj workspace update-stale in the workspace directory
+pub fn update_stale_workspace(workspace_path: &str) -> Result<(), JjError> {
+    let output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["workspace", "update-stale"])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(JjError::InitFailed(format!(
+            "Failed to update stale workspace: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )))
+    }
+}
+
 /// Edit the working copy of a workspace branch
 /// Tries to edit <branch>+ (child of bookmark), falls back to <branch> + new if no child exists
 /// This ensures we're editing the working copy, not the bookmark commit itself

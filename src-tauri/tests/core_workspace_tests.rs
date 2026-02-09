@@ -26,7 +26,8 @@ fn test_can_create_workspace() {
     let workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
         "feat/test",
-        Some("new feature"),
+        Some("new feature".to_string()),
+        None, // moved_files
         None, // source_branch (defaults to current)
     )
     .expect("Failed to create workspace");
@@ -112,7 +113,8 @@ fn test_can_create_workspace_from_remote_branch() {
     let workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
         "feature-remote",
-        Some("feature-remote"),
+        Some("feature-remote".to_string()),
+        None, // moved_files
         None,
     )
     .expect("Failed to create workspace from remote branch");
@@ -163,7 +165,7 @@ fn test_can_create_stacked_workspace() {
 
     // Create first workspace
     let base: Workspace =
-        treq_lib::core::create_workspace(&repo.repo_path, "feat/base", Some("feature-base"), None)
+        treq_lib::core::create_workspace(&repo.repo_path, "feat/base", Some("feature-base".to_string()), None, None)
             .expect("Failed to create base workspace");
 
     let workspace1_path = repo.workspaces_dir().join(&base.workspace_path);
@@ -284,7 +286,8 @@ fn test_can_merge_workspace_into_home_repo() {
     let workspace: Workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
         "feature-merge",
-        Some("merging feature"),
+        Some("merging feature".to_string()),
+        None,
         None,
     )
     .expect("Failed to create workspace");
@@ -423,7 +426,8 @@ fn test_can_squash_merge_workspace_into_home_repo() {
     let workspace: Workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
         "feature-squash",
-        Some("squashing feature"),
+        Some("squashing feature".to_string()),
+        None,
         None,
     )
     .expect("Failed to create workspace");
@@ -491,7 +495,8 @@ fn test_can_delete_workspace() {
     let workspace: Workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
         "feat/delete",
-        Some("delete feature"),
+        Some("delete feature".to_string()),
+        None,
         None,
     )
     .expect("Failed to create workspace");
@@ -549,7 +554,8 @@ fn test_can_update_workspace() {
     let workspace: Workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
         "feat/update-test",
-        Some("initial feature"),
+        Some("initial feature".to_string()),
+        None,
         None,
     )
     .expect("Failed to create workspace");
@@ -582,7 +588,8 @@ fn test_update_workspace_target_branch_perform_rebase() {
     let workspace: Workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
         "feat/initial",
-        Some("initial feature"),
+        Some("initial feature".to_string()),
+        None,
         None,
     )
     .expect("Failed to create workspace");
@@ -620,7 +627,11 @@ fn test_update_workspace_target_branch_perform_rebase() {
         "feat/initial".to_string(),
         "Workspace branch name should remain unchanged after update"
     );
-    assert_eq!(updated.intent, None, "Workspace intent should be unchanged");
+    assert_eq!(
+        updated.intent,
+        Some("initial feature".to_string()),
+        "Workspace intent should remain unchanged from creation"
+    );
 
     // verify that the workspace is rebased onto the develop branch, check that develop.txt is present in workspace
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
@@ -648,11 +659,11 @@ fn test_update_workspace_target_branch_perform_rebase() {
 fn test_can_list_workspaces() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
-    treq_lib::core::create_workspace(&repo.repo_path, "feat/a", Some("feature-a"), None)
+    treq_lib::core::create_workspace(&repo.repo_path, "feat/a", Some("feature-a".to_string()), None, None)
         .expect("Failed to create workspace");
-    treq_lib::core::create_workspace(&repo.repo_path, "feat/b", Some("feature-b"), None)
+    treq_lib::core::create_workspace(&repo.repo_path, "feat/b", Some("feature-b".to_string()), None, None)
         .expect("Failed to create workspace");
-    treq_lib::core::create_workspace(&repo.repo_path, "feat/c", Some("feature-c"), None)
+    treq_lib::core::create_workspace(&repo.repo_path, "feat/c", Some("feature-c".to_string()), None, None)
         .expect("Failed to create workspace");
 
     // JJ VERIFICATION: Verify via jj workspace list command directly (primary source of truth)
@@ -685,7 +696,7 @@ fn test_workspace_conflict_detection() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
     let workspace =
-        treq_lib::core::create_workspace(&repo.repo_path, "base", Some("feature-base"), None)
+        treq_lib::core::create_workspace(&repo.repo_path, "base", Some("feature-base".to_string()), None, None)
             .expect("Failed to create base workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
@@ -792,7 +803,8 @@ fn test_push_workspace_to_remote() {
     let workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
         "test-workspace",
-        Some("test workspace"),
+        Some("test workspace".to_string()),
+        None,
         None,
     )
     .expect("Failed to create workspace");
@@ -853,7 +865,8 @@ fn test_push_home_repo_to_remote() {
     let workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
         "workspace-for-home-test",
-        Some("test"),
+        Some("test".to_string()),
+        None,
         None,
     )
     .expect("Failed to create workspace");
@@ -881,4 +894,153 @@ fn test_push_home_repo_to_remote() {
         "Workspace not_on_remote flag should NOT be modified by home repo push"
     );
 
+}
+
+// =============================================================================
+// Test: moved_files are stored correctly (main repo -> workspace)
+// =============================================================================
+
+#[test]
+fn test_moved_files_from_main_repo() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    // Create test files in the main repo
+    let file1_path = Path::new(&repo.repo_path).join("feature1.rs");
+    let file2_path = Path::new(&repo.repo_path).join("feature2.rs");
+    fs::write(&file1_path, "// Feature 1 code").expect("Failed to create file1");
+    fs::write(&file2_path, "// Feature 2 code").expect("Failed to create file2");
+
+    // Verify files exist in main repo
+    assert!(file1_path.exists(), "feature1.rs should exist in main repo");
+    assert!(file2_path.exists(), "feature2.rs should exist in main repo");
+
+    // jj auto-tracks files, no need to explicitly add them
+
+    // Create workspace with moved_files metadata
+    let moved_files = vec!["feature1.rs".to_string(), "feature2.rs".to_string()];
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/refactor",
+        Some("refactor code".to_string()),
+        Some(moved_files.clone()),
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    // Verify workspace has moved_files set
+    assert_eq!(
+        workspace.moved_files, Some(moved_files.clone()),
+        "Workspace should have moved_files set after creation"
+    );
+
+    // Verify workspace has intent set
+    assert_eq!(
+        workspace.intent, Some("refactor code".to_string()),
+        "Workspace should have intent set"
+    );
+
+    // Verify the workspace directory exists and is a valid jj workspace
+    let workspace_path = Path::new(&repo.repo_path)
+        .join(".treq")
+        .join("workspaces")
+        .join(&workspace.workspace_path);
+
+    // Verify files are now in the workspace (moved by create_workspace when moved_files provided)
+    let file1_in_workspace = workspace_path.join("feature1.rs");
+    let file2_in_workspace = workspace_path.join("feature2.rs");
+    assert!(
+        file1_in_workspace.exists(),
+        "feature1.rs should exist in workspace after create_workspace"
+    );
+    assert!(
+        file2_in_workspace.exists(),
+        "feature2.rs should exist in workspace after create_workspace"
+    );
+
+    // Verify files are no longer in main repo
+    assert!(
+        !file1_path.exists(),
+        "feature1.rs should be removed from main repo after squash"
+    );
+    assert!(
+        !file2_path.exists(),
+        "feature2.rs should be removed from main repo after squash"
+    );
+}
+
+// =============================================================================
+// Test: moved_files are stored correctly (workspace -> workspace)
+// =============================================================================
+
+#[test]
+fn test_moved_files_from_workspace_to_workspace() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    // Create base workspace
+    let base_workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/base",
+        Some("base feature".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create base workspace");
+
+    let base_path = Path::new(&repo.repo_path)
+        .join(".treq")
+        .join("workspaces")
+        .join(&base_workspace.workspace_path);
+
+    // Create test files in the base workspace
+    let file1_path = base_path.join("component1.ts");
+    let file2_path = base_path.join("component2.ts");
+    fs::write(&file1_path, "// Component 1").expect("Failed to create component1");
+    fs::write(&file2_path, "// Component 2").expect("Failed to create component2");
+
+    // jj auto-tracks files, no need to explicitly add them
+
+    // Create stacked workspace with moved_files from base
+    let moved_files = vec!["component1.ts".to_string(), "component2.ts".to_string()];
+    let stacked_workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/components",
+        Some("extract components".to_string()),
+        Some(moved_files.clone()),
+        Some("feat/base"),
+    )
+    .expect("Failed to create stacked workspace");
+
+    // Verify moved_files are recorded
+    assert_eq!(
+        stacked_workspace.moved_files, Some(moved_files.clone()),
+        "Stacked workspace should have moved_files set"
+    );
+
+    // Verify the stacked workspace directory exists and is a valid jj workspace
+    let stacked_path = Path::new(&repo.repo_path)
+        .join(".treq")
+        .join("workspaces")
+        .join(&stacked_workspace.workspace_path);
+
+    // Verify files are now in the stacked workspace (moved by create_workspace when moved_files provided)
+    let file1_in_stacked = stacked_path.join("component1.ts");
+    let file2_in_stacked = stacked_path.join("component2.ts");
+    assert!(
+        file1_in_stacked.exists(),
+        "component1.ts should exist in stacked workspace after create_workspace"
+    );
+    assert!(
+        file2_in_stacked.exists(),
+        "component2.ts should exist in stacked workspace after create_workspace"
+    );
+
+    // Verify files are no longer in the base workspace
+    assert!(
+        !file1_path.exists(),
+        "component1.ts should be removed from base workspace after create_workspace"
+    );
+    assert!(
+        !file2_path.exists(),
+        "component2.ts should be removed from base workspace after create_workspace"
+    );
 }
