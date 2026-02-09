@@ -1973,7 +1973,7 @@ export const ChangesDiffViewer = memo(
         cachedChanges.refresh();
       }, [cachedChanges]);
 
-      // Reload with pending data, preserving comments and moving orphaned ones to general comment
+      // Reload with pending data, preserving valid comments and discarding orphaned ones
       const handleReloadWithPendingChanges = useCallback(() => {
         // Set flag to bypass review mode check during reload
         isReloadingRef.current = true;
@@ -2010,34 +2010,13 @@ export const ChangesDiffViewer = memo(
             validComments.push(comment);
           }
 
-          // If there are orphaned comments, add them to the final review comment
+          // If there are orphaned comments, discard them and show toast
           if (orphanedComments.length > 0) {
-            const orphanedText = orphanedComments
-              .map((c) => {
-                const lineRef =
-                  c.startLine === c.endLine
-                    ? `${c.filePath}:${c.startLine}`
-                    : `${c.filePath}:${c.startLine}-${c.endLine}`;
-                const codeBlock =
-                  c.lineContent.length > 0
-                    ? `\n\`\`\`\n${c.lineContent.join("\n")}\n\`\`\`\n`
-                    : "";
-                return `**${lineRef}** (outdated)${codeBlock}${c.text}`;
-              })
-              .join("\n\n");
-
-            setFinalReviewComment((prev) => {
-              if (prev.trim()) {
-                return `${prev}\n\n---\n**Outdated comments:**\n\n${orphanedText}`;
-              }
-              return `**Outdated comments:**\n\n${orphanedText}`;
-            });
-
             addToast({
-              title: "Comments moved",
-              description: `${orphanedComments.length} comment${
+              title: "Comments discarded",
+              description: `${orphanedComments.length} outdated comment${
                 orphanedComments.length > 1 ? "s" : ""
-              } moved to summary (lines changed)`,
+              } discarded (lines changed)`,
               type: "info",
             });
           }
@@ -3140,6 +3119,48 @@ export const ChangesDiffViewer = memo(
         [comments, isCommentOutdated]
       );
 
+      // Get all outdated comments across all files
+      const getAllOutdatedComments = useCallback((): LineComment[] => {
+        return comments.filter((c) => isCommentOutdated(c));
+      }, [comments, isCommentOutdated]);
+
+      // Copy all outdated comments to clipboard as markdown
+      const handleCopyOutdatedComments = useCallback(async () => {
+        const outdated = getAllOutdatedComments();
+        if (outdated.length === 0) return;
+
+        const markdown = outdated
+          .map((c) => {
+            const lineRef =
+              c.startLine === c.endLine
+                ? `${c.filePath}:${c.startLine}`
+                : `${c.filePath}:${c.startLine}-${c.endLine}`;
+            const codeBlock =
+              c.lineContent.length > 0
+                ? `\n\`\`\`\n${c.lineContent.join("\n")}\n\`\`\`\n`
+                : "";
+            return `**${lineRef}**${codeBlock}${c.text}`;
+          })
+          .join("\n\n");
+
+        try {
+          await navigator.clipboard.writeText(markdown);
+          addToast({
+            title: "Copied",
+            description: `${outdated.length} outdated comment${
+              outdated.length > 1 ? "s" : ""
+            } copied to clipboard`,
+            type: "success",
+          });
+        } catch {
+          addToast({
+            title: "Copy failed",
+            description: "Could not copy to clipboard",
+            type: "error",
+          });
+        }
+      }, [getAllOutdatedComments, addToast]);
+
       // Get comments for a specific line in a specific hunk
       const getCommentsForLine = useCallback(
         (filePath: string, hunkId: string, actualLineNum: number, currentLineSide: "old" | "new") => {
@@ -3724,15 +3745,28 @@ export const ChangesDiffViewer = memo(
                     )
                   </span>
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 border-amber-500/60 text-amber-800 dark:text-amber-200 hover:bg-amber-500/25"
-                  onClick={handleReloadWithPendingChanges}
-                >
-                  <RefreshCw className="w-3 h-3" />
-                  Reload
-                </Button>
+                <div className="flex items-center gap-2">
+                  {getAllOutdatedComments().length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 border-amber-500/60 text-amber-800 dark:text-amber-200 hover:bg-amber-500/25"
+                      onClick={handleCopyOutdatedComments}
+                    >
+                      <Copy className="w-3 h-3" />
+                      Copy Outdated ({getAllOutdatedComments().length})
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 border-amber-500/60 text-amber-800 dark:text-amber-200 hover:bg-amber-500/25"
+                    onClick={handleReloadWithPendingChanges}
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    Reload
+                  </Button>
+                </div>
               </div>
             )}
 
