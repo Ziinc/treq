@@ -209,15 +209,6 @@ pub fn update_workspace_metadata(
 }
 
 #[tauri::command]
-pub fn update_workspace_conflicts(
-    repo_path: String,
-    workspace_id: i64,
-    has_conflicts: bool,
-) -> Result<(), String> {
-    local_db::update_workspace_has_conflicts(&repo_path, workspace_id, has_conflicts)
-}
-
-#[tauri::command]
 pub fn update_workspace_not_on_remote(
     repo_path: String,
     workspace_id: i64,
@@ -226,46 +217,9 @@ pub fn update_workspace_not_on_remote(
     local_db::update_workspace_not_on_remote(&repo_path, workspace_id, not_on_remote)
 }
 
-/// Get list of workspace IDs that currently have conflicts
-/// Checks directly against jj, does not use stale database state
 #[tauri::command]
-pub fn list_conflicted_workspace_ids(repo_path: String) -> Result<Vec<i64>, String> {
-    let workspaces = local_db::get_workspaces(&repo_path)?;
-    let mut conflicted_ids = Vec::new();
-
-    for workspace in workspaces {
-        // Check actual conflict status from jj directly
-        let conflicted_files = jj::get_conflicted_files(
-            &workspace.workspace_path,
-            workspace.target_branch.as_deref(),
-        )
-        .unwrap_or_default();
-
-        if !conflicted_files.is_empty() {
-            conflicted_ids.push(workspace.id);
-        }
-    }
-
-    Ok(conflicted_ids)
-}
-
-/// Get list of workspace IDs that currently have uncommitted changes
-/// Checks directly against jj, does not use stale database state
-#[tauri::command]
-pub fn list_workspaces_with_changes(repo_path: String) -> Result<Vec<i64>, String> {
-    let workspaces = local_db::get_workspaces(&repo_path)?;
-    let mut changed_ids = Vec::new();
-
-    for workspace in workspaces {
-        // Check actual change status from jj directly
-        let changed_files = jj::jj_get_changed_files(&workspace.workspace_path).unwrap_or_default();
-
-        if !changed_files.is_empty() {
-            changed_ids.push(workspace.id);
-        }
-    }
-
-    Ok(changed_ids)
+pub fn list_workspace_statuses(repo_path: String) -> Result<Vec<crate::core::WorkspacePartialStatus>, String> {
+    crate::core::list_workspace_statuses(&repo_path)
 }
 
 #[tauri::command]
@@ -311,11 +265,6 @@ pub fn set_workspace_target_branch(
     // If rebase succeeded, save the target branch (in Git format for UI)
     if rebase_result.success {
         local_db::update_workspace_target_branch(&repo_path, id, &target_branch)?;
-
-        // Check for conflicts after rebase and update status in database
-        let conflicted_files =
-            jj::get_conflicted_files(&workspace_path, Some(&target_branch)).unwrap_or_default();
-        local_db::update_workspace_has_conflicts(&repo_path, id, !conflicted_files.is_empty())?;
     }
 
     Ok(rebase_result)

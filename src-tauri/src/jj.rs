@@ -1503,52 +1503,7 @@ fn get_conflicted_files_from_status_with_retry(
     }
 
     let status = String::from_utf8_lossy(&output.stdout);
-    let mut conflicts = parse_conflicted_files_from_status(&status)?;
-
-    // Check for bookmark conflicts in the status output
-    if conflicts.is_empty() && status.contains("Warning: These bookmarks have conflicts:") {
-        // Extract conflicted bookmark names
-        let mut in_conflict_section = false;
-        for line in status.lines() {
-            if line.contains("Warning: These bookmarks have conflicts:") {
-                in_conflict_section = true;
-                continue;
-            }
-            if in_conflict_section {
-                let trimmed = line.trim();
-                if trimmed.is_empty()
-                    || trimmed.starts_with("Hint:")
-                    || trimmed.starts_with("Use `")
-                {
-                    break; // End of conflict section
-                }
-                if !trimmed.is_empty() && !trimmed.starts_with("Warning") {
-                    // Bookmark name is the conflicted bookmark
-                    conflicts.push(format!("(bookmark conflict: {})", trimmed));
-                }
-            }
-        }
-    }
-
-    // If no conflicts found in status output, check if current branch is marked as (conflicted)
-    if conflicts.is_empty() {
-        // Check if the current branch is marked as conflicted
-        if let Ok(branches) = get_branches(workspace_path) {
-            // Look for any branch marked as (conflicted)
-            for branch in &branches {
-                if branch.name.contains("(conflicted)") || branch.name.contains("(conflict)") {
-                    // If a branch is conflicted, return a marker
-                    conflicts.push(format!(
-                        "(branch conflict: {})",
-                        branch
-                            .name
-                            .replace(" (conflicted)", "")
-                            .replace(" (conflict)", "")
-                    ));
-                }
-            }
-        }
-    }
+    let conflicts = parse_conflicted_files_from_status(&status)?;
 
     Ok(conflicts)
 }

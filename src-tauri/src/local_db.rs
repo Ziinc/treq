@@ -16,7 +16,6 @@ pub struct Workspace {
     pub created_at: String,
     pub metadata: Option<String>,
     pub target_branch: Option<String>,
-    pub has_conflicts: bool,
     pub intent: Option<String>,
     pub moved_files: Option<Vec<String>>,
     pub not_on_remote: bool,
@@ -357,13 +356,13 @@ fn get_connection(repo_path: &str) -> Result<Connection, String> {
 pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, target_branch, COALESCE(has_conflicts, 0), COALESCE(not_on_remote, 0), intent, moved_files FROM workspaces ORDER BY branch_name COLLATE NOCASE ASC")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, target_branch, COALESCE(not_on_remote, 0), intent, moved_files FROM workspaces ORDER BY branch_name COLLATE NOCASE ASC")
         .map_err(|e| format!("Failed to prepare workspaces query: {}", e))?;
 
     let workspaces = stmt
         .query_map([], |row| {
-            let intent: Option<String> = row.get(8)?;
-            let moved_files_json: Option<String> = row.get(9)?;
+            let intent: Option<String> = row.get(7)?;
+            let moved_files_json: Option<String> = row.get(8)?;
             let moved_files = moved_files_json.and_then(|json| {
                 serde_json::from_str::<Vec<String>>(&json).ok()
             });
@@ -376,8 +375,7 @@ pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
                 created_at: row.get(4)?,
                 metadata: None,
                 target_branch: row.get(5)?,
-                has_conflicts: row.get::<_, i64>(6)? != 0,
-                not_on_remote: row.get::<_, i64>(7)? != 0,
+                not_on_remote: row.get::<_, i64>(6)? != 0,
                 intent,
                 moved_files,
             })
@@ -392,13 +390,13 @@ pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
 pub fn get_workspace_by_id(repo_path: &str, id: i64) -> Result<Option<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, target_branch, COALESCE(has_conflicts, 0), COALESCE(not_on_remote, 0), intent, moved_files FROM workspaces WHERE id = ?1")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, target_branch, COALESCE(not_on_remote, 0), intent, moved_files FROM workspaces WHERE id = ?1")
         .map_err(|e| format!("Failed to prepare workspace query: {}", e))?;
 
     let workspace = stmt
         .query_row([id], |row| {
-            let intent: Option<String> = row.get(8)?;
-            let moved_files_json: Option<String> = row.get(9)?;
+            let intent: Option<String> = row.get(7)?;
+            let moved_files_json: Option<String> = row.get(8)?;
             let moved_files = moved_files_json.and_then(|json| {
                 serde_json::from_str::<Vec<String>>(&json).ok()
             });
@@ -411,8 +409,7 @@ pub fn get_workspace_by_id(repo_path: &str, id: i64) -> Result<Option<Workspace>
                 created_at: row.get(4)?,
                 metadata: None,
                 target_branch: row.get(5)?,
-                has_conflicts: row.get::<_, i64>(6)? != 0,
-                not_on_remote: row.get::<_, i64>(7)? != 0,
+                not_on_remote: row.get::<_, i64>(6)? != 0,
                 intent,
                 moved_files,
             })
@@ -429,13 +426,13 @@ pub fn get_workspace_by_path(
 ) -> Result<Option<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, target_branch, COALESCE(has_conflicts, 0), COALESCE(not_on_remote, 0), intent, moved_files FROM workspaces WHERE workspace_path = ?1")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, target_branch, COALESCE(not_on_remote, 0), intent, moved_files FROM workspaces WHERE workspace_path = ?1")
         .map_err(|e| format!("Failed to prepare workspace query: {}", e))?;
 
     let workspace = stmt
         .query_row([workspace_path], |row| {
-            let intent: Option<String> = row.get(8)?;
-            let moved_files_json: Option<String> = row.get(9)?;
+            let intent: Option<String> = row.get(7)?;
+            let moved_files_json: Option<String> = row.get(8)?;
             let moved_files = moved_files_json.and_then(|json| {
                 serde_json::from_str::<Vec<String>>(&json).ok()
             });
@@ -448,8 +445,7 @@ pub fn get_workspace_by_path(
                 created_at: row.get(4)?,
                 metadata: None,
                 target_branch: row.get(5)?,
-                has_conflicts: row.get::<_, i64>(6)? != 0,
-                not_on_remote: row.get::<_, i64>(7)? != 0,
+                not_on_remote: row.get::<_, i64>(6)? != 0,
                 intent,
                 moved_files,
             })
@@ -466,13 +462,13 @@ pub fn get_workspace_by_branch(
 ) -> Result<Option<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, target_branch, COALESCE(has_conflicts, 0), COALESCE(not_on_remote, 0), intent, moved_files FROM workspaces WHERE branch_name = ?1")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, target_branch, COALESCE(not_on_remote, 0), intent, moved_files FROM workspaces WHERE branch_name = ?1")
         .map_err(|e| format!("Failed to prepare workspace query: {}", e))?;
 
     let workspace = stmt
         .query_row([branch_name], |row| {
-            let intent: Option<String> = row.get(8)?;
-            let moved_files_json: Option<String> = row.get(9)?;
+            let intent: Option<String> = row.get(7)?;
+            let moved_files_json: Option<String> = row.get(8)?;
             let moved_files = moved_files_json.and_then(|json| {
                 serde_json::from_str::<Vec<String>>(&json).ok()
             });
@@ -485,8 +481,7 @@ pub fn get_workspace_by_branch(
                 created_at: row.get(4)?,
                 metadata: None,
                 target_branch: row.get(5)?,
-                has_conflicts: row.get::<_, i64>(6)? != 0,
-                not_on_remote: row.get::<_, i64>(7)? != 0,
+                not_on_remote: row.get::<_, i64>(6)? != 0,
                 intent,
                 moved_files,
             })
@@ -596,13 +591,13 @@ pub fn get_workspaces_by_target_branch(
 ) -> Result<Vec<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, target_branch, COALESCE(has_conflicts, 0), COALESCE(not_on_remote, 0), intent, moved_files FROM workspaces WHERE target_branch = ?1 ORDER BY branch_name COLLATE NOCASE ASC")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, target_branch, COALESCE(not_on_remote, 0), intent, moved_files FROM workspaces WHERE target_branch = ?1 ORDER BY branch_name COLLATE NOCASE ASC")
         .map_err(|e| format!("Failed to prepare workspaces query: {}", e))?;
 
     let workspaces = stmt
         .query_map([target_branch], |row| {
-            let intent: Option<String> = row.get(8)?;
-            let moved_files_json: Option<String> = row.get(9)?;
+            let intent: Option<String> = row.get(7)?;
+            let moved_files_json: Option<String> = row.get(8)?;
             let moved_files = moved_files_json.and_then(|json| {
                 serde_json::from_str::<Vec<String>>(&json).ok()
             });
@@ -615,8 +610,7 @@ pub fn get_workspaces_by_target_branch(
                 created_at: row.get(4)?,
                 metadata: None,
                 target_branch: row.get(5)?,
-                has_conflicts: row.get::<_, i64>(6)? != 0,
-                not_on_remote: row.get::<_, i64>(7)? != 0,
+                not_on_remote: row.get::<_, i64>(6)? != 0,
                 intent,
                 moved_files,
             })
@@ -626,21 +620,6 @@ pub fn get_workspaces_by_target_branch(
     workspaces
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())
-}
-
-/// Update the has_conflicts flag for a workspace
-pub fn update_workspace_has_conflicts(
-    repo_path: &str,
-    id: i64,
-    has_conflicts: bool,
-) -> Result<(), String> {
-    let conn = get_connection(repo_path)?;
-    conn.execute(
-        "UPDATE workspaces SET has_conflicts = ?1 WHERE id = ?2",
-        params![has_conflicts as i64, id],
-    )
-    .map_err(|e| format!("Failed to update workspace has_conflicts: {}", e))?;
-    Ok(())
 }
 
 /// Update the not_on_remote flag for a workspace
@@ -787,7 +766,6 @@ pub fn rebuild_workspaces_from_filesystem(repo_path: &str) -> Result<Vec<Workspa
             created_at: Utc::now().to_rfc3339(),
             metadata: None,
             target_branch: None,
-            has_conflicts: false,
             not_on_remote: false,
             intent: None,
             moved_files: None,
@@ -1403,39 +1381,6 @@ mod tests {
         assert_eq!(main_workspaces[1].id, id3);
         assert_eq!(main_workspaces[0].target_branch, Some("main".to_string()));
         assert_eq!(main_workspaces[1].target_branch, Some("main".to_string()));
-
-        if let Some(initialized) = INITIALIZED_DBS.get() {
-            initialized.lock().unwrap().remove(repo_path);
-        }
-    }
-
-    #[test]
-    fn test_update_workspace_has_conflicts() {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let repo_path = temp_dir.path().to_str().unwrap();
-
-        let id = add_workspace(
-            repo_path,
-            "test-workspace".to_string(),
-            format!("{}/.treq/workspaces/test-workspace", repo_path),
-            "test-branch".to_string(),
-            None,
-            None,
-        )
-        .expect("add_workspace should succeed");
-
-        let workspaces = get_workspaces(repo_path).expect("get_workspaces should succeed");
-        assert_eq!(workspaces[0].has_conflicts, false);
-
-        update_workspace_has_conflicts(repo_path, id, true).expect("update should succeed");
-
-        let workspaces = get_workspaces(repo_path).expect("get_workspaces should succeed");
-        assert_eq!(workspaces[0].has_conflicts, true);
-
-        update_workspace_has_conflicts(repo_path, id, false).expect("update should succeed");
-
-        let workspaces = get_workspaces(repo_path).expect("get_workspaces should succeed");
-        assert_eq!(workspaces[0].has_conflicts, false);
 
         if let Some(initialized) = INITIALIZED_DBS.get() {
             initialized.lock().unwrap().remove(repo_path);

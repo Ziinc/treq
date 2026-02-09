@@ -162,10 +162,15 @@ export function generateStackedBranchName(
  * Construct the full workspace path from a Workspace object
  * The workspace_path in the database is just the directory name,
  * so we need to reconstruct the full path: {repo_path}/.treq/workspaces/{workspace_path}
+ * Handles legacy workspaces where workspace_path might already be a full absolute path.
  */
 export function getFullWorkspacePath(
   workspace: { repo_path: string; workspace_path: string }
 ): string {
+  // If workspace_path is already an absolute path, return it as-is
+  if (workspace.workspace_path.startsWith("/")) {
+    return workspace.workspace_path;
+  }
   return `${workspace.repo_path}/.treq/workspaces/${workspace.workspace_path}`;
 }
 

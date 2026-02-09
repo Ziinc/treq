@@ -106,15 +106,6 @@ pub fn rebase_workspaces_for_target(
                     }
                 }
 
-                // Update DB flags - check for conflicts after rebase
-                let has_conflicts = jj::get_conflicted_files(
-                    &workspace.workspace_path,
-                    workspace.target_branch.as_deref(),
-                )
-                .map(|files| !files.is_empty())
-                .unwrap_or(false);
-                local_db::update_workspace_has_conflicts(repo_path, workspace.id, has_conflicts)?;
-
                 local_db::update_workspace_last_rebased_commit(
                     repo_path,
                     workspace.id,
@@ -260,24 +251,6 @@ pub fn check_and_rebase_all(repo_path: &str) -> Result<Vec<AutoRebaseResult>, St
                         }
                     }
 
-                    // Update DB flags - check for conflicts after rebase
-                    let has_conflicts = jj::get_conflicted_files(
-                        &workspace.workspace_path,
-                        workspace.target_branch.as_deref(),
-                    )
-                    .map(|files| !files.is_empty())
-                    .unwrap_or(false);
-                    if let Err(e) = local_db::update_workspace_has_conflicts(
-                        repo_path,
-                        workspace.id,
-                        has_conflicts,
-                    ) {
-                        eprintln!(
-                            "Warning: Failed to update conflicts flag for workspace '{}': {}",
-                            workspace.workspace_name, e
-                        );
-                    }
-
                     if let Err(e) = local_db::update_workspace_last_rebased_commit(
                         repo_path,
                         workspace.id,
@@ -400,15 +373,6 @@ pub fn rebase_single_workspace(
         }
     }
 
-
-    // Update DB flags - check for conflicts after rebase
-    let has_conflicts = jj::get_conflicted_files(
-        &workspace.workspace_path,
-        workspace.target_branch.as_deref(),
-    )
-    .map(|files| !files.is_empty())
-    .unwrap_or(false);
-    local_db::update_workspace_has_conflicts(repo_path, workspace.id, has_conflicts)?;
 
     local_db::update_workspace_last_rebased_commit(
         repo_path,

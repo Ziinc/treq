@@ -11,8 +11,13 @@ export interface Workspace {
   created_at: string;
   metadata?: string;
   target_branch?: string | null;
-  has_conflicts: boolean;
   not_on_remote: boolean;
+}
+
+export interface WorkspacePartialStatus {
+  current: Workspace;
+  has_conflicts: boolean;
+  has_changes: boolean;
 }
 
 export interface Session {
@@ -419,17 +424,6 @@ export const updateWorkspaceMetadata = (
     metadata,
   });
 
-export const updateWorkspaceConflicts = (
-  repo_path: string,
-  workspace_id: number,
-  has_conflicts: boolean
-): Promise<void> =>
-  invoke("update_workspace_conflicts", {
-    repoPath: repo_path,
-    workspaceId: workspace_id,
-    hasConflicts: has_conflicts,
-  });
-
 export const updateWorkspaceNotOnRemote = (
   repo_path: string,
   workspace_id: number,
@@ -450,17 +444,10 @@ export const pushWorkspaceToRemote = (
     workspaceId: workspace_id,
   });
 
-export const listConflictedWorkspaceIds = (
+export const listWorkspaceStatuses = (
   repo_path: string
-): Promise<number[]> =>
-  invoke("list_conflicted_workspace_ids", {
-    repoPath: repo_path,
-  });
-
-export const listWorkspacesWithChanges = (
-  repo_path: string
-): Promise<number[]> =>
-  invoke("list_workspaces_with_changes", {
+): Promise<WorkspacePartialStatus[]> =>
+  invoke("list_workspace_statuses", {
     repoPath: repo_path,
   });
 
