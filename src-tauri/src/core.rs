@@ -27,8 +27,16 @@ pub enum MaybeEmptyParam<T> {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct WorkspaceStatus {
+pub struct WorkspacePartialStatus {
     pub current: local_db::Workspace,
+    pub has_conflicts: bool,
+    pub has_changes: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WorkspaceStatus {
+    #[serde(flatten)]
+    pub partial: WorkspacePartialStatus,
     pub target: Option<local_db::Workspace>,
     pub children: Vec<local_db::Workspace>,
     pub dag_nodes: Vec<WorkspaceNode>,
@@ -38,7 +46,7 @@ pub struct WorkspaceStatus {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WorkspaceNode {
-    pub workspace: local_db::Workspace,
+    pub status: WorkspacePartialStatus,
     pub parent_id: Option<i64>,
     pub child_ids: Vec<i64>,
     pub depth: usize,
@@ -293,7 +301,7 @@ pub fn list_workspaces(repo_path: &str) -> Result<Vec<local_db::Workspace>, Stri
 
     let updated_workspaces: Vec<local_db::Workspace> = workspaces
         .into_iter()
-        .map(|mut workspace| {
+        .map(|workspace| {
             let workspace_path = Path::new(repo_path)
                 .join(".treq")
                 .join("workspaces")
@@ -302,41 +310,14 @@ pub fn list_workspaces(repo_path: &str) -> Result<Vec<local_db::Workspace>, Stri
                 .expect("not a valid path")
                 .to_string();
 
-            let _files = match jj::jj_get_changed_files(&workspace_path) {
-                Ok(files) => files,
-                Err(jj::JjError::IoError(e))
-                    if e.contains("stale") || e.contains("not updated since operation") =>
-                {
-                    eprintln!("Stale working copy detected, updating: {}", workspace_path);
-                    if let Err(update_err) = jj::jj_workspace_update_stale(&workspace_path) {
-                        eprintln!("Failed to update stale workspace: {}", update_err);
-                    }
-                    jj::jj_get_changed_files(&workspace_path).unwrap_or_default()
-                }
-                Err(e) => {
-                    eprintln!("Failed to get changed files: {}", e);
-                    vec![]
-                }
-            };
-
-            // Ensure workspace is fresh before conflict detection
+            // Snapshot working copy by running jj status.
+            // Then check for staleness (can occur if another workspace was snapshotted
+            // above, rewriting a parent commit and making this workspace stale).
+            let _ = jj::jj_get_changed_files(&workspace_path);
             if let Ok(true) = jj::is_workspace_stale(&workspace_path) {
-                let _ = jj::jj_workspace_update_stale(&workspace_path);
-            }
-
-            let conflicts =
-                jj::get_conflicted_files(&workspace_path, workspace.target_branch.as_deref())
-                    .unwrap_or_default();
-
-            let has_conflicts = !conflicts.is_empty();
-
-            if workspace.has_conflicts != has_conflicts {
-                let _ = local_db::update_workspace_has_conflicts(
-                    repo_path,
-                    workspace.id,
-                    has_conflicts,
-                );
-                workspace.has_conflicts = has_conflicts;
+                if let Err(update_err) = jj::jj_workspace_update_stale(&workspace_path) {
+                    eprintln!("Failed to update stale workspace: {}", update_err);
+                }
             }
 
             workspace
@@ -344,6 +325,42 @@ pub fn list_workspaces(repo_path: &str) -> Result<Vec<local_db::Workspace>, Stri
         .collect();
 
     Ok(updated_workspaces)
+}
+
+/// Lists all workspaces with their computed conflict and change status.
+/// Consolidates what was previously 3 separate calls (list_workspaces, list_conflicted_workspace_ids, list_workspaces_with_changes).
+pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspacePartialStatus>, String> {
+    let workspaces = list_workspaces(repo_path)?;
+
+    let statuses: Vec<WorkspacePartialStatus> = workspaces
+        .into_iter()
+        .map(|workspace| {
+            let workspace_path = Path::new(repo_path)
+                .join(".treq")
+                .join("workspaces")
+                .join(&workspace.workspace_path)
+                .to_str()
+                .expect("not a valid path")
+                .to_string();
+
+            let has_changes = jj::jj_get_changed_files(&workspace_path)
+                .map(|files| !files.is_empty())
+                .unwrap_or(false);
+
+            let has_conflicts =
+                jj::get_conflicted_files(&workspace_path, workspace.target_branch.as_deref())
+                    .map(|files| !files.is_empty())
+                    .unwrap_or(false);
+
+            WorkspacePartialStatus {
+                current: workspace,
+                has_conflicts,
+                has_changes,
+            }
+        })
+        .collect();
+
+    Ok(statuses)
 }
 
 pub fn stack_workspace(
@@ -470,8 +487,8 @@ pub fn workspace_status(workspace_path: &str) -> Result<WorkspaceStatus, String>
     // Collect conflicted workspace IDs from DAG nodes
     let conflicted_workspace_ids: Vec<i64> = dag_nodes
         .iter()
-        .filter(|node| node.workspace.has_conflicts)
-        .map(|node| node.workspace.id)
+        .filter(|node| node.status.has_conflicts)
+        .map(|node| node.status.current.id)
         .collect();
 
     // Calculate commits ahead of target
@@ -504,8 +521,21 @@ pub fn workspace_status(workspace_path: &str) -> Result<WorkspaceStatus, String>
         }
     };
 
+    // Compute partial status for current workspace
+    let has_changes = jj::jj_get_changed_files(workspace_path)
+        .map(|files| !files.is_empty())
+        .unwrap_or(false);
+    let has_conflicts =
+        jj::get_conflicted_files(workspace_path, current_workspace.target_branch.as_deref())
+            .map(|files| !files.is_empty())
+            .unwrap_or(false);
+
     Ok(WorkspaceStatus {
-        current: current_workspace,
+        partial: WorkspacePartialStatus {
+            current: current_workspace,
+            has_conflicts,
+            has_changes,
+        },
         target,
         children,
         dag_nodes,
@@ -533,8 +563,29 @@ fn build_dag_recursive(
         .unwrap_or_default();
     let child_ids: Vec<i64> = children.iter().map(|c| c.id).collect();
 
+    // Compute status for this node
+    let workspace_path = Path::new(repo_path)
+        .join(".treq")
+        .join("workspaces")
+        .join(&workspace.workspace_path)
+        .to_str()
+        .expect("not a valid path")
+        .to_string();
+
+    let has_changes = jj::jj_get_changed_files(&workspace_path)
+        .map(|files| !files.is_empty())
+        .unwrap_or(false);
+    let has_conflicts =
+        jj::get_conflicted_files(&workspace_path, workspace.target_branch.as_deref())
+            .map(|files| !files.is_empty())
+            .unwrap_or(false);
+
     dag_nodes.push(WorkspaceNode {
-        workspace: workspace.clone(),
+        status: WorkspacePartialStatus {
+            current: workspace.clone(),
+            has_conflicts,
+            has_changes,
+        },
         parent_id,
         child_ids: child_ids.clone(),
         depth,

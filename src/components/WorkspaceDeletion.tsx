@@ -148,11 +148,6 @@ export const WorkspaceDeletion: React.FC<WorkspaceDeletionProps> = ({
                       </span>
                     )}
                   </div>
-                  {workspace.has_conflicts && (
-                    <div className="truncate text-sm text-destructive">
-                      Has conflicts
-                    </div>
-                  )}
                 </div>
               </Command.Item>
             );

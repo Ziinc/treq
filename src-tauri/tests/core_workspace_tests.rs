@@ -79,7 +79,6 @@ fn test_can_create_workspace() {
         jj_works
     );
 
-    eprintln!("workspace: {:?}", workspace);
     // JJ VERIFICATION: Verify workspace via jj workspace list (primary source of truth)
     let jj_workspaces =
         JjVerifier::list_workspaces(&repo.repo_path).expect("Failed to list jj workspaces");
@@ -251,12 +250,12 @@ fn test_can_create_stacked_workspace() {
     let base_node = base_status
         .dag_nodes
         .iter()
-        .find(|n| n.workspace.branch_name == "feat/base")
+        .find(|n| n.status.current.branch_name == "feat/base")
         .expect("Base should be in DAG");
     let stacked_node = base_status
         .dag_nodes
         .iter()
-        .find(|n| n.workspace.branch_name == "feat/stacked")
+        .find(|n| n.status.current.branch_name == "feat/stacked")
         .expect("Stacked should be in DAG");
 
     assert_eq!(base_node.depth, 0, "Base should be at depth 0");
@@ -516,7 +515,6 @@ fn test_can_delete_workspace() {
     // bookmark is preserved
 
     let bookmarks = JjVerifier::list_bookmarks(&repo.repo_path).expect("Failed to list bookmarks");
-    eprintln!("bookmarks: {:?}", bookmarks);
     assert!(
         bookmarks.iter().any(|b| b == &workspace.branch_name),
         "Bookmark '{}' should exist in workspace, got: {:?}",
@@ -706,37 +704,61 @@ fn test_workspace_conflict_detection() {
     let stacked_workspace =
         treq_lib::core::stack_workspace(&repo.repo_path, Some(&workspace), Some("feat/stacked"))
             .expect("Failed to create stacked workspace");
-    // before, not conflicted
-    let workspaces =
-        treq_lib::core::list_workspaces(&repo.repo_path).expect("Failed to list workspaces");
-    assert_eq!(
-        workspaces[0].has_conflicts, false,
-        "Workspace should not be marked as conflicted"
-    );
-    assert_eq!(
-        workspaces[1].has_conflicts, false,
-        "Workspace should not be marked as conflicted"
-    );
-
     let stacked_workspace_path = repo
         .workspaces_dir()
         .join(&stacked_workspace.workspace_path);
-    fs::write(
-        &stacked_workspace_path.join("README.md"),
-        "different stacked content",
-    )
-    .expect("Failed to write  file");
 
-    fs::remove_file(&workspace_path.join("README.md")).expect("Failed to delete workspace file");
+    // Verify has_changes via list_workspace_statuses:
+    // base has changes (wrote README.md), stacked does not yet
+    let statuses =
+        treq_lib::core::list_workspace_statuses(&repo.repo_path).expect("Failed to list workspace statuses");
+    let base_status_before = statuses.iter().find(|s| s.current.id == workspace.id).unwrap();
+    let stacked_status_before = statuses.iter().find(|s| s.current.id == stacked_workspace.id).unwrap();
+    assert!(
+        !base_status_before.has_conflicts,
+        "Base workspace should not be marked as conflicted"
+    );
+    assert!(
+        !stacked_status_before.has_conflicts,
+        "Stacked workspace should not be marked as conflicted"
+    );
+    assert!(
+        base_status_before.has_changes,
+        "Base workspace should have changes (wrote README.md)"
+    );
+    assert!(
+        !stacked_status_before.has_changes,
+        "Stacked workspace should not have changes yet"
+    );
 
-    let workspaces =
-        treq_lib::core::list_workspaces(&repo.repo_path).expect("Failed to list workspaces");
-    let stacked = workspaces
+    // Write to stacked workspace README.md and verify has_changes flips to true
+    fs::write(&stacked_workspace_path.join("README.md"), "stacked content")
+        .expect("Failed to write file");
+    let statuses =
+        treq_lib::core::list_workspace_statuses(&repo.repo_path).expect("Failed to list workspace statuses");
+    let stacked_status_with_change = statuses.iter().find(|s| s.current.id == stacked_workspace.id).unwrap();
+    assert!(
+        stacked_status_with_change.has_changes,
+        "Stacked workspace should have changes after writing a file"
+    );
+
+    // Now create a modify-vs-modify conflict scenario:
+    // Both workspaces modify README.md to different content
+    fs::write(&stacked_workspace_path.join("README.md"), "stacked version of README")
+        .expect("Failed to write stacked file");
+    fs::write(&workspace_path.join("README.md"), "base version of README")
+        .expect("Failed to write base file");
+
+    // list_workspace_statuses should trigger jj snapshot for base workspace,
+    // which makes the stacked workspace stale, then detect the conflict
+    let statuses =
+        treq_lib::core::list_workspace_statuses(&repo.repo_path).expect("Failed to list workspace statuses");
+    let stacked_status = statuses
         .iter()
-        .find(|w| w.workspace_path == stacked_workspace.workspace_path)
+        .find(|s| s.current.workspace_path == stacked_workspace.workspace_path)
         .expect("Stacked workspace should exist");
-    assert_eq!(
-        stacked.has_conflicts, true,
+    assert!(
+        stacked_status.has_conflicts,
         "Stacked workspace should be marked as conflicted"
     );
 
@@ -761,10 +783,10 @@ fn test_workspace_conflict_detection() {
     let stacked_node = status
         .dag_nodes
         .iter()
-        .find(|n| n.workspace.id == stacked_workspace.id)
+        .find(|n| n.status.current.id == stacked_workspace.id)
         .expect("Stacked workspace should be in DAG");
     assert!(
-        stacked_node.workspace.has_conflicts,
+        stacked_node.status.has_conflicts,
         "Stacked workspace node should have has_conflicts = true"
     );
 
@@ -772,10 +794,10 @@ fn test_workspace_conflict_detection() {
     let base_node = status
         .dag_nodes
         .iter()
-        .find(|n| n.workspace.id == workspace.id)
+        .find(|n| n.status.current.id == workspace.id)
         .expect("Base workspace should be in DAG");
     assert!(
-        !base_node.workspace.has_conflicts,
+        !base_node.status.has_conflicts,
         "Base workspace should not have conflicts"
     );
 }

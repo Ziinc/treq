@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, memo, useMemo } from "react";
-import { Workspace, getWorkspaces, listConflictedWorkspaceIds, listWorkspacesWithChanges } from "../lib/api";
+import { Workspace, listWorkspaceStatuses } from "../lib/api";
 import {
   buildWorkspaceTree,
   flattenWorkspaceTree,
@@ -168,23 +168,15 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
     onOpenBranchSwitcher,
     currentPage,
   }) => {
-    const { data: workspaces = [] } = useQuery({
-      queryKey: ["workspaces", repoPath],
-      queryFn: () => getWorkspaces(repoPath || ""),
+    const { data: workspaceStatuses = [] } = useQuery({
+      queryKey: ["workspace-statuses", repoPath],
+      queryFn: () => listWorkspaceStatuses(repoPath || ""),
       enabled: !!repoPath,
     });
 
-    const { data: conflictedIds = [] } = useQuery<number[]>({
-      queryKey: ["conflicted-workspace-ids", repoPath],
-      queryFn: () => listConflictedWorkspaceIds(repoPath || ""),
-      enabled: !!repoPath,
-    });
-
-    const { data: changedIds = [] } = useQuery<number[]>({
-      queryKey: ["workspaces-with-changes", repoPath],
-      queryFn: () => listWorkspacesWithChanges(repoPath || ""),
-      enabled: !!repoPath,
-    });
+    const workspaces = useMemo(() => workspaceStatuses.map(s => s.current), [workspaceStatuses]);
+    const conflictedIds = useMemo(() => workspaceStatuses.filter(s => s.has_conflicts).map(s => s.current.id), [workspaceStatuses]);
+    const changedIds = useMemo(() => workspaceStatuses.filter(s => s.has_changes).map(s => s.current.id), [workspaceStatuses]);
 
     // Build hierarchical tree and flatten for rendering
     const flattenedNodes = useMemo(() => {

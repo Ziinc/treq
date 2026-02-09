@@ -52,7 +52,6 @@ import {
   startFileWatcher,
   stopFileWatcher,
   jjTrackWorkspaceBookmarks,
-  listConflictedWorkspaceIds,
 } from "../lib/api";
 import { Loader2 } from "lucide-react";
 import { getFullWorkspacePath } from "../lib/utils";
@@ -324,7 +323,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
               queryKey: ["workspaces", repoPath],
             });
             queryClient.invalidateQueries({
-              queryKey: ["workspaces-with-changes", repoPath],
+              queryKey: ["workspace-statuses", repoPath],
             });
           })
           .catch((error) => console.error("Auto-rebase failed:", error));
@@ -372,27 +371,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     cleanup();
   }, [repoPath]);
 
-  // Fetch actual conflicted workspace IDs on startup
-  useEffect(() => {
-    const fetchConflictedIds = async () => {
-      console.log("[Dashboard] Attempting to fetch conflicted workspace IDs, repoPath:", repoPath);
-      if (!repoPath) {
-        console.log("[Dashboard] No repoPath, skipping conflicted IDs fetch");
-        return;
-      }
-      try {
-        console.log("[Dashboard] Calling listConflictedWorkspaceIds for:", repoPath);
-        const conflictedIds = await listConflictedWorkspaceIds(repoPath);
-        console.log(`[Dashboard] Found ${conflictedIds.length} workspace(s) with conflicts`, conflictedIds);
-        // Cache the result so sidebar can use it
-        queryClient.setQueryData(["conflicted-workspace-ids", repoPath], conflictedIds);
-      } catch (error) {
-        console.error("Failed to fetch conflicted workspace IDs:", error);
-      }
-    };
-    fetchConflictedIds();
-  }, [repoPath, queryClient]);
-
   // Listen for file changes to update change indicators in real-time
   useEffect(() => {
     if (!repoPath) return;
@@ -403,7 +381,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     }>("workspace-files-changed", () => {
       // Invalidate query to refresh all workspace indicators
       queryClient.invalidateQueries({
-        queryKey: ["workspaces-with-changes", repoPath],
+        queryKey: ["workspace-statuses", repoPath],
       });
     });
 
