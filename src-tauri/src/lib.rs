@@ -53,6 +53,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
             // Initialize database
             let app_dir = app
@@ -86,6 +87,17 @@ pub fn run() {
             };
 
             app.manage(app_state);
+
+            // Listen for deep-link events and forward to frontend
+            #[cfg(desktop)]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                let handle = app.handle().clone();
+                app.deep_link().on_open_url(move |event| {
+                    let urls: Vec<String> = event.urls().into_iter().map(|u| u.to_string()).collect();
+                    let _ = handle.emit("deep-link-received", &urls);
+                });
+            }
 
             // Create menu
             #[cfg(target_os = "macos")]
