@@ -429,12 +429,12 @@ pub fn workspace_status(workspace_path: &str) -> Result<WorkspaceStatus, String>
     let all_workspaces = local_db::get_workspaces(&repo_path)
         .map_err(|e| format!("Failed to get workspaces: {}", e))?;
 
-    // Find current workspace by workspace_path
+    // Find current workspace by workspace_path (handle both short name and full path)
     let current_workspace = all_workspaces
         .iter()
-        .find(|w| w.workspace_path == workspace_name)
+        .find(|w| w.workspace_path == workspace_name || w.workspace_path == workspace_path)
         .cloned()
-        .ok_or("Workspace not found")?;
+        .ok_or_else(|| format!("Workspace not found for path: {}", workspace_path))?;
 
     // Build branch_name → Workspace lookup map
     let branch_map: HashMap<String, &local_db::Workspace> = all_workspaces

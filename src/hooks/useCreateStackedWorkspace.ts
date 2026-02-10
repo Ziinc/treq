@@ -7,7 +7,7 @@ import {
   getWorkspaces,
   type Workspace,
 } from "../lib/api";
-import { generateStackedIntent, generateStackedBranchName } from "../lib/utils";
+import { generateStackedIntent, generateStackedBranchName, getFullWorkspacePath } from "../lib/utils";
 import { useToast } from "../components/ui/toast";
 
 interface CreateStackedWorkspaceOptions {
@@ -80,9 +80,18 @@ export function useCreateStackedWorkspace() {
         );
 
         if (createdWorkspace) {
+          const fullPath = getFullWorkspacePath(createdWorkspace);
+          console.log(
+            "[useCreateStackedWorkspace] Setting target branch:",
+            parentBranch,
+            "workspace_path:",
+            createdWorkspace.workspace_path,
+            "fullPath:",
+            fullPath
+          );
           await setWorkspaceTargetBranch(
             repoPath,
-            createdWorkspace.workspace_path,
+            fullPath,
             workspaceId,
             parentBranch
           );

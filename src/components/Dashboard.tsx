@@ -453,6 +453,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+      queryClient.invalidateQueries({ queryKey: ["workspace-statuses", repoPath] });
       handleReturnToDashboard(); // Navigate to dashboard & clear selected workspace
       addToast({
         title: "Workspace Deleted",
@@ -728,6 +729,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         }
         // Show single toast and refresh after all deletions
         queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+      queryClient.invalidateQueries({ queryKey: ["workspace-statuses", repoPath] });
         handleReturnToDashboard();
         addToast({
           title: `${count} Workspace${count > 1 ? "s" : ""} Deleted`,
@@ -772,6 +774,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
 
     // Refresh workspace data
     queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+      queryClient.invalidateQueries({ queryKey: ["workspace-statuses", repoPath] });
   }, [repoPath, queryClient]);
 
 
@@ -1053,6 +1056,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         onSuccess={async (workspaceId) => {
           // Invalidate and refetch workspaces
           await queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+      queryClient.invalidateQueries({ queryKey: ["workspace-statuses", repoPath] });
           // Force refetch to get the latest data
           const updatedWorkspaces = await queryClient.fetchQuery({
             queryKey: ["workspaces", repoPath],

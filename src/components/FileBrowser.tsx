@@ -19,7 +19,7 @@ import {
   jjGetChangedFiles,
   ensureWorkspaceIndexed,
 } from "../lib/api";
-import { cn } from "../lib/utils";
+import { cn, getFullWorkspacePath } from "../lib/utils";
 import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
 import { useToast } from "./ui/toast";
 import { Button } from "./ui/button";
@@ -845,7 +845,7 @@ export const FileBrowser = memo(function FileBrowser({
   // Ensure workspace is indexed on mount
   useEffect(() => {
     if (repoPath) {
-      const workspacePath = workspace?.workspace_path || basePath;
+      const workspacePath = workspace ? getFullWorkspacePath(workspace) : basePath;
       const workspaceId = workspace?.id ?? null;
       ensureWorkspaceIndexed(repoPath, workspaceId, workspacePath)
         .catch((error) => {
@@ -876,7 +876,7 @@ export const FileBrowser = memo(function FileBrowser({
   // Load changed files from JJ
   useEffect(() => {
     if (repoPath) {
-      const workspacePath = workspace?.workspace_path || repoPath;
+      const workspacePath = workspace ? getFullWorkspacePath(workspace) : repoPath;
       jjGetChangedFiles(workspacePath)
         .then(jjFiles => {
           const parsed = parseJjChangedFiles(jjFiles);

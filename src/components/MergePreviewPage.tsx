@@ -28,7 +28,7 @@ import {
   ChevronRight,
   ChevronDown,
 } from "lucide-react";
-import { cn } from "../lib/utils";
+import { cn, getFullWorkspacePath } from "../lib/utils";
 
 export interface MergePreviewPageProps {
   workspace: Workspace;
@@ -64,9 +64,10 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
       const loadPreview = async () => {
         setLoading(true);
         try {
+          const fullPath = getFullWorkspacePath(workspace);
           const [commits, diffData] = await Promise.all([
-            jjGetCommitsAhead(workspace.workspace_path, targetBranch),
-            jjGetMergeDiff(workspace.workspace_path, targetBranch),
+            jjGetCommitsAhead(fullPath, targetBranch),
+            jjGetMergeDiff(fullPath, targetBranch),
           ]);
 
           setCommitsAhead(commits);

@@ -175,17 +175,18 @@ pub fn cleanup_stale_workspaces(repo_path: String) -> Result<(), String> {
             continue;
         }
 
-        let dir_path_str = dir_path.to_string_lossy().to_string();
+        let dir_name = entry.file_name().to_string_lossy().to_string();
 
         // If this directory doesn't have a corresponding DB entry, it's stale
-        if !db_workspace_paths.contains(&dir_path_str) {
+        if !db_workspace_paths.contains(&dir_name) {
+            let dir_path_display = dir_path.display();
             if let Err(e) = std::fs::remove_dir_all(&dir_path) {
                 eprintln!(
                     "Warning: Failed to remove stale workspace directory {}: {}",
-                    dir_path_str, e
+                    dir_path_display, e
                 );
             } else {
-                println!("Cleaned up stale workspace directory: {}", dir_path_str);
+                println!("Cleaned up stale workspace directory: {}", dir_path_display);
             }
         }
     }
@@ -259,6 +260,19 @@ pub fn set_workspace_target_branch(
     id: i64,
     target_branch: String,
 ) -> Result<JjRebaseResult, String> {
+    eprintln!(
+        "[set_workspace_target_branch] repo_path={}, workspace_path={}, id={}, target_branch={}",
+        repo_path, workspace_path, id, target_branch
+    );
+
+    // Validate workspace path exists
+    if !std::path::Path::new(&workspace_path).exists() {
+        return Err(format!(
+            "Workspace path does not exist: {}. This likely means a short workspace name was passed instead of the full path.",
+            workspace_path
+        ));
+    }
+
     // Convert Git remote branch format (origin/main) to jj format (main@origin)
     let jj_branch_name =
         crate::jj::convert_git_branch_to_jj_format_public(&target_branch, &repo_path);
@@ -568,7 +582,7 @@ mod tests {
         local_db::add_workspace(
             repo_path,
             "workspace1".to_string(),
-            workspace1_dir.to_str().unwrap().to_string(),
+            "workspace1".to_string(),
             "branch1".to_string(),
             None,
             None,

@@ -13,7 +13,7 @@ import { Textarea } from "./ui/textarea";
 import { Label } from "./ui/label";
 import { useToast } from "./ui/toast";
 import { GitBranchPlusIcon } from "./ui/icons";
-import { applyBranchNamePattern } from "../lib/utils";
+import { applyBranchNamePattern, getFullWorkspacePath } from "../lib/utils";
 import {
   createWorkspace,
   getRepoSetting,
@@ -306,13 +306,18 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
         );
 
         if (createdWorkspace) {
+          const fullPath = getFullWorkspacePath(createdWorkspace);
           console.log(
             "[CreateWorkspaceDialog] Setting target branch:",
-            targetBranch
+            targetBranch,
+            "workspace_path:",
+            createdWorkspace.workspace_path,
+            "fullPath:",
+            fullPath
           );
           await setWorkspaceTargetBranch(
             repoPath,
-            createdWorkspace.workspace_path,
+            fullPath,
             workspaceId,
             targetBranch
           );
