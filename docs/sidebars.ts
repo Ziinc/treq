@@ -46,7 +46,6 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Common Tasks',
       items: [
-        'guides/common-tasks/creating-worktrees',
         'guides/common-tasks/pushing-to-remote',
         'guides/common-tasks/discarding-changes',
         'guides/common-tasks/moving-files-between-worktrees',
