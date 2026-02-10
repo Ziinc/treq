@@ -638,6 +638,68 @@ pub fn squash_to_workspace(
     }
 }
 
+/// Copy files from one workspace to another using filesystem copy.
+/// jj auto-tracks new files, so no explicit add is needed.
+pub fn copy_files_between_workspaces(
+    source_workspace_path: &str,
+    target_workspace_path: &str,
+    file_paths: Vec<String>,
+) -> Result<(), JjError> {
+    for file_path in &file_paths {
+        let src = Path::new(source_workspace_path).join(file_path);
+        let dst = Path::new(target_workspace_path).join(file_path);
+
+        if !src.exists() {
+            return Err(JjError::IoError(format!(
+                "Source file does not exist: {}",
+                src.display()
+            )));
+        }
+
+        // Create parent directories if needed
+        if let Some(parent) = dst.parent() {
+            fs::create_dir_all(parent).map_err(|e| {
+                JjError::IoError(format!("Failed to create directory {}: {}", parent.display(), e))
+            })?;
+        }
+
+        fs::copy(&src, &dst).map_err(|e| {
+            JjError::IoError(format!(
+                "Failed to copy {} to {}: {}",
+                src.display(),
+                dst.display(),
+                e
+            ))
+        })?;
+    }
+    Ok(())
+}
+
+/// Squash a specific commit's changes into a target workspace.
+/// Runs: jj squash --from <change_id> --into <target_workspace_name>@
+pub fn squash_commit_to_workspace(
+    workspace_path: &str,
+    change_id: &str,
+    target_workspace_name: &str,
+) -> Result<String, JjError> {
+    let target_ref = format!("{}@", target_workspace_name);
+
+    let output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["squash", "--from", change_id, "--into", &target_ref])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        Err(JjError::InitFailed(format!(
+            "Failed to squash commit to workspace: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )))
+    }
+}
+
 /// Update a stale workspace working copy
 /// Runs: jj workspace update-stale in the workspace directory
 pub fn update_stale_workspace(workspace_path: &str) -> Result<(), JjError> {

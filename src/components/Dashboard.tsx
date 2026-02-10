@@ -13,6 +13,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
+import { SplitWorkspaceDialog } from "./SplitWorkspaceDialog";
 import { CommandPalette } from "./CommandPalette";
 import { WorkspacePicker } from "./WorkspacePicker";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
@@ -80,6 +81,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   const [repoPath, setRepoPath] = useState("");
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showSplitDialog, setShowSplitDialog] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
   const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(
     null
@@ -135,8 +137,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     }
   }, [selectedWorkspace]);
 
+  const [isCreatingStack, setIsCreatingStack] = useState(false);
+
   const handleCreateStackedWorkspace = useCallback(async () => {
-    if (!repoPath) return;
+    if (!repoPath || isCreatingStack) return;
 
     const parentBranch = selectedWorkspace?.branch_name || currentBranch;
     if (!parentBranch) {
@@ -148,24 +152,30 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
       return;
     }
 
-    const workspaceId = await createStackedWorkspace({
-      repoPath,
-      parentBranch,
-      parentWorkspace: selectedWorkspace,
-    });
+    setIsCreatingStack(true);
+    try {
+      const workspaceId = await createStackedWorkspace({
+        repoPath,
+        parentBranch,
+        parentWorkspace: selectedWorkspace,
+      });
 
-    const updatedWorkspaces = await queryClient.fetchQuery({
-      queryKey: ["workspaces", repoPath],
-      queryFn: () => getWorkspaces(repoPath),
-    });
+      const updatedWorkspaces = await queryClient.fetchQuery({
+        queryKey: ["workspaces", repoPath],
+        queryFn: () => getWorkspaces(repoPath),
+      });
 
-    const newWorkspace = updatedWorkspaces.find((w) => w.id === workspaceId);
-    if (newWorkspace) {
-      setSelectedWorkspace(newWorkspace);
-      setViewMode("show-workspace");
+      const newWorkspace = updatedWorkspaces.find((w) => w.id === workspaceId);
+      if (newWorkspace) {
+        setSelectedWorkspace(newWorkspace);
+        setViewMode("show-workspace");
+      }
+    } finally {
+      setIsCreatingStack(false);
     }
   }, [
     repoPath,
+    isCreatingStack,
     selectedWorkspace,
     currentBranch,
     createStackedWorkspace,
@@ -909,6 +919,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
                     onOpenMergePreview={handleOpenMergePreview}
                     onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
                     onCreateStackedWorkspace={handleCreateStackedWorkspace}
+                    stackCreating={isCreatingStack}
+                    onSplitWorkspace={selectedWorkspace ? () => setShowSplitDialog(true) : undefined}
                     onNavigateToWorkspace={(ws) => handleOpenSession(ws)}
                     queryClient={queryClient}
                     onSessionCreated={(sessionData) => {
@@ -1069,6 +1081,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
           }
         }}
       />
+
+      {selectedWorkspace && (
+        <SplitWorkspaceDialog
+          open={showSplitDialog}
+          onOpenChange={setShowSplitDialog}
+          workspace={selectedWorkspace}
+          repoPath={repoPath}
+          onSplit={async (newWorkspaceId) => {
+            await queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+            queryClient.invalidateQueries({ queryKey: ["workspace-statuses", repoPath] });
+            const updatedWorkspaces = await queryClient.fetchQuery({
+              queryKey: ["workspaces", repoPath],
+              queryFn: () => getWorkspaces(repoPath),
+            });
+            const newWorkspace = updatedWorkspaces.find((w) => w.id === newWorkspaceId);
+            if (newWorkspace) {
+              handleOpenSession(newWorkspace);
+            }
+          }}
+        />
+      )}
 
       <CommandPalette
         showCommandPalette={showCommandPalette}

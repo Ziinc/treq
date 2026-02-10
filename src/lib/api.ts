@@ -423,6 +423,27 @@ export const jjCreateMerge = (
 ): Promise<JjMergeResult> =>
   invoke("jj_create_merge", { workspacePath, workspaceBranch, targetBranch, message });
 
+export const splitWorkspace = (
+  repoPath: string,
+  workspaceId: number,
+  branchName: string,
+  intent: string | null,
+  filePaths: string[] | null,
+  commitIds: string[] | null,
+  mode: "move" | "copy",
+  position: "before" | "after"
+): Promise<number> =>
+  invoke("split_workspace", {
+    repoPath,
+    workspaceId,
+    branchName,
+    intent,
+    filePaths,
+    commitIds,
+    mode,
+    position,
+  });
+
 export const mergeWorkspace = (
   repoPath: string,
   workspaceId: number,

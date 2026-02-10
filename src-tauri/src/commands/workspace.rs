@@ -357,6 +357,44 @@ pub fn check_and_rebase_workspaces(
     }
 }
 
+/// Split a workspace by moving or copying files/commits to a new workspace.
+/// Delegates to core::split_workspace() for all logic.
+#[tauri::command]
+pub fn split_workspace(
+    repo_path: String,
+    workspace_id: i64,
+    branch_name: String,
+    intent: Option<String>,
+    file_paths: Option<Vec<String>>,
+    commit_ids: Option<Vec<String>>,
+    mode: String,
+    position: String,
+) -> Result<i64, String> {
+    use crate::core::{SplitMode, SplitPosition};
+
+    let mode = match mode.as_str() {
+        "copy" => SplitMode::Copy,
+        _ => SplitMode::Move,
+    };
+    let position = match position.as_str() {
+        "before" => SplitPosition::Before,
+        _ => SplitPosition::After,
+    };
+
+    let workspace = crate::core::split_workspace(
+        &repo_path,
+        workspace_id,
+        &branch_name,
+        intent,
+        file_paths,
+        commit_ids,
+        mode,
+        position,
+    )?;
+
+    Ok(workspace.id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

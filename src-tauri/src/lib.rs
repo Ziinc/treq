@@ -283,6 +283,7 @@ pub fn run() {
             commands::delete_workspace,
             commands::push_workspace_to_remote,
             commands::merge_workspace,
+            commands::split_workspace,
             commands::cleanup_stale_workspaces,
             commands::rebuild_workspaces,
             commands::update_workspace_metadata,

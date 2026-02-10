@@ -78,6 +78,7 @@ import {
   Layers,
   FileDiff,
   RefreshCw,
+  Split,
 } from "lucide-react";
 import { TargetBranchSelector } from "./TargetBranchSelector";
 import { cn } from "../lib/utils";
@@ -95,6 +96,8 @@ interface ShowWorkspaceProps {
   onOpenMergePreview?: () => void;
   onOpenBranchSwitcher?: () => void;
   onCreateStackedWorkspace?: () => void;
+  stackCreating?: boolean;
+  onSplitWorkspace?: () => void;
   onNavigateToWorkspace?: (workspace: Workspace) => void;
   queryClient?: QueryClient;
 }
@@ -110,6 +113,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   onOpenMergePreview,
   onOpenBranchSwitcher,
   onCreateStackedWorkspace,
+  stackCreating,
+  onSplitWorkspace,
   onNavigateToWorkspace,
 }) {
   const workingDirectory = workspace ? getFullWorkspacePath(workspace) : (repositoryPath || "");
@@ -309,36 +314,30 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
     if (!workspace || !workingDirectory) return;
 
     let isMounted = true;
-    const intervalId = setInterval(async () => {
-      if (!isMounted) return;
+    let timeoutId: ReturnType<typeof setTimeout>;
 
+    const checkConflicts = async () => {
+      if (!isMounted) return;
       try {
         await jjGetConflictedFiles(workingDirectory);
-        // Clear error cache on successful check
         lastConflictErrorRef.current = null;
-        // if (isMounted) {
-        //   setConflictedFiles((prev) => {
-        //     // Only update if changed to prevent unnecessary re-renders
-        //     if (prev.length !== files.length ||
-        //         !prev.every((f, i) => f === files[i])) {
-        //       return files;
-        //     }
-        //     return prev;
-        //   });
-        // }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        // Only log if error has changed to avoid spam
         if (lastConflictErrorRef.current !== errorMessage) {
           lastConflictErrorRef.current = errorMessage;
           console.error("Failed to check conflicts:", error);
         }
       }
-    }, 2000); // Check every 2 seconds
+      if (isMounted) {
+        timeoutId = setTimeout(checkConflicts, 2000);
+      }
+    };
+
+    timeoutId = setTimeout(checkConflicts, 2000);
 
     return () => {
       isMounted = false;
-      clearInterval(intervalId);
+      clearTimeout(timeoutId);
     };
   }, [workspace, workingDirectory]);
 
@@ -1038,14 +1037,21 @@ const handleSync = useCallback(async () => {
                           variant="default"
                           size="sm"
                           onClick={onCreateStackedWorkspace}
+                          disabled={stackCreating}
                           className="gap-1"
                         >
-                          <Layers className="w-3.5 h-3.5" />
+                          {stackCreating ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Layers className="w-3.5 h-3.5" />
+                          )}
                           Stack
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        Create stacked workspace from {branchTitle}
+                        {stackCreating
+                          ? "Creating stacked workspace..."
+                          : `Create stacked workspace from ${branchTitle}`}
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -1075,19 +1081,51 @@ const handleSync = useCallback(async () => {
                           variant="default"
                           size="sm"
                           onClick={onCreateStackedWorkspace}
+                          disabled={stackCreating || rebasing || conflictedFiles.length > 0}
+                          className="gap-1"
+                        >
+                          {stackCreating ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Layers className="w-3.5 h-3.5" />
+                          )}
+                          Stack
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {stackCreating
+                          ? "Creating stacked workspace..."
+                          : rebasing
+                          ? "Rebasing in progress..."
+                          : conflictedFiles.length > 0
+                          ? `Cannot stack: ${conflictedFiles.length} conflict${conflictedFiles.length === 1 ? '' : 's'} detected`
+                          : `Create stacked workspace from ${branchTitle}`}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                {/* Split button for workspace */}
+                {workspace && onSplitWorkspace && (
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={onSplitWorkspace}
                           disabled={rebasing || conflictedFiles.length > 0}
                           className="gap-1"
                         >
-                          <Layers className="w-3.5 h-3.5" />
-                          Stack
+                          <Split className="w-3.5 h-3.5" />
+                          Split
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
                         {rebasing
                           ? "Rebasing in progress..."
                           : conflictedFiles.length > 0
-                          ? `Cannot stack: ${conflictedFiles.length} conflict${conflictedFiles.length === 1 ? '' : 's'} detected`
-                          : `Create stacked workspace from ${branchTitle}`}
+                          ? `Cannot split: ${conflictedFiles.length} conflict${conflictedFiles.length === 1 ? '' : 's'} detected`
+                          : `Split changes from ${branchTitle} into a new workspace`}
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
