@@ -4,7 +4,15 @@ import { Workspace, listWorkspaceStatuses } from "../lib/api";
 import {
   buildWorkspaceTree,
   flattenWorkspaceTree,
+  getEntireStack,
+  getDescendants,
 } from "../lib/workspace-tree";
+import {
+  DragDropContext,
+  Droppable,
+  Draggable,
+  type DropResult,
+} from "@hello-pangea/dnd";
 import {
   Settings,
   Home,
@@ -16,6 +24,9 @@ import {
   Copy,
   FolderOpen,
   CornerLeftUp,
+  ListStart,
+  ListEnd,
+  ListPlus,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { GitBranchPlusIcon } from "./ui/icons";
@@ -54,6 +65,10 @@ interface WorkspaceSidebarProps {
   onOpenCommandPalette?: () => void;
   onOpenBranchSwitcher?: () => void;
   currentPage?: "settings" | "session" | null;
+  onAddBefore?: (workspace: Workspace) => void;
+  onAddAfter?: (workspace: Workspace) => void;
+  onMoveWorkspace?: (workspace: Workspace, targetBranch: string | null) => void;
+  onSelectStack?: (workspaceIds: Set<number>) => void;
 }
 
 // Note: StatusPill simplified - git status checking removed
@@ -167,6 +182,10 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
     onOpenCommandPalette,
     onOpenBranchSwitcher,
     currentPage,
+    onAddBefore,
+    onAddAfter,
+    onMoveWorkspace,
+    onSelectStack,
   }) => {
     const { data: workspaceStatuses = [] } = useQuery({
       queryKey: ["workspace-statuses", repoPath],
@@ -174,9 +193,10 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
       enabled: !!repoPath,
     });
 
-    const workspaces = useMemo(() => workspaceStatuses.map(s => s.current), [workspaceStatuses]);
-    const conflictedIds = useMemo(() => workspaceStatuses.filter(s => s.has_conflicts).map(s => s.current.id), [workspaceStatuses]);
-    const changedIds = useMemo(() => workspaceStatuses.filter(s => s.has_changes).map(s => s.current.id), [workspaceStatuses]);
+    const statuses = workspaceStatuses ?? [];
+    const workspaces = useMemo(() => statuses.map(s => s.current), [statuses]);
+    const conflictedIds = useMemo(() => statuses.filter(s => s.has_conflicts).map(s => s.current.id), [statuses]);
+    const changedIds = useMemo(() => statuses.filter(s => s.has_changes).map(s => s.current.id), [statuses]);
 
     // Build hierarchical tree and flatten for rendering
     const flattenedNodes = useMemo(() => {
@@ -200,6 +220,48 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
         }
       },
       [selectedWorkspaceIds, onWorkspaceMultiSelect]
+    );
+
+    const handleDoubleClick = useCallback(
+      (workspace: Workspace, e: React.MouseEvent) => {
+        if (!onSelectStack) return;
+        e.stopPropagation();
+
+        if (e.shiftKey) {
+          // Shift+double-click: select workspace + descendants
+          const descendants = getDescendants(workspaces, workspace.branch_name);
+          const ids = new Set([workspace.id, ...descendants.map(w => w.id)]);
+          onSelectStack(ids);
+        } else {
+          // Double-click: select entire stack
+          const stack = getEntireStack(workspaces, workspace.branch_name);
+          const ids = new Set(stack.map(w => w.id));
+          onSelectStack(ids);
+        }
+      },
+      [workspaces, onSelectStack]
+    );
+
+    const handleDragEnd = useCallback(
+      (result: DropResult) => {
+        if (!onMoveWorkspace) return;
+
+        const draggedId = parseInt(result.draggableId, 10);
+        const draggedWorkspace = workspaces.find(w => w.id === draggedId);
+        if (!draggedWorkspace) return;
+
+        if (result.combine) {
+          // Dropped onto another workspace → set target to that workspace's branch
+          const targetWorkspace = workspaces.find(w => String(w.id) === result.combine!.draggableId);
+          if (targetWorkspace && targetWorkspace.id !== draggedWorkspace.id) {
+            onMoveWorkspace(draggedWorkspace, targetWorkspace.branch_name);
+          }
+        } else if (result.destination) {
+          // Dropped on root area (not on any item) → detach from stack
+          onMoveWorkspace(draggedWorkspace, null);
+        }
+      },
+      [workspaces, onMoveWorkspace]
     );
 
     const repoName = repoPath
@@ -303,8 +365,15 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
             )}
 
             {/* Workspaces section */}
-            <div className="space-y-1">
-              {flattenedNodes.map((node) => {
+            <DragDropContext onDragEnd={handleDragEnd}>
+            <Droppable droppableId="sidebar-root" isCombineEnabled>
+            {(droppableProvided) => (
+            <div
+              className="space-y-1"
+              ref={droppableProvided.innerRef}
+              {...droppableProvided.droppableProps}
+            >
+              {flattenedNodes.map((node, index) => {
                 const workspace = node.workspace;
                 const isSelected =
                   selectedWorkspaceIds?.has(workspace.id) ||
@@ -312,20 +381,52 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                 const indentStyle = { paddingLeft: `${16 + (node.depth - 1) * 6}px`};
 
                 return (
-                  <ContextMenu key={workspace.id}>
+                  <div key={workspace.id}>
+                  {index > 0 && onAddBefore && (
+                    <div className="group/divider relative flex items-center h-2 mx-2 -my-1">
+                      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-transparent group-hover/divider:bg-border transition-colors" />
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            aria-label="Stack before"
+                            className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 top-1/2 z-10 p-1 rounded bg-transparent hover:bg-foreground/10 text-muted-foreground opacity-0 group-hover/divider:opacity-100 transition-all"
+                            onClick={() => onAddBefore(workspace)}
+                          >
+                            <ListPlus className="w-3 h-3" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right">Insert workspace into stack</TooltipContent>
+                      </Tooltip>
+                    </div>
+                  )}
+                  <Draggable
+                    draggableId={String(workspace.id)}
+                    index={index}
+                  >
+                  {(dragProvided, dragSnapshot) => (
+                  <div
+                    ref={dragProvided.innerRef}
+                    {...dragProvided.draggableProps}
+                    {...dragProvided.dragHandleProps}
+                  >
+                  <ContextMenu>
                     <Tooltip>
                       <ContextMenuTrigger asChild>
                         <TooltipTrigger asChild>
                           <div
                             style={indentStyle}
-                            className={`relative flex items-center text-sm tracking-wide  pr-2 rounded-md transition-colors cursor-pointer ${
+                            className={`group/workspace relative flex items-center text-sm tracking-wide pr-2 rounded-md transition-colors cursor-pointer ${
                               isSelected ? "bg-primary/20" : "hover:bg-muted/50"
-                            } ${node.depth > 0 ? 'pt-0.5' : 'py-1 '}`}
+                            } py-1 ${
+                              dragSnapshot.combineTargetFor ? "bg-primary/10" : ""
+                            } ${dragSnapshot.isDragging ? "opacity-50" : ""}`}
                             onClick={(e) =>
                               onWorkspaceMultiSelect
                                 ? onWorkspaceMultiSelect(workspace, e)
                                 : onWorkspaceClick?.(workspace)
                             }
+                            onDoubleClick={(e) => handleDoubleClick(workspace, e)}
                           >
                             {node.depth === 0 ? (
                               <GitBranch
@@ -347,6 +448,45 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                             >
                               {getWorkspaceTitle(workspace)}
                             </span>
+                            {/* Hover action buttons */}
+                            <span className="opacity-0 group-hover/workspace:opacity-100 transition-opacity flex items-center gap-0.5 shrink-0">
+                              {node.depth === 0 && onAddBefore && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      aria-label="Stack before"
+                                      className="p-1 rounded bg-transparent hover:bg-foreground/10 text-muted-foreground"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onAddBefore(workspace);
+                                      }}
+                                    >
+                                      <ListStart className="w-3 h-3" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="bottom">Stack new workspace before</TooltipContent>
+                                </Tooltip>
+                              )}
+                              {onAddAfter && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      aria-label="Insert workspace after"
+                                      className="p-1 rounded bg-transparent hover:bg-foreground/10 text-muted-foreground"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onAddAfter(workspace);
+                                      }}
+                                    >
+                                      <ListEnd className="w-3 h-3" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="bottom">Stack new workspace</TooltipContent>
+                                </Tooltip>
+                              )}
+                            </span>
                             {/* Indicators: Conflict takes priority over changes */}
                             {conflictedIds.includes(workspace.id) ? (
                               <AlertTriangle className="w-3 h-3 text-destructive shrink-0" />
@@ -357,12 +497,14 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                           </div>
                         </TooltipTrigger>
                       </ContextMenuTrigger>
-                      <TooltipContent side="right" className="font-mono">
-                        <div className="flex items-center gap-1.5">
-                          <GitBranch className="w-3 h-3" />
-                          <span>{getWorkspaceTitle(workspace)}</span>
-                        </div>
-                      </TooltipContent>
+                      {!dragSnapshot.isDragging && (
+                        <TooltipContent side="right" className="font-mono">
+                          <div className="flex items-center gap-1.5">
+                            <GitBranch className="w-3 h-3" />
+                            <span>{getWorkspaceTitle(workspace)}</span>
+                          </div>
+                        </TooltipContent>
+                      )}
                     </Tooltip>
                     <ContextMenuContent>
                       <ContextMenuItem
@@ -396,8 +538,18 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                       />
                     </ContextMenuContent>
                   </ContextMenu>
+                  {dragSnapshot.combineTargetFor && (
+                    <div className="relative h-0">
+                      <div className="absolute left-0 right-0 top-0 h-[2px] bg-primary rounded-full" />
+                    </div>
+                  )}
+                  </div>
+                  )}
+                  </Draggable>
+                  </div>
                 );
               })}
+              {droppableProvided.placeholder}
 
               {/* Show delete button when workspaces are selected, otherwise show create buttons */}
               {selectedWorkspaceIds && selectedWorkspaceIds.size > 0 ? (
@@ -435,6 +587,9 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                 )
               )}
             </div>
+            )}
+            </Droppable>
+            </DragDropContext>
           </div>
         </div>
       </TooltipProvider>

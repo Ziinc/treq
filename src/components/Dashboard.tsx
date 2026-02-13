@@ -31,6 +31,7 @@ import { MergePreviewPage } from "./MergePreviewPage";
 import { useToast } from "./ui/toast";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { useCreateStackedWorkspace } from "../hooks/useCreateStackedWorkspace";
+import { useWorkspaceHierarchy } from "../hooks/useWorkspaceHierarchy";
 import {
   getWorkspaces,
   rebuildWorkspaces,
@@ -114,7 +115,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   const queryClient = useQueryClient();
   const { addToast } = useToast();
   const { createStackedWorkspace } = useCreateStackedWorkspace();
-
   const handleReturnToDashboard = useCallback(() => {
     // Navigate to main repo ShowWorkspace > Code
     setSelectedWorkspace(null);
@@ -666,6 +666,68 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     []
   );
 
+  const { addAfter, addBefore, moveWorkspace } = useWorkspaceHierarchy({
+    repoPath,
+    workspaces,
+    defaultBranch: currentBranch || "main",
+  });
+
+  const handleAddAfter = useCallback(async (workspace: Workspace) => {
+    try {
+      const newId = await addAfter(workspace);
+      const updatedWorkspaces = await queryClient.fetchQuery({
+        queryKey: ["workspaces", repoPath],
+        queryFn: () => getWorkspaces(repoPath),
+      });
+      const newWorkspace = updatedWorkspaces.find(w => w.id === newId);
+      if (newWorkspace) {
+        handleSelectWorkspace(newWorkspace);
+      }
+    } catch (error) {
+      addToast({
+        title: "Failed to add workspace",
+        description: error instanceof Error ? error.message : String(error),
+        type: "error",
+      });
+    }
+  }, [addAfter, repoPath, queryClient, addToast, handleSelectWorkspace]);
+
+  const handleAddBefore = useCallback(async (workspace: Workspace) => {
+    try {
+      const newId = await addBefore(workspace);
+      const updatedWorkspaces = await queryClient.fetchQuery({
+        queryKey: ["workspaces", repoPath],
+        queryFn: () => getWorkspaces(repoPath),
+      });
+      const newWorkspace = updatedWorkspaces.find(w => w.id === newId);
+      if (newWorkspace) {
+        handleSelectWorkspace(newWorkspace);
+      }
+    } catch (error) {
+      addToast({
+        title: "Failed to add workspace",
+        description: error instanceof Error ? error.message : String(error),
+        type: "error",
+      });
+    }
+  }, [addBefore, repoPath, queryClient, addToast, handleSelectWorkspace]);
+
+  const handleMoveWorkspace = useCallback(async (workspace: Workspace, targetBranch: string | null) => {
+    try {
+      await moveWorkspace(workspace, targetBranch);
+    } catch (error) {
+      addToast({
+        title: "Failed to move workspace",
+        description: error instanceof Error ? error.message : String(error),
+        type: "error",
+      });
+    }
+  }, [moveWorkspace, addToast]);
+
+  const handleSelectStack = useCallback((workspaceIds: Set<number>) => {
+    setSelectedWorkspaceIds(workspaceIds);
+  }, []);
+
   const handleCreateSessionFromSidebar = useCallback(
     async (workspaceId: number | null) => {
       const workspace = workspaceId
@@ -884,6 +946,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
           navigateToDashboard={handleReturnToDashboard}
           onOpenCommandPalette={() => setShowCommandPalette(true)}
           onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
+          onAddBefore={handleAddBefore}
+          onAddAfter={handleAddAfter}
+          onMoveWorkspace={handleMoveWorkspace}
+          onSelectStack={handleSelectStack}
           currentPage={
             viewMode === "settings"
               ? "settings"

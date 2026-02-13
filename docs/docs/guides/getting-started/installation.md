@@ -6,7 +6,7 @@ sidebar_position: 1
 
 _Get Treq installed and ready to use._
 
-Download the latest version for your platform from the [GitHub Releases page](https://github.com/anthropics/treq/releases).
+Download the latest version for your platform from the [GitHub Releases page](https://github.com/Ziinc/treq/releases).
 
 ## First Launch
 
@@ -21,10 +21,6 @@ Download the latest version for your platform from the [GitHub Releases page](ht
 Click **Select Repository** or the folder icon, navigate to a Git repository, and select the folder containing `.git`. Treq verifies the repository, checks for existing worktrees, and initializes the `.treq` folder for metadata.
 
 Optionally configure settings through the gear icon: branch naming pattern, post-create commands (like `npm install`), and terminal preferences. You can change these anytime.
-
-## Updating
-
-Treq checks for updates automatically. Manual check: **Treq → Check for Updates** (macOS/Linux) or **Help → Check for Updates** (Windows).
 
 ## Troubleshooting
 

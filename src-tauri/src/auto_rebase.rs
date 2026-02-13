@@ -2,6 +2,20 @@ use crate::jj::{self, JjRebaseResult};
 use crate::local_db::{self, Workspace};
 use std::collections::HashMap;
 
+/// Reconstruct full workspace path from a Workspace object.
+/// The workspace_path in DB may be just the directory name, so we prepend
+/// {repo_path}/.treq/workspaces/ if it's not already an absolute path.
+fn get_full_workspace_path(workspace: &Workspace) -> String {
+    if workspace.workspace_path.starts_with("/") {
+        workspace.workspace_path.clone()
+    } else {
+        format!(
+            "{}/.treq/workspaces/{}",
+            workspace.repo_path, workspace.workspace_path
+        )
+    }
+}
+
 /// Result for auto-rebase operation on a group of workspaces
 #[derive(Debug)]
 pub struct AutoRebaseResult {
@@ -66,8 +80,9 @@ pub fn rebase_workspaces_for_target(
         // Use workspace bookmark instead of @ to work only with committed changes
         let revset = format!("roots({}..{})", jj_target_branch, workspace.branch_name);
 
+        let full_path = get_full_workspace_path(workspace);
         let rebase_result = jj::jj_rebase_with_revset(
-            &workspace.workspace_path, // Run from workspace directory
+            &full_path, // Run from workspace directory
             &revset,
             &jj_target_branch,
             &workspace.branch_name, // Set bookmark after rebase
@@ -85,7 +100,7 @@ pub fn rebase_workspaces_for_target(
                 // Auto-sync working copy to bookmark if safe (empty working copy)
                 // This runs FROM the workspace directory to avoid staleness
                 match jj::jj_sync_working_copy_if_safe(
-                    &workspace.workspace_path,
+                    &full_path,
                     &workspace.branch_name,
                 ) {
                     Ok(true) => {
@@ -215,9 +230,10 @@ pub fn check_and_rebase_all(repo_path: &str) -> Result<Vec<AutoRebaseResult>, St
             // Rebase from workspace directory using roots() revset
             // Use workspace bookmark instead of @ to work only with committed changes
             let revset = format!("roots({}..{})", jj_target_branch, workspace.branch_name);
+            let full_path = get_full_workspace_path(workspace);
 
             match jj::jj_rebase_with_revset(
-                &workspace.workspace_path,
+                &full_path,
                 &revset,
                 &jj_target_branch,
                 &workspace.branch_name, // Set bookmark after rebase
@@ -233,7 +249,7 @@ pub fn check_and_rebase_all(repo_path: &str) -> Result<Vec<AutoRebaseResult>, St
                     // Auto-sync working copy to bookmark if safe (empty working copy)
                     // This runs FROM the workspace directory to avoid staleness
                     match jj::jj_sync_working_copy_if_safe(
-                        &workspace.workspace_path,
+                        &full_path,
                         &workspace.branch_name,
                     ) {
                         Ok(true) => {
@@ -345,8 +361,9 @@ pub fn rebase_single_workspace(
     // Perform the rebase from workspace directory using roots() revset
     // Use workspace bookmark instead of @ to work only with committed changes
     let revset = format!("roots({}..{})", jj_target_branch, workspace.branch_name);
+    let full_path = get_full_workspace_path(&workspace);
     let rebase_result = jj::jj_rebase_with_revset(
-        &workspace.workspace_path, // Run from workspace directory
+        &full_path, // Run from workspace directory
         &revset,
         &jj_target_branch,
         &workspace.branch_name, // Set bookmark after rebase
@@ -355,7 +372,7 @@ pub fn rebase_single_workspace(
 
     // Auto-sync working copy to bookmark if safe (empty working copy)
     // This runs FROM the workspace directory to avoid staleness
-    match jj::jj_sync_working_copy_if_safe(&workspace.workspace_path, &workspace.branch_name) {
+    match jj::jj_sync_working_copy_if_safe(&full_path, &workspace.branch_name) {
         Ok(true) => {
             log::info!(
                 "Auto-synced working copy for workspace '{}'",

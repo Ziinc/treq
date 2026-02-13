@@ -1756,6 +1756,15 @@ pub fn jj_rebase_with_revset(
     let stderr = String::from_utf8_lossy(&output.stderr);
     let combined_message = format!("{}{}", stdout, stderr);
 
+    // Empty revision set means there are no commits to rebase (branch is already
+    // on target, or the revset resolves to nothing). Treat as a successful no-op.
+    if !output.status.success() && stderr.contains("Empty revision set") {
+        return Ok(JjRebaseResult {
+            success: true,
+            message: "Nothing to rebase (empty revision set)".to_string(),
+        });
+    }
+
     // After rebase with -s <revset> -d <target>, jj automatically updates bookmarks
     // that are included in the revset to point to the rebased commits.
     // We don't need to manually set the bookmark to @ (which is the working copy).

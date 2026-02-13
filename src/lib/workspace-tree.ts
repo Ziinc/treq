@@ -18,6 +18,7 @@ export interface FlattenedWorkspaceNode {
   branchName: string;
   depth: number;
   hasChildren: boolean;
+  parentBranch: string | null;
 }
 
 /**
@@ -124,6 +125,7 @@ export function flattenWorkspaceTree(
       branchName: node.branchName,
       depth: node.depth,
       hasChildren: node.children.length > 0,
+      parentBranch: node.workspace.target_branch ?? null,
     });
 
     for (const child of node.children) {
@@ -183,6 +185,132 @@ export function getAncestorChain(
  * @param currentBranch The branch we're setting a target for
  * @returns List of valid target branch names
  */
+/**
+ * Recursively collect all descendant workspaces of a given branch.
+ * A workspace W is a descendant of branchName if W.target_branch === branchName,
+ * or W.target_branch is itself a descendant.
+ */
+export function getDescendants(
+  workspaces: Workspace[],
+  branchName: string
+): Workspace[] {
+  const childrenMap = new Map<string, Workspace[]>();
+  for (const ws of workspaces) {
+    if (ws.target_branch) {
+      const list = childrenMap.get(ws.target_branch) || [];
+      list.push(ws);
+      childrenMap.set(ws.target_branch, list);
+    }
+  }
+
+  const result: Workspace[] = [];
+  const stack = [branchName];
+  const visited = new Set<string>([branchName]);
+
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    const children = childrenMap.get(current) || [];
+    for (const child of children) {
+      if (!visited.has(child.branch_name)) {
+        visited.add(child.branch_name);
+        result.push(child);
+        stack.push(child.branch_name);
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Follow target_branch chain upward to find the root workspace of a stack.
+ * The root is a workspace whose target_branch either doesn't exist in the
+ * workspace list or is null (i.e., it targets an external branch like "main").
+ *
+ * Returns the branch_name of the root workspace.
+ */
+export function getStackRoot(
+  workspaces: Workspace[],
+  branchName: string
+): string {
+  const workspaceByBranch = new Map<string, Workspace>();
+  for (const ws of workspaces) {
+    workspaceByBranch.set(ws.branch_name, ws);
+  }
+
+  let current = branchName;
+  const visited = new Set<string>();
+
+  while (true) {
+    visited.add(current);
+    const ws = workspaceByBranch.get(current);
+    if (!ws || !ws.target_branch) {
+      return current;
+    }
+    // If target_branch is not a workspace (external branch), current is root
+    if (!workspaceByBranch.has(ws.target_branch)) {
+      return current;
+    }
+    // Cycle detection
+    if (visited.has(ws.target_branch)) {
+      return current;
+    }
+    current = ws.target_branch;
+  }
+}
+
+/**
+ * Get entire stack: root + all its descendants.
+ * Finds the root via getStackRoot, then collects all descendants.
+ */
+export function getEntireStack(
+  workspaces: Workspace[],
+  branchName: string
+): Workspace[] {
+  const rootBranch = getStackRoot(workspaces, branchName);
+  const root = workspaces.find(w => w.branch_name === rootBranch);
+  if (!root) return [];
+
+  const descendants = getDescendants(workspaces, rootBranch);
+  return [root, ...descendants];
+}
+
+/**
+ * Check if candidate is a descendant of ancestor.
+ * Uses target_branch chain: follows candidate's ancestors upward looking for ancestor.
+ */
+export function isDescendantOf(
+  workspaces: Workspace[],
+  candidate: string,
+  ancestor: string
+): boolean {
+  if (candidate === ancestor) return false;
+
+  const workspaceByBranch = new Map<string, Workspace>();
+  for (const ws of workspaces) {
+    workspaceByBranch.set(ws.branch_name, ws);
+  }
+
+  let current = candidate;
+  const visited = new Set<string>();
+
+  while (true) {
+    visited.add(current);
+    const ws = workspaceByBranch.get(current);
+    if (!ws || !ws.target_branch) {
+      return false;
+    }
+    if (ws.target_branch === ancestor) {
+      return true;
+    }
+    // Cycle detection
+    if (visited.has(ws.target_branch)) {
+      return false;
+    }
+    current = ws.target_branch;
+  }
+}
+
 export function getValidTargets(
   workspaces: Workspace[],
   currentBranch: string

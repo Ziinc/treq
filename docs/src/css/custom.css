@@ -4,9 +4,6 @@
  * work well for content-centric websites.
  */
 
-/* Bootstrap Icons */
-@import url("https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css");
-
 /* You can override the default Infima variables here. */
 :root {
   --ifm-color-primary: #10b981;
@@ -144,4 +141,9 @@ a:hover {
 
 [data-theme='dark'] ::-webkit-scrollbar-thumb:hover {
   background: #4b5563;
+}
+
+/* Spinner animation for auth pages */
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }

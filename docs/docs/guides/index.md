@@ -59,13 +59,3 @@ Review pull requests without leaving your main development environment. Create a
 Work on multiple features simultaneously, each in its own worktree with separate terminal sessions and build outputs.
 
 **Quick Path**: [Creating Terminal Sessions](core-workflows/creating-terminal-sessions) → [Moving Files Between Worktrees](common-tasks/moving-files-between-worktrees)
-
-## Need More Help?
-
-- **Technical Details**: See the [Features Documentation](/docs/features/worktrees) for deeper technical information
-- **Troubleshooting**: Check the [Troubleshooting Guide](/docs/troubleshooting) for common issues
-- **Community**: Join discussions on [GitHub](https://github.com/yourusername/treq/discussions)
-
-## Contributing to Documentation
-
-Found an error or want to improve these guides? Contributions are welcome! Visit our [GitHub repository](https://github.com/yourusername/treq) to submit feedback or pull requests.

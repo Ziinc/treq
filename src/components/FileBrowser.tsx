@@ -802,7 +802,7 @@ export const FileBrowser = memo(function FileBrowser({
   onCreateAgentWithComment,
 }: FileBrowserProps) {
   // Determine the path and branch to use
-  const basePath = workspace?.workspace_path ?? repoPath ?? "";
+  const basePath = workspace ? getFullWorkspacePath(workspace) : (repoPath ?? "");
 
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(
     new Set([basePath])
