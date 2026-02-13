@@ -65,4 +65,3 @@ jobs:
       - name: Run unit tests
         working-directory: ./src-tauri
         run: cargo test --lib
-

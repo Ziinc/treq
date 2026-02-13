@@ -1,13 +1,16 @@
 import {themes as prismThemes} from 'prism-react-renderer';
 import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
+import pkg from '../package.json';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
+
+const featureFlags = pkg.featureFlags;
 
 const config: Config = {
   title: 'Treq',
   tagline: 'A modern Git worktree manager',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/favicon.svg',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
@@ -22,8 +25,12 @@ const config: Config = {
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
-  organizationName: 'yourusername', // Usually your GitHub org/user name.
+  organizationName: 'Ziinc', // Usually your GitHub org/user name.
   projectName: 'treq', // Usually your repo name.
+
+  customFields: {
+    featureFlags,
+  },
 
   onBrokenLinks: 'throw',
 
@@ -44,7 +51,7 @@ const config: Config = {
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl:
-            'https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/',
+            'https://github.com/Ziinc/treq/tree/main/docs/',
         },
         blog: false,
         theme: {
@@ -56,15 +63,15 @@ const config: Config = {
 
   themeConfig: {
     // Replace with your project's social card
-    image: 'img/docusaurus-social-card.jpg',
+    // TODO: Replace with branded Treq social card (1200x630)
+    image: 'img/treq-social-card.png',
     colorMode: {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'Treq',
       logo: {
         alt: 'Treq Logo',
-        src: 'img/logo.svg',
+        src: 'assets/combined-horizontal.png',
       },
       items: [
         {
@@ -79,8 +86,13 @@ const config: Config = {
           position: 'left',
           label: 'Docs',
         },
+        ...(featureFlags.pro ? [{
+          to: '/dashboard',
+          label: 'Dashboard',
+          position: 'right' as const,
+        }] : []),
         {
-          href: 'https://github.com/yourusername/treq',
+          href: 'https://github.com/Ziinc/treq',
           label: 'GitHub',
           position: 'right',
         },
@@ -116,11 +128,11 @@ const config: Config = {
           items: [
             {
               label: 'GitHub',
-              href: 'https://github.com/yourusername/treq',
+              href: 'https://github.com/Ziinc/treq',
             },
             {
               label: 'Issues',
-              href: 'https://github.com/yourusername/treq/issues',
+              href: 'https://github.com/Ziinc/treq/issues',
             },
           ],
         },

@@ -38,8 +38,9 @@ npm run tauri dev            # Dev mode
 
 - **lib.rs** - Entry point, command registry, AppState
 - **main.rs** - Calls `treq_lib::run()`
+- **core.rs** - High-level workspace orchestration (WorkspaceStatus, WorkspaceNode, WorkspaceMetadata, MergeCommit enum, SplitMode/SplitPosition enums, DAG nodes for hierarchy)
 - **db.rs** - Global SQLite (settings, sessions, git_cache, file_views)
-- **local_db.rs** - Per-repo SQLite (workspaces, sessions, changed_files, workspace_files)
+- **local_db.rs** - Per-repo SQLite (workspaces, sessions, changed_files, workspace_files, pending_reviews)
 
 **JJ Integration:**
 
@@ -54,7 +55,7 @@ npm run tauri dev            # Dev mode
 
 **Commands (src-tauri/src/commands/):**
 
-- **workspace.rs** - Workspace CRUD, auto-rebase, indexing
+- **workspace.rs** - Workspace CRUD, auto-rebase, indexing, merge, split, status
 - **jj_commands.rs** - JJ command wrappers
 - **session.rs** - AI session management
 - **settings.rs** - App/repo settings
@@ -62,15 +63,26 @@ npm run tauri dev            # Dev mode
 - **file_view.rs** - File view tracking
 - **pty_commands.rs** - Terminal sessions
 - **binary.rs** - Binary detection
-- **git_watcher.rs** - File change detection
+- **file_watcher.rs** - File change detection
+- **pending_review.rs** - Pending review persistence (load/save/clear)
 
 ### Frontend (src/)
 
 **Core:**
 
-- **App.tsx** - Root with providers (QueryClient, Theme, Terminal/Diff settings, Toast)
+- **App.tsx** - Root with providers (QueryClient, Auth, Theme, PrismThemeLoader, Terminal/Diff settings, EditorApps, Toast)
 - **Dashboard.tsx** - Main UI, auto-rebase on focus
 - **ShowWorkspace.tsx** - Workspace detail (Code/Review/Files tabs)
+
+**Workspace Management:**
+
+- **CreateWorkspaceDialog.tsx** - Create workspace with branch naming, intent, target branch selection
+- **SplitWorkspaceDialog.tsx** - Split workspace (file/commit selection, move/copy, before/after)
+- **MoveToWorkspaceDialog.tsx** - Move files between workspaces
+- **WorkspaceDeletion.tsx** - Safe workspace deletion with confirmation
+- **WorkspacePicker.tsx** - Dropdown workspace switcher
+- **TargetBranchSelector.tsx** - Target branch selection for stacking/rebasing
+- **WorkspaceEditSession.tsx** - Workspace edit session
 
 **Navigation:**
 
@@ -78,23 +90,47 @@ npm run tauri dev            # Dev mode
 - **CommandPalette.tsx** - Cmd+K
 - **FilePicker.tsx** - Cmd+P
 - **BranchSwitcher.tsx** - Branch switching
+- **SearchOverlay.tsx** - File/content search overlay
+- **FileTreeView.tsx** - Hierarchical file tree display
 
 **Diff & Review:**
 
-- **ChangesDiffViewer.tsx** - Main diff viewer (2508 lines), code review
+- **ChangesDiffViewer.tsx** - Main diff viewer, code review
+- **AnnotatableDiffViewer.tsx** - Advanced diff with line annotations/comments
 - **ChangesSection.tsx** / **ConflictsSection.tsx** - File lists
+- **CommittedChangesSection.tsx** - Committed changes display
+- **GitFileRow.tsx** - Individual file change row with status badges
+- **FileContextMenu.tsx** - File right-click context menu
+- **LineDiffStatsDisplay.tsx** - Insertions/deletions stats
+- **LinearCommitHistory.tsx** - Linear commit graph with stats
 - **ReviewSummaryPanel.tsx** - Review summary
 - **FileBrowser.tsx** - File tree with virtualized code view
+
+**Merge:**
+
+- **MergePreviewPage.tsx** - Merge preview (commits ahead, file diffs, merge/squash strategy)
+- **MergeDialog.tsx** - Merge dialog with strategy selection
+
+**Settings & Account:**
+
+- **SettingsPage.tsx** - Tabbed settings (Application/Repository/Account)
+- **RepositorySettingsContent.tsx** - Repo-level settings (branch naming patterns)
+- **AccountSettings.tsx** - Auth sign-in/out, subscription status, profile display
+- **ModelSelector.tsx** - AI model selection
 
 **Terminal:**
 
 - **WorkspaceTerminalPane.tsx** - Terminal container
+- **ConsolidatedTerminal.tsx** - xterm.js terminal with addons (WebGL, search, ligatures, Unicode, images)
+- **Terminal.tsx** - Terminal component
 - **terminal/** - ClaudeTerminalPanel, ShellTerminalPanel, ResizeDivider
 
 **Other:**
 
+- **ConflictCommentCard.tsx** - Conflict info/resolution display
+- **ErrorBoundary.tsx** - React error boundary
+- **PrismThemeLoader.tsx** - Dynamic syntax highlighting theme loading
 - **lib/api.ts** - Type-safe Tauri wrappers
-- **hooks/** - Custom React hooks (theme, settings, keyboard, debounce)
 
 ### Hooks (src/hooks/)
 
@@ -105,15 +141,35 @@ npm run tauri dev            # Dev mode
 - **useCachedWorkspaceChanges.ts** - Workspace cache
 - **useDebounce.ts** - Debounce
 - **useKeyboard.ts** - Shortcuts (j, k, p, n)
+- **useAuth.tsx** - Authentication state, Supabase session, subscription tracking, deep-link auth callback, token exchange
+- **useEditorApps.tsx** - Detect installed editors (Cursor, VSCode, Zed)
+- **useCreateStackedWorkspace.ts** - Stacked workspace creation (unique branch names, parent inheritance)
+- **useWorkspaceHierarchy.ts** - Workspace hierarchy ops (addAfter, addBefore, moveWorkspace, cycle detection)
+
+### Lib (src/lib/)
+
+- **api.ts** - Type-safe Tauri command wrappers
+- **supabase.ts** - Supabase client configuration
+- **features.ts** - Feature flags from package.json
+- **workspace-tree.ts** - Tree utilities (buildWorkspaceTree, flattenWorkspaceTree, getAncestorChain, getDescendants, getStackRoot, getEntireStack, isDescendantOf, getValidTargets)
+- **workspace-utils.ts** - Workspace utility functions
+- **toast-helpers.ts** - Toast notification helpers
+- **logger.ts** - Logging utilities
+- **utils.ts** - General utilities (getFullWorkspacePath, etc.)
+- **git-status-colors.ts** - Git status color mappings
+- **git-utils.ts** - Git utility functions
+- **syntax-highlight.ts** - Syntax highlighting utilities
+- **text-search.ts** - Text search utilities
 
 ### Database Schema
 
 **Local DB (`.treq/local.db`)** - Per repository:
 
-- **workspaces** - id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch, has_conflicts
+- **workspaces** - id, workspace_name, workspace_path, branch_name, created_at, metadata, target_branch, has_conflicts, archived, not_on_remote, intent, moved_files
 - **sessions** - id, workspace_id, name, created_at, last_accessed, model
 - **changed_files** - id, workspace_id, file_path, workspace_status, is_untracked, hunks_json, updated_at
 - **workspace_files** - id, workspace_id, file_path, relative_path, is_directory, parent_path, cached_at, mtime
+- **pending_reviews** - id, workspace_id (unique), comments (JSON), viewed_files (JSON), summary_text, created_at, updated_at
 
 **Global DB (`treq.db`)** - App-wide:
 
@@ -133,24 +189,36 @@ npm run tauri dev            # Dev mode
 - **Binary Detection** - Caches git/jj/claude paths in `OnceLock`, extends PTY PATH
 - **State (Frontend)** - React Query for server state, Context API for UI state
 - **PTY** - portable-pty with background threads, HashMap storage, UTF-8 handling
+- **Workspace Hierarchy/Stacking** - DAG of workspaces with parent/child via target_branch, cycle detection, addBefore/addAfter/move operations
+- **Deep-Link Authentication** - `treq://` scheme for desktop-to-web auth, one-time token exchange via Supabase edge function
+- **Supabase Integration** - Auth + subscriptions (free/pro plans) with session persistence in settings DB
+- **Merge Preview** - Squash/merge strategies, commits-ahead calculation, combined diff display
+- **Workspace Splitting** - Move/copy modes, before/after positioning, file/commit-based selection
+- **Feature Flags** - `featureFlags` from package.json, exposed via `features.ts`
+- **Editor Detection** - Detect Cursor, VSCode, Zed via macOS `mdfind` / PATH
+- **File Watcher** - `notify` crate with 1s debounce, emits `workspace-files-changed` event, respects .gitignore
 
 ## Key Commands (Condensed)
 
-**Workspace:** get_workspaces, create_workspace, delete_workspace_from_db, rebuild_workspaces, set_workspace_target_branch, check_and_rebase_workspaces, ensure_workspace_indexed
+**Workspace:** get_workspaces, create_workspace, add_workspace_to_db, delete_workspace_from_db, delete_workspace, push_workspace_to_remote, merge_workspace, split_workspace, cleanup_stale_workspaces, rebuild_workspaces, update_workspace_metadata, update_workspace_not_on_remote, list_workspace_statuses, get_workspace_status, set_workspace_target_branch, check_and_rebase_workspaces, ensure_workspace_indexed
 
-**JJ:** jj_create_workspace, jj_get_changed_files, jj_get_file_hunks, jj_restore_file, jj_commit, jj_split, jj_rebase_onto, jj_get_conflicted_files, jj_push, jj_pull, jj_get_log
+**JJ:** jj_create_workspace, jj_list_workspaces, jj_remove_workspace, jj_get_workspace_info, jj_squash_to_workspace, jj_get_changed_files, jj_get_file_hunks, jj_get_file_lines, jj_restore_file, jj_restore_all, jj_commit, jj_split, jj_is_workspace, jj_init, jj_rebase_onto, jj_get_conflicted_files, jj_get_default_branch, jj_get_current_branch, jj_push, jj_get_sync_status, jj_git_fetch, jj_git_fetch_background, jj_pull, jj_get_log, jj_get_commits_ahead, jj_get_merge_diff, jj_create_merge, jj_check_branch_exists, jj_get_branches, jj_edit_bookmark, jj_track_workspace_bookmarks
 
 **PTY:** pty_create_session, pty_write, pty_resize, pty_close, pty_session_exists
 
-**Session:** create_session, get_sessions, update_session_access, delete_session, get_session_model, set_session_model
+**Session:** create_session, get_sessions, update_session_access, update_session_name, delete_session, get_session_model, set_session_model
 
 **Settings:** get_setting, get_settings_batch, set_setting, get_repo_setting, set_repo_setting
 
-**File System:** read_file, list_directory, list_directory_cached, search_workspace_files
+**File System:** read_file, list_directory, list_directory_cached, get_change_indicators, search_workspace_files
 
 **File View:** mark_file_viewed, unmark_file_viewed, get_viewed_files, clear_all_viewed_files
 
-**Binary:** detect_binaries
+**File Watcher:** start_file_watcher, stop_file_watcher
+
+**Pending Review:** load_pending_review, save_pending_review, clear_pending_review
+
+**Binary:** detect_binaries, detect_editor_apps
 
 ## Code Style
 
@@ -231,13 +299,15 @@ export async function createWorkspace(...) { ... }
 
 - **react-window** - Use v2 API (`List` with `rowComponent`, `rowHeight`, `rowCount`, `listRef`)
 - **Monaco Editor** - CDN loaded via `@monaco-editor/react`
+- **Supabase** - Auth + subscriptions via `@supabase/supabase-js`
 
 **Frontend:**
 
 - Lazy load `ShowWorkspace` with `Suspense`
 - Heavy memoization (`memo`, `useMemo`, `useCallback`)
 - Virtualization with `react-window`
-- View modes: `"session" | "show-workspace" | "settings"`
+- View modes: `"session" | "show-workspace" | "settings" | "merge-preview"`
+- Deep-link auth flow: `treq://` URL scheme triggers `AuthProvider` callback, exchanges one-time token via Supabase edge function
 
 **Keyboard:**
 
