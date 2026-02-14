@@ -866,7 +866,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         sessionId: session.id,
         sessionName: session.name,
         ptySessionId: `session-${session.id}`,
-        workspacePath: sessionWorkspace?.workspace_path ?? null,
+        workspacePath: sessionWorkspace ? getFullWorkspacePath(sessionWorkspace) : null,
         repoPath: sessionWorkspace?.repo_path ?? repoPath,
         workspaceName: sessionWorkspace?.branch_name ?? null,
       };
@@ -1005,7 +1005,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
           <WorkspaceTerminalPane
             ref={terminalPaneRef}
             key={repoPath}
-            workingDirectory={selectedWorkspace?.workspace_path || repoPath}
+            workingDirectory={selectedWorkspace ? getFullWorkspacePath(selectedWorkspace) : repoPath}
             isHidden={false}
             currentBranch={currentBranch}
             claudeSessions={claudeSessionsForPane}

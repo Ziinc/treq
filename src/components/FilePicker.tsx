@@ -11,7 +11,7 @@ interface FilePickerProps {
   onOpenChange: (open: boolean) => void;
   repoPath: string;
   workspaceId: number | null;
-  onFileSelect: (filePath: string) => void;
+  onFileSelect: (relativePath: string) => void;
 }
 
 export const FilePicker: React.FC<FilePickerProps> = ({
@@ -100,7 +100,7 @@ export const FilePicker: React.FC<FilePickerProps> = ({
             <Command.Item
               key={file.file_path}
               value={file.relative_path}
-              onSelect={() => handleSelect(file.file_path)}
+              onSelect={() => handleSelect(file.relative_path)}
               className="px-3 py-1.5 mx-2 rounded-md flex items-center gap-3 cursor-pointer text-foreground aria-selected:bg-accent/50 aria-selected:text-foreground hover:bg-accent/30 transition-colors"
             >
               {getFileIcon()}

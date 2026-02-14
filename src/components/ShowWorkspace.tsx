@@ -81,6 +81,7 @@ import {
   Split,
 } from "lucide-react";
 import { TargetBranchSelector } from "./TargetBranchSelector";
+import { TaskInput } from "./TaskInput";
 import { cn } from "../lib/utils";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import type { SessionCreationInfo } from "../types/sessions";
@@ -161,6 +162,11 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   // Show overview tab by default for main repo, changes tab for workspaces
   const [activeTab, setActiveTab] = useState("overview");
   const [showFileBrowserInCode, setShowFileBrowserInCode] = useState(false);
+
+  // Reset to Code tab when switching workspaces
+  useEffect(() => {
+    setActiveTab("overview");
+  }, [workspace?.id]);
 
   // Files list expansion state
 
@@ -908,6 +914,14 @@ const handleSync = useCallback(async () => {
                       </kbd>
                     </button>
                   </div>
+                  {/* Task Input */}
+                  <TaskInput
+                    repoPath={effectiveRepoPath}
+                    workspaceId={workspace?.id ?? null}
+                    workspacePath={workspace?.workspace_path ?? null}
+                    workingDirectory={workingDirectory}
+                    onSessionCreated={onSessionCreated}
+                  />
                   {/* File Listing */}
                   <div className="border rounded-lg divide-y divide-border">
                     {displayedEntries.map((entry) => (

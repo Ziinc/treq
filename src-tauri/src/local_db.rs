@@ -977,11 +977,40 @@ pub fn search_workspace_files(
     query: &str,
     limit: usize,
 ) -> Result<Vec<CachedWorkspaceFile>, String> {
-    if query.trim().is_empty() {
-        return Ok(Vec::new());
-    }
-
     let conn = get_connection(repo_path)?;
+
+    // Empty query: return files ordered by path length (shortest/top-level first)
+    if query.trim().is_empty() {
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, workspace_id, file_path, relative_path, is_directory, parent_path, cached_at, mtime
+                 FROM workspace_files
+                 WHERE workspace_id IS ?1
+                   AND is_directory = 0
+                 ORDER BY LENGTH(relative_path)
+                 LIMIT ?2",
+            )
+            .map_err(|e| format!("Failed to prepare search query: {}", e))?;
+
+        let files = stmt
+            .query_map(params![workspace_id, limit as i64], |row| {
+                Ok(CachedWorkspaceFile {
+                    id: row.get(0)?,
+                    workspace_id: row.get(1)?,
+                    file_path: row.get(2)?,
+                    relative_path: row.get(3)?,
+                    is_directory: row.get::<_, i64>(4)? != 0,
+                    parent_path: row.get(5)?,
+                    cached_at: row.get(6)?,
+                    mtime: row.get(7)?,
+                })
+            })
+            .map_err(|e| format!("Failed to search files: {}", e))?;
+
+        return files
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string());
+    }
 
     let search_pattern = format!("%{}%", query.to_lowercase());
 
