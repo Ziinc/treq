@@ -363,9 +363,8 @@ pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
         .query_map([], |row| {
             let intent: Option<String> = row.get(7)?;
             let moved_files_json: Option<String> = row.get(8)?;
-            let moved_files = moved_files_json.and_then(|json| {
-                serde_json::from_str::<Vec<String>>(&json).ok()
-            });
+            let moved_files =
+                moved_files_json.and_then(|json| serde_json::from_str::<Vec<String>>(&json).ok());
             Ok(Workspace {
                 id: row.get(0)?,
                 repo_path: repo_path.to_string(),
@@ -397,9 +396,8 @@ pub fn get_workspace_by_id(repo_path: &str, id: i64) -> Result<Option<Workspace>
         .query_row([id], |row| {
             let intent: Option<String> = row.get(7)?;
             let moved_files_json: Option<String> = row.get(8)?;
-            let moved_files = moved_files_json.and_then(|json| {
-                serde_json::from_str::<Vec<String>>(&json).ok()
-            });
+            let moved_files =
+                moved_files_json.and_then(|json| serde_json::from_str::<Vec<String>>(&json).ok());
             Ok(Workspace {
                 id: row.get(0)?,
                 repo_path: repo_path.to_string(),
@@ -433,9 +431,8 @@ pub fn get_workspace_by_path(
         .query_row([workspace_path], |row| {
             let intent: Option<String> = row.get(7)?;
             let moved_files_json: Option<String> = row.get(8)?;
-            let moved_files = moved_files_json.and_then(|json| {
-                serde_json::from_str::<Vec<String>>(&json).ok()
-            });
+            let moved_files =
+                moved_files_json.and_then(|json| serde_json::from_str::<Vec<String>>(&json).ok());
             Ok(Workspace {
                 id: row.get(0)?,
                 repo_path: repo_path.to_string(),
@@ -469,9 +466,8 @@ pub fn get_workspace_by_branch(
         .query_row([branch_name], |row| {
             let intent: Option<String> = row.get(7)?;
             let moved_files_json: Option<String> = row.get(8)?;
-            let moved_files = moved_files_json.and_then(|json| {
-                serde_json::from_str::<Vec<String>>(&json).ok()
-            });
+            let moved_files =
+                moved_files_json.and_then(|json| serde_json::from_str::<Vec<String>>(&json).ok());
             Ok(Workspace {
                 id: row.get(0)?,
                 repo_path: repo_path.to_string(),
@@ -598,9 +594,8 @@ pub fn get_workspaces_by_target_branch(
         .query_map([target_branch], |row| {
             let intent: Option<String> = row.get(7)?;
             let moved_files_json: Option<String> = row.get(8)?;
-            let moved_files = moved_files_json.and_then(|json| {
-                serde_json::from_str::<Vec<String>>(&json).ok()
-            });
+            let moved_files =
+                moved_files_json.and_then(|json| serde_json::from_str::<Vec<String>>(&json).ok());
             Ok(Workspace {
                 id: row.get(0)?,
                 repo_path: repo_path.to_string(),

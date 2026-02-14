@@ -1,5 +1,6 @@
 mod auto_rebase;
 mod binary_paths;
+mod cli;
 mod commands;
 pub mod core;
 pub mod db;
@@ -54,7 +55,32 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_cli::init())
         .setup(|app| {
+            // --- CLI mode: handle commands and exit before any GUI init ---
+            {
+                use tauri_plugin_cli::CliExt;
+                if let Ok(matches) = app.cli().matches() {
+                    if let Some(ref subcommand) = matches.subcommand {
+                        cli::init_cli_binary_paths();
+                        let handled = cli::handle_cli_command(subcommand);
+                        if handled {
+                            app.handle().exit(0);
+                            return Ok(());
+                        }
+                    }
+                }
+            }
+
+            // --- GUI mode: create window programmatically ---
+            let _window = tauri::WebviewWindowBuilder::new(
+                app,
+                "main",
+                tauri::WebviewUrl::App("index.html".into()),
+            )
+            .title("Treq - Coding Agent Manager")
+            .inner_size(1400.0, 900.0)
+            .build()?;
             // Initialize database
             let app_dir = app
                 .path()
@@ -94,7 +120,8 @@ pub fn run() {
                 use tauri_plugin_deep_link::DeepLinkExt;
                 let handle = app.handle().clone();
                 app.deep_link().on_open_url(move |event| {
-                    let urls: Vec<String> = event.urls().into_iter().map(|u| u.to_string()).collect();
+                    let urls: Vec<String> =
+                        event.urls().into_iter().map(|u| u.to_string()).collect();
                     let _ = handle.emit("deep-link-received", &urls);
                 });
             }

@@ -61,7 +61,11 @@ fn test_create_session() {
         make_callback(&output),
     );
 
-    assert!(result.is_ok(), "create_session should succeed: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "create_session should succeed: {:?}",
+        result
+    );
     assert!(manager.session_exists("test-create"));
 
     // Cleanup
@@ -114,7 +118,11 @@ fn test_write_to_session() {
 
     // Write a command
     let result = manager.write_to_session("test-write", "echo WRITE_TEST_OK\n");
-    assert!(result.is_ok(), "write_to_session should succeed: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "write_to_session should succeed: {:?}",
+        result
+    );
 
     let found = wait_for_output(&output, "WRITE_TEST_OK", 5000);
     assert!(
@@ -152,7 +160,11 @@ fn test_resize_session() {
 
     // Resize should succeed
     let result = manager.resize_session("test-resize", 48, 120);
-    assert!(result.is_ok(), "resize_session should succeed: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "resize_session should succeed: {:?}",
+        result
+    );
 
     // Resize to different dimensions should also succeed
     let result = manager.resize_session("test-resize", 24, 80);

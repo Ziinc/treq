@@ -267,6 +267,19 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
       autoCommand += ` --model="${sessionModel}"`;
     }
 
+    // Add treq CLI documentation as system prompt for the Claude agent
+    const treqSystemPrompt = [
+      "You have access to the treq CLI for managing workspaces. Available commands:",
+      "- treq workspace ls — List all workspaces with their status",
+      "- treq workspace st — Show status of all workspaces",
+      "- treq workspace st <name> — Show detailed status for a specific workspace",
+      "- treq workspace add <branch> [-i intent] [-s source_branch] — Create a new workspace",
+      "- treq workspace set <name> [-i intent] [-t target_branch] — Update workspace settings",
+      "- treq help — Show all available commands",
+    ].join("\\n");
+
+    autoCommand += ` --append-system-prompt "${treqSystemPrompt}"`;
+
     // If there's a pending prompt, add it as a positional argument after --
     if (sessionData.pendingPrompt) {
       // Escape shell special characters (keep newlines as actual newlines)

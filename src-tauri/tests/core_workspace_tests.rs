@@ -163,9 +163,14 @@ fn test_can_create_stacked_workspace() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
     // Create first workspace
-    let base: Workspace =
-        treq_lib::core::create_workspace(&repo.repo_path, "feat/base", Some("feature-base".to_string()), None, None)
-            .expect("Failed to create base workspace");
+    let base: Workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/base",
+        Some("feature-base".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create base workspace");
 
     let workspace1_path = repo.workspaces_dir().join(&base.workspace_path);
 
@@ -436,8 +441,7 @@ fn test_can_squash_merge_workspace_into_home_repo() {
 
     let feature_file = workspace_path.join("squash-feature.txt");
     fs::write(&feature_file, "squash feature content").expect("Failed to write feature file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Add squash feature")
-        .expect("Failed to commit");
+    treq_lib::jj::jj_commit(workspace_path_str, "Add squash feature").expect("Failed to commit");
 
     treq_lib::core::merge_workspace(
         &repo.repo_path,
@@ -657,12 +661,30 @@ fn test_update_workspace_target_branch_perform_rebase() {
 fn test_can_list_workspaces() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
-    treq_lib::core::create_workspace(&repo.repo_path, "feat/a", Some("feature-a".to_string()), None, None)
-        .expect("Failed to create workspace");
-    treq_lib::core::create_workspace(&repo.repo_path, "feat/b", Some("feature-b".to_string()), None, None)
-        .expect("Failed to create workspace");
-    treq_lib::core::create_workspace(&repo.repo_path, "feat/c", Some("feature-c".to_string()), None, None)
-        .expect("Failed to create workspace");
+    treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/a",
+        Some("feature-a".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+    treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/b",
+        Some("feature-b".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+    treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/c",
+        Some("feature-c".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
 
     // JJ VERIFICATION: Verify via jj workspace list command directly (primary source of truth)
     let jj_workspaces =
@@ -693,9 +715,14 @@ fn test_can_list_workspaces() {
 fn test_workspace_conflict_detection() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
-    let workspace =
-        treq_lib::core::create_workspace(&repo.repo_path, "base", Some("feature-base".to_string()), None, None)
-            .expect("Failed to create base workspace");
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "base",
+        Some("feature-base".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create base workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
     let file_path = workspace_path.join("README.md");
@@ -710,10 +737,16 @@ fn test_workspace_conflict_detection() {
 
     // Verify has_changes via list_workspace_statuses:
     // base has changes (wrote README.md), stacked does not yet
-    let statuses =
-        treq_lib::core::list_workspace_statuses(&repo.repo_path).expect("Failed to list workspace statuses");
-    let base_status_before = statuses.iter().find(|s| s.current.id == workspace.id).unwrap();
-    let stacked_status_before = statuses.iter().find(|s| s.current.id == stacked_workspace.id).unwrap();
+    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
+        .expect("Failed to list workspace statuses");
+    let base_status_before = statuses
+        .iter()
+        .find(|s| s.current.id == workspace.id)
+        .unwrap();
+    let stacked_status_before = statuses
+        .iter()
+        .find(|s| s.current.id == stacked_workspace.id)
+        .unwrap();
     assert!(
         !base_status_before.has_conflicts,
         "Base workspace should not be marked as conflicted"
@@ -734,9 +767,12 @@ fn test_workspace_conflict_detection() {
     // Write to stacked workspace README.md and verify has_changes flips to true
     fs::write(&stacked_workspace_path.join("README.md"), "stacked content")
         .expect("Failed to write file");
-    let statuses =
-        treq_lib::core::list_workspace_statuses(&repo.repo_path).expect("Failed to list workspace statuses");
-    let stacked_status_with_change = statuses.iter().find(|s| s.current.id == stacked_workspace.id).unwrap();
+    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
+        .expect("Failed to list workspace statuses");
+    let stacked_status_with_change = statuses
+        .iter()
+        .find(|s| s.current.id == stacked_workspace.id)
+        .unwrap();
     assert!(
         stacked_status_with_change.has_changes,
         "Stacked workspace should have changes after writing a file"
@@ -744,15 +780,18 @@ fn test_workspace_conflict_detection() {
 
     // Now create a modify-vs-modify conflict scenario:
     // Both workspaces modify README.md to different content
-    fs::write(&stacked_workspace_path.join("README.md"), "stacked version of README")
-        .expect("Failed to write stacked file");
+    fs::write(
+        &stacked_workspace_path.join("README.md"),
+        "stacked version of README",
+    )
+    .expect("Failed to write stacked file");
     fs::write(&workspace_path.join("README.md"), "base version of README")
         .expect("Failed to write base file");
 
     // list_workspace_statuses should trigger jj snapshot for base workspace,
     // which makes the stacked workspace stale, then detect the conflict
-    let statuses =
-        treq_lib::core::list_workspace_statuses(&repo.repo_path).expect("Failed to list workspace statuses");
+    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
+        .expect("Failed to list workspace statuses");
     let stacked_status = statuses
         .iter()
         .find(|s| s.current.workspace_path == stacked_workspace.workspace_path)
@@ -870,9 +909,10 @@ fn test_push_workspace_to_remote() {
     );
 
     // Test 6: Verify not_on_remote flag was cleared after successful push
-    let workspace_after_push = treq_lib::local_db::get_workspace_by_id(&repo.repo_path, workspace.id)
-        .expect("Failed to get workspace from db")
-        .expect("Workspace should exist after push");
+    let workspace_after_push =
+        treq_lib::local_db::get_workspace_by_id(&repo.repo_path, workspace.id)
+            .expect("Failed to get workspace from db")
+            .expect("Workspace should exist after push");
     assert!(
         !workspace_after_push.not_on_remote,
         "not_on_remote flag should be cleared after successful push"
@@ -907,15 +947,15 @@ fn test_push_home_repo_to_remote() {
     );
 
     // Test 3: Verify home repo push didn't affect workspace flags
-    let workspace_after_push = treq_lib::local_db::get_workspace_by_id(&repo.repo_path, workspace.id)
-        .expect("Failed to get workspace from db")
-        .expect("Workspace should exist after push");
+    let workspace_after_push =
+        treq_lib::local_db::get_workspace_by_id(&repo.repo_path, workspace.id)
+            .expect("Failed to get workspace from db")
+            .expect("Workspace should exist after push");
 
     assert!(
         workspace_after_push.not_on_remote,
         "Workspace not_on_remote flag should NOT be modified by home repo push"
     );
-
 }
 
 // =============================================================================
@@ -951,13 +991,15 @@ fn test_moved_files_from_main_repo() {
 
     // Verify workspace has moved_files set
     assert_eq!(
-        workspace.moved_files, Some(moved_files.clone()),
+        workspace.moved_files,
+        Some(moved_files.clone()),
         "Workspace should have moved_files set after creation"
     );
 
     // Verify workspace has intent set
     assert_eq!(
-        workspace.intent, Some("refactor code".to_string()),
+        workspace.intent,
+        Some("refactor code".to_string()),
         "Workspace should have intent set"
     );
 
@@ -1409,8 +1451,8 @@ fn test_split_workspace_move_commits_before() {
     treq_lib::jj::jj_commit(source_path_str, "Late commit").expect("Failed to commit");
 
     // Get commits
-    let commits_ahead = treq_lib::jj::jj_get_commits_ahead(source_path_str, "main")
-        .expect("Failed to get commits");
+    let commits_ahead =
+        treq_lib::jj::jj_get_commits_ahead(source_path_str, "main").expect("Failed to get commits");
 
     let early_commit_id = commits_ahead.commits.last().unwrap().change_id.clone();
 
@@ -1506,7 +1548,6 @@ fn test_moved_files_from_workspace_to_workspace() {
         Some("feat/base"),
     )
     .expect("Failed to create stacked workspace");
-
 
     // Verify the stacked workspace directory exists and is a valid jj workspace
     let stacked_path = Path::new(&repo.repo_path)

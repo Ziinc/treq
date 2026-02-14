@@ -659,7 +659,11 @@ pub fn copy_files_between_workspaces(
         // Create parent directories if needed
         if let Some(parent) = dst.parent() {
             fs::create_dir_all(parent).map_err(|e| {
-                JjError::IoError(format!("Failed to create directory {}: {}", parent.display(), e))
+                JjError::IoError(format!(
+                    "Failed to create directory {}: {}",
+                    parent.display(),
+                    e
+                ))
             })?;
         }
 
@@ -841,9 +845,10 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
         return Ok(Vec::new()); // Return empty list if workspace doesn't exist
     }
     if !path.is_dir() {
-        return Err(JjError::IoError(
-            format!("Workspace path is not a directory: {}", workspace_path),
-        ));
+        return Err(JjError::IoError(format!(
+            "Workspace path is not a directory: {}",
+            workspace_path
+        )));
     }
 
     let output = command_for("jj")
@@ -1438,22 +1443,22 @@ pub fn get_conflicted_files(
 ) -> Result<Vec<String>, JjError> {
     // Validate workspace path
     if workspace_path.is_empty() {
-        return Err(JjError::IoError(
-            "Workspace path is empty".to_string(),
-        ));
+        return Err(JjError::IoError("Workspace path is empty".to_string()));
     }
 
     let path = std::path::Path::new(workspace_path);
     if !path.exists() {
-        return Err(JjError::IoError(
-            format!("Workspace path does not exist: {}", workspace_path),
-        ));
+        return Err(JjError::IoError(format!(
+            "Workspace path does not exist: {}",
+            workspace_path
+        )));
     }
 
     if !path.is_dir() {
-        return Err(JjError::IoError(
-            format!("Workspace path is not a directory: {}", workspace_path),
-        ));
+        return Err(JjError::IoError(format!(
+            "Workspace path is not a directory: {}",
+            workspace_path
+        )));
     }
 
     // 1. Proactively check and update if stale
@@ -2678,7 +2683,15 @@ pub fn jj_squash_merge_commit(
 ) -> Result<(), JjError> {
     let squash_output = command_for("jj")
         .current_dir(workspace_path)
-        .args(["squash", "--from", workspace_branch, "--into", target_branch, "-m", message])
+        .args([
+            "squash",
+            "--from",
+            workspace_branch,
+            "--into",
+            target_branch,
+            "-m",
+            message,
+        ])
         .output()
         .map_err(|e| JjError::IoError(e.to_string()))?;
 

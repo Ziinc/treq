@@ -99,10 +99,7 @@ pub fn rebase_workspaces_for_target(
 
                 // Auto-sync working copy to bookmark if safe (empty working copy)
                 // This runs FROM the workspace directory to avoid staleness
-                match jj::jj_sync_working_copy_if_safe(
-                    &full_path,
-                    &workspace.branch_name,
-                ) {
+                match jj::jj_sync_working_copy_if_safe(&full_path, &workspace.branch_name) {
                     Ok(true) => {
                         log::info!(
                             "Auto-synced working copy for workspace '{}'",
@@ -248,10 +245,7 @@ pub fn check_and_rebase_all(repo_path: &str) -> Result<Vec<AutoRebaseResult>, St
 
                     // Auto-sync working copy to bookmark if safe (empty working copy)
                     // This runs FROM the workspace directory to avoid staleness
-                    match jj::jj_sync_working_copy_if_safe(
-                        &full_path,
-                        &workspace.branch_name,
-                    ) {
+                    match jj::jj_sync_working_copy_if_safe(&full_path, &workspace.branch_name) {
                         Ok(true) => {
                             log::info!(
                                 "Auto-synced working copy for workspace '{}'",
@@ -390,7 +384,6 @@ pub fn rebase_single_workspace(
         }
     }
 
-
     local_db::update_workspace_last_rebased_commit(
         repo_path,
         workspace.id,
@@ -403,4 +396,3 @@ pub fn rebase_single_workspace(
         rebase_result,
     }))
 }
-

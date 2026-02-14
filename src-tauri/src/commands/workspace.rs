@@ -1,10 +1,10 @@
 use crate::jj::{self, JjRebaseResult};
 use crate::local_db::{self, Workspace};
 use crate::AppState;
+use serde_json;
 use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
 use tauri::State;
-use serde_json;
 
 // Track which workspaces have been indexed this session
 static INDEXED_WORKSPACES: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
@@ -25,17 +25,22 @@ pub fn add_workspace_to_db(
     // Parse metadata JSON to extract intent and moved_files fields directly
     let (intent, moved_files) = metadata
         .and_then(|m| {
-            serde_json::from_str::<serde_json::Value>(&m).ok().and_then(|obj| {
-                let intent = obj.get("intent").and_then(|v| v.as_str()).map(String::from);
-                let moved_files = obj.get("moved_files").and_then(|v| v.as_array()).map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(String::from))
-                        .collect::<Vec<_>>()
-                });
-                // Only return Some if moved_files has actual items
-                let moved_files = moved_files.filter(|v| !v.is_empty());
-                Some((intent, moved_files))
-            })
+            serde_json::from_str::<serde_json::Value>(&m)
+                .ok()
+                .and_then(|obj| {
+                    let intent = obj.get("intent").and_then(|v| v.as_str()).map(String::from);
+                    let moved_files =
+                        obj.get("moved_files")
+                            .and_then(|v| v.as_array())
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|v| v.as_str().map(String::from))
+                                    .collect::<Vec<_>>()
+                            });
+                    // Only return Some if moved_files has actual items
+                    let moved_files = moved_files.filter(|v| !v.is_empty());
+                    Some((intent, moved_files))
+                })
         })
         .unwrap_or((None, None));
 
@@ -62,17 +67,22 @@ pub fn create_workspace(
     // Parse metadata JSON to extract intent and moved_files fields directly
     let (intent, moved_files) = metadata
         .and_then(|m| {
-            serde_json::from_str::<serde_json::Value>(&m).ok().and_then(|obj| {
-                let intent = obj.get("intent").and_then(|v| v.as_str()).map(String::from);
-                let moved_files = obj.get("moved_files").and_then(|v| v.as_array()).map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(String::from))
-                        .collect::<Vec<_>>()
-                });
-                // Only return Some if moved_files has actual items
-                let moved_files = moved_files.filter(|v| !v.is_empty());
-                Some((intent, moved_files))
-            })
+            serde_json::from_str::<serde_json::Value>(&m)
+                .ok()
+                .and_then(|obj| {
+                    let intent = obj.get("intent").and_then(|v| v.as_str()).map(String::from);
+                    let moved_files =
+                        obj.get("moved_files")
+                            .and_then(|v| v.as_array())
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|v| v.as_str().map(String::from))
+                                    .collect::<Vec<_>>()
+                            });
+                    // Only return Some if moved_files has actual items
+                    let moved_files = moved_files.filter(|v| !v.is_empty());
+                    Some((intent, moved_files))
+                })
         })
         .unwrap_or((None, None));
 
@@ -101,8 +111,7 @@ pub fn delete_workspace_from_db(repo_path: String, id: i64) -> Result<(), String
 /// Delegates to core::delete_workspace which correctly constructs the full workspace path
 #[tauri::command]
 pub fn delete_workspace(repo_path: String, id: i64) -> Result<(), String> {
-    crate::core::delete_workspace(&repo_path, &id)
-        .map(|_| ())
+    crate::core::delete_workspace(&repo_path, &id).map(|_| ())
 }
 
 /// Push workspace to remote and update not_on_remote flag
@@ -194,9 +203,10 @@ pub fn cleanup_stale_workspaces(repo_path: String) -> Result<(), String> {
     Ok(())
 }
 
-
 #[tauri::command]
-pub fn get_workspace_status(workspace_path: String) -> Result<crate::core::WorkspaceStatus, String> {
+pub fn get_workspace_status(
+    workspace_path: String,
+) -> Result<crate::core::WorkspaceStatus, String> {
     crate::core::workspace_status(&workspace_path)
 }
 
@@ -224,7 +234,9 @@ pub fn update_workspace_not_on_remote(
 }
 
 #[tauri::command]
-pub fn list_workspace_statuses(repo_path: String) -> Result<Vec<crate::core::WorkspacePartialStatus>, String> {
+pub fn list_workspace_statuses(
+    repo_path: String,
+) -> Result<Vec<crate::core::WorkspacePartialStatus>, String> {
     crate::core::list_workspace_statuses(&repo_path)
 }
 

@@ -214,8 +214,12 @@ pub fn create_workspace(
             };
 
             // Perform the squash operation
-            jj::squash_to_workspace(&source_workspace_path, &workspace.workspace_name, Some(files))
-                .map_err(|e| format!("Failed to squash files to workspace: {}", e))?;
+            jj::squash_to_workspace(
+                &source_workspace_path,
+                &workspace.workspace_name,
+                Some(files),
+            )
+            .map_err(|e| format!("Failed to squash files to workspace: {}", e))?;
 
             // Update the workspace's working copy to reflect the squash
             let workspace_dir = Path::new(repo_path)
@@ -292,8 +296,7 @@ pub fn push_workspace_to_remote(
     };
 
     // Perform the push
-    let result = jj::jj_push(&push_path)
-        .map_err(|e| format!("Push failed: {}", e))?;
+    let result = jj::jj_push(&push_path).map_err(|e| format!("Push failed: {}", e))?;
 
     // Clear the not_on_remote flag after successful push (only for workspaces)
     if let Some(id) = workspace_id {
@@ -674,13 +677,8 @@ pub fn merge_workspace(
                 .map_err(|e| format!("Failed to create merge commit: {}", e))?;
         }
         MergeCommit::Squash => {
-            jj::jj_squash_merge_commit(
-                repo_path,
-                &workspace.branch_name,
-                target_branch,
-                message,
-            )
-            .map_err(|e| format!("Failed to squash merge workspace: {}", e))?;
+            jj::jj_squash_merge_commit(repo_path, &workspace.branch_name, target_branch, message)
+                .map_err(|e| format!("Failed to squash merge workspace: {}", e))?;
         }
     }
 
@@ -843,12 +841,8 @@ pub fn split_workspace(
                     }
                     SplitMode::Copy => {
                         // Copy files (filesystem level, jj auto-tracks)
-                        jj::copy_files_between_workspaces(
-                            &source_full_path,
-                            &new_full_path,
-                            files,
-                        )
-                        .map_err(|e| format!("Failed to copy files: {}", e))?;
+                        jj::copy_files_between_workspaces(&source_full_path, &new_full_path, files)
+                            .map_err(|e| format!("Failed to copy files: {}", e))?;
                     }
                 }
             } else if has_commits {
@@ -893,12 +887,8 @@ pub fn split_workspace(
                 .to_string();
 
             // Set new workspace's target_branch to source's old target
-            local_db::update_workspace_target_branch(
-                repo_path,
-                new_workspace.id,
-                &source_target,
-            )
-            .map_err(|e| format!("Failed to set new workspace target: {}", e))?;
+            local_db::update_workspace_target_branch(repo_path, new_workspace.id, &source_target)
+                .map_err(|e| format!("Failed to set new workspace target: {}", e))?;
 
             if has_files {
                 let files = file_paths.unwrap();
@@ -912,12 +902,8 @@ pub fn split_workspace(
                         .map_err(|e| format!("Failed to move files: {}", e))?;
                     }
                     SplitMode::Copy => {
-                        jj::copy_files_between_workspaces(
-                            &source_full_path,
-                            &new_full_path,
-                            files,
-                        )
-                        .map_err(|e| format!("Failed to copy files: {}", e))?;
+                        jj::copy_files_between_workspaces(&source_full_path, &new_full_path, files)
+                            .map_err(|e| format!("Failed to copy files: {}", e))?;
                     }
                 }
             } else if has_commits {
