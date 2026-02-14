@@ -1153,6 +1153,24 @@ pub fn jj_set_bookmark(
     Ok(())
 }
 
+/// Delete a jj bookmark
+/// Uses: jj bookmark delete <name>
+pub fn jj_delete_bookmark(workspace_path: &str, bookmark_name: &str) -> Result<(), JjError> {
+    let output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["bookmark", "delete", bookmark_name])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !output.status.success() {
+        return Err(JjError::IoError(
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
 /// Track a remote bookmark
 /// Uses: jj bookmark track <name>@<remote>
 pub fn jj_bookmark_track(

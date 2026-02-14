@@ -1577,3 +1577,286 @@ fn test_moved_files_from_workspace_to_workspace() {
         "component2.ts should be removed from base workspace after create_workspace"
     );
 }
+
+// =============================================================================
+// Test: Rename workspace — dry run with valid name
+// =============================================================================
+
+#[test]
+fn test_rename_workspace_dry_run_valid_name() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/original",
+        Some("original feature".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    // Dry run should succeed with a valid new name
+    let result = treq_lib::core::rename_workspace(
+        &repo.repo_path,
+        workspace.id,
+        "feat/new-name",
+        true,
+    )
+    .expect("Failed to dry-run rename workspace");
+
+    assert!(result.success, "Dry run should succeed for valid name");
+
+    // Verify workspace is unchanged in DB
+    let db_workspace = treq_lib::local_db::get_workspace_by_id(&repo.repo_path, workspace.id)
+        .expect("Failed to get workspace")
+        .expect("Workspace should exist");
+    assert_eq!(
+        db_workspace.branch_name, "feat/original",
+        "Branch name should be unchanged after dry run"
+    );
+
+    // Verify jj bookmarks are unchanged
+    let bookmarks =
+        JjVerifier::list_bookmarks(&repo.repo_path).expect("Failed to list bookmarks");
+    assert!(
+        bookmarks.iter().any(|b| b == "feat/original"),
+        "Original bookmark should still exist after dry run, got: {:?}",
+        bookmarks
+    );
+    assert!(
+        !bookmarks.iter().any(|b| b == "feat/new-name"),
+        "New bookmark should NOT exist after dry run, got: {:?}",
+        bookmarks
+    );
+}
+
+// =============================================================================
+// Test: Rename workspace — dry run clashes with existing branch
+// =============================================================================
+
+#[test]
+fn test_rename_workspace_dry_run_clashes_with_existing_branch() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let _ws_a = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/a",
+        Some("feature a".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace A");
+
+    let ws_b = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/b",
+        Some("feature b".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace B");
+
+    // Try to rename B to A's branch name (should fail)
+    let result = treq_lib::core::rename_workspace(
+        &repo.repo_path,
+        ws_b.id,
+        "feat/a",
+        true,
+    )
+    .expect("Failed to dry-run rename workspace");
+
+    assert!(
+        !result.success,
+        "Dry run should fail when name clashes with existing branch"
+    );
+    assert!(
+        result.message.to_lowercase().contains("already exists")
+            || result.message.to_lowercase().contains("clash"),
+        "Message should indicate branch already exists, got: {}",
+        result.message
+    );
+}
+
+// =============================================================================
+// Test: Rename workspace — dry run same name
+// =============================================================================
+
+#[test]
+fn test_rename_workspace_dry_run_same_name() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/original",
+        Some("original feature".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    // Renaming to same name should fail
+    let result = treq_lib::core::rename_workspace(
+        &repo.repo_path,
+        workspace.id,
+        "feat/original",
+        true,
+    )
+    .expect("Failed to dry-run rename workspace");
+
+    assert!(
+        !result.success,
+        "Dry run should fail when renaming to the same name"
+    );
+}
+
+// =============================================================================
+// Test: Rename workspace — success (non-dry-run)
+// =============================================================================
+
+#[test]
+fn test_rename_workspace_success() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/original",
+        Some("original feature".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    // Actual rename
+    let result = treq_lib::core::rename_workspace(
+        &repo.repo_path,
+        workspace.id,
+        "feat/renamed",
+        false,
+    )
+    .expect("Failed to rename workspace");
+
+    assert!(result.success, "Rename should succeed");
+    assert_eq!(
+        result.workspace.as_ref().unwrap().branch_name,
+        "feat/renamed",
+        "Result workspace should have new branch name"
+    );
+
+    // Verify DB is updated
+    let db_workspace = treq_lib::local_db::get_workspace_by_id(&repo.repo_path, workspace.id)
+        .expect("Failed to get workspace")
+        .expect("Workspace should exist");
+    assert_eq!(
+        db_workspace.branch_name, "feat/renamed",
+        "DB branch name should be updated"
+    );
+
+    // Verify jj bookmarks
+    let bookmarks =
+        JjVerifier::list_bookmarks(&repo.repo_path).expect("Failed to list bookmarks");
+    assert!(
+        bookmarks.iter().any(|b| b == "feat/renamed"),
+        "New bookmark should exist, got: {:?}",
+        bookmarks
+    );
+    assert!(
+        !bookmarks.iter().any(|b| b == "feat/original"),
+        "Old bookmark should NOT exist, got: {:?}",
+        bookmarks
+    );
+}
+
+// =============================================================================
+// Test: Rename workspace — updates child target branches
+// =============================================================================
+
+#[test]
+fn test_rename_workspace_updates_child_target_branches() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    // Create parent workspace
+    let parent = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/parent",
+        Some("parent feature".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create parent workspace");
+
+    // Create stacked workspace targeting parent
+    let child =
+        treq_lib::core::stack_workspace(&repo.repo_path, Some(&parent), Some("feat/child"))
+            .expect("Failed to create child workspace");
+
+    // Verify child targets parent
+    assert_eq!(
+        child.target_branch.as_deref(),
+        Some("feat/parent"),
+        "Child should target parent"
+    );
+
+    // Rename parent
+    let result = treq_lib::core::rename_workspace(
+        &repo.repo_path,
+        parent.id,
+        "feat/parent-renamed",
+        false,
+    )
+    .expect("Failed to rename parent workspace");
+
+    assert!(result.success, "Rename should succeed");
+    assert!(
+        result.updated_children_ids.contains(&child.id),
+        "Child should be in updated_children_ids, got: {:?}",
+        result.updated_children_ids
+    );
+
+    // Verify child's target_branch is updated
+    let updated_child = treq_lib::local_db::get_workspace_by_id(&repo.repo_path, child.id)
+        .expect("Failed to get child workspace")
+        .expect("Child workspace should exist");
+    assert_eq!(
+        updated_child.target_branch.as_deref(),
+        Some("feat/parent-renamed"),
+        "Child's target_branch should be updated to new name"
+    );
+}
+
+// =============================================================================
+// Test: Rename workspace — sets not_on_remote
+// =============================================================================
+
+#[test]
+fn test_rename_workspace_sets_not_on_remote() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/original",
+        Some("original feature".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    // Rename workspace
+    let result = treq_lib::core::rename_workspace(
+        &repo.repo_path,
+        workspace.id,
+        "feat/renamed",
+        false,
+    )
+    .expect("Failed to rename workspace");
+
+    assert!(result.success, "Rename should succeed");
+
+    // Verify not_on_remote is set to true
+    let db_workspace = treq_lib::local_db::get_workspace_by_id(&repo.repo_path, workspace.id)
+        .expect("Failed to get workspace")
+        .expect("Workspace should exist");
+    assert!(
+        db_workspace.not_on_remote,
+        "not_on_remote should be true after rename"
+    );
+}

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, memo, useMemo } from "react";
+import { useCallback, memo, useMemo, useState } from "react";
 import { Workspace, listWorkspaceStatuses } from "../lib/api";
 import {
   buildWorkspaceTree,
@@ -27,6 +27,7 @@ import {
   ListStart,
   ListEnd,
   ListPlus,
+  Pencil,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { GitBranchPlusIcon } from "./ui/icons";
@@ -47,6 +48,7 @@ import {
   ContextMenuSeparator,
 } from "./ui/context-menu";
 import { getWorkspaceTitle as getWorkspaceTitleFromUtils } from "../lib/workspace-utils";
+import { RenameWorkspaceDialog } from "./RenameWorkspaceDialog";
 import { revealItemInDir, openUrl } from "@tauri-apps/plugin-opener";
 import { useEditorApps } from "../hooks/useEditorApps";
 
@@ -197,6 +199,8 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
     const workspaces = useMemo(() => statuses.map(s => s.current), [statuses]);
     const conflictedIds = useMemo(() => statuses.filter(s => s.has_conflicts).map(s => s.current.id), [statuses]);
     const changedIds = useMemo(() => statuses.filter(s => s.has_changes).map(s => s.current.id), [statuses]);
+
+    const [renameTarget, setRenameTarget] = useState<Workspace | null>(null);
 
     // Build hierarchical tree and flatten for rendering
     const flattenedNodes = useMemo(() => {
@@ -515,6 +519,10 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                         <GitBranch className="w-4 h-4 mr-2" />
                         Copy branch name
                       </ContextMenuItem>
+                      <ContextMenuItem onClick={() => setRenameTarget(workspace)}>
+                        <Pencil className="w-4 h-4 mr-2" />
+                        Rename Workspace
+                      </ContextMenuItem>
                       <ContextMenuSeparator />
                       <PathContextMenuItems
                         relativePath={
@@ -592,6 +600,15 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
             </DragDropContext>
           </div>
         </div>
+      {renameTarget && repoPath && (
+        <RenameWorkspaceDialog
+          open={!!renameTarget}
+          onOpenChange={(open) => { if (!open) setRenameTarget(null); }}
+          repoPath={repoPath}
+          workspace={renameTarget}
+          onSuccess={() => setRenameTarget(null)}
+        />
+      )}
       </TooltipProvider>
     );
   }

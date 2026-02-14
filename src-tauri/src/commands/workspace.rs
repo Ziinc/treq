@@ -369,6 +369,18 @@ pub fn check_and_rebase_workspaces(
     }
 }
 
+/// Rename a workspace's branch/bookmark.
+/// Supports dry_run mode for validation without performing the rename.
+#[tauri::command]
+pub fn rename_workspace(
+    repo_path: String,
+    workspace_id: i64,
+    new_branch_name: String,
+    dry_run: bool,
+) -> Result<crate::core::RenameWorkspaceResult, String> {
+    crate::core::rename_workspace(&repo_path, workspace_id, &new_branch_name, dry_run)
+}
+
 /// Split a workspace by moving or copying files/commits to a new workspace.
 /// Delegates to core::split_workspace() for all logic.
 #[tauri::command]

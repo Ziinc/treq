@@ -41,6 +41,14 @@ pub enum SplitPosition {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RenameWorkspaceResult {
+    pub success: bool,
+    pub message: String,
+    pub workspace: Option<local_db::Workspace>,
+    pub updated_children_ids: Vec<i64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WorkspacePartialStatus {
     pub current: local_db::Workspace,
     pub has_conflicts: bool,
@@ -755,6 +763,140 @@ pub fn update_workspace(
     local_db::get_workspace_by_id(repo_path, workspace_id)
         .map_err(|e| format!("Failed to get updated workspace: {}", e))?
         .ok_or_else(|| "Workspace not found after update".to_string())
+}
+
+/// Renames a workspace's jj bookmark/branch.
+///
+/// In dry_run mode, validates the new name (checks for clashes with existing local/remote
+/// branches) without performing the rename.
+///
+/// # Arguments
+/// * `repo_path` - Path to the repository root
+/// * `workspace_id` - ID of the workspace to rename
+/// * `new_branch_name` - The new branch name
+/// * `dry_run` - If true, only validate without performing the rename
+pub fn rename_workspace(
+    repo_path: &str,
+    workspace_id: i64,
+    new_branch_name: &str,
+    dry_run: bool,
+) -> Result<RenameWorkspaceResult, String> {
+    // 1. Look up workspace by ID
+    let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
+        .map_err(|e| format!("Failed to get workspace: {}", e))?
+        .ok_or("Workspace not found")?;
+
+    let old_branch_name = &workspace.branch_name;
+
+    // 2. Check same-name
+    if old_branch_name == new_branch_name {
+        return Ok(RenameWorkspaceResult {
+            success: false,
+            message: "New name is the same as the current name".to_string(),
+            workspace: None,
+            updated_children_ids: vec![],
+        });
+    }
+
+    // 3. Check local branch clash
+    let branches =
+        jj::get_branches(repo_path).map_err(|e| format!("Failed to get branches: {}", e))?;
+    if branches.iter().any(|b| b.name == new_branch_name) {
+        return Ok(RenameWorkspaceResult {
+            success: false,
+            message: format!(
+                "Branch '{}' already exists locally",
+                new_branch_name
+            ),
+            workspace: None,
+            updated_children_ids: vec![],
+        });
+    }
+
+    // 4. Check remote branch clash
+    let remote_ref = format!("{}@origin", new_branch_name);
+    let remote_exists = jj::check_remote_branch_exists(repo_path, &remote_ref)
+        .map_err(|e| format!("Failed to check remote branch: {}", e))?;
+    if remote_exists {
+        return Ok(RenameWorkspaceResult {
+            success: false,
+            message: format!(
+                "Branch '{}' already exists on remote",
+                new_branch_name
+            ),
+            workspace: None,
+            updated_children_ids: vec![],
+        });
+    }
+
+    // 5. If dry_run, return success without performing the rename
+    if dry_run {
+        return Ok(RenameWorkspaceResult {
+            success: true,
+            message: format!("'{}' is available", new_branch_name),
+            workspace: None,
+            updated_children_ids: vec![],
+        });
+    }
+
+    // 6. Construct full workspace path
+    let workspace_path = Path::new(repo_path)
+        .join(".treq")
+        .join("workspaces")
+        .join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path
+        .to_str()
+        .ok_or("Failed to convert workspace path to string")?;
+
+    // 7. Check if old bookmark was tracked
+    let was_tracked =
+        jj::is_bookmark_tracked(workspace_path_str, old_branch_name, "origin").unwrap_or(false);
+
+    // 8. Set new bookmark at same revision as old
+    jj::jj_set_bookmark(workspace_path_str, new_branch_name, old_branch_name)
+        .map_err(|e| format!("Failed to set new bookmark: {}", e))?;
+
+    // 9. Delete old bookmark
+    jj::jj_delete_bookmark(workspace_path_str, old_branch_name)
+        .map_err(|e| format!("Failed to delete old bookmark: {}", e))?;
+
+    // 10. If was tracked, best-effort track new bookmark
+    if was_tracked {
+        let _ = jj::jj_bookmark_track(workspace_path_str, new_branch_name, "origin");
+    }
+
+    // 11. Update branch name in DB
+    local_db::update_workspace_branch_name(repo_path, workspace_id, new_branch_name)
+        .map_err(|e| format!("Failed to update branch name in DB: {}", e))?;
+
+    // 12. Mark as not_on_remote (new name hasn't been pushed)
+    local_db::update_workspace_not_on_remote(repo_path, workspace_id, true)
+        .map_err(|e| format!("Failed to update not_on_remote: {}", e))?;
+
+    // 13. Update children targeting the old branch name
+    let children = local_db::get_workspaces_by_target_branch(repo_path, old_branch_name)
+        .map_err(|e| format!("Failed to get child workspaces: {}", e))?;
+
+    let mut updated_children_ids = Vec::new();
+    for child in &children {
+        local_db::update_workspace_target_branch(repo_path, child.id, new_branch_name)
+            .map_err(|e| format!("Failed to update child target branch: {}", e))?;
+        updated_children_ids.push(child.id);
+    }
+
+    // 14. Return updated workspace
+    let updated_workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
+        .map_err(|e| format!("Failed to get updated workspace: {}", e))?;
+
+    Ok(RenameWorkspaceResult {
+        success: true,
+        message: format!(
+            "Renamed '{}' to '{}'",
+            old_branch_name, new_branch_name
+        ),
+        workspace: updated_workspace,
+        updated_children_ids,
+    })
 }
 
 /// Splits an existing workspace by moving or copying files/commits to a new workspace.

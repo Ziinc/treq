@@ -444,6 +444,26 @@ export const splitWorkspace = (
     position,
   });
 
+export interface RenameWorkspaceResult {
+  success: boolean;
+  message: string;
+  workspace: Workspace | null;
+  updated_children_ids: number[];
+}
+
+export const renameWorkspace = (
+  repoPath: string,
+  workspaceId: number,
+  newBranchName: string,
+  dryRun: boolean,
+): Promise<RenameWorkspaceResult> =>
+  invoke("rename_workspace", {
+    repoPath,
+    workspaceId,
+    newBranchName,
+    dryRun,
+  });
+
 export const mergeWorkspace = (
   repoPath: string,
   workspaceId: number,
