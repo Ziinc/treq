@@ -20,6 +20,7 @@ import {
   jjGitFetch,
   jjGitFetchBackground,
   pushWorkspaceToRemote,
+  jjGetLog,
 } from "../lib/api";
 import { getStatusBgColor } from "../lib/git-status-colors";
 import { parseJjChangedFiles, type ParsedFileChange } from "../lib/git-utils";
@@ -143,6 +144,9 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   // Sync status state (ahead/behind counts)
   const [syncStatus, setSyncStatus] = useState<{ ahead: number; behind: number } | null>(null);
 
+  // Aggregate diff stats (insertions/deletions across all commits)
+  const [diffStats, setDiffStats] = useState<{ insertions: number; deletions: number } | null>(null);
+
   // Target branch and conflicts state
   const [targetBranch, setTargetBranch] = useState<string | null>(null);
   const [defaultBranch, setDefaultBranch] = useState<string>("main");
@@ -243,6 +247,32 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   useEffect(() => {
     fetchSyncStatus();
   }, [fetchSyncStatus]);
+
+  // Fetch aggregate diff stats from commit log
+  // Always use isHomeRepo=false to get commits ahead of target branch (workspace-style revset)
+  // Use workspace?.id as dep to avoid stale targetBranch/workingDirectory mismatches during navigation
+  const diffStatsTargetBranch = workspace ? (workspace.target_branch || defaultBranch) : defaultBranch;
+  useEffect(() => {
+    if (!workingDirectory || !diffStatsTargetBranch) {
+      setDiffStats(null);
+      return;
+    }
+    let cancelled = false;
+    const path = workspace ? getFullWorkspacePath(workspace) : workingDirectory;
+    jjGetLog(path, diffStatsTargetBranch, false)
+      .then(({ commits }) => {
+        if (cancelled) return;
+        const totals = commits.reduce(
+          (acc, c) => ({ insertions: acc.insertions + c.insertions, deletions: acc.deletions + c.deletions }),
+          { insertions: 0, deletions: 0 }
+        );
+        setDiffStats(totals.insertions > 0 || totals.deletions > 0 ? totals : null);
+      })
+      .catch(() => {
+        if (!cancelled) setDiffStats(null);
+      });
+    return () => { cancelled = true; };
+  }, [workingDirectory, diffStatsTargetBranch, workspace, defaultBranch]);
 
   // useEffect(() => {
   //   if (activeTab === "overview" && workingDirectory) {
@@ -809,12 +839,27 @@ const handleSync = useCallback(async () => {
             </TabsTrigger>
           </TabsList>
         </Tabs>
-        {(rebasing || refreshingFiles) && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            <span>{rebasing ? "Rebasing..." : "Refreshing..."}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          {diffStats && (
+            <div className="flex items-center gap-1.5 text-xs font-mono">
+              <span className="text-green-600 dark:text-green-400">+{diffStats.insertions}</span>
+              <span className="text-red-600 dark:text-red-400">-{diffStats.deletions}</span>
+              <div className="flex items-center gap-0.5">
+                {Array.from({ length: 5 }, (_, i) => {
+                  const ratio = diffStats.insertions / (diffStats.insertions + diffStats.deletions);
+                  const isGreen = i < Math.round(ratio * 5);
+                  return <div key={i} className={cn("w-2 h-2 rounded-sm", isGreen ? "bg-green-600" : "bg-red-600")} />;
+                })}
+              </div>
+            </div>
+          )}
+          {(rebasing || refreshingFiles) && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>{rebasing ? "Rebasing..." : "Refreshing..."}</span>
+            </div>
+          )}
+        </div>
       </div>
       {activeTab === "changes" && workspace && (
         <div className="px-4 py-2 border-b border-border flex">
@@ -870,7 +915,7 @@ const handleSync = useCallback(async () => {
             <div className="flex h-full">
               {/* LEFT: Files + README (4/5 width) */}
               <div className="flex-[4] overflow-auto border-r border-border">
-                <div className="p-4 space-y-6">
+                <div className="p-4 space-y-4">
                   {/* Conflicts Alert */}
                   {conflictedFiles.length > 0 && (
                     <div
@@ -898,6 +943,14 @@ const handleSync = useCallback(async () => {
                       </div>
                     </div>
                   )}
+                  {/* Task Input */}
+                  <TaskInput
+                    repoPath={effectiveRepoPath}
+                    workspaceId={workspace?.id ?? null}
+                    workspacePath={workspace?.workspace_path ?? null}
+                    workingDirectory={workingDirectory}
+                    onSessionCreated={onSessionCreated}
+                  />
                   {/* File Search Input */}
                   <div className="flex justify-end">
                     <button
@@ -914,14 +967,7 @@ const handleSync = useCallback(async () => {
                       </kbd>
                     </button>
                   </div>
-                  {/* Task Input */}
-                  <TaskInput
-                    repoPath={effectiveRepoPath}
-                    workspaceId={workspace?.id ?? null}
-                    workspacePath={workspace?.workspace_path ?? null}
-                    workingDirectory={workingDirectory}
-                    onSessionCreated={onSessionCreated}
-                  />
+                  
                   {/* File Listing */}
                   <div className="border rounded-lg divide-y divide-border">
                     {displayedEntries.map((entry) => (

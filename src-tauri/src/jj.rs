@@ -2260,7 +2260,8 @@ pub fn jj_get_log(
     // Build revset based on context (home repo vs workspace)
     let revset = build_jj_get_log_revset(target_branch, is_home_repo.unwrap_or(false));
 
-    // Build template for tab-separated output
+    // Build template for tab-separated output, using \x1E (Record Separator) between commits
+    // because diff.stat() is multiline (per-file stats + summary line)
     let template = concat!(
         "commit_id.short(12) ++ \"\\t\" ++ ",
         "change_id.short(12) ++ \"\\t\" ++ ",
@@ -2270,7 +2271,7 @@ pub fn jj_get_log(
         "parents.map(|p| p.commit_id().short(12)).join(\",\") ++ \"\\t\" ++ ",
         "if(working_copies, \"true\", \"false\") ++ \"\\t\" ++ ",
         "bookmarks.map(|b| b.name()).join(\",\") ++ \"\\t\" ++ ",
-        "diff.stat() ++ \"\\n\""
+        "diff.stat() ++ \"\\x1E\""
     );
 
     let output = command_for("jj")
@@ -2288,15 +2289,23 @@ pub fn jj_get_log(
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut commits = Vec::new();
 
-    // Parse each line of tab-separated output
-    for line in stdout.lines() {
-        if line.trim().is_empty() {
+    // Split by record separator — each record is one commit
+    for record in stdout.split('\x1E') {
+        let record = record.trim();
+        if record.is_empty() {
             continue;
         }
 
-        let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() < 9 {
-            continue; // Skip malformed lines
+        // The first line contains tab-separated fields; remaining lines are diff.stat() continuation
+        let mut lines = record.lines();
+        let first_line = match lines.next() {
+            Some(l) => l,
+            None => continue,
+        };
+
+        let parts: Vec<&str> = first_line.split('\t').collect();
+        if parts.len() < 8 {
+            continue; // Skip malformed records
         }
 
         let short_id = parts[0].to_string();
@@ -2307,7 +2316,18 @@ pub fn jj_get_log(
         let parent_ids_str = parts[5];
         let is_working_copy = parts[6] == "true";
         let bookmarks_str = parts[7];
-        let diff_stat = parts[8];
+
+        // diff.stat() spans from parts[8] (if present) through all remaining lines
+        // The summary line (e.g. "2 files changed, 64 insertions(+), 16 deletions(-)") is the last line
+        let mut diff_stat_parts: Vec<&str> = Vec::new();
+        if parts.len() > 8 {
+            diff_stat_parts.push(parts[8]);
+        }
+        for line in lines {
+            diff_stat_parts.push(line);
+        }
+        // The summary is the last line of the diff stat output
+        let diff_stat = diff_stat_parts.last().copied().unwrap_or("");
 
         // Parse parent IDs
         let parent_ids: Vec<String> = if parent_ids_str.is_empty() {

@@ -885,7 +885,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         sessionId: pendingClaudeSession.sessionId,
         sessionName: pendingClaudeSession.sessionName,
         ptySessionId: `session-${pendingClaudeSession.sessionId}`,
-        workspacePath: pendingClaudeSession.workspacePath,
+        workspacePath: pendingWorkspace ? getFullWorkspacePath(pendingWorkspace) : null,
         repoPath: pendingClaudeSession.repoPath,
         workspaceName: pendingWorkspace?.branch_name ?? null,
         pendingPrompt: pendingClaudeSession.pendingPrompt,
