@@ -3,11 +3,13 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::TempDir;
 
+#[allow(dead_code)]
 pub struct TestRepo {
     pub temp_dir: TempDir,
     pub repo_path: String,
 }
 
+#[allow(dead_code)]
 impl TestRepo {
     /// Creates a new temporary Git repository for testing.
     /// Simulates cloning a git repo by initializing with proper git config.

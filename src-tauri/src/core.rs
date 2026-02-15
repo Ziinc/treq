@@ -1038,10 +1038,17 @@ pub fn split_workspace(
             local_db::update_workspace_target_branch(repo_path, new_workspace.id, &source_target)
                 .map_err(|e| format!("Failed to set new workspace target: {}", e))?;
 
+            // Track files to remove from source after rebase (for Move mode).
+            // When splitting "before", the new workspace becomes source's parent.
+            // After rebase, moved files reappear in source via parent inheritance,
+            // so we must explicitly delete them from source's working copy.
+            let mut files_to_remove_from_source: Vec<String> = Vec::new();
+
             if has_files {
                 let files = file_paths.unwrap();
                 match mode {
                     SplitMode::Move => {
+                        files_to_remove_from_source = files.clone();
                         jj::squash_to_workspace(
                             &source_full_path,
                             &new_workspace.workspace_name,
@@ -1056,6 +1063,14 @@ pub fn split_workspace(
                 }
             } else if has_commits {
                 let commits = commit_ids.unwrap();
+                if matches!(mode, SplitMode::Move) {
+                    // Collect files from commits before moving them
+                    for change_id in &commits {
+                        let commit_files = jj::jj_diff_summary(&source_full_path, change_id)
+                            .unwrap_or_default();
+                        files_to_remove_from_source.extend(commit_files);
+                    }
+                }
                 for change_id in &commits {
                     jj::squash_commit_to_workspace(
                         &source_full_path,
@@ -1081,6 +1096,19 @@ pub fn split_workspace(
             // Refresh working copies
             let _ = jj::update_stale_workspace(&new_full_path);
             let _ = jj::update_stale_workspace(&source_full_path);
+
+            // Remove moved files from source's working copy.
+            // After rebase, these files reappear from the parent; deleting them
+            // creates an explicit removal in source's commit tree.
+            if !files_to_remove_from_source.is_empty() {
+                let source_dir = Path::new(&source_full_path);
+                for file in &files_to_remove_from_source {
+                    let file_path = source_dir.join(file);
+                    if file_path.exists() {
+                        let _ = std::fs::remove_file(&file_path);
+                    }
+                }
+            }
 
             // Return updated workspace from DB
             local_db::get_workspace_by_id(repo_path, new_workspace.id)
