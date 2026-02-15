@@ -51,7 +51,8 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
       setLoading(true);
       jjGetLog(workspacePath, targetBranch, isHomeRepo)
         .then(({commits}) => {
-          setCommits(commits);
+          // Skip the first commit (working copy / uncommitted @)
+          setCommits(commits.slice(1));
         })
         .catch((err) => {
           console.error('Failed to fetch commit history:', err);
@@ -68,9 +69,20 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
       return <LoadingState />;
     }
 
-    // Hide entire graph if no commits after filtering
     if (commits.length === 0) {
-      return null;
+      return (
+        <div className="p-4">
+          <h3 className="text-sm font-semibold text-muted-foreground mb-4">
+            Commits
+          </h3>
+          <p className="text-sm text-muted-foreground text-center">
+            No commits yet.
+          </p>
+          <p className="text-sm text-muted-foreground text-center">
+            Changes you commit will appear here.
+          </p>
+        </div>
+      );
     }
 
     let globalIndex = 0;
@@ -147,11 +159,6 @@ function CommitItem({ commit, isFirst }: CommitItemProps) {
           <p className="text-xs text-muted-foreground font-mono">
             {commit.short_id}
           </p>
-          {isFirst && (
-            <span className="text-xs font-medium text-amber-600 bg-amber-100 dark:text-amber-400 dark:bg-amber-900/30 px-1.5 py-0.5 rounded">
-              Uncommitted
-            </span>
-          )}
           <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
