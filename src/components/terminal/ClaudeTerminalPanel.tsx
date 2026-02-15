@@ -81,6 +81,12 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
     const terminalId = `claude-${sessionData.sessionId}`;
     const isHidden = collapsed;
 
+    // Capture pendingPrompt and permissionMode in refs so they survive
+    // the race condition where sessions refetch clears pendingClaudeSession
+    // before isModelLoaded becomes true and ConsolidatedTerminal mounts.
+    const pendingPromptRef = useRef(sessionData.pendingPrompt);
+    const permissionModeRef = useRef(sessionData.permissionMode);
+
     // Load session model on mount
     useEffect(() => {
       const loadModel = async () => {
@@ -255,7 +261,8 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
     }, [pendingModelReset, handleReset, sessionModel, addToast]);
 
     // Build Claude command with optional pending prompt
-    const permissionModeArg = sessionData.permissionMode === 'plan'
+    // Use refs to avoid losing values due to race condition with sessions refetch
+    const permissionModeArg = permissionModeRef.current === 'plan'
       ? ' --permission-mode plan'
       : ' --permission-mode acceptEdits';
 
@@ -281,9 +288,9 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
     autoCommand += ` --append-system-prompt "${treqSystemPrompt}"`;
 
     // If there's a pending prompt, add it as a positional argument after --
-    if (sessionData.pendingPrompt) {
+    if (pendingPromptRef.current) {
       // Escape shell special characters (keep newlines as actual newlines)
-      const escapedPrompt = sessionData.pendingPrompt
+      const escapedPrompt = pendingPromptRef.current
         .replace(/\\/g, '\\\\')  // Escape backslashes first
         .replace(/"/g, '\\"')    // Escape double quotes
         .replace(/`/g, '\\`')    // Escape backticks (command substitution)

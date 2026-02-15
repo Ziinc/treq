@@ -98,6 +98,7 @@ export const ConsolidatedTerminal = forwardRef<
       cols: number;
     } | null>(null);
     const autoCommandSentRef = useRef(false);
+    const initialAutoCommandRef = useRef(autoCommand);
     const [terminalError, setTerminalError] = useState<string | null>(null);
     const [instanceKey, setInstanceKey] = useState(0);
 
@@ -128,12 +129,12 @@ export const ConsolidatedTerminal = forwardRef<
       onTerminalIdleRef.current = onTerminalIdle;
     }, [onTerminalIdle]);
 
-    // Reset output and error when session or autoCommand changes
+    // Reset output and error when session changes
     useEffect(() => {
       outputRef.current = "";
       autoCommandSentRef.current = false;
       setTerminalError(null);
-    }, [sessionId, instanceKey, autoCommand]);
+    }, [sessionId, instanceKey]);
 
     const handleRetryTerminal = useCallback(() => {
       setTerminalError(null);
@@ -359,11 +360,12 @@ export const ConsolidatedTerminal = forwardRef<
 
           // Send autoCommand if we have one and haven't sent it yet
           // (isNewSession check ensures we only send on first setup, ref prevents duplicates)
-          if (autoCommand && !autoCommandSentRef.current && isNewSession) {
+          // Use initialAutoCommandRef to avoid re-running effect when autoCommand prop changes
+          if (initialAutoCommandRef.current && !autoCommandSentRef.current && isNewSession) {
             autoCommandSentRef.current = true;
             // Add a small delay to ensure the shell prompt is ready
             setTimeout(() => {
-              ptyWrite(sessionId, normalizeCommand(autoCommand)).catch(
+              ptyWrite(sessionId, normalizeCommand(initialAutoCommandRef.current!)).catch(
                 localHandleError
               );
             }, isNewSession ? 100 : 0);
@@ -402,7 +404,6 @@ export const ConsolidatedTerminal = forwardRef<
       workingDirectory,
       shell,
       fontSize,
-      autoCommand,
       instanceKey,
       idleTimeoutMs,
     ]);
