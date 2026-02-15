@@ -781,11 +781,6 @@ const handleSync = useCallback(async () => {
           permissionMode: mode,
         });
 
-        addToast({
-          title: "Review sent to agent",
-          description: "Created new agent session with code review",
-          type: "success",
-        });
       } catch (error) {
         addToast({
           title: "Failed to create agent",
