@@ -95,6 +95,7 @@ interface TreeNodeProps {
   hasChanges: boolean;
   selectedFile: string | null;
   changedFiles: Map<string, ParsedFileChange>;
+  basePath: string;
   onDirectoryClick: (path: string) => void;
   onFileClick: (path: string) => void;
   getDirectoryChangeStatus: (path: string) => ParsedFileChange | undefined;
@@ -688,6 +689,7 @@ const TreeNode = memo(function TreeNode({
   hasChanges,
   selectedFile,
   changedFiles,
+  basePath,
   onDirectoryClick,
   onFileClick,
   getDirectoryChangeStatus,
@@ -759,8 +761,11 @@ const TreeNode = memo(function TreeNode({
     );
   }
 
-  // File node
-  const fileStatus = changedFiles.get(entry.path);
+  // File node - derive relative path for changedFiles lookup
+  const relativePath = entry.path.startsWith(basePath + "/")
+    ? entry.path.slice(basePath.length + 1)
+    : entry.path;
+  const fileStatus = changedFiles.get(relativePath);
   const status = fileStatus?.workspaceStatus;
   return (
     <FileTreeContextMenu
@@ -882,9 +887,8 @@ export const FileBrowser = memo(function FileBrowser({
           const parsed = parseJjChangedFiles(jjFiles);
           const map = new Map<string, ParsedFileChange>();
           for (const file of parsed) {
-            // Store with full path as key (basePath + relative path)
-            const fullPath = `${basePath}/${file.path}`;
-            map.set(fullPath, file);
+            // Store with relative path as key for consistent lookups
+            map.set(file.path, file);
           }
           setChangedFiles(map);
         })
@@ -992,7 +996,8 @@ export const FileBrowser = memo(function FileBrowser({
         setFileContent(content);
 
         // Load hunks for line-level indicators
-        if (changedFiles.has(path)) {
+        const relPath = path.startsWith(basePath + "/") ? path.slice(basePath.length + 1) : path;
+        if (changedFiles.has(relPath)) {
           try {
             const hunks = await jjGetFileHunks(
               basePath,
@@ -1230,28 +1235,34 @@ export const FileBrowser = memo(function FileBrowser({
 
   const hasChangedFilesInDirectory = useCallback(
     (dirPath: string): boolean => {
+      const relDir = dirPath.startsWith(basePath + "/")
+        ? dirPath.slice(basePath.length + 1)
+        : dirPath;
       for (const [path] of changedFiles) {
-        if (path.startsWith(dirPath + "/")) {
+        if (path.startsWith(relDir + "/")) {
           return true;
         }
       }
       return false;
     },
-    [changedFiles]
+    [changedFiles, basePath]
   );
 
   const getDirectoryChangeStatus = useCallback(
     (dirPath: string): ParsedFileChange | undefined => {
       // Check if any files in this directory are changed
       // Returns the first found change, or undefined if none
+      const relDir = dirPath.startsWith(basePath + "/")
+        ? dirPath.slice(basePath.length + 1)
+        : dirPath;
       for (const [path, file] of changedFiles) {
-        if (path.startsWith(dirPath + "/")) {
+        if (path.startsWith(relDir + "/")) {
           return file;
         }
       }
       return undefined;
     },
-    [changedFiles]
+    [changedFiles, basePath]
   );
 
   const handleDirectoryClick = async (path: string) => {
@@ -1285,6 +1296,7 @@ export const FileBrowser = memo(function FileBrowser({
           hasChanges={hasChanges}
           selectedFile={selectedFile}
           changedFiles={changedFiles}
+          basePath={basePath}
           onDirectoryClick={handleDirectoryClick}
           onFileClick={handleFileClick}
           getDirectoryChangeStatus={getDirectoryChangeStatus}
@@ -1300,6 +1312,7 @@ export const FileBrowser = memo(function FileBrowser({
       hasChangedFilesInDirectory,
       selectedFile,
       changedFiles,
+      basePath,
       handleDirectoryClick,
       handleFileClick,
       getDirectoryChangeStatus,
