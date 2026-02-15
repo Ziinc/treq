@@ -28,6 +28,7 @@ import {
   savePendingReview,
   clearPendingReview,
   jjGetMergeDiff,
+  jjGetFileLines,
   type JjDiffHunk,
   type JjFileChange,
   type JjRevisionDiff,
@@ -67,6 +68,7 @@ import {
   Loader2,
   Plus,
   ChevronDown,
+  ChevronUp,
   ChevronRight,
   MoreVertical,
   CheckCircle2,
@@ -1174,6 +1176,9 @@ export const ChangesDiffViewer = memo(
       );
       const [largeChangesetExpanded, setLargeChangesetExpanded] =
         useState(false);
+
+      // Expanded context lines per hunk: "filePath:hunkIndex:before|after" -> string[]
+      const [expandedContext, setExpandedContext] = useState<Map<string, string[]>>(new Map());
 
       // Line selection state for staging
       const [diffLineSelection, setDiffLineSelection] =
@@ -3178,6 +3183,66 @@ export const ChangesDiffViewer = memo(
         [comments, isCommentOutdated]
       );
 
+      // Fetch and expand context lines before/after a hunk
+      const handleExpandContext = useCallback(
+        async (
+          filePath: string,
+          hunkIndex: number,
+          hunk: JjDiffHunk,
+          direction: "before" | "after"
+        ) => {
+          const key = `${filePath}:${hunkIndex}:${direction}`;
+          const existing = expandedContext.get(key) || [];
+          const LINES_TO_FETCH = 20;
+
+          const { newStart, newCount } = parseHunkHeader(hunk.header);
+
+          let startLine: number;
+          let endLine: number;
+
+          if (direction === "before") {
+            // Fetch lines before the hunk start, accounting for already-expanded lines
+            const hunkStartLine = newStart;
+            endLine = hunkStartLine - 1 - existing.length;
+            startLine = Math.max(1, endLine - LINES_TO_FETCH + 1);
+            if (startLine > endLine) return; // Nothing more to fetch
+          } else {
+            // Fetch lines after the hunk end, accounting for already-expanded lines
+            const hunkEndLine = newStart + newCount - 1;
+            startLine = hunkEndLine + 1 + existing.length;
+            endLine = startLine + LINES_TO_FETCH - 1;
+          }
+
+          try {
+            const result = await jjGetFileLines(
+              workspacePath,
+              filePath,
+              false, // fromParent=false to get working copy
+              startLine,
+              endLine
+            );
+
+            if (result.lines.length > 0) {
+              setExpandedContext((prev) => {
+                const next = new Map(prev);
+                const prevLines = prev.get(key) || [];
+                if (direction === "before") {
+                  // Prepend new lines before existing expanded lines
+                  next.set(key, [...result.lines, ...prevLines]);
+                } else {
+                  // Append new lines after existing expanded lines
+                  next.set(key, [...prevLines, ...result.lines]);
+                }
+                return next;
+              });
+            }
+          } catch (error) {
+            // Silently ignore - lines may not exist (e.g., beginning/end of file)
+          }
+        },
+        [workspacePath, expandedContext]
+      );
+
       // Render diff lines for a hunk (no collapsible, just lines with selection support)
       const renderHunkLines = (
         hunk: JjDiffHunk,
@@ -3197,7 +3262,7 @@ export const ChangesDiffViewer = memo(
               )}
             >
               {/* Line number column */}
-              <div className="w-16 flex-shrink-0 border-r border-border/40" />
+              <div className="w-24 flex-shrink-0 border-r border-border/40" />
 
               {/* Comment button spacer */}
               <div className="w-6 flex-shrink-0" />
@@ -3212,6 +3277,57 @@ export const ChangesDiffViewer = memo(
                 </span>
               </div>
             </div>
+            {/* Expand above button */}
+            {(() => {
+              const beforeKey = `${filePath}:${hunkIndex}:before`;
+              const beforeLines = expandedContext.get(beforeKey);
+              const { newStart } = parseHunkHeader(hunk.header);
+              // Only show if hunk doesn't start at line 1 (or has room above)
+              const hasRoomAbove = newStart > 1 || (beforeLines && beforeLines.length > 0);
+              return (
+                <>
+                  {beforeLines && beforeLines.length > 0 && (
+                    beforeLines.map((ctxLine, ctxIdx) => {
+                      const ctxLineNum = newStart - beforeLines.length + ctxIdx;
+                      return (
+                        <div
+                          key={`${beforeKey}-${ctxIdx}`}
+                          className="flex items-stretch font-mono text-sm"
+                        >
+                          <div className="w-24 flex-shrink-0 text-muted-foreground select-none border-r border-border/40 flex items-center">
+                            <span className="w-10 text-right text-sm mr-1">
+                              {ctxLineNum > 0 ? ctxLineNum : ""}
+                            </span>
+                            <span className="w-10 text-right text-sm">
+                              {ctxLineNum > 0 ? ctxLineNum : ""}
+                            </span>
+                          </div>
+                          <div className="w-6 flex-shrink-0" />
+                          <div className="w-5 flex-shrink-0 text-center select-none"> </div>
+                          <div className="flex-1 px-[8px] py-[2px] whitespace-pre-wrap break-all text-muted-foreground">
+                            <HighlightedLine content={ctxLine || " "} language={language} />
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                  {hasRoomAbove && (
+                    <div
+                      className="flex items-stretch font-mono text-sm bg-muted/30 hover:bg-muted/50 cursor-pointer transition-colors"
+                      onClick={() => handleExpandContext(filePath, hunkIndex, hunk, "before")}
+                    >
+                      <div className="w-24 flex-shrink-0 border-r border-border/40" />
+                      <div className="w-6 flex-shrink-0" />
+                      <div className="w-5 flex-shrink-0" />
+                      <div className="flex-1 flex items-center justify-center px-[8px] py-[2px] gap-1 text-muted-foreground text-xs">
+                        <ChevronUp className="w-3 h-3" />
+                        <span>Show more lines above</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
             {/* Hunk lines */}
             {hunk.lines.map((line, lineIndex) => {
               const lineNum = lineNumbers[lineIndex];
@@ -3253,7 +3369,7 @@ export const ChangesDiffViewer = memo(
                   >
                     {/* Line number / comment indicator - click here to select lines */}
                     <div
-                      className="w-16 flex-shrink-0 text-muted-foreground select-none border-r border-border/40 flex items-center gap-[4px] cursor-pointer hover:bg-muted/50"
+                      className="w-24 flex-shrink-0 text-muted-foreground select-none border-r border-border/40 flex items-center gap-[4px] cursor-pointer hover:bg-muted/50"
                       onMouseDown={(e) =>
                         handleLineMouseDown(
                           e,
@@ -3268,10 +3384,10 @@ export const ChangesDiffViewer = memo(
                       {lineComments.length > 0 && (
                         <MessageSquare className="w-3 h-3 text-primary ml-[4px]" />
                       )}
-                      <span className="w-6 text-right text-sm mr-1">
+                      <span className="w-10 text-right text-sm mr-1">
                         {lineNum?.old ?? ""}
                       </span>
-                      <span className="w-6 text-right text-sm">
+                      <span className="w-10 text-right text-sm">
                         {lineNum?.new ?? ""}
                       </span>
                     </div>
@@ -3410,6 +3526,53 @@ export const ChangesDiffViewer = memo(
                 </Fragment>
               );
             })}
+            {/* Expand below button */}
+            {(() => {
+              const afterKey = `${filePath}:${hunkIndex}:after`;
+              const afterLines = expandedContext.get(afterKey);
+              return (
+                <>
+                  <div
+                    className="flex items-stretch font-mono text-sm bg-muted/30 hover:bg-muted/50 cursor-pointer transition-colors"
+                    onClick={() => handleExpandContext(filePath, hunkIndex, hunk, "after")}
+                  >
+                    <div className="w-24 flex-shrink-0 border-r border-border/40" />
+                    <div className="w-6 flex-shrink-0" />
+                    <div className="w-5 flex-shrink-0" />
+                    <div className="flex-1 flex items-center justify-center px-[8px] py-[2px] gap-1 text-muted-foreground text-xs">
+                      <ChevronDown className="w-3 h-3" />
+                      <span>Show more lines below</span>
+                    </div>
+                  </div>
+                  {afterLines && afterLines.length > 0 && (
+                    afterLines.map((ctxLine, ctxIdx) => {
+                      const { newStart, newCount } = parseHunkHeader(hunk.header);
+                      const ctxLineNum = newStart + newCount + ctxIdx;
+                      return (
+                        <div
+                          key={`${afterKey}-${ctxIdx}`}
+                          className="flex items-stretch font-mono text-sm"
+                        >
+                          <div className="w-24 flex-shrink-0 text-muted-foreground select-none border-r border-border/40 flex items-center">
+                            <span className="w-10 text-right text-sm mr-1">
+                              {ctxLineNum}
+                            </span>
+                            <span className="w-10 text-right text-sm">
+                              {ctxLineNum}
+                            </span>
+                          </div>
+                          <div className="w-6 flex-shrink-0" />
+                          <div className="w-5 flex-shrink-0 text-center select-none"> </div>
+                          <div className="flex-1 px-[8px] py-[2px] whitespace-pre-wrap break-all text-muted-foreground">
+                            <HighlightedLine content={ctxLine || " "} language={language} />
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </>
+              );
+            })()}
           </Fragment>
         );
       };
