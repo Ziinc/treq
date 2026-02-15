@@ -172,7 +172,7 @@ function CommitItem({ commit, isFirst }: CommitItemProps) {
             </Tooltip>
           </TooltipProvider>
           {hasStats && (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-muted-foreground ml-auto">
               <span className="text-green-600">+{commit.insertions}</span>
               {" "}
               <span className="text-red-600">-{commit.deletions}</span>
