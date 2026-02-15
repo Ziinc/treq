@@ -68,40 +68,59 @@ export function escapeBashString(str: string): string {
 }
 
 /**
+ * Parse jj timestamp format ("2025-01-15 10:30:45.000 +08:00") into a Date.
+ * Returns null if the timestamp cannot be parsed.
+ */
+function parseTimestamp(timestamp: string): Date | null {
+  try {
+    // Normalize jj format to ISO 8601:
+    //   "2025-01-15 10:30:45.000 +08:00" → "2025-01-15T10:30:45.000+08:00"
+    // Replace first space (between date and time) with T,
+    // then remove space before timezone offset.
+    const iso = timestamp
+      .replace(/^(\d{4}-\d{2}-\d{2})\s/, "$1T")
+      .replace(/\s([+-]\d{2}:\d{2})$/, "$1");
+    const date = new Date(iso);
+    if (isNaN(date.getTime())) return null;
+    return date;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Format timestamp as relative time (e.g., "5 minutes ago", "2 hours ago", "3 days ago")
  * @param timestamp - Timestamp in jj format: "YYYY-MM-DD HH:MM:SS.mmm +TZ:TZ"
  * @returns Relative time string
  */
 export function formatRelativeTime(timestamp: string): string {
-  try {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffSeconds = Math.floor(diffMs / 1000);
-    const diffMinutes = Math.floor(diffSeconds / 60);
-    const diffHours = Math.floor(diffMinutes / 60);
-    const diffDays = Math.floor(diffHours / 24);
-    const diffWeeks = Math.floor(diffDays / 7);
-    const diffMonths = Math.floor(diffDays / 30);
-    const diffYears = Math.floor(diffDays / 365);
+  const date = parseTimestamp(timestamp);
+  if (!date) return timestamp;
 
-    if (diffSeconds < 10) return "just now";
-    if (diffSeconds < 60) return `${diffSeconds} seconds ago`;
-    if (diffMinutes === 1) return "1 minute ago";
-    if (diffMinutes < 60) return `${diffMinutes} minutes ago`;
-    if (diffHours === 1) return "1 hour ago";
-    if (diffHours < 24) return `${diffHours} hours ago`;
-    if (diffDays === 1) return "1 day ago";
-    if (diffDays < 7) return `${diffDays} days ago`;
-    if (diffWeeks === 1) return "1 week ago";
-    if (diffWeeks < 4) return `${diffWeeks} weeks ago`;
-    if (diffMonths === 1) return "1 month ago";
-    if (diffMonths < 12) return `${diffMonths} months ago`;
-    if (diffYears === 1) return "1 year ago";
-    return `${diffYears} years ago`;
-  } catch (e) {
-    return timestamp;
-  }
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  const diffWeeks = Math.floor(diffDays / 7);
+  const diffMonths = Math.floor(diffDays / 30);
+  const diffYears = Math.floor(diffDays / 365);
+
+  if (diffSeconds < 10) return "just now";
+  if (diffSeconds < 60) return `${diffSeconds} seconds ago`;
+  if (diffMinutes === 1) return "1 minute ago";
+  if (diffMinutes < 60) return `${diffMinutes} minutes ago`;
+  if (diffHours === 1) return "1 hour ago";
+  if (diffHours < 24) return `${diffHours} hours ago`;
+  if (diffDays === 1) return "1 day ago";
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffWeeks === 1) return "1 week ago";
+  if (diffWeeks < 4) return `${diffWeeks} weeks ago`;
+  if (diffMonths === 1) return "1 month ago";
+  if (diffMonths < 12) return `${diffMonths} months ago`;
+  if (diffYears === 1) return "1 year ago";
+  return `${diffYears} years ago`;
 }
 
 /**
@@ -110,20 +129,53 @@ export function formatRelativeTime(timestamp: string): string {
  * @returns Formatted timestamp string
  */
 export function formatFullTimestamp(timestamp: string): string {
-  try {
-    const date = new Date(timestamp);
-    return date.toLocaleString(undefined, {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      timeZoneName: 'short'
-    });
-  } catch (e) {
-    return timestamp;
-  }
+  const date = parseTimestamp(timestamp);
+  if (!date) return timestamp;
+
+  return date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZoneName: 'short'
+  });
+}
+
+/**
+ * Get a "YYYY-MM-DD" day key from a jj timestamp for grouping commits by day.
+ */
+export function getDayKey(timestamp: string): string {
+  const date = parseTimestamp(timestamp);
+  if (!date) return "unknown";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Format a jj timestamp into a human-friendly day label.
+ * Returns "Today", "Yesterday", or "Jan 15, 2025".
+ */
+export function formatDayLabel(timestamp: string): string {
+  const date = parseTimestamp(timestamp);
+  if (!date) return timestamp;
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.round((today.getTime() - target.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 /**

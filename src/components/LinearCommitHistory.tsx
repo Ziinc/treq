@@ -1,6 +1,6 @@
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { jjGetLog, type JjLogCommit } from "../lib/api";
-import { cn, formatRelativeTime, formatFullTimestamp } from "../lib/utils";
+import { cn, formatRelativeTime, formatFullTimestamp, getDayKey, formatDayLabel } from "../lib/utils";
 import {
   Tooltip,
   TooltipContent,
@@ -12,6 +12,30 @@ interface LinearCommitHistoryProps {
   workspacePath: string;
   targetBranch: string | null;
   isHomeRepo?: boolean;
+}
+
+interface DayGroup {
+  dayKey: string;
+  label: string;
+  commits: JjLogCommit[];
+}
+
+function groupCommitsByDay(commits: JjLogCommit[]): DayGroup[] {
+  const groups: DayGroup[] = [];
+  for (const commit of commits) {
+    const key = getDayKey(commit.timestamp);
+    const last = groups[groups.length - 1];
+    if (last && last.dayKey === key) {
+      last.commits.push(commit);
+    } else {
+      groups.push({
+        dayKey: key,
+        label: formatDayLabel(commit.timestamp),
+        commits: [commit],
+      });
+    }
+  }
+  return groups;
 }
 
 export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
@@ -27,10 +51,7 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
       setLoading(true);
       jjGetLog(workspacePath, targetBranch, isHomeRepo)
         .then(({commits}) => {
-          // Filter out working copy commits
-          const filtered = commits.filter(({is_working_copy}) => !is_working_copy);
-          // For home repo, show newest first; for workspace, show oldest first
-          setCommits(isHomeRepo ? filtered : filtered.reverse());
+          setCommits(commits);
         })
         .catch((err) => {
           console.error('Failed to fetch commit history:', err);
@@ -41,6 +62,8 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
         });
     }, [workspacePath, targetBranch, isHomeRepo]);
 
+    const dayGroups = useMemo(() => groupCommitsByDay(commits), [commits]);
+
     if (loading) {
       return <LoadingState />;
     }
@@ -49,6 +72,8 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
     if (commits.length === 0) {
       return null;
     }
+
+    let globalIndex = 0;
 
     return (
       <div className="h-full overflow-auto">
@@ -62,15 +87,26 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
               aria-hidden="true"
             />
 
-            <ul className="space-y-0">
-              {commits.map((commit, index) => (
-                <CommitItem
-                  key={commit.commit_id}
-                  commit={commit}
-                  isLast={index === commits.length - 1}
-                />
-              ))}
-            </ul>
+            {dayGroups.map((group) => (
+              <div key={group.dayKey} className="mt-5 first:mt-0">
+                <p className="text-xs font-semibold text-muted-foreground mb-1 pl-7">
+                  {group.label}
+                </p>
+                <ul className="space-y-0">
+                  {group.commits.map((commit) => {
+                    const isFirst = globalIndex === 0;
+                    globalIndex++;
+                    return (
+                      <CommitItem
+                        key={commit.commit_id}
+                        commit={commit}
+                        isFirst={isFirst}
+                      />
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -80,10 +116,10 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 
 interface CommitItemProps {
   commit: JjLogCommit;
-  isLast: boolean;
+  isFirst: boolean;
 }
 
-function CommitItem({ commit, isLast }: CommitItemProps) {
+function CommitItem({ commit, isFirst }: CommitItemProps) {
   const firstLine = commit.description.split("\n")[0] || "(no message)";
   const hasStats = commit.insertions > 0 || commit.deletions > 0;
 
@@ -93,7 +129,7 @@ function CommitItem({ commit, isLast }: CommitItemProps) {
         <div
           className={cn(
             "w-[14px] h-[14px] rounded-full border-2 border-background",
-            isLast ? "bg-primary" : "bg-muted-foreground"
+            isFirst ? "bg-primary" : "bg-muted-foreground"
           )}
         />
       </div>
@@ -101,7 +137,7 @@ function CommitItem({ commit, isLast }: CommitItemProps) {
       <div
         className={cn(
           "flex-1 min-w-0 pt-0.5 rounded-md",
-          isLast && "bg-accent/50 p-2 -m-2 shadow-sm border border-accent"
+          isFirst && "bg-accent/50 p-2 -m-2 shadow-sm border border-accent"
         )}
       >
         <p className="text-sm truncate" title={firstLine}>
@@ -111,6 +147,11 @@ function CommitItem({ commit, isLast }: CommitItemProps) {
           <p className="text-xs text-muted-foreground font-mono">
             {commit.short_id}
           </p>
+          {isFirst && (
+            <span className="text-xs font-medium text-amber-600 bg-amber-100 dark:text-amber-400 dark:bg-amber-900/30 px-1.5 py-0.5 rounded">
+              Uncommitted
+            </span>
+          )}
           <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>

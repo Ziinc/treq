@@ -2260,7 +2260,7 @@ fn parse_diff_stat(stat: &str) -> (u32, u32) {
 fn build_jj_get_log_revset(target_branch: &str, is_home_repo: bool) -> String {
     if is_home_repo {
         // For home repo: show last 10 commits of current branch
-        "latest(::@, 10)".to_string()
+        "latest(::@, 15)".to_string()
     } else {
         // For workspace: show commits ahead of target branch
         format!("{}..@", target_branch)
@@ -4228,10 +4228,10 @@ target/debug/deps/lib.so    2-sided conflict including 1 deletion and an executa
 
     #[test]
     fn test_jj_get_log_revset_construction() {
-        // Happy path 1: Home repo should use latest(::@, 10) revset
+        // Happy path 1: Home repo should use latest(::@, 15) revset
         let revset_home = build_jj_get_log_revset("main", true);
         assert_eq!(
-            revset_home, "latest(::@, 10)",
+            revset_home, "latest(::@, 15)",
             "Home repo should use latest revset"
         );
 
