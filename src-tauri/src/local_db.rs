@@ -62,18 +62,6 @@ pub fn get_local_db_path(repo_path: &str) -> PathBuf {
     Path::new(repo_path).join(".treq").join("local.db")
 }
 
-/// Extract intent from workspace metadata
-fn extract_intent_from_metadata(metadata: &Option<String>) -> Option<String> {
-    metadata.as_ref().and_then(|m| {
-        serde_json::from_str::<serde_json::Value>(m)
-            .ok()
-            .and_then(|v| {
-                v.get("intent")
-                    .and_then(|i| i.as_str())
-                    .map(|s| s.to_string())
-            })
-    })
-}
 
 /// Initialize the local database for a repository.
 ///

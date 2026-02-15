@@ -934,6 +934,40 @@ pub fn squash_commit_to_workspace(
     }
 }
 
+/// Get the list of files changed in a specific commit.
+/// Runs: jj diff --summary -r <change_id>
+/// Returns file paths (added/modified/removed) from the commit.
+pub fn jj_diff_summary(workspace_path: &str, change_id: &str) -> Result<Vec<String>, JjError> {
+    let output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["diff", "--summary", "-r", change_id])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !output.status.success() {
+        return Err(JjError::InitFailed(format!(
+            "Failed to get diff summary: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let files: Vec<String> = stdout
+        .lines()
+        .filter_map(|line| {
+            // jj diff --summary format: "M file.txt" or "A file.txt" or "D file.txt"
+            let line = line.trim();
+            if line.len() > 2 {
+                Some(line[2..].to_string())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Ok(files)
+}
+
 /// Update a stale workspace working copy
 /// Runs: jj workspace update-stale in the workspace directory
 pub fn update_stale_workspace(workspace_path: &str) -> Result<(), JjError> {
