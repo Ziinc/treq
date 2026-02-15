@@ -1860,3 +1860,273 @@ fn test_rename_workspace_sets_not_on_remote() {
         "not_on_remote should be true after rename"
     );
 }
+
+// =============================================================================
+// Test: Recover workspace after .jj reinit (recovery happens during core::init)
+// =============================================================================
+
+#[test]
+fn test_recover_workspace_after_jj_reinit() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    // Create workspace
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/test-recover",
+        Some("recovery test".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+
+    // Add uncommitted file to workspace
+    fs::write(workspace_path.join("uncommitted.txt"), "uncommitted content")
+        .expect("Failed to write file");
+
+    // Verify workspace is registered with jj
+    let jj_workspaces_before =
+        JjVerifier::list_workspaces(&repo.repo_path).expect("Failed to list jj workspaces");
+    assert!(
+        jj_workspaces_before.contains(&workspace.workspace_name),
+        "Workspace should be in jj before reinit"
+    );
+
+    // Delete .jj and reinit — recovery should happen automatically during init
+    fs::remove_dir_all(Path::new(&repo.repo_path).join(".jj")).expect("Failed to remove .jj");
+    treq_lib::core::init(&repo.repo_path).expect("Failed to reinit");
+
+    // After init: workspace should already be recovered in jj
+    let jj_workspaces_recovered =
+        JjVerifier::list_workspaces(&repo.repo_path).expect("Failed to list jj workspaces");
+    assert!(
+        jj_workspaces_recovered.contains(&workspace.workspace_name),
+        "Workspace should be in jj after init recovery, got: {:?}",
+        jj_workspaces_recovered
+    );
+
+    // Uncommitted file should still exist
+    assert!(
+        workspace_path.join("uncommitted.txt").exists(),
+        "Uncommitted file should be preserved after recovery"
+    );
+
+    // jj status should succeed on workspace
+    let status = Command::new("jj")
+        .current_dir(&workspace_path)
+        .args(["status"])
+        .output()
+        .expect("Failed to run jj status");
+    assert!(
+        status.status.success(),
+        "jj status should succeed after recovery"
+    );
+
+    // jj should detect the uncommitted changes
+    let changed_files = treq_lib::jj::jj_get_changed_files(workspace_path.to_str().unwrap())
+        .expect("Failed to get changed files");
+    assert!(
+        !changed_files.is_empty(),
+        "Should detect uncommitted changes after recovery"
+    );
+}
+
+// =============================================================================
+// Test: Recover multiple workspaces after .jj reinit
+// =============================================================================
+
+#[test]
+fn test_recover_multiple_workspaces_after_jj_reinit() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    // Create 2 workspaces
+    let ws1 = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/recover-a",
+        Some("feature a".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace 1");
+
+    let ws2 = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/recover-b",
+        Some("feature b".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace 2");
+
+    let ws1_path = repo.workspaces_dir().join(&ws1.workspace_path);
+    let ws2_path = repo.workspaces_dir().join(&ws2.workspace_path);
+
+    // Add uncommitted files
+    fs::write(ws1_path.join("ws1-file.txt"), "ws1 content").expect("Failed to write");
+    fs::write(ws2_path.join("ws2-file.txt"), "ws2 content").expect("Failed to write");
+
+    // Delete .jj and reinit — recovery should happen automatically during init
+    fs::remove_dir_all(Path::new(&repo.repo_path).join(".jj")).expect("Failed to remove .jj");
+    treq_lib::core::init(&repo.repo_path).expect("Failed to reinit");
+
+    // Both should be back in jj after init
+    let jj_workspaces =
+        JjVerifier::list_workspaces(&repo.repo_path).expect("Failed to list jj workspaces");
+    assert!(
+        jj_workspaces.contains(&ws1.workspace_name),
+        "Workspace 1 should be in jj after init recovery, got: {:?}",
+        jj_workspaces
+    );
+    assert!(
+        jj_workspaces.contains(&ws2.workspace_name),
+        "Workspace 2 should be in jj after init recovery, got: {:?}",
+        jj_workspaces
+    );
+
+    // Both should have their uncommitted changes
+    assert!(
+        ws1_path.join("ws1-file.txt").exists(),
+        "Workspace 1 uncommitted file should be preserved"
+    );
+    assert!(
+        ws2_path.join("ws2-file.txt").exists(),
+        "Workspace 2 uncommitted file should be preserved"
+    );
+}
+
+// =============================================================================
+// Test: Recover workspace preserves bookmark
+// =============================================================================
+
+#[test]
+fn test_recover_workspace_preserves_bookmark() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+
+    // Create workspace on branch "feat/test-bookmark"
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/test-bookmark",
+        Some("bookmark test".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+
+    // Delete .jj and reinit — recovery should happen automatically during init
+    fs::remove_dir_all(Path::new(&repo.repo_path).join(".jj")).expect("Failed to remove .jj");
+    treq_lib::core::init(&repo.repo_path).expect("Failed to reinit");
+
+    // Bookmark should exist and point to workspace's @
+    let bookmarks = JjVerifier::list_bookmarks(workspace_path.to_str().unwrap())
+        .expect("Failed to list bookmarks");
+    assert!(
+        bookmarks.iter().any(|b| b == "feat/test-bookmark"),
+        "Bookmark 'feat/test-bookmark' should exist after init recovery, got: {:?}",
+        bookmarks
+    );
+}
+
+// =============================================================================
+// Test: ensure_jj_initialized reinits when .jj deleted
+// =============================================================================
+
+#[test]
+fn test_ensure_jj_initialized_reinits_when_jj_deleted() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    // Verify .jj exists
+    assert!(repo.is_jj_initialized(), ".jj should exist after init");
+
+    // Delete .jj
+    fs::remove_dir_all(Path::new(&repo.repo_path).join(".jj")).expect("Failed to remove .jj");
+    assert!(!repo.is_jj_initialized(), ".jj should be gone");
+
+    // Create a DB for ensure_jj_initialized
+    let db = repo.create_db().expect("Failed to create db");
+
+    // Set the flag to true (simulating already-configured state)
+    db.set_repo_setting(&repo.repo_path, "jj_initialized", "true")
+        .expect("Failed to set flag");
+
+    // ensure_jj_initialized should detect missing .jj and reinit
+    let result = treq_lib::jj::ensure_jj_initialized(&db, &repo.repo_path)
+        .expect("ensure_jj_initialized failed");
+    assert!(result, "Should return true after reinit");
+
+    // .jj should exist again
+    assert!(
+        repo.is_jj_initialized(),
+        ".jj should exist again after ensure_jj_initialized"
+    );
+}
+
+// =============================================================================
+// Test: Recover skips already registered workspaces (init is idempotent)
+// =============================================================================
+
+#[test]
+fn test_recover_skips_already_registered_workspaces() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    // Create workspace (registered with jj, .jj not deleted)
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/already-registered",
+        Some("already registered".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    // Re-init without deleting .jj — workspace is already registered
+    treq_lib::core::init(&repo.repo_path).expect("Failed to reinit");
+
+    // Workspace should still work normally
+    let jj_workspaces =
+        JjVerifier::list_workspaces(&repo.repo_path).expect("Failed to list jj workspaces");
+    assert!(
+        jj_workspaces.contains(&workspace.workspace_name),
+        "Workspace should still be in jj, got: {:?}",
+        jj_workspaces
+    );
+}
+
+// =============================================================================
+// Test: Recover handles missing workspace directory
+// =============================================================================
+
+#[test]
+fn test_recover_handles_missing_workspace_dir() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    // Create workspace
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/missing-dir",
+        Some("missing dir test".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+
+    // Delete .jj AND the workspace directory, then reinit
+    fs::remove_dir_all(Path::new(&repo.repo_path).join(".jj")).expect("Failed to remove .jj");
+    fs::remove_dir_all(&workspace_path).expect("Failed to remove workspace dir");
+
+    // Init should not error even when workspace dir is missing
+    treq_lib::core::init(&repo.repo_path).expect("Failed to reinit");
+
+    // Workspace should NOT be in jj (dir was missing, so recovery skipped it)
+    let jj_workspaces =
+        JjVerifier::list_workspaces(&repo.repo_path).expect("Failed to list jj workspaces");
+    assert!(
+        !jj_workspaces.contains(&workspace.workspace_name),
+        "Workspace with missing dir should not be recovered, got: {:?}",
+        jj_workspaces
+    );
+}

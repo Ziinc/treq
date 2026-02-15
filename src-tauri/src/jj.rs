@@ -323,12 +323,13 @@ pub fn ensure_jj_initialized(db: &crate::db::Database, repo_path: &str) -> Resul
         .unwrap_or(false);
 
     if already_configured {
-        return Ok(true);
-    }
-
-    // Double-check filesystem in case flag got out of sync
-    if is_jj_workspace(repo_path) {
-        // Update flag and return
+        if is_jj_workspace(repo_path) {
+            return Ok(true); // Flag valid, .jj exists
+        }
+        // Flag stale — .jj was deleted. Clear flag, fall through to reinit
+        let _ = db.set_repo_setting(repo_path, flag_key, "false");
+    } else if is_jj_workspace(repo_path) {
+        // Double-check filesystem in case flag got out of sync
         let _ = db.set_repo_setting(repo_path, flag_key, "true");
         return Ok(true);
     }
@@ -465,6 +466,235 @@ pub fn create_workspace(
     }
 
     Ok(sanitized_name)
+}
+
+/// Result of a workspace recovery operation
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WorkspaceRecoveryResult {
+    pub workspace_name: String,
+    pub branch_name: String,
+    pub success: bool,
+    pub message: String,
+}
+
+/// List workspace names that jj knows about by parsing `jj workspace list` output.
+/// Returns a Vec of workspace name strings (e.g., ["default", "feat-test"]).
+pub fn list_jj_workspaces(repo_path: &str) -> Result<Vec<String>, JjError> {
+    let output = command_for("jj")
+        .current_dir(repo_path)
+        .args(["workspace", "list"])
+        .output()
+        .map_err(|e| JjError::IoError(format!("Failed to execute jj workspace list: {}", e)))?;
+
+    if !output.status.success() {
+        return Err(JjError::IoError(format!(
+            "jj workspace list failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let workspaces: Vec<String> = stdout
+        .lines()
+        .filter_map(|line| {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                return None;
+            }
+            // Format: "workspace_name: commit_id description"
+            trimmed.split(':').next().map(|s| s.trim().to_string())
+        })
+        .collect();
+
+    Ok(workspaces)
+}
+
+/// Recover a single orphaned workspace after .jj reinit.
+///
+/// Strategy: backup workspace dir → `jj workspace add` to re-register →
+/// restore backed-up files (preserving new .jj/.git) → re-set bookmark.
+fn recover_orphaned_workspace(
+    repo_path: &str,
+    workspace_name: &str,
+    workspace_dir_name: &str,
+    branch_name: &str,
+) -> WorkspaceRecoveryResult {
+    let workspaces_dir = Path::new(repo_path).join(".treq").join("workspaces");
+    let workspace_dir = workspaces_dir.join(workspace_dir_name);
+    let backup_dir = workspaces_dir.join(format!("{}_treq_recovery", workspace_dir_name));
+
+    // Step 1: Backup workspace dir
+    if let Err(e) = fs::rename(&workspace_dir, &backup_dir) {
+        return WorkspaceRecoveryResult {
+            workspace_name: workspace_name.to_string(),
+            branch_name: branch_name.to_string(),
+            success: false,
+            message: format!("Failed to backup workspace dir: {}", e),
+        };
+    }
+
+    // Step 2: Re-register workspace with jj
+    let workspace_path_str = workspace_dir.to_string_lossy().to_string();
+    let add_result = command_for("jj")
+        .current_dir(repo_path)
+        .args(["workspace", "add", &workspace_path_str, "--name", workspace_name])
+        .output();
+
+    match add_result {
+        Err(e) => {
+            // Restore backup on failure
+            let _ = fs::rename(&backup_dir, &workspace_dir);
+            return WorkspaceRecoveryResult {
+                workspace_name: workspace_name.to_string(),
+                branch_name: branch_name.to_string(),
+                success: false,
+                message: format!("Failed to execute jj workspace add: {}", e),
+            };
+        }
+        Ok(output) if !output.status.success() => {
+            // Restore backup on failure
+            let _ = fs::rename(&backup_dir, &workspace_dir);
+            return WorkspaceRecoveryResult {
+                workspace_name: workspace_name.to_string(),
+                branch_name: branch_name.to_string(),
+                success: false,
+                message: format!(
+                    "jj workspace add failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                ),
+            };
+        }
+        Ok(_) => {} // Success, continue
+    }
+
+    // Step 3: Restore backed-up files into workspace dir (skip .jj and .git created by jj workspace add)
+    if let Err(e) = restore_backup_files(&backup_dir, &workspace_dir) {
+        // Keep backup for manual recovery
+        return WorkspaceRecoveryResult {
+            workspace_name: workspace_name.to_string(),
+            branch_name: branch_name.to_string(),
+            success: false,
+            message: format!("Failed to restore files from backup: {}", e),
+        };
+    }
+
+    // Step 4: Clean up backup dir
+    let _ = fs::remove_dir_all(&backup_dir);
+
+    // Step 5: Re-set bookmark (non-fatal)
+    if let Err(e) = jj_set_bookmark(&workspace_path_str, branch_name, "@") {
+        eprintln!(
+            "Warning: Failed to set bookmark '{}' during recovery: {}",
+            branch_name, e
+        );
+    }
+
+    // Step 6: Track bookmark with origin (best-effort, non-fatal)
+    let _ = jj_bookmark_track(&workspace_path_str, branch_name, "origin");
+
+    // Step 7: Snapshot working copy by triggering jj status
+    let _ = jj_get_changed_files(&workspace_path_str);
+
+    WorkspaceRecoveryResult {
+        workspace_name: workspace_name.to_string(),
+        branch_name: branch_name.to_string(),
+        success: true,
+        message: "Workspace recovered successfully".to_string(),
+    }
+}
+
+/// Restore files from backup directory into target directory.
+/// Copies everything from backup except .jj and .git directories
+/// (which were freshly created by `jj workspace add`).
+fn restore_backup_files(backup_dir: &Path, target_dir: &Path) -> Result<(), String> {
+    let entries = fs::read_dir(backup_dir)
+        .map_err(|e| format!("Failed to read backup dir: {}", e))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read dir entry: {}", e))?;
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+
+        // Skip .jj and .git - those were freshly created by jj workspace add
+        if name_str == ".jj" || name_str == ".git" {
+            continue;
+        }
+
+        let src = entry.path();
+        let dst = target_dir.join(&name);
+
+        // Remove any fresh version first (from jj workspace add)
+        if dst.exists() {
+            if dst.is_dir() {
+                let _ = fs::remove_dir_all(&dst);
+            } else {
+                let _ = fs::remove_file(&dst);
+            }
+        }
+
+        // Move from backup to target
+        fs::rename(&src, &dst).map_err(|e| {
+            format!(
+                "Failed to restore '{}': {}",
+                name_str, e
+            )
+        })?;
+    }
+
+    Ok(())
+}
+
+/// Recover all orphaned workspaces in a repository.
+///
+/// An orphaned workspace is one that exists in the database and on disk
+/// but is not registered with jj (e.g., after .jj was deleted and reinitialized).
+pub fn recover_all_orphaned_workspaces(
+    repo_path: &str,
+) -> Result<Vec<WorkspaceRecoveryResult>, JjError> {
+    // Get workspaces from DB
+    let db_workspaces = local_db::get_workspaces(repo_path)
+        .map_err(|e| JjError::IoError(format!("Failed to get workspaces from DB: {}", e)))?;
+
+    if db_workspaces.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Get jj-known workspace names
+    let jj_workspaces = list_jj_workspaces(repo_path)?;
+
+    let workspaces_dir = Path::new(repo_path).join(".treq").join("workspaces");
+    let mut results = Vec::new();
+
+    for ws in &db_workspaces {
+        // Skip if already registered with jj
+        if jj_workspaces.contains(&ws.workspace_name) {
+            continue;
+        }
+
+        // Skip if workspace directory doesn't exist on disk
+        let workspace_dir = workspaces_dir.join(&ws.workspace_path);
+        if !workspace_dir.exists() {
+            continue;
+        }
+
+        let result = recover_orphaned_workspace(
+            repo_path,
+            &ws.workspace_name,
+            &ws.workspace_path,
+            &ws.branch_name,
+        );
+
+        if !result.success {
+            eprintln!(
+                "Warning: Failed to recover workspace '{}': {}",
+                ws.workspace_name, result.message
+            );
+        }
+
+        results.push(result);
+    }
+
+    Ok(results)
 }
 
 /// List all workspaces in a repository
