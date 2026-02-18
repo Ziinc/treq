@@ -23,6 +23,7 @@ import {
   ArrowLeft,
   GitMerge,
   GitCommitHorizontal,
+  GitBranch,
   Loader2,
   FileText,
   ChevronRight,
@@ -111,23 +112,21 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
       }
 
       if (mergeStrategy === "squash") {
-        // For squash merge, use just the intent
-        if (intent) {
-          setCommitMessage(intent);
-        }
+        setCommitMessage(intent);
       } else if (mergeStrategy === "merge") {
-        // For merge commit, format as "Merge <branch> into <target>\n\n<intent>"
         if (intent) {
           setCommitMessage(`Merge ${workspace.branch_name} into ${targetBranch}\n\n${intent}`);
         } else {
           setCommitMessage(`Merge ${workspace.branch_name} into ${targetBranch}`);
         }
+      } else if (mergeStrategy === "rebase") {
+        setCommitMessage("");
       }
     }, [mergeStrategy, workspace.metadata, workspace.branch_name, targetBranch]);
 
     // Handle merge
     const handleMerge = useCallback(async () => {
-      if (!commitMessage.trim()) {
+      if (mergeStrategy !== "rebase" && !commitMessage.trim()) {
         addToast({
           title: "Commit message required",
           type: "error",
@@ -147,12 +146,21 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
 
         await onMergeComplete();
 
+        const actionLabel =
+          mergeStrategy === "squash"
+            ? "squashed"
+            : mergeStrategy === "rebase"
+              ? "rebased"
+              : "merged";
+
         addToast({
           title:
             mergeStrategy === "squash"
               ? "Workspace squashed"
-              : "Workspace merged",
-          description: `Successfully merged ${workspace.branch_name} into ${targetBranch}`,
+              : mergeStrategy === "rebase"
+                ? "Workspace rebased"
+                : "Workspace merged",
+          description: `Successfully ${actionLabel} ${workspace.branch_name} into ${targetBranch}`,
           type: "success",
         });
       } catch (error) {
@@ -198,10 +206,11 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
       );
     }
 
+    const requiresMessage = mergeStrategy !== "rebase";
     const canMerge =
       commitsAhead &&
       commitsAhead.total_count > 0 &&
-      commitMessage.trim().length > 0;
+      (!requiresMessage || commitMessage.trim().length > 0);
 
     return (
       <div className="h-full flex flex-col bg-background">
@@ -225,18 +234,26 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
             <Card className="w-full md:w-3/4 p-6">
               <div className="flex flex-col gap-4">
                 <div>
-                  <h2 className="text-sm font-semibold mb-3">
-                    Merge Commit Message
-                  </h2>
-                  <Textarea
-                    value={commitMessage}
-                    onChange={(e) => setCommitMessage(e.target.value)}
-                    placeholder="Enter merge commit message..."
-                    rows={3}
-                    maxLength={10000}
-                    className="font-mono text-sm"
-                  />
-                </div>
+                    <h2 className="text-sm font-semibold mb-3">
+                      {mergeStrategy === "rebase"
+                        ? "Commit Message (not used for rebase)"
+                        : "Merge Commit Message"}
+                    </h2>
+                    <Textarea
+                      value={commitMessage}
+                      onChange={(e) => setCommitMessage(e.target.value)}
+                      placeholder="Enter merge commit message..."
+                      rows={3}
+                      maxLength={10000}
+                      className="font-mono text-sm"
+                      disabled={mergeStrategy === "rebase"}
+                    />
+                    {mergeStrategy === "rebase" ? (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Rebase keeps the original commit messages.
+                      </p>
+                    ) : null}
+                  </div>
 
                 {/* Button group - aligned to left */}
                 <div className="flex justify-start">
@@ -258,7 +275,9 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
                         ? "Merging..."
                         : mergeStrategy === "squash"
                           ? "Squash and merge"
-                          : "Confirm merge"}
+                          : mergeStrategy === "rebase"
+                            ? "Rebase and merge"
+                            : "Confirm merge"}
                     </Button>
                     <div className="w-px opacity-30" style={{ backgroundColor: "currentColor" }} />
                     <DropdownMenu>
@@ -304,6 +323,18 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
                             <div className="text-xs text-muted-foreground mt-1 pl-6">
                               The {commitsAhead?.commits.length || "multiple"} commits
                               from this branch will be combined into one commit
+                            </div>
+                          </DropdownMenuRadioItem>
+                          <DropdownMenuRadioItem
+                            value="rebase"
+                            className="flex-col items-start py-3"
+                          >
+                            <div className="font-semibold flex items-center gap-2">
+                              <GitBranch className="h-4 w-4" />
+                              Rebase and merge
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-1 pl-6">
+                              Commits will be rebased onto {targetBranch} with a linear history
                             </div>
                           </DropdownMenuRadioItem>
                         </DropdownMenuRadioGroup>
