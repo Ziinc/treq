@@ -839,6 +839,12 @@ const handleSync = useCallback(async () => {
           </TabsList>
         </Tabs>
         <div className="flex items-center gap-3">
+          {(rebasing || refreshingFiles) && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>{rebasing ? "Rebasing..." : "Refreshing..."}</span>
+            </div>
+          )}
           {diffStats && (
             <div className="flex items-center gap-1.5 text-xs font-mono">
               <span className="text-green-600 dark:text-green-400">+{diffStats.insertions}</span>
@@ -850,12 +856,6 @@ const handleSync = useCallback(async () => {
                   return <div key={i} className={cn("w-2 h-2 rounded-sm", isGreen ? "bg-green-600" : "bg-red-600")} />;
                 })}
               </div>
-            </div>
-          )}
-          {(rebasing || refreshingFiles) && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>{rebasing ? "Rebasing..." : "Refreshing..."}</span>
             </div>
           )}
         </div>
