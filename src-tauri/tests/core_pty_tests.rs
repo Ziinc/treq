@@ -4,7 +4,7 @@ use e2e_test_helpers::TestRepo;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use treq_lib::pty::PtyManager;
+use treq_lib::pty::{line_matches_auto_command, strip_ansi_codes, PtyManager};
 
 /// Helper: create a PtyManager and an output capture buffer.
 fn setup() -> (PtyManager, Arc<Mutex<String>>) {
@@ -395,4 +395,173 @@ fn test_utf8_output() {
     );
 
     let _ = manager.close_session("test-utf8");
+}
+
+// ======================================================================
+// Tests for auto_command echo suppression
+// ======================================================================
+
+#[test]
+fn test_strip_ansi_codes_plain() {
+    assert_eq!(strip_ansi_codes("hello world"), "hello world");
+}
+
+#[test]
+fn test_strip_ansi_codes_csi() {
+    assert_eq!(strip_ansi_codes("\x1b[32mhello\x1b[0m"), "hello");
+    assert_eq!(strip_ansi_codes("\x1b[1;31mred\x1b[0m"), "red");
+}
+
+#[test]
+fn test_strip_ansi_codes_osc() {
+    assert_eq!(strip_ansi_codes("\x1b]0;title\x07text"), "text");
+}
+
+#[test]
+fn test_strip_ansi_codes_charset() {
+    assert_eq!(strip_ansi_codes("\x1b(Bhello"), "hello");
+}
+
+#[test]
+fn test_line_matches_auto_command_short_line() {
+    // Lines shorter than 20 chars should never match
+    assert!(!line_matches_auto_command("short", "some long auto command that is definitely long enough"));
+}
+
+#[test]
+fn test_line_matches_auto_command_exact_substring() {
+    let auto_cmd = "claude --permission-mode acceptEdits --append-system-prompt 'some long prompt'";
+    let line = "claude --permission-mode acceptEdits --append-system-prompt 'some long prompt'";
+    assert!(line_matches_auto_command(line, auto_cmd));
+}
+
+#[test]
+fn test_line_matches_auto_command_partial_overlap() {
+    let auto_cmd = "claude --permission-mode acceptEdits --append-system-prompt 'very long system prompt text here'";
+    // A line that contains a 20+ char substring of the auto command
+    let line = "$ claude --permission-mode acceptEdits --append-system-prompt 'very long system prompt text here'";
+    assert!(line_matches_auto_command(line, auto_cmd));
+}
+
+#[test]
+fn test_line_matches_auto_command_no_match() {
+    let auto_cmd = "claude --permission-mode acceptEdits --append-system-prompt 'some prompt'";
+    let line = "total 42\ndrwxr-xr-x  5 user  staff  160 Jan  1 00:00 .";
+    assert!(!line_matches_auto_command(line, auto_cmd));
+}
+
+#[test]
+fn test_line_matches_auto_command_normal_output() {
+    let auto_cmd = "claude --permission-mode acceptEdits --append-system-prompt 'hello world this is a test'";
+    // Normal CLI output should not match
+    assert!(!line_matches_auto_command("Hello! How can I help you today?", auto_cmd));
+    assert!(!line_matches_auto_command("Processing your request...", auto_cmd));
+}
+
+#[test]
+fn test_set_auto_command_nonexistent_session() {
+    let manager = PtyManager::new();
+    let result = manager.set_auto_command("nonexistent", "some command");
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), "Session not found");
+}
+
+#[test]
+fn test_set_auto_command_on_session() {
+    let repo = TestRepo::new_without_init().expect("Failed to create test repo");
+    let (manager, output) = setup();
+
+    manager
+        .create_session(
+            "test-auto-cmd".to_string(),
+            Some(repo.repo_path.clone()),
+            None,
+            None,
+            make_callback(&output),
+        )
+        .expect("create_session should succeed");
+
+    // set_auto_command should succeed on an existing session
+    let result = manager.set_auto_command("test-auto-cmd", "some long test command string here");
+    assert!(result.is_ok(), "set_auto_command should succeed: {:?}", result);
+
+    let _ = manager.close_session("test-auto-cmd");
+}
+
+#[test]
+fn test_suppress_echo_filters_command() {
+    let repo = TestRepo::new_without_init().expect("Failed to create test repo");
+    let (manager, output) = setup();
+
+    manager
+        .create_session(
+            "test-suppress".to_string(),
+            Some(repo.repo_path.clone()),
+            None,
+            None,
+            make_callback(&output),
+        )
+        .expect("create_session should succeed");
+
+    // Wait for shell to be ready
+    thread::sleep(Duration::from_millis(500));
+
+    // Set a filter for a long claude-like command, then write a DIFFERENT echo command.
+    // The auto_command filter should only suppress lines matching the filter string,
+    // not unrelated output.
+    let filter_cmd = "claude --permission-mode acceptEdits --append-system-prompt 'unique-filter-string-for-test-1234567890'";
+    manager.set_auto_command("test-suppress", filter_cmd).expect("set_auto_command");
+
+    // Write a normal echo command whose output won't match the filter
+    manager
+        .write_to_session("test-suppress", "echo VISIBLE_AFTER_FILTER\n")
+        .expect("write command");
+
+    // The echo output should still appear since it doesn't match the filter
+    let found = wait_for_output(&output, "VISIBLE_AFTER_FILTER", 5000);
+    assert!(
+        found,
+        "Expected non-filtered output in terminal, got: {}",
+        output.lock().unwrap()
+    );
+
+    let _ = manager.close_session("test-suppress");
+}
+
+#[test]
+fn test_normal_output_not_filtered() {
+    let repo = TestRepo::new_without_init().expect("Failed to create test repo");
+    let (manager, output) = setup();
+
+    manager
+        .create_session(
+            "test-no-filter".to_string(),
+            Some(repo.repo_path.clone()),
+            None,
+            None,
+            make_callback(&output),
+        )
+        .expect("create_session should succeed");
+
+    // Wait for shell to be ready
+    thread::sleep(Duration::from_millis(500));
+
+    // Set a filter for something completely different
+    let filter_cmd = "claude --permission-mode acceptEdits --append-system-prompt 'this is a unique filter string 12345'";
+    manager.set_auto_command("test-no-filter", filter_cmd).expect("set_auto_command");
+
+    // Write a normal command that should NOT be filtered
+    manager
+        .write_to_session("test-no-filter", "echo NORMAL_OUTPUT_VISIBLE\n")
+        .expect("write command");
+
+    // The normal output should still appear
+    let found = wait_for_output(&output, "NORMAL_OUTPUT_VISIBLE", 5000);
+    assert!(
+        found,
+        "Normal output should not be filtered, got: {}",
+        output.lock().unwrap()
+    );
+
+    let _ = manager.close_session("test-no-filter");
 }

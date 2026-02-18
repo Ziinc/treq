@@ -48,6 +48,17 @@ pub fn pty_resize(
 }
 
 #[tauri::command]
+pub fn pty_write_suppress_echo(
+    state: State<AppState>,
+    session_id: String,
+    data: String,
+) -> Result<(), String> {
+    let pty_manager = state.pty_manager.lock().unwrap();
+    pty_manager.set_auto_command(&session_id, &data)?;
+    pty_manager.write_to_session(&session_id, &data)
+}
+
+#[tauri::command]
 pub fn pty_close(state: State<AppState>, session_id: String) -> Result<(), String> {
     let pty_manager = state.pty_manager.lock().unwrap();
     pty_manager.close_session(&session_id)

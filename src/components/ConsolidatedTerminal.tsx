@@ -19,6 +19,7 @@ import {
   ptyListen,
   ptyResize,
   ptyWrite,
+  ptyWriteSuppressEcho,
   ptySessionExists,
 } from "../lib/api";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
@@ -365,7 +366,7 @@ export const ConsolidatedTerminal = forwardRef<
             autoCommandSentRef.current = true;
             // Add a small delay to ensure the shell prompt is ready
             setTimeout(() => {
-              ptyWrite(sessionId, normalizeCommand(initialAutoCommandRef.current!)).catch(
+              ptyWriteSuppressEcho(sessionId, normalizeCommand(initialAutoCommandRef.current!)).catch(
                 localHandleError
               );
             }, isNewSession ? 100 : 0);
