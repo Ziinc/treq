@@ -2983,6 +2983,58 @@ pub fn jj_create_merge_commit(
     })
 }
 
+/// Rebases a workspace branch onto the target branch and moves the target bookmark.
+///
+/// # Arguments
+/// * `workspace_path` - Path to the workspace directory
+/// * `workspace_branch` - Name of the workspace branch to rebase
+/// * `target_branch` - Name of the target branch
+///
+/// # Returns
+/// Returns the rebase result or a JjError on failure.
+pub fn jj_rebase_merge_commit(
+    workspace_path: &str,
+    workspace_branch: &str,
+    target_branch: &str,
+) -> Result<JjRebaseResult, JjError> {
+    if workspace_branch.starts_with('-')
+        || workspace_branch.contains('\0')
+        || workspace_branch.is_empty()
+    {
+        return Err(JjError::IoError(
+            "Invalid workspace branch name".to_string(),
+        ));
+    }
+
+    if target_branch.starts_with('-') || target_branch.contains('\0') || target_branch.is_empty() {
+        return Err(JjError::IoError("Invalid target branch name".to_string()));
+    }
+
+    let output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["rebase", "-s", workspace_branch, "-d", target_branch])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{}{}", stdout, stderr);
+
+    if output.status.success() {
+        if let Err(e) = jj_set_bookmark(workspace_path, target_branch, workspace_branch) {
+            eprintln!(
+                "Warning: Failed to update target bookmark '{}': {}",
+                target_branch, e
+            );
+        }
+    }
+
+    Ok(JjRebaseResult {
+        success: output.status.success(),
+        message: combined,
+    })
+}
+
 /// Squashes a workspace branch into the target branch and updates the description.
 ///
 /// # Arguments
