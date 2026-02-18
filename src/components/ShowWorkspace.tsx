@@ -505,6 +505,10 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
             description: `Workspace rebased onto ${branch}`,
             type: "success",
           });
+
+          // Invalidate sidebar queries so hierarchy updates
+          queryClient.invalidateQueries({ queryKey: ["workspaces", effectiveRepoPath] });
+          queryClient.invalidateQueries({ queryKey: ["workspace-statuses", effectiveRepoPath] });
         } else {
           addToast({
             title: "Rebase failed",
@@ -525,7 +529,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
         setRebasing(false);
       }
     },
-    [targetBranch, workspace, effectiveRepoPath, workingDirectory, addToast]
+    [targetBranch, workspace, effectiveRepoPath, workingDirectory, addToast, queryClient]
   );
 
   // Helper to get status for a directory entry

@@ -44,8 +44,14 @@ vi.mock("../src/components/ChangesDiffViewer", () => ({
   },
 }));
 
+// Capture onSelect handler from the TargetBranchSelector mock
+let targetBranchSelectHandler: ((branch: string) => void) | null = null;
+
 vi.mock("../src/components/TargetBranchSelector", () => ({
-  TargetBranchSelector: () => <div data-testid="target-branch-selector" />,
+  TargetBranchSelector: (props: { onSelect?: (branch: string) => void }) => {
+    targetBranchSelectHandler = props.onSelect || null;
+    return <div data-testid="target-branch-selector" />;
+  },
 }));
 
 vi.mock("../src/lib/api", async () => {
@@ -400,5 +406,104 @@ describe("ShowWorkspace rebasing indicator", () => {
 
     // Verify no success toast is displayed
     expect(screen.queryByText("Workspace rebased")).not.toBeInTheDocument();
+  });
+});
+
+describe("ShowWorkspace target branch change invalidation", () => {
+  beforeEach(() => {
+    targetBranchSelectHandler = null;
+    vi.clearAllMocks();
+  });
+
+  it("invalidates workspace and status queries when target branch is changed", async () => {
+    const { QueryClient } = await import("@tanstack/react-query");
+    const invalidateSpy = vi.spyOn(
+      QueryClient.prototype,
+      "invalidateQueries"
+    );
+
+    vi.mocked(api.setWorkspaceTargetBranch).mockResolvedValue({
+      success: true,
+      message: "Rebased successfully",
+    });
+
+    render(
+      <ShowWorkspace
+        repositoryPath={workspace.repo_path}
+        workspace={workspace}
+        mainRepoBranch="main"
+        initialSelectedFile={null}
+        onDeleteWorkspace={vi.fn()}
+        allWorkspaces={[workspace]}
+      />
+    );
+
+    // Wait for component to mount and capture the handler
+    await waitFor(() => expect(targetBranchSelectHandler).toBeTruthy());
+
+    // Clear any invalidation calls from mount/auto-rebase
+    invalidateSpy.mockClear();
+
+    // Simulate selecting a new target branch
+    await act(async () => {
+      await targetBranchSelectHandler!("develop");
+    });
+
+    // Verify sidebar queries were invalidated
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: ["workspaces", workspace.repo_path],
+      })
+    );
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: ["workspace-statuses", workspace.repo_path],
+      })
+    );
+
+    invalidateSpy.mockRestore();
+  });
+
+  it("does not invalidate queries when target branch change fails", async () => {
+    const { QueryClient } = await import("@tanstack/react-query");
+    const invalidateSpy = vi.spyOn(
+      QueryClient.prototype,
+      "invalidateQueries"
+    );
+
+    vi.mocked(api.setWorkspaceTargetBranch).mockResolvedValue({
+      success: false,
+      message: "Rebase failed: conflicts",
+    });
+
+    render(
+      <ShowWorkspace
+        repositoryPath={workspace.repo_path}
+        workspace={workspace}
+        mainRepoBranch="main"
+        initialSelectedFile={null}
+        onDeleteWorkspace={vi.fn()}
+        allWorkspaces={[workspace]}
+      />
+    );
+
+    await waitFor(() => expect(targetBranchSelectHandler).toBeTruthy());
+
+    invalidateSpy.mockClear();
+
+    await act(async () => {
+      await targetBranchSelectHandler!("develop");
+    });
+
+    // Should NOT have invalidated workspace/status queries on failure
+    const workspaceInvalidations = invalidateSpy.mock.calls.filter(
+      (call) =>
+        Array.isArray(call[0]?.queryKey) &&
+        (call[0].queryKey[0] === "workspaces" ||
+          call[0].queryKey[0] === "workspace-statuses")
+    );
+    expect(workspaceInvalidations).toHaveLength(0);
+
+    invalidateSpy.mockRestore();
   });
 });
