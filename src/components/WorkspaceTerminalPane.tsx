@@ -472,6 +472,14 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
 
     const allTerminals = [...orderedTerminals, ...missingClaudeTerminals];
 
+    // Auto-collapse when all terminals are closed
+    useEffect(() => {
+      if (allTerminals.length === 0) {
+        setCollapsed(true);
+        setMaximized(false);
+      }
+    }, [allTerminals.length]);
+
     // Group terminals by workspace
     const workspaceGroups = useMemo((): WorkspaceGroup[] => {
       const groupMap = new Map<string, WorkspaceGroup>();
