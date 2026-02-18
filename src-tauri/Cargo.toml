@@ -35,6 +35,7 @@ jj-lib = "0.36.0"
 notify = { version = "6.1", default-features = false, features = ["macos_fsevent"] }
 notify-debouncer-full = "0.3"
 log = "0.4"
+regex = "1"
 
 [dev-dependencies]
 mockall = "0.14.0"

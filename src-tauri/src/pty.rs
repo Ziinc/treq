@@ -1,4 +1,5 @@
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
+use regex::Regex;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
@@ -41,10 +42,35 @@ fn process_utf8_chunk(pending: &mut Vec<u8>, new_bytes: &[u8]) -> String {
     }
 }
 
+/// Strip ANSI escape sequences from a string.
+pub fn strip_ansi_codes(s: &str) -> String {
+    // Match CSI sequences (including private modes like ?1h), OSC sequences, and charset designations
+    let re = Regex::new(r"\x1b\[[\x20-\x3f]*[\x30-\x3f]*[\x40-\x7e]|\x1b\][^\x07]*\x07|\x1b\([A-Z]|\x1b[=>]").unwrap();
+    re.replace_all(s, "").to_string()
+}
+
+/// Check if a line's content overlaps with the auto_command text.
+/// Uses 20-char sliding window substring matching (char-based, not byte-based).
+pub fn line_matches_auto_command(stripped_line: &str, auto_command: &str) -> bool {
+    let trimmed = stripped_line.trim();
+    let chars: Vec<char> = trimmed.chars().collect();
+    if chars.len() < 20 {
+        return false;
+    }
+    for i in 0..=(chars.len() - 20) {
+        let window: String = chars[i..i + 20].iter().collect();
+        if auto_command.contains(&window) {
+            return true;
+        }
+    }
+    false
+}
+
 pub struct PtySession {
     writer: Box<dyn Write + Send>,
     master: Box<dyn MasterPty + Send>,
     _child: Box<dyn Child + Send>,
+    auto_command: Arc<Mutex<Option<String>>>,
 }
 
 impl PtySession {
@@ -121,6 +147,9 @@ impl PtyManager {
         let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
         let master = pair.master;
 
+        let auto_command: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+        let auto_command_reader = auto_command.clone();
+
         // Store session with master for resizing
         {
             let mut sessions = self.sessions.lock().unwrap();
@@ -130,6 +159,7 @@ impl PtyManager {
                     writer,
                     master,
                     _child: child,
+                    auto_command,
                 },
             );
         }
@@ -146,6 +176,10 @@ impl PtyManager {
         thread::spawn(move || {
             let mut buffer = [0u8; 8192];
             let mut pending_bytes: Vec<u8> = Vec::with_capacity(4);
+            let mut line_buffer = String::new();
+            let mut non_matching_lines_emitted: usize = 0;
+            // Once we've emitted enough non-matching lines, stop filtering
+            const FILTER_STOP_THRESHOLD: usize = 5;
 
             loop {
                 match reader.read(&mut buffer) {
@@ -154,15 +188,65 @@ impl PtyManager {
                         if !pending_bytes.is_empty() {
                             let data = String::from_utf8_lossy(&pending_bytes).to_string();
                             if !data.is_empty() {
-                                callback(data);
+                                line_buffer.push_str(&data);
                             }
+                        }
+                        // Flush remaining line buffer
+                        if !line_buffer.is_empty() {
+                            callback(line_buffer);
                         }
                         break;
                     }
                     Ok(n) => {
                         let data = process_utf8_chunk(&mut pending_bytes, &buffer[..n]);
-                        if !data.is_empty() {
+                        if data.is_empty() {
+                            continue;
+                        }
+
+                        // Check if filtering is active
+                        let filter_cmd = {
+                            let guard = auto_command_reader.lock().unwrap();
+                            guard.clone()
+                        };
+
+                        if filter_cmd.is_none() {
+                            // No filter active, pass through directly
                             callback(data);
+                            continue;
+                        }
+
+                        let filter_cmd = filter_cmd.unwrap();
+
+                        // Filtering is active: buffer and process line by line
+                        line_buffer.push_str(&data);
+
+                        while let Some(newline_pos) = line_buffer.find('\n') {
+                            let line = line_buffer[..=newline_pos].to_string();
+                            line_buffer = line_buffer[newline_pos + 1..].to_string();
+
+                            let stripped = strip_ansi_codes(&line);
+                            if line_matches_auto_command(&stripped, &filter_cmd) {
+                                // Discard this line
+                                continue;
+                            }
+
+                            // Emit non-matching line
+                            callback(line);
+                            non_matching_lines_emitted += 1;
+
+                            if non_matching_lines_emitted >= FILTER_STOP_THRESHOLD {
+                                // Stop filtering: clear the auto_command
+                                {
+                                    let mut guard = auto_command_reader.lock().unwrap();
+                                    *guard = None;
+                                }
+                                // Flush remaining line buffer
+                                if !line_buffer.is_empty() {
+                                    let remaining = std::mem::take(&mut line_buffer);
+                                    callback(remaining);
+                                }
+                                break;
+                            }
                         }
                     }
                     Err(_) => break,
@@ -195,6 +279,17 @@ impl PtyManager {
         let mut sessions = self.sessions.lock().unwrap();
         sessions.remove(session_id);
         Ok(())
+    }
+
+    pub fn set_auto_command(&self, session_id: &str, command: &str) -> Result<(), String> {
+        let sessions = self.sessions.lock().unwrap();
+        if let Some(session) = sessions.get(session_id) {
+            let mut guard = session.auto_command.lock().unwrap();
+            *guard = Some(command.to_string());
+            Ok(())
+        } else {
+            Err("Session not found".to_string())
+        }
     }
 
     pub fn session_exists(&self, session_id: &str) -> bool {

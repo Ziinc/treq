@@ -372,6 +372,7 @@ pub fn run() {
             commands::pty_create_session,
             commands::pty_session_exists,
             commands::pty_write,
+            commands::pty_write_suppress_echo,
             commands::pty_resize,
             commands::pty_close,
             commands::read_file,

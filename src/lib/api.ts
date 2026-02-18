@@ -571,6 +571,9 @@ export const ptyCreateSession = (
 export const ptyWrite = (session_id: string, data: string): Promise<void> =>
   invoke("pty_write", { sessionId: session_id, data });
 
+export const ptyWriteSuppressEcho = (session_id: string, data: string): Promise<void> =>
+  invoke("pty_write_suppress_echo", { sessionId: session_id, data });
+
 export const ptyResize = (session_id: string, rows: number, cols: number): Promise<void> =>
   invoke("pty_resize", { sessionId: session_id, rows, cols });
 

@@ -6280,6 +6280,7 @@ dependencies = [
  "notify",
  "notify-debouncer-full",
  "portable-pty",
+ "regex",
  "rusqlite",
  "serde",
  "serde_json",
