@@ -956,9 +956,12 @@ pub fn jj_diff_summary(workspace_path: &str, change_id: &str) -> Result<Vec<Stri
         .lines()
         .filter_map(|line| {
             // jj diff --summary format: "M file.txt" or "A file.txt" or "D file.txt"
+            // Renames: "R {old.txt => new.txt}"
             let line = line.trim();
             if line.len() > 2 {
-                Some(line[2..].to_string())
+                let raw_path = &line[2..];
+                let (path, _) = parse_rename_path(raw_path);
+                Some(path)
             } else {
                 None
             }
@@ -1199,6 +1202,17 @@ pub fn jj_sync_working_copy_if_safe(
     Ok(true) // Sync performed successfully
 }
 
+/// Parse jj rename path format: "{old => new}" → (new_path, Some(old_path))
+/// For non-rename paths, returns (path, None)
+fn parse_rename_path(path: &str) -> (String, Option<String>) {
+    if path.starts_with('{') && path.ends_with('}') {
+        if let Some((old, new)) = path[1..path.len() - 1].split_once(" => ") {
+            return (new.trim().to_string(), Some(old.trim().to_string()));
+        }
+    }
+    (path.to_string(), None)
+}
+
 /// Parse jj status output into file changes
 fn parse_jj_status(status: &str) -> Result<Vec<JjFileChange>, JjError> {
     let mut changes = Vec::new();
@@ -1218,15 +1232,16 @@ fn parse_jj_status(status: &str) -> Result<Vec<JjFileChange>, JjError> {
                 "M" => "M", // Modified
                 "A" => "A", // Added
                 "D" => "D", // Deleted
-                "R" => "M", // Renamed (treat as modified for now)
+                "R" => "R", // Renamed
                 _ => continue,
             };
 
-            let path = rest.trim().to_string();
+            let raw_path = rest.trim();
+            let (path, previous_path) = parse_rename_path(raw_path);
             changes.push(JjFileChange {
                 path,
                 status: status.to_string(),
-                previous_path: None,
+                previous_path,
             });
         }
     }
@@ -2771,12 +2786,13 @@ fn parse_diff_summary(summary: &str) -> Result<Vec<JjFileChange>, JjError> {
         }
 
         let status = parts[0].to_string();
-        let path = parts[1].to_string();
+        let raw_path = parts[1];
+        let (path, previous_path) = parse_rename_path(raw_path);
 
         files.push(JjFileChange {
             path,
             status,
-            previous_path: None,
+            previous_path,
         });
     }
 
@@ -4656,5 +4672,53 @@ target/debug/deps/lib.so    2-sided conflict including 1 deletion and an executa
                 msg
             );
         }
+    }
+
+    #[test]
+    fn test_parse_rename_path() {
+        // Rename format
+        let (path, prev) = parse_rename_path("{agents.md => AGENTS.md}");
+        assert_eq!(path, "AGENTS.md");
+        assert_eq!(prev, Some("agents.md".to_string()));
+
+        // Rename with subdirectories
+        let (path, prev) = parse_rename_path("{src/old.rs => src/new.rs}");
+        assert_eq!(path, "src/new.rs");
+        assert_eq!(prev, Some("src/old.rs".to_string()));
+
+        // Non-rename path
+        let (path, prev) = parse_rename_path("normal_file.txt");
+        assert_eq!(path, "normal_file.txt");
+        assert_eq!(prev, None);
+    }
+
+    #[test]
+    fn test_parse_jj_status_with_renames() {
+        let input = "R {agents.md => AGENTS.md}\nM other.txt";
+        let changes = parse_jj_status(input).unwrap();
+        assert_eq!(changes.len(), 2);
+
+        assert_eq!(changes[0].path, "AGENTS.md");
+        assert_eq!(changes[0].status, "R");
+        assert_eq!(changes[0].previous_path, Some("agents.md".to_string()));
+
+        assert_eq!(changes[1].path, "other.txt");
+        assert_eq!(changes[1].status, "M");
+        assert_eq!(changes[1].previous_path, None);
+    }
+
+    #[test]
+    fn test_parse_diff_summary_with_renames() {
+        let input = "R {old.txt => new.txt}\nA added.txt";
+        let files = parse_diff_summary(input).unwrap();
+        assert_eq!(files.len(), 2);
+
+        assert_eq!(files[0].path, "new.txt");
+        assert_eq!(files[0].status, "R");
+        assert_eq!(files[0].previous_path, Some("old.txt".to_string()));
+
+        assert_eq!(files[1].path, "added.txt");
+        assert_eq!(files[1].status, "A");
+        assert_eq!(files[1].previous_path, None);
     }
 }

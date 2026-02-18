@@ -677,7 +677,8 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
   const fileData = allFileHunks.get(filePath);
   if (!fileData) return <div />;
 
-  const isCollapsed = isBinaryFile(filePath)
+  const isRename = !!file.oldPath;
+  const isCollapsed = isBinaryFile(filePath) || isRename
     ? true
     : collapsedFiles.has(filePath);
   const isViewed = viewedFiles.has(filePath);
@@ -860,24 +861,30 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
         <FileContextMenu filePath={filePath} workspacePath={workspacePath}>
           <div className="sticky top-0 z-10 flex items-center justify-between px-[16px] py-[8px] bg-muted border-b border-border">
             <div className="flex items-center gap-[8px] flex-1 min-w-0">
-              <button
-                role="button"
-                aria-label={isCollapsed ? "Expand file diff" : "Collapse file diff"}
-                className="p-0 border-0 bg-transparent cursor-pointer"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleFileCollapse(filePath);
-                }}
-              >
-                {isCollapsed ? (
-                  <ChevronRight className="w-3 h-3 flex-shrink-0" />
-                ) : (
-                  <ChevronDown className="w-3 h-3 flex-shrink-0" />
-                )}
-              </button>
+              {isRename ? (
+                <span className="w-3 h-3 flex-shrink-0" />
+              ) : (
+                <button
+                  role="button"
+                  aria-label={isCollapsed ? "Expand file diff" : "Collapse file diff"}
+                  className="p-0 border-0 bg-transparent cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFileCollapse(filePath);
+                  }}
+                >
+                  {isCollapsed ? (
+                    <ChevronRight className="w-3 h-3 flex-shrink-0" />
+                  ) : (
+                    <ChevronDown className="w-3 h-3 flex-shrink-0" />
+                  )}
+                </button>
+              )}
               <div className="min-w-0 flex-1 flex items-center gap-[6px]">
                 <span className="text-sm text-muted-foreground truncate font-mono">
-                  {filePath.replace(/\/+$/, "")}
+                  {isRename
+                    ? `${file.oldPath} => ${filePath.replace(/\/+$/, "")}`
+                    : filePath.replace(/\/+$/, "")}
                 </span>
                 <button
                   onClick={(e) => {
@@ -925,6 +932,11 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
                 )}
                 <span>Viewed</span>
               </button>
+              {isRename && (
+                <span className="text-sm px-[8px] py-[2px] rounded bg-blue-500/25 text-blue-700 dark:text-blue-300">
+                  Renamed
+                </span>
+              )}
               {isBinaryFile(filePath) && (
                 <span className="text-sm px-[8px] py-[2px] rounded bg-zinc-500/25 text-zinc-700 dark:text-zinc-300">
                   Binary
