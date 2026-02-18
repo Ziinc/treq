@@ -564,9 +564,10 @@ export const ptyCreateSession = (
   session_id: string,
   working_dir?: string,
   shell?: string,
-  initial_command?: string
+  initial_command?: string,
+  suppress_echo_for?: string
 ): Promise<void> =>
-  invoke("pty_create_session", { sessionId: session_id, workingDir: working_dir, shell, initialCommand: initial_command });
+  invoke("pty_create_session", { sessionId: session_id, workingDir: working_dir, shell, initialCommand: initial_command, suppressEchoFor: suppress_echo_for });
 
 export const ptyWrite = (session_id: string, data: string): Promise<void> =>
   invoke("pty_write", { sessionId: session_id, data });

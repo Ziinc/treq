@@ -108,6 +108,7 @@ impl PtyManager {
         working_dir: Option<String>,
         shell: Option<String>,
         initial_command: Option<String>,
+        suppress_echo_for: Option<String>,
         callback: Box<dyn Fn(String) + Send + 'static>,
     ) -> Result<(), String> {
         let pty_system = native_pty_system();
@@ -147,7 +148,7 @@ impl PtyManager {
         let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
         let master = pair.master;
 
-        let auto_command: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+        let auto_command: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(suppress_echo_for));
         let auto_command_reader = auto_command.clone();
 
         // Store session with master for resizing
@@ -178,6 +179,7 @@ impl PtyManager {
             let mut pending_bytes: Vec<u8> = Vec::with_capacity(4);
             let mut line_buffer = String::new();
             let mut non_matching_lines_emitted: usize = 0;
+            let mut seen_command_echo = false;
             // Once we've emitted enough non-matching lines, stop filtering
             const FILTER_STOP_THRESHOLD: usize = 5;
 
@@ -225,12 +227,25 @@ impl PtyManager {
                             line_buffer = line_buffer[newline_pos + 1..].to_string();
 
                             let stripped = strip_ansi_codes(&line);
+
+                            // Discard lines matching the auto_command
                             if line_matches_auto_command(&stripped, &filter_cmd) {
-                                // Discard this line
+                                seen_command_echo = true;
                                 continue;
                             }
 
-                            // Emit non-matching line
+                            // Phase 1: Before we've seen the command echo,
+                            // suppress ALL output (shell prompt, empty lines, etc.)
+                            if !seen_command_echo {
+                                continue;
+                            }
+
+                            // Phase 2: After command echo, discard empty/whitespace lines
+                            if stripped.trim().is_empty() {
+                                continue;
+                            }
+
+                            // Phase 3: Emit non-matching, non-empty lines
                             callback(line);
                             non_matching_lines_emitted += 1;
 

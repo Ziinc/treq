@@ -349,7 +349,13 @@ export const ConsolidatedTerminal = forwardRef<
           const isNewSession = !exists;
 
           if (isNewSession) {
-            await ptyCreateSession(sessionId, workingDirectory, shell);
+            await ptyCreateSession(
+              sessionId,
+              workingDirectory,
+              shell,
+              undefined,
+              initialAutoCommandRef.current || undefined
+            );
           }
 
           const unlisten = await ptyListen(sessionId, localHandlePtyOutput);
@@ -505,7 +511,7 @@ export const ConsolidatedTerminal = forwardRef<
           <div
             ref={terminalRef}
             className={cn(
-              "h-full w-full",
+              "h-full w-full pt-1",
               "[&_.xterm-viewport::-webkit-scrollbar]:w-2",
               "[&_.xterm-viewport::-webkit-scrollbar-track]:bg-transparent",
               "[&_.xterm-viewport::-webkit-scrollbar-thumb]:bg-border",

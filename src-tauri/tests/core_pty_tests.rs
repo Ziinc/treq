@@ -58,6 +58,7 @@ fn test_create_session() {
         Some(repo.repo_path.clone()),
         None,
         None,
+        None,
         make_callback(&output),
     );
 
@@ -82,6 +83,7 @@ fn test_create_session_with_initial_command() {
         Some(repo.repo_path.clone()),
         None,
         Some("echo HELLO_FROM_INIT".to_string()),
+        None,
         make_callback(&output),
     );
 
@@ -107,6 +109,7 @@ fn test_write_to_session() {
         .create_session(
             "test-write".to_string(),
             Some(repo.repo_path.clone()),
+            None,
             None,
             None,
             make_callback(&output),
@@ -154,6 +157,7 @@ fn test_resize_session() {
             Some(repo.repo_path.clone()),
             None,
             None,
+            None,
             make_callback(&output),
         )
         .expect("create_session should succeed");
@@ -193,6 +197,7 @@ fn test_close_session() {
             Some(repo.repo_path.clone()),
             None,
             None,
+            None,
             make_callback(&output),
         )
         .expect("create_session should succeed");
@@ -224,6 +229,7 @@ fn test_multiple_concurrent_sessions() {
             Some(repo.repo_path.clone()),
             None,
             None,
+            None,
             make_callback(&output_a),
         )
         .expect("create session A");
@@ -234,6 +240,7 @@ fn test_multiple_concurrent_sessions() {
             Some(repo.repo_path.clone()),
             None,
             None,
+            None,
             make_callback(&output_b),
         )
         .expect("create session B");
@@ -242,6 +249,7 @@ fn test_multiple_concurrent_sessions() {
         .create_session(
             "multi-c".to_string(),
             Some(repo.repo_path.clone()),
+            None,
             None,
             None,
             make_callback(&output_c),
@@ -303,6 +311,7 @@ fn test_session_isolation() {
             Some(repo.repo_path.clone()),
             None,
             None,
+            None,
             make_callback(&output_a),
         )
         .expect("create session A");
@@ -311,6 +320,7 @@ fn test_session_isolation() {
         .create_session(
             "iso-b".to_string(),
             Some(repo.repo_path.clone()),
+            None,
             None,
             None,
             make_callback(&output_b),
@@ -355,6 +365,7 @@ fn test_utf8_output() {
         .create_session(
             "test-utf8".to_string(),
             Some(repo.repo_path.clone()),
+            None,
             None,
             None,
             make_callback(&output),
@@ -477,6 +488,7 @@ fn test_set_auto_command_on_session() {
             Some(repo.repo_path.clone()),
             None,
             None,
+            None,
             make_callback(&output),
         )
         .expect("create_session should succeed");
@@ -490,6 +502,9 @@ fn test_set_auto_command_on_session() {
 
 #[test]
 fn test_suppress_echo_filters_command() {
+    // Simulates the real workflow: set_auto_command + write the matching command.
+    // The command echo should be filtered, but subsequent output should pass through.
+    // Uses `true` which produces no output (avoids output-matching-filter issue).
     let repo = TestRepo::new_without_init().expect("Failed to create test repo");
     let (manager, output) = setup();
 
@@ -499,6 +514,7 @@ fn test_suppress_echo_filters_command() {
             Some(repo.repo_path.clone()),
             None,
             None,
+            None,
             make_callback(&output),
         )
         .expect("create_session should succeed");
@@ -506,22 +522,26 @@ fn test_suppress_echo_filters_command() {
     // Wait for shell to be ready
     thread::sleep(Duration::from_millis(500));
 
-    // Set a filter for a long claude-like command, then write a DIFFERENT echo command.
-    // The auto_command filter should only suppress lines matching the filter string,
-    // not unrelated output.
-    let filter_cmd = "claude --permission-mode acceptEdits --append-system-prompt 'unique-filter-string-for-test-1234567890'";
-    manager.set_auto_command("test-suppress", filter_cmd).expect("set_auto_command");
-
-    // Write a normal echo command whose output won't match the filter
+    // Simulate ptyWriteSuppressEcho: set filter then write the MATCHING command.
+    // `true` produces no output, so only the echo is filtered.
+    let cmd = "true # suppress-test-unique-ident-1234567890";
+    manager.set_auto_command("test-suppress", cmd).expect("set_auto_command");
     manager
-        .write_to_session("test-suppress", "echo VISIBLE_AFTER_FILTER\n")
-        .expect("write command");
+        .write_to_session("test-suppress", &format!("{}\n", cmd))
+        .expect("write filtered command");
 
-    // The echo output should still appear since it doesn't match the filter
-    let found = wait_for_output(&output, "VISIBLE_AFTER_FILTER", 5000);
+    // Wait for filtered command to be processed
+    thread::sleep(Duration::from_millis(300));
+
+    // Now write a follow-up command — its output should appear
+    manager
+        .write_to_session("test-suppress", "echo VISIBLE_AFTER\n")
+        .expect("write follow-up command");
+
+    let found = wait_for_output(&output, "VISIBLE_AFTER", 5000);
     assert!(
         found,
-        "Expected non-filtered output in terminal, got: {}",
+        "Expected output after filtered command echo, got: {}",
         output.lock().unwrap()
     );
 
@@ -529,7 +549,8 @@ fn test_suppress_echo_filters_command() {
 }
 
 #[test]
-fn test_normal_output_not_filtered() {
+fn test_normal_output_not_filtered_without_filter() {
+    // Sessions without a filter should pass all output through unmodified
     let repo = TestRepo::new_without_init().expect("Failed to create test repo");
     let (manager, output) = setup();
 
@@ -539,6 +560,7 @@ fn test_normal_output_not_filtered() {
             Some(repo.repo_path.clone()),
             None,
             None,
+            None,
             make_callback(&output),
         )
         .expect("create_session should succeed");
@@ -546,16 +568,11 @@ fn test_normal_output_not_filtered() {
     // Wait for shell to be ready
     thread::sleep(Duration::from_millis(500));
 
-    // Set a filter for something completely different
-    let filter_cmd = "claude --permission-mode acceptEdits --append-system-prompt 'this is a unique filter string 12345'";
-    manager.set_auto_command("test-no-filter", filter_cmd).expect("set_auto_command");
-
-    // Write a normal command that should NOT be filtered
+    // No filter set — write a command directly
     manager
         .write_to_session("test-no-filter", "echo NORMAL_OUTPUT_VISIBLE\n")
         .expect("write command");
 
-    // The normal output should still appear
     let found = wait_for_output(&output, "NORMAL_OUTPUT_VISIBLE", 5000);
     assert!(
         found,
@@ -564,4 +581,106 @@ fn test_normal_output_not_filtered() {
     );
 
     let _ = manager.close_session("test-no-filter");
+}
+
+#[test]
+fn test_empty_lines_filtered_during_suppression() {
+    // After the command echo is seen, empty lines should still be filtered
+    let repo = TestRepo::new_without_init().expect("Failed to create test repo");
+    let (manager, output) = setup();
+
+    manager
+        .create_session(
+            "test-empty-filter".to_string(),
+            Some(repo.repo_path.clone()),
+            None,
+            None,
+            None,
+            make_callback(&output),
+        )
+        .expect("create_session should succeed");
+
+    // Wait for shell to be ready
+    thread::sleep(Duration::from_millis(500));
+
+    // Set filter and write matching command (triggers seen_command_echo)
+    let cmd = "echo TRIGGER_ECHO_MATCH_1234567890_ABCDE";
+    manager.set_auto_command("test-empty-filter", cmd).expect("set_auto_command");
+    manager
+        .write_to_session("test-empty-filter", &format!("{}\n", cmd))
+        .expect("write trigger command");
+
+    // Wait for the trigger to be processed
+    thread::sleep(Duration::from_millis(500));
+
+    // Now write empty lines followed by a real command
+    manager
+        .write_to_session("test-empty-filter", "echo AFTER_EMPTY_LINES\n")
+        .expect("write commands");
+
+    let found = wait_for_output(&output, "AFTER_EMPTY_LINES", 5000);
+    assert!(
+        found,
+        "Output after empty lines should appear, got: {}",
+        output.lock().unwrap()
+    );
+
+    let _ = manager.close_session("test-empty-filter");
+}
+
+#[test]
+fn test_suppress_echo_at_creation_filters_initial_prompt() {
+    // Filter set at creation time suppresses shell prompt and all output
+    // until the matching command echo is seen.
+    let repo = TestRepo::new_without_init().expect("Failed to create test repo");
+    let (manager, output) = setup();
+
+    // Use `true` so only the echo is filtered, not command output
+    let filter_cmd = "true # creation-filter-unique-ident-1234567890";
+    manager
+        .create_session(
+            "test-creation-filter".to_string(),
+            Some(repo.repo_path.clone()),
+            None,
+            None,
+            Some(filter_cmd.to_string()),
+            make_callback(&output),
+        )
+        .expect("create_session should succeed");
+
+    // Wait for shell prompt to be emitted (and filtered since filter is active)
+    thread::sleep(Duration::from_millis(500));
+
+    // The initial prompt should have been suppressed.
+    {
+        let buf = output.lock().unwrap();
+        let stripped = strip_ansi_codes(&buf);
+        assert!(
+            stripped.trim().is_empty(),
+            "Initial prompt should be suppressed, but got: {}",
+            buf.clone()
+        );
+    }
+
+    // Now write the matching command (simulates ptyWriteSuppressEcho)
+    manager
+        .write_to_session("test-creation-filter", &format!("{}\n", filter_cmd))
+        .expect("write filtered command");
+
+    // Wait for it to be processed
+    thread::sleep(Duration::from_millis(300));
+
+    // Write a follow-up command to verify output works
+    manager
+        .write_to_session("test-creation-filter", "echo CREATION_VISIBLE\n")
+        .expect("write follow-up command");
+
+    let found = wait_for_output(&output, "CREATION_VISIBLE", 5000);
+    assert!(
+        found,
+        "Output should appear after creation-time filter, got: {}",
+        output.lock().unwrap()
+    );
+
+    let _ = manager.close_session("test-creation-filter");
 }
