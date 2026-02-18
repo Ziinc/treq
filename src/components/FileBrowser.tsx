@@ -29,6 +29,7 @@ import { getFileStatusTextColor, getStatusBgColor } from "../lib/git-status-colo
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import { parseJjChangedFiles, type ParsedFileChange } from "../lib/git-utils";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
+import { useDebounce } from "../hooks/useDebounce";
 import { SearchOverlay } from "./SearchOverlay";
 import { findMatches, highlightInHtml, type SearchMatch } from "../lib/text-search";
 import {
@@ -250,12 +251,14 @@ interface FileContentViewProps {
   // Search props
   isSearchOpen: boolean;
   searchQuery: string;
+  searchQueryDisplay: string;
   searchMatches: SearchMatch[];
   currentMatchIndex: number;
   onSearchQueryChange: (query: string) => void;
   onSearchNext: () => void;
   onSearchPrevious: () => void;
   onSearchClose: () => void;
+  searchFocusTrigger: number;
 }
 
 const FileContentView = memo(function FileContentView({
@@ -285,12 +288,14 @@ const FileContentView = memo(function FileContentView({
   listRef,
   isSearchOpen,
   searchQuery,
+  searchQueryDisplay,
   searchMatches,
   currentMatchIndex,
   onSearchQueryChange,
   onSearchNext,
   onSearchPrevious,
   onSearchClose,
+  searchFocusTrigger,
 }: FileContentViewProps) {
   const [copied, setCopied] = useState(false);
   const [copiedPath, setCopiedPath] = useState(false);
@@ -515,7 +520,7 @@ const FileContentView = memo(function FileContentView({
         {/* Search overlay */}
         <SearchOverlay
           isVisible={isSearchOpen}
-          query={searchQuery}
+          query={searchQueryDisplay}
           onQueryChange={onSearchQueryChange}
           onNext={onSearchNext}
           onPrevious={onSearchPrevious}
@@ -523,6 +528,7 @@ const FileContentView = memo(function FileContentView({
           currentMatch={searchMatches.length > 0 ? currentMatchIndex + 1 : 0}
           totalMatches={searchMatches.length}
           className="absolute top-2 right-2 z-20"
+          focusTrigger={searchFocusTrigger}
         />
       </div>
     </div>
@@ -842,6 +848,8 @@ export const FileBrowser = memo(function FileBrowser({
   const [scrollOffset, setScrollOffset] = useState(0);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 150);
+  const [searchFocusTrigger, setSearchFocusTrigger] = useState(0);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const { addToast } = useToast();
   const { fontSize} = useTerminalSettings();
@@ -900,16 +908,17 @@ export const FileBrowser = memo(function FileBrowser({
   useKeyboardShortcut("f", true, () => {
     if (selectedFile && !isBinaryFile(selectedFile)) {
       setIsSearchOpen(true);
+      setSearchFocusTrigger((n) => n + 1);
     }
   }, [selectedFile]);
 
   // Compute search matches
   const searchMatches = useMemo(() => {
-    if (!searchQuery || !fileContent) {
+    if (!debouncedSearchQuery || !fileContent) {
       return [];
     }
-    return findMatches(fileContent, searchQuery);
-  }, [fileContent, searchQuery]);
+    return findMatches(fileContent, debouncedSearchQuery);
+  }, [fileContent, debouncedSearchQuery]);
 
   // Search navigation handlers
   const handleSearchNext = useCallback(() => {
@@ -963,7 +972,7 @@ export const FileBrowser = memo(function FileBrowser({
   // Reset current match index when query changes
   useEffect(() => {
     setCurrentMatchIndex(0);
-  }, [searchQuery]);
+  }, [debouncedSearchQuery]);
 
   const handleFileClick = useCallback(
     async (path: string) => {
@@ -1386,13 +1395,15 @@ export const FileBrowser = memo(function FileBrowser({
         onScrollOffsetChange={setScrollOffset}
         listRef={listRef}
         isSearchOpen={isSearchOpen}
-        searchQuery={searchQuery}
+        searchQuery={debouncedSearchQuery}
+        searchQueryDisplay={searchQuery}
         searchMatches={searchMatches}
         currentMatchIndex={currentMatchIndex}
         onSearchQueryChange={setSearchQuery}
         onSearchNext={handleSearchNext}
         onSearchPrevious={handleSearchPrevious}
         onSearchClose={handleSearchClose}
+        searchFocusTrigger={searchFocusTrigger}
       />
     );
   };

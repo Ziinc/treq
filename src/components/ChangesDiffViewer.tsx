@@ -88,14 +88,17 @@ import {
   isBinaryFile,
   type ParsedFileChange,
 } from "../lib/git-utils";
+import { escapeRegex, highlightInHtml } from "../lib/text-search";
 import { useDiffSettings } from "../hooks/useDiffSettings";
 import { useEditorApps } from "../hooks/useEditorApps";
+import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { ChangesSection } from "./ChangesSection";
 import { ConflictsSection } from "./ConflictsSection";
 import { CommittedChangesSection } from "./CommittedChangesSection";
 import { ConflictCommentCard } from "./ConflictCommentCard";
 import { MoveToWorkspaceDialog } from "./MoveToWorkspaceDialog";
 import { FileContextMenu } from "./FileContextMenu";
+import { SearchOverlay } from "./SearchOverlay";
 
 interface ChangesDiffViewerProps {
   workspacePath: string;
@@ -579,14 +582,24 @@ CommitInput.displayName = "CommitInput";
 interface HighlightedLineProps {
   content: string;
   language: string | null;
+  searchQuery?: string;
+  searchHighlightOffset?: number; // which match within this line is "current" (-1 = none)
 }
 
 const HighlightedLine: React.FC<HighlightedLineProps> = memo(
-  ({ content, language }) => {
-    const html = useMemo(
-      () => highlightCode(content, language),
-      [content, language]
-    );
+  ({ content, language, searchQuery, searchHighlightOffset }) => {
+    const html = useMemo(() => {
+      let result = highlightCode(content, language);
+      if (searchQuery) {
+        const { html: highlighted } = highlightInHtml(
+          result,
+          searchQuery,
+          searchHighlightOffset ?? -1
+        );
+        result = highlighted;
+      }
+      return result;
+    }, [content, language, searchQuery, searchHighlightOffset]);
     return <span dangerouslySetInnerHTML={{ __html: html }} />;
   }
 );
@@ -1223,6 +1236,13 @@ export const ChangesDiffViewer = memo(
       // Active file tracking (for sidebar highlighting)
       const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
 
+      // Search state
+      const [isSearchOpen, setIsSearchOpen] = useState(false);
+      const [searchQuery, setSearchQuery] = useState("");
+      const debouncedSearchQuery = useDebounce(searchQuery, 150);
+      const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
+      const [searchFocusTrigger, setSearchFocusTrigger] = useState(0);
+
       // Committed changes state
       const [committedFiles, setCommittedFiles] = useState<JjFileChange[]>([]);
       const [committedSectionCollapsed, setCommittedSectionCollapsed] = useState(false);
@@ -1389,6 +1409,142 @@ export const ChangesDiffViewer = memo(
 
         return { actualConflictedFiles: conflicted, conflictRegionsByFile: regionsByFile };
       }, [files, allFileHunks, showCommittedChanges, committedFiles]);
+
+      // Search: compute matches across all visible diff lines
+      const searchData = useMemo(() => {
+        const matches: Array<{ filePath: string; hunkIndex: number; lineIndex: number; matchIndexInLine: number }> = [];
+        const matchesByKey = new Map<string, { firstGlobalIndex: number; count: number }>();
+
+        if (!debouncedSearchQuery) return { matches, matchesByKey };
+
+        const escapedQuery = escapeRegex(debouncedSearchQuery);
+        const regex = new RegExp(escapedQuery, "gi");
+
+        const countLineMatches = (text: string): number => {
+          regex.lastIndex = 0;
+          let count = 0;
+          while (regex.exec(text) !== null) count++;
+          return count;
+        };
+
+        // Also search conflict regions
+        for (const [, regions] of conflictRegionsByFile) {
+          for (const region of regions) {
+            const lines = region.content.split("\n");
+            for (let idx = 0; idx < lines.length; idx++) {
+              const mc = countLineMatches(lines[idx]);
+              if (mc > 0) {
+                const key = `conflict:${region.id}:${idx}`;
+                matchesByKey.set(key, { firstGlobalIndex: matches.length, count: mc });
+                for (let m = 0; m < mc; m++) {
+                  matches.push({ filePath: region.filePath, hunkIndex: -1, lineIndex: idx, matchIndexInLine: m });
+                }
+              }
+            }
+          }
+        }
+
+        const processFile = (filePath: string) => {
+          const fileData = allFileHunks.get(filePath);
+          if (!fileData || fileData.isLoading || !fileData.hunks) return;
+          if (collapsedFiles.has(filePath)) return;
+          if (isBinaryFile(filePath)) return;
+
+          // Check large diff gate (mirrors FileRowComponent logic: >250 additions+deletions)
+          let additions = 0, deletions = 0;
+          for (const hunk of fileData.hunks) {
+            for (const line of hunk.lines) {
+              if (line.startsWith("+")) additions++;
+              else if (line.startsWith("-")) deletions++;
+            }
+          }
+          if (additions + deletions > 250 && !expandedLargeDiffs.has(filePath)) return;
+
+          for (let hunkIndex = 0; hunkIndex < fileData.hunks.length; hunkIndex++) {
+            const hunk = fileData.hunks[hunkIndex];
+            for (let lineIndex = 0; lineIndex < hunk.lines.length; lineIndex++) {
+              const lineText = hunk.lines[lineIndex].substring(1);
+              const mc = countLineMatches(lineText);
+              if (mc > 0) {
+                const key = `${filePath}:${hunkIndex}:${lineIndex}`;
+                matchesByKey.set(key, { firstGlobalIndex: matches.length, count: mc });
+                for (let m = 0; m < mc; m++) {
+                  matches.push({ filePath, hunkIndex, lineIndex, matchIndexInLine: m });
+                }
+              }
+            }
+          }
+        };
+
+        for (const file of files) {
+          processFile(file.path);
+        }
+        if (showCommittedChanges) {
+          for (const file of committedFiles) {
+            processFile(file.path);
+          }
+        }
+
+        return { matches, matchesByKey };
+      }, [debouncedSearchQuery, files, allFileHunks, collapsedFiles, expandedLargeDiffs, showCommittedChanges, committedFiles, conflictRegionsByFile]);
+
+      // Clamp currentMatchIndex when matches change
+      useEffect(() => {
+        if (searchData.matches.length === 0) {
+          setCurrentMatchIndex(0);
+        } else if (currentMatchIndex >= searchData.matches.length) {
+          setCurrentMatchIndex(0);
+        }
+      }, [searchData.matches.length]);
+
+      // Reset search state when workspace changes
+      useEffect(() => {
+        setIsSearchOpen(false);
+        setSearchQuery("");
+        setCurrentMatchIndex(0);
+      }, [workspacePath]);
+
+      // Keyboard shortcut: Ctrl/Cmd+F
+      useKeyboardShortcut("f", true, () => {
+        setIsSearchOpen(true);
+        setSearchFocusTrigger((n) => n + 1);
+      }, []);
+
+      // Search navigation handlers
+      const scrollToSearchMatch = useCallback((matchIdx: number) => {
+        if (!diffContainerRef.current || searchData.matches.length === 0) return;
+        const match = searchData.matches[matchIdx];
+        if (!match) return;
+
+        const searchId = match.hunkIndex === -1
+          ? `conflict:${match.filePath}:${match.lineIndex}`
+          : `${match.filePath}:${match.hunkIndex}:${match.lineIndex}`;
+
+        const el = diffContainerRef.current.querySelector(`[data-search-id="${CSS.escape(searchId)}"]`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, [searchData.matches]);
+
+      const handleSearchNext = useCallback(() => {
+        if (searchData.matches.length === 0) return;
+        const next = (currentMatchIndex + 1) % searchData.matches.length;
+        setCurrentMatchIndex(next);
+        scrollToSearchMatch(next);
+      }, [currentMatchIndex, searchData.matches.length, scrollToSearchMatch]);
+
+      const handleSearchPrevious = useCallback(() => {
+        if (searchData.matches.length === 0) return;
+        const prev = (currentMatchIndex - 1 + searchData.matches.length) % searchData.matches.length;
+        setCurrentMatchIndex(prev);
+        scrollToSearchMatch(prev);
+      }, [currentMatchIndex, searchData.matches.length, scrollToSearchMatch]);
+
+      const handleSearchClose = useCallback(() => {
+        setIsSearchOpen(false);
+        setSearchQuery("");
+        setCurrentMatchIndex(0);
+      }, []);
 
       // Track stale files that changed while user is in review mode
       const [staleFiles, setStaleFiles] = useState<Set<string>>(new Set());
@@ -3359,10 +3515,22 @@ export const ChangesDiffViewer = memo(
                 lineIndex === pendingComment.displayAtLineIndex;
               const selected = isLineSelected(filePath, hunkIndex, lineIndex);
 
+              // Search highlight info for this line
+              const searchKey = `${filePath}:${hunkIndex}:${lineIndex}`;
+              const searchLineData = searchData.matchesByKey.get(searchKey);
+              let searchCurrentOffset = -1;
+              if (searchLineData && debouncedSearchQuery) {
+                const globalFirst = searchLineData.firstGlobalIndex;
+                if (currentMatchIndex >= globalFirst && currentMatchIndex < globalFirst + searchLineData.count) {
+                  searchCurrentOffset = currentMatchIndex - globalFirst;
+                }
+              }
+
               return (
                 <Fragment key={`${hunk.id}-line-${lineIndex}`}>
                   <div
                     data-diff-line
+                    data-search-id={searchKey}
                     className={cn(
                       "group flex items-stretch",
                       getLineTypeClass(line),
@@ -3452,6 +3620,8 @@ export const ChangesDiffViewer = memo(
                       <HighlightedLine
                         content={line.substring(1) || " "}
                         language={language}
+                        searchQuery={debouncedSearchQuery || undefined}
+                        searchHighlightOffset={searchCurrentOffset}
                       />
                     </div>
                   </div>
@@ -3961,7 +4131,19 @@ export const ChangesDiffViewer = memo(
             )}
 
             {/* All Files Diffs */}
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden relative">
+              <SearchOverlay
+                isVisible={isSearchOpen}
+                query={searchQuery}
+                onQueryChange={(q) => { setSearchQuery(q); setCurrentMatchIndex(0); }}
+                onNext={handleSearchNext}
+                onPrevious={handleSearchPrevious}
+                onClose={handleSearchClose}
+                currentMatch={searchData.matches.length > 0 ? currentMatchIndex + 1 : 0}
+                totalMatches={searchData.matches.length}
+                className="absolute top-2 right-2 z-20"
+                focusTrigger={searchFocusTrigger}
+              />
               {initialLoading || loadingAllHunks ? (
                 <div className="h-full flex items-center justify-center text-muted-foreground">
                   <Loader2 className="w-6 h-6 animate-spin" />
@@ -4042,15 +4224,33 @@ export const ChangesDiffViewer = memo(
                                             {region.content.split('\n').map((line, idx) => {
                                               const isMarker = isJjConflictMarker(line);
                                               const bgClass = getConflictLineBackground(line);
+                                              const conflictSearchKey = `conflict:${region.id}:${idx}`;
+                                              const conflictLineData = searchData.matchesByKey.get(conflictSearchKey);
+                                              let conflictHighlightOffset = -1;
+                                              if (conflictLineData && debouncedSearchQuery) {
+                                                const gf = conflictLineData.firstGlobalIndex;
+                                                if (currentMatchIndex >= gf && currentMatchIndex < gf + conflictLineData.count) {
+                                                  conflictHighlightOffset = currentMatchIndex - gf;
+                                                }
+                                              }
+                                              const hasSearchHighlight = debouncedSearchQuery && conflictLineData;
+                                              const lineHtml = hasSearchHighlight
+                                                ? highlightInHtml(line, debouncedSearchQuery, conflictHighlightOffset).html
+                                                : null;
                                               return (
                                                 <div
                                                   key={idx}
+                                                  data-search-id={conflictSearchKey}
                                                   className={cn(
                                                     isMarker ? "text-muted-foreground" : "",
                                                     bgClass
                                                   )}
                                                 >
-                                                  {line}
+                                                  {lineHtml ? (
+                                                    <span dangerouslySetInnerHTML={{ __html: lineHtml }} />
+                                                  ) : (
+                                                    line
+                                                  )}
                                                 </div>
                                               );
                                             })}

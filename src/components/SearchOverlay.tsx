@@ -14,6 +14,7 @@ export interface SearchOverlayProps {
   currentMatch: number;
   totalMatches: number;
   className?: string;
+  focusTrigger?: number;
 }
 
 export function SearchOverlay({
@@ -26,15 +27,17 @@ export function SearchOverlay({
   currentMatch,
   totalMatches,
   className = "",
+  focusTrigger = 0,
 }: SearchOverlayProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Focus input when overlay becomes visible
+  // Focus and select input when overlay becomes visible or focus is re-requested
   useEffect(() => {
     if (isVisible && inputRef.current) {
       inputRef.current.focus();
+      inputRef.current.select();
     }
-  }, [isVisible]);
+  }, [isVisible, focusTrigger]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
