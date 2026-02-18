@@ -9,6 +9,7 @@ pub fn pty_create_session(
     working_dir: Option<String>,
     shell: Option<String>,
     initial_command: Option<String>,
+    suppress_echo_for: Option<String>,
 ) -> Result<(), String> {
     let pty_manager = state.pty_manager.lock().unwrap();
     let sid = session_id.clone();
@@ -18,6 +19,7 @@ pub fn pty_create_session(
         working_dir,
         shell,
         initial_command,
+        suppress_echo_for,
         Box::new(move |data| {
             let _ = app.emit(&format!("pty-data-{}", sid), data);
         }),
