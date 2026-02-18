@@ -483,6 +483,66 @@ fn test_can_squash_merge_workspace_into_home_repo() {
     );
 }
 
+#[test]
+fn test_can_rebase_merge_workspace_into_home_repo() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace: Workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feature-rebase",
+        Some("rebasing feature"),
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().unwrap();
+
+    let feature_file = workspace_path.join("rebase-feature.txt");
+    fs::write(&feature_file, "rebase feature content").expect("Failed to write feature file");
+    treq_lib::jj::jj_commit(workspace_path_str, "Add rebase feature")
+        .expect("Failed to commit");
+
+    treq_lib::core::merge_workspace(
+        &repo.repo_path,
+        workspace.id,
+        "Rebase feature-rebase onto main",
+        MergeCommit::Rebase,
+    )
+    .expect("Failed to rebase merge workspace");
+
+    let main_feature_file = Path::new(&repo.repo_path).join("rebase-feature.txt");
+    assert!(
+        main_feature_file.exists(),
+        "Feature file should exist in main repo after rebase merge"
+    );
+
+    let git_log = Command::new("git")
+        .current_dir(&repo.repo_path)
+        .args(["log", "-1", "--pretty=%s"])
+        .output()
+        .expect("Failed to run git log");
+    let git_log_str = String::from_utf8_lossy(&git_log.stdout);
+    assert_eq!(
+        git_log_str.trim(),
+        "Add rebase feature",
+        "Git log should contain the rebased commit message, got: {}",
+        git_log_str
+    );
+
+    assert!(
+        !workspace_path.exists(),
+        "Workspace directory should be deleted after rebase merge"
+    );
+
+    let workspaces =
+        treq_lib::core::list_workspaces(&repo.repo_path).expect("Failed to list workspaces");
+    assert!(
+        !workspaces.iter().any(|w| w.id == workspace.id),
+        "Rebased workspace should not appear in list_workspaces"
+    );
+}
+
 // TODO: rolling merge for stacked workspaces
 
 // TODO: merge individual workspace into another workspace
