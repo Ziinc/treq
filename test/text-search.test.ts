@@ -155,13 +155,42 @@ describe("text-search utilities", () => {
       expect(result.matchCount).toBe(1);
     });
 
-    it("handles matches that span across token boundaries", () => {
+    it("does NOT match text inside HTML tag attributes", () => {
+      // "token" exists in class attribute but NOT in visible text
+      const html = '<span class="token keyword">const</span>';
+      const result = highlightInHtml(html, "token", -1);
+
+      // Should NOT highlight "token" from the class attribute
+      expect(result.matchCount).toBe(0);
+      expect(result.html).not.toContain("<mark");
+      // HTML structure should be preserved
+      expect(result.html).toBe('<span class="token keyword">const</span>');
+    });
+
+    it("does NOT break HTML structure when search term appears in attributes", () => {
+      const html = '<span class="token punctuation">;</span> <span class="token keyword">let</span>';
+      const result = highlightInHtml(html, "token", -1);
+
+      // No matches in visible text, HTML preserved
+      expect(result.matchCount).toBe(0);
+      expect(result.html).toBe(html);
+    });
+
+    it("highlights text content while preserving surrounding HTML tags", () => {
+      const html = '<span class="token keyword">const</span> x = <span class="token number">42</span>';
+      const result = highlightInHtml(html, "const", -1);
+
+      // Should highlight "const" in text content only
+      expect(result.html).toBe('<span class="token keyword"><mark class="search-match">const</mark></span> x = <span class="token number">42</span>');
+      expect(result.matchCount).toBe(1);
+    });
+
+    it("does not match text that spans across HTML tag boundaries", () => {
       const html = '<span class="token">hel</span><span class="token">lo</span>';
       const result = highlightInHtml(html, "hello", -1);
 
-      // Should find the match even if it spans tokens
-      expect(result.html).toContain("mark");
-      expect(result.matchCount).toBe(1);
+      // Cross-tag matches are not supported — matches only within text nodes
+      expect(result.matchCount).toBe(0);
     });
 
     it("correctly counts matches in HTML content", () => {

@@ -273,16 +273,13 @@ code[class*="language-"] * {
 /* Search match highlighting */
 mark.search-match {
   background-color: hsl(var(--primary) / 0.3);
-  border-radius: 2px;
-  padding: 0 1px;
+  padding: 0;
   color: inherit;
 }
 
 mark.search-match-current {
   background-color: hsl(var(--primary) / 0.6);
-  outline: 2px solid hsl(var(--primary));
-  border-radius: 2px;
-  padding: 0 1px;
+  padding: 0;
   color: inherit;
 }
 

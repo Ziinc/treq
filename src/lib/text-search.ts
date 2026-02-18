@@ -60,55 +60,52 @@ export function highlightInHtml(
   // Use simple highlighting - works reliably across environments
   const result = simpleHighlight(html, query, currentMatchIndex);
 
-  // Count matches
-  const escapedQuery = escapeRegex(query);
-  const regex = new RegExp(escapedQuery, "gi");
-  const textContent = extractTextFromHtml(html);
-  const matches = textContent.match(regex) || [];
-
-  return { html: result, matchCount: matches.length };
+  return { html: result.html, matchCount: result.matchCount };
 }
 
 /**
- * Simple fallback highlighting that works on text content
+ * Highlights search matches in text content only, skipping HTML tags.
+ * Splits HTML into tag vs text segments and only applies highlighting to text segments.
  */
 function simpleHighlight(
-  text: string,
+  html: string,
   query: string,
   currentMatchIndex: number
-): string {
+): { html: string; matchCount: number } {
   const escapedQuery = escapeRegex(query);
   const regex = new RegExp(escapedQuery, "gi");
 
+  // Split HTML into tags and text segments
+  const parts = html.split(/(<[^>]*>)/);
+
   let result = "";
-  let lastIndex = 0;
-  let match;
   let matchCount = 0;
 
-  while ((match = regex.exec(text)) !== null) {
-    // Add text before match
-    result += text.substring(lastIndex, match.index);
+  for (const part of parts) {
+    if (part.startsWith("<")) {
+      // HTML tag — pass through unchanged
+      result += part;
+    } else {
+      // Text content — apply highlighting
+      let lastIndex = 0;
+      let match;
+      regex.lastIndex = 0;
 
-    // Add marked text
-    const isCurrentMatch = matchCount === currentMatchIndex;
-    const className = isCurrentMatch ? "search-match-current" : "search-match";
-    result += `<mark class="${className}">${match[0]}</mark>`;
-
-    lastIndex = match.index + match[0].length;
-    matchCount++;
+      let segment = "";
+      while ((match = regex.exec(part)) !== null) {
+        segment += part.substring(lastIndex, match.index);
+        const isCurrentMatch = matchCount === currentMatchIndex;
+        const className = isCurrentMatch
+          ? "search-match-current"
+          : "search-match";
+        segment += `<mark class="${className}">${match[0]}</mark>`;
+        lastIndex = match.index + match[0].length;
+        matchCount++;
+      }
+      segment += part.substring(lastIndex);
+      result += segment;
+    }
   }
 
-  // Add remaining text
-  result += text.substring(lastIndex);
-
-  return result;
-}
-
-/**
- * Extracts plain text content from HTML string
- */
-function extractTextFromHtml(html: string): string {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, "text/html");
-  return doc.body.textContent || "";
+  return { html: result, matchCount };
 }
