@@ -18,6 +18,7 @@ pub struct WorkspaceCommit {
 pub enum MergeCommit {
     Merge,
     Squash,
+    Rebase,
 }
 
 pub enum MaybeEmptyParam<T> {
@@ -693,6 +694,18 @@ pub fn merge_workspace(
         MergeCommit::Squash => {
             jj::jj_squash_merge_commit(repo_path, &workspace.branch_name, target_branch, message)
                 .map_err(|e| format!("Failed to squash merge workspace: {}", e))?;
+        }
+        MergeCommit::Rebase => {
+            let rebase_result = jj::jj_rebase_merge_commit(
+                repo_path,
+                &workspace.branch_name,
+                target_branch,
+            )
+            .map_err(|e| format!("Failed to rebase merge workspace: {}", e))?;
+
+            if !rebase_result.success {
+                return Err(format!("Rebase merge failed: {}", rebase_result.message));
+            }
         }
     }
 
