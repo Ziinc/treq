@@ -1,3 +1,4 @@
+use crate::conflict_markers;
 use crate::jj;
 use crate::AppState;
 use tauri::{AppHandle, State};
@@ -76,10 +77,15 @@ pub fn jj_get_changed_files(workspace_path: String) -> Result<Vec<jj::JjFileChan
 
 #[tauri::command]
 pub fn jj_get_file_hunks(
+    state: State<AppState>,
     workspace_path: String,
     file_path: String,
 ) -> Result<Vec<jj::JjDiffHunk>, String> {
-    jj::jj_get_file_hunks(&workspace_path, &file_path).map_err(|e| e.to_string())
+    let conflict_style = state.db.lock().unwrap()
+        .get_setting("conflict_marker_style")
+        .ok().flatten()
+        .unwrap_or_else(|| "git".to_string());
+    jj::jj_get_file_hunks(&workspace_path, &file_path, &conflict_style).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -166,10 +172,15 @@ pub fn jj_init(state: State<AppState>, repo_path: String) -> Result<bool, String
 /// Rebase workspace onto a target branch
 #[tauri::command]
 pub fn jj_rebase_onto(
+    state: State<AppState>,
     workspace_path: String,
     target_branch: String,
 ) -> Result<jj::JjRebaseResult, String> {
-    jj::jj_rebase_onto(&workspace_path, &target_branch).map_err(|e| e.to_string())
+    let conflict_style = state.db.lock().unwrap()
+        .get_setting("conflict_marker_style")
+        .ok().flatten()
+        .unwrap_or_else(|| "git".to_string());
+    jj::jj_rebase_onto(&workspace_path, &target_branch, &conflict_style).map_err(|e| e.to_string())
 }
 
 /// Get list of conflicted files in workspace
@@ -223,8 +234,12 @@ pub fn jj_git_fetch_background(repo_path: String) -> Result<(), String> {
 
 /// Pull changes from remote using jj git fetch + rebase
 #[tauri::command]
-pub fn jj_pull(workspace_path: String) -> Result<String, String> {
-    jj::jj_pull(&workspace_path).map_err(|e| e.to_string())
+pub fn jj_pull(state: State<AppState>, workspace_path: String) -> Result<String, String> {
+    let conflict_style = state.db.lock().unwrap()
+        .get_setting("conflict_marker_style")
+        .ok().flatten()
+        .unwrap_or_else(|| "git".to_string());
+    jj::jj_pull(&workspace_path, &conflict_style).map_err(|e| e.to_string())
 }
 
 /// Get commit log for a workspace
@@ -249,21 +264,31 @@ pub fn jj_get_commits_ahead(
 /// Get combined diff between workspace and target branch
 #[tauri::command]
 pub fn jj_get_merge_diff(
+    state: State<AppState>,
     workspace_path: String,
     target_branch: String,
 ) -> Result<jj::JjRevisionDiff, String> {
-    jj::jj_get_merge_diff(&workspace_path, &target_branch).map_err(|e| e.to_string())
+    let conflict_style = state.db.lock().unwrap()
+        .get_setting("conflict_marker_style")
+        .ok().flatten()
+        .unwrap_or_else(|| "git".to_string());
+    jj::jj_get_merge_diff(&workspace_path, &target_branch, &conflict_style).map_err(|e| e.to_string())
 }
 
 /// Create a merge commit combining workspace changes with target branch
 #[tauri::command]
 pub fn jj_create_merge(
+    state: State<AppState>,
     workspace_path: String,
     workspace_branch: String,
     target_branch: String,
     message: String,
 ) -> Result<jj::JjMergeResult, String> {
-    jj::jj_create_merge_commit(&workspace_path, &workspace_branch, &target_branch, &message)
+    let conflict_style = state.db.lock().unwrap()
+        .get_setting("conflict_marker_style")
+        .ok().flatten()
+        .unwrap_or_else(|| "git".to_string());
+    jj::jj_create_merge_commit(&workspace_path, &workspace_branch, &target_branch, &message, &conflict_style)
         .map_err(|e| e.to_string())
 }
 
@@ -375,4 +400,20 @@ pub fn jj_track_workspace_bookmarks(
     }
 
     Ok(result)
+}
+
+/// Parse conflict markers from file content.
+///
+/// # Arguments
+/// * `content` - The full text content of a file
+/// * `file_path` - Path to the file (used for generating region IDs)
+///
+/// # Returns
+/// A vector of conflict regions found in the content.
+#[tauri::command]
+pub fn parse_conflict_markers(
+    content: String,
+    file_path: String,
+) -> Vec<conflict_markers::ConflictRegion> {
+    conflict_markers::parse_conflict_markers(&content, &file_path)
 }

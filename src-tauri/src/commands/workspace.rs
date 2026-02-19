@@ -267,6 +267,7 @@ pub fn ensure_workspace_indexed(
 
 #[tauri::command]
 pub fn set_workspace_target_branch(
+    state: State<AppState>,
     repo_path: String,
     workspace_path: String,
     id: i64,
@@ -285,13 +286,18 @@ pub fn set_workspace_target_branch(
         ));
     }
 
+    let conflict_style = state.db.lock().unwrap()
+        .get_setting("conflict_marker_style")
+        .ok().flatten()
+        .unwrap_or_else(|| "git".to_string());
+
     // Convert Git remote branch format (origin/main) to jj format (main@origin)
     let jj_branch_name =
         crate::jj::convert_git_branch_to_jj_format_public(&target_branch, &repo_path);
 
     // Perform rebase
     let rebase_result =
-        jj::jj_rebase_onto(&workspace_path, &jj_branch_name).map_err(|e| e.to_string())?;
+        jj::jj_rebase_onto(&workspace_path, &jj_branch_name, &conflict_style).map_err(|e| e.to_string())?;
 
     // If rebase succeeded, save the target branch (in Git format for UI)
     if rebase_result.success {
@@ -311,17 +317,23 @@ pub struct SingleRebaseResult {
 
 #[tauri::command]
 pub fn check_and_rebase_workspaces(
+    state: State<AppState>,
     repo_path: String,
     workspace_id: Option<i64>,
     default_branch: Option<String>,
     force: Option<bool>,
 ) -> Result<SingleRebaseResult, String> {
+    let conflict_style = state.db.lock().unwrap()
+        .get_setting("conflict_marker_style")
+        .ok().flatten()
+        .unwrap_or_else(|| "git".to_string());
+
     // If workspace_id provided, only rebase that workspace
     if let Some(id) = workspace_id {
         let default_branch = default_branch.unwrap_or_else(|| "main".to_string());
         let force = force.unwrap_or(false);
         let result =
-            crate::auto_rebase::rebase_single_workspace(&repo_path, id, &default_branch, force)?;
+            crate::auto_rebase::rebase_single_workspace(&repo_path, id, &default_branch, force, &conflict_style)?;
 
         match result {
             Some(auto_result) => Ok(SingleRebaseResult {
@@ -337,7 +349,7 @@ pub fn check_and_rebase_workspaces(
         }
     } else {
         // Existing behavior: rebase all workspaces
-        let results = crate::auto_rebase::check_and_rebase_all(&repo_path)?;
+        let results = crate::auto_rebase::check_and_rebase_all(&repo_path, &conflict_style)?;
 
         // Aggregate results
         let rebased_count: usize = results.iter().map(|r| r.workspaces_rebased.len()).sum();

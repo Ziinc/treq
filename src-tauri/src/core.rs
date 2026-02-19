@@ -687,7 +687,7 @@ pub fn merge_workspace(
 
     match merge_strategy {
         MergeCommit::Merge => {
-            jj::jj_create_merge_commit(repo_path, &workspace.branch_name, target_branch, message)
+            jj::jj_create_merge_commit(repo_path, &workspace.branch_name, target_branch, message, "diff")
                 .map_err(|e| format!("Failed to create merge commit: {}", e))?;
         }
         MergeCommit::Squash => {
@@ -739,7 +739,7 @@ pub fn update_workspace(
         MaybeEmptyParam::EmptyValue => {
             local_db::update_workspace_target_branch(repo_path, workspace_id, "main")
                 .map_err(|e| format!("Failed to update target branch: {}", e))?;
-            jj::jj_rebase_onto(workspace_path_str, "main")
+            jj::jj_rebase_onto(workspace_path_str, "main", "diff")
                 .map_err(|e| format!("Failed to rebase workspace: {}", e))?;
         }
         MaybeEmptyParam::Some(branch) => {
@@ -747,7 +747,7 @@ pub fn update_workspace(
             let _ = jj::jj_git_fetch(repo_path);
 
             // Rebase workspace onto the target commit
-            let rebase_result = jj::jj_rebase_onto(workspace_path_str, &branch)
+            let rebase_result = jj::jj_rebase_onto(workspace_path_str, &branch, "diff")
                 .map_err(|e| format!("Failed to rebase workspace: {}", e))?;
 
             if !rebase_result.success {
@@ -1090,7 +1090,7 @@ pub fn split_workspace(
             .map_err(|e| format!("Failed to update source target: {}", e))?;
 
             // Rebase source onto new workspace
-            jj::jj_rebase_onto(&source_full_path, &new_workspace.branch_name)
+            jj::jj_rebase_onto(&source_full_path, &new_workspace.branch_name, "diff")
                 .map_err(|e| format!("Failed to rebase source: {}", e))?;
 
             // Refresh working copies

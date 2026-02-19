@@ -33,6 +33,7 @@ fn convert_to_jj_branch_format(branch: &str, repo_path: &str) -> String {
 pub fn rebase_workspaces_for_target(
     repo_path: &str,
     target_branch: &str,
+    conflict_marker_style: &str,
 ) -> Result<Option<AutoRebaseResult>, String> {
     // Get all workspaces targeting this branch
     let workspaces = local_db::get_workspaces_by_target_branch(repo_path, target_branch)?;
@@ -86,6 +87,7 @@ pub fn rebase_workspaces_for_target(
             &revset,
             &jj_target_branch,
             &workspace.branch_name, // Set bookmark after rebase
+            conflict_marker_style,
         );
 
         match rebase_result {
@@ -154,11 +156,12 @@ pub fn rebase_after_commit(
     committed_branch: &str,
 ) -> Result<Option<AutoRebaseResult>, String> {
     // Rebase all workspaces targeting the committed branch
-    rebase_workspaces_for_target(repo_path, committed_branch)
+    // Use default "diff" style for fire-and-forget background rebase
+    rebase_workspaces_for_target(repo_path, committed_branch, "diff")
 }
 
 /// Check and rebase all workspaces in the repo, grouped by target branch
-pub fn check_and_rebase_all(repo_path: &str) -> Result<Vec<AutoRebaseResult>, String> {
+pub fn check_and_rebase_all(repo_path: &str, conflict_marker_style: &str) -> Result<Vec<AutoRebaseResult>, String> {
     // Get all workspaces
     let all_workspaces = local_db::get_workspaces(repo_path)?;
 
@@ -234,6 +237,7 @@ pub fn check_and_rebase_all(repo_path: &str) -> Result<Vec<AutoRebaseResult>, St
                 &revset,
                 &jj_target_branch,
                 &workspace.branch_name, // Set bookmark after rebase
+                conflict_marker_style,
             ) {
                 Ok(result) => {
                     workspace_branches.push(workspace.branch_name.clone());
@@ -314,6 +318,7 @@ pub fn rebase_single_workspace(
     workspace_id: i64,
     default_branch: &str,
     force: bool,
+    conflict_marker_style: &str,
 ) -> Result<Option<AutoRebaseResult>, String> {
     // Get the specific workspace from DB
     let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)?
@@ -361,6 +366,7 @@ pub fn rebase_single_workspace(
         &revset,
         &jj_target_branch,
         &workspace.branch_name, // Set bookmark after rebase
+        conflict_marker_style,
     )
     .map_err(|e| format!("Rebase failed: {}", e))?;
 
