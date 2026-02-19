@@ -112,7 +112,7 @@ export interface JjMergeResult {
   merge_commit_id: string | null;
 }
 
-export type MergeStrategy = "merge" | "squash";
+export type MergeStrategy = "merge" | "squash" | "rebase";
 
 export interface JjFileDiff {
   path: string;
