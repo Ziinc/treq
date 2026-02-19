@@ -843,3 +843,21 @@ export const stopFileWatcher = (
   workspaceId: number,
   workspacePath: string
 ): Promise<void> => invoke("stop_file_watcher", { workspaceId, workspacePath });
+
+// Conflict marker parsing
+export interface ConflictRegion {
+  id: string;
+  filePath: string;
+  conflictNumber: number;
+  totalConflicts: number;
+  startLine: number;
+  endLine: number;
+  content: string;
+  markerStyle: "jj" | "git";
+}
+
+export const parseConflictMarkers = (
+  content: string,
+  filePath: string
+): Promise<ConflictRegion[]> =>
+  invoke("parse_conflict_markers", { content, filePath });

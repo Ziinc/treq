@@ -29,9 +29,12 @@ import {
   clearPendingReview,
   jjGetMergeDiff,
   jjGetFileLines,
+  getSetting,
+  parseConflictMarkers,
   type JjDiffHunk,
   type JjFileChange,
   type JjRevisionDiff,
+  type ConflictRegion,
 } from "../lib/api";
 import { useDebounce } from "../hooks/useDebounce";
 import { useCachedWorkspaceChanges } from "../hooks/useCachedWorkspaceChanges";
@@ -135,15 +138,6 @@ interface LineComment {
   lineSide?: "old" | "new";
 }
 
-interface ConflictRegion {
-  id: string;
-  filePath: string;
-  conflictNumber: number;  // e.g., "1" from "Conflict..."
-  totalConflicts: number;  // e.g., "3" from "Conflict..."
-  startLine: number;       // line number of  marker
-  endLine: number;         // line number of  marker
-  content: string;         // full conflict content including markers
-}
 
 interface ConflictComment {
   id: string;
@@ -185,14 +179,14 @@ const getLinePrefix = (line: string): string => {
   return " ";
 };
 
-// Helper to detect JJ conflict markers
-const isJjConflictMarker = (line: string): boolean => {
-  return /^(<{7}\s+Conflict|>{7}\s+Conflict|%{7}|\+{7}|-{7})/.test(line);
+// Helper to detect conflict markers (JJ diff, JJ snapshot, and git diff3 styles)
+const isConflictMarker = (line: string): boolean => {
+  return /^(<{7}|>{7}|%{7}|\+{7}|-{7}|\|{7}|={7})/.test(line);
 };
 
 // Helper to get background color for conflict lines
 const getConflictLineBackground = (line: string): string => {
-  if (isJjConflictMarker(line)) return "";
+  if (isConflictMarker(line)) return "";
   if (line.startsWith("-")) return "bg-red-500/20";
   if (line.startsWith("+")) return "bg-emerald-500/20";
   return "";
@@ -233,46 +227,6 @@ const parseCachedHunks = (raw: string): JjDiffHunk[] | null => {
     // Silently ignore parse failures
   }
   return null;
-};
-
-// Parse JJ conflict markers from file content
-const parseConflictMarkers = (content: string, filePath: string): ConflictRegion[] => {
-  const lines = content.split('\n');
-  const regions: ConflictRegion[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const startMatch = line.match(/^\s*<{7}\s+Conflict\s+(\d+)\s+of\s+(\d+)/);
-    if (startMatch) {
-      const conflictNumber = parseInt(startMatch[1], 10);
-      const totalConflicts = parseInt(startMatch[2], 10);
-      const startLine = i + 1; // 1-indexed
-
-      // Find the end marker
-      let endLine = startLine;
-      let conflictContent = line + '\n';
-      for (let j = i + 1; j < lines.length; j++) {
-        conflictContent += lines[j] + '\n';
-        if (lines[j].match(/^\s*>{7}\s+Conflict\s+\d+\s+of\s+\d+\s+ends/)) {
-          endLine = j + 1; // 1-indexed
-          i = j; // Skip to end of this conflict
-          break;
-        }
-      }
-
-      regions.push({
-        id: `${filePath}-conflict-${conflictNumber}`,
-        filePath,
-        conflictNumber,
-        totalConflicts,
-        startLine,
-        endLine,
-        content: conflictContent.trim(),
-      });
-    }
-  }
-
-  return regions;
 };
 
 // Parse hunk header to extract starting line numbers and counts
@@ -740,7 +694,7 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
                 <div className="p-0 relative">
                   <pre className="text-sm font-mono overflow-x-auto bg-muted/30 p-3 rounded whitespace-pre-wrap break-all">
                     {region.content.split('\n').map((line, idx) => {
-                      const isMarker = isJjConflictMarker(line);
+                      const isMarker = isConflictMarker(line);
                       const bgClass = getConflictLineBackground(line);
                       return (
                         <div
@@ -1227,6 +1181,7 @@ export const ChangesDiffViewer = memo(
         y: number;
       } | null>(null);
       const [commitPending, setCommitPending] = useState(false);
+      const [conflictMarkerStyle, setConflictMarkerStyle] = useState<string>("git");
       const commitInputRef = useRef<CommitInputHandle>(null);
       const prevFilePathsRef = useRef<string[]>([]);
       const diffContainerRef = useRef<HTMLDivElement>(null);
@@ -1280,135 +1235,85 @@ export const ChangesDiffViewer = memo(
         finalReviewComment,
       ]);
 
-      // Compute actual conflicted files and their conflict regions
-      const { actualConflictedFiles, conflictRegionsByFile } = useMemo(() => {
-        const conflicted: string[] = [];
-        const regionsByFile = new Map<string, ConflictRegion[]>();
+      const [actualConflictedFiles, setActualConflictedFiles] = useState<string[]>([]);
+      const [conflictRegionsByFile, setConflictRegionsByFile] = useState<Map<string, ConflictRegion[]>>(new Map());
 
-        // Safety check - ensure files array exists
-        if (!files || !Array.isArray(files)) {
-          return { actualConflictedFiles: conflicted, conflictRegionsByFile: regionsByFile };
-        }
+      const filesWithMarkers = useMemo(() => {
+        const result: { filePath: string; content: string }[] = [];
 
-        try {
-          for (const file of files) {
-            // Skip if file or path is invalid
-            if (!file || !file.path) {
-              continue;
-            }
+        const extractContent = (hunks: JjDiffHunk[]): string | null => {
+          const lines: string[] = [];
+          let hasConflictMarkers = false;
 
-            const fileHunksData = allFileHunks.get(file.path);
-            if (!fileHunksData || fileHunksData.isLoading || !fileHunksData.hunks) {
-              continue;
-            }
-
-            // Reconstruct file content from hunks
-            const lines: string[] = [];
-            let hasConflictMarkers = false;
-
-            for (const hunk of fileHunksData.hunks) {
-              if (!hunk || !hunk.lines) continue;
-
-              for (const line of hunk.lines) {
-                if (!line) continue;
-
-                // For additions (+), include them as they represent the current state
-                if (line.startsWith('+')) {
-                  const content = line.substring(1);
-                  lines.push(content);
-                  // Check for conflict markers in lines we're actually including
-                  if (content.includes('<<<<<<< Conflict') || content.includes('>>>>>>> Conflict')) {
-                    hasConflictMarkers = true;
-                  }
-                } else if (line.startsWith(' ')) {
-                  const content = line.substring(1); // Context lines
-                  lines.push(content);
-                  // Check for conflict markers in lines we're actually including
-                  if (content.includes('<<<<<<< Conflict') || content.includes('>>>>>>> Conflict')) {
-                    hasConflictMarkers = true;
-                  }
+          for (const hunk of hunks) {
+            if (!hunk || !hunk.lines) continue;
+            for (const line of hunk.lines) {
+              if (!line) continue;
+              if (line.startsWith('+') || line.startsWith(' ')) {
+                const content = line.substring(1);
+                lines.push(content);
+                if (content.includes('<<<<<<<')) {
+                  hasConflictMarkers = true;
                 }
-                // Skip removal lines (-)
-              }
-            }
-
-            // If this file has conflicts, parse the regions
-            if (hasConflictMarkers) {
-              const content = lines.join('\n');
-              const regions = parseConflictMarkers(content, file.path);
-
-              if (regions.length > 0) {
-                conflicted.push(file.path);
-                regionsByFile.set(file.path, regions);
               }
             }
           }
-        } catch (error) {
-          console.error('Error computing conflicted files:', error);
-        }
 
-        // Also check committed files for conflicts
-        if (showCommittedChanges && committedFiles && Array.isArray(committedFiles)) {
-          try {
-            for (const file of committedFiles) {
-              // Skip if file or path is invalid
-              if (!file || !file.path) {
-                continue;
-              }
+          return hasConflictMarkers ? lines.join('\n') : null;
+        };
 
-              const fileHunksData = allFileHunks.get(file.path);
-              if (!fileHunksData || fileHunksData.isLoading || !fileHunksData.hunks) {
-                continue;
-              }
+        const allFiles = [
+          ...(files && Array.isArray(files) ? files : []),
+          ...(showCommittedChanges && committedFiles && Array.isArray(committedFiles) ? committedFiles : []),
+        ];
 
-              // Reconstruct file content from hunks
-              const lines: string[] = [];
-              let hasConflictMarkers = false;
-
-              for (const hunk of fileHunksData.hunks) {
-                if (!hunk || !hunk.lines) continue;
-
-                for (const line of hunk.lines) {
-                  if (!line) continue;
-
-                  // For additions (+), include them as they represent the current state
-                  if (line.startsWith('+')) {
-                    const content = line.substring(1);
-                    lines.push(content);
-                    // Check for conflict markers
-                    if (content.includes('<<<<<<< Conflict') || content.includes('>>>>>>> Conflict')) {
-                      hasConflictMarkers = true;
-                    }
-                  } else if (line.startsWith(' ')) {
-                    const content = line.substring(1); // Context lines
-                    lines.push(content);
-                    // Check for conflict markers
-                    if (content.includes('<<<<<<< Conflict') || content.includes('>>>>>>> Conflict')) {
-                      hasConflictMarkers = true;
-                    }
-                  }
-                  // Skip removal lines (-)
-                }
-              }
-
-              // If this file has conflicts, parse the regions
-              if (hasConflictMarkers) {
-                const content = lines.join('\n');
-                const regions = parseConflictMarkers(content, file.path);
-
-                if (regions.length > 0) {
-                  conflicted.push(file.path);
-                  regionsByFile.set(file.path, regions);
-                }
-              }
-            }
-          } catch (error) {
-            console.error('Error computing committed file conflicts:', error);
+        for (const file of allFiles) {
+          if (!file || !file.path) continue;
+          const fileHunksData = allFileHunks.get(file.path);
+          if (!fileHunksData || fileHunksData.isLoading || !fileHunksData.hunks) continue;
+          const content = extractContent(fileHunksData.hunks);
+          if (content) {
+            result.push({ filePath: file.path, content });
           }
         }
 
-        return { actualConflictedFiles: conflicted, conflictRegionsByFile: regionsByFile };
+        return result;
       }, [files, allFileHunks, showCommittedChanges, committedFiles]);
+
+      useEffect(() => {
+        if (filesWithMarkers.length === 0) {
+          setActualConflictedFiles([]);
+          setConflictRegionsByFile(new Map());
+          return;
+        }
+
+        const expectedStyle: "jj" | "git" = conflictMarkerStyle === "git" ? "git" : "jj";
+        let cancelled = false;
+
+        Promise.all(
+          filesWithMarkers.map(({ filePath, content }) =>
+            parseConflictMarkers(content, filePath).then(allRegions => {
+              const filtered = allRegions.filter(r => r.markerStyle === expectedStyle);
+              const regions = filtered.length > 0 ? filtered : (allRegions.length > 0 ? allRegions : null);
+              return { filePath, regions };
+            })
+          )
+        ).then(results => {
+          if (cancelled) return;
+          const conflicted: string[] = [];
+          const regionsByFile = new Map<string, ConflictRegion[]>();
+          for (const { filePath, regions } of results) {
+            if (regions) {
+              conflicted.push(filePath);
+              regionsByFile.set(filePath, regions);
+            }
+          }
+          setActualConflictedFiles(conflicted);
+          setConflictRegionsByFile(regionsByFile);
+        });
+
+        return () => { cancelled = true; };
+      }, [filesWithMarkers, conflictMarkerStyle]);
 
       // Search: compute matches across all visible diff lines
       const searchData = useMemo(() => {
@@ -1503,6 +1408,13 @@ export const ChangesDiffViewer = memo(
         setSearchQuery("");
         setCurrentMatchIndex(0);
       }, [workspacePath]);
+
+      // Load conflict marker style setting
+      useEffect(() => {
+        getSetting("conflict_marker_style").then((style: string | null) => {
+          if (style) setConflictMarkerStyle(style);
+        });
+      }, []);
 
       // Keyboard shortcut: Ctrl/Cmd+F
       useKeyboardShortcut("f", true, () => {
@@ -4222,7 +4134,7 @@ export const ChangesDiffViewer = memo(
                                         <div className="p-0 relative">
                                           <pre className="text-sm font-mono overflow-x-auto bg-muted/30 p-3 rounded whitespace-pre-wrap break-all">
                                             {region.content.split('\n').map((line, idx) => {
-                                              const isMarker = isJjConflictMarker(line);
+                                              const isMarker = isConflictMarker(line);
                                               const bgClass = getConflictLineBackground(line);
                                               const conflictSearchKey = `conflict:${region.id}:${idx}`;
                                               const conflictLineData = searchData.matchesByKey.get(conflictSearchKey);

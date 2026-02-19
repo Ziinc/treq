@@ -27,6 +27,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 }) => {
   const [currentTab, setCurrentTab] = useState<TabValue>("repository");
   const [defaultModel, setDefaultModel] = useState<string>("");
+  const [conflictMarkerStyle, setConflictMarkerStyle] = useState<string>("git");
   const [originalFontSize, setOriginalFontSize] = useState<number | null>(null);
   const [localFontSize, setLocalFontSize] = useState<number>(12);
 
@@ -39,6 +40,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     getSetting("default_model").then((model: string | null) => {
       if (model) setDefaultModel(model);
     });
+    getSetting("conflict_marker_style").then((style: string | null) => {
+      if (style) setConflictMarkerStyle(style);
+    });
     // Store original font size and initialize local font size
     setOriginalFontSize(fontSize);
     setLocalFontSize(fontSize);
@@ -47,6 +51,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const handleSaveApplicationSettings = async () => {
     try {
       await setSetting("default_model", defaultModel);
+      await setSetting("conflict_marker_style", conflictMarkerStyle);
       await setFontSize(localFontSize);
 
       addToast({
@@ -185,6 +190,23 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       </select>
                       <p className="text-sm text-muted-foreground mt-1">
                         Default model for new Claude Code sessions
+                      </p>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="conflict-marker-style">Conflict Marker Style</Label>
+                      <select
+                        id="conflict-marker-style"
+                        value={conflictMarkerStyle}
+                        onChange={(e) => setConflictMarkerStyle(e.target.value)}
+                        className="mt-2 w-full px-3 py-2 border rounded-md bg-background text-foreground"
+                      >
+                        <option value="git">Git Diff3 (Default)</option>
+                        <option value="diff">JJ Diff</option>
+                        <option value="snapshot">JJ Snapshot</option>
+                      </select>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Style of conflict markers written to files during rebase. Git Diff3 is compatible with most editors.
                       </p>
                     </div>
                   </div>

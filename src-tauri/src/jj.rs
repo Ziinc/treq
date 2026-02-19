@@ -16,6 +16,17 @@ fn command_for(binary: &str) -> Command {
     Command::new(path)
 }
 
+/// Create a jj Command with conflict-marker-style config applied
+fn jj_command(conflict_marker_style: &str) -> Command {
+    let mut cmd = command_for("jj");
+    let style = match conflict_marker_style {
+        "snapshot" | "git" => conflict_marker_style,
+        _ => "diff",
+    };
+    cmd.args(["--config", &format!("ui.conflict-marker-style=\"{}\"", style)]);
+    cmd
+}
+
 /// Convert git remote branch format to jj bookmark format
 /// Examples: "origin/main" -> "main@origin" (if origin is a remote)
 ///           "treq/test" -> "treq/test" (if treq is not a remote)
@@ -1254,9 +1265,10 @@ fn parse_jj_status(status: &str) -> Result<Vec<JjFileChange>, JjError> {
 pub fn jj_get_file_hunks(
     workspace_path: &str,
     file_path: &str,
+    conflict_marker_style: &str,
 ) -> Result<Vec<JjDiffHunk>, JjError> {
     // Use jj diff --git to get hunks in git-compatible format
-    let output = command_for("jj")
+    let output = jj_command(conflict_marker_style)
         .current_dir(workspace_path)
         .args(["diff", "--git", "--no-pager", "--", file_path])
         .output()
@@ -1710,8 +1722,9 @@ pub fn jj_split(
 pub fn jj_rebase_onto(
     workspace_path: &str,
     target_branch: &str,
+    conflict_marker_style: &str,
 ) -> Result<JjRebaseResult, JjError> {
-    let output = command_for("jj")
+    let output = jj_command(conflict_marker_style)
         .current_dir(workspace_path)
         .args(["rebase", "-d", target_branch])
         .output()
@@ -2047,8 +2060,9 @@ pub fn jj_rebase_with_revset(
     revset: &str,
     target_branch: &str,
     _branch_name: &str, // No longer used after switching to bookmark-only rebasing
+    conflict_marker_style: &str,
 ) -> Result<JjRebaseResult, JjError> {
-    let output = command_for("jj")
+    let output = jj_command(conflict_marker_style)
         .current_dir(working_dir)
         .args(["rebase", "-s", revset, "-d", target_branch])
         .output()
@@ -2267,7 +2281,7 @@ pub fn jj_git_fetch(repo_path: &str) -> Result<String, JjError> {
 
 /// Pull changes from remote using jj git fetch + rebase
 /// Fetches from origin and rebases current workspace onto tracking branch
-pub fn jj_pull(workspace_path: &str) -> Result<String, JjError> {
+pub fn jj_pull(workspace_path: &str, conflict_marker_style: &str) -> Result<String, JjError> {
     // First, fetch from remote
     let fetch_output = command_for("jj")
         .current_dir(workspace_path)
@@ -2295,7 +2309,7 @@ pub fn jj_pull(workspace_path: &str) -> Result<String, JjError> {
 
     // Rebase onto the tracking branch (branch@origin)
     let tracking_branch = format!("{}@origin", branch_name);
-    let rebase_output = command_for("jj")
+    let rebase_output = jj_command(conflict_marker_style)
         .current_dir(workspace_path)
         .args(["rebase", "-d", &tracking_branch])
         .output()
@@ -2814,6 +2828,7 @@ fn extract_conflicted_files_from_summary(files: Vec<JjFileChange>) -> Vec<String
 pub fn jj_get_merge_diff(
     workspace_path: &str,
     target_branch: &str,
+    conflict_marker_style: &str,
 ) -> Result<JjRevisionDiff, JjError> {
     // Validate target_branch to prevent injection
     if target_branch.starts_with('-') || target_branch.contains('\0') || target_branch.is_empty() {
@@ -2839,7 +2854,7 @@ pub fn jj_get_merge_diff(
     // For each file, get the hunks
     let mut hunks_by_file = Vec::new();
     for file in &files {
-        let diff_output = command_for("jj")
+        let diff_output = jj_command(conflict_marker_style)
             .current_dir(workspace_path)
             .args([
                 "diff",
@@ -2887,6 +2902,7 @@ pub fn jj_create_merge_commit(
     workspace_branch: &str,
     target_branch: &str,
     message: &str,
+    conflict_marker_style: &str,
 ) -> Result<JjMergeResult, JjError> {
     if workspace_branch.starts_with('-')
         || workspace_branch.contains('\0')
@@ -2913,7 +2929,7 @@ pub fn jj_create_merge_commit(
 
     // Step 1: Create merge commit with workspace_branch and target_branch+ as parents
     let target_revset = format!("{}+", target_branch);
-    let output = command_for("jj")
+    let output = jj_command(conflict_marker_style)
         .current_dir(workspace_path)
         .args(["new", workspace_branch, &target_revset, "-m", message])
         .output()
@@ -3762,7 +3778,7 @@ target/debug/deps/lib.so    2-sided conflict including 1 deletion and an executa
 
         // Call jj_get_merge_diff comparing main to main (no commits)
         // Since there are NO commits on main (main = main), the result should be EMPTY
-        let result = jj_get_merge_diff(repo_path.to_str().unwrap(), "main");
+        let result = jj_get_merge_diff(repo_path.to_str().unwrap(), "main", "diff");
 
         assert!(result.is_ok(), "jj_get_merge_diff should succeed");
         let diff = result.unwrap();
@@ -3856,7 +3872,7 @@ target/debug/deps/lib.so    2-sided conflict including 1 deletion and an executa
         fs::write(repo_path.join("working_copy.txt"), "uncommitted changes").unwrap();
 
         // Call jj_get_merge_diff
-        let result = jj_get_merge_diff(repo_path.to_str().unwrap(), "main");
+        let result = jj_get_merge_diff(repo_path.to_str().unwrap(), "main", "diff");
 
         assert!(result.is_ok(), "jj_get_merge_diff should succeed");
         let diff = result.unwrap();
@@ -4720,5 +4736,41 @@ target/debug/deps/lib.so    2-sided conflict including 1 deletion and an executa
         assert_eq!(files[1].path, "added.txt");
         assert_eq!(files[1].status, "A");
         assert_eq!(files[1].previous_path, None);
+    }
+
+    #[test]
+    fn test_jj_command_default_style() {
+        let cmd = jj_command("diff");
+        let args: Vec<&std::ffi::OsStr> = cmd.get_args().collect();
+        assert!(args.contains(&std::ffi::OsStr::new("--config")));
+        assert!(args.contains(&std::ffi::OsStr::new("ui.conflict-marker-style=\"diff\"")));
+    }
+
+    #[test]
+    fn test_jj_command_snapshot_style() {
+        let cmd = jj_command("snapshot");
+        let args: Vec<&std::ffi::OsStr> = cmd.get_args().collect();
+        assert!(args.contains(&std::ffi::OsStr::new("ui.conflict-marker-style=\"snapshot\"")));
+    }
+
+    #[test]
+    fn test_jj_command_git_style() {
+        let cmd = jj_command("git");
+        let args: Vec<&std::ffi::OsStr> = cmd.get_args().collect();
+        assert!(args.contains(&std::ffi::OsStr::new("ui.conflict-marker-style=\"git\"")));
+    }
+
+    #[test]
+    fn test_jj_command_invalid_style_falls_back_to_diff() {
+        let cmd = jj_command("invalid");
+        let args: Vec<&std::ffi::OsStr> = cmd.get_args().collect();
+        assert!(args.contains(&std::ffi::OsStr::new("ui.conflict-marker-style=\"diff\"")));
+    }
+
+    #[test]
+    fn test_jj_command_empty_style_falls_back_to_diff() {
+        let cmd = jj_command("");
+        let args: Vec<&std::ffi::OsStr> = cmd.get_args().collect();
+        assert!(args.contains(&std::ffi::OsStr::new("ui.conflict-marker-style=\"diff\"")));
     }
 }

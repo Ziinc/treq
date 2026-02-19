@@ -2,6 +2,7 @@ mod auto_rebase;
 mod binary_paths;
 mod cli;
 mod commands;
+pub mod conflict_markers;
 pub mod core;
 pub mod db;
 mod file_indexer;
@@ -369,6 +370,7 @@ pub fn run() {
             commands::jj_get_branches,
             commands::jj_edit_bookmark,
             commands::jj_track_workspace_bookmarks,
+            commands::parse_conflict_markers,
             commands::pty_create_session,
             commands::pty_session_exists,
             commands::pty_write,
