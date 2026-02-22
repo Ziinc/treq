@@ -1342,6 +1342,35 @@ describe("WorkspacesSidebar", () => {
       });
     });
 
+    it("should copy workspace relative path using .treq/workspaces/ prefix when workspace_path is a short name", async () => {
+      vi.mocked(api.getWorkspaces).mockResolvedValue([
+        {
+          id: 1,
+          repo_path: "/Users/test/repo",
+          workspace_name: "one",
+          workspace_path: "one",
+          branch_name: "feature/test",
+          created_at: new Date().toISOString(),
+          has_conflicts: false,
+        },
+      ]);
+
+      render(<Dashboard />);
+
+      const workspaceElement = await screen.findByText("feature/test");
+      fireEvent.contextMenu(workspaceElement);
+
+      await waitFor(() => {
+        expect(screen.getByText("Copy relative path")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText("Copy relative path"));
+
+      await waitFor(() => {
+        expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(".treq/workspaces/one");
+      });
+    });
+
     it("should copy workspace full path from context menu", async () => {
       // Setup a workspace
       vi.mocked(api.getWorkspaces).mockResolvedValue([

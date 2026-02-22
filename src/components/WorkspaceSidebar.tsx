@@ -48,6 +48,7 @@ import {
   ContextMenuSeparator,
 } from "./ui/context-menu";
 import { getWorkspaceTitle as getWorkspaceTitleFromUtils } from "../lib/workspace-utils";
+import { getFullWorkspacePath } from "../lib/utils";
 import { RenameWorkspaceDialog } from "./RenameWorkspaceDialog";
 import { revealItemInDir, openUrl } from "@tauri-apps/plugin-opener";
 import { useEditorApps } from "../hooks/useEditorApps";
@@ -526,11 +527,13 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                       <ContextMenuSeparator />
                       <PathContextMenuItems
                         relativePath={
-                          repoPath && workspace.workspace_path.startsWith(repoPath)
-                            ? workspace.workspace_path.slice(repoPath.length + 1)
-                            : workspace.workspace_path
+                          workspace.workspace_path.startsWith("/")
+                            ? repoPath && workspace.workspace_path.startsWith(repoPath)
+                              ? workspace.workspace_path.slice(repoPath.length + 1)
+                              : workspace.workspace_path
+                            : `.treq/workspaces/${workspace.workspace_path}`
                         }
-                        fullPath={workspace.workspace_path}
+                        fullPath={getFullWorkspacePath(workspace)}
                         additionalItems={
                           <>
                             <ContextMenuSeparator />
