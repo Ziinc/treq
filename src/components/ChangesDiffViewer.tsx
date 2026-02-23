@@ -98,10 +98,11 @@ import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { ChangesSection } from "./ChangesSection";
 import { ConflictsSection } from "./ConflictsSection";
 import { CommittedChangesSection } from "./CommittedChangesSection";
-import { ConflictCommentCard } from "./ConflictCommentCard";
 import { MoveToWorkspaceDialog } from "./MoveToWorkspaceDialog";
 import { FileContextMenu } from "./FileContextMenu";
 import { SearchOverlay } from "./SearchOverlay";
+import { CommentEditInput } from "./CommentEditInput";
+import { InlineConflictCard } from "./InlineConflictCard";
 
 interface ChangesDiffViewerProps {
   workspacePath: string;
@@ -139,7 +140,7 @@ interface LineComment {
 }
 
 
-interface ConflictComment {
+export interface ConflictComment {
   id: string;
   conflictId: string;      // references ConflictRegion.id
   filePath: string;
@@ -166,6 +167,16 @@ interface FileHunksData {
   error?: string;
 }
 
+export interface DiffSearchData {
+  matches: Array<{
+    filePath: string;
+    hunkIndex: number;
+    lineIndex: number;
+    matchIndexInLine: number;
+  }>;
+  matchesByKey: Map<string, { firstGlobalIndex: number; count: number }>;
+}
+
 // Helper to get line type styling (background only, text color handled by syntax highlighting)
 const getLineTypeClass = (line: string): string => {
   if (line.startsWith("+")) return "bg-emerald-500/20";
@@ -177,19 +188,6 @@ const getLinePrefix = (line: string): string => {
   if (line.startsWith("+")) return "+";
   if (line.startsWith("-")) return "-";
   return " ";
-};
-
-// Helper to detect conflict markers (JJ diff, JJ snapshot, and git diff3 styles)
-const isConflictMarker = (line: string): boolean => {
-  return /^(<{7}|>{7}|%{7}|\+{7}|-{7}|\|{7}|={7})/.test(line);
-};
-
-// Helper to get background color for conflict lines
-const getConflictLineBackground = (line: string): string => {
-  if (isConflictMarker(line)) return "";
-  if (line.startsWith("-")) return "bg-red-500/20";
-  if (line.startsWith("+")) return "bg-emerald-500/20";
-  return "";
 };
 
 const hunksEqual = (
@@ -358,85 +356,6 @@ const CommentInput: React.FC<CommentInputProps> = memo(
 );
 CommentInput.displayName = "CommentInput";
 
-interface CommentEditInputProps {
-  initialText: string;
-  onSave: (text: string) => void;
-  onCancel: () => void;
-  onDiscard: () => void;
-}
-
-const CommentEditInput: React.FC<CommentEditInputProps> = memo(
-  ({ initialText, onSave, onCancel, onDiscard }) => {
-    const [text, setText] = useState(initialText);
-
-    const handleSave = useCallback(() => {
-      if (text.trim()) {
-        onSave(text.trim());
-      }
-    }, [text, onSave]);
-
-    const handleKeyDown = useCallback(
-      (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.metaKey || e.ctrlKey) {
-          const key = e.key.toLowerCase();
-          if (["a", "c", "x", "v", "z", "y"].includes(key)) {
-            e.stopPropagation();
-            return;
-          }
-        }
-
-        if (e.key === "Escape") {
-          onCancel();
-        } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-          handleSave();
-        }
-      },
-      [onCancel, handleSave]
-    );
-
-    return (
-      <div className="space-y-2">
-        <Textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          className="font-sans text-sm"
-          autoFocus
-          onKeyDown={handleKeyDown}
-        />
-        <div className="flex justify-between gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onDiscard}
-            className="text-destructive hover:text-destructive hover:bg-destructive/10 font-sans"
-          >
-            Discard
-          </Button>
-          <div className="flex gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onCancel}
-              className="font-sans"
-            >
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleSave}
-              disabled={!text.trim()}
-              className="font-sans"
-            >
-              Save
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-);
-CommentEditInput.displayName = "CommentEditInput";
-
 // Isolated commit input component to prevent parent re-renders during typing
 interface CommitInputHandle {
   focus: () => void;
@@ -585,20 +504,6 @@ interface FileRowComponentProps {
   addToast: ReturnType<typeof useToast>["addToast"];
   getOutdatedCommentsForFile: (filePath: string) => LineComment[];
   deleteComment: (commentId: string) => void;
-  // Conflict-related props
-  conflictRegions?: ConflictRegion[];
-  conflictComments: Map<string, ConflictComment>;
-  openConflictComments: Set<string>;
-  editingConflictCommentId: string | null;
-  saveConflictComment: (conflictId: string, filePath: string, conflictNumber: number, text: string) => void;
-  clearConflictComment: (conflictId: string) => void;
-  toggleConflictComment: (conflictId: string) => void;
-  setOpenConflictComments: React.Dispatch<React.SetStateAction<Set<string>>>;
-  startEditConflictComment: (conflictId: string) => void;
-  cancelEditConflictComment: () => void;
-  saveEditConflictComment: (conflictId: string, newText: string) => void;
-  conflictFileRefs: React.MutableRefObject<Map<string, HTMLDivElement>>;
-  hideConflictCards?: boolean;
 }
 
 const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
@@ -623,19 +528,6 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
     addToast,
     getOutdatedCommentsForFile,
     deleteComment,
-    conflictRegions,
-    conflictComments,
-    openConflictComments,
-    editingConflictCommentId,
-    saveConflictComment,
-    clearConflictComment,
-    toggleConflictComment,
-    setOpenConflictComments,
-    startEditConflictComment,
-    cancelEditConflictComment,
-    saveEditConflictComment,
-    conflictFileRefs,
-    hideConflictCards,
   } = props;
 
   const editorApps = useEditorApps();
@@ -667,156 +559,6 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
 
   return (
     <>
-      {/* Conflict Cards - shown before file diff if this file has conflicts */}
-      {!hideConflictCards && conflictRegions && conflictRegions.length > 0 && (
-        <div
-          ref={(el) => {
-            if (el) {
-              conflictFileRefs.current.set(filePath, el);
-            } else {
-              conflictFileRefs.current.delete(filePath);
-            }
-          }}
-          className="border border-destructive/30 rounded-md overflow-hidden mb-4"
-        >
-          {/* Single header for the file */}
-          <div className="bg-destructive/10 px-3 py-2 flex items-center gap-2">
-            <span className="font-mono text-sm">{filePath}</span>
-          </div>
-
-          {/* Multiple conflict sections with dividers */}
-          {conflictRegions.map((region, index) => (
-            <Fragment key={region.id}>
-              {index > 0 && <div className="border-t border-border" />}
-
-              {/* Conflict section */}
-              <div>
-                <div className="p-0 relative">
-                  <pre className="text-sm font-mono overflow-x-auto bg-muted/30 p-3 rounded whitespace-pre-wrap break-all">
-                    {region.content.split('\n').map((line, idx) => {
-                      const isMarker = isConflictMarker(line);
-                      const bgClass = getConflictLineBackground(line);
-                      return (
-                        <div
-                          key={idx}
-                          className={cn(
-                            isMarker ? "text-muted-foreground" : "",
-                            bgClass
-                          )}
-                        >
-                          {line}
-                        </div>
-                      );
-                    })}
-                  </pre>
-
-                  {/* Add comment button below conflict content */}
-                  <div className="mt-2 flex justify-end absolute right-3 bottom-3">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => toggleConflictComment(region.id)}
-                      aria-label="Add comment"
-                    >
-                      Add comment
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Display saved comment inline (always visible if exists) */}
-                {conflictComments.has(region.id) && (
-                  <div className="px-3 py-2 bg-muted/40 border-t border-border">
-                    <div className="text-muted-foreground mb-1">Resolution note:</div>
-                    {editingConflictCommentId === region.id ? (
-                      <div className="bg-background rounded-md p-[12px] border border-border/60">
-                        <CommentEditInput
-                          initialText={conflictComments.get(region.id)?.text || ""}
-                          onSave={(newText) =>
-                            saveEditConflictComment(region.id, newText)
-                          }
-                          onCancel={cancelEditConflictComment}
-                          onDiscard={() => {
-                            clearConflictComment(region.id);
-                            cancelEditConflictComment();
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div
-                              className="group bg-background rounded-md p-[12px] border border-border/60 cursor-pointer hover:shadow-md transition-shadow"
-                              onClick={() =>
-                                startEditConflictComment(region.id)
-                              }
-                            >
-                              <div className="flex items-start gap-2">
-                                <Pencil className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5" />
-                                <p className="text-sm whitespace-pre-wrap flex-1">
-                                  {conflictComments.get(region.id)?.text}
-                                </p>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        clearConflictComment(region.id);
-                                      }}
-                                      className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground flex-shrink-0"
-                                    >
-                                      <X className="w-3 h-3" />
-                                    </button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    Delete comment
-                                  </TooltipContent>
-                                </Tooltip>
-                              </div>
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            Click to edit
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                  </div>
-                )}
-
-                {/* Conflict comment input form (conditionally shown) */}
-                {openConflictComments.has(region.id) && (
-                  <ConflictCommentCard
-                    conflictId={region.id}
-                    filePath={region.filePath}
-                    conflictNumber={region.conflictNumber}
-                    startLine={region.startLine}
-                    endLine={region.endLine}
-                    comment={conflictComments.get(region.id)}
-                    onSave={(text) => {
-                      saveConflictComment(region.id, region.filePath, region.conflictNumber, text);
-                      setOpenConflictComments(prev => {
-                        const next = new Set(prev);
-                        next.delete(region.id);
-                        return next;
-                      });
-                    }}
-                    onClear={() => {
-                      clearConflictComment(region.id)
-                      setOpenConflictComments(prev => {
-                        const next = new Set(prev);
-                        next.delete(region.id);
-                        return next;
-                      });
-                    }}
-                  />
-                )}
-              </div>
-            </Fragment>
-          ))}
-        </div>
-      )}
-
       {/* Regular File Diff */}
       <div
         key={filePath}
@@ -1237,6 +979,29 @@ export const ChangesDiffViewer = memo(
 
       const [actualConflictedFiles, setActualConflictedFiles] = useState<string[]>([]);
       const [conflictRegionsByFile, setConflictRegionsByFile] = useState<Map<string, ConflictRegion[]>>(new Map());
+      const conflictLineLookups = useMemo(() => {
+        const map = new Map<string, Map<number, ConflictRegion>>();
+        for (const [filePath, regions] of conflictRegionsByFile) {
+          if (!regions || regions.length === 0) continue;
+          const lineMap = new Map<number, ConflictRegion>();
+          for (const region of regions) {
+            for (let line = region.startLine; line <= region.endLine; line++) {
+              lineMap.set(line, region);
+            }
+          }
+          map.set(filePath, lineMap);
+        }
+        return map;
+      }, [conflictRegionsByFile]);
+      const firstConflictRegionIdByFile = useMemo(() => {
+        const map = new Map<string, string>();
+        for (const [filePath, regions] of conflictRegionsByFile) {
+          if (regions && regions.length > 0) {
+            map.set(filePath, regions[0].id);
+          }
+        }
+        return map;
+      }, [conflictRegionsByFile]);
 
       const filesWithMarkers = useMemo(() => {
         const result: { filePath: string; content: string }[] = [];
@@ -1316,7 +1081,7 @@ export const ChangesDiffViewer = memo(
       }, [filesWithMarkers, conflictMarkerStyle]);
 
       // Search: compute matches across all visible diff lines
-      const searchData = useMemo(() => {
+      const searchData = useMemo<DiffSearchData>(() => {
         const matches: Array<{ filePath: string; hunkIndex: number; lineIndex: number; matchIndexInLine: number }> = [];
         const matchesByKey = new Map<string, { firstGlobalIndex: number; count: number }>();
 
@@ -1354,6 +1119,7 @@ export const ChangesDiffViewer = memo(
           if (!fileData || fileData.isLoading || !fileData.hunks) return;
           if (collapsedFiles.has(filePath)) return;
           if (isBinaryFile(filePath)) return;
+          const conflictLineMap = conflictLineLookups.get(filePath);
 
           // Check large diff gate (mirrors FileRowComponent logic: >250 additions+deletions)
           let additions = 0, deletions = 0;
@@ -1367,7 +1133,12 @@ export const ChangesDiffViewer = memo(
 
           for (let hunkIndex = 0; hunkIndex < fileData.hunks.length; hunkIndex++) {
             const hunk = fileData.hunks[hunkIndex];
+            const lineNumbers = computeHunkLineNumbers(hunk);
             for (let lineIndex = 0; lineIndex < hunk.lines.length; lineIndex++) {
+              const newLineNumber = lineNumbers[lineIndex]?.new;
+              if (newLineNumber !== undefined && conflictLineMap?.has(newLineNumber)) {
+                continue;
+              }
               const lineText = hunk.lines[lineIndex].substring(1);
               const mc = countLineMatches(lineText);
               if (mc > 0) {
@@ -1391,7 +1162,7 @@ export const ChangesDiffViewer = memo(
         }
 
         return { matches, matchesByKey };
-      }, [debouncedSearchQuery, files, allFileHunks, collapsedFiles, expandedLargeDiffs, showCommittedChanges, committedFiles, conflictRegionsByFile]);
+      }, [debouncedSearchQuery, files, allFileHunks, collapsedFiles, expandedLargeDiffs, showCommittedChanges, committedFiles, conflictLineLookups]);
 
       // Clamp currentMatchIndex when matches change
       useEffect(() => {
@@ -3329,6 +3100,9 @@ export const ChangesDiffViewer = memo(
       ) => {
         const lineNumbers = computeHunkLineNumbers(hunk);
         const language = getLanguageFromPath(filePath);
+        const conflictLineMap = conflictLineLookups.get(filePath);
+        const renderedConflictIds = new Set<string>();
+        const firstConflictRegionId = firstConflictRegionIdByFile.get(filePath);
 
         return (
           <Fragment key={hunk.id}>
@@ -3409,6 +3183,49 @@ export const ChangesDiffViewer = memo(
             {/* Hunk lines */}
             {hunk.lines.map((line, lineIndex) => {
               const lineNum = lineNumbers[lineIndex];
+              const newLineNumber = lineNum?.new;
+              if (newLineNumber !== undefined && conflictLineMap) {
+                const conflictRegion = conflictLineMap.get(newLineNumber);
+                if (conflictRegion) {
+                  if (!renderedConflictIds.has(conflictRegion.id) && conflictRegion.startLine === newLineNumber) {
+                    renderedConflictIds.add(conflictRegion.id);
+                    const shouldRegisterRef = firstConflictRegionId === conflictRegion.id;
+                    return (
+                      <InlineConflictCard
+                        key={`conflict-${conflictRegion.id}`}
+                        region={conflictRegion}
+                        conflictComments={conflictComments}
+                        openConflictComments={openConflictComments}
+                        editingConflictCommentId={editingConflictCommentId}
+                        saveConflictComment={saveConflictComment}
+                        clearConflictComment={clearConflictComment}
+                        toggleConflictComment={toggleConflictComment}
+                        setOpenConflictComments={setOpenConflictComments}
+                        startEditConflictComment={startEditConflictComment}
+                        cancelEditConflictComment={cancelEditConflictComment}
+                        saveEditConflictComment={saveEditConflictComment}
+                        searchData={searchData}
+                        debouncedSearchQuery={debouncedSearchQuery}
+                        currentMatchIndex={currentMatchIndex}
+                        className="bg-destructive/10 border-y border-destructive/40 px-[16px] py-[12px] space-y-2"
+                        registerFileRef={
+                          shouldRegisterRef
+                            ? (el) => {
+                                if (el) {
+                                  conflictFileRefs.current.set(filePath, el);
+                                } else {
+                                  conflictFileRefs.current.delete(filePath);
+                                }
+                              }
+                            : undefined
+                        }
+                      />
+                    );
+                  }
+                  return null;
+                }
+              }
+
               const actualLineNum =
                 lineNum?.new ?? lineNum?.old ?? lineIndex + 1;
               const currentLineSide: "old" | "new" =
@@ -3720,6 +3537,21 @@ export const ChangesDiffViewer = memo(
         }
       }, [files, stagedFilesList]);
 
+      // Keyboard shortcut: Ctrl/Cmd+A to select all files (no deselect)
+      useKeyboardShortcut("a", true, () => {
+        if (selectedStagedFiles.size > 0) {
+          setSelectedStagedFiles(new Set(stagedFilesList.map(f => f.path)));
+          if (stagedFilesList.length > 0) {
+            setLastSelectedStagedIndex(stagedFilesList.length - 1);
+          }
+        } else {
+          setSelectedUnstagedFiles(new Set(unstagedFiles.map(f => f.path)));
+          if (unstagedFiles.length > 0) {
+            setLastSelectedFileIndex(files.findIndex(f => f.path === unstagedFiles[unstagedFiles.length - 1].path));
+          }
+        }
+      }, [selectedStagedFiles, stagedFilesList, unstagedFiles, files]);
+
       // Note: FileRowComponent extracted outside for performance
 
       return (
@@ -3752,6 +3584,20 @@ export const ChangesDiffViewer = memo(
                       activeFilePath={activeFilePath}
                       onFileSelect={(path) => {
                         setActiveFilePath(path);
+                        // Expand large changeset if collapsed (matches Changes file click behavior)
+                        setLargeChangesetExpanded(true);
+                        // Uncollapse the file containing this conflict
+                        setCollapsedFiles((prev) => {
+                          const next = new Set(prev);
+                          next.delete(path);
+                          return next;
+                        });
+                        // Expand large diff for this file
+                        setExpandedLargeDiffs((prev) => {
+                          const next = new Set(prev);
+                          next.add(path);
+                          return next;
+                        });
                         setTimeout(() => {
                           const el = conflictFileRefs.current.get(path);
                           if (el) {
@@ -4109,166 +3955,42 @@ export const ChangesDiffViewer = memo(
                         {/* Grouped conflict cards at top */}
                         {actualConflictedFiles.length > 0 && (
                           <>
-                            {actualConflictedFiles.map((conflictFile) => {
-                              const regions = conflictRegionsByFile.get(conflictFile);
-                              if (!regions || regions.length === 0) return null;
-                              return (
-                                <div
-                                  key={`conflict-${conflictFile}`}
-                                  ref={(el) => {
-                                    if (el) {
-                                      conflictFileRefs.current.set(conflictFile, el);
-                                    } else {
-                                      conflictFileRefs.current.delete(conflictFile);
-                                    }
-                                  }}
-                                  className="border border-destructive/30 rounded-md overflow-hidden"
-                                >
-                                  <div className="bg-destructive/10 px-3 py-2 flex items-center gap-2">
-                                    <span className="font-mono text-sm">{conflictFile}</span>
-                                  </div>
-                                  {regions.map((region, index) => (
-                                    <Fragment key={region.id}>
-                                      {index > 0 && <div className="border-t border-border" />}
-                                      <div>
-                                        <div className="p-0 relative">
-                                          <pre className="text-sm font-mono overflow-x-auto bg-muted/30 p-3 rounded whitespace-pre-wrap break-all">
-                                            {region.content.split('\n').map((line, idx) => {
-                                              const isMarker = isConflictMarker(line);
-                                              const bgClass = getConflictLineBackground(line);
-                                              const conflictSearchKey = `conflict:${region.id}:${idx}`;
-                                              const conflictLineData = searchData.matchesByKey.get(conflictSearchKey);
-                                              let conflictHighlightOffset = -1;
-                                              if (conflictLineData && debouncedSearchQuery) {
-                                                const gf = conflictLineData.firstGlobalIndex;
-                                                if (currentMatchIndex >= gf && currentMatchIndex < gf + conflictLineData.count) {
-                                                  conflictHighlightOffset = currentMatchIndex - gf;
-                                                }
-                                              }
-                                              const hasSearchHighlight = debouncedSearchQuery && conflictLineData;
-                                              const lineHtml = hasSearchHighlight
-                                                ? highlightInHtml(line, debouncedSearchQuery, conflictHighlightOffset).html
-                                                : null;
-                                              return (
-                                                <div
-                                                  key={idx}
-                                                  data-search-id={conflictSearchKey}
-                                                  className={cn(
-                                                    isMarker ? "text-muted-foreground" : "",
-                                                    bgClass
-                                                  )}
-                                                >
-                                                  {lineHtml ? (
-                                                    <span dangerouslySetInnerHTML={{ __html: lineHtml }} />
-                                                  ) : (
-                                                    line
-                                                  )}
-                                                </div>
-                                              );
-                                            })}
-                                          </pre>
-                                          <div className="mt-2 flex justify-end absolute right-3 bottom-3">
-                                            <Button
-                                              variant="secondary"
-                                              size="sm"
-                                              onClick={() => toggleConflictComment(region.id)}
-                                              aria-label="Add comment"
-                                            >
-                                              Add comment
-                                            </Button>
-                                          </div>
-                                        </div>
-                                        {conflictComments.has(region.id) && (
-                                          <div className="px-3 py-2 bg-muted/40 border-t border-border">
-                                            <div className="text-muted-foreground mb-1">Resolution note:</div>
-                                            {editingConflictCommentId === region.id ? (
-                                              <div className="bg-background rounded-md p-[12px] border border-border/60">
-                                                <CommentEditInput
-                                                  initialText={conflictComments.get(region.id)?.text || ""}
-                                                  onSave={(newText) =>
-                                                    saveEditConflictComment(region.id, newText)
-                                                  }
-                                                  onCancel={cancelEditConflictComment}
-                                                  onDiscard={() => {
-                                                    clearConflictComment(region.id);
-                                                    cancelEditConflictComment();
-                                                  }}
-                                                />
-                                              </div>
-                                            ) : (
-                                              <TooltipProvider>
-                                                <Tooltip>
-                                                  <TooltipTrigger asChild>
-                                                    <div
-                                                      className="group bg-background rounded-md p-[12px] border border-border/60 cursor-pointer hover:shadow-md transition-shadow"
-                                                      onClick={() =>
-                                                        startEditConflictComment(region.id)
-                                                      }
-                                                    >
-                                                      <div className="flex items-start gap-2">
-                                                        <Pencil className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5" />
-                                                        <p className="text-sm whitespace-pre-wrap flex-1">
-                                                          {conflictComments.get(region.id)?.text}
-                                                        </p>
-                                                        <Tooltip>
-                                                          <TooltipTrigger asChild>
-                                                            <button
-                                                              onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                clearConflictComment(region.id);
-                                                              }}
-                                                              className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground flex-shrink-0"
-                                                            >
-                                                              <X className="w-3 h-3" />
-                                                            </button>
-                                                          </TooltipTrigger>
-                                                          <TooltipContent>
-                                                            Delete comment
-                                                          </TooltipContent>
-                                                        </Tooltip>
-                                                      </div>
-                                                    </div>
-                                                  </TooltipTrigger>
-                                                  <TooltipContent>
-                                                    Click to edit
-                                                  </TooltipContent>
-                                                </Tooltip>
-                                              </TooltipProvider>
-                                            )}
-                                          </div>
-                                        )}
-                                        {openConflictComments.has(region.id) && (
-                                          <ConflictCommentCard
-                                            conflictId={region.id}
-                                            filePath={region.filePath}
-                                            conflictNumber={region.conflictNumber}
-                                            startLine={region.startLine}
-                                            endLine={region.endLine}
-                                            comment={conflictComments.get(region.id)}
-                                            onSave={(text) => {
-                                              saveConflictComment(region.id, region.filePath, region.conflictNumber, text);
-                                              setOpenConflictComments(prev => {
-                                                const next = new Set(prev);
-                                                next.delete(region.id);
-                                                return next;
-                                              });
-                                            }}
-                                            onClear={() => {
-                                              clearConflictComment(region.id);
-                                              setOpenConflictComments(prev => {
-                                                const next = new Set(prev);
-                                                next.delete(region.id);
-                                                return next;
-                                              });
-                                            }}
-                                          />
-                                        )}
+                                {actualConflictedFiles.map((conflictFile) => {
+                                  const regions = conflictRegionsByFile.get(conflictFile);
+                                  if (!regions || regions.length === 0) return null;
+                                  return (
+                                    <div
+                                      key={`conflict-${conflictFile}`}
+                                      className="border border-destructive/30 rounded-md overflow-hidden"
+                                    >
+                                      <div className="bg-destructive/10 px-3 py-2 flex items-center gap-2">
+                                        <span className="font-mono text-sm">{conflictFile}</span>
                                       </div>
-                                    </Fragment>
-                                  ))}
-                                </div>
-                              );
-                            })}
+                                      {regions.map((region, index) => (
+                                        <Fragment key={region.id}>
+                                          {index > 0 && <div className="border-t border-border" />}
+                                          <InlineConflictCard
+                                            region={region}
+                                            conflictComments={conflictComments}
+                                            openConflictComments={openConflictComments}
+                                            editingConflictCommentId={editingConflictCommentId}
+                                            saveConflictComment={saveConflictComment}
+                                            clearConflictComment={clearConflictComment}
+                                            toggleConflictComment={toggleConflictComment}
+                                            setOpenConflictComments={setOpenConflictComments}
+                                            startEditConflictComment={startEditConflictComment}
+                                            cancelEditConflictComment={cancelEditConflictComment}
+                                            saveEditConflictComment={saveEditConflictComment}
+                                            searchData={searchData}
+                                            debouncedSearchQuery={debouncedSearchQuery}
+                                            currentMatchIndex={currentMatchIndex}
+                                            className="p-0"
+                                          />
+                                        </Fragment>
+                                      ))}
+                                    </div>
+                                  );
+                                })}
                           </>
                         )}
 
@@ -4298,19 +4020,6 @@ export const ChangesDiffViewer = memo(
                               getOutdatedCommentsForFile
                             }
                             deleteComment={deleteComment}
-                            conflictRegions={conflictRegionsByFile.get(file.path)}
-                            conflictComments={conflictComments}
-                            openConflictComments={openConflictComments}
-                            editingConflictCommentId={editingConflictCommentId}
-                            saveConflictComment={saveConflictComment}
-                            clearConflictComment={clearConflictComment}
-                            toggleConflictComment={toggleConflictComment}
-                            setOpenConflictComments={setOpenConflictComments}
-                            startEditConflictComment={startEditConflictComment}
-                            cancelEditConflictComment={cancelEditConflictComment}
-                            saveEditConflictComment={saveEditConflictComment}
-                            conflictFileRefs={conflictFileRefs}
-                            hideConflictCards
                           />
                         ))}
 
@@ -4338,19 +4047,6 @@ export const ChangesDiffViewer = memo(
                             addToast={addToast}
                             getOutdatedCommentsForFile={() => []}
                             deleteComment={deleteComment}
-                            conflictRegions={conflictRegionsByFile.get(file.path)}
-                            conflictComments={conflictComments}
-                            openConflictComments={openConflictComments}
-                            editingConflictCommentId={editingConflictCommentId}
-                            saveConflictComment={saveConflictComment}
-                            clearConflictComment={clearConflictComment}
-                            toggleConflictComment={toggleConflictComment}
-                            setOpenConflictComments={setOpenConflictComments}
-                            startEditConflictComment={startEditConflictComment}
-                            cancelEditConflictComment={cancelEditConflictComment}
-                            saveEditConflictComment={saveEditConflictComment}
-                            conflictFileRefs={conflictFileRefs}
-                            hideConflictCards
                           />
                         ))}
                       </div>
