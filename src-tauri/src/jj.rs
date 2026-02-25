@@ -945,6 +945,25 @@ pub fn squash_commit_to_workspace(
     }
 }
 
+/// Abandon a specific commit by change-id.
+/// Runs: jj abandon <change_id>
+pub fn jj_abandon(workspace_path: &str, change_id: &str) -> Result<String, JjError> {
+    let output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["abandon", change_id])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        Err(JjError::InitFailed(format!(
+            "Failed to abandon commit: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )))
+    }
+}
+
 /// Get the list of files changed in a specific commit.
 /// Runs: jj diff --summary -r <change_id>
 /// Returns file paths (added/modified/removed) from the commit.

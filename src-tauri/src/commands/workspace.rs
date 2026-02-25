@@ -451,6 +451,48 @@ pub fn split_workspace(
     Ok(workspace.id)
 }
 
+#[tauri::command]
+pub fn move_commit_to_new_workspace(
+    repo_path: String,
+    source_workspace_id: i64,
+    commit_change_id: String,
+    branch_name: String,
+    intent: Option<String>,
+) -> Result<i64, String> {
+    crate::core::move_commit_to_new_workspace(
+        &repo_path,
+        source_workspace_id,
+        &commit_change_id,
+        &branch_name,
+        intent,
+    )
+    .map(|w| w.id)
+}
+
+#[tauri::command]
+pub fn move_commit_to_existing_workspace(
+    repo_path: String,
+    source_workspace_id: i64,
+    commit_change_id: String,
+    target_workspace_id: i64,
+) -> Result<(), String> {
+    crate::core::move_commit_to_existing_workspace(
+        &repo_path,
+        source_workspace_id,
+        &commit_change_id,
+        target_workspace_id,
+    )
+}
+
+#[tauri::command]
+pub fn abandon_commit(
+    repo_path: String,
+    workspace_id: i64,
+    commit_change_id: String,
+) -> Result<(), String> {
+    crate::core::abandon_commit(&repo_path, workspace_id, &commit_change_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

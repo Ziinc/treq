@@ -861,3 +861,43 @@ export const parseConflictMarkers = (
   filePath: string
 ): Promise<ConflictRegion[]> =>
   invoke("parse_conflict_markers", { content, filePath });
+
+// Move commit API
+export const moveCommitToNewWorkspace = (
+  repoPath: string,
+  sourceWorkspaceId: number,
+  commitChangeId: string,
+  branchName: string,
+  intent: string | null,
+): Promise<number> =>
+  invoke("move_commit_to_new_workspace", {
+    repoPath,
+    sourceWorkspaceId,
+    commitChangeId,
+    branchName,
+    intent,
+  });
+
+export const moveCommitToExistingWorkspace = (
+  repoPath: string,
+  sourceWorkspaceId: number,
+  commitChangeId: string,
+  targetWorkspaceId: number,
+): Promise<void> =>
+  invoke("move_commit_to_existing_workspace", {
+    repoPath,
+    sourceWorkspaceId,
+    commitChangeId,
+    targetWorkspaceId,
+  });
+
+export const abandonCommit = (
+  repoPath: string,
+  workspaceId: number,
+  commitChangeId: string,
+): Promise<void> =>
+  invoke("abandon_commit", {
+    repoPath,
+    workspaceId,
+    commitChangeId,
+  });
