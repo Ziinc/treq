@@ -267,19 +267,16 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
         : JSON.stringify({});
 
       // Determine newBranch and sourceBranch based on branch status
-      let newBranch = true;
       let effectiveSourceBranch = sourceBranch || undefined;
 
       if (branchStatusData?.local_exists) {
         // Checkout existing local branch
-        newBranch = false;
         effectiveSourceBranch = undefined;
       } else if (
         branchStatusData?.remote_exists &&
         branchStatusData.remote_ref
       ) {
         // Create from remote branch - use remote_ref from backend
-        newBranch = true;
         effectiveSourceBranch = branchStatusData.remote_ref;
       }
       // else: new branch, use existing behavior

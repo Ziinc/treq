@@ -120,7 +120,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     setSelectedWorkspace(null);
     setActiveSessionId(null);
     setPendingClaudeSession(null);
-    setViewMode("session");
   }, []);
 
   const openSettings = useCallback((tab?: string) => {
@@ -519,7 +518,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
 
         await setSetting("repo_path", selected);
         setRepoPath(selected);
-        setViewMode("session");
         setSelectedWorkspace(null);
 
         // Reset session state
@@ -643,14 +641,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
 
   const handleOpenSession = useCallback(
     async (workspace: Workspace | null, options?: SessionOpenOptions) => {
-      const sessionId = await getOrCreateSession(workspace?.id ?? null, {
-        workspaceBranchName: workspace?.branch_name,
-        forceNew: options?.forceNew,
-        name: options?.sessionName,
-      });
       setSelectedWorkspace(workspace);
       setSessionSelectedFile(options?.selectedFilePath ?? null);
-      setActiveSessionId(sessionId);
       setViewMode(workspace ? "show-workspace" : "session");
     },
     [getOrCreateSession]
@@ -1177,15 +1169,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         onNavigateToDashboard={handleReturnToDashboard}
         onNavigateToSettings={() => setViewMode("settings")}
         onOpenWorkspaceSession={handleOpenSession}
-        onOpenSession={(session, workspace) => {
-          setActiveSessionId(session.id);
-          if (workspace) {
-            setSelectedWorkspace(workspace);
-            setViewMode("show-workspace");
-          } else {
-            setViewMode("session");
-          }
-        }}
         onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
         onOpenFilePicker={() => setShowFilePicker(true)}
         onOpenWorkspacePicker={() => setShowWorkspacePicker(true)}

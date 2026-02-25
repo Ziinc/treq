@@ -79,7 +79,7 @@ export const GitFileRow = memo<GitFileRowProps>(({
           {isLastSelected && isSelected && !readOnly && onDiscard && (
             <button
               type="button"
-              className="p-0.5 bg-background hover:text-foreground hover:bg-red-500/20 text-red-600 dark:text-red-400 rounded transition-colors"
+              className="p-0.5 hover:text-foreground hover:bg-red-500/20 text-red-600 dark:text-red-400 rounded transition-colors"
               onClick={(e) => {
                 e.stopPropagation();
                 onDiscard(file.path);
@@ -93,7 +93,7 @@ export const GitFileRow = memo<GitFileRowProps>(({
           {isLastSelected && isSelected && !readOnly && onStage && !isStaged && (
             <button
               type="button"
-              className="p-0.5 bg-background opacity-0 group-hover/row:opacity-100 hover:text-foreground hover:bg-accent rounded transition-opacity transition-colors"
+              className="p-0.5 opacity-0 group-hover/row:opacity-100 hover:text-foreground hover:bg-accent rounded transition-opacity transition-colors"
               onClick={(e) => {
                 e.stopPropagation();
                 onStage(file.path);
@@ -107,7 +107,7 @@ export const GitFileRow = memo<GitFileRowProps>(({
           {!readOnly && onUnstage && isStaged && (
             <button
               type="button"
-              className="p-0.5 bg-background opacity-0 group-hover/row:opacity-100 hover:text-foreground hover:bg-accent rounded transition-opacity transition-colors"
+              className="p-0.5 opacity-0 group-hover/row:opacity-100 hover:text-foreground hover:bg-accent rounded transition-opacity transition-colors"
               onClick={(e) => {
                 e.stopPropagation();
                 onUnstage(file.path);

@@ -1023,6 +1023,8 @@ const handleSync = useCallback(async () => {
                   workspacePath={workspace ? getFullWorkspacePath(workspace) : workingDirectory}
                   targetBranch={targetBranch}
                   isHomeRepo={!workspace}
+                  workspaceId={workspace?.id}
+                  repoPath={effectiveRepoPath || undefined}
                 />
               </div>
             </div>

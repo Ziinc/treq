@@ -38,7 +38,6 @@ interface CommandPaletteProps {
   onNavigateToDashboard: () => void;
   onNavigateToSettings: () => void;
   onOpenWorkspaceSession: (workspace: Workspace) => void;
-  onOpenSession: (session: Session, workspace?: Workspace) => void;
   onOpenBranchSwitcher: () => void;
   onOpenFilePicker: () => void;
   onOpenWorkspacePicker: () => void;
@@ -80,7 +79,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onNavigateToDashboard,
   onNavigateToSettings,
   onOpenWorkspaceSession: _onOpenWorkspaceSession,
-  onOpenSession: _onOpenSession,
   onOpenBranchSwitcher,
   onOpenFilePicker,
   onOpenWorkspacePicker,
