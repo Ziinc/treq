@@ -1542,13 +1542,39 @@ pub fn is_bookmark_tracked(
 }
 
 /// Edit/switch to a bookmark (similar to git checkout)
-/// Uses: jj edit <bookmark_name>
+/// Uses a multi-strategy approach to handle immutable commits
 /// For colocated repos, also syncs git HEAD
 pub fn jj_edit_bookmark(repo_path: &str, bookmark_name: &str) -> Result<String, JjError> {
-    // Run jj edit <bookmark>
+    // Strategy 1: Try jj edit <bookmark>+ (edit a child commit if one exists)
+    let branch_plus = format!("{}+", bookmark_name);
+    let result = command_for("jj")
+        .current_dir(repo_path)
+        .args(["edit", &branch_plus])
+        .output();
+    if let Ok(output) = result {
+        if output.status.success() {
+            let _ = command_for("git")
+                .current_dir(repo_path)
+                .args(["checkout", bookmark_name])
+                .output();
+            return Ok(format!("Switched to {}", bookmark_name));
+        }
+    }
+
+    // Strategy 2: Check if already at the bookmark commit
+    let bookmark_commit = jj_get_commit_id(repo_path, bookmark_name);
+    let working_copy_commit = jj_get_commit_id(repo_path, "@");
+    if let (Ok(b_id), Ok(wc_id)) = (bookmark_commit, working_copy_commit) {
+        if b_id == wc_id {
+            return Ok(format!("Already at {}", bookmark_name));
+        }
+    }
+
+    // Strategy 3: jj new <bookmark> — works for both mutable and immutable commits
+    // This creates a new empty working copy on top of the bookmark's commit
     let output = command_for("jj")
         .current_dir(repo_path)
-        .args(["edit", bookmark_name])
+        .args(["new", bookmark_name])
         .output()
         .map_err(|e| JjError::IoError(e.to_string()))?;
 
@@ -1558,7 +1584,7 @@ pub fn jj_edit_bookmark(repo_path: &str, bookmark_name: &str) -> Result<String, 
         ));
     }
 
-    // For colocated repos, sync git HEAD to keep git in sync
+    // For colocated repos, best-effort sync git HEAD
     let _ = command_for("git")
         .current_dir(repo_path)
         .args(["checkout", bookmark_name])

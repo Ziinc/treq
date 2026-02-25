@@ -357,9 +357,10 @@ pub fn rebase_single_workspace(
         }
     }
 
-    // Perform the rebase from workspace directory using roots() revset
-    // Use workspace bookmark instead of @ to work only with committed changes
-    let revset = format!("roots({}..{})", jj_target_branch, workspace.branch_name);
+    // Perform the rebase from workspace directory using roots() revset.
+    // Filter to mutable() commits only to avoid "Commit is immutable" errors
+    // when the workspace branch has pushed/immutable commits in its history.
+    let revset = format!("roots(mutable() & ({}..{}))", jj_target_branch, workspace.branch_name);
     let full_path = get_full_workspace_path(&workspace);
     let rebase_result = jj::jj_rebase_with_revset(
         &full_path, // Run from workspace directory

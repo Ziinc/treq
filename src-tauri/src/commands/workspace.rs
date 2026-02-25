@@ -293,12 +293,31 @@ pub fn set_workspace_target_branch(
         .unwrap_or_else(|| "git".to_string());
 
     // Convert Git remote branch format (origin/main) to jj format (main@origin)
-    let jj_branch_name =
+    let jj_target_branch =
         crate::jj::convert_git_branch_to_jj_format_public(&target_branch, &repo_path);
 
-    // Perform rebase
-    let rebase_result =
-        jj::jj_rebase_onto(&workspace_path, &jj_branch_name, &conflict_style).map_err(|e| e.to_string())?;
+    // Look up the workspace branch name to build a precise revset
+    // This avoids trying to rebase immutable commits (e.g. shared history on main)
+    let workspace = local_db::get_workspace_by_id(&repo_path, id)
+        .map_err(|e| e.to_string())?;
+
+    let rebase_result = if let Some(ws) = workspace {
+        // Convert workspace branch name to jj format as well
+        let jj_workspace_branch =
+            crate::jj::convert_git_branch_to_jj_format_public(&ws.branch_name, &repo_path);
+
+        // Only rebase MUTABLE commits between target and workspace branch.
+        // Using mutable() filters out any pushed/immutable commits that may exist
+        // in the range, preventing "Commit is immutable" errors when the workspace
+        // branch (or part of it) has already been pushed to a remote.
+        let revset = format!("roots(mutable() & ({}..{}))", jj_target_branch, jj_workspace_branch);
+        jj::jj_rebase_with_revset(&workspace_path, &revset, &jj_target_branch, &jj_workspace_branch, &conflict_style)
+            .map_err(|e| e.to_string())?
+    } else {
+        // Fallback if workspace not found in DB
+        jj::jj_rebase_onto(&workspace_path, &jj_target_branch, &conflict_style)
+            .map_err(|e| e.to_string())?
+    };
 
     // If rebase succeeded, save the target branch (in Git format for UI)
     if rebase_result.success {
