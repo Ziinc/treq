@@ -19,8 +19,6 @@ import {
   Search,
   GitBranch,
   Trash2,
-  AlertTriangle,
-  CircleDot,
   Copy,
   FolderOpen,
   CornerLeftUp,
@@ -198,8 +196,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 
     const statuses = workspaceStatuses ?? [];
     const workspaces = useMemo(() => statuses.map(s => s.current), [statuses]);
-    const conflictedIds = useMemo(() => statuses.filter(s => s.has_conflicts).map(s => s.current.id), [statuses]);
-    const changedIds = useMemo(() => statuses.filter(s => s.has_changes).map(s => s.current.id), [statuses]);
+    const commitsAheadMap = useMemo(() => new Map(statuses.map(s => [s.current.id, s.commits_ahead])), [statuses]);
 
     const [renameTarget, setRenameTarget] = useState<Workspace | null>(null);
 
@@ -384,9 +381,9 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                   selectedWorkspaceIds?.has(workspace.id) ||
                   selectedWorkspaceId === workspace.id;
                 const indentStyle = { paddingLeft: `${16 + (node.depth - 1) * 6}px`};
+                              const count = commitsAheadMap.get(workspace.id) ?? 0;
 
-                const isConflicted = conflictedIds.includes(workspace.id);
-                const isChanged = changedIds.includes(workspace.id);
+                const wsCommitsAhead = commitsAheadMap.get(workspace.id) ?? 0;
                 return (
                   <div key={workspace.id}>
                   {index > 0 && onAddBefore && (
@@ -427,7 +424,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                               isSelected ? "bg-primary/20" : "hover:bg-muted/50"
                             } py-1 ${
                               dragSnapshot.combineTargetFor ? "bg-primary/10" : ""
-                            } ${dragSnapshot.isDragging ? "opacity-50" : ""} ${isConflicted ? "text-destructive font-bold" : ""} ${isChanged ? "text-slate-700 font-bold" : ""}`}
+                            } ${dragSnapshot.isDragging ? "opacity-50" : ""} ${wsCommitsAhead > 0 ? "font-bold" : ""}`}
                             onClick={(e) =>
                               onWorkspaceMultiSelect
                                 ? onWorkspaceMultiSelect(workspace, e)
@@ -494,12 +491,9 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                                 </Tooltip>
                               )}
                             </span>
-                            {/* Indicators: Conflict takes priority over changes */}
-                            {conflictedIds.includes(workspace.id) ? (
-                              <AlertTriangle className="w-3 h-3 text-destructive shrink-0" />
-                            ) : changedIds.includes(workspace.id) ? (
-                              <CircleDot className="w-3 h-3 text-slate-400 fill-slate-400 shrink-0" />
-                            ) : null}
+                            {wsCommitsAhead > 0 && (<span className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded text-xs font-medium leading-none bg-slate-400 text-primary-foreground mr-1">
+                              {wsCommitsAhead}
+                            </span>)}
                           </div>
                         </TooltipTrigger>
                       </ContextMenuTrigger>
@@ -508,6 +502,10 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                           <div className="flex items-center gap-1.5">
                             <GitBranch className="w-3 h-3" />
                             <span>{getWorkspaceTitle(workspace)}</span>
+                          </div>
+                          <div className="font-sans mt-1">
+                            {wsCommitsAhead > 1 && (<span>{wsCommitsAhead} commits ahead of target branch</span>)}
+                            {wsCommitsAhead === 1 && (<span>{wsCommitsAhead} commit ahead of target branch</span>)}
                           </div>
                         </TooltipContent>
                       )}
