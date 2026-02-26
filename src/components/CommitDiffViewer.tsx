@@ -300,8 +300,8 @@ function CommitWithDiff({
         type="button"
         onClick={onToggle}
         className={cn(
-          "relative flex items-start gap-3 py-2 w-full text-left group",
-          "hover:bg-muted/40 rounded-md transition-colors cursor-pointer"
+          "relative flex items-start gap-3 py-2 px-2 -mx-2 w-full text-left group",
+          "hover:bg-muted/50 rounded-md transition-colors cursor-pointer"
         )}
       >
         <div className="relative z-10 flex-shrink-0">
