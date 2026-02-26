@@ -54,6 +54,7 @@ pub struct WorkspacePartialStatus {
     pub current: local_db::Workspace,
     pub has_conflicts: bool,
     pub has_changes: bool,
+    pub commits_ahead: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -384,10 +385,19 @@ pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspacePartialSt
                     .map(|files| !files.is_empty())
                     .unwrap_or(false);
 
+            let target_branch = workspace
+                .target_branch
+                .as_deref()
+                .unwrap_or("main");
+            let commits_ahead = jj::jj_get_commits_ahead(&workspace_path, target_branch)
+                .map(|ca| ca.total_count)
+                .unwrap_or(0);
+
             WorkspacePartialStatus {
                 current: workspace,
                 has_conflicts,
                 has_changes,
+                commits_ahead,
             }
         })
         .collect();
@@ -560,11 +570,14 @@ pub fn workspace_status(workspace_path: &str) -> Result<WorkspaceStatus, String>
         .map(|node| (node.status.has_changes, node.status.has_conflicts))
         .unwrap_or((false, false));
 
+    let commits_ahead_count = commits_ahead_of_target.len();
+
     Ok(WorkspaceStatus {
         partial: WorkspacePartialStatus {
             current: current_workspace,
             has_conflicts,
             has_changes,
+            commits_ahead: commits_ahead_count,
         },
         target,
         children,
@@ -625,6 +638,7 @@ fn build_dag_recursive(
             current: workspace.clone(),
             has_conflicts,
             has_changes,
+            commits_ahead: 0, // DAG nodes don't need commits_ahead
         },
         parent_id,
         child_ids: child_ids.clone(),
@@ -677,6 +691,9 @@ pub fn merge_workspace(
 
     // Get target branch for comparison
     let target_branch = workspace.target_branch.as_deref().unwrap_or("main");
+
+    // Abandon empty commits before merge to keep history clean
+    let _ = jj::jj_abandon_empty_commits(workspace_path_str, target_branch);
 
     // Get commits ahead of target
     let commits_ahead = jj::jj_get_commits_ahead(workspace_path_str, target_branch)
