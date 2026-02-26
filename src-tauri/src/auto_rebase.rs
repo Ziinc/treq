@@ -1,5 +1,6 @@
-use crate::jj::{self, JjRebaseResult};
+use crate::jj::{self, BookmarkConflictCommit, JjRebaseResult};
 use crate::local_db::{self, Workspace};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Reconstruct full workspace path from a Workspace object.
@@ -17,11 +18,22 @@ fn get_full_workspace_path(workspace: &Workspace) -> String {
 }
 
 /// Result for auto-rebase operation on a group of workspaces
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutoRebaseResult {
     pub target_branch: String,
     pub workspaces_rebased: Vec<String>,
     pub rebase_result: JjRebaseResult,
+    pub bookmark_conflicts: Vec<WorkspaceBookmarkConflict>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceBookmarkConflict {
+    pub workspace_id: i64,
+    pub workspace_name: String,
+    pub workspace_path: String,
+    pub branch_name: String,
+    pub bookmark: String,
+    pub commits: Vec<BookmarkConflictCommit>,
 }
 
 /// Convert git remote branch format to jj format using centralized logic
@@ -75,6 +87,7 @@ pub fn rebase_workspaces_for_target(
     let mut workspace_branches = Vec::new();
     let mut all_success = true;
     let mut combined_messages = Vec::new();
+    let mut bookmark_conflicts = Vec::new();
 
     for workspace in &workspaces_needing_rebase {
         // Rebase from workspace directory using roots() revset to include entire branch lineage
@@ -110,6 +123,20 @@ pub fn rebase_workspaces_for_target(
                     }
                     Ok(false) => {
                         // Skipped (already synced or has uncommitted changes) - this is fine
+                    }
+                    Err(jj::JjError::BookmarkConflict(info)) => {
+                        bookmark_conflicts.push(WorkspaceBookmarkConflict {
+                            workspace_id: workspace.id,
+                            workspace_name: workspace.workspace_name.clone(),
+                            workspace_path: full_path.clone(),
+                            branch_name: workspace.branch_name.clone(),
+                            bookmark: info.bookmark.clone(),
+                            commits: info.commits.clone(),
+                        });
+                        eprintln!(
+                            "Warning: Working copy for workspace '{}' has conflicted bookmark '{}'",
+                            workspace.workspace_name, info.bookmark
+                        );
                     }
                     Err(e) => {
                         eprintln!(
@@ -147,6 +174,7 @@ pub fn rebase_workspaces_for_target(
             success: all_success,
             message: combined_messages.join("\n"),
         },
+        bookmark_conflicts,
     }))
 }
 
@@ -225,6 +253,7 @@ pub fn check_and_rebase_all(repo_path: &str, conflict_marker_style: &str) -> Res
         let mut workspace_branches = Vec::new();
         let mut all_success = true;
         let mut combined_messages = Vec::new();
+        let mut bookmark_conflicts = Vec::new();
 
         for workspace in &workspaces_needing_rebase {
             // Rebase from workspace directory using roots() revset
@@ -257,6 +286,20 @@ pub fn check_and_rebase_all(repo_path: &str, conflict_marker_style: &str) -> Res
                             );
                         }
                         Ok(false) => {} // Skipped - this is fine
+                        Err(jj::JjError::BookmarkConflict(info)) => {
+                            bookmark_conflicts.push(WorkspaceBookmarkConflict {
+                                workspace_id: workspace.id,
+                                workspace_name: workspace.workspace_name.clone(),
+                                workspace_path: full_path.clone(),
+                                branch_name: workspace.branch_name.clone(),
+                                bookmark: info.bookmark.clone(),
+                                commits: info.commits.clone(),
+                            });
+                            eprintln!(
+                                "Warning: Working copy for workspace '{}' has conflicted bookmark '{}'",
+                                workspace.workspace_name, info.bookmark
+                            );
+                        }
                         Err(e) => {
                             eprintln!(
                                 "Warning: Failed to auto-sync working copy for workspace '{}': {}",
@@ -298,6 +341,7 @@ pub fn check_and_rebase_all(repo_path: &str, conflict_marker_style: &str) -> Res
                     success: all_success,
                     message: combined_messages.join("\n"),
                 },
+                bookmark_conflicts,
             });
         }
     }
@@ -373,6 +417,7 @@ pub fn rebase_single_workspace(
 
     // Auto-sync working copy to bookmark if safe (empty working copy)
     // This runs FROM the workspace directory to avoid staleness
+    let mut bookmark_conflicts = Vec::new();
     match jj::jj_sync_working_copy_if_safe(&full_path, &workspace.branch_name) {
         Ok(true) => {
             log::info!(
@@ -381,6 +426,20 @@ pub fn rebase_single_workspace(
             );
         }
         Ok(false) => {} // Skipped - this is fine
+        Err(jj::JjError::BookmarkConflict(info)) => {
+            bookmark_conflicts.push(WorkspaceBookmarkConflict {
+                workspace_id: workspace.id,
+                workspace_name: workspace.workspace_name.clone(),
+                workspace_path: full_path.clone(),
+                branch_name: workspace.branch_name.clone(),
+                bookmark: info.bookmark.clone(),
+                commits: info.commits.clone(),
+            });
+            eprintln!(
+                "Warning: Working copy for workspace '{}' has conflicted bookmark '{}'",
+                workspace.workspace_name, info.bookmark
+            );
+        }
         Err(e) => {
             eprintln!(
                 "Warning: Failed to auto-sync working copy for workspace '{}': {}",
@@ -401,5 +460,6 @@ pub fn rebase_single_workspace(
         target_branch,
         workspaces_rebased: vec![workspace.branch_name],
         rebase_result,
+        bookmark_conflicts,
     }))
 }

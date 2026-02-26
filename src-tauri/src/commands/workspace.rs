@@ -1,3 +1,4 @@
+use crate::auto_rebase::WorkspaceBookmarkConflict;
 use crate::jj::{self, JjRebaseResult};
 use crate::local_db::{self, Workspace};
 use crate::AppState;
@@ -333,6 +334,7 @@ pub struct SingleRebaseResult {
     pub rebased: bool,
     pub success: bool,
     pub message: String,
+    pub bookmark_conflicts: Vec<WorkspaceBookmarkConflict>,
 }
 
 #[tauri::command]
@@ -360,11 +362,13 @@ pub fn check_and_rebase_workspaces(
                 rebased: true,
                 success: auto_result.rebase_result.success,
                 message: auto_result.rebase_result.message,
+                bookmark_conflicts: auto_result.bookmark_conflicts,
             }),
             None => Ok(SingleRebaseResult {
                 rebased: false,
                 success: true,
                 message: "No rebase needed".to_string(),
+                bookmark_conflicts: Vec::new(),
             }),
         }
     } else {
@@ -374,6 +378,10 @@ pub fn check_and_rebase_workspaces(
         // Aggregate results
         let rebased_count: usize = results.iter().map(|r| r.workspaces_rebased.len()).sum();
         let all_success = results.iter().all(|r| r.rebase_result.success);
+        let bookmark_conflicts: Vec<WorkspaceBookmarkConflict> = results
+            .iter()
+            .flat_map(|r| r.bookmark_conflicts.clone())
+            .collect();
 
         let mut summary = String::new();
         for result in &results {
@@ -397,8 +405,49 @@ pub fn check_and_rebase_workspaces(
             rebased: rebased_count > 0,
             success: all_success,
             message: summary,
+            bookmark_conflicts,
         })
     }
+}
+
+/// Resolve a conflicted bookmark by setting it to a user-selected revision
+#[tauri::command]
+pub fn resolve_workspace_bookmark_conflict(
+    repo_path: String,
+    workspace_id: i64,
+    workspace_path: String,
+    branch_name: String,
+    revision_id: String,
+) -> Result<JjRebaseResult, String> {
+    if workspace_path.is_empty() {
+        return Err("Workspace path does not exist".to_string());
+    }
+
+    jj::jj_set_bookmark(&workspace_path, &branch_name, &revision_id).map_err(|e| e.to_string())?;
+
+    if let Err(e) =
+        local_db::update_workspace_last_rebased_commit(&repo_path, workspace_id, &revision_id)
+    {
+        eprintln!(
+            "Warning: Failed to update last rebased commit for workspace {}: {}",
+            workspace_id, e
+        );
+    }
+
+    if let Err(e) = jj::jj_workspace_update_stale(&workspace_path) {
+        eprintln!(
+            "Warning: Failed to refresh working copy after resolving bookmark conflict: {}",
+            e
+        );
+    }
+
+    Ok(JjRebaseResult {
+        success: true,
+        message: format!(
+            "Bookmark '{}' now points to revision {}",
+            branch_name, revision_id
+        ),
+    })
 }
 
 /// Rename a workspace's branch/bookmark.
