@@ -77,6 +77,11 @@ vi.mock("../src/lib/api", async () => {
       has_conflicts: false,
       conflicted_files: [],
       message: "No rebase needed",
+      bookmark_conflicts: [],
+    }),
+    resolveBookmarkConflict: vi.fn().mockResolvedValue({
+      success: true,
+      message: "Resolved",
     }),
   };
 });
@@ -88,6 +93,7 @@ const workspace: Workspace = {
   workspace_path: "/Users/test/repo/.treq/workspaces/feature-one",
   branch_name: "feature-one",
   created_at: new Date().toISOString(),
+  not_on_remote: false,
 };
 
 describe("ShowWorkspace agent comments", () => {
@@ -196,6 +202,100 @@ describe("ShowWorkspace agent comments", () => {
         repoPath: workspace.repo_path,
         pendingPrompt: reviewMarkdown,
       })
+    );
+  });
+});
+
+describe("Workspace bookmark conflict handling", () => {
+  const conflictPayload = {
+    workspace_id: workspace.id,
+    workspace_name: workspace.workspace_name,
+    workspace_path: workspace.workspace_path,
+    branch_name: workspace.branch_name,
+    bookmark: workspace.branch_name,
+    commits: [
+      {
+        commit_id: "abc123def4567890",
+        short_commit_id: "abc123def456",
+        change_id: "xyz987",
+        description: "Test conflict commit",
+        author_name: "Dev Example",
+        timestamp: "2025-01-01 10:00:00.000 +00:00",
+        diff_summary: "1 files changed",
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows a modal when auto rebase reports a bookmark conflict", async () => {
+    vi.mocked(api.checkAndRebaseWorkspaces).mockResolvedValueOnce({
+      rebased: true,
+      success: false,
+      message: "Bookmark conflict",
+      bookmark_conflicts: [conflictPayload],
+    });
+
+    render(
+      <ShowWorkspace
+        repositoryPath={workspace.repo_path}
+        workspace={workspace}
+        mainRepoBranch="main"
+        initialSelectedFile={null}
+      />
+    );
+
+    expect(
+      await screen.findByText(/Resolve bookmark conflict/i)
+    ).toBeInTheDocument();
+  });
+
+  it("lets the user resolve the bookmark conflict from the modal", async () => {
+    vi.mocked(api.checkAndRebaseWorkspaces)
+      .mockResolvedValueOnce({
+        rebased: true,
+        success: false,
+        message: "Bookmark conflict",
+        bookmark_conflicts: [conflictPayload],
+      })
+      .mockResolvedValueOnce({
+        rebased: false,
+        success: true,
+        message: "No rebase needed",
+        bookmark_conflicts: [],
+      });
+
+    const user = userEvent.setup();
+
+    render(
+      <ShowWorkspace
+        repositoryPath={workspace.repo_path}
+        workspace={workspace}
+        mainRepoBranch="main"
+        initialSelectedFile={null}
+      />
+    );
+
+    const commitButton = await screen.findByRole("button", {
+      name: /abc123def456/i,
+    });
+    await user.click(commitButton);
+
+    const resolveButton = await screen.findByRole("button", {
+      name: /resolve conflict/i,
+    });
+    await user.click(resolveButton);
+
+    await waitFor(() =>
+      expect(api.resolveBookmarkConflict).toHaveBeenCalledWith(
+        workspace.repo_path,
+        workspace.id,
+        workspace.workspace_path,
+        workspace.branch_name,
+        conflictPayload.commits[0].commit_id
+      )
     );
   });
 });

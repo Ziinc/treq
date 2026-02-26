@@ -64,6 +64,7 @@ pub enum JjError {
     WorkspaceNotFound(String),
     GitWorkspaceError(String),
     IoError(String),
+    BookmarkConflict(BookmarkConflictInfo),
 }
 
 /// Information about a jj workspace
@@ -138,6 +139,24 @@ pub struct JjCommitsAhead {
     pub total_count: usize,
 }
 
+/// Detailed metadata about a conflicted bookmark revision
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BookmarkConflictCommit {
+    pub commit_id: String,
+    pub short_commit_id: String,
+    pub change_id: String,
+    pub description: String,
+    pub author_name: String,
+    pub timestamp: String,
+    pub diff_summary: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BookmarkConflictInfo {
+    pub bookmark: String,
+    pub commits: Vec<BookmarkConflictCommit>,
+}
+
 /// Result of merge operation
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct JjMergeResult {
@@ -172,6 +191,12 @@ impl std::fmt::Display for JjError {
             JjError::WorkspaceNotFound(name) => write!(f, "Workspace '{}' not found", name),
             JjError::GitWorkspaceError(e) => write!(f, "Git workspace error: {}", e),
             JjError::IoError(e) => write!(f, "IO error: {}", e),
+            JjError::BookmarkConflict(info) => write!(
+                f,
+                "Conflicted bookmark '{}' with {} revision(s)",
+                info.bookmark,
+                info.commits.len()
+            ),
         }
     }
 }
@@ -2008,13 +2033,23 @@ fn parse_conflicted_files_from_status(status: &str) -> Result<Vec<String>, JjErr
     Ok(conflicts)
 }
 
-/// Get all commit IDs for a potentially conflicted bookmark
-/// Returns a vector of commit IDs - will have 1 item for normal bookmarks,
-/// 2+ items for conflicted bookmarks
-fn get_all_commits_for_revision(repo_path: &str, revision: &str) -> Result<Vec<String>, JjError> {
-    // Try with bookmarks(exact:...) to get all revisions for a bookmark
-    let bookmark_name = revision.split('@').next().unwrap_or(revision);
+/// Collect detailed information about all revisions for a conflicted bookmark
+fn collect_bookmark_conflict_info(
+    repo_path: &str,
+    revision: &str,
+) -> Result<BookmarkConflictInfo, JjError> {
+    let bookmark_name = revision.split('@').next().unwrap_or(revision).to_string();
     let exact_query = format!("bookmarks(exact:{})", bookmark_name);
+
+    let template = concat!(
+        "commit_id() ++ \"\\t\" ++ ",
+        "commit_id.short(12) ++ \"\\t\" ++ ",
+        "change_id.short(12) ++ \"\\t\" ++ ",
+        "if(description, description.first_line(), \"(no description)\") ++ \"\\t\" ++ ",
+        "author.name() ++ \"\\t\" ++ ",
+        "author.timestamp() ++ \"\\t\" ++ ",
+        "diff.stat() ++ \"\\x1E\""
+    );
 
     let output = command_for("jj")
         .current_dir(repo_path)
@@ -2024,7 +2059,7 @@ fn get_all_commits_for_revision(repo_path: &str, revision: &str) -> Result<Vec<S
             &exact_query,
             "--no-graph",
             "-T",
-            "commit_id.short(12)\n",
+            template,
         ])
         .output()
         .map_err(|e| JjError::IoError(e.to_string()))?;
@@ -2035,13 +2070,56 @@ fn get_all_commits_for_revision(repo_path: &str, revision: &str) -> Result<Vec<S
         ));
     }
 
-    let commit_ids: Vec<String> = String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut commits = Vec::new();
 
-    Ok(commit_ids)
+    for record in stdout.split('\x1E') {
+        let record = record.trim();
+        if record.is_empty() {
+            continue;
+        }
+
+        let mut lines = record.lines();
+        let first_line = match lines.next() {
+            Some(line) => line,
+            None => continue,
+        };
+
+        let parts: Vec<&str> = first_line.split('\t').collect();
+        if parts.len() < 6 {
+            continue;
+        }
+
+        // diff.stat() output might span multiple lines; append remaining lines
+        let mut diff_stat_parts: Vec<&str> = Vec::new();
+        if parts.len() > 6 {
+            diff_stat_parts.push(parts[6]);
+        }
+        for line in lines {
+            diff_stat_parts.push(line);
+        }
+        let diff_summary = diff_stat_parts
+            .last()
+            .copied()
+            .unwrap_or("")
+            .trim()
+            .to_string();
+
+        commits.push(BookmarkConflictCommit {
+            commit_id: parts[0].to_string(),
+            short_commit_id: parts[1].to_string(),
+            change_id: parts[2].to_string(),
+            description: parts[3].to_string(),
+            author_name: parts[4].to_string(),
+            timestamp: parts[5].to_string(),
+            diff_summary,
+        });
+    }
+
+    Ok(BookmarkConflictInfo {
+        bookmark: bookmark_name,
+        commits,
+    })
 }
 
 /// Get the current commit ID for a branch/revision
@@ -2067,14 +2145,9 @@ pub fn jj_get_commit_id(repo_path: &str, revision: &str) -> Result<String, JjErr
 
         // If the bookmark is conflicted, get all commits and report them
         if error_msg.contains("conflicted") && !revision.starts_with("bookmarks(") {
-            // Try to get all conflicting commits
-            if let Ok(commits) = get_all_commits_for_revision(repo_path, revision) {
-                if !commits.is_empty() {
-                    let commit_list = commits.join(", ");
-                    return Err(JjError::IoError(format!(
-                        "Conflicted bookmark '{}' has multiple revisions: [{}]. Use `jj bookmark set {} -r <REVISION>` to resolve.",
-                        revision, commit_list, revision
-                    )));
+            if let Ok(info) = collect_bookmark_conflict_info(repo_path, revision) {
+                if !info.commits.is_empty() {
+                    return Err(JjError::BookmarkConflict(info));
                 }
             }
         }
@@ -2917,6 +2990,70 @@ pub fn jj_get_merge_diff(
 
         if !diff_output.status.success() {
             // If diff fails for a file, skip it but continue with others
+            continue;
+        }
+
+        let diff_text = String::from_utf8_lossy(&diff_output.stdout);
+        let hunks = parse_git_diff_hunks(&diff_text)?;
+
+        hunks_by_file.push(JjFileDiff {
+            path: file.path.clone(),
+            hunks,
+        });
+    }
+
+    Ok(JjRevisionDiff {
+        files,
+        hunks_by_file,
+    })
+}
+
+/// Get diff for a single commit by revision (commit_id or change_id)
+/// Uses: jj diff -r <revision> --summary and jj diff -r <revision> --git -- <file>
+pub fn jj_get_commit_diff(
+    workspace_path: &str,
+    revision: &str,
+    conflict_marker_style: &str,
+) -> Result<JjRevisionDiff, JjError> {
+    // Validate revision to prevent injection
+    if revision.starts_with('-') || revision.contains('\0') || revision.is_empty() {
+        return Err(JjError::IoError("Invalid revision".to_string()));
+    }
+
+    // Get list of changed files
+    let status_output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["diff", "--summary", "-r", revision])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !status_output.status.success() {
+        return Err(JjError::IoError(
+            String::from_utf8_lossy(&status_output.stderr).to_string(),
+        ));
+    }
+
+    let summary = String::from_utf8_lossy(&status_output.stdout);
+    let files = parse_diff_summary(&summary)?;
+
+    // For each file, get the hunks
+    let mut hunks_by_file = Vec::new();
+    for file in &files {
+        let diff_output = jj_command(conflict_marker_style)
+            .current_dir(workspace_path)
+            .args([
+                "diff",
+                "-r",
+                revision,
+                "--git",
+                "--no-pager",
+                "--",
+                &file.path,
+            ])
+            .output()
+            .map_err(|e| JjError::IoError(e.to_string()))?;
+
+        if !diff_output.status.success() {
             continue;
         }
 

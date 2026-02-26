@@ -275,6 +275,20 @@ pub fn jj_get_merge_diff(
     jj::jj_get_merge_diff(&workspace_path, &target_branch, &conflict_style).map_err(|e| e.to_string())
 }
 
+/// Get diff for a single commit by revision (commit_id or change_id)
+#[tauri::command]
+pub fn jj_get_commit_diff(
+    state: State<AppState>,
+    workspace_path: String,
+    revision: String,
+) -> Result<jj::JjRevisionDiff, String> {
+    let conflict_style = state.db.lock().unwrap()
+        .get_setting("conflict_marker_style")
+        .ok().flatten()
+        .unwrap_or_else(|| "git".to_string());
+    jj::jj_get_commit_diff(&workspace_path, &revision, &conflict_style).map_err(|e| e.to_string())
+}
+
 /// Create a merge commit combining workspace changes with target branch
 #[tauri::command]
 pub fn jj_create_merge(

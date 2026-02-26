@@ -385,6 +385,8 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                   selectedWorkspaceId === workspace.id;
                 const indentStyle = { paddingLeft: `${16 + (node.depth - 1) * 6}px`};
 
+                const isConflicted = conflictedIds.includes(workspace.id);
+                const isChanged = changedIds.includes(workspace.id);
                 return (
                   <div key={workspace.id}>
                   {index > 0 && onAddBefore && (
@@ -425,7 +427,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                               isSelected ? "bg-primary/20" : "hover:bg-muted/50"
                             } py-1 ${
                               dragSnapshot.combineTargetFor ? "bg-primary/10" : ""
-                            } ${dragSnapshot.isDragging ? "opacity-50" : ""}`}
+                            } ${dragSnapshot.isDragging ? "opacity-50" : ""} ${isConflicted ? "text-destructive font-bold" : ""} ${isChanged ? "text-slate-700 font-bold" : ""}`}
                             onClick={(e) =>
                               onWorkspaceMultiSelect
                                 ? onWorkspaceMultiSelect(workspace, e)
@@ -449,7 +451,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                             <span
                               className={`flex-1 min-w-0 truncate font-mono ${
                                 isSelected ? "text-primary font-medium" : "text-muted-foreground"
-                              }`}
+                              } `}
                             >
                               {getWorkspaceTitle(workspace)}
                             </span>
@@ -498,7 +500,6 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                             ) : changedIds.includes(workspace.id) ? (
                               <CircleDot className="w-3 h-3 text-slate-400 fill-slate-400 shrink-0" />
                             ) : null}
-                            <StatusPill path={workspace.workspace_path} />
                           </div>
                         </TooltipTrigger>
                       </ContextMenuTrigger>

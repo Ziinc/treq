@@ -28,6 +28,7 @@ interface LinearCommitHistoryProps {
   workspaceId?: number;
   repoPath?: string;
   onCommitMoved?: () => void;
+  onCommitClick?: (changeId: string) => void;
 }
 
 interface DayGroup {
@@ -55,7 +56,7 @@ function groupCommitsByDay(commits: JjLogCommit[]): DayGroup[] {
 }
 
 export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
-  function LinearCommitHistory({ workspacePath, targetBranch, isHomeRepo, workspaceId, repoPath, onCommitMoved }) {
+  function LinearCommitHistory({ workspacePath, targetBranch, isHomeRepo, workspaceId, repoPath, onCommitMoved, onCommitClick }) {
     const [commits, setCommits] = useState<JjLogCommit[]>([]);
     const [loading, setLoading] = useState(true);
     const [moveTarget, setMoveTarget] = useState<JjLogCommit | null>(null);
@@ -71,9 +72,10 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
       }
       setLoading(true);
       jjGetLog(workspacePath, targetBranch, isHomeRepo)
-        .then(({commits}) => {
+        .then((result) => {
           // Skip the first commit (working copy / uncommitted @)
-          setCommits(commits.slice(1));
+          const nextCommits = result?.commits ?? [];
+          setCommits(nextCommits.slice(1));
           setRemovingCommitIds(new Set());
         })
         .catch((err) => {
@@ -192,6 +194,7 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
                         onMoveToNew={handleMoveToNew}
                         onMoveToExisting={handleMoveToExisting}
                         onAbandon={handleAbandon}
+                        onCommitClick={onCommitClick}
                       />
                     );
                   })}
@@ -239,9 +242,10 @@ interface CommitItemProps {
   onMoveToNew: (commit: JjLogCommit) => void;
   onMoveToExisting: (commit: JjLogCommit) => void;
   onAbandon: (commit: JjLogCommit) => void;
+  onCommitClick?: (changeId: string) => void;
 }
 
-function CommitItem({ commit, isFirst, canMove, isRemoving, onMoveToNew, onMoveToExisting, onAbandon }: CommitItemProps) {
+function CommitItem({ commit, isFirst, canMove, isRemoving, onMoveToNew, onMoveToExisting, onAbandon, onCommitClick }: CommitItemProps) {
   const firstLine = commit.description.split("\n")[0] || "(no message)";
   const hasStats = commit.insertions > 0 || commit.deletions > 0;
 
@@ -264,8 +268,10 @@ function CommitItem({ commit, isFirst, canMove, isRemoving, onMoveToNew, onMoveT
       <div
         className={cn(
           "flex-1 min-w-0 pt-0.5 rounded-md",
-          isFirst && "bg-accent/50 p-2 -m-2 shadow-sm border border-accent"
+          isFirst && "bg-accent/50 p-2 -m-2 shadow-sm border border-accent",
+          onCommitClick && "cursor-pointer hover:bg-muted/40 transition-colors"
         )}
+        onClick={onCommitClick ? () => onCommitClick(commit.change_id) : undefined}
       >
         <p className="text-sm truncate" title={firstLine}>
           {firstLine}

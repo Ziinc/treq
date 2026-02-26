@@ -21,6 +21,9 @@ import {
   jjGitFetchBackground,
   pushWorkspaceToRemote,
   jjGetLog,
+  resolveBookmarkConflict,
+  type SingleRebaseResult,
+  type WorkspaceBookmarkConflict,
 } from "../lib/api";
 import { getStatusBgColor } from "../lib/git-status-colors";
 import { parseJjChangedFiles, type ParsedFileChange } from "../lib/git-utils";
@@ -39,6 +42,8 @@ import {
 } from "./ChangesDiffViewer";
 import { FileBrowser } from "./FileBrowser";
 import { LinearCommitHistory } from "./LinearCommitHistory";
+import { CommitDiffViewer } from "./CommitDiffViewer";
+import { WorkspaceBookmarkConflictModal } from "./WorkspaceBookmarkConflictModal";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import { Button } from "./ui/button";
 import { useToast } from "./ui/toast";
@@ -78,6 +83,7 @@ import {
   EyeOff,
   Layers,
   FileDiff,
+  GitCommitHorizontal,
   RefreshCw,
   Split,
 } from "lucide-react";
@@ -161,16 +167,66 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   );
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [rebasing, setRebasing] = useState(false);
+  const [bookmarkConflict, setBookmarkConflict] = useState<WorkspaceBookmarkConflict | null>(null);
+  const [conflictModalOpen, setConflictModalOpen] = useState(false);
+  const [resolvingBookmarkConflict, setResolvingBookmarkConflict] = useState(false);
   const [refreshingFiles, setRefreshingFiles] = useState(false);
 
   // Show overview tab by default for main repo, changes tab for workspaces
   const [activeTab, setActiveTab] = useState("overview");
+  const [scrollToCommitId, setScrollToCommitId] = useState<string | null>(null);
   const [showFileBrowserInCode, setShowFileBrowserInCode] = useState(false);
+
+  const handleChangedFilesUpdate = useCallback(
+    (parsedFiles: ParsedFileChange[]) => {
+      const map = new Map<string, ParsedFileChange>();
+      for (const file of parsedFiles) {
+        const fullPath = `${workingDirectory}/${file.path}`;
+        map.set(fullPath, file);
+      }
+      setChangedFiles(map);
+    },
+    [workingDirectory]
+  );
 
   // Reset to Code tab when switching workspaces
   useEffect(() => {
     setActiveTab("overview");
   }, [workspace?.id]);
+
+  useEffect(() => {
+    setBookmarkConflict(null);
+    setConflictModalOpen(false);
+  }, [workspace?.id]);
+
+  const handleBookmarkConflictsFromResult = useCallback(
+    (result?: SingleRebaseResult | null) => {
+      if (!workspace) {
+        setBookmarkConflict(null);
+        setConflictModalOpen(false);
+        return false;
+      }
+
+      const conflicts = result?.bookmark_conflicts ?? [];
+      const conflictForWorkspace = conflicts.find(
+        (conflict) => conflict.workspace_id === workspace.id
+      );
+
+      if (conflictForWorkspace) {
+        setBookmarkConflict(conflictForWorkspace);
+        setConflictModalOpen(true);
+        return true;
+      }
+
+      if (bookmarkConflict) {
+        setBookmarkConflict(null);
+        setConflictModalOpen(false);
+      }
+
+      return false;
+    },
+    [workspace, bookmarkConflict]
+  );
 
   // Files list expansion state
 
@@ -235,8 +291,13 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 
     try {
       const notOnRemote = workspace?.not_on_remote ?? false;
-      const [ahead, behind] = await jjGetSyncStatus(path, branch, notOnRemote);
-      setSyncStatus({ ahead, behind });
+      const result = await jjGetSyncStatus(path, branch, notOnRemote);
+      if (Array.isArray(result) && result.length >= 2) {
+        const [ahead, behind] = result as [number, number];
+        setSyncStatus({ ahead, behind });
+      } else {
+        setSyncStatus(null);
+      }
     } catch (error) {
       console.error("Failed to fetch sync status:", error);
       setSyncStatus(null);
@@ -260,8 +321,9 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
     let cancelled = false;
     const path = workspace ? getFullWorkspacePath(workspace) : workingDirectory;
     jjGetLog(path, diffStatsTargetBranch, false)
-      .then(({ commits }) => {
-        if (cancelled) return;
+      .then((logResult) => {
+        if (cancelled || !logResult) return;
+        const commits = logResult.commits ?? [];
         const totals = commits.reduce(
           (acc, c) => ({ insertions: acc.insertions + c.insertions, deletions: acc.deletions + c.deletions }),
           { insertions: 0, deletions: 0 }
@@ -397,12 +459,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
         .then((jjFiles) => {
           if (!isMounted) return;
           const parsed = parseJjChangedFiles(jjFiles);
-          const map = new Map<string, ParsedFileChange>();
-          for (const file of parsed) {
-            const fullPath = `${workingDirectory}/${file.path}`;
-            map.set(fullPath, file);
-          }
-          setChangedFiles(map);
+          handleChangedFilesUpdate(parsed);
         })
         .catch(() => {
           if (isMounted) {
@@ -414,7 +471,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
         isMounted = false;
       };
     }
-  }, [workingDirectory]);
+  }, [workingDirectory, handleChangedFilesUpdate]);
 
   // Handle file selection from Cmd+P (or other external sources)
   useEffect(() => {
@@ -454,7 +511,13 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 
         if (!mounted) return;
 
-        if (result.rebased && !result.success) {
+        if (!result) {
+          return;
+        }
+
+        const conflictDetected = handleBookmarkConflictsFromResult(result);
+
+        if (result.rebased && !result.success && !conflictDetected) {
           addToast({
             title: "Rebase failed",
             description: result.message,
@@ -484,7 +547,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
     return () => {
       mounted = false;
     };
-  }, [workspace?.id, workspace?.branch_name, targetBranch, effectiveRepoPath, addToast]);
+  }, [workspace?.id, workspace?.branch_name, targetBranch, effectiveRepoPath, addToast, handleBookmarkConflictsFromResult]);
 
   const handleTargetBranchSelect = useCallback(
     async (branch: string) => {
@@ -652,8 +715,14 @@ const handleSync = useCallback(async () => {
         true // force = true
       );
 
+      if (!result) {
+        return;
+      }
+
+      const conflictDetected = handleBookmarkConflictsFromResult(result);
+
       if (result.rebased) {
-        if (!result.success) {
+        if (!result.success && !conflictDetected) {
           addToast({
             title: "Rebase failed",
             description: result.message,
@@ -670,7 +739,7 @@ const handleSync = useCallback(async () => {
           map.set(fullPath, file);
         }
         setChangedFiles(map);
-      } else {
+      } else if (!conflictDetected) {
         addToast({
           title: "No rebase needed",
           description: "Workspace is already up to date",
@@ -691,7 +760,62 @@ const handleSync = useCallback(async () => {
         setRebasing(false);
       }, remainingTime);
     }
-  }, [workspace, targetBranch, effectiveRepoPath, workingDirectory, addToast]);
+  }, [workspace, targetBranch, effectiveRepoPath, workingDirectory, addToast, handleBookmarkConflictsFromResult]);
+
+  const handleResolveBookmarkConflict = useCallback(
+    async (revisionId: string) => {
+      if (!workspace || !effectiveRepoPath || !bookmarkConflict || !targetBranch) {
+        return;
+      }
+
+      setResolvingBookmarkConflict(true);
+      try {
+        await resolveBookmarkConflict(
+          effectiveRepoPath,
+          workspace.id,
+          workingDirectory,
+          bookmarkConflict.branch_name,
+          revisionId
+        );
+
+        addToast({
+          title: "Bookmark updated",
+          description: `Set ${bookmarkConflict.branch_name} to ${revisionId}`,
+          type: "success",
+        });
+
+        setBookmarkConflict(null);
+        setConflictModalOpen(false);
+
+        const result = await checkAndRebaseWorkspaces(
+          effectiveRepoPath,
+          workspace.id,
+          targetBranch,
+          true
+        );
+        if (result) {
+          handleBookmarkConflictsFromResult(result);
+        }
+      } catch (error) {
+        addToast({
+          title: "Failed to resolve conflict",
+          description: error instanceof Error ? error.message : String(error),
+          type: "error",
+        });
+      } finally {
+        setResolvingBookmarkConflict(false);
+      }
+    },
+    [
+      workspace,
+      effectiveRepoPath,
+      bookmarkConflict,
+      workingDirectory,
+      addToast,
+      targetBranch,
+      handleBookmarkConflictsFromResult,
+    ]
+  );
 
   // Listen for Developer menu > Force Rebase Workspace command
   useEffect(() => {
@@ -819,6 +943,10 @@ const handleSync = useCallback(async () => {
             <TabsTrigger value="overview" className="inline-flex items-center">
               <Code2 className="w-4 h-4 mr-1.5" />
               Code
+            </TabsTrigger>
+            <TabsTrigger value="commits" className="inline-flex items-center gap-1.5">
+              <GitCommitHorizontal className="w-4 h-4" />
+              <span>Commits</span>
             </TabsTrigger>
             <TabsTrigger value="changes" className="inline-flex items-center gap-1.5">
               <FileDiff className="w-4 h-4" />
@@ -1025,10 +1153,22 @@ const handleSync = useCallback(async () => {
                   isHomeRepo={!workspace}
                   workspaceId={workspace?.id}
                   repoPath={effectiveRepoPath || undefined}
+                  onCommitClick={(changeId) => {
+                    setScrollToCommitId(changeId);
+                    setActiveTab("commits");
+                  }}
                 />
               </div>
             </div>
           )
+        ) : activeTab === "commits" ? (
+          <CommitDiffViewer
+            workspacePath={workspace ? getFullWorkspacePath(workspace) : workingDirectory}
+            targetBranch={targetBranch}
+            isHomeRepo={!workspace}
+            scrollToCommitId={scrollToCommitId}
+            onScrollComplete={() => setScrollToCommitId(null)}
+          />
         ) : (
           <ChangesDiffViewer
             key={`changes-${workingDirectory}`}
@@ -1036,6 +1176,7 @@ const handleSync = useCallback(async () => {
             workspacePath={workingDirectory}
             workspaceId={workspace?.id}
             repoPath={effectiveRepoPath}
+            onChangedFilesChange={handleChangedFilesUpdate}
             onRefreshingChange={setRefreshingFiles}
             initialSelectedFile={initialSelectedFile}
             conflictedFiles={conflictedFiles}
@@ -1075,7 +1216,8 @@ const handleSync = useCallback(async () => {
   const isTruncated = workspaceIntent && workspaceIntent.length > 100;
 
   return (
-    <div className="h-full w-full flex flex-col bg-background">
+    <>
+      <div className="h-full w-full flex flex-col bg-background">
       <div className="border-b p-2 flex flex-col gap-1 flex-shrink-0">
         {/* Row 1: Branch name */}
         <div className="flex items-center justify-between">
@@ -1352,7 +1494,14 @@ const handleSync = useCallback(async () => {
           {executionPanel}
         </div>
       </div>
-
-    </div>
+      </div>
+      <WorkspaceBookmarkConflictModal
+        conflict={bookmarkConflict}
+        open={conflictModalOpen && !!bookmarkConflict}
+        onClose={() => setConflictModalOpen(false)}
+        onResolve={handleResolveBookmarkConflict}
+        resolving={resolvingBookmarkConflict}
+      />
+    </>
   );
 });

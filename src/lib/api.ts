@@ -79,6 +79,25 @@ export interface JjRebaseResult {
   message: string;
 }
 
+export interface BookmarkConflictCommit {
+  commit_id: string;
+  short_commit_id: string;
+  change_id: string;
+  description: string;
+  author_name: string;
+  timestamp: string;
+  diff_summary: string;
+}
+
+export interface WorkspaceBookmarkConflict {
+  workspace_id: number;
+  workspace_name: string;
+  workspace_path: string;
+  branch_name: string;
+  bookmark: string;
+  commits: BookmarkConflictCommit[];
+}
+
 export interface JjLogCommit {
   commit_id: string;
   short_id: string;
@@ -393,6 +412,12 @@ export const checkBranchExists = (
 ): Promise<BranchStatus> =>
   invoke("jj_check_branch_exists", { repoPath: repo_path, branchName: branch_name });
 
+export const jjGetCommitDiff = (
+  workspacePath: string,
+  revision: string
+): Promise<JjRevisionDiff> =>
+  invoke("jj_get_commit_diff", { workspacePath, revision });
+
 export const jjGetLog = (
   workspacePath: string,
   targetBranch: string,
@@ -544,6 +569,7 @@ export interface SingleRebaseResult {
   rebased: boolean;
   success: boolean;
   message: string;
+  bookmark_conflicts?: WorkspaceBookmarkConflict[];
 }
 
 export const checkAndRebaseWorkspaces = (
@@ -557,6 +583,21 @@ export const checkAndRebaseWorkspaces = (
     workspaceId: workspace_id ?? null,
     defaultBranch: default_branch ?? null,
     force: force ?? null,
+  });
+
+export const resolveBookmarkConflict = (
+  repo_path: string,
+  workspace_id: number,
+  workspace_path: string,
+  branch_name: string,
+  revision_id: string
+): Promise<JjRebaseResult> =>
+  invoke("resolve_workspace_bookmark_conflict", {
+    repoPath: repo_path,
+    workspaceId: workspace_id,
+    workspacePath: workspace_path,
+    branchName: branch_name,
+    revisionId: revision_id,
   });
 
 // PTY API

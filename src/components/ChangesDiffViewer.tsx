@@ -110,6 +110,7 @@ interface ChangesDiffViewerProps {
   workspaceId?: number;
   readOnly?: boolean;
   onStagedFilesChange?: (files: string[]) => void;
+  onChangedFilesChange?: (files: ParsedFileChange[]) => void;
   onRefreshingChange?: (isRefreshing: boolean) => void;
   initialSelectedFile: string | null;
   onReviewSubmitted?: () => void;
@@ -859,6 +860,7 @@ export const ChangesDiffViewer = memo(
         workspaceId,
         readOnly = false,
         onStagedFilesChange,
+        onChangedFilesChange,
         onRefreshingChange,
         initialSelectedFile,
         onReviewSubmitted,
@@ -1273,6 +1275,8 @@ export const ChangesDiffViewer = memo(
 
       const applyChangedFiles = useCallback(
         (parsed: ParsedFileChange[], forceApply = false) => {
+          onChangedFilesChange?.(parsed);
+
           // If in review mode and not forcing, store as pending and mark stale files
           if (isInReviewMode && !forceApply) {
             setFiles((prev) => {
@@ -1342,7 +1346,7 @@ export const ChangesDiffViewer = memo(
             onStagedFilesChange(Array.from(new Set(staged)));
           }
         },
-        [initialSelectedFile, onStagedFilesChange, isInReviewMode]
+        [initialSelectedFile, onStagedFilesChange, onChangedFilesChange, isInReviewMode]
       );
 
       const invalidateCache = useCallback(async () => {
@@ -1456,53 +1460,55 @@ export const ChangesDiffViewer = memo(
         loadReview();
       }, [repoPath, workspaceId]);
 
-      // Fetch committed changes when toggle is enabled
-      useEffect(() => {
-        const fetchCommittedChanges = async () => {
-          if (showCommittedChanges && targetBranch) {
-            try {
-              const mergeDiff: JjRevisionDiff = await jjGetMergeDiff(
-                workspacePath,
-                targetBranch
-              );
-              setCommittedFiles(mergeDiff.files);
+      const refreshCommittedChanges = useCallback(async () => {
+        if (showCommittedChanges && targetBranch) {
+          try {
+            const mergeDiff: JjRevisionDiff = await jjGetMergeDiff(
+              workspacePath,
+              targetBranch
+            );
+            setCommittedFiles(mergeDiff.files);
 
-              // Store hunks by file path and add to allFileHunks for rendering
-              setAllFileHunks((prev) => {
-                const updated = new Map(prev);
-                for (const fileDiff of mergeDiff.hunks_by_file) {
-                  updated.set(fileDiff.path, {
-                    filePath: fileDiff.path,
-                    hunks: fileDiff.hunks,
-                    isLoading: false,
-                  });
-                }
-                return updated;
-              });
-            } catch (error) {
-              console.error("Failed to fetch committed changes:", error);
-              addToast?.({
-                title: "Failed to load committed changes",
-                description: error instanceof Error ? error.message : "Unknown error",
-                type: "error",
-              });
-            }
-          } else {
-            // Clear committed files when toggle is off
-            setCommittedFiles([]);
-            // Remove committed file hunks from allFileHunks
+            // Store hunks by file path and add to allFileHunks for rendering
             setAllFileHunks((prev) => {
               const updated = new Map(prev);
-              committedFiles.forEach((file) => {
-                updated.delete(file.path);
-              });
+              for (const fileDiff of mergeDiff.hunks_by_file) {
+                updated.set(fileDiff.path, {
+                  filePath: fileDiff.path,
+                  hunks: fileDiff.hunks,
+                  isLoading: false,
+                });
+              }
               return updated;
             });
+          } catch (error) {
+            console.error("Failed to fetch committed changes:", error);
+            addToast?.({
+              title: "Failed to load committed changes",
+              description: error instanceof Error ? error.message : "Unknown error",
+              type: "error",
+            });
           }
-        };
+          return;
+        }
 
-        fetchCommittedChanges();
+        // Clear committed files when toggle is off
+        setCommittedFiles((previousCommittedFiles) => {
+          setAllFileHunks((prev) => {
+            const updated = new Map(prev);
+            previousCommittedFiles.forEach((file) => {
+              updated.delete(file.path);
+            });
+            return updated;
+          });
+          return [];
+        });
       }, [showCommittedChanges, targetBranch, workspacePath, addToast]);
+
+      // Fetch committed changes when toggle/target changes
+      useEffect(() => {
+        refreshCommittedChanges();
+      }, [refreshCommittedChanges]);
 
       // Debounce comments and summary for auto-save
       const debouncedComments = useDebounce(comments, 500);
@@ -2898,7 +2904,7 @@ export const ChangesDiffViewer = memo(
               description: result.trim() || "Commit successful",
               type: "success",
             });
-            loadChangedFiles();
+            await Promise.all([loadChangedFiles(), refreshCommittedChanges()]);
           } catch (error) {
             const message =
               error instanceof Error ? error.message : String(error);
@@ -2911,7 +2917,7 @@ export const ChangesDiffViewer = memo(
             setCommitPending(false);
           }
         },
-        [workspacePath, addToast, invalidateCache, stagedFiles, files.length]
+        [workspacePath, addToast, invalidateCache, stagedFiles, loadChangedFiles, refreshCommittedChanges]
       );
 
       const toggleSectionCollapse = useCallback((sectionId: string) => {
