@@ -2809,9 +2809,9 @@ pub fn jj_get_commits_ahead(
         return Err(JjError::IoError("Invalid target branch name".to_string()));
     }
 
-    // Revset: commits reachable from @- but not from target_branch
-    // Uses @- to exclude the empty working copy commit
-    let revset = format!("{}..@-", target_branch);
+    // Revset: commits reachable from @- but not from target_branch, excluding empty commits
+    // Uses @- to exclude the working copy commit, and ~ empty() to exclude empty intermediate commits
+    let revset = format!("({}..@-) ~ empty()", target_branch);
 
     // Use same template as jj_get_log
     let template = concat!(
@@ -2898,6 +2898,45 @@ pub fn jj_get_commits_ahead(
         commits,
         total_count,
     })
+}
+
+/// Abandon empty commits between target branch and working copy parent.
+/// Returns list of abandoned change IDs.
+pub fn jj_abandon_empty_commits(
+    workspace_path: &str,
+    target_branch: &str,
+) -> Result<Vec<String>, JjError> {
+    if target_branch.starts_with('-') || target_branch.contains('\0') || target_branch.is_empty() {
+        return Err(JjError::IoError("Invalid target branch name".to_string()));
+    }
+
+    // Find empty commits in the range
+    let revset = format!("({}..@-) & empty()", target_branch);
+
+    let output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["log", "-r", &revset, "--no-graph", "-T", "change_id.short(12) ++ \"\\n\""])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !output.status.success() {
+        return Err(JjError::IoError(
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        ));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let change_ids: Vec<String> = stdout
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
+
+    for change_id in &change_ids {
+        jj_abandon(workspace_path, change_id)?;
+    }
+
+    Ok(change_ids)
 }
 
 /// Parse diff summary output from jj diff --summary

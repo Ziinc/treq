@@ -6,6 +6,7 @@ use std::path::Path;
 use std::process::Command;
 
 use treq_lib::core::{MaybeEmptyParam, MergeCommit};
+use treq_lib::jj;
 use treq_lib::local_db::Workspace;
 
 // =============================================================================
@@ -490,7 +491,8 @@ fn test_can_rebase_merge_workspace_into_home_repo() {
     let workspace: Workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
         "feature-rebase",
-        Some("rebasing feature"),
+        Some("rebasing feature".to_string()),
+        None,
         None,
     )
     .expect("Failed to create workspace");
@@ -822,6 +824,15 @@ fn test_workspace_conflict_detection() {
     assert!(
         !stacked_status_before.has_changes,
         "Stacked workspace should not have changes yet"
+    );
+    // Both workspaces should have 0 commits ahead (no commits yet, only uncommitted changes)
+    assert_eq!(
+        base_status_before.commits_ahead, 0,
+        "Base workspace should have 0 commits ahead (only uncommitted changes)"
+    );
+    assert_eq!(
+        stacked_status_before.commits_ahead, 0,
+        "Stacked workspace should have 0 commits ahead"
     );
 
     // Write to stacked workspace README.md and verify has_changes flips to true
@@ -2188,5 +2199,282 @@ fn test_recover_handles_missing_workspace_dir() {
         !jj_workspaces.contains(&workspace.workspace_name),
         "Workspace with missing dir should not be recovered, got: {:?}",
         jj_workspaces
+    );
+}
+
+// =============================================================================
+// Test: Empty commits are excluded from commits ahead
+// =============================================================================
+
+#[test]
+fn test_empty_commits_excluded_from_commits_ahead() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace: Workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/empty-filter",
+        Some("empty filter test".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().unwrap();
+
+    // Create a real commit with content
+    fs::write(workspace_path.join("real.txt"), "real content").expect("Failed to write file");
+    jj::jj_commit(workspace_path_str, "Add real file").expect("Failed to commit");
+
+    // Create empty commits via `jj new` (these have no file changes)
+    Command::new("jj")
+        .current_dir(workspace_path_str)
+        .args(["new"])
+        .output()
+        .expect("Failed to run jj new");
+    Command::new("jj")
+        .current_dir(workspace_path_str)
+        .args(["new"])
+        .output()
+        .expect("Failed to run jj new");
+
+    // Verify that jj_get_commits_ahead only returns the real commit
+    let target_branch = workspace.target_branch.as_deref().unwrap_or("main");
+    let commits_ahead = jj::jj_get_commits_ahead(workspace_path_str, target_branch)
+        .expect("Failed to get commits ahead");
+
+    assert_eq!(
+        commits_ahead.total_count, 1,
+        "Should only have 1 non-empty commit ahead, got {}",
+        commits_ahead.total_count
+    );
+    assert!(
+        commits_ahead.commits[0].description.contains("Add real file"),
+        "The commit should be the real one, got: {}",
+        commits_ahead.commits[0].description
+    );
+}
+
+// =============================================================================
+// Test: Merge abandons empty commits
+// =============================================================================
+
+#[test]
+fn test_merge_abandons_empty_commits() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace: Workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/merge-empty",
+        Some("merge empty test".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().unwrap();
+
+    // Create a real commit
+    fs::write(workspace_path.join("feature.txt"), "feature content")
+        .expect("Failed to write file");
+    jj::jj_commit(workspace_path_str, "Add feature").expect("Failed to commit");
+
+    // Create empty commits
+    Command::new("jj")
+        .current_dir(workspace_path_str)
+        .args(["new"])
+        .output()
+        .expect("Failed to run jj new");
+
+    // Merge should succeed despite empty commits
+    treq_lib::core::merge_workspace(
+        &repo.repo_path,
+        workspace.id,
+        "Merge feat/merge-empty",
+        MergeCommit::Merge,
+    )
+    .expect("Failed to merge workspace with empty commits");
+
+    // Verify the file is in the main repo
+    assert!(
+        Path::new(&repo.repo_path).join("feature.txt").exists(),
+        "Feature file should exist in main repo after merge"
+    );
+
+    // Verify workspace is cleaned up
+    assert!(
+        !workspace_path.exists(),
+        "Workspace directory should be deleted after merge"
+    );
+}
+
+// =============================================================================
+// Test: Squash merge with empty commits
+// =============================================================================
+
+#[test]
+fn test_squash_merge_with_empty_commits() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace: Workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/squash-empty",
+        Some("squash empty test".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().unwrap();
+
+    // Create a real commit
+    fs::write(workspace_path.join("squash.txt"), "squash content").expect("Failed to write file");
+    jj::jj_commit(workspace_path_str, "Add squash file").expect("Failed to commit");
+
+    // Create empty commits
+    Command::new("jj")
+        .current_dir(workspace_path_str)
+        .args(["new"])
+        .output()
+        .expect("Failed to run jj new");
+    Command::new("jj")
+        .current_dir(workspace_path_str)
+        .args(["new"])
+        .output()
+        .expect("Failed to run jj new");
+
+    // Squash merge should succeed
+    treq_lib::core::merge_workspace(
+        &repo.repo_path,
+        workspace.id,
+        "Squash feat/squash-empty",
+        MergeCommit::Squash,
+    )
+    .expect("Failed to squash merge workspace with empty commits");
+
+    assert!(
+        Path::new(&repo.repo_path).join("squash.txt").exists(),
+        "Squash file should exist in main repo after merge"
+    );
+
+    assert!(
+        !workspace_path.exists(),
+        "Workspace directory should be deleted after squash merge"
+    );
+}
+
+// =============================================================================
+// Test: Rebase merge with empty commits
+// =============================================================================
+
+#[test]
+fn test_rebase_merge_with_empty_commits() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace: Workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/rebase-empty",
+        Some("rebase empty test".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().unwrap();
+
+    // Create a real commit
+    fs::write(workspace_path.join("rebase.txt"), "rebase content").expect("Failed to write file");
+    jj::jj_commit(workspace_path_str, "Add rebase file").expect("Failed to commit");
+
+    // Create empty commits
+    Command::new("jj")
+        .current_dir(workspace_path_str)
+        .args(["new"])
+        .output()
+        .expect("Failed to run jj new");
+
+    // Rebase merge should succeed
+    treq_lib::core::merge_workspace(
+        &repo.repo_path,
+        workspace.id,
+        "Rebase feat/rebase-empty",
+        MergeCommit::Rebase,
+    )
+    .expect("Failed to rebase merge workspace with empty commits");
+
+    assert!(
+        Path::new(&repo.repo_path).join("rebase.txt").exists(),
+        "Rebase file should exist in main repo after merge"
+    );
+
+    assert!(
+        !workspace_path.exists(),
+        "Workspace directory should be deleted after rebase merge"
+    );
+}
+
+// =============================================================================
+// Test: list_workspace_statuses returns correct commits_ahead counts
+// =============================================================================
+
+#[test]
+fn test_list_workspace_statuses_commits_ahead() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/commits-ahead",
+        Some("test commits ahead".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().unwrap();
+
+    // Fresh workspace should have 0 commits ahead
+    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
+        .expect("Failed to list workspace statuses");
+    let status = statuses
+        .iter()
+        .find(|s| s.current.id == workspace.id)
+        .expect("Workspace should exist in statuses");
+    assert_eq!(
+        status.commits_ahead, 0,
+        "Fresh workspace should have 0 commits ahead"
+    );
+
+    // Make first commit
+    fs::write(workspace_path.join("file1.txt"), "content 1").expect("Failed to write file");
+    treq_lib::jj::jj_commit(workspace_path_str, "First commit").expect("Failed to commit");
+
+    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
+        .expect("Failed to list workspace statuses");
+    let status = statuses
+        .iter()
+        .find(|s| s.current.id == workspace.id)
+        .expect("Workspace should exist in statuses");
+    assert_eq!(
+        status.commits_ahead, 1,
+        "Should have 1 commit ahead after first commit"
+    );
+
+    // Make second commit
+    fs::write(workspace_path.join("file2.txt"), "content 2").expect("Failed to write file");
+    treq_lib::jj::jj_commit(workspace_path_str, "Second commit").expect("Failed to commit");
+
+    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
+        .expect("Failed to list workspace statuses");
+    let status = statuses
+        .iter()
+        .find(|s| s.current.id == workspace.id)
+        .expect("Workspace should exist in statuses");
+    assert_eq!(
+        status.commits_ahead, 2,
+        "Should have 2 commits ahead after second commit"
     );
 }
