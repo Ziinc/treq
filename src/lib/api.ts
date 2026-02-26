@@ -18,6 +18,7 @@ export interface WorkspacePartialStatus {
   current: Workspace;
   has_conflicts: boolean;
   has_changes: boolean;
+  commits_ahead: number;
 }
 
 export interface WorkspaceNode {
