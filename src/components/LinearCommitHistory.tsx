@@ -252,7 +252,7 @@ function CommitItem({ commit, isFirst, canMove, isRemoving, onMoveToNew, onMoveT
   return (
     <li
       className={cn(
-        "relative flex items-start gap-3 py-2 group transition-all duration-200",
+        "relative flex items-start gap-3 py-2 px-2 -mx-2 rounded-md group transition-all duration-200 hover:bg-muted/50",
         isRemoving && "opacity-0 -translate-x-1 max-h-0 py-0 overflow-hidden"
       )}
     >
