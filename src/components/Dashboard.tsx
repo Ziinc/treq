@@ -554,21 +554,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         const newRepoName =
           selected.split("/").pop() || selected.split("\\").pop() || selected;
 
-        const webview = new WebviewWindow(windowLabel, {
+        new WebviewWindow(windowLabel, {
           url: `index.html?repo=${encodeURIComponent(selected)}`,
           title: `Treq - ${newRepoName}`,
           width: 1400,
           height: 900,
         });
 
-        webview.once("tauri://error", (e) => {
-          console.error("Failed to create window:", e);
-          addToast({
-            title: "Failed to open window",
-            description: "Could not create new window",
-            type: "error",
-          });
-        });
       }),
     ];
 
