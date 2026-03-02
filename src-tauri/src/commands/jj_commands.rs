@@ -117,21 +117,8 @@ pub fn jj_restore_all(workspace_path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn jj_commit(workspace_path: String, message: String) -> Result<String, String> {
-    let result = jj::jj_commit(&workspace_path, &message).map_err(|e| e.to_string())?;
-
-    // Trigger auto-rebase in background (fire-and-forget)
-    std::thread::spawn(move || {
-        // Derive repo path and get committed branch
-        if let Some(repo_path) = jj::derive_repo_path_from_workspace(&workspace_path) {
-            if let Ok(branch) = jj::get_workspace_branch(&workspace_path) {
-                // Fire and forget - don't block commit result on rebase
-                let _ = crate::auto_rebase::rebase_after_commit(&repo_path, &branch);
-            }
-        }
-    });
-
-    Ok(result)
+pub fn jj_commit(repo_path: String, workspace_id: i64, message: String) -> Result<String, String> {
+    crate::core::create_commit(&repo_path, workspace_id, &message)
 }
 
 #[tauri::command]
@@ -279,14 +266,20 @@ pub fn jj_get_merge_diff(
 #[tauri::command]
 pub fn jj_get_commit_diff(
     state: State<AppState>,
-    workspace_path: String,
+    repo_path: String,
+    workspace_id: Option<i64>,
     revision: String,
 ) -> Result<jj::JjRevisionDiff, String> {
     let conflict_style = state.db.lock().unwrap()
         .get_setting("conflict_marker_style")
         .ok().flatten()
         .unwrap_or_else(|| "git".to_string());
-    jj::jj_get_commit_diff(&workspace_path, &revision, &conflict_style).map_err(|e| e.to_string())
+
+    match workspace_id {
+        Some(id) => crate::core::get_commit_diff(&repo_path, id, &revision, &conflict_style),
+        None => jj::jj_get_commit_diff(&repo_path, &revision, &conflict_style)
+            .map_err(|e| e.to_string()),
+    }
 }
 
 /// Create a merge commit combining workspace changes with target branch

@@ -23,28 +23,7 @@ pub struct EditorAppsResponse {
 #[tauri::command]
 pub fn detect_binaries(state: State<'_, AppState>) -> Result<BinaryPathsResponse, String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
-
-    let binaries = vec!["git", "jj", "claude"];
-    let mut detected_paths = HashMap::new();
-
-    for binary in &binaries {
-        // Try to detect the binary
-        if let Some(path) = binary_paths::detect_binary(binary) {
-            log::info!("Detected {} at: {}", binary, path);
-            detected_paths.insert(binary.to_string(), path.clone());
-
-            // Store in database
-            let key = format!("binary_path_{}", binary);
-            if let Err(e) = db.set_setting(&key, &path) {
-                log::warn!("Failed to cache {} path in database: {}", binary, e);
-            }
-        } else {
-            log::warn!("Could not detect {} binary", binary);
-        }
-    }
-
-    // Initialize the in-memory cache
-    binary_paths::init_binary_paths_cache(detected_paths.clone());
+    let detected_paths = crate::core::detect_binaries(&db)?;
 
     Ok(BinaryPathsResponse {
         git: detected_paths.get("git").cloned(),

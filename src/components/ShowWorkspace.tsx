@@ -106,7 +106,6 @@ interface ShowWorkspaceProps {
   onCreateStackedWorkspace?: () => void;
   stackCreating?: boolean;
   onSplitWorkspace?: () => void;
-  onNavigateToWorkspace?: (workspace: Workspace) => void;
   queryClient?: QueryClient;
 }
 
@@ -123,7 +122,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   onCreateStackedWorkspace,
   stackCreating,
   onSplitWorkspace,
-  onNavigateToWorkspace,
 }) {
   const workingDirectory = workspace ? getFullWorkspacePath(workspace) : (repositoryPath || "");
   const effectiveRepoPath = workspace?.repo_path || repositoryPath || "";
@@ -336,28 +334,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
     return () => { cancelled = true; };
   }, [workingDirectory, diffStatsTargetBranch, workspace, defaultBranch]);
 
-  // useEffect(() => {
-  //   if (activeTab === "overview" && workingDirectory) {
-  //     let isMounted = true;
-
-  //     // Refresh conflicted files when switching to overview tab
-  //     jjGetConflictedFiles(workingDirectory)
-  //       .then((files) => {
-  //         if (isMounted) {
-  //           setConflictedFiles(files);
-  //         }
-  //       })
-  //       .catch(() => {
-  //         if (isMounted) {
-  //           setConflictedFiles([]);
-  //         }
-  //       });
-
-  //     return () => {
-  //       isMounted = false;
-  //     };
-  //   }
-  // }, [activeTab, workingDirectory]);
 
   // Auto-fetch remote updates periodically and on window focus
   useEffect(() => {
@@ -1040,8 +1016,8 @@ const handleSync = useCallback(async () => {
             </div>
           ) : (
             <div className="flex h-full">
-              {/* LEFT: Files + README (4/5 width) */}
-              <div className="flex-[4] overflow-auto border-r border-border">
+              {/* LEFT: Files + README */}
+              <div className="flex-1 overflow-auto border-r border-border">
                 <div className="p-4 space-y-4">
                   {/* Conflicts Alert */}
                   {conflictedFiles.length > 0 && (
@@ -1145,8 +1121,8 @@ const handleSync = useCallback(async () => {
                 </div>
               </div>
 
-              {/* RIGHT: Commit History (1/5 width) */}
-              <div className="flex-[1] bg-muted/20">
+              {/* RIGHT: Commit History (fixed width matching sidebar) */}
+              <div className="w-[240px] shrink-0 bg-muted/20">
                 <LinearCommitHistory
                   workspacePath={workspace ? getFullWorkspacePath(workspace) : workingDirectory}
                   targetBranch={targetBranch}
@@ -1164,6 +1140,8 @@ const handleSync = useCallback(async () => {
         ) : activeTab === "commits" ? (
           <CommitDiffViewer
             workspacePath={workspace ? getFullWorkspacePath(workspace) : workingDirectory}
+            repoPath={effectiveRepoPath}
+            workspaceId={workspace?.id ?? null}
             targetBranch={targetBranch}
             isHomeRepo={!workspace}
             scrollToCommitId={scrollToCommitId}

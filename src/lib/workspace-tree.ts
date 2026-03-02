@@ -1,10 +1,10 @@
-import type { Workspace } from "./api";
+import type { Workspace, WorkspacePartialStatus } from "./api";
 
 /**
  * Represents a node in the workspace tree
  */
 export interface WorkspaceTreeNode {
-  workspace: Workspace;
+  status: WorkspacePartialStatus;
   branchName: string;
   children: WorkspaceTreeNode[];
   depth: number;
@@ -14,7 +14,7 @@ export interface WorkspaceTreeNode {
  * Flattened node for rendering
  */
 export interface FlattenedWorkspaceNode {
-  workspace: Workspace;
+  status: WorkspacePartialStatus;
   branchName: string;
   depth: number;
   hasChildren: boolean;
@@ -34,7 +34,8 @@ export interface FlattenedWorkspaceNode {
  * @param workspaces Flat list of workspaces
  * @returns Array of root nodes forming a forest
  */
-export function buildWorkspaceTree(workspaces: Workspace[]): WorkspaceTreeNode[] {
+export function buildWorkspaceTree(statuses: WorkspacePartialStatus[]): WorkspaceTreeNode[] {
+  const workspaces = statuses.map(s => s.current);
   // Step 1: Create lookup map by branch_name
   const workspaceByBranch = new Map<string, Workspace>();
   for (const ws of workspaces) {
@@ -45,7 +46,7 @@ export function buildWorkspaceTree(workspaces: Workspace[]): WorkspaceTreeNode[]
   const nodeByBranch = new Map<string, WorkspaceTreeNode>();
   for (const ws of workspaces) {
     nodeByBranch.set(ws.branch_name, {
-      workspace: ws,
+      status: statuses.find(s => s.current.id === ws.id)!,
       branchName: ws.branch_name,
       children: [],
       depth: 0,
@@ -70,7 +71,7 @@ export function buildWorkspaceTree(workspaces: Workspace[]): WorkspaceTreeNode[]
   // Step 4: Find root nodes (workspaces with no target or target not in workspace list)
   const roots: WorkspaceTreeNode[] = [];
   for (const node of nodeByBranch.values()) {
-    const targetBranch = node.workspace.target_branch;
+    const targetBranch = node.status.current.target_branch;
     const hasTarget = targetBranch !== null && targetBranch !== undefined;
     const targetExists = hasTarget && workspaceByBranch.has(targetBranch);
 
@@ -121,11 +122,11 @@ export function flattenWorkspaceTree(
 
   function traverse(node: WorkspaceTreeNode): void {
     result.push({
-      workspace: node.workspace,
+      status: node.status,
       branchName: node.branchName,
       depth: node.depth,
       hasChildren: node.children.length > 0,
-      parentBranch: node.workspace.target_branch ?? null,
+      parentBranch: node.status.current.target_branch ?? null,
     });
 
     for (const child of node.children) {

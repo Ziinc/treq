@@ -316,11 +316,13 @@ export const jjIsWorkspace = (repo_path: string): Promise<boolean> =>
   invoke("jj_is_workspace", { repoPath: repo_path });
 
 export const jjCommit = (
-  workspace_path: string,
+  repoPath: string,
+  workspaceId: number,
   message: string
 ): Promise<string> =>
   invoke("jj_commit", {
-    workspacePath: workspace_path,
+    repoPath,
+    workspaceId,
     message,
   });
 
@@ -414,10 +416,11 @@ export const checkBranchExists = (
   invoke("jj_check_branch_exists", { repoPath: repo_path, branchName: branch_name });
 
 export const jjGetCommitDiff = (
-  workspacePath: string,
+  repoPath: string,
+  workspaceId: number | null,
   revision: string
 ): Promise<JjRevisionDiff> =>
-  invoke("jj_get_commit_diff", { workspacePath, revision });
+  invoke("jj_get_commit_diff", { repoPath, workspaceId, revision });
 
 export const jjGetLog = (
   workspacePath: string,

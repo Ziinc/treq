@@ -2376,6 +2376,82 @@ pub fn jj_get_sync_status(
     Ok((ahead_count, behind_count))
 }
 
+/// Check if a bookmark is in a conflicted (diverged) state.
+///
+/// This happens when both local and remote have diverged from a common ancestor.
+pub fn jj_is_bookmark_conflicted(workspace_path: &str, branch_name: &str) -> bool {
+    let output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["bookmark", "list", "--conflicted", "-T", r#"name ++ "\n""#])
+        .output();
+
+    match output {
+        Ok(output) if output.status.success() => String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .any(|line| line.trim() == branch_name),
+        _ => false,
+    }
+}
+
+/// Get sync counts for a diverged (conflicted) bookmark.
+///
+/// When a bookmark is conflicted, the bookmark name can't be used directly in revsets.
+/// Instead, we use `@-` (parent of working copy) as a proxy for the local bookmark tip.
+pub fn jj_get_diverged_sync_counts(
+    workspace_path: &str,
+    branch_name: &str,
+) -> Result<(usize, usize), JjError> {
+    let remote_ref = format!("{}@origin", branch_name);
+
+    // Count ahead: commits in local but not remote
+    let ahead_output = command_for("jj")
+        .current_dir(workspace_path)
+        .args([
+            "log",
+            "-r",
+            &format!("{}..@-", remote_ref),
+            "--no-graph",
+            "-T",
+            r#"commit_id ++ "\n""#,
+        ])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    let ahead_count = if ahead_output.status.success() {
+        String::from_utf8_lossy(&ahead_output.stdout)
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .count()
+    } else {
+        0
+    };
+
+    // Count behind: commits in remote but not local
+    let behind_output = command_for("jj")
+        .current_dir(workspace_path)
+        .args([
+            "log",
+            "-r",
+            &format!("@-..{}", remote_ref),
+            "--no-graph",
+            "-T",
+            r#"commit_id ++ "\n""#,
+        ])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    let behind_count = if behind_output.status.success() {
+        String::from_utf8_lossy(&behind_output.stdout)
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .count()
+    } else {
+        0
+    };
+
+    Ok((ahead_count, behind_count))
+}
+
 /// Fetch remote branches using jj git fetch (without rebasing)
 /// This updates remote tracking refs and makes remote branches available
 pub fn jj_git_fetch(repo_path: &str) -> Result<String, JjError> {
