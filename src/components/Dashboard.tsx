@@ -20,7 +20,6 @@ import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { WorkspaceTerminalPane, type WorkspaceTerminalPaneHandle } from "./WorkspaceTerminalPane";
 import type { ClaudeSessionData } from "./terminal/types";
-import type { SessionCreationInfo } from "../types/sessions";
 
 // Lazy imports
 const ShowWorkspace = lazy(() =>
@@ -106,9 +105,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   const [lastSelectedWorkspaceIndex, setLastSelectedWorkspaceIndex] = useState<
     number | null
   >(null);
-  const [pendingClaudeSession, setPendingClaudeSession] = useState<
-    SessionCreationInfo | null
-  >(null);
 
   const terminalPaneRef = useRef<WorkspaceTerminalPaneHandle>(null);
 
@@ -119,7 +115,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     // Navigate to main repo ShowWorkspace > Code
     setSelectedWorkspace(null);
     setActiveSessionId(null);
-    setPendingClaudeSession(null);
   }, []);
 
   const openSettings = useCallback((tab?: string) => {
@@ -635,7 +630,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     async (workspace: Workspace | null, options?: SessionOpenOptions) => {
       setSelectedWorkspace(workspace);
       setSessionSelectedFile(options?.selectedFilePath ?? null);
-      setViewMode(workspace ? "show-workspace" : "session");
     },
     [getOrCreateSession]
   );
@@ -717,9 +711,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
       const workspace = workspaceId
         ? workspaces.find((w) => w.id === workspaceId) ?? null
         : null;
-      await handleOpenSession(workspace, { forceNew: true });
+      const sessionId = await getOrCreateSession(workspaceId, { forceNew: true });
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      setActiveSessionId(sessionId);
+      setSelectedWorkspace(workspace);
     },
-    [handleOpenSession, workspaces]
+    [getOrCreateSession, workspaces, repoPath, queryClient]
   );
 
   const handleWorkspaceMultiSelect = useCallback(
@@ -842,7 +839,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   const claudeSessionsForPane = useMemo((): ClaudeSessionData[] => {
     const workspaceMap = new Map(workspaces.map((ws) => [ws.id, ws]));
 
-    const paneSessions: ClaudeSessionData[] = sessions.map((session) => {
+    return sessions.map((session) => {
       const sessionWorkspace = session.workspace_id
         ? workspaceMap.get(session.workspace_id) ?? null
         : null;
@@ -855,49 +852,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         workspaceName: sessionWorkspace?.branch_name ?? null,
       };
     });
-
-    if (
-      pendingClaudeSession &&
-      !paneSessions.some(
-        (session) => session.sessionId === pendingClaudeSession.sessionId
-      )
-    ) {
-      const pendingWorkspace = pendingClaudeSession.workspaceId
-        ? workspaceMap.get(pendingClaudeSession.workspaceId) ?? null
-        : null;
-      paneSessions.push({
-        sessionId: pendingClaudeSession.sessionId,
-        sessionName: pendingClaudeSession.sessionName,
-        ptySessionId: `session-${pendingClaudeSession.sessionId}`,
-        workspacePath: pendingWorkspace ? getFullWorkspacePath(pendingWorkspace) : null,
-        repoPath: pendingClaudeSession.repoPath,
-        workspaceName: pendingWorkspace?.branch_name ?? null,
-        pendingPrompt: pendingClaudeSession.pendingPrompt,
-        permissionMode: pendingClaudeSession.permissionMode,
-      });
-    }
-
-    return paneSessions;
-  }, [sessions, workspaces, repoPath, pendingClaudeSession]);
-
-  useEffect(() => {
-    if (!pendingClaudeSession) return;
-    const sessionExists = sessions.some(
-      (session) => session.id === pendingClaudeSession.sessionId
-    );
-    if (sessionExists) {
-      setPendingClaudeSession(null);
-    }
-  }, [sessions, pendingClaudeSession]);
-
-  useEffect(() => {
-    if (
-      pendingClaudeSession &&
-      activeSessionId !== pendingClaudeSession.sessionId
-    ) {
-      setPendingClaudeSession(null);
-    }
-  }, [activeSessionId, pendingClaudeSession]);
+  }, [sessions, workspaces, repoPath]);
 
   const mainContentStyle = useMemo(
     () => ({ width: showSidebar ? "calc(100vw - 240px)" : "100%" }),
@@ -977,7 +932,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
                         queryKey: ["sessions"],
                       });
                       setActiveSessionId(sessionData.sessionId);
-                      setPendingClaudeSession(sessionData);
                     }}
                   />
                 </Suspense>
@@ -992,10 +946,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
             currentBranch={currentBranch}
             claudeSessions={claudeSessionsForPane}
             activeClaudeSessionId={isSessionView ? activeSessionId : null}
-            onClaudeTerminalOutput={() => {
-              // No-op: Just ensure callback chain is connected so ClaudeTerminalPanel
-              // can detect when Claude is ready and send pending prompts
-            }}
             onActiveSessionChange={(sessionId) => {
               if (sessionId === null) {
                 setActiveSessionId(null);
@@ -1018,7 +968,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
             }}
             onCreateNewSession={(activeWorkspacePath) => {
               if (activeWorkspacePath) {
-                const ws = workspaces.find(w => w.workspace_path === activeWorkspacePath);
+                const ws = workspaces.find(w => getFullWorkspacePath(w) === activeWorkspacePath);
                 handleCreateSessionFromSidebar(ws?.id ?? null);
               } else {
                 handleCreateSessionFromSidebar(selectedWorkspace?.id ?? null);
