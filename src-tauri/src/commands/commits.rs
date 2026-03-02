@@ -117,8 +117,13 @@ pub fn jj_restore_all(workspace_path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn jj_commit(repo_path: String, workspace_id: i64, message: String) -> Result<String, String> {
+pub fn create_commit(repo_path: String, workspace_id: Option<i64>, message: String) -> Result<String, String> {
     crate::core::create_commit(&repo_path, workspace_id, &message)
+}
+
+#[tauri::command]
+pub fn list_commits(repo_path: String, workspace_id: Option<i64>) -> Result<crate::jj::JjLogResult, String> {
+    crate::core::list_commits(&repo_path, workspace_id)
 }
 
 #[tauri::command]

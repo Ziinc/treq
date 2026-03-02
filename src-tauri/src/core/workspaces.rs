@@ -21,6 +21,14 @@ pub enum MergeCommit {
     Rebase,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PullWorkspaceResult {
+    pub success: bool,
+    pub message: String,
+    pub was_diverged: bool,
+    pub commits_rebased: usize,
+}
+
 pub enum MaybeEmptyParam<T> {
     EmptyValue,
     Omitted,
@@ -1180,4 +1188,97 @@ pub fn split_workspace(
                 .ok_or_else(|| "New workspace not found after split".to_string())
         }
     }
+}
+
+/// Pull a workspace from remote, automatically resolving divergence by rebasing
+/// local mutable commits onto the remote tip.
+///
+/// When the local bookmark has diverged from its remote counterpart (both have
+/// new commits), this function:
+/// 1. Fetches remote changes
+/// 2. Captures local-only commit IDs (before resolving the bookmark)
+/// 3. Resolves the bookmark conflict by pointing to the remote tip
+/// 4. Rebases local mutable commits onto the new bookmark tip
+/// 5. Refreshes the working copy
+pub fn pull_workspace_from_remote(
+    repo_path: &str,
+    workspace_id: i64,
+    conflict_marker_style: &str,
+) -> Result<PullWorkspaceResult, String> {
+    // Look up workspace from DB
+    let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
+        .map_err(|e| format!("Failed to get workspace: {}", e))?
+        .ok_or_else(|| format!("Workspace not found: {}", workspace_id))?;
+
+    let full_path = Path::new(repo_path)
+        .join(".treq")
+        .join("workspaces")
+        .join(&workspace.workspace_path);
+    let full_path_str = full_path
+        .to_str()
+        .ok_or("Failed to convert workspace path to string")?;
+
+    let branch_name = &workspace.branch_name;
+
+    // Step 1: Fetch remote changes
+    jj::jj_git_fetch(repo_path).map_err(|e| format!("Fetch failed: {}", e))?;
+
+    // Step 2: Check if bookmark is conflicted (diverged)
+    let is_conflicted = jj::jj_is_bookmark_conflicted(full_path_str, branch_name);
+
+    if !is_conflicted {
+        // No divergence — try to sync working copy if safe
+        let _ = jj::jj_workspace_update_stale(full_path_str);
+        let _ = jj::jj_sync_working_copy_if_safe(full_path_str, branch_name);
+
+        return Ok(PullWorkspaceResult {
+            success: true,
+            message: "Fetched remote changes (no divergence)".to_string(),
+            was_diverged: false,
+            commits_rebased: 0,
+        });
+    }
+
+    // Step 3: Diverged — capture local-only commit IDs BEFORE resolving bookmark
+    let remote_ref = format!("{}@origin", branch_name);
+    let local_revset = format!("({}..@-) & mutable()", remote_ref);
+    let local_commit_ids = jj::jj_log_revset_commit_ids(full_path_str, &local_revset)
+        .map_err(|e| format!("Failed to capture local commits: {}", e))?;
+
+    let commits_rebased = local_commit_ids.len();
+
+    // Step 4: Resolve bookmark conflict — point local bookmark to remote tip
+    jj::jj_set_bookmark(full_path_str, branch_name, &remote_ref)
+        .map_err(|e| format!("Failed to resolve bookmark conflict: {}", e))?;
+
+    // Step 5: Rebase local commits onto the new bookmark tip (if any)
+    if !local_commit_ids.is_empty() {
+        let ids_revset = local_commit_ids.join(" | ");
+        let roots_revset = format!("roots({})", ids_revset);
+
+        jj::jj_rebase_with_revset(
+            full_path_str,
+            &roots_revset,
+            branch_name,
+            branch_name,
+            conflict_marker_style,
+        )
+        .map_err(|e| format!("Failed to rebase local commits: {}", e))?;
+    }
+
+    // Step 6: Refresh working copy
+    // Only update stale — do NOT sync to bookmark, because the working copy
+    // should remain on top of the rebased local commits (D' → @'), not
+    // jump back to the bookmark tip (C).
+    let _ = jj::jj_workspace_update_stale(full_path_str);
+
+    Ok(PullWorkspaceResult {
+        success: true,
+        message: format!(
+            "Resolved divergence: rebased {} local commit(s) onto remote tip",
+            commits_rebased
+        ),
+        was_diverged: true,
+        commits_rebased,
+    })
 }

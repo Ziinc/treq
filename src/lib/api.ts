@@ -315,15 +315,24 @@ export const jjRestoreAll = (workspace_path: string): Promise<string> =>
 export const jjIsWorkspace = (repo_path: string): Promise<boolean> =>
   invoke("jj_is_workspace", { repoPath: repo_path });
 
-export const jjCommit = (
+export const createCommit = (
   repoPath: string,
-  workspaceId: number,
+  workspaceId: number | null,
   message: string
 ): Promise<string> =>
-  invoke("jj_commit", {
+  invoke("create_commit", {
     repoPath,
     workspaceId,
     message,
+  });
+
+export const listCommits = (
+  repoPath: string,
+  workspaceId: number | null
+): Promise<JjLogResult> =>
+  invoke("list_commits", {
+    repoPath,
+    workspaceId,
   });
 
 export const jjSplit = (

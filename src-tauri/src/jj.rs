@@ -2170,6 +2170,47 @@ pub fn jj_get_commit_id(repo_path: &str, revision: &str) -> Result<String, JjErr
     Ok(commit_id)
 }
 
+/// Get commit IDs matching a revset expression.
+/// Returns short (12-char) commit IDs, one per matching commit.
+/// Returns empty vec if the revset matches nothing (not an error).
+pub fn jj_log_revset_commit_ids(
+    workspace_path: &str,
+    revset: &str,
+) -> Result<Vec<String>, JjError> {
+    let output = command_for("jj")
+        .current_dir(workspace_path)
+        .args([
+            "log",
+            "-r",
+            revset,
+            "--no-graph",
+            "-T",
+            r#"commit_id.short(12) ++ "\n""#,
+        ])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // Empty revision set is not an error - just means no matches
+        if stderr.contains("Empty revision set") {
+            return Ok(Vec::new());
+        }
+        return Err(JjError::IoError(format!(
+            "Failed to log revset '{}': {}",
+            revset, stderr
+        )));
+    }
+
+    let ids: Vec<String> = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
+
+    Ok(ids)
+}
+
 /// Rebase using a revset expression
 /// Runs from specified directory to ensure correct commit resolution
 /// Sets jj bookmark after successful rebase

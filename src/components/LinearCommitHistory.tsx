@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useState } from "react";
-import { abandonCommit, jjGetLog, type JjLogCommit } from "../lib/api";
+import { abandonCommit, listCommits, type JjLogCommit } from "../lib/api";
 import { cn, formatRelativeTime, formatFullTimestamp, getDayKey, formatDayLabel } from "../lib/utils";
 import {
   Tooltip,
@@ -21,12 +21,9 @@ import { useToast } from "./ui/toast";
 const REMOVE_ANIMATION_MS = 220;
 
 interface LinearCommitHistoryProps {
-  workspacePath: string;
-  targetBranch: string | null;
-  isHomeRepo?: boolean;
+  repoPath: string;
+  workspaceId: number | null;
   // Optional props for move-commit feature
-  workspaceId?: number;
-  repoPath?: string;
   onCommitMoved?: () => void;
   onCommitClick?: (changeId: string) => void;
 }
@@ -56,7 +53,7 @@ function groupCommitsByDay(commits: JjLogCommit[]): DayGroup[] {
 }
 
 export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
-  function LinearCommitHistory({ workspacePath, targetBranch, isHomeRepo, workspaceId, repoPath, onCommitMoved, onCommitClick }) {
+  function LinearCommitHistory({ repoPath, workspaceId, onCommitMoved, onCommitClick }) {
     const [commits, setCommits] = useState<JjLogCommit[]>([]);
     const [loading, setLoading] = useState(true);
     const [moveTarget, setMoveTarget] = useState<JjLogCommit | null>(null);
@@ -66,12 +63,12 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
     const { addToast } = useToast();
 
     useEffect(() => {
-      if (!workspacePath || !targetBranch) {
+      if (!repoPath) {
         setLoading(false);
         return;
       }
       setLoading(true);
-      jjGetLog(workspacePath, targetBranch, isHomeRepo)
+      listCommits(repoPath, workspaceId)
         .then((result) => {
           // Skip the first commit (working copy / uncommitted @)
           const nextCommits = result?.commits ?? [];
@@ -85,11 +82,11 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
         .finally(() => {
           setLoading(false);
         });
-    }, [workspacePath, targetBranch, isHomeRepo]);
+    }, [repoPath, workspaceId]);
 
     const dayGroups = useMemo(() => groupCommitsByDay(commits), [commits]);
 
-    const canMove = !!(workspaceId && repoPath);
+    const canMove = !!(workspaceId !== null && workspaceId !== undefined && repoPath);
 
     const handleMoveToNew = (commit: JjLogCommit) => {
       setMoveTarget(commit);

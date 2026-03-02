@@ -20,7 +20,7 @@ import {
   jjGitFetch,
   jjGitFetchBackground,
   pushWorkspaceToRemote,
-  jjGetLog,
+  listCommits,
   resolveBookmarkConflict,
   type SingleRebaseResult,
   type WorkspaceBookmarkConflict,
@@ -308,17 +308,13 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   }, [fetchSyncStatus]);
 
   // Fetch aggregate diff stats from commit log
-  // Always use isHomeRepo=false to get commits ahead of target branch (workspace-style revset)
-  // Use workspace?.id as dep to avoid stale targetBranch/workingDirectory mismatches during navigation
-  const diffStatsTargetBranch = workspace ? (workspace.target_branch || defaultBranch) : defaultBranch;
   useEffect(() => {
-    if (!workingDirectory || !diffStatsTargetBranch) {
+    if (!effectiveRepoPath) {
       setDiffStats(null);
       return;
     }
     let cancelled = false;
-    const path = workspace ? getFullWorkspacePath(workspace) : workingDirectory;
-    jjGetLog(path, diffStatsTargetBranch, false)
+    listCommits(effectiveRepoPath, workspace?.id ?? null)
       .then((logResult) => {
         if (cancelled || !logResult) return;
         const commits = logResult.commits ?? [];
@@ -332,7 +328,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
         if (!cancelled) setDiffStats(null);
       });
     return () => { cancelled = true; };
-  }, [workingDirectory, diffStatsTargetBranch, workspace, defaultBranch]);
+  }, [effectiveRepoPath, workspace?.id]);
 
 
   // Auto-fetch remote updates periodically and on window focus
@@ -1124,11 +1120,8 @@ const handleSync = useCallback(async () => {
               {/* RIGHT: Commit History (fixed width matching sidebar) */}
               <div className="w-[240px] shrink-0 bg-muted/20">
                 <LinearCommitHistory
-                  workspacePath={workspace ? getFullWorkspacePath(workspace) : workingDirectory}
-                  targetBranch={targetBranch}
-                  isHomeRepo={!workspace}
-                  workspaceId={workspace?.id}
-                  repoPath={effectiveRepoPath || undefined}
+                  repoPath={effectiveRepoPath}
+                  workspaceId={workspace?.id ?? null}
                   onCommitClick={(changeId) => {
                     setScrollToCommitId(changeId);
                     setActiveTab("commits");

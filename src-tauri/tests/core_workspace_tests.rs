@@ -2766,3 +2766,181 @@ fn test_workspace_status_diverged() {
         "Workspace should be Diverged {{ ahead: 1, behind: 1 }}"
     );
 }
+
+// =============================================================================
+// Test: pull_workspace_from_remote - resolves divergence
+// =============================================================================
+
+#[test]
+fn test_pull_workspace_resolves_divergence() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/pull-diverged",
+        Some("test pull diverged".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().unwrap();
+
+    // Add initial commit B and push
+    fs::write(workspace_path.join("file1.txt"), "content 1").expect("Failed to write file");
+    jj::jj_commit(workspace_path_str, "Commit B").expect("Failed to commit");
+    treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
+        .expect("Failed to push workspace");
+
+    // Make local commit D (don't push)
+    fs::write(workspace_path.join("local-file.txt"), "local content")
+        .expect("Failed to write file");
+    jj::jj_commit(workspace_path_str, "Local commit D").expect("Failed to commit");
+
+    // Clone the bare remote, commit C, push from clone to simulate remote-ahead
+    let clone_dir = repo.temp_dir.path().join("clone-pull-diverged");
+    let remote_dir = repo.temp_dir.path().join("remote.git");
+    Command::new("git")
+        .args([
+            "clone",
+            remote_dir.to_str().unwrap(),
+            clone_dir.to_str().unwrap(),
+        ])
+        .output()
+        .expect("Failed to clone remote");
+    Command::new("git")
+        .current_dir(&clone_dir)
+        .args(["checkout", &workspace.branch_name])
+        .output()
+        .expect("Failed to checkout branch in clone");
+    fs::write(clone_dir.join("remote-file.txt"), "from remote").expect("Failed to write file");
+    Command::new("git")
+        .current_dir(&clone_dir)
+        .args(["add", "remote-file.txt"])
+        .output()
+        .expect("Failed to git add");
+    Command::new("git")
+        .current_dir(&clone_dir)
+        .args(["commit", "-m", "Remote commit C"])
+        .output()
+        .expect("Failed to git commit");
+    Command::new("git")
+        .current_dir(&clone_dir)
+        .args(["push", "origin", &workspace.branch_name])
+        .output()
+        .expect("Failed to push from clone");
+
+    // Call pull_workspace_from_remote to resolve the divergence
+    let result =
+        treq_lib::core::pull_workspace_from_remote(&repo.repo_path, workspace.id, "git")
+            .expect("pull_workspace_from_remote should succeed");
+
+    assert!(result.success, "Pull should succeed");
+    assert!(result.was_diverged, "Should detect divergence");
+    assert_eq!(
+        result.commits_rebased, 1,
+        "Should rebase 1 local commit (D)"
+    );
+
+    // Verify bookmark is no longer conflicted
+    assert!(
+        !jj::jj_is_bookmark_conflicted(workspace_path_str, &workspace.branch_name),
+        "Bookmark should no longer be conflicted after pull"
+    );
+
+    // Verify both files exist (remote-file.txt from C, local-file.txt from D)
+    // Update stale first since rebase may have changed things
+    let _ = jj::jj_workspace_update_stale(workspace_path_str);
+    assert!(
+        workspace_path.join("remote-file.txt").exists(),
+        "remote-file.txt should exist from remote commit C"
+    );
+    assert!(
+        workspace_path.join("local-file.txt").exists(),
+        "local-file.txt should exist from rebased local commit D"
+    );
+
+    // Verify sync status is no longer Diverged
+    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
+        .expect("Failed to list workspace statuses");
+    let status = statuses
+        .iter()
+        .find(|s| s.current.id == workspace.id)
+        .expect("Workspace should exist in statuses");
+
+    assert!(
+        !matches!(status.remote_sync, RemoteSyncStatus::Diverged { .. }),
+        "Workspace should no longer be Diverged after pull, got: {:?}",
+        status.remote_sync
+    );
+}
+
+// =============================================================================
+// Test: pull_workspace_from_remote - no divergence (fast-forward)
+// =============================================================================
+
+#[test]
+fn test_pull_workspace_no_divergence() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/pull-no-div",
+        Some("test pull no divergence".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().unwrap();
+
+    // Add initial commit and push
+    fs::write(workspace_path.join("file1.txt"), "content 1").expect("Failed to write file");
+    jj::jj_commit(workspace_path_str, "Initial commit").expect("Failed to commit");
+    treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
+        .expect("Failed to push workspace");
+
+    // No local changes — simulate remote advancing
+    let clone_dir = repo.temp_dir.path().join("clone-pull-no-div");
+    let remote_dir = repo.temp_dir.path().join("remote.git");
+    Command::new("git")
+        .args([
+            "clone",
+            remote_dir.to_str().unwrap(),
+            clone_dir.to_str().unwrap(),
+        ])
+        .output()
+        .expect("Failed to clone remote");
+    Command::new("git")
+        .current_dir(&clone_dir)
+        .args(["checkout", &workspace.branch_name])
+        .output()
+        .expect("Failed to checkout branch in clone");
+    fs::write(clone_dir.join("remote-only.txt"), "remote content").expect("Failed to write file");
+    Command::new("git")
+        .current_dir(&clone_dir)
+        .args(["add", "remote-only.txt"])
+        .output()
+        .expect("Failed to git add");
+    Command::new("git")
+        .current_dir(&clone_dir)
+        .args(["commit", "-m", "Remote commit"])
+        .output()
+        .expect("Failed to git commit");
+    Command::new("git")
+        .current_dir(&clone_dir)
+        .args(["push", "origin", &workspace.branch_name])
+        .output()
+        .expect("Failed to push from clone");
+
+    // Call pull — should NOT be diverged (local has no unpushed commits)
+    let result =
+        treq_lib::core::pull_workspace_from_remote(&repo.repo_path, workspace.id, "git")
+            .expect("pull_workspace_from_remote should succeed");
+
+    assert!(result.success, "Pull should succeed");
+    assert!(!result.was_diverged, "Should NOT detect divergence");
+    assert_eq!(result.commits_rebased, 0, "Should rebase 0 commits");
+}

@@ -238,32 +238,41 @@ pub fn get_commit_diff(
 /// The commit output string on success, or an error string.
 pub fn create_commit(
     repo_path: &str,
-    workspace_id: i64,
+    workspace_id: Option<i64>,
     message: &str,
 ) -> Result<String, String> {
-    let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
-        .map_err(|e| format!("Failed to get workspace: {}", e))?
-        .ok_or_else(|| format!("Workspace not found: {}", workspace_id))?;
+    match workspace_id {
+        Some(id) => {
+            let workspace = local_db::get_workspace_by_id(repo_path, id)
+                .map_err(|e| format!("Failed to get workspace: {}", e))?
+                .ok_or_else(|| format!("Workspace not found: {}", id))?;
 
-    let workspace_dir = Path::new(repo_path)
-        .join(".treq")
-        .join("workspaces")
-        .join(&workspace.workspace_path);
-    let workspace_dir_str = workspace_dir
-        .to_str()
-        .ok_or("Failed to convert workspace path to string")?;
+            let workspace_dir = Path::new(repo_path)
+                .join(".treq")
+                .join("workspaces")
+                .join(&workspace.workspace_path);
+            let workspace_dir_str = workspace_dir
+                .to_str()
+                .ok_or("Failed to convert workspace path to string")?;
 
-    let result = jj::jj_commit(workspace_dir_str, message)
-        .map_err(|e| format!("Failed to create commit: {}", e))?;
+            let result = jj::jj_commit(workspace_dir_str, message)
+                .map_err(|e| format!("Failed to create commit: {}", e))?;
 
-    // Trigger auto-rebase in background (fire-and-forget)
-    let repo_path_owned = repo_path.to_string();
-    let workspace_dir_owned = workspace_dir.to_string_lossy().to_string();
-    std::thread::spawn(move || {
-        if let Ok(branch) = jj::get_workspace_branch(&workspace_dir_owned) {
-            let _ = crate::auto_rebase::rebase_after_commit(&repo_path_owned, &branch);
+            // Trigger auto-rebase in background (fire-and-forget)
+            let repo_path_owned = repo_path.to_string();
+            let workspace_dir_owned = workspace_dir.to_string_lossy().to_string();
+            std::thread::spawn(move || {
+                if let Ok(branch) = jj::get_workspace_branch(&workspace_dir_owned) {
+                    let _ = crate::auto_rebase::rebase_after_commit(&repo_path_owned, &branch);
+                }
+            });
+
+            Ok(result)
         }
-    });
-
-    Ok(result)
+        None => {
+            let result = jj::jj_commit(repo_path, message)
+                .map_err(|e| format!("Failed to create commit: {}", e))?;
+            Ok(result)
+        }
+    }
 }
