@@ -31,10 +31,8 @@ interface WorkspaceTerminalPaneProps {
   // Claude terminal integration
   claudeSessions?: ClaudeSessionData[];
   activeClaudeSessionId?: number | null;
-  onClaudeTerminalOutput?: (sessionId: number, output: string) => void;
-  onClaudeTerminalIdle?: (sessionId: number) => void;
-  // Callbacks for session management
   onActiveSessionChange?: (sessionId: number | null) => void;
+  // Callbacks for session management
   onCreateNewSession?: (activeWorkspacePath?: string | null) => void;
   onCloseSession?: (sessionId: number) => void;
   onRenameSession?: (sessionId: number, newName: string) => void;
@@ -67,9 +65,6 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
     currentBranch,
     claudeSessions = [],
     activeClaudeSessionId = null,
-    onClaudeTerminalOutput,
-    onClaudeTerminalIdle,
-    onActiveSessionChange: _onActiveSessionChange,
     onCreateNewSession,
     onCloseSession,
     onRenameSession,
@@ -247,14 +242,11 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
           prev.filter((id) => id !== claudeTerminalId)
         );
         onCloseSession?.(sessionId);
-        if (activeClaudeSessionId === sessionId) {
-          _onActiveSessionChange?.(null);
-        }
         if (activePtySessionId === claudeTerminalId) {
           setActivePtySessionId(null);
         }
       },
-      [claudeSessions, onCloseSession, activeClaudeSessionId, _onActiveSessionChange, activePtySessionId]
+      [claudeSessions, onCloseSession, activeClaudeSessionId, activePtySessionId]
     );
 
     // Expose methods via ref for command palette
@@ -542,7 +534,7 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
     const totalTerminals = allTerminals.length;
 
     return (
-      <div ref={paneRef} className={className}>
+      <div ref={paneRef} className={className} style={{ display: 'contents' }}>
         {!collapsed && !maximized && (
           <div
             className="relative flex-shrink-0 h-1 group"
@@ -584,7 +576,7 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
+                  <Button
                       type="button"
                       onClick={handleCreateAgentSession}
                       variant={totalTerminals === 0 ? "default" : "ghost"}
@@ -788,21 +780,6 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
                                   : undefined
                               }
                               onSessionError={onSessionError}
-                              onTerminalOutput={
-                                onClaudeTerminalOutput
-                                  ? (output) =>
-                                      onClaudeTerminalOutput(
-                                        terminal.data.sessionId,
-                                        output
-                                      )
-                                  : undefined
-                              }
-                              onTerminalIdle={
-                                onClaudeTerminalIdle
-                                  ? () =>
-                                      onClaudeTerminalIdle(terminal.data.sessionId)
-                                  : undefined
-                              }
                               terminalRefs={terminalRefs}
                               width={terminalWidths.get(terminalId)}
                             />
