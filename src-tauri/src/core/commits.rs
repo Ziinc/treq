@@ -3,6 +3,50 @@ use std::path::Path;
 use crate::jj;
 use crate::local_db;
 
+/// Lists commits for a workspace by its database ID, or for the home repo
+/// when no workspace ID is provided.
+///
+/// # Arguments
+/// * `repo_path`    - Path to the repository root
+/// * `workspace_id` - ID of the workspace to list commits for, or `None` for the home repo
+///
+/// # Returns
+/// The parsed log result on success, or an error string.
+pub fn list_commits(
+    repo_path: &str,
+    workspace_id: Option<i64>,
+) -> Result<jj::JjLogResult, String> {
+    match workspace_id {
+        Some(id) => {
+            let workspace = local_db::get_workspace_by_id(repo_path, id)
+                .map_err(|e| format!("Failed to get workspace: {}", e))?
+                .ok_or_else(|| format!("Workspace not found: {}", id))?;
+
+            let workspace_dir = Path::new(repo_path)
+                .join(".treq")
+                .join("workspaces")
+                .join(&workspace.workspace_path);
+            let workspace_dir_str = workspace_dir
+                .to_str()
+                .ok_or("Failed to convert workspace path to string")?;
+
+            let target_branch = workspace
+                .target_branch
+                .as_deref()
+                .unwrap_or("main");
+
+            jj::jj_get_log(workspace_dir_str, target_branch, Some(false))
+                .map_err(|e| format!("Failed to list commits: {}", e))
+        }
+        None => {
+            let branch = jj::get_workspace_branch(repo_path)
+                .map_err(|e| format!("Failed to get active branch: {}", e))?;
+            jj::jj_get_log(repo_path, &branch, Some(true))
+                .map_err(|e| format!("Failed to list commits: {}", e))
+        }
+    }
+}
+
 /// Moves a specific commit from a source workspace into a brand-new workspace.
 ///
 /// Creates the new workspace (registering it in the DB), then squashes the

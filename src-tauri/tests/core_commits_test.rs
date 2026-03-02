@@ -34,9 +34,9 @@ fn test_jj_get_log_diff_stats_with_multiline_output() {
     treq_lib::jj::jj_commit(workspace_path_str, "Add two files")
         .expect("Failed to commit");
 
-    // Now call jj_get_log — this should correctly parse the multiline diff.stat() output
-    let result = treq_lib::jj::jj_get_log(workspace_path_str, "main", Some(false))
-        .expect("Failed to get log");
+    // Now call list_commits — this should correctly parse the multiline diff.stat() output
+    let result = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id))
+        .expect("Failed to list commits");
 
     // Filter out working copy commit to get only the committed change
     let committed: Vec<_> = result.commits.iter().filter(|c| !c.is_working_copy).collect();
@@ -96,8 +96,8 @@ fn test_jj_get_log_diff_stats_with_modifications() {
     treq_lib::jj::jj_commit(workspace_path_str, "Modify and delete")
         .expect("Failed to commit");
 
-    let result = treq_lib::jj::jj_get_log(workspace_path_str, "main", Some(false))
-        .expect("Failed to get log");
+    let result = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id))
+        .expect("Failed to list commits");
 
     let committed: Vec<_> = result.commits.iter().filter(|c| !c.is_working_copy).collect();
 
@@ -124,46 +124,6 @@ fn test_jj_get_log_diff_stats_with_modifications() {
     );
 }
 
-#[test]
-fn test_jj_get_log_diff_stats_for_working_copy() {
-    let repo = TestRepo::new().expect("Failed to create test repo");
-
-    // Make changes in the home repo working copy (no workspace)
-    fs::write(
-        std::path::Path::new(&repo.repo_path).join("new_file.txt"),
-        "line 1\nline 2\nline 3\nline 4\nline 5\n",
-    )
-    .expect("Failed to write file");
-
-    // Call jj_get_log for the home repo with isHomeRepo=false
-    // to use the workspace-style revset (main..@)
-    let result = treq_lib::jj::jj_get_log(&repo.repo_path, "main", Some(false))
-        .expect("Failed to get log");
-
-    // Should include the working copy commit with diff stats
-    assert!(
-        !result.commits.is_empty(),
-        "Should have at least 1 commit (the working copy)"
-    );
-
-    let wc_commit = result.commits.iter().find(|c| c.is_working_copy);
-    assert!(
-        wc_commit.is_some(),
-        "Should have a working copy commit in the results"
-    );
-
-    let wc = wc_commit.unwrap();
-    assert_eq!(
-        wc.insertions, 5,
-        "Working copy should have 5 insertions, got {}",
-        wc.insertions
-    );
-    assert_eq!(
-        wc.deletions, 0,
-        "Working copy should have 0 deletions, got {}",
-        wc.deletions
-    );
-}
 
 // =============================================================================
 // Test: move_commit_to_new_workspace
@@ -374,13 +334,13 @@ fn test_commit_diff_added_files() {
         .expect("Failed to commit");
 
     // Get the commit's change_id from the log
-    let log = treq_lib::jj::jj_get_log(workspace_path_str, "main", Some(false))
-        .expect("Failed to get log");
+    let log = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id))
+        .expect("Failed to list commits");
     let committed: Vec<_> = log.commits.iter().filter(|c| !c.is_working_copy).collect();
     assert_eq!(committed.len(), 1);
     let change_id = &committed[0].change_id;
 
-    // Call jj_get_commit_diff
+    // Call get_commit_diff
     let diff = treq_lib::core::get_commit_diff(&repo.repo_path, workspace.id, change_id, "git")
         .expect("Failed to get commit diff");
 
@@ -437,7 +397,6 @@ fn test_commit_diff_modified_files() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().unwrap();
 
     // First commit: create a file
     fs::write(workspace_path.join("data.txt"), "line 1\nline 2\nline 3\n")
@@ -452,8 +411,8 @@ fn test_commit_diff_modified_files() {
         .expect("Failed to commit");
 
     // Get commits
-    let log = treq_lib::jj::jj_get_log(workspace_path_str, "main", Some(false))
-        .expect("Failed to get log");
+    let log = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id))
+        .expect("Failed to list commits");
     let committed: Vec<_> = log.commits.iter().filter(|c| !c.is_working_copy).collect();
     assert_eq!(committed.len(), 2);
 
@@ -507,8 +466,8 @@ fn test_commit_diff_deleted_files() {
         .expect("Failed to commit");
 
     // Get commits
-    let log = treq_lib::jj::jj_get_log(workspace_path_str, "main", Some(false))
-        .expect("Failed to get log");
+    let log = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id))
+        .expect("Failed to list commits");
     let committed: Vec<_> = log.commits.iter().filter(|c| !c.is_working_copy).collect();
 
     let del_commit = committed.iter().find(|c| c.description == "Delete temp file")
@@ -551,4 +510,225 @@ fn test_commit_diff_invalid_change_id() {
     // Try with empty change_id
     let result = treq_lib::core::get_commit_diff(&repo.repo_path, workspace.id, "", "git");
     assert!(result.is_err(), "Should reject empty change_id");
+}
+
+// =============================================================================
+// Test: list_commits returns commits for a workspace
+// =============================================================================
+
+#[test]
+fn test_list_commits() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/list-commits",
+        Some("list commits test".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+
+    // First commit
+    fs::write(workspace_path.join("hello.txt"), "hello\n").expect("Failed to write file");
+    treq_lib::core::create_commit(&repo.repo_path, workspace.id, "Add hello")
+        .expect("Failed to commit");
+
+    // Second commit
+    fs::write(workspace_path.join("world.txt"), "world\n").expect("Failed to write file");
+    treq_lib::core::create_commit(&repo.repo_path, workspace.id, "Add world")
+        .expect("Failed to commit");
+
+    let result = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id))
+        .expect("Failed to list commits");
+
+    // Should have both committed changes
+    let committed: Vec<_> = result.commits.iter().filter(|c| !c.is_working_copy).collect();
+    assert_eq!(
+        committed.len(),
+        2,
+        "Should have 2 non-working-copy commits, got {}",
+        committed.len()
+    );
+
+    // Verify commit descriptions are present
+    let descriptions: Vec<&str> = committed.iter().map(|c| c.description.as_str()).collect();
+    assert!(descriptions.contains(&"Add hello"), "Should contain 'Add hello' commit");
+    assert!(descriptions.contains(&"Add world"), "Should contain 'Add world' commit");
+
+    // Should have exactly 1 working copy commit
+    let wc: Vec<_> = result.commits.iter().filter(|c| c.is_working_copy).collect();
+    assert_eq!(wc.len(), 1, "Should have 1 working copy commit");
+}
+
+// =============================================================================
+// Test: list_commits excludes base branch commits made before workspace creation
+// =============================================================================
+
+#[test]
+fn test_list_commits_excludes_base_branch_commits() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    // Add commits to main (the base branch) BEFORE creating the workspace.
+    // Use git directly since main is the git branch.
+    repo.commit_file("base_file_1.txt", "base content 1\n", "Base commit 1")
+        .expect("Failed to create base commit 1");
+    repo.commit_file("base_file_2.txt", "base content 2\n", "Base commit 2")
+        .expect("Failed to create base commit 2");
+
+    // Now create a workspace — it branches off current main
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/after-base",
+        Some("test base exclusion".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+
+    // Make a commit on the workspace branch
+    fs::write(workspace_path.join("branch_file.txt"), "branch content\n")
+        .expect("Failed to write file");
+    treq_lib::core::create_commit(&repo.repo_path, workspace.id, "Branch commit")
+        .expect("Failed to commit");
+
+    let result = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id))
+        .expect("Failed to list commits");
+
+    let committed: Vec<_> = result.commits.iter().filter(|c| !c.is_working_copy).collect();
+
+    // Should only include the commit made AFTER the branch was created
+    assert_eq!(
+        committed.len(),
+        1,
+        "Should have only 1 commit (branch commit), not base branch commits. Got {}: {:?}",
+        committed.len(),
+        committed.iter().map(|c| &c.description).collect::<Vec<_>>()
+    );
+    assert_eq!(committed[0].description, "Branch commit");
+
+    // Verify base branch commits are NOT included
+    let descriptions: Vec<&str> = committed.iter().map(|c| c.description.as_str()).collect();
+    assert!(
+        !descriptions.contains(&"Base commit 1"),
+        "Should not contain base branch commit 1"
+    );
+    assert!(
+        !descriptions.contains(&"Base commit 2"),
+        "Should not contain base branch commit 2"
+    );
+}
+
+#[test]
+fn test_list_commits_invalid_workspace() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let result = treq_lib::core::list_commits(&repo.repo_path, Some(99999));
+    assert!(
+        result.is_err(),
+        "Should return error for non-existent workspace"
+    );
+}
+
+// =============================================================================
+// Test: list_commits returns diff stats for working copy changes
+// =============================================================================
+
+#[test]
+fn test_list_commits_working_copy_diff_stats() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/wc-diff-stats",
+        Some("working copy diff stats test".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+
+    // Write a file but don't commit — it stays in the working copy
+    fs::write(
+        workspace_path.join("new_file.txt"),
+        "line 1\nline 2\nline 3\nline 4\nline 5\n",
+    )
+    .expect("Failed to write file");
+
+    let result = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id))
+        .expect("Failed to list commits");
+
+    let wc_commit = result.commits.iter().find(|c| c.is_working_copy);
+    assert!(
+        wc_commit.is_some(),
+        "Should have a working copy commit in the results"
+    );
+
+    let wc = wc_commit.unwrap();
+    assert_eq!(
+        wc.insertions, 5,
+        "Working copy should have 5 insertions, got {}",
+        wc.insertions
+    );
+    assert_eq!(
+        wc.deletions, 0,
+        "Working copy should have 0 deletions, got {}",
+        wc.deletions
+    );
+}
+
+// =============================================================================
+// Test: list_commits with None workspace_id returns home repo commits
+// =============================================================================
+
+#[test]
+fn test_list_commits_home_repo() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    // Create a file in the home repo to ensure there's a change
+    fs::write(
+        std::path::Path::new(&repo.repo_path).join("home_file.txt"),
+        "home content\n",
+    )
+    .expect("Failed to write file");
+
+    let result = treq_lib::core::list_commits(&repo.repo_path, None)
+        .expect("Failed to list commits for home repo");
+
+    // Should have at least 1 commit (the working copy or initial commits)
+    assert!(
+        !result.commits.is_empty(),
+        "Should have at least 1 commit for home repo"
+    );
+}
+
+#[test]
+fn test_list_commits_home_repo_with_committed_changes() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    // Make a git commit on the home repo
+    repo.commit_file("committed_file.txt", "committed content\n", "Home repo commit")
+        .expect("Failed to create commit");
+
+    let result = treq_lib::core::list_commits(&repo.repo_path, None)
+        .expect("Failed to list commits for home repo");
+
+    // Should include the committed change
+    let committed: Vec<_> = result.commits.iter().filter(|c| !c.is_working_copy).collect();
+    assert!(
+        !committed.is_empty(),
+        "Should have at least 1 committed change in home repo"
+    );
+
+    let descriptions: Vec<&str> = committed.iter().map(|c| c.description.as_str()).collect();
+    assert!(
+        descriptions.contains(&"Home repo commit"),
+        "Should contain 'Home repo commit', got: {:?}",
+        descriptions
+    );
 }
