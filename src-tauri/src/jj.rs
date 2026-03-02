@@ -1260,9 +1260,15 @@ pub fn jj_sync_working_copy_if_safe(
 /// Parse jj rename path format: "{old => new}" → (new_path, Some(old_path))
 /// For non-rename paths, returns (path, None)
 fn parse_rename_path(path: &str) -> (String, Option<String>) {
-    if path.starts_with('{') && path.ends_with('}') {
-        if let Some((old, new)) = path[1..path.len() - 1].split_once(" => ") {
-            return (new.trim().to_string(), Some(old.trim().to_string()));
+    if let Some(open) = path.find('{') {
+        if let Some(close) = path.find('}') {
+            if let Some((old_part, new_part)) = path[open + 1..close].split_once(" => ") {
+                let prefix = &path[..open];
+                let suffix = &path[close + 1..];
+                let new_path = format!("{}{}{}", prefix, new_part.trim(), suffix);
+                let old_path = format!("{}{}{}", prefix, old_part.trim(), suffix);
+                return (new_path, Some(old_path));
+            }
         }
     }
     (path.to_string(), None)
@@ -5091,6 +5097,25 @@ target/debug/deps/lib.so    2-sided conflict including 1 deletion and an executa
         let (path, prev) = parse_rename_path("{src/old.rs => src/new.rs}");
         assert_eq!(path, "src/new.rs");
         assert_eq!(prev, Some("src/old.rs".to_string()));
+
+        // Partial-directory rename: prefix/{old => new}
+        let (path, prev) =
+            parse_rename_path("src-tauri/src/commands/{jj_commands.rs => commits.rs}");
+        assert_eq!(path, "src-tauri/src/commands/commits.rs");
+        assert_eq!(
+            prev,
+            Some("src-tauri/src/commands/jj_commands.rs".to_string())
+        );
+
+        // Partial-directory rename: {old => new}/suffix
+        let (path, prev) = parse_rename_path("{src/old_dir => src/new_dir}/file.rs");
+        assert_eq!(path, "src/new_dir/file.rs");
+        assert_eq!(prev, Some("src/old_dir/file.rs".to_string()));
+
+        // Partial-directory rename: prefix/{old => new}/suffix
+        let (path, prev) = parse_rename_path("src/{commands => cmds}/file.rs");
+        assert_eq!(path, "src/cmds/file.rs");
+        assert_eq!(prev, Some("src/commands/file.rs".to_string()));
 
         // Non-rename path
         let (path, prev) = parse_rename_path("normal_file.txt");
