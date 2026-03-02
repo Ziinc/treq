@@ -23,6 +23,8 @@ import { ChevronRight, FileText, Loader2 } from "lucide-react";
 
 interface CommitDiffViewerProps {
   workspacePath: string;
+  repoPath: string;
+  workspaceId: number | null;
   targetBranch: string | null;
   isHomeRepo?: boolean;
   scrollToCommitId?: string | null;
@@ -68,6 +70,8 @@ const parseHunkHeader = (
 export const CommitDiffViewer = memo<CommitDiffViewerProps>(
   function CommitDiffViewer({
     workspacePath,
+    repoPath,
+    workspaceId,
     targetBranch,
     isHomeRepo,
     scrollToCommitId,
@@ -134,7 +138,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
             next.set(commitId, { diff: { files: [], hunks_by_file: [] }, loading: true });
             return next;
           });
-          jjGetCommitDiff(workspacePath, commitId)
+          jjGetCommitDiff(repoPath, workspaceId, commitId)
             .then((diff) => {
               setCommitDiffs((prev) => {
                 const next = new Map(prev);
@@ -155,7 +159,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
             });
         }
       },
-      [workspacePath, commitDiffs]
+      [repoPath, workspaceId, commitDiffs]
     );
 
     const toggleCommit = useCallback(
@@ -173,7 +177,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                 next.set(commitId, { diff: { files: [], hunks_by_file: [] }, loading: true });
                 return next;
               });
-              jjGetCommitDiff(workspacePath, commitId)
+              jjGetCommitDiff(repoPath, workspaceId, commitId)
                 .then((diff) => {
                   setCommitDiffs((prev) => {
                     const next = new Map(prev);
@@ -197,7 +201,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
           return next;
         });
       },
-      [workspacePath, commitDiffs]
+      [repoPath, workspaceId, commitDiffs]
     );
 
     const dayGroups = useMemo(

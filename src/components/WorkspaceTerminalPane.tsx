@@ -26,7 +26,6 @@ interface ShellTerminalData {
 
 interface WorkspaceTerminalPaneProps {
   workingDirectory: string;
-  isHidden?: boolean;
   onSessionError?: (message: string) => void;
   currentBranch?: string | null;
   // Claude terminal integration
@@ -40,6 +39,7 @@ interface WorkspaceTerminalPaneProps {
   onCloseSession?: (sessionId: number) => void;
   onRenameSession?: (sessionId: number, newName: string) => void;
   onNavigateToWorkspace?: (workspaceKey: string, isMainRepo: boolean) => void;
+  className?: string;
 }
 
 export interface WorkspaceTerminalPaneHandle {
@@ -63,7 +63,6 @@ interface WorkspaceGroup {
 const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, WorkspaceTerminalPaneProps>(
   function WorkspaceTerminalPane({
     workingDirectory,
-    isHidden = false,
     onSessionError,
     currentBranch,
     claudeSessions = [],
@@ -75,6 +74,7 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
     onCloseSession,
     onRenameSession,
     onNavigateToWorkspace,
+    className,
   }, ref) {
     // Shared pane state
     const [collapsed, setCollapsed] = useState(true);
@@ -386,10 +386,9 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
       "j",
       true,
       () => {
-        if (isHidden) return;
         setCollapsed((prev) => !prev);
       },
-      [isHidden]
+      []
     );
 
     // Cmd+Control+J: Toggle maximize/restore terminal pane
@@ -397,7 +396,6 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
       "j",
       true,
       () => {
-        if (isHidden) return;
 
         if (maximized) {
           // If already maximized, restore to expanded state
@@ -408,7 +406,7 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
           setMaximized(true);
         }
       },
-      [isHidden, maximized],
+      [maximized],
       { requireBothCmdAndCtrl: true }
     );
 
@@ -417,10 +415,9 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
       "]",
       true,
       () => {
-        if (isHidden) return;
         handleCreateAgentSession();
       },
-      [isHidden, handleCreateAgentSession]
+      [handleCreateAgentSession]
     );
 
     // Cmd+\: Create new shell terminal
@@ -428,10 +425,9 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
       "\\",
       true,
       () => {
-        if (isHidden) return;
         handleAddShell();
       },
-      [isHidden, handleAddShell]
+      [handleAddShell]
     );
 
     // Build ordered list of all terminals for rendering based on terminalOrder
@@ -518,7 +514,7 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
 
     // Scroll to workspace group and focus first terminal when workingDirectory changes
     useEffect(() => {
-      if (collapsed || isHidden || !scrollContainerRef.current) return;
+      if (collapsed || !scrollContainerRef.current) return;
       const matchingGroup = workspaceGroups.find(
         (g) => g.workspaceKey === workingDirectory
       );
@@ -543,43 +539,10 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
       }
     }, [workingDirectory]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // When completely hidden, render terminals in hidden div to keep PTY sessions alive
-    if (isHidden) {
-      return (
-        <div className="hidden">
-          {allShellTerminals.map((terminal) => (
-            <ShellTerminalPanel
-              key={terminal.id}
-              terminalData={terminal}
-              collapsed={true}
-              canClose={false}
-              onSessionError={onSessionError}
-              terminalRefs={terminalRefs}
-            />
-          ))}
-          {claudeSessionsToRender.map((sessionData) => (
-            <ClaudeTerminalPanel
-              key={sessionData.sessionId}
-              sessionData={sessionData}
-              collapsed={true}
-              onSessionError={onSessionError}
-              onRename={
-                onRenameSession
-                  ? (newName) => onRenameSession(sessionData.sessionId, newName)
-                  : undefined
-              }
-              terminalRefs={terminalRefs}
-            />
-          ))}
-        </div>
-      );
-    }
-
     const totalTerminals = allTerminals.length;
 
     return (
-      <div ref={paneRef} style={{ display: 'contents' }}>
-        {/* Resize handle - only when expanded and not maximized */}
+      <div ref={paneRef} className={className}>
         {!collapsed && !maximized && (
           <div
             className="relative flex-shrink-0 h-1 group"

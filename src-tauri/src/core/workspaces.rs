@@ -1,8 +1,8 @@
-use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-use crate::db::Database;
+use serde::{Deserialize, Serialize};
+
 use crate::jj;
 use crate::local_db;
 
@@ -49,12 +49,23 @@ pub struct RenameWorkspaceResult {
     pub updated_children_ids: Vec<i64>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(tag = "type", content = "data")]
+pub enum RemoteSyncStatus {
+    NotOnRemote,
+    InSync,
+    Ahead { count: usize },
+    Behind { count: usize },
+    Diverged { ahead: usize, behind: usize },
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WorkspacePartialStatus {
     pub current: local_db::Workspace,
     pub has_conflicts: bool,
     pub has_changes: bool,
     pub commits_ahead: usize,
+    pub remote_sync: RemoteSyncStatus,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -89,36 +100,6 @@ impl WorkspaceMetadata {
     /// Serialize metadata to JSON string for storage
     pub fn to_json(&self) -> String {
         serde_json::to_string(self).unwrap_or_else(|_| "{}".to_string())
-    }
-}
-
-/// Initializes a repository for use with Treq.
-///
-/// Sets up both the local database (per-repo) and ensures JJ is initialized.
-/// Creates the .treq/workspaces directory if it doesn't exist.
-///
-/// # Arguments
-/// * `repo_path` - Path to the repository root
-///
-/// # Returns
-/// Returns true if successful or already initialized, false if JJ initialization failed.
-pub fn init(repo_path: &str) -> Result<bool, String> {
-    let db_path = local_db::init_local_db(repo_path)?;
-    let db = Database::new(db_path).map_err(|e| format!("Failed to open database: {}", e))?;
-    db.init()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
-
-    let workspaces_dir = Path::new(repo_path).join(".treq").join("workspaces");
-    std::fs::create_dir_all(&workspaces_dir)
-        .map_err(|e| format!("Failed to create workspaces directory: {}", e))?;
-
-    match jj::ensure_jj_initialized(&db, repo_path) {
-        Ok(_already_initialized) => {
-            // Recover orphaned workspaces (e.g., after .jj was deleted and reinitialized)
-            let _ = jj::recover_all_orphaned_workspaces(repo_path);
-            Ok(true)
-        }
-        Err(_) => Ok(false),
     }
 }
 
@@ -393,11 +374,40 @@ pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspacePartialSt
                 .map(|ca| ca.total_count)
                 .unwrap_or(0);
 
+            let remote_sync = if workspace.not_on_remote {
+                RemoteSyncStatus::NotOnRemote
+            } else if jj::jj_is_bookmark_conflicted(&workspace_path, &workspace.branch_name)
+            {
+                match jj::jj_get_diverged_sync_counts(
+                    &workspace_path,
+                    &workspace.branch_name,
+                ) {
+                    Ok((ahead, behind)) => {
+                        RemoteSyncStatus::Diverged { ahead, behind }
+                    }
+                    Err(_) => RemoteSyncStatus::Diverged {
+                        ahead: 0,
+                        behind: 0,
+                    },
+                }
+            } else {
+                match jj::jj_get_sync_status(&workspace_path, &workspace.branch_name, false) {
+                    Ok((ahead, behind)) => match (ahead, behind) {
+                        (0, 0) => RemoteSyncStatus::InSync,
+                        (a, 0) => RemoteSyncStatus::Ahead { count: a },
+                        (0, b) => RemoteSyncStatus::Behind { count: b },
+                        (a, b) => RemoteSyncStatus::Diverged { ahead: a, behind: b },
+                    },
+                    Err(_) => RemoteSyncStatus::NotOnRemote,
+                }
+            };
+
             WorkspacePartialStatus {
                 current: workspace,
                 has_conflicts,
                 has_changes,
                 commits_ahead,
+                remote_sync,
             }
         })
         .collect();
@@ -572,12 +582,35 @@ pub fn workspace_status(workspace_path: &str) -> Result<WorkspaceStatus, String>
 
     let commits_ahead_count = commits_ahead_of_target.len();
 
+    let remote_sync = if current_workspace.not_on_remote {
+        RemoteSyncStatus::NotOnRemote
+    } else if jj::jj_is_bookmark_conflicted(workspace_path, &current_workspace.branch_name) {
+        match jj::jj_get_diverged_sync_counts(workspace_path, &current_workspace.branch_name) {
+            Ok((ahead, behind)) => RemoteSyncStatus::Diverged { ahead, behind },
+            Err(_) => RemoteSyncStatus::Diverged {
+                ahead: 0,
+                behind: 0,
+            },
+        }
+    } else {
+        match jj::jj_get_sync_status(workspace_path, &current_workspace.branch_name, false) {
+            Ok((ahead, behind)) => match (ahead, behind) {
+                (0, 0) => RemoteSyncStatus::InSync,
+                (a, 0) => RemoteSyncStatus::Ahead { count: a },
+                (0, b) => RemoteSyncStatus::Behind { count: b },
+                (a, b) => RemoteSyncStatus::Diverged { ahead: a, behind: b },
+            },
+            Err(_) => RemoteSyncStatus::NotOnRemote,
+        }
+    };
+
     Ok(WorkspaceStatus {
         partial: WorkspacePartialStatus {
             current: current_workspace,
             has_conflicts,
             has_changes,
             commits_ahead: commits_ahead_count,
+            remote_sync,
         },
         target,
         children,
@@ -639,6 +672,7 @@ fn build_dag_recursive(
             has_conflicts,
             has_changes,
             commits_ahead: 0, // DAG nodes don't need commits_ahead
+            remote_sync: RemoteSyncStatus::NotOnRemote, // DAG nodes don't need remote_sync
         },
         parent_id,
         child_ids: child_ids.clone(),
@@ -1146,152 +1180,4 @@ pub fn split_workspace(
                 .ok_or_else(|| "New workspace not found after split".to_string())
         }
     }
-}
-
-/// Moves a specific commit from a source workspace into a brand-new workspace.
-///
-/// Creates the new workspace (registering it in the DB), then squashes the
-/// specified commit's changes into the new workspace's working copy.
-///
-/// # Arguments
-/// * `repo_path`           - Path to the repository root
-/// * `source_workspace_id` - ID of the workspace that owns the commit
-/// * `commit_change_id`    - The short change-id of the commit to move
-/// * `branch_name`         - Branch name for the new workspace
-/// * `intent`              - Optional intent description for the new workspace
-///
-/// # Returns
-/// The newly created `Workspace` on success, or an error string.
-pub fn move_commit_to_new_workspace(
-    repo_path: &str,
-    source_workspace_id: i64,
-    commit_change_id: &str,
-    branch_name: &str,
-    intent: Option<String>,
-) -> Result<local_db::Workspace, String> {
-    // Resolve full path of the source workspace
-    let source = local_db::get_workspace_by_id(repo_path, source_workspace_id)
-        .map_err(|e| format!("Failed to get source workspace: {}", e))?
-        .ok_or_else(|| format!("Source workspace not found: {}", source_workspace_id))?;
-
-    let source_full_path = Path::new(repo_path)
-        .join(".treq")
-        .join("workspaces")
-        .join(&source.workspace_path);
-    let source_full_path_str = source_full_path
-        .to_str()
-        .ok_or("Failed to convert source workspace path to string")?
-        .to_string();
-
-    // Create the new workspace
-    let new_workspace = create_workspace(repo_path, branch_name, intent, None, None)?;
-
-    // Squash the commit into the new workspace's working copy
-    jj::squash_commit_to_workspace(
-        &source_full_path_str,
-        commit_change_id,
-        &new_workspace.workspace_name,
-    )
-    .map_err(|e| format!("Failed to move commit to new workspace: {}", e))?;
-
-    // Refresh the new workspace's working copy so it reflects the squash
-    let new_workspace_dir = Path::new(repo_path)
-        .join(".treq")
-        .join("workspaces")
-        .join(&new_workspace.workspace_path);
-    jj::update_stale_workspace(&new_workspace_dir.to_string_lossy())
-        .map_err(|e| format!("Failed to update new workspace working copy: {}", e))?;
-
-    Ok(new_workspace)
-}
-
-/// Moves a specific commit from a source workspace into an existing target workspace.
-///
-/// Squashes the specified commit's changes into the target workspace's working copy.
-///
-/// # Arguments
-/// * `repo_path`            - Path to the repository root
-/// * `source_workspace_id`  - ID of the workspace that owns the commit
-/// * `commit_change_id`     - The short change-id of the commit to move
-/// * `target_workspace_id`  - ID of the destination workspace
-///
-/// # Returns
-/// `Ok(())` on success, or an error string.
-pub fn move_commit_to_existing_workspace(
-    repo_path: &str,
-    source_workspace_id: i64,
-    commit_change_id: &str,
-    target_workspace_id: i64,
-) -> Result<(), String> {
-    // Resolve full path of the source workspace
-    let source = local_db::get_workspace_by_id(repo_path, source_workspace_id)
-        .map_err(|e| format!("Failed to get source workspace: {}", e))?
-        .ok_or_else(|| format!("Source workspace not found: {}", source_workspace_id))?;
-
-    // Resolve target workspace
-    let target = local_db::get_workspace_by_id(repo_path, target_workspace_id)
-        .map_err(|e| format!("Failed to get target workspace: {}", e))?
-        .ok_or_else(|| format!("Target workspace not found: {}", target_workspace_id))?;
-
-    let source_full_path = Path::new(repo_path)
-        .join(".treq")
-        .join("workspaces")
-        .join(&source.workspace_path);
-    let source_full_path_str = source_full_path
-        .to_str()
-        .ok_or("Failed to convert source workspace path to string")?
-        .to_string();
-
-    // Squash the commit into the target workspace's working copy
-    jj::squash_commit_to_workspace(
-        &source_full_path_str,
-        commit_change_id,
-        &target.workspace_name,
-    )
-    .map_err(|e| format!("Failed to move commit to target workspace: {}", e))?;
-
-    // Refresh the target workspace's working copy so it reflects the squash
-    let target_workspace_dir = Path::new(repo_path)
-        .join(".treq")
-        .join("workspaces")
-        .join(&target.workspace_path);
-    jj::update_stale_workspace(&target_workspace_dir.to_string_lossy())
-        .map_err(|e| format!("Failed to update target workspace working copy: {}", e))?;
-
-    Ok(())
-}
-
-/// Abandons a specific commit from a workspace by change-id.
-///
-/// # Arguments
-/// * `repo_path`         - Path to the repository root
-/// * `workspace_id`      - ID of the workspace that owns the commit
-/// * `commit_change_id`  - The short change-id of the commit to abandon
-///
-/// # Returns
-/// `Ok(())` on success, or an error string.
-pub fn abandon_commit(
-    repo_path: &str,
-    workspace_id: i64,
-    commit_change_id: &str,
-) -> Result<(), String> {
-    let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
-        .map_err(|e| format!("Failed to get workspace: {}", e))?
-        .ok_or_else(|| format!("Workspace not found: {}", workspace_id))?;
-
-    let workspace_dir = Path::new(repo_path)
-        .join(".treq")
-        .join("workspaces")
-        .join(&workspace.workspace_path);
-    let workspace_dir_str = workspace_dir
-        .to_str()
-        .ok_or("Failed to convert workspace path to string")?;
-
-    jj::jj_abandon(workspace_dir_str, commit_change_id)
-        .map_err(|e| format!("Failed to abandon commit: {}", e))?;
-
-    jj::update_stale_workspace(workspace_dir_str)
-        .map_err(|e| format!("Failed to update workspace working copy: {}", e))?;
-
-    Ok(())
 }

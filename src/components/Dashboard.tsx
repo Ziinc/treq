@@ -971,7 +971,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
                     onCreateStackedWorkspace={handleCreateStackedWorkspace}
                     stackCreating={isCreatingStack}
                     onSplitWorkspace={selectedWorkspace ? () => setShowSplitDialog(true) : undefined}
-                    onNavigateToWorkspace={(ws) => handleOpenSession(ws)}
                     queryClient={queryClient}
                     onSessionCreated={(sessionData) => {
                       queryClient.invalidateQueries({
@@ -990,7 +989,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
             ref={terminalPaneRef}
             key={repoPath}
             workingDirectory={selectedWorkspace ? getFullWorkspacePath(selectedWorkspace) : repoPath}
-            isHidden={false}
             currentBranch={currentBranch}
             claudeSessions={claudeSessionsForPane}
             activeClaudeSessionId={isSessionView ? activeSessionId : null}

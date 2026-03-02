@@ -2895,7 +2895,7 @@ export const ChangesDiffViewer = memo(
               setStagedFiles(new Set()); // Clear staging after commit
             } else {
               // No staged files, commit all
-              result = await jjCommit(workspacePath, commitMsg);
+              result = await jjCommit(repoPath!, workspaceId!, commitMsg);
             }
 
             await invalidateCache();

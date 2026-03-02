@@ -5,7 +5,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use treq_lib::core::{MaybeEmptyParam, MergeCommit};
+use treq_lib::core::{MaybeEmptyParam, MergeCommit, RemoteSyncStatus};
 use treq_lib::jj;
 use treq_lib::local_db::Workspace;
 
@@ -2476,5 +2476,293 @@ fn test_list_workspace_statuses_commits_ahead() {
     assert_eq!(
         status.commits_ahead, 2,
         "Should have 2 commits ahead after second commit"
+    );
+}
+
+// =============================================================================
+// Test: workspace remote_sync status - NotOnRemote
+// =============================================================================
+
+#[test]
+fn test_workspace_status_not_on_remote() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/not-on-remote",
+        Some("test not on remote".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    assert!(workspace.not_on_remote, "New workspace should be not_on_remote");
+
+    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
+        .expect("Failed to list workspace statuses");
+    let status = statuses
+        .iter()
+        .find(|s| s.current.id == workspace.id)
+        .expect("Workspace should exist in statuses");
+
+    assert_eq!(
+        status.remote_sync,
+        RemoteSyncStatus::NotOnRemote,
+        "Unpushed workspace should have NotOnRemote sync status"
+    );
+}
+
+// =============================================================================
+// Test: workspace remote_sync status - InSync
+// =============================================================================
+
+#[test]
+fn test_workspace_status_in_sync() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/in-sync",
+        Some("test in sync".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    // Add a commit so there's something to push
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    fs::write(workspace_path.join("file.txt"), "content").expect("Failed to write file");
+    treq_lib::jj::jj_commit(workspace_path.to_str().unwrap(), "Initial commit")
+        .expect("Failed to commit");
+
+    // Push to remote
+    treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
+        .expect("Failed to push workspace");
+
+    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
+        .expect("Failed to list workspace statuses");
+    let status = statuses
+        .iter()
+        .find(|s| s.current.id == workspace.id)
+        .expect("Workspace should exist in statuses");
+
+    assert_eq!(
+        status.remote_sync,
+        RemoteSyncStatus::InSync,
+        "Pushed workspace with no new changes should be InSync"
+    );
+}
+
+// =============================================================================
+// Test: workspace remote_sync status - Ahead
+// =============================================================================
+
+#[test]
+fn test_workspace_status_ahead_of_remote() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/ahead",
+        Some("test ahead".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().unwrap();
+
+    // Add initial commit and push
+    fs::write(workspace_path.join("file1.txt"), "content 1").expect("Failed to write file");
+    treq_lib::jj::jj_commit(workspace_path_str, "Initial commit").expect("Failed to commit");
+    treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
+        .expect("Failed to push workspace");
+
+    // Make a local commit without pushing
+    fs::write(workspace_path.join("file2.txt"), "content 2").expect("Failed to write file");
+    treq_lib::jj::jj_commit(workspace_path_str, "Local only commit").expect("Failed to commit");
+
+    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
+        .expect("Failed to list workspace statuses");
+    let status = statuses
+        .iter()
+        .find(|s| s.current.id == workspace.id)
+        .expect("Workspace should exist in statuses");
+
+    assert_eq!(
+        status.remote_sync,
+        RemoteSyncStatus::Ahead { count: 1 },
+        "Workspace with unpushed commit should be Ahead {{ count: 1 }}"
+    );
+}
+
+// =============================================================================
+// Test: workspace remote_sync status - Behind
+// =============================================================================
+
+#[test]
+fn test_workspace_status_behind_remote() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/behind",
+        Some("test behind".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().unwrap();
+
+    // Add initial commit and push
+    fs::write(workspace_path.join("file1.txt"), "content 1").expect("Failed to write file");
+    treq_lib::jj::jj_commit(workspace_path_str, "Initial commit").expect("Failed to commit");
+    treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
+        .expect("Failed to push workspace");
+
+    // Clone the bare remote, commit and push from the clone to simulate remote-ahead
+    let clone_dir = repo.temp_dir.path().join("clone");
+    let remote_dir = repo.temp_dir.path().join("remote.git");
+    Command::new("git")
+        .args(["clone", remote_dir.to_str().unwrap(), clone_dir.to_str().unwrap()])
+        .output()
+        .expect("Failed to clone remote");
+    Command::new("git")
+        .current_dir(&clone_dir)
+        .args(["checkout", &workspace.branch_name])
+        .output()
+        .expect("Failed to checkout branch in clone");
+    fs::write(clone_dir.join("remote-file.txt"), "from remote").expect("Failed to write file");
+    Command::new("git")
+        .current_dir(&clone_dir)
+        .args(["add", "remote-file.txt"])
+        .output()
+        .expect("Failed to git add");
+    Command::new("git")
+        .current_dir(&clone_dir)
+        .args(["commit", "-m", "Remote commit"])
+        .output()
+        .expect("Failed to git commit");
+    Command::new("git")
+        .current_dir(&clone_dir)
+        .args(["push", "origin", &workspace.branch_name])
+        .output()
+        .expect("Failed to push from clone");
+
+    // Fetch in the main repo so jj knows about the remote commit.
+    // Note: jj auto-fast-forwards the local bookmark to match remote on fetch.
+    treq_lib::jj::jj_git_fetch(&repo.repo_path).expect("Failed to fetch");
+
+    // Move the local bookmark back to simulate being behind remote.
+    // After fetch, both local and remote point to the same commit.
+    // Setting the bookmark to its parent puts local one commit behind remote.
+    let set_output = Command::new("jj")
+        .current_dir(workspace_path_str)
+        .args([
+            "bookmark",
+            "set",
+            &workspace.branch_name,
+            "-r",
+            &format!("{}@origin-", workspace.branch_name),
+            "--allow-backwards",
+        ])
+        .output()
+        .expect("Failed to set bookmark");
+    assert!(
+        set_output.status.success(),
+        "Failed to set bookmark back: {}",
+        String::from_utf8_lossy(&set_output.stderr)
+    );
+
+    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
+        .expect("Failed to list workspace statuses");
+    let status = statuses
+        .iter()
+        .find(|s| s.current.id == workspace.id)
+        .expect("Workspace should exist in statuses");
+
+    assert_eq!(
+        status.remote_sync,
+        RemoteSyncStatus::Behind { count: 1 },
+        "Workspace should be Behind {{ count: 1 }} after remote commit"
+    );
+}
+
+// =============================================================================
+// Test: workspace remote_sync status - Diverged
+// =============================================================================
+
+#[test]
+fn test_workspace_status_diverged() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/diverged",
+        Some("test diverged".to_string()),
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().unwrap();
+
+    // Add initial commit and push
+    fs::write(workspace_path.join("file1.txt"), "content 1").expect("Failed to write file");
+    treq_lib::jj::jj_commit(workspace_path_str, "Initial commit").expect("Failed to commit");
+    treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
+        .expect("Failed to push workspace");
+
+    // Make a local commit (don't push)
+    fs::write(workspace_path.join("local-file.txt"), "local content").expect("Failed to write file");
+    treq_lib::jj::jj_commit(workspace_path_str, "Local commit").expect("Failed to commit");
+
+    // Clone the bare remote, commit and push from the clone to simulate remote-ahead
+    let clone_dir = repo.temp_dir.path().join("clone-diverged");
+    let remote_dir = repo.temp_dir.path().join("remote.git");
+    Command::new("git")
+        .args(["clone", remote_dir.to_str().unwrap(), clone_dir.to_str().unwrap()])
+        .output()
+        .expect("Failed to clone remote");
+    Command::new("git")
+        .current_dir(&clone_dir)
+        .args(["checkout", &workspace.branch_name])
+        .output()
+        .expect("Failed to checkout branch in clone");
+    fs::write(clone_dir.join("remote-file.txt"), "from remote").expect("Failed to write file");
+    Command::new("git")
+        .current_dir(&clone_dir)
+        .args(["add", "remote-file.txt"])
+        .output()
+        .expect("Failed to git add");
+    Command::new("git")
+        .current_dir(&clone_dir)
+        .args(["commit", "-m", "Remote commit"])
+        .output()
+        .expect("Failed to git commit");
+    Command::new("git")
+        .current_dir(&clone_dir)
+        .args(["push", "origin", &workspace.branch_name])
+        .output()
+        .expect("Failed to push from clone");
+
+    // Fetch in the main repo so jj knows about the remote commit
+    treq_lib::jj::jj_git_fetch(&repo.repo_path).expect("Failed to fetch");
+
+    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
+        .expect("Failed to list workspace statuses");
+    let status = statuses
+        .iter()
+        .find(|s| s.current.id == workspace.id)
+        .expect("Workspace should exist in statuses");
+
+    assert_eq!(
+        status.remote_sync,
+        RemoteSyncStatus::Diverged { ahead: 1, behind: 1 },
+        "Workspace should be Diverged {{ ahead: 1, behind: 1 }}"
     );
 }
