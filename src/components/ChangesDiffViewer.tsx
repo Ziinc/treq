@@ -19,7 +19,7 @@ import {
   jjGetFileHunks,
   jjRestoreFile,
   jjRestoreAll,
-  jjCommit,
+  createCommit,
   jjSplit,
   getDiffCache,
   markFileViewed,
@@ -2895,7 +2895,7 @@ export const ChangesDiffViewer = memo(
               setStagedFiles(new Set()); // Clear staging after commit
             } else {
               // No staged files, commit all
-              result = await jjCommit(repoPath!, workspaceId!, commitMsg);
+              result = await createCommit(repoPath!, workspaceId ?? null, commitMsg);
             }
 
             await invalidateCache();

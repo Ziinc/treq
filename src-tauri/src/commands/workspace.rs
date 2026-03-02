@@ -410,6 +410,21 @@ pub fn check_and_rebase_workspaces(
     }
 }
 
+/// Pull workspace from remote, automatically resolving divergence
+#[tauri::command]
+pub fn pull_workspace_from_remote(
+    state: State<AppState>,
+    repo_path: String,
+    workspace_id: i64,
+) -> Result<crate::core::PullWorkspaceResult, String> {
+    let conflict_style = state.db.lock().unwrap()
+        .get_setting("conflict_marker_style")
+        .ok().flatten()
+        .unwrap_or_else(|| "git".to_string());
+
+    crate::core::pull_workspace_from_remote(&repo_path, workspace_id, &conflict_style)
+}
+
 /// Resolve a conflicted bookmark by setting it to a user-selected revision
 #[tauri::command]
 pub fn resolve_workspace_bookmark_conflict(
