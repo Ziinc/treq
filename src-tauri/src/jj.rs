@@ -120,6 +120,7 @@ pub struct JjLogCommit {
     pub parent_ids: Vec<String>,
     pub is_working_copy: bool,
     pub bookmarks: Vec<String>,
+    pub is_immutable: bool,
     pub insertions: u32,
     pub deletions: u32,
 }
@@ -2823,6 +2824,7 @@ pub fn jj_get_log(
         "parents.map(|p| p.commit_id().short(12)).join(\",\") ++ \"\\t\" ++ ",
         "if(working_copies, \"true\", \"false\") ++ \"\\t\" ++ ",
         "bookmarks.map(|b| b.name()).join(\",\") ++ \"\\t\" ++ ",
+        "if(immutable, \"true\", \"false\") ++ \"\\t\" ++ ",
         "diff.stat() ++ \"\\x1E\""
     );
 
@@ -2856,7 +2858,7 @@ pub fn jj_get_log(
         };
 
         let parts: Vec<&str> = first_line.split('\t').collect();
-        if parts.len() < 8 {
+        if parts.len() < 9 {
             continue; // Skip malformed records
         }
 
@@ -2868,12 +2870,13 @@ pub fn jj_get_log(
         let parent_ids_str = parts[5];
         let is_working_copy = parts[6] == "true";
         let bookmarks_str = parts[7];
+        let is_immutable = parts[8] == "true";
 
-        // diff.stat() spans from parts[8] (if present) through all remaining lines
+        // diff.stat() spans from parts[9] (if present) through all remaining lines
         // The summary line (e.g. "2 files changed, 64 insertions(+), 16 deletions(-)") is the last line
         let mut diff_stat_parts: Vec<&str> = Vec::new();
-        if parts.len() > 8 {
-            diff_stat_parts.push(parts[8]);
+        if parts.len() > 9 {
+            diff_stat_parts.push(parts[9]);
         }
         for line in lines {
             diff_stat_parts.push(line);
@@ -2908,6 +2911,7 @@ pub fn jj_get_log(
             parent_ids,
             is_working_copy,
             bookmarks,
+            is_immutable,
             insertions,
             deletions,
         });
@@ -2946,6 +2950,7 @@ pub fn jj_get_commits_ahead(
         "parents.map(|p| p.commit_id().short(12)).join(\",\") ++ \"\\t\" ++ ",
         "if(working_copies, \"true\", \"false\") ++ \"\\t\" ++ ",
         "bookmarks.map(|b| b.name()).join(\",\") ++ \"\\t\" ++ ",
+        "if(immutable, \"true\", \"false\") ++ \"\\t\" ++ ",
         "diff.stat() ++ \"\\n\""
     );
 
@@ -2971,7 +2976,7 @@ pub fn jj_get_commits_ahead(
         }
 
         let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() < 9 {
+        if parts.len() < 10 {
             continue;
         }
 
@@ -2983,7 +2988,8 @@ pub fn jj_get_commits_ahead(
         let parent_ids_str = parts[5];
         let is_working_copy = parts[6] == "true";
         let bookmarks_str = parts[7];
-        let diff_stat = parts[8];
+        let is_immutable = parts[8] == "true";
+        let diff_stat = parts[9];
 
         let parent_ids: Vec<String> = if parent_ids_str.is_empty() {
             Vec::new()
@@ -3010,6 +3016,7 @@ pub fn jj_get_commits_ahead(
             parent_ids,
             is_working_copy,
             bookmarks,
+            is_immutable,
             insertions,
             deletions,
         });

@@ -109,6 +109,7 @@ export interface JjLogCommit {
   parent_ids: string[];
   is_working_copy: boolean;
   bookmarks: string[];
+  is_immutable: boolean;
   insertions: number;
   deletions: number;
 }
