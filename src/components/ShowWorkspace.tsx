@@ -1139,6 +1139,8 @@ const handleSync = useCallback(async () => {
             isHomeRepo={!workspace}
             scrollToCommitId={scrollToCommitId}
             onScrollComplete={() => setScrollToCommitId(null)}
+            onCommitMoved={() => {}}
+            onCommitAbandoned={() => {}}
           />
         ) : (
           <ChangesDiffViewer
