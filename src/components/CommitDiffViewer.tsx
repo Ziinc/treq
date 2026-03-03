@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   jjGetLog,
   jjGetCommitDiff,
+  abandonCommit,
   type JjLogCommit,
   type JjRevisionDiff,
   type JjDiffHunk,
@@ -19,7 +20,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
-import { ChevronRight, FileText, Loader2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
+import { ArrowRightLeft, ChevronRight, FileText, Loader2, Trash2 } from "lucide-react";
+import { MoveCommitToNewWorkspaceDialog } from "./MoveCommitToNewWorkspaceDialog";
+import { MoveCommitToExistingWorkspaceDialog } from "./MoveCommitToExistingWorkspaceDialog";
+import { useToast } from "./ui/toast";
 
 interface CommitDiffViewerProps {
   workspacePath: string;
@@ -29,6 +39,8 @@ interface CommitDiffViewerProps {
   isHomeRepo?: boolean;
   scrollToCommitId?: string | null;
   onScrollComplete?: () => void;
+  onCommitMoved?: () => void;
+  onCommitAbandoned?: () => void;
 }
 
 interface DayGroup {
@@ -76,6 +88,8 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
     isHomeRepo,
     scrollToCommitId,
     onScrollComplete,
+    onCommitMoved,
+    onCommitAbandoned,
   }) {
     const [commits, setCommits] = useState<JjLogCommit[]>([]);
     const [loading, setLoading] = useState(true);
@@ -86,6 +100,63 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
       Map<string, { diff: JjRevisionDiff; loading: boolean; error?: string }>
     >(new Map());
     const containerRef = useRef<HTMLDivElement>(null);
+
+    // Move/abandon commit state
+    const [moveTarget, setMoveTarget] = useState<JjLogCommit | null>(null);
+    const [showNewDialog, setShowNewDialog] = useState(false);
+    const [showExistingDialog, setShowExistingDialog] = useState(false);
+    const [removingCommitIds, setRemovingCommitIds] = useState<Set<string>>(new Set());
+    const { addToast } = useToast();
+
+    const canMove = !!(workspaceId !== null && workspaceId !== undefined && repoPath);
+
+    const handleMoveToNew = useCallback((commit: JjLogCommit) => {
+      setMoveTarget(commit);
+      setShowNewDialog(true);
+    }, []);
+
+    const handleMoveToExisting = useCallback((commit: JjLogCommit) => {
+      setMoveTarget(commit);
+      setShowExistingDialog(true);
+    }, []);
+
+    const REMOVE_ANIMATION_MS = 220;
+
+    const handleAbandon = useCallback(async (commit: JjLogCommit) => {
+      if (!repoPath || !workspaceId) return;
+
+      const firstLine = commit.description.split("\n")[0] || "(no message)";
+      const confirmed = window.confirm(`Abandon this commit?\n\n${commit.short_id} — ${firstLine}`);
+      if (!confirmed) return;
+
+      try {
+        await abandonCommit(repoPath, workspaceId, commit.change_id);
+        setRemovingCommitIds((prev) => new Set(prev).add(commit.commit_id));
+
+        window.setTimeout(() => {
+          setCommits((prev) => prev.filter((c) => c.commit_id !== commit.commit_id));
+          setRemovingCommitIds((prev) => {
+            const next = new Set(prev);
+            next.delete(commit.commit_id);
+            return next;
+          });
+          onCommitAbandoned?.();
+        }, REMOVE_ANIMATION_MS);
+
+        addToast({
+          title: "Commit deleted",
+          description: `Abandoned commit ${commit.short_id}`,
+          type: "success",
+        });
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        addToast({
+          title: "Failed to delete commit",
+          description: errorMsg,
+          type: "error",
+        });
+      }
+    }, [repoPath, workspaceId, onCommitAbandoned, addToast]);
 
     // Fetch commits
     useEffect(() => {
@@ -232,43 +303,75 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
     let globalIndex = 0;
 
     return (
-      <div ref={containerRef} className="h-full overflow-auto">
-        <div className="p-4">
-          <div className="relative">
-            <div
-              className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-border"
-              aria-hidden="true"
-            />
+      <>
+        <div ref={containerRef} className="h-full overflow-auto">
+          <div className="p-4">
+            <div className="relative">
+              <div
+                className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-border"
+                aria-hidden="true"
+              />
 
-            {dayGroups.map((group) => (
-              <div key={group.dayKey} className="mt-5 first:mt-0">
-                <p className="text-xs font-semibold text-muted-foreground mb-1 pl-7">
-                  {group.label}
-                </p>
-                <div className="space-y-0">
-                  {group.commits.map((commit) => {
-                    const isFirst = globalIndex === 0;
-                    globalIndex++;
-                    const isExpanded = expandedCommits.has(commit.commit_id);
-                    const diffData = commitDiffs.get(commit.commit_id);
+              {dayGroups.map((group) => (
+                <div key={group.dayKey} className="mt-5 first:mt-0">
+                  <p className="text-xs font-semibold text-muted-foreground mb-1 pl-7">
+                    {group.label}
+                  </p>
+                  <div className="space-y-0">
+                    {group.commits.map((commit) => {
+                      const isFirst = globalIndex === 0;
+                      globalIndex++;
+                      const isExpanded = expandedCommits.has(commit.commit_id);
+                      const diffData = commitDiffs.get(commit.commit_id);
 
-                    return (
-                      <CommitWithDiff
-                        key={commit.commit_id}
-                        commit={commit}
-                        isFirst={isFirst}
-                        isExpanded={isExpanded}
-                        diffData={diffData}
-                        onToggle={() => toggleCommit(commit.commit_id)}
-                      />
-                    );
-                  })}
+                      return (
+                        <CommitWithDiff
+                          key={commit.commit_id}
+                          commit={commit}
+                          isFirst={isFirst}
+                          isExpanded={isExpanded}
+                          diffData={diffData}
+                          onToggle={() => toggleCommit(commit.commit_id)}
+                          canMove={canMove && !commit.is_immutable}
+                          isRemoving={removingCommitIds.has(commit.commit_id)}
+                          onMoveToNew={handleMoveToNew}
+                          onMoveToExisting={handleMoveToExisting}
+                          onAbandon={handleAbandon}
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+
+        {canMove && moveTarget && (
+          <>
+            <MoveCommitToNewWorkspaceDialog
+              open={showNewDialog}
+              onOpenChange={setShowNewDialog}
+              commit={moveTarget}
+              repoPath={repoPath}
+              sourceWorkspaceId={workspaceId!}
+              onSuccess={() => {
+                onCommitMoved?.();
+              }}
+            />
+            <MoveCommitToExistingWorkspaceDialog
+              open={showExistingDialog}
+              onOpenChange={setShowExistingDialog}
+              commit={moveTarget}
+              repoPath={repoPath}
+              sourceWorkspaceId={workspaceId!}
+              onSuccess={() => {
+                onCommitMoved?.();
+              }}
+            />
+          </>
+        )}
+      </>
     );
   }
 );
@@ -285,6 +388,11 @@ interface CommitWithDiffProps {
     error?: string;
   };
   onToggle: () => void;
+  canMove: boolean;
+  isRemoving: boolean;
+  onMoveToNew: (commit: JjLogCommit) => void;
+  onMoveToExisting: (commit: JjLogCommit) => void;
+  onAbandon: (commit: JjLogCommit) => void;
 }
 
 function CommitWithDiff({
@@ -293,6 +401,11 @@ function CommitWithDiff({
   isExpanded,
   diffData,
   onToggle,
+  canMove,
+  isRemoving,
+  onMoveToNew,
+  onMoveToExisting,
+  onAbandon,
 }: CommitWithDiffProps) {
   const firstLine = commit.description.split("\n")[0] || "(no message)";
   const hasStats = commit.insertions > 0 || commit.deletions > 0;
@@ -333,6 +446,11 @@ function CommitWithDiff({
             <p className="text-xs text-muted-foreground font-mono">
               {commit.short_id}
             </p>
+            {commit.is_immutable && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border font-medium">
+                Immutable
+              </span>
+            )}
             <TooltipProvider delayDuration={300}>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -357,7 +475,38 @@ function CommitWithDiff({
 
       {/* Expanded diff content */}
       {isExpanded && (
-        <div className="ml-7 mb-3 border border-border rounded-md overflow-hidden">
+        <div className="ml-7 mb-3">
+          {canMove && (
+            <div className="flex items-center gap-2 mb-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-md border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <ArrowRightLeft className="w-3.5 h-3.5" />
+                    Move commit
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem onClick={() => onMoveToNew(commit)}>
+                    Move to New Workspace
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onMoveToExisting(commit)}>
+                    Move to Existing Workspace
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <button
+                className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-md border border-border hover:bg-muted text-muted-foreground hover:text-destructive transition-colors"
+                onClick={() => onAbandon(commit)}
+                disabled={isRemoving}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete commit
+              </button>
+            </div>
+          )}
+          <div className="border border-border rounded-md overflow-hidden">
           {diffData?.loading ? (
             <div className="flex items-center gap-2 p-3 text-sm text-muted-foreground">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -370,6 +519,7 @@ function CommitWithDiff({
           ) : diffData?.diff ? (
             <CommitDiffContent diff={diffData.diff} />
           ) : null}
+          </div>
         </div>
       )}
     </div>

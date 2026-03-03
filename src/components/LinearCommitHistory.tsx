@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useState } from "react";
-import { abandonCommit, listCommits, type JjLogCommit } from "../lib/api";
+import { listCommits, type JjLogCommit } from "../lib/api";
 import { cn, formatRelativeTime, formatFullTimestamp, getDayKey, formatDayLabel } from "../lib/utils";
 import {
   Tooltip,
@@ -7,24 +7,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
-import { ArrowRightLeft, Trash2 } from "lucide-react";
-import { MoveCommitToNewWorkspaceDialog } from "./MoveCommitToNewWorkspaceDialog";
-import { MoveCommitToExistingWorkspaceDialog } from "./MoveCommitToExistingWorkspaceDialog";
-import { useToast } from "./ui/toast";
-
-const REMOVE_ANIMATION_MS = 220;
 
 interface LinearCommitHistoryProps {
   repoPath: string;
   workspaceId: number | null;
-  // Optional props for move-commit feature
-  onCommitMoved?: () => void;
   onCommitClick?: (changeId: string) => void;
 }
 
@@ -53,14 +39,9 @@ function groupCommitsByDay(commits: JjLogCommit[]): DayGroup[] {
 }
 
 export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
-  function LinearCommitHistory({ repoPath, workspaceId, onCommitMoved, onCommitClick }) {
+  function LinearCommitHistory({ repoPath, workspaceId, onCommitClick }) {
     const [commits, setCommits] = useState<JjLogCommit[]>([]);
     const [loading, setLoading] = useState(true);
-    const [moveTarget, setMoveTarget] = useState<JjLogCommit | null>(null);
-    const [showNewDialog, setShowNewDialog] = useState(false);
-    const [showExistingDialog, setShowExistingDialog] = useState(false);
-    const [removingCommitIds, setRemovingCommitIds] = useState<Set<string>>(new Set());
-    const { addToast } = useToast();
 
     useEffect(() => {
       if (!repoPath) {
@@ -73,7 +54,6 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
           // Skip the first commit (working copy / uncommitted @)
           const nextCommits = result?.commits ?? [];
           setCommits(nextCommits.slice(1));
-          setRemovingCommitIds(new Set());
         })
         .catch((err) => {
           console.error('Failed to fetch commit history:', err);
@@ -85,58 +65,6 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
     }, [repoPath, workspaceId]);
 
     const dayGroups = useMemo(() => groupCommitsByDay(commits), [commits]);
-
-    const canMove = !!(workspaceId !== null && workspaceId !== undefined && repoPath);
-
-    const handleMoveToNew = (commit: JjLogCommit) => {
-      setMoveTarget(commit);
-      setShowNewDialog(true);
-    };
-
-    const handleMoveToExisting = (commit: JjLogCommit) => {
-      setMoveTarget(commit);
-      setShowExistingDialog(true);
-    };
-
-    const handleAbandon = async (commit: JjLogCommit) => {
-      if (!repoPath || !workspaceId) {
-        return;
-      }
-
-      const firstLine = commit.description.split("\n")[0] || "(no message)";
-      const confirmed = window.confirm(`Abandon this commit?\n\n${commit.short_id} — ${firstLine}`);
-      if (!confirmed) {
-        return;
-      }
-
-      try {
-        await abandonCommit(repoPath, workspaceId, commit.change_id);
-        setRemovingCommitIds((prev) => new Set(prev).add(commit.commit_id));
-
-        window.setTimeout(() => {
-          setCommits((prev) => prev.filter((c) => c.commit_id !== commit.commit_id));
-          setRemovingCommitIds((prev) => {
-            const next = new Set(prev);
-            next.delete(commit.commit_id);
-            return next;
-          });
-          onCommitMoved?.();
-        }, REMOVE_ANIMATION_MS);
-
-        addToast({
-          title: "Commit deleted",
-          description: `Abandoned commit ${commit.short_id}`,
-          type: "success",
-        });
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        addToast({
-          title: "Failed to delete commit",
-          description: errorMsg,
-          type: "error",
-        });
-      }
-    };
 
     if (loading) {
       return <LoadingState />;
@@ -186,11 +114,6 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
                         key={commit.commit_id}
                         commit={commit}
                         isFirst={isFirst}
-                        canMove={canMove}
-                        isRemoving={removingCommitIds.has(commit.commit_id)}
-                        onMoveToNew={handleMoveToNew}
-                        onMoveToExisting={handleMoveToExisting}
-                        onAbandon={handleAbandon}
                         onCommitClick={onCommitClick}
                       />
                     );
@@ -200,32 +123,6 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
             ))}
           </div>
         </div>
-
-        {/* Move commit dialogs */}
-        {canMove && moveTarget && (
-          <>
-            <MoveCommitToNewWorkspaceDialog
-              open={showNewDialog}
-              onOpenChange={setShowNewDialog}
-              commit={moveTarget}
-              repoPath={repoPath!}
-              sourceWorkspaceId={workspaceId!}
-              onSuccess={() => {
-                onCommitMoved?.();
-              }}
-            />
-            <MoveCommitToExistingWorkspaceDialog
-              open={showExistingDialog}
-              onOpenChange={setShowExistingDialog}
-              commit={moveTarget}
-              repoPath={repoPath!}
-              sourceWorkspaceId={workspaceId!}
-              onSuccess={() => {
-                onCommitMoved?.();
-              }}
-            />
-          </>
-        )}
       </div>
     );
   }
@@ -234,15 +131,10 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 interface CommitItemProps {
   commit: JjLogCommit;
   isFirst: boolean;
-  canMove: boolean;
-  isRemoving: boolean;
-  onMoveToNew: (commit: JjLogCommit) => void;
-  onMoveToExisting: (commit: JjLogCommit) => void;
-  onAbandon: (commit: JjLogCommit) => void;
   onCommitClick?: (changeId: string) => void;
 }
 
-function CommitItem({ commit, isFirst, canMove, isRemoving, onMoveToNew, onMoveToExisting, onAbandon, onCommitClick }: CommitItemProps) {
+function CommitItem({ commit, isFirst, onCommitClick }: CommitItemProps) {
   const firstLine = commit.description.split("\n")[0] || "(no message)";
   const hasStats = commit.insertions > 0 || commit.deletions > 0;
 
@@ -250,7 +142,6 @@ function CommitItem({ commit, isFirst, canMove, isRemoving, onMoveToNew, onMoveT
     <li
       className={cn(
         "relative flex items-start gap-3 py-2 px-2 -mx-2 rounded-md group transition-all duration-200 hover:bg-muted",
-        isRemoving && "opacity-0 -translate-x-1 max-h-0 py-0 overflow-hidden"
       )}
     >
       <div className="relative z-10 flex-shrink-0">
@@ -277,6 +168,11 @@ function CommitItem({ commit, isFirst, canMove, isRemoving, onMoveToNew, onMoveT
           <p className="text-xs text-muted-foreground font-mono">
             {commit.short_id}
           </p>
+          {commit.is_immutable && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border font-medium">
+              Immutable
+            </span>
+          )}
           <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -298,37 +194,6 @@ function CommitItem({ commit, isFirst, canMove, isRemoving, onMoveToNew, onMoveT
           )}
         </div>
       </div>
-
-      {canMove && (
-        <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
-                title="Move commit"
-              >
-                <ArrowRightLeft className="w-3.5 h-3.5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onMoveToNew(commit)}>
-                Move to New Workspace
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onMoveToExisting(commit)}>
-                Move to Existing Workspace
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <button
-            className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-destructive"
-            title="Delete commit"
-            onClick={() => onAbandon(commit)}
-            disabled={isRemoving}
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
     </li>
   );
 }
