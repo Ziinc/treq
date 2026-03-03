@@ -43,7 +43,6 @@ import {
   Workspace,
   createSession,
   updateSessionAccess,
-  updateSessionName,
   getSessions,
   setSessionModel,
   jjIsWorkspace,
@@ -972,21 +971,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
                 handleCreateSessionFromSidebar(ws?.id ?? null);
               } else {
                 handleCreateSessionFromSidebar(selectedWorkspace?.id ?? null);
-              }
-            }}
-            onRenameSession={async (sessionId, newName) => {
-              try {
-                await updateSessionName(repoPath, sessionId, newName);
-                queryClient.invalidateQueries({
-                  queryKey: ["sessions", repoPath],
-                });
-              } catch (error) {
-                addToast({
-                  title: "Failed to rename session",
-                  description:
-                    error instanceof Error ? error.message : String(error),
-                  type: "error",
-                });
               }
             }}
             onNavigateToWorkspace={(workspaceKey, isMainRepo) => {

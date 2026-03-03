@@ -40,7 +40,6 @@ export interface ClaudeTerminalPanelProps {
   isActive?: boolean;
   onFocus?: () => void;
   onClose?: () => void;
-  onRename?: (newName: string) => void;
   onSessionError?: (message: string) => void;
   onTerminalOutput?: (output: string) => void;
   onTerminalIdle?: () => void;
@@ -57,7 +56,6 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
     isActive,
     onFocus,
     onClose,
-    onRename,
     onSessionError,
     onTerminalOutput,
     onTerminalIdle,
@@ -66,7 +64,6 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
   }) {
     const { addToast } = useToast();
     const searchInputRef = useRef<HTMLInputElement>(null);
-    const nameInputRef = useRef<HTMLInputElement>(null);
     const [searchVisible, setSearchVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [isResetting, setIsResetting] = useState(false);
@@ -75,8 +72,6 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
     const [isModelLoaded, setIsModelLoaded] = useState(false);
     const [terminalInstanceKey, setTerminalInstanceKey] = useState(0);
     const [pendingModelReset, setPendingModelReset] = useState(false);
-    const [isEditingName, setIsEditingName] = useState(false);
-    const [editNameValue, setEditNameValue] = useState(sessionData.sessionName);
 
     const terminalId = `claude-${sessionData.sessionId}`;
     const isHidden = collapsed;
@@ -128,42 +123,6 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
       setSearchQuery("");
       terminalRefs.current.get(terminalId)?.clearSearch();
     }, [terminalRefs, terminalId]);
-
-    // Inline name editing handlers
-    const startEditingName = useCallback(() => {
-      setEditNameValue(sessionData.sessionName);
-      setIsEditingName(true);
-      requestAnimationFrame(() => {
-        nameInputRef.current?.focus();
-        nameInputRef.current?.select();
-      });
-    }, [sessionData.sessionName]);
-
-    const cancelEditingName = useCallback(() => {
-      setIsEditingName(false);
-      setEditNameValue(sessionData.sessionName);
-    }, [sessionData.sessionName]);
-
-    const saveEditedName = useCallback(() => {
-      const trimmed = editNameValue.trim();
-      if (trimmed && trimmed !== sessionData.sessionName) {
-        onRename?.(trimmed);
-      }
-      setIsEditingName(false);
-    }, [editNameValue, sessionData.sessionName, onRename]);
-
-    const handleNameKeyDown = useCallback(
-      (e: ReactKeyboardEvent<HTMLInputElement>) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          saveEditedName();
-        } else if (e.key === "Escape") {
-          e.preventDefault();
-          cancelEditingName();
-        }
-      },
-      [saveEditedName, cancelEditingName]
-    );
 
     const runSearch = useCallback(
       (direction: "next" | "previous") => {
@@ -323,29 +282,9 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
         )}>
           <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground min-w-0">
             <Bot className="w-3 h-3 flex-shrink-0" />
-            {isEditingName ? (
-              <input
-                ref={nameInputRef}
-                type="text"
-                value={editNameValue}
-                onChange={(e) => setEditNameValue(e.target.value)}
-                onKeyDown={handleNameKeyDown}
-                onBlur={saveEditedName}
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                className="bg-muted border border-border rounded px-1 py-0 text-sm font-medium text-foreground w-full max-w-[150px] outline-none focus:ring-1 focus:ring-primary"
-              />
-            ) : (
-              <span
-                className="truncate cursor-pointer hover:text-foreground transition-colors"
-                onDoubleClick={startEditingName}
-                title="Double-click to rename"
-              >
-                {sessionData.sessionName}
-              </span>
-            )}
+            <span className="truncate">
+              {sessionData.sessionName}
+            </span>
           </div>
           <div className="flex items-center gap-0.5">
             {/* Model selector */}

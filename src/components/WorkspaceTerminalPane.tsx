@@ -35,7 +35,6 @@ interface WorkspaceTerminalPaneProps {
   // Callbacks for session management
   onCreateNewSession?: (activeWorkspacePath?: string | null) => void;
   onCloseSession?: (sessionId: number) => void;
-  onRenameSession?: (sessionId: number, newName: string) => void;
   onNavigateToWorkspace?: (workspaceKey: string, isMainRepo: boolean) => void;
   className?: string;
 }
@@ -67,7 +66,6 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
     activeClaudeSessionId = null,
     onCreateNewSession,
     onCloseSession,
-    onRenameSession,
     onNavigateToWorkspace,
     className,
   }, ref) {
@@ -769,15 +767,6 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
                               onFocus={() => setActivePtySessionId(ptyId)}
                               onClose={() =>
                                 handleCloseClaudeSession(terminal.data.sessionId)
-                              }
-                              onRename={
-                                onRenameSession
-                                  ? (newName) =>
-                                      onRenameSession(
-                                        terminal.data.sessionId,
-                                        newName
-                                      )
-                                  : undefined
                               }
                               onSessionError={onSessionError}
                               terminalRefs={terminalRefs}
