@@ -981,6 +981,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
                 }
               }
             }}
+            onCloseSession={(sessionId) => {
+              if (activeSessionId === sessionId) {
+                setActiveSessionId(null);
+              }
+            }}
             onCreateNewSession={(activeWorkspacePath) => {
               if (activeWorkspacePath) {
                 const ws = workspaces.find(w => getFullWorkspacePath(w) === activeWorkspacePath);

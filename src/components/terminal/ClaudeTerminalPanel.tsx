@@ -435,6 +435,7 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
               workingDirectory={sessionData.workspacePath || sessionData.repoPath}
               autoCommand={autoCommand}
               onSessionError={onSessionError}
+              onClose={onClose}
               onTerminalOutput={handleTerminalOutput}
               onTerminalIdle={onTerminalIdle}
               containerClassName="h-full w-full overflow-hidden"

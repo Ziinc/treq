@@ -94,6 +94,7 @@ export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
             sessionId={terminalData.id}
             workingDirectory={terminalData.workingDirectory}
             onSessionError={onSessionError}
+            onClose={onClose}
             containerClassName="h-full w-full overflow-hidden"
             terminalPaneClassName="w-full h-full"
             isHidden={isHidden}
