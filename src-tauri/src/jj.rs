@@ -2,6 +2,7 @@ use jj_lib::config::{ConfigLayer, ConfigSource, StackedConfig};
 use jj_lib::settings::UserSettings;
 use jj_lib::workspace::Workspace;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::Path;
@@ -2532,6 +2533,217 @@ pub fn jj_get_diverged_sync_counts(
     };
 
     Ok((ahead_count, behind_count))
+}
+
+// ============================================================================
+// Batched queries for list_workspace_statuses — reduce subprocess calls
+// ============================================================================
+
+/// Get all conflicted bookmarks in the repo in a single global call.
+/// Returns a HashSet of conflicted bookmark names.
+pub fn jj_get_all_conflicted_bookmarks(repo_path: &str) -> HashSet<String> {
+    let output = command_for("jj")
+        .current_dir(repo_path)
+        .args(["bookmark", "list", "--conflicted", "-T", r#"name ++ "\n""#])
+        .output();
+
+    match output {
+        Ok(output) if output.status.success() => String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| line.trim().to_string())
+            .collect(),
+        _ => HashSet::new(),
+    }
+}
+
+/// Combined status for a workspace: changed files + conflict markers from a single jj status call.
+pub struct WorkspaceStatusCombined {
+    pub changed_files: Vec<JjFileChange>,
+    pub has_conflict_markers: bool,
+}
+
+/// Get changed files and conflict marker presence from a single jj status call.
+/// Reuses the status output that jj_get_changed_files would have produced.
+pub fn jj_get_workspace_status_combined(workspace_path: &str) -> WorkspaceStatusCombined {
+    let path = std::path::Path::new(workspace_path);
+    if !path.exists() || !path.is_dir() {
+        return WorkspaceStatusCombined {
+            changed_files: Vec::new(),
+            has_conflict_markers: false,
+        };
+    }
+
+    let output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["status", "--no-pager"])
+        .output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            let status_output = String::from_utf8_lossy(&output.stdout);
+            let changed_files = parse_jj_status(&status_output).unwrap_or_default();
+            // jj status reports "There are unresolved conflicts" when conflicts exist
+            let has_conflict_markers = status_output.contains("unresolved conflicts");
+            WorkspaceStatusCombined {
+                changed_files,
+                has_conflict_markers,
+            }
+        }
+        _ => WorkspaceStatusCombined {
+            changed_files: Vec::new(),
+            has_conflict_markers: false,
+        },
+    }
+}
+
+/// Combined ahead/behind counts for a workspace.
+pub struct CombinedCounts {
+    pub commits_ahead_of_target: usize,
+    pub ahead_of_origin: usize,
+    pub behind_origin: usize,
+}
+
+/// Get commits ahead of target + sync status in a single jj log call using a union revset.
+/// Falls back gracefully when branch@origin doesn't exist (returns 0 for sync counts).
+pub fn jj_get_combined_counts(
+    workspace_path: &str,
+    target_branch: &str,
+    branch_name: &str,
+    not_on_remote: bool,
+    is_diverged: bool,
+) -> CombinedCounts {
+    // Validate inputs
+    if target_branch.starts_with('-') || target_branch.contains('\0') || target_branch.is_empty() {
+        return CombinedCounts {
+            commits_ahead_of_target: 0,
+            ahead_of_origin: 0,
+            behind_origin: 0,
+        };
+    }
+
+    // Build union revset with tags to distinguish each category
+    let ahead_of_target_revset = format!("({}..@-) ~ empty()", target_branch);
+
+    if not_on_remote {
+        // Only query commits ahead of target — no sync needed
+        let output = command_for("jj")
+            .current_dir(workspace_path)
+            .args([
+                "log",
+                "-r",
+                &ahead_of_target_revset,
+                "--no-graph",
+                "-T",
+                r#"commit_id ++ "\n""#,
+            ])
+            .output();
+
+        let commits_ahead = match output {
+            Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .filter(|l| !l.trim().is_empty())
+                .count(),
+            _ => 0,
+        };
+
+        return CombinedCounts {
+            commits_ahead_of_target: commits_ahead,
+            ahead_of_origin: 0,
+            behind_origin: 0,
+        };
+    }
+
+    // For diverged bookmarks, use @- as proxy for local tip
+    let (local_ref, remote_ref) = if is_diverged {
+        ("@-".to_string(), format!("{}@origin", branch_name))
+    } else {
+        (branch_name.to_string(), format!("{}@origin", branch_name))
+    };
+
+    let ahead_of_origin_revset = format!("{}..{}", remote_ref, local_ref);
+    let behind_origin_revset = format!("{}..{}", local_ref, remote_ref);
+
+    // Union revset: tag each commit with which category it belongs to
+    // We use a template that outputs a tag character per commit
+    let union_revset = format!(
+        "({}) | ({}) | ({})",
+        ahead_of_target_revset, ahead_of_origin_revset, behind_origin_revset
+    );
+
+    // Template: output commit_id + which sets it belongs to using contained_in()
+    let template = format!(
+        r#"commit_id.short(12) ++ " " ++ if(self.contained_in("{}"), "T", "") ++ if(self.contained_in("{}"), "A", "") ++ if(self.contained_in("{}"), "B", "") ++ "\n""#,
+        ahead_of_target_revset.replace('"', r#"\""#),
+        ahead_of_origin_revset.replace('"', r#"\""#),
+        behind_origin_revset.replace('"', r#"\""#),
+    );
+
+    let output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["log", "-r", &union_revset, "--no-graph", "-T", &template])
+        .output();
+
+    match output {
+        Ok(o) if o.status.success() => {
+            let stdout = String::from_utf8_lossy(&o.stdout);
+            let mut target_count = 0usize;
+            let mut ahead_count = 0usize;
+            let mut behind_count = 0usize;
+
+            for line in stdout.lines() {
+                let line = line.trim();
+                if line.is_empty() {
+                    continue;
+                }
+                // Format: "commit_id TAB" where TAB contains T/A/B flags
+                if let Some(flags_start) = line.find(' ') {
+                    let flags = &line[flags_start + 1..];
+                    if flags.contains('T') {
+                        target_count += 1;
+                    }
+                    if flags.contains('A') {
+                        ahead_count += 1;
+                    }
+                    if flags.contains('B') {
+                        behind_count += 1;
+                    }
+                }
+            }
+
+            CombinedCounts {
+                commits_ahead_of_target: target_count,
+                ahead_of_origin: ahead_count,
+                behind_origin: behind_count,
+            }
+        }
+        Ok(o) => {
+            // Command failed — likely stale bookmark reference. Fall back to individual queries.
+            let stderr = String::from_utf8_lossy(&o.stderr);
+            if !not_on_remote {
+                eprintln!("[combined_counts] Union revset failed, falling back: {}", stderr.lines().next().unwrap_or(""));
+            }
+            // Fall back to individual counts
+            let commits_ahead = jj_get_commits_ahead(workspace_path, target_branch)
+                .map(|ca| ca.total_count)
+                .unwrap_or(0);
+            let (ahead, behind) = if is_diverged {
+                jj_get_diverged_sync_counts(workspace_path, branch_name).unwrap_or((0, 0))
+            } else {
+                jj_get_sync_status(workspace_path, branch_name, false).unwrap_or((0, 0))
+            };
+            CombinedCounts {
+                commits_ahead_of_target: commits_ahead,
+                ahead_of_origin: ahead,
+                behind_origin: behind,
+            }
+        }
+        Err(_) => CombinedCounts {
+            commits_ahead_of_target: 0,
+            ahead_of_origin: 0,
+            behind_origin: 0,
+        },
+    }
 }
 
 /// Fetch remote branches using jj git fetch (without rebasing)

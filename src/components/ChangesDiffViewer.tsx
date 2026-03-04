@@ -11,7 +11,6 @@ import {
 } from "react";
 import { type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { v4 as uuidv4 } from "uuid";
 import {
@@ -38,9 +37,11 @@ import {
 } from "../lib/api";
 import { useDebounce } from "../hooks/useDebounce";
 import { useCachedWorkspaceChanges } from "../hooks/useCachedWorkspaceChanges";
+import { useFocusRefreshSubscription } from "../hooks/useAppFocusHandler";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { useToast } from "./ui/toast";
+import { CommentInput } from "./CommentInput";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import {
   Tooltip,
@@ -282,80 +283,7 @@ const computeHunksHash = (hunks: JjDiffHunk[]): string => {
   return hash.toString(16);
 };
 
-// Isolated comment input component to prevent parent re-renders during typing
-interface CommentInputProps {
-  onSubmit: (text: string) => void;
-  onCancel: () => void;
-  filePath?: string;
-  startLine?: number;
-  endLine?: number;
-}
-
-const CommentInput: React.FC<CommentInputProps> = memo(
-  ({ onSubmit, onCancel, filePath, startLine, endLine }) => {
-    const [text, setText] = useState("");
-
-    const handleSubmit = useCallback(() => {
-      if (text.trim()) {
-        onSubmit(text.trim());
-      }
-    }, [text, onSubmit]);
-
-    const handleKeyDown = useCallback(
-      (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-        // Stop propagation for standard text editing shortcuts
-        if (e.metaKey || e.ctrlKey) {
-          const key = e.key.toLowerCase();
-          if (["a", "c", "x", "v", "z", "y"].includes(key)) {
-            e.stopPropagation();
-            return; // Let browser handle natively
-          }
-        }
-
-        if (e.key === "Escape") {
-          onCancel();
-        } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-          handleSubmit();
-        }
-      },
-      [onCancel, handleSubmit]
-    );
-
-    const lineLabel =
-      startLine && endLine
-        ? startLine === endLine
-          ? `L${startLine}`
-          : `L${startLine}-${endLine}`
-        : null;
-
-    return (
-      <div className="bg-muted/60 border-y border-border/40 px-4 py-3 font-sans text-base">
-        {filePath && lineLabel && (
-          <div className="mb-2 text-md text-muted-foreground">
-            {filePath}:{lineLabel}
-          </div>
-        )}
-        <Textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Add a comment..."
-          className="mb-2 font-sans"
-          autoFocus
-          onKeyDown={handleKeyDown}
-        />
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={!text.trim()}>
-            Add Comment
-          </Button>
-        </div>
-      </div>
-    );
-  }
-);
-CommentInput.displayName = "CommentInput";
+// CommentInput extracted to ./CommentInput.tsx
 
 // Isolated commit input component to prevent parent re-renders during typing
 interface CommitInputHandle {
@@ -1391,30 +1319,12 @@ export const ChangesDiffViewer = memo(
         [loadChangedFiles]
       );
 
-      // Refresh changed files when window regains focus
-      useEffect(() => {
-        let lastFocusTime = 0;
-        const FOCUS_DEBOUNCE_MS = 2000; // Debounce rapid focus events
-
-        const unlistenFocus = getCurrentWindow().onFocusChanged(
-          ({ payload: focused }) => {
-            if (focused) {
-              const now = Date.now();
-              if (now - lastFocusTime < FOCUS_DEBOUNCE_MS) return;
-              lastFocusTime = now;
-
-              // Delay slightly to stagger with other focus handlers
-              setTimeout(() => {
-                loadChangedFiles();
-              }, 200);
-            }
-          }
-        );
-
-        return () => {
-          unlistenFocus.then((fn) => fn());
-        };
-      }, [loadChangedFiles]);
+      // Refresh changed files after focus-triggered rebase + invalidation
+      useFocusRefreshSubscription(
+        "afterInvalidate",
+        () => { loadChangedFiles(); },
+        [loadChangedFiles]
+      );
 
       // Listen for workspace file changes
       useEffect(() => {
