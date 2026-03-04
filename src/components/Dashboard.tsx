@@ -95,6 +95,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
   const [showWorkspaceDeletion, setShowWorkspaceDeletion] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
+  const [pendingSessionData, setPendingSessionData] = useState<Map<number, { pendingPrompt?: string; permissionMode?: 'plan' | 'acceptEdits' }>>(new Map());
   const [sessionSelectedFile, setSessionSelectedFile] = useState<string | null>(
     null
   );
@@ -842,6 +843,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
       const sessionWorkspace = session.workspace_id
         ? workspaceMap.get(session.workspace_id) ?? null
         : null;
+      const pending = pendingSessionData.get(session.id);
       return {
         sessionId: session.id,
         sessionName: session.name,
@@ -849,9 +851,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         workspacePath: sessionWorkspace ? getFullWorkspacePath(sessionWorkspace) : null,
         repoPath: sessionWorkspace?.repo_path ?? repoPath,
         workspaceName: sessionWorkspace?.branch_name ?? null,
+        ...(pending && {
+          pendingPrompt: pending.pendingPrompt,
+          permissionMode: pending.permissionMode,
+        }),
       };
     });
-  }, [sessions, workspaces, repoPath]);
+  }, [sessions, workspaces, repoPath, pendingSessionData]);
 
   const mainContentStyle = useMemo(
     () => ({ width: showSidebar ? "calc(100vw - 240px)" : "100%" }),
@@ -931,6 +937,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
                         queryKey: ["sessions"],
                       });
                       setActiveSessionId(sessionData.sessionId);
+                      if (sessionData.pendingPrompt || sessionData.permissionMode) {
+                        setPendingSessionData(prev => {
+                          const next = new Map(prev);
+                          next.set(sessionData.sessionId, {
+                            pendingPrompt: sessionData.pendingPrompt,
+                            permissionMode: sessionData.permissionMode,
+                          });
+                          return next;
+                        });
+                      }
                     }}
                   />
                 </Suspense>

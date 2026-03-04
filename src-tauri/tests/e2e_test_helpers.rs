@@ -153,6 +153,50 @@ impl TestRepo {
         Ok(())
     }
 
+    /// Create a commit in the bare remote (requires with_remote()).
+    /// Uses a temporary git clone of the remote to make the commit and push,
+    /// so the local repo is never modified.
+    pub fn remote_commit_file(
+        &self,
+        relative_path: &str,
+        content: &str,
+        message: &str,
+    ) -> Result<(), String> {
+        let remote_path = self.temp_dir.path().join("remote.git");
+        let clone_path = self.temp_dir.path().join("remote_clone");
+
+        // Clone the bare remote into a temporary working copy
+        Self::run_git(
+            &self.temp_dir.path().to_string_lossy(),
+            &["clone", remote_path.to_str().unwrap(), clone_path.to_str().unwrap()],
+        )?;
+
+        let clone_path_str = clone_path.to_string_lossy().to_string();
+
+        // Configure git user in the clone
+        Self::run_git(&clone_path_str, &["config", "user.email", "test@example.com"])?;
+        Self::run_git(&clone_path_str, &["config", "user.name", "Test User"])?;
+
+        // Write file, commit, and push from the clone
+        let file_path = clone_path.join(relative_path);
+        if let Some(parent) = file_path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create parent dirs: {}", e))?;
+        }
+        fs::write(&file_path, content)
+            .map_err(|e| format!("Failed to write file in remote clone: {}", e))?;
+
+        Self::run_git(&clone_path_str, &["add", relative_path])?;
+        Self::run_git(&clone_path_str, &["commit", "-m", message])?;
+        Self::run_git(&clone_path_str, &["push", "origin", "main"])?;
+
+        // Clean up the clone
+        fs::remove_dir_all(&clone_path)
+            .map_err(|e| format!("Failed to clean up remote clone: {}", e))?;
+
+        Ok(())
+    }
+
     /// Push a branch to remote (requires with_remote()).
     pub fn push_branch(&self, branch_name: &str) -> Result<(), String> {
         Self::run_git(&self.repo_path, &["push", "origin", branch_name])?;

@@ -122,8 +122,8 @@ pub fn create_commit(repo_path: String, workspace_id: Option<i64>, message: Stri
 }
 
 #[tauri::command]
-pub fn list_commits(repo_path: String, workspace_id: Option<i64>) -> Result<crate::jj::JjLogResult, String> {
-    crate::core::list_commits(&repo_path, workspace_id)
+pub fn list_commits(repo_path: String, workspace_id: Option<i64>, include_target_branch_history: Option<bool>, target_branch_limit: Option<usize>, limit: Option<usize>) -> Result<crate::jj::JjLogResult, String> {
+    crate::core::list_commits(&repo_path, workspace_id, include_target_branch_history.unwrap_or(false), target_branch_limit, limit)
 }
 
 #[tauri::command]
@@ -240,8 +240,9 @@ pub fn jj_get_log(
     workspace_path: String,
     target_branch: String,
     is_home_repo: Option<bool>,
+    limit: Option<usize>,
 ) -> Result<jj::JjLogResult, String> {
-    jj::jj_get_log(&workspace_path, &target_branch, is_home_repo).map_err(|e| e.to_string())
+    jj::jj_get_log(&workspace_path, &target_branch, is_home_repo, limit).map_err(|e| e.to_string())
 }
 
 /// Get commits ahead of target branch (commits to be merged)

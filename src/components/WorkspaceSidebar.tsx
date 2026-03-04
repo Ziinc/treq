@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, memo, useMemo, useState, useEffect } from "react";
+import { useCallback, memo, useMemo, useState } from "react";
 import { Workspace, listWorkspaceStatuses } from "../lib/api";
 import {
   buildWorkspaceTree,
@@ -50,8 +50,6 @@ import { cn, getFullWorkspacePath } from "../lib/utils";
 import { RenameWorkspaceDialog } from "./RenameWorkspaceDialog";
 import { revealItemInDir, openUrl } from "@tauri-apps/plugin-opener";
 import { useEditorApps } from "../hooks/useEditorApps";
-import { CurrentPage } from "./Dashboard";
-
 interface WorkspaceSidebarProps {
   repoPath?: string;
   currentBranch?: string | null;
@@ -66,7 +64,7 @@ interface WorkspaceSidebarProps {
   navigateToDashboard?: () => void;
   onOpenCommandPalette?: () => void;
   onOpenBranchSwitcher?: () => void;
-  currentPage?: CurrentPage;
+  currentPage?: string;
   onAddBefore?: (workspace: Workspace) => void;
   onAddAfter?: (workspace: Workspace) => void;
   onMoveWorkspace?: (workspace: Workspace, targetBranch: string | null) => void;
@@ -192,7 +190,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 
     const statuses = workspaceStatuses ?? [];
     const workspaces = useMemo(() => statuses.map(s => s.current), [statuses]);
-    const commitsAheadMap = useMemo(() => new Map(statuses.map(s => [s.current.id, s.commits_ahead])), [statuses]);
+
 
     const [renameTarget, setRenameTarget] = useState<Workspace | null>(null);
 

@@ -467,34 +467,103 @@ pub fn stack_workspace(
 ///
 /// # Returns
 /// Returns a WorkspaceStatus containing the current workspace, parent, children, DAG nodes, and conflicted workspace IDs.
-pub fn workspace_status(workspace_path: &str) -> Result<WorkspaceStatus, String> {
-    // Extract workspace name from path (last component)
-    let path = Path::new(workspace_path);
-    let workspace_name = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or("Invalid workspace path")?;
+pub fn workspace_status(repo_path: &str, workspace_id: Option<i64>) -> Result<WorkspaceStatus, String> {
+    // Home repo case: no workspace, build a minimal status
+    let workspace_id = match workspace_id {
+        Some(id) => id,
+        None => {
+            let default_branch = jj::get_default_branch(repo_path)
+                .unwrap_or_else(|_| "main".to_string());
 
-    // Derive repo_path by going up 3 levels (.../workspaces/name -> ../../..)
-    let repo_path = path
-        .parent() // .../workspaces
-        .and_then(|p| p.parent()) // .../.treq
-        .and_then(|p| p.parent()) // ...
-        .ok_or("Invalid workspace path structure")?
-        .to_str()
-        .ok_or("Failed to convert repo path")?
-        .to_string();
+            let has_changes = jj::jj_get_changed_files(repo_path)
+                .map(|files| !files.is_empty())
+                .unwrap_or(false);
 
-    // Get all workspaces in the repo
-    let all_workspaces = local_db::get_workspaces(&repo_path)
+            let has_conflicts = jj::get_conflicted_files(repo_path, Some(&default_branch))
+                .map(|files| !files.is_empty())
+                .unwrap_or(false);
+
+            // Check sync status for all branches the home repo is on (not just default)
+            let branches = jj::get_bookmarks_on_revision(repo_path, "@-")
+                .unwrap_or_default();
+            // If no bookmarks on @-, fall back to the default branch
+            let branches_to_check: Vec<String> = if branches.is_empty() {
+                vec![default_branch.clone()]
+            } else {
+                branches
+            };
+
+            let mut total_ahead: usize = 0;
+            let mut total_behind: usize = 0;
+            let mut any_on_remote = false;
+            for branch in &branches_to_check {
+                if let Ok((ahead, behind)) = jj::jj_get_sync_status(repo_path, branch, false) {
+                    any_on_remote = true;
+                    total_ahead += ahead;
+                    total_behind += behind;
+                }
+            }
+
+            let remote_sync = if !any_on_remote {
+                RemoteSyncStatus::NotOnRemote
+            } else {
+                match (total_ahead, total_behind) {
+                    (0, 0) => RemoteSyncStatus::InSync,
+                    (a, 0) => RemoteSyncStatus::Ahead { count: a },
+                    (0, b) => RemoteSyncStatus::Behind { count: b },
+                    (a, b) => RemoteSyncStatus::Diverged { ahead: a, behind: b },
+                }
+            };
+
+            // Synthesize a Workspace-like entry for the home repo
+            let home_workspace = local_db::Workspace {
+                id: 0,
+                repo_path: repo_path.to_string(),
+                workspace_name: "home".to_string(),
+                workspace_path: repo_path.to_string(),
+                branch_name: default_branch,
+                created_at: String::new(),
+                metadata: None,
+                target_branch: None,
+                intent: None,
+                moved_files: None,
+                not_on_remote: false,
+            };
+
+            return Ok(WorkspaceStatus {
+                partial: WorkspacePartialStatus {
+                    current: home_workspace,
+                    has_conflicts,
+                    has_changes,
+                    commits_ahead: 0,
+                    remote_sync,
+                },
+                target: None,
+                children: Vec::new(),
+                dag_nodes: Vec::new(),
+                conflicted_workspace_ids: Vec::new(),
+                commits_ahead_of_target: Vec::new(),
+            });
+        }
+    };
+
+    // Workspace case: look up from DB
+    let all_workspaces = local_db::get_workspaces(repo_path)
         .map_err(|e| format!("Failed to get workspaces: {}", e))?;
 
-    // Find current workspace by workspace_path (handle both short name and full path)
     let current_workspace = all_workspaces
         .iter()
-        .find(|w| w.workspace_path == workspace_name || w.workspace_path == workspace_path)
+        .find(|w| w.id == workspace_id)
         .cloned()
-        .ok_or_else(|| format!("Workspace not found for path: {}", workspace_path))?;
+        .ok_or_else(|| format!("Workspace not found: {}", workspace_id))?;
+
+    let workspace_path = Path::new(repo_path)
+        .join(".treq")
+        .join("workspaces")
+        .join(&current_workspace.workspace_path);
+    let workspace_path_str = workspace_path
+        .to_str()
+        .ok_or("Failed to convert workspace path to string")?;
 
     // Build branch_name → Workspace lookup map
     let branch_map: HashMap<String, &local_db::Workspace> = all_workspaces
@@ -553,7 +622,7 @@ pub fn workspace_status(workspace_path: &str) -> Result<WorkspaceStatus, String>
 
     // Calculate commits ahead of target
     let commits_ahead_of_target = if let Some(target_workspace) = &target {
-        match jj::jj_get_commits_ahead(workspace_path, &target_workspace.branch_name) {
+        match jj::jj_get_commits_ahead(workspace_path_str, &target_workspace.branch_name) {
             Ok(commits_ahead) => commits_ahead
                 .commits
                 .iter()
@@ -567,7 +636,7 @@ pub fn workspace_status(workspace_path: &str) -> Result<WorkspaceStatus, String>
         }
     } else {
         // No target branch, commits are ahead of main
-        match jj::jj_get_commits_ahead(workspace_path, "main") {
+        match jj::jj_get_commits_ahead(workspace_path_str, "main") {
             Ok(commits_ahead) => commits_ahead
                 .commits
                 .iter()
@@ -592,8 +661,8 @@ pub fn workspace_status(workspace_path: &str) -> Result<WorkspaceStatus, String>
 
     let remote_sync = if current_workspace.not_on_remote {
         RemoteSyncStatus::NotOnRemote
-    } else if jj::jj_is_bookmark_conflicted(workspace_path, &current_workspace.branch_name) {
-        match jj::jj_get_diverged_sync_counts(workspace_path, &current_workspace.branch_name) {
+    } else if jj::jj_is_bookmark_conflicted(workspace_path_str, &current_workspace.branch_name) {
+        match jj::jj_get_diverged_sync_counts(workspace_path_str, &current_workspace.branch_name) {
             Ok((ahead, behind)) => RemoteSyncStatus::Diverged { ahead, behind },
             Err(_) => RemoteSyncStatus::Diverged {
                 ahead: 0,
@@ -601,7 +670,7 @@ pub fn workspace_status(workspace_path: &str) -> Result<WorkspaceStatus, String>
             },
         }
     } else {
-        match jj::jj_get_sync_status(workspace_path, &current_workspace.branch_name, false) {
+        match jj::jj_get_sync_status(workspace_path_str, &current_workspace.branch_name, false) {
             Ok((ahead, behind)) => match (ahead, behind) {
                 (0, 0) => RemoteSyncStatus::InSync,
                 (a, 0) => RemoteSyncStatus::Ahead { count: a },
@@ -1202,9 +1271,25 @@ pub fn split_workspace(
 /// 5. Refreshes the working copy
 pub fn pull_workspace_from_remote(
     repo_path: &str,
-    workspace_id: i64,
+    workspace_id: Option<i64>,
     conflict_marker_style: &str,
 ) -> Result<PullWorkspaceResult, String> {
+    // When workspace_id is None, do a simple pull for the home repo
+    let workspace_id = match workspace_id {
+        Some(id) => id,
+        None => {
+            // For home repo, just fetch — do not rebase, which would detach HEAD
+            jj::jj_git_fetch(repo_path)
+                .map_err(|e| format!("Fetch failed: {}", e))?;
+            return Ok(PullWorkspaceResult {
+                success: true,
+                message: "Fetched home repo".to_string(),
+                was_diverged: false,
+                commits_rebased: 0,
+            });
+        }
+    };
+
     // Look up workspace from DB
     let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
         .map_err(|e| format!("Failed to get workspace: {}", e))?

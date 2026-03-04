@@ -15,8 +15,8 @@ import {
   jjGetChangedFiles,
   createSession,
   checkAndRebaseWorkspaces,
-  jjPush,
-  jjGetSyncStatus,
+  getWorkspaceStatus,
+  pullWorkspaceFromRemote,
   jjGitFetch,
   jjGitFetchBackground,
   pushWorkspaceToRemote,
@@ -278,29 +278,28 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
     }
   }, [workspace?.target_branch, defaultBranch]);
 
-  // Fetch sync status
+  // Fetch sync status via core::workspace_status
   const fetchSyncStatus = useCallback(async () => {
-    // For workspace: use full workspace path and branch
-    // For home repo: use working directory and default branch
-    const path = workspace ? getFullWorkspacePath(workspace) : workingDirectory;
-    const branch = workspace?.branch_name || defaultBranch;
-
-    if (!path || !branch) return;
+    if (!effectiveRepoPath) return;
 
     try {
-      const notOnRemote = workspace?.not_on_remote ?? false;
-      const result = await jjGetSyncStatus(path, branch, notOnRemote);
-      if (Array.isArray(result) && result.length >= 2) {
-        const [ahead, behind] = result as [number, number];
-        setSyncStatus({ ahead, behind });
+      const status = await getWorkspaceStatus(effectiveRepoPath, workspace?.id ?? null);
+      const sync = status.remote_sync;
+      if (sync.type === "Ahead") {
+        setSyncStatus({ ahead: sync.data.count, behind: 0 });
+      } else if (sync.type === "Behind") {
+        setSyncStatus({ ahead: 0, behind: sync.data.count });
+      } else if (sync.type === "Diverged") {
+        setSyncStatus({ ahead: sync.data.ahead, behind: sync.data.behind });
       } else {
-        setSyncStatus(null);
+        // InSync or NotOnRemote
+        setSyncStatus({ ahead: 0, behind: 0 });
       }
     } catch (error) {
       console.error("Failed to fetch sync status:", error);
       setSyncStatus(null);
     }
-  }, [workspace, workingDirectory, defaultBranch]);
+  }, [workspace, effectiveRepoPath]);
 
   // Fetch sync status on mount and when workspace changes
   useEffect(() => {
@@ -623,7 +622,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
         type: "success",
       });
       // Refresh sync status after push
-      fetchSyncStatus();
+      await fetchSyncStatus();
+      queryClient?.invalidateQueries();
     } catch (error) {
       console.error("Push failed:", error);
       addToast({
@@ -634,20 +634,15 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
     } finally {
       _setActionPending(null);
     }
-  }, [workspace, effectiveRepoPath, addToast, fetchSyncStatus]);
+  }, [workspace, effectiveRepoPath, addToast, fetchSyncStatus, queryClient]);
 
 const handleSync = useCallback(async () => {
-    const syncPath = workspace ? getFullWorkspacePath(workspace) : workingDirectory;
-    const syncRepoPath = repositoryPath || workingDirectory;
-    if (!syncPath || !syncRepoPath) return;
+    if (!effectiveRepoPath) return;
 
     _setActionPending("sync");
     try {
-      // First, fetch from remote to update remote refs
-      await jjGitFetch(syncRepoPath);
-
-      // Then push local commits
-      await jjPush(syncPath);
+      await pullWorkspaceFromRemote(effectiveRepoPath, workspace?.id ?? null);
+      await pushWorkspaceToRemote(effectiveRepoPath, workspace?.id ?? null);
 
       addToast({
         title: "Synced with remote",
@@ -655,10 +650,7 @@ const handleSync = useCallback(async () => {
         type: "success",
       });
 
-      // Refresh sync status after operations
-      fetchSyncStatus();
-
-      // Refresh UI state
+      await fetchSyncStatus();
       queryClient?.invalidateQueries();
     } catch (error) {
       console.error("Sync failed:", error);
@@ -670,7 +662,7 @@ const handleSync = useCallback(async () => {
     } finally {
       _setActionPending(null);
     }
-  }, [workspace, workingDirectory, repositoryPath, addToast, fetchSyncStatus, queryClient]);
+  }, [workspace, effectiveRepoPath, addToast, fetchSyncStatus, queryClient]);
 
   const handleForceRebase = useCallback(async () => {
     if (!workspace || !targetBranch || !effectiveRepoPath) {
@@ -1335,7 +1327,7 @@ const handleSync = useCallback(async () => {
             )}
 
             {/* Sync status indicator - shown when branch is on remote */}
-            {workspace && !workspace.not_on_remote && syncStatus && (syncStatus.ahead > 0 || syncStatus.behind > 0) && (
+            {(!workspace || !workspace.not_on_remote) && syncStatus && (syncStatus.ahead > 0 || syncStatus.behind > 0) && (
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 {syncStatus.behind > 0 && (
                   <span className="flex items-center">
@@ -1351,7 +1343,7 @@ const handleSync = useCallback(async () => {
             )}
 
             {/* Sync button - show when there are changes to sync */}
-            {workspace && !workspace.not_on_remote && syncStatus && (syncStatus.ahead > 0 || syncStatus.behind > 0) && (
+            {(!workspace || !workspace.not_on_remote) && syncStatus && (syncStatus.ahead > 0 || syncStatus.behind > 0) && (
               <TooltipProvider delayDuration={200}>
                 <Tooltip>
                   <TooltipTrigger asChild>

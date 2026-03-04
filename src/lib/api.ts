@@ -14,11 +14,19 @@ export interface Workspace {
   not_on_remote: boolean;
 }
 
+export type RemoteSyncStatus =
+  | { type: "NotOnRemote" }
+  | { type: "InSync" }
+  | { type: "Ahead"; data: { count: number } }
+  | { type: "Behind"; data: { count: number } }
+  | { type: "Diverged"; data: { ahead: number; behind: number } };
+
 export interface WorkspacePartialStatus {
   current: Workspace;
   has_conflicts: boolean;
   has_changes: boolean;
   commits_ahead: number;
+  remote_sync: RemoteSyncStatus;
 }
 
 export interface WorkspaceNode {
@@ -32,6 +40,7 @@ export interface WorkspaceStatus {
   current: Workspace;
   has_conflicts: boolean;
   has_changes: boolean;
+  remote_sync: RemoteSyncStatus;
   target: Workspace | null;
   children: Workspace[];
   dag_nodes: WorkspaceNode[];
@@ -118,6 +127,7 @@ export interface JjLogResult {
   commits: JjLogCommit[];
   target_branch: string;
   workspace_branch: string;
+  target_branch_commits?: JjLogCommit[];
 }
 
 export interface JjCommitsAhead {
@@ -329,11 +339,17 @@ export const createCommit = (
 
 export const listCommits = (
   repoPath: string,
-  workspaceId: number | null
+  workspaceId: number | null,
+  includeTargetBranchHistory?: boolean,
+  targetBranchLimit?: number,
+  limit?: number
 ): Promise<JjLogResult> =>
   invoke("list_commits", {
     repoPath,
     workspaceId,
+    includeTargetBranchHistory: includeTargetBranchHistory ?? false,
+    targetBranchLimit: targetBranchLimit ?? null,
+    limit: limit ?? null,
   });
 
 export const jjSplit = (
@@ -412,6 +428,22 @@ export const jjGitFetchBackground = (repo_path: string): Promise<void> =>
 export const jjPull = (workspace_path: string): Promise<string> =>
   invoke("jj_pull", { workspacePath: workspace_path });
 
+export interface PullWorkspaceResult {
+  success: boolean;
+  message: string;
+  was_diverged: boolean;
+  commits_rebased: number;
+}
+
+export const pullWorkspaceFromRemote = (
+  repo_path: string,
+  workspace_id: number | null
+): Promise<PullWorkspaceResult> =>
+  invoke("pull_workspace_from_remote", {
+    repoPath: repo_path,
+    workspaceId: workspace_id,
+  });
+
 export interface BranchStatus {
   local_exists: boolean;
   remote_exists: boolean;
@@ -435,9 +467,10 @@ export const jjGetCommitDiff = (
 export const jjGetLog = (
   workspacePath: string,
   targetBranch: string,
-  isHomeRepo?: boolean
+  isHomeRepo?: boolean,
+  limit?: number
 ): Promise<JjLogResult> =>
-  invoke("jj_get_log", { workspacePath, targetBranch, isHomeRepo: isHomeRepo ?? null });
+  invoke("jj_get_log", { workspacePath, targetBranch, isHomeRepo: isHomeRepo ?? null, limit: limit ?? null });
 
 export const jjInit = (repo_path: string): Promise<string> =>
   invoke("jj_init", { repoPath: repo_path });
@@ -550,10 +583,12 @@ export const listWorkspaceStatuses = (
   });
 
 export const getWorkspaceStatus = (
-  workspace_path: string
+  repo_path: string,
+  workspace_id: number | null
 ): Promise<WorkspaceStatus> =>
   invoke("get_workspace_status", {
-    workspacePath: workspace_path,
+    repoPath: repo_path,
+    workspaceId: workspace_id,
   });
 
 export const setWorkspaceTargetBranch = (

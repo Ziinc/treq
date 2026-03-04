@@ -18,16 +18,24 @@ vi.mock("@tauri-apps/api/window", () => ({
   WebviewWindow: vi.fn(),
 }));
 
-// Mock the API module
+// Mock the API module — LinearCommitHistory uses listCommits
 vi.mock("../src/lib/api", async () => {
   const actual = await vi.importActual("../src/lib/api");
   return {
     ...actual,
-    jjGetLog: vi.fn(),
+    listCommits: vi.fn(),
   };
 });
 
 const mockCommits = [
+  createMockCommit({
+    commit_id: "wc000",
+    short_id: "wc000",
+    change_id: "wc_change",
+    description: "(no description)",
+    is_working_copy: true,
+    timestamp: "2024-01-03 10:00:00",
+  }),
   createMockCommit({
     commit_id: "def456",
     short_id: "def456",
@@ -57,54 +65,118 @@ beforeEach(() => {
 });
 
 describe("LinearCommitHistory", () => {
-  it("should display commits with correct ordering based on context", async () => {
-    const jjGetLogMock = vi.mocked(api.jjGetLog);
+  it("should display commits (skipping working copy)", async () => {
+    const listCommitsMock = vi.mocked(api.listCommits);
 
-    // Test both home repo and workspace ordering
-    // Happy path 1: Home repo with isHomeRepo=true should show newest first
-    jjGetLogMock.mockResolvedValueOnce({
+    listCommitsMock.mockResolvedValueOnce({
       commits: mockCommits,
       target_branch: "main",
       workspace_branch: "main",
     });
 
-    const { rerender } = render(
+    render(
       <LinearCommitHistory
-        workspacePath="/test/repo"
-        targetBranch="main"
-        isHomeRepo={true}
+        repoPath="/test/repo"
+        workspaceId={null}
       />
     );
 
-    // Wait for commits to load and verify newest is first (no reverse)
+    // Wait for commits to load — working copy is skipped, so 2 commits
     await waitFor(() => {
       const listItems = document.querySelectorAll("ul > li");
       expect(listItems.length).toBe(2);
-      // For home repo (isHomeRepo=true), first commit should be newest (def456)
       expect(listItems[0].textContent).toContain("Second commit");
+      expect(listItems[1].textContent).toContain("First commit");
     });
+  });
 
-    // Happy path 2: Workspace with isHomeRepo=false should show oldest first
-    jjGetLogMock.mockResolvedValueOnce({
+  it("should display commits for a workspace", async () => {
+    const listCommitsMock = vi.mocked(api.listCommits);
+
+    listCommitsMock.mockResolvedValueOnce({
       commits: mockCommits,
       target_branch: "main",
       workspace_branch: "feature",
     });
 
-    rerender(
+    render(
       <LinearCommitHistory
-        workspacePath="/test/repo"
-        targetBranch="main"
-        isHomeRepo={false}
+        repoPath="/test/repo"
+        workspaceId={1}
       />
     );
 
-    // Wait for new commits to load and verify oldest is first (reversed)
     await waitFor(() => {
       const listItems = document.querySelectorAll("ul > li");
       expect(listItems.length).toBe(2);
-      // For workspace (isHomeRepo=false), first commit should be oldest (abc123)
-      expect(listItems[0].textContent).toContain("First commit");
+      expect(listItems[0].textContent).toContain("Second commit");
+      expect(listItems[1].textContent).toContain("First commit");
     });
+  });
+
+  it("should show load more button for home repo when at limit", async () => {
+    const listCommitsMock = vi.mocked(api.listCommits);
+
+    // Create 15 commits (limit) + 1 working copy = 16 total
+    // After slicing WC, 15 commits remain which equals the limit
+    const manyCommits = [
+      createMockCommit({ commit_id: "wc", is_working_copy: true, timestamp: "2024-01-20 10:00:00" }),
+      ...Array.from({ length: 15 }, (_, i) =>
+        createMockCommit({
+          commit_id: `commit${i}`,
+          short_id: `commit${i}`,
+          description: `Commit ${i}`,
+          timestamp: `2024-01-${String(15 - i).padStart(2, "0")} 10:00:00`,
+        })
+      ),
+    ];
+
+    listCommitsMock.mockResolvedValueOnce({
+      commits: manyCommits,
+      target_branch: "main",
+      workspace_branch: "main",
+    });
+
+    render(
+      <LinearCommitHistory
+        repoPath="/test/repo"
+        workspaceId={null}
+      />
+    );
+
+    await waitFor(() => {
+      expect(document.querySelectorAll("ul > li").length).toBe(15);
+    });
+
+    const loadMoreButton = document.querySelector("button");
+    expect(loadMoreButton).not.toBeNull();
+    expect(loadMoreButton!.textContent).toContain("Load more commits");
+  });
+
+  it("should not show load more button for workspace", async () => {
+    const listCommitsMock = vi.mocked(api.listCommits);
+
+    listCommitsMock.mockResolvedValueOnce({
+      commits: mockCommits,
+      target_branch: "main",
+      workspace_branch: "feature",
+    });
+
+    render(
+      <LinearCommitHistory
+        repoPath="/test/repo"
+        workspaceId={1}
+      />
+    );
+
+    await waitFor(() => {
+      const listItems = document.querySelectorAll("ul > li");
+      expect(listItems.length).toBe(2);
+    });
+
+    // No "Load more commits" button for workspaces
+    const buttons = document.querySelectorAll("button");
+    const loadMore = Array.from(buttons).find(b => b.textContent?.includes("Load more commits"));
+    expect(loadMore).toBeUndefined();
   });
 });

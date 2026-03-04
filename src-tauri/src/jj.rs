@@ -131,6 +131,8 @@ pub struct JjLogResult {
     pub commits: Vec<JjLogCommit>,
     pub target_branch: String,
     pub workspace_branch: String,
+    #[serde(default)]
+    pub target_branch_commits: Vec<JjLogCommit>,
 }
 
 /// Commits ahead of target branch
@@ -2351,6 +2353,38 @@ pub fn jj_push(workspace_path: &str) -> Result<String, JjError> {
     Ok(format!("{}{}{}", tracking_message, stdout, stderr))
 }
 
+/// Get bookmarks on a given revision
+pub fn get_bookmarks_on_revision(workspace_path: &str, revision: &str) -> Result<Vec<String>, JjError> {
+    let output = command_for("jj")
+        .current_dir(workspace_path)
+        .args([
+            "log",
+            "-r",
+            revision,
+            "--no-graph",
+            "-T",
+            r#"bookmarks.map(|b| b.name()).join(",") ++ "\n""#,
+        ])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !output.status.success() {
+        return Err(JjError::IoError(
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        ));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let bookmarks: Vec<String> = stdout
+        .lines()
+        .flat_map(|line| line.split(','))
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    Ok(bookmarks)
+}
+
 /// Get sync status with remote (ahead/behind counts)
 /// Returns (ahead_count, behind_count)
 ///
@@ -2792,10 +2826,10 @@ fn parse_diff_stat(stat: &str) -> (u32, u32) {
 }
 
 /// Build the revset string for jj_get_log based on context
-fn build_jj_get_log_revset(target_branch: &str, is_home_repo: bool) -> String {
+fn build_jj_get_log_revset(target_branch: &str, is_home_repo: bool, limit: Option<usize>) -> String {
     if is_home_repo {
-        // For home repo: show last 10 commits of current branch
-        "latest(::@, 15)".to_string()
+        let n = limit.unwrap_or(15);
+        format!("latest(::@, {})", n)
     } else {
         // For workspace: show commits ahead of target branch
         format!("{}..@", target_branch)
@@ -2806,12 +2840,13 @@ pub fn jj_get_log(
     workspace_path: &str,
     target_branch: &str,
     is_home_repo: Option<bool>,
+    limit: Option<usize>,
 ) -> Result<JjLogResult, JjError> {
     // Get workspace branch name
     let workspace_branch = get_workspace_branch(workspace_path)?;
 
     // Build revset based on context (home repo vs workspace)
-    let revset = build_jj_get_log_revset(target_branch, is_home_repo.unwrap_or(false));
+    let revset = build_jj_get_log_revset(target_branch, is_home_repo.unwrap_or(false), limit);
 
     // Build template for tab-separated output, using \x1E (Record Separator) between commits
     // because diff.stat() is multiline (per-file stats + summary line)
@@ -2841,6 +2876,18 @@ pub fn jj_get_log(
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
+    let commits = parse_jj_log_output(&stdout);
+
+    Ok(JjLogResult {
+        commits,
+        target_branch: target_branch.to_string(),
+        workspace_branch,
+        target_branch_commits: Vec::new(),
+    })
+}
+
+/// Shared helper to parse jj log output (record-separator delimited) into commits.
+fn parse_jj_log_output(stdout: &str) -> Vec<JjLogCommit> {
     let mut commits = Vec::new();
 
     // Split by record separator — each record is one commit
@@ -2917,11 +2964,51 @@ pub fn jj_get_log(
         });
     }
 
-    Ok(JjLogResult {
-        commits,
-        target_branch: target_branch.to_string(),
-        workspace_branch,
-    })
+    commits
+}
+
+/// Get the most recent commits on a target branch (for display below active workspace commits).
+///
+/// Uses revset: `latest(::{target_branch}, {limit})` to get the N most recent commits
+/// on the target branch.
+pub fn jj_get_target_branch_log(
+    workspace_path: &str,
+    target_branch: &str,
+    limit: usize,
+) -> Result<Vec<JjLogCommit>, JjError> {
+    let revset = build_target_branch_revset(target_branch, limit);
+
+    let template = concat!(
+        "commit_id.short(12) ++ \"\\t\" ++ ",
+        "change_id.short(12) ++ \"\\t\" ++ ",
+        "if(description, description.first_line(), \"(no description)\") ++ \"\\t\" ++ ",
+        "author.name() ++ \"\\t\" ++ ",
+        "author.timestamp() ++ \"\\t\" ++ ",
+        "parents.map(|p| p.commit_id().short(12)).join(\",\") ++ \"\\t\" ++ ",
+        "if(working_copies, \"true\", \"false\") ++ \"\\t\" ++ ",
+        "bookmarks.map(|b| b.name()).join(\",\") ++ \"\\t\" ++ ",
+        "if(immutable, \"true\", \"false\") ++ \"\\t\" ++ ",
+        "diff.stat() ++ \"\\x1E\""
+    );
+
+    let output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["log", "-r", &revset, "--no-graph", "-T", template])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+
+    if !output.status.success() {
+        return Err(JjError::IoError(
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        ));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(parse_jj_log_output(&stdout))
+}
+
+fn build_target_branch_revset(target_branch: &str, limit: usize) -> String {
+    format!("latest(::{}, {})", target_branch, limit)
 }
 
 /// Get commits that are in workspace but not in target branch
@@ -4928,17 +5015,37 @@ target/debug/deps/lib.so    2-sided conflict including 1 deletion and an executa
     #[test]
     fn test_jj_get_log_revset_construction() {
         // Happy path 1: Home repo should use latest(::@, 15) revset
-        let revset_home = build_jj_get_log_revset("main", true);
+        let revset_home = build_jj_get_log_revset("main", true, None);
         assert_eq!(
             revset_home, "latest(::@, 15)",
             "Home repo should use latest revset"
         );
 
+        // Home repo with custom limit
+        let revset_home_30 = build_jj_get_log_revset("main", true, Some(30));
+        assert_eq!(
+            revset_home_30, "latest(::@, 30)",
+            "Home repo with custom limit should use that limit"
+        );
+
         // Happy path 2: Workspace should use target_branch..@ revset
-        let revset_workspace = build_jj_get_log_revset("main", false);
+        let revset_workspace = build_jj_get_log_revset("main", false, None);
         assert_eq!(
             revset_workspace, "main..@",
             "Workspace should use diff revset"
+        );
+
+        // Target branch revset should use latest(::branch, limit)
+        let target_revset = build_target_branch_revset("main", 10);
+        assert_eq!(
+            target_revset, "latest(::main, 10)",
+            "Target branch revset should use latest"
+        );
+
+        let target_revset_custom = build_target_branch_revset("develop", 5);
+        assert_eq!(
+            target_revset_custom, "latest(::develop, 5)",
+            "Target branch revset should work with custom branch and limit"
         );
     }
 

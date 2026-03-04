@@ -5,19 +5,21 @@ import { getWorkspaceTitle } from "../lib/workspace-utils";
 import { cn } from "../lib/utils";
 
 interface WorkspaceStackTreeProps {
-  workspacePath: string;
+  repoPath: string;
+  workspaceId: number;
   currentWorkspaceId: number;
   onNavigateToWorkspace: (workspace: Workspace) => void;
 }
 
 export function WorkspaceStackTree({
-  workspacePath,
+  repoPath,
+  workspaceId,
   currentWorkspaceId,
   onNavigateToWorkspace,
 }: WorkspaceStackTreeProps) {
   const { data: status } = useQuery({
-    queryKey: ["workspace-status", workspacePath],
-    queryFn: () => getWorkspaceStatus(workspacePath),
+    queryKey: ["workspace-status", repoPath, workspaceId],
+    queryFn: () => getWorkspaceStatus(repoPath, workspaceId),
     staleTime: 30_000,
   });
 

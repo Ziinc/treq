@@ -15,6 +15,9 @@ use crate::local_db;
 pub fn list_commits(
     repo_path: &str,
     workspace_id: Option<i64>,
+    include_target_branch_history: bool,
+    target_branch_limit: Option<usize>,
+    limit: Option<usize>,
 ) -> Result<jj::JjLogResult, String> {
     match workspace_id {
         Some(id) => {
@@ -35,13 +38,28 @@ pub fn list_commits(
                 .as_deref()
                 .unwrap_or("main");
 
-            jj::jj_get_log(workspace_dir_str, target_branch, Some(false))
-                .map_err(|e| format!("Failed to list commits: {}", e))
+            let mut result = jj::jj_get_log(workspace_dir_str, target_branch, Some(false), None)
+                .map_err(|e| format!("Failed to list commits: {}", e))?;
+
+            if include_target_branch_history {
+                let limit = target_branch_limit.unwrap_or(10);
+                match jj::jj_get_target_branch_log(workspace_dir_str, target_branch, limit) {
+                    Ok(target_commits) => {
+                        result.target_branch_commits = target_commits;
+                    }
+                    Err(e) => {
+                        eprintln!("[list_commits] Failed to get target branch history: {}", e);
+                        // Non-fatal: leave target_branch_commits empty
+                    }
+                }
+            }
+
+            Ok(result)
         }
         None => {
             let branch = jj::get_workspace_branch(repo_path)
                 .map_err(|e| format!("Failed to get active branch: {}", e))?;
-            jj::jj_get_log(repo_path, &branch, Some(true))
+            jj::jj_get_log(repo_path, &branch, Some(true), limit)
                 .map_err(|e| format!("Failed to list commits: {}", e))
         }
     }
