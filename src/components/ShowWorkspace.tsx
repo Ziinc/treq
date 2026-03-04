@@ -18,7 +18,6 @@ import {
   getWorkspaceStatus,
   pullWorkspaceFromRemote,
   jjGitFetch,
-  jjGitFetchBackground,
   pushWorkspaceToRemote,
   listCommits,
   resolveBookmarkConflict,
@@ -28,6 +27,7 @@ import {
 import { getStatusBgColor } from "../lib/git-status-colors";
 import { parseJjChangedFiles, type ParsedFileChange } from "../lib/git-utils";
 import { getFullWorkspacePath } from "../lib/utils";
+import { useFocusRefreshSubscription } from "../hooks/useAppFocusHandler";
 
 // Define BranchListItem locally since git API was removed
 export interface BranchListItem {
@@ -330,51 +330,30 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   }, [effectiveRepoPath, workspace?.id]);
 
 
-  // Auto-fetch remote updates periodically and on window focus
+  // Periodic background fetch every 5 minutes (independent of focus)
   useEffect(() => {
     const repoPath = repositoryPath || workingDirectory;
     if (!repoPath) return;
-
-    let lastFocusFetch = 0;
-    const FOCUS_DEBOUNCE_MS = 2000; // Debounce rapid focus events
 
     const performBackgroundFetch = async () => {
       try {
         await jjGitFetch(repoPath);
         fetchSyncStatus();
       } catch (error) {
-        // Silent failure for background operations
         console.debug("Background fetch failed:", error);
       }
     };
 
-    // Fetch every 5 minutes
     const intervalId = setInterval(performBackgroundFetch, 5 * 60 * 1000);
-
-    // Fetch on window focus - fire-and-forget with debouncing
-    const handleFocus = () => {
-      const now = Date.now();
-      if (now - lastFocusFetch < FOCUS_DEBOUNCE_MS) return;
-      lastFocusFetch = now;
-
-      // Fire background fetch (returns immediately, work happens in separate thread)
-      jjGitFetchBackground(repoPath).catch((error) =>
-        console.debug("Background fetch failed:", error)
-      );
-
-      // Fire sync status update independently after a small delay
-      // to let the background fetch get started
-      setTimeout(() => {
-        fetchSyncStatus();
-      }, 500);
-    };
-    window.addEventListener("focus", handleFocus);
-
-    return () => {
-      clearInterval(intervalId);
-      window.removeEventListener("focus", handleFocus);
-    };
+    return () => clearInterval(intervalId);
   }, [repositoryPath, workingDirectory, fetchSyncStatus]);
+
+  // Refresh sync status after focus-triggered rebase + invalidation
+  useFocusRefreshSubscription(
+    "afterInvalidate",
+    () => fetchSyncStatus(),
+    [fetchSyncStatus]
+  );
 
   // Periodic conflict check when workspace is active
   const lastConflictErrorRef = useRef<string | null>(null);
@@ -801,7 +780,9 @@ const handleSync = useCallback(async () => {
       startLine: number,
       endLine: number,
       lineContent: string[],
-      commentText: string
+      commentText: string,
+      commitShortId?: string,
+      mode?: "plan" | "acceptEdits"
     ) => {
       try {
         // Format comment as markdown
@@ -809,7 +790,7 @@ const handleSync = useCallback(async () => {
           ? filePath.slice(workingDirectory.length + 1)
           : filePath;
 
-        const lineRef = `${relativePath}:${startLine}${startLine !== endLine ? `-${endLine}` : ''}`;
+        const lineRef = `${relativePath}:${startLine}${startLine !== endLine ? `-${endLine}` : ''}${commitShortId ? ` (commit ${commitShortId})` : ''}`;
         const formattedComment = `${lineRef}\n\`\`\`\n${lineContent.join('\n')}\n\`\`\`\n> ${commentText}\n`;
         const sessionName = "Code Comment";
 
@@ -830,6 +811,7 @@ const handleSync = useCallback(async () => {
           workspacePath: workspace?.workspace_path ?? null,
           repoPath: sessionRepoPath,
           pendingPrompt: formattedComment,
+          permissionMode: mode,
         });
 
         addToast({
@@ -1133,6 +1115,7 @@ const handleSync = useCallback(async () => {
             onScrollComplete={() => setScrollToCommitId(null)}
             onCommitMoved={() => {}}
             onCommitAbandoned={() => {}}
+            onCreateAgentWithComment={handleCreateAgentWithComment}
           />
         ) : (
           <ChangesDiffViewer
@@ -1160,6 +1143,8 @@ const handleSync = useCallback(async () => {
 
   // Display branch name as title: workspace branch if available, otherwise main repo branch
   const branchTitle = workspace?.branch_name || mainRepoBranch || "main";
+  const isHomeRepo = !workspace;
+  const hasSyncChanges = !!syncStatus && (syncStatus.ahead > 0 || syncStatus.behind > 0);
 
   // Extract intent from workspace metadata
   const workspaceIntent = workspace?.metadata
@@ -1206,7 +1191,7 @@ const handleSync = useCallback(async () => {
                           size="sm"
                           onClick={onCreateStackedWorkspace}
                           disabled={stackCreating}
-                          className="gap-1"
+                          className="gap-1 px-2 py-1"
                         >
                           {stackCreating ? (
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1250,12 +1235,11 @@ const handleSync = useCallback(async () => {
                           size="sm"
                           onClick={onCreateStackedWorkspace}
                           disabled={stackCreating || rebasing || conflictedFiles.length > 0}
-                          className="gap-1"
                         >
                           {stackCreating ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <Loader2 className="w-4 h-4 animate-spin" />
                           ) : (
-                            <Layers className="w-3.5 h-3.5" />
+                            <Layers className="w-4 h-4" />
                           )}
                           Stack
                         </Button>
@@ -1282,9 +1266,8 @@ const handleSync = useCallback(async () => {
                           size="sm"
                           onClick={onSplitWorkspace}
                           disabled={rebasing || conflictedFiles.length > 0}
-                          className="gap-1"
                         >
-                          <Split className="w-3.5 h-3.5" />
+                          <Split className="w-4 h-4" />
                           Split
                         </Button>
                       </TooltipTrigger>
@@ -1313,9 +1296,9 @@ const handleSync = useCallback(async () => {
                       size="sm"
                       onClick={handlePushToRemote}
                       disabled={!!actionPending}
-                      className="gap-1 bg-blue-600 hover:bg-blue-700"
+                      className="bg-blue-600 hover:bg-blue-700"
                     >
-                      <Upload className="w-3.5 h-3.5" />
+                      <Upload className="w-4 h-4" />
                       Push to remote
                     </Button>
                   </TooltipTrigger>
@@ -1326,42 +1309,38 @@ const handleSync = useCallback(async () => {
               </TooltipProvider>
             )}
 
-            {/* Sync status indicator - shown when branch is on remote */}
-            {(!workspace || !workspace.not_on_remote) && syncStatus && (syncStatus.ahead > 0 || syncStatus.behind > 0) && (
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                {syncStatus.behind > 0 && (
-                  <span className="flex items-center">
-                    ↓{syncStatus.behind}
-                  </span>
-                )}
-                {syncStatus.ahead > 0 && (
-                  <span className="flex items-center">
-                    ↑{syncStatus.ahead}
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Sync button - show when there are changes to sync */}
-            {(!workspace || !workspace.not_on_remote) && syncStatus && (syncStatus.ahead > 0 || syncStatus.behind > 0) && (
+            {/* Sync control - status + icon in one clickable button */}
+            {(!workspace || !workspace.not_on_remote) && syncStatus && (isHomeRepo || hasSyncChanges) && (
               <TooltipProvider delayDuration={200}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-6 w-6 p-0"
+                      className="h-6 gap-1 px-2 text-xs text-muted-foreground"
                       onClick={handleSync}
-                      disabled={!!actionPending}
+                      disabled={!!actionPending || !hasSyncChanges}
                     >
+                      {(isHomeRepo || syncStatus.behind > 0) && (
+                        <span className="flex items-center">
+                          ↓{syncStatus.behind}
+                        </span>
+                      )}
+                      {(isHomeRepo || syncStatus.ahead > 0) && (
+                        <span className="flex items-center">
+                          ↑{syncStatus.ahead}
+                        </span>
+                      )}
                       <RefreshCw className={cn(
-                        "w-3.5 h-3.5",
+                        "w-4 h-4",
                         actionPending === "sync" && "animate-spin"
                       )} />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    Sync with remote (fetch and push)
+                    {hasSyncChanges
+                      ? "Sync with remote (fetch and push)"
+                      : "No commits to sync"}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -1379,7 +1358,7 @@ const handleSync = useCallback(async () => {
                         disabled={rebasing || conflictedFiles.length > 0}
                         className="gap-1 bg-green-600 hover:bg-green-700"
                       >
-                        <GitCompareArrows className="w-3.5 h-3.5" />
+                        <GitCompareArrows className="w-4 h-4" />
                         Merge...
                       </Button>
                     </div>
@@ -1399,7 +1378,7 @@ const handleSync = useCallback(async () => {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="px-2"
+                  className="px-1"
                   disabled={!!actionPending}
                 >
                   <MoreVertical className="w-4 h-4" />

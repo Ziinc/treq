@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::jj;
@@ -317,11 +318,13 @@ pub fn push_workspace_to_remote(
 ///
 /// # Returns
 /// Returns a vector of workspaces if successful, otherwise an error message.
-pub fn list_workspaces(repo_path: &str) -> Result<Vec<local_db::Workspace>, String> {
+/// Snapshots all workspaces sequentially (must be sequential since snapshotting workspace A
+/// can make workspace B stale) and returns each workspace paired with its changed files.
+fn list_workspaces_with_changes(repo_path: &str) -> Result<Vec<(local_db::Workspace, Vec<jj::JjFileChange>)>, String> {
     let workspaces = local_db::get_workspaces(repo_path)
         .map_err(|e| format!("Failed to get workspaces from db: {}", e))?;
 
-    let updated_workspaces: Vec<local_db::Workspace> = workspaces
+    let result: Vec<(local_db::Workspace, Vec<jj::JjFileChange>)> = workspaces
         .into_iter()
         .map(|workspace| {
             let workspace_path = Path::new(repo_path)
@@ -335,29 +338,47 @@ pub fn list_workspaces(repo_path: &str) -> Result<Vec<local_db::Workspace>, Stri
             // Snapshot working copy by running jj status.
             // Then check for staleness (can occur if another workspace was snapshotted
             // above, rewriting a parent commit and making this workspace stale).
-            let _ = jj::jj_get_changed_files(&workspace_path);
+            let changed_files = jj::jj_get_changed_files(&workspace_path)
+                .unwrap_or_default();
             if let Ok(true) = jj::is_workspace_stale(&workspace_path) {
                 if let Err(update_err) = jj::jj_workspace_update_stale(&workspace_path) {
                     eprintln!("Failed to update stale workspace: {}", update_err);
                 }
             }
 
-            workspace
+            (workspace, changed_files)
         })
         .collect();
 
-    Ok(updated_workspaces)
+    Ok(result)
+}
+
+pub fn list_workspaces(repo_path: &str) -> Result<Vec<local_db::Workspace>, String> {
+    let workspaces_with_changes = list_workspaces_with_changes(repo_path)?;
+    Ok(workspaces_with_changes.into_iter().map(|(ws, _)| ws).collect())
 }
 
 /// Lists all workspaces with their computed conflict and change status.
-/// Consolidates what was previously 3 separate calls (list_workspaces, list_conflicted_workspace_ids, list_workspaces_with_changes).
+/// Phase 1 (sequential): snapshot all workspaces and capture changed files.
+/// Phase 2 (parallel): read-only batched status queries using rayon for concurrent execution.
+///
+/// Optimizations:
+/// - Single global call for conflicted bookmarks (replaces N per-workspace calls)
+/// - Combined jj log with union revset for counts (replaces 3 separate calls per workspace)
+/// - Rayon parallelization for Phase 2 (independent read-only queries)
 pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspacePartialStatus>, String> {
-    let workspaces = list_workspaces(repo_path)?;
+    // Phase 1: Sequential snapshotting — captures changed files to avoid duplicate jj calls
+    let workspaces_with_changes = list_workspaces_with_changes(repo_path)?;
 
-    let statuses: Vec<WorkspacePartialStatus> = workspaces
-        .into_iter()
-        .map(|workspace| {
-            let workspace_path = Path::new(repo_path)
+    // Single global call: get all conflicted bookmarks at once
+    let conflicted_bookmarks = jj::jj_get_all_conflicted_bookmarks(repo_path);
+
+    // Phase 2: Parallel read-only status queries per workspace
+    let repo_path_owned = repo_path.to_string();
+    let statuses: Vec<WorkspacePartialStatus> = workspaces_with_changes
+        .into_par_iter()
+        .map(|(workspace, changed_files)| {
+            let workspace_path = Path::new(&repo_path_owned)
                 .join(".treq")
                 .join("workspaces")
                 .join(&workspace.workspace_path)
@@ -365,9 +386,7 @@ pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspacePartialSt
                 .expect("not a valid path")
                 .to_string();
 
-            let has_changes = jj::jj_get_changed_files(&workspace_path)
-                .map(|files| !files.is_empty())
-                .unwrap_or(false);
+            let has_changes = !changed_files.is_empty();
 
             let has_conflicts =
                 jj::get_conflicted_files(&workspace_path, workspace.target_branch.as_deref())
@@ -378,35 +397,31 @@ pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspacePartialSt
                 .target_branch
                 .as_deref()
                 .unwrap_or("main");
-            let commits_ahead = jj::jj_get_commits_ahead(&workspace_path, target_branch)
-                .map(|ca| ca.total_count)
-                .unwrap_or(0);
+
+            let is_diverged = conflicted_bookmarks.contains(&workspace.branch_name);
+
+            // Combined counts: commits ahead of target + sync status in one jj call
+            let counts = jj::jj_get_combined_counts(
+                &workspace_path,
+                target_branch,
+                &workspace.branch_name,
+                workspace.not_on_remote,
+                is_diverged,
+            );
 
             let remote_sync = if workspace.not_on_remote {
                 RemoteSyncStatus::NotOnRemote
-            } else if jj::jj_is_bookmark_conflicted(&workspace_path, &workspace.branch_name)
-            {
-                match jj::jj_get_diverged_sync_counts(
-                    &workspace_path,
-                    &workspace.branch_name,
-                ) {
-                    Ok((ahead, behind)) => {
-                        RemoteSyncStatus::Diverged { ahead, behind }
-                    }
-                    Err(_) => RemoteSyncStatus::Diverged {
-                        ahead: 0,
-                        behind: 0,
-                    },
+            } else if is_diverged {
+                RemoteSyncStatus::Diverged {
+                    ahead: counts.ahead_of_origin,
+                    behind: counts.behind_origin,
                 }
             } else {
-                match jj::jj_get_sync_status(&workspace_path, &workspace.branch_name, false) {
-                    Ok((ahead, behind)) => match (ahead, behind) {
-                        (0, 0) => RemoteSyncStatus::InSync,
-                        (a, 0) => RemoteSyncStatus::Ahead { count: a },
-                        (0, b) => RemoteSyncStatus::Behind { count: b },
-                        (a, b) => RemoteSyncStatus::Diverged { ahead: a, behind: b },
-                    },
-                    Err(_) => RemoteSyncStatus::NotOnRemote,
+                match (counts.ahead_of_origin, counts.behind_origin) {
+                    (0, 0) => RemoteSyncStatus::InSync,
+                    (a, 0) => RemoteSyncStatus::Ahead { count: a },
+                    (0, b) => RemoteSyncStatus::Behind { count: b },
+                    (a, b) => RemoteSyncStatus::Diverged { ahead: a, behind: b },
                 }
             };
 
@@ -414,7 +429,7 @@ pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspacePartialSt
                 current: workspace,
                 has_conflicts,
                 has_changes,
-                commits_ahead,
+                commits_ahead: counts.commits_ahead_of_target,
                 remote_sync,
             }
         })

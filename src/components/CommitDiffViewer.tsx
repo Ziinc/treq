@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   jjGetLog,
   jjGetCommitDiff,
@@ -27,9 +27,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import { ArrowRightLeft, ChevronRight, FileText, Loader2, Trash2 } from "lucide-react";
+import { ArrowRightLeft, ChevronRight, FileText, Loader2, Plus, Trash2 } from "lucide-react";
 import { MoveCommitToNewWorkspaceDialog } from "./MoveCommitToNewWorkspaceDialog";
 import { MoveCommitToExistingWorkspaceDialog } from "./MoveCommitToExistingWorkspaceDialog";
+import { CommentInput } from "./CommentInput";
 import { useToast } from "./ui/toast";
 
 interface CommitDiffViewerProps {
@@ -42,6 +43,15 @@ interface CommitDiffViewerProps {
   onScrollComplete?: () => void;
   onCommitMoved?: () => void;
   onCommitAbandoned?: () => void;
+  onCreateAgentWithComment?: (
+    filePath: string,
+    startLine: number,
+    endLine: number,
+    lineContent: string[],
+    commentText: string,
+    commitShortId: string,
+    mode: "plan" | "acceptEdits"
+  ) => void;
 }
 
 interface DayGroup {
@@ -91,6 +101,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
     onScrollComplete,
     onCommitMoved,
     onCommitAbandoned,
+    onCreateAgentWithComment,
   }) {
     const [commits, setCommits] = useState<JjLogCommit[]>([]);
     const [targetBranchCommits, setTargetBranchCommits] = useState<JjLogCommit[]>([]);
@@ -389,6 +400,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                           onMoveToNew={handleMoveToNew}
                           onMoveToExisting={handleMoveToExisting}
                           onAbandon={handleAbandon}
+                          onCreateAgentWithComment={onCreateAgentWithComment}
                         />
                       );
                     })}
@@ -445,6 +457,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                               onMoveToNew={() => {}}
                               onMoveToExisting={() => {}}
                               onAbandon={() => {}}
+                              onCreateAgentWithComment={onCreateAgentWithComment}
                             />
                           );
                         })}
@@ -522,6 +535,15 @@ interface CommitWithDiffProps {
   onMoveToNew: (commit: JjLogCommit) => void;
   onMoveToExisting: (commit: JjLogCommit) => void;
   onAbandon: (commit: JjLogCommit) => void;
+  onCreateAgentWithComment?: (
+    filePath: string,
+    startLine: number,
+    endLine: number,
+    lineContent: string[],
+    commentText: string,
+    commitShortId: string,
+    mode: "plan" | "acceptEdits"
+  ) => void;
 }
 
 function CommitWithDiff({
@@ -535,9 +557,32 @@ function CommitWithDiff({
   onMoveToNew,
   onMoveToExisting,
   onAbandon,
+  onCreateAgentWithComment,
 }: CommitWithDiffProps) {
   const firstLine = commit.description.split("\n")[0] || "(no message)";
   const hasStats = commit.insertions > 0 || commit.deletions > 0;
+
+  const handleAgentComment = useCallback(
+    (
+      filePath: string,
+      startLine: number,
+      endLine: number,
+      lineContent: string[],
+      commentText: string,
+      mode: "plan" | "acceptEdits"
+    ) => {
+      onCreateAgentWithComment?.(
+        filePath,
+        startLine,
+        endLine,
+        lineContent,
+        commentText,
+        commit.short_id,
+        mode
+      );
+    },
+    [onCreateAgentWithComment, commit.short_id]
+  );
 
   return (
     <div data-commit-id={commit.commit_id}>
@@ -646,7 +691,10 @@ function CommitWithDiff({
               Failed to load diff: {diffData.error}
             </div>
           ) : diffData?.diff ? (
-            <CommitDiffContent diff={diffData.diff} />
+            <CommitDiffContent
+              diff={diffData.diff}
+              onCreateAgentWithComment={onCreateAgentWithComment ? handleAgentComment : undefined}
+            />
           ) : null}
           </div>
         </div>
@@ -657,13 +705,57 @@ function CommitWithDiff({
 
 interface CommitDiffContentProps {
   diff: JjRevisionDiff;
+  onCreateAgentWithComment?: (
+    filePath: string,
+    startLine: number,
+    endLine: number,
+    lineContent: string[],
+    commentText: string,
+    mode: "plan" | "acceptEdits"
+  ) => void;
 }
 
-function CommitDiffContent({ diff }: CommitDiffContentProps) {
+interface DiffLineSelection {
+  filePath: string;
+  lines: { hunkIndex: number; lineIndex: number; content: string }[];
+}
+
+interface PendingComment {
+  filePath: string;
+  hunkIndex: number;
+  displayAtLineIndex: number;
+  startLine: number;
+  endLine: number;
+  lineContent: string[];
+}
+
+function CommitDiffContent({ diff, onCreateAgentWithComment }: CommitDiffContentProps) {
   // Always show all files expanded
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(
     () => new Set(diff.hunks_by_file.map((f) => f.path))
   );
+
+  // Comment/selection state
+  const [diffLineSelection, setDiffLineSelection] = useState<DiffLineSelection | null>(null);
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectionAnchor, setSelectionAnchor] = useState<{
+    filePath: string;
+    hunkIndex: number;
+    lineIndex: number;
+  } | null>(null);
+  const [pendingComment, setPendingComment] = useState<PendingComment | null>(null);
+  const [showCommentInput, setShowCommentInput] = useState(false);
+
+  // Global mouseup listener to end drag selection
+  useEffect(() => {
+    const handleMouseUp = () => {
+      if (isSelecting) {
+        setIsSelecting(false);
+      }
+    };
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, [isSelecting]);
 
   if (diff.files.length === 0) {
     return (
@@ -681,6 +773,180 @@ function CommitDiffContent({ diff }: CommitDiffContentProps) {
       }
       return next;
     });
+  };
+
+  // Compute line numbers for a hunk
+  const computeHunkLineNumbers = (hunk: JjDiffHunk) => {
+    const { oldStart, newStart } = parseHunkHeader(hunk.header);
+    let oldLine = oldStart;
+    let newLine = newStart;
+
+    return hunk.lines.map((line) => {
+      if (line.startsWith("+")) {
+        return { old: undefined, new: newLine++ };
+      } else if (line.startsWith("-")) {
+        return { old: oldLine++, new: undefined };
+      } else {
+        const result = { old: oldLine++, new: newLine++ };
+        return result;
+      }
+    });
+  };
+
+  const handleLineMouseDown = (
+    e: React.MouseEvent,
+    filePath: string,
+    hunkIndex: number,
+    lineIndex: number,
+    lineContent: string
+  ) => {
+    if (!onCreateAgentWithComment) return;
+    e.preventDefault();
+    setIsSelecting(true);
+    setSelectionAnchor({ filePath, hunkIndex, lineIndex });
+    setDiffLineSelection({
+      filePath,
+      lines: [{ hunkIndex, lineIndex, content: lineContent }],
+    });
+    // Reset any pending comment
+    setShowCommentInput(false);
+    setPendingComment(null);
+  };
+
+  const handleLineMouseEnter = (
+    filePath: string,
+    hunkIndex: number,
+    lineIndex: number
+  ) => {
+    if (!isSelecting || !selectionAnchor || selectionAnchor.filePath !== filePath) return;
+
+    // Build selection from anchor to current position
+    const fileDiff = diff.hunks_by_file.find((f) => f.path === filePath);
+    if (!fileDiff) return;
+
+    const lines: { hunkIndex: number; lineIndex: number; content: string }[] = [];
+
+    const anchorGlobal = getGlobalLineIndex(fileDiff.hunks, selectionAnchor.hunkIndex, selectionAnchor.lineIndex);
+    const currentGlobal = getGlobalLineIndex(fileDiff.hunks, hunkIndex, lineIndex);
+
+    const startGlobal = Math.min(anchorGlobal, currentGlobal);
+    const endGlobal = Math.max(anchorGlobal, currentGlobal);
+
+    let globalIdx = 0;
+    for (let hi = 0; hi < fileDiff.hunks.length; hi++) {
+      for (let li = 0; li < fileDiff.hunks[hi].lines.length; li++) {
+        if (globalIdx >= startGlobal && globalIdx <= endGlobal) {
+          lines.push({
+            hunkIndex: hi,
+            lineIndex: li,
+            content: fileDiff.hunks[hi].lines[li],
+          });
+        }
+        globalIdx++;
+      }
+    }
+
+    setDiffLineSelection({ filePath, lines });
+  };
+
+  const handleLineMouseUp = () => {
+    setIsSelecting(false);
+  };
+
+  const handleAddComment = (
+    filePath: string,
+    hunkIndex: number,
+    lineIndex: number,
+    lineContent: string,
+    lineNum: number
+  ) => {
+    if (!onCreateAgentWithComment) return;
+
+    // If there's a multi-line selection, use that
+    if (diffLineSelection && diffLineSelection.filePath === filePath && diffLineSelection.lines.length > 1) {
+      handleAddCommentFromSelection();
+      return;
+    }
+
+    setPendingComment({
+      filePath,
+      hunkIndex,
+      displayAtLineIndex: lineIndex,
+      startLine: lineNum,
+      endLine: lineNum,
+      lineContent: [lineContent],
+    });
+    setShowCommentInput(true);
+  };
+
+  const handleAddCommentFromSelection = () => {
+    if (!diffLineSelection || diffLineSelection.lines.length === 0) return;
+
+    const filePath = diffLineSelection.filePath;
+    const fileDiff = diff.hunks_by_file.find((f) => f.path === filePath);
+    if (!fileDiff) return;
+
+    const lineContents: string[] = [];
+    let minLineNum = Infinity;
+    let maxLineNum = -Infinity;
+    let lastHunkIndex = 0;
+    let lastLineIndex = 0;
+
+    for (const line of diffLineSelection.lines) {
+      const hunk = fileDiff.hunks[line.hunkIndex];
+      if (!hunk) continue;
+
+      const lineNumbers = computeHunkLineNumbers(hunk);
+      const lineNum =
+        lineNumbers[line.lineIndex]?.new ??
+        lineNumbers[line.lineIndex]?.old ??
+        line.lineIndex + 1;
+
+      minLineNum = Math.min(minLineNum, lineNum);
+      maxLineNum = Math.max(maxLineNum, lineNum);
+      lineContents.push(line.content);
+      lastHunkIndex = line.hunkIndex;
+      lastLineIndex = line.lineIndex;
+    }
+
+    setPendingComment({
+      filePath,
+      hunkIndex: lastHunkIndex,
+      displayAtLineIndex: lastLineIndex,
+      startLine: minLineNum,
+      endLine: maxLineNum,
+      lineContent: lineContents,
+    });
+    setShowCommentInput(true);
+  };
+
+  const handleCommentSubmit = (text: string, mode: "plan" | "acceptEdits") => {
+    if (!pendingComment || !onCreateAgentWithComment) return;
+
+    onCreateAgentWithComment(
+      pendingComment.filePath,
+      pendingComment.startLine,
+      pendingComment.endLine,
+      pendingComment.lineContent,
+      text,
+      mode
+    );
+
+    setShowCommentInput(false);
+    setPendingComment(null);
+    setDiffLineSelection(null);
+  };
+
+  const handleCommentCancel = () => {
+    setShowCommentInput(false);
+    setPendingComment(null);
+  };
+
+  const isLineSelected = (filePath: string, hunkIndex: number, lineIndex: number) => {
+    if (!diffLineSelection || diffLineSelection.filePath !== filePath) return false;
+    return diffLineSelection.lines.some(
+      (l) => l.hunkIndex === hunkIndex && l.lineIndex === lineIndex
+    );
   };
 
   return (
@@ -703,7 +969,7 @@ function CommitDiffContent({ diff }: CommitDiffContentProps) {
                 )}
               />
               <FileText className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-              <span className="text-xs font-mono truncate flex-1">
+              <span className="text-sm font-mono truncate flex-1">
                 {file.path}
               </span>
               <span
@@ -720,8 +986,23 @@ function CommitDiffContent({ diff }: CommitDiffContentProps) {
 
             {isFileExpanded && fileDiff && (
               <div className="bg-muted/20">
-                {fileDiff.hunks.map((hunk) => (
-                  <HunkView key={hunk.id} hunk={hunk} />
+                {fileDiff.hunks.map((hunk, hunkIndex) => (
+                  <HunkView
+                    key={hunk.id}
+                    hunk={hunk}
+                    filePath={file.path}
+                    hunkIndex={hunkIndex}
+                    hasCommentSupport={!!onCreateAgentWithComment}
+                    isLineSelected={isLineSelected}
+                    showCommentInput={showCommentInput}
+                    pendingComment={pendingComment}
+                    onLineMouseDown={handleLineMouseDown}
+                    onLineMouseEnter={handleLineMouseEnter}
+                    onLineMouseUp={handleLineMouseUp}
+                    onAddComment={handleAddComment}
+                    onCommentSubmit={handleCommentSubmit}
+                    onCommentCancel={handleCommentCancel}
+                  />
                 ))}
               </div>
             )}
@@ -732,19 +1013,66 @@ function CommitDiffContent({ diff }: CommitDiffContentProps) {
   );
 }
 
-interface HunkViewProps {
-  hunk: JjDiffHunk;
+// Helper to get a global line index across all hunks
+function getGlobalLineIndex(hunks: JjDiffHunk[], hunkIndex: number, lineIndex: number): number {
+  let idx = 0;
+  for (let h = 0; h < hunkIndex; h++) {
+    idx += hunks[h].lines.length;
+  }
+  return idx + lineIndex;
 }
 
-function HunkView({ hunk }: HunkViewProps) {
+interface HunkViewProps {
+  hunk: JjDiffHunk;
+  filePath: string;
+  hunkIndex: number;
+  hasCommentSupport: boolean;
+  isLineSelected: (filePath: string, hunkIndex: number, lineIndex: number) => boolean;
+  showCommentInput: boolean;
+  pendingComment: PendingComment | null;
+  onLineMouseDown: (
+    e: React.MouseEvent,
+    filePath: string,
+    hunkIndex: number,
+    lineIndex: number,
+    lineContent: string
+  ) => void;
+  onLineMouseEnter: (filePath: string, hunkIndex: number, lineIndex: number) => void;
+  onLineMouseUp: () => void;
+  onAddComment: (
+    filePath: string,
+    hunkIndex: number,
+    lineIndex: number,
+    lineContent: string,
+    lineNum: number
+  ) => void;
+  onCommentSubmit: (text: string, mode: "plan" | "acceptEdits") => void;
+  onCommentCancel: () => void;
+}
+
+function HunkView({
+  hunk,
+  filePath,
+  hunkIndex,
+  hasCommentSupport,
+  isLineSelected,
+  showCommentInput,
+  pendingComment,
+  onLineMouseDown,
+  onLineMouseEnter,
+  onLineMouseUp,
+  onAddComment,
+  onCommentSubmit,
+  onCommentCancel,
+}: HunkViewProps) {
   const { oldStart, newStart } = parseHunkHeader(hunk.header);
   let oldLine = oldStart;
   let newLine = newStart;
 
   return (
-    <div className="text-xs font-mono">
+    <div className="text-sm font-mono">
       {/* Hunk header */}
-      <div className="px-3 py-0.5 bg-muted/60 text-muted-foreground border-t border-border">
+      <div className="px-3 py-0.5 bg-muted/60 text-muted-foreground border-t border-border text-xs">
         {hunk.header}
       </div>
       {/* Hunk lines */}
@@ -767,21 +1095,89 @@ function HunkView({ hunk }: HunkViewProps) {
           newNum = newLine++;
         }
 
+        const actualLineNum = newNum ?? oldNum ?? i + 1;
+        const selected = isLineSelected(filePath, hunkIndex, i);
+        const showCommentInputHere =
+          showCommentInput &&
+          pendingComment &&
+          pendingComment.filePath === filePath &&
+          pendingComment.hunkIndex === hunkIndex &&
+          i === pendingComment.displayAtLineIndex;
+
         return (
-          <div key={i} className={cn("flex", bgClass)}>
-            <span className="w-10 text-right pr-1 text-muted-foreground/60 select-none flex-shrink-0">
-              {oldNum ?? ""}
-            </span>
-            <span className="w-10 text-right pr-1 text-muted-foreground/60 select-none flex-shrink-0">
-              {newNum ?? ""}
-            </span>
-            <span className="w-4 text-center text-muted-foreground/60 select-none flex-shrink-0">
-              {prefix}
-            </span>
-            <span className="flex-1 whitespace-pre overflow-x-auto">
-              {line.slice(1)}
-            </span>
-          </div>
+          <Fragment key={i}>
+            <div
+              className={cn(
+                "group flex",
+                bgClass,
+                selected && "!bg-blue-500/30 ring-1 ring-inset ring-blue-500/50"
+              )}
+              onMouseEnter={() => onLineMouseEnter(filePath, hunkIndex, i)}
+              onMouseUp={onLineMouseUp}
+            >
+              {/* Line number gutter — click to start selection */}
+              <div
+                className={cn(
+                  "w-10 text-right pr-1 text-muted-foreground/60 select-none flex-shrink-0",
+                  hasCommentSupport && "cursor-pointer hover:bg-muted/50"
+                )}
+                onMouseDown={(e) => onLineMouseDown(e, filePath, hunkIndex, i, line)}
+              >
+                {oldNum ?? ""}
+              </div>
+              <div
+                className={cn(
+                  "w-10 text-right pr-1 text-muted-foreground/60 select-none flex-shrink-0",
+                  hasCommentSupport && "cursor-pointer hover:bg-muted/50"
+                )}
+                onMouseDown={(e) => onLineMouseDown(e, filePath, hunkIndex, i, line)}
+              >
+                {newNum ?? ""}
+              </div>
+              {/* Plus button column */}
+              {hasCommentSupport ? (
+                <div className="w-5 flex-shrink-0 flex items-center justify-center select-none">
+                  <button
+                    className="p-[1px] rounded bg-primary text-primary-foreground hover:bg-primary/90 invisible group-hover:visible"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAddComment(filePath, hunkIndex, i, line, actualLineNum);
+                    }}
+                    title="Add comment"
+                  >
+                    <Plus className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <span className="w-4 text-center text-muted-foreground/60 select-none flex-shrink-0">
+                  {prefix}
+                </span>
+              )}
+              {/* Line prefix when comment support is enabled */}
+              {hasCommentSupport && (
+                <span className="w-4 text-center text-muted-foreground/60 select-none flex-shrink-0">
+                  {prefix}
+                </span>
+              )}
+              <span className="flex-1 whitespace-pre overflow-x-auto">
+                {line.slice(1)}
+              </span>
+            </div>
+
+            {/* Comment input */}
+            {showCommentInputHere && pendingComment && (
+              <CommentInput
+                key={`comment-${pendingComment.filePath}-${hunkIndex}-${pendingComment.displayAtLineIndex}`}
+                onSubmit={() => {}}
+                onSubmitWithMode={onCommentSubmit}
+                onCancel={onCommentCancel}
+                filePath={pendingComment.filePath}
+                startLine={pendingComment.startLine}
+                endLine={pendingComment.endLine}
+              />
+            )}
+          </Fragment>
         );
       })}
     </div>

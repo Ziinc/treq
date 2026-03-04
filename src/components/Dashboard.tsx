@@ -32,6 +32,10 @@ import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { useCreateStackedWorkspace } from "../hooks/useCreateStackedWorkspace";
 import { useWorkspaceHierarchy } from "../hooks/useWorkspaceHierarchy";
 import {
+  FocusRefreshProvider,
+  useFocusRefreshSubscription,
+} from "../hooks/useAppFocusHandler";
+import {
   getWorkspaces,
   rebuildWorkspaces,
   deleteWorkspace,
@@ -48,7 +52,6 @@ import {
   jjIsWorkspace,
   jjGitFetch,
   jjGetCurrentBranch,
-  checkAndRebaseWorkspaces,
   startFileWatcher,
   stopFileWatcher,
   jjTrackWorkspaceBookmarks,
@@ -298,54 +301,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     };
   }, [selectedWorkspace?.id, selectedWorkspace?.repo_path, selectedWorkspace?.workspace_path]);
 
-  // Listen for window focus to refresh workspace data
-  useEffect(() => {
-    if (!repoPath) return;
-
-    let lastFocusTime = 0;
-    const FOCUS_DEBOUNCE_MS = 2000; // Debounce rapid focus events
-
-    // Fire-and-forget pattern: no awaits to prevent UI blocking
-    const handleFocus = () => {
-      const now = Date.now();
-      if (now - lastFocusTime < FOCUS_DEBOUNCE_MS) return;
-      lastFocusTime = now;
-
-      // Fire branch update independently
-      jjGetCurrentBranch(repoPath)
-        .then((branch) => setCurrentBranch(branch))
-        .catch((error) =>
-          console.error("Failed to get current branch:", error)
-        );
-
-      // Fire rebase in background after a short delay to avoid IPC storm
-      // This is the heaviest operation, so give lighter ops time to complete
-      setTimeout(() => {
-        checkAndRebaseWorkspaces(repoPath)
-          .then(() => {
-            queryClient.invalidateQueries({
-              queryKey: ["workspaces", repoPath],
-            });
-            queryClient.invalidateQueries({
-              queryKey: ["workspace-statuses", repoPath],
-            });
-          })
-          .catch((error) => console.error("Auto-rebase failed:", error));
-      }, 100);
-    };
-
-    const unlistenFocus = getCurrentWindow().onFocusChanged(
-      ({ payload: focused }) => {
-        if (focused) {
-          handleFocus();
-        }
-      }
-    );
-
-    return () => {
-      unlistenFocus.then((fn) => fn());
-    };
-  }, [repoPath, queryClient]);
+  // After focus rebase completes, invalidate workspace queries
+  useFocusRefreshSubscription(
+    "afterRebase",
+    () => {
+      if (!repoPath) return;
+      queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+      queryClient.invalidateQueries({
+        queryKey: ["workspace-statuses", repoPath],
+      });
+    },
+    [repoPath, queryClient]
+  );
 
   const { data: sessions = [] } = useQuery({
     queryKey: ["sessions", repoPath],
@@ -873,6 +840,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   );
 
   return (
+    <FocusRefreshProvider
+      repoPath={repoPath}
+      onBranchUpdate={setCurrentBranch}
+    >
     <div className="flex h-screen bg-background">
       {/* WorkspaceSidebar - shown in session and settings views */}
       {showSidebar && (
@@ -1148,5 +1119,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         onSelect={handleOpenSession}
       />
     </div>
+    </FocusRefreshProvider>
   );
 };
