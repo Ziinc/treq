@@ -112,7 +112,7 @@ export const SplitWorkspaceDialog: React.FC<SplitWorkspaceDialogProps> = ({
       const fullPath = getFullWorkspacePath(workspace);
       setDataLoading(true);
       Promise.all([
-        getWorkspaceStatus(fullPath),
+        getWorkspaceStatus(repoPath, workspace.id),
         jjGetChangedFiles(fullPath),
         getWorkspaces(repoPath),
       ])

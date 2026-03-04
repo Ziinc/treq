@@ -7,6 +7,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
+import { Loader2 } from "lucide-react";
 
 interface LinearCommitHistoryProps {
   repoPath: string;
@@ -42,6 +43,9 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
   function LinearCommitHistory({ repoPath, workspaceId, onCommitClick }) {
     const [commits, setCommits] = useState<JjLogCommit[]>([]);
     const [loading, setLoading] = useState(true);
+    const [limit, setLimit] = useState(15);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const isHomeRepo = workspaceId == null;
 
     useEffect(() => {
       if (!repoPath) {
@@ -49,6 +53,7 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
         return;
       }
       setLoading(true);
+      setLimit(15);
       listCommits(repoPath, workspaceId)
         .then((result) => {
           // Skip the first commit (working copy / uncommitted @)
@@ -63,6 +68,20 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
           setLoading(false);
         });
     }, [repoPath, workspaceId]);
+
+    // Re-fetch when limit increases (beyond initial load)
+    useEffect(() => {
+      if (limit <= 15) return;
+      if (!isHomeRepo) return;
+      setLoadingMore(true);
+      listCommits(repoPath, workspaceId, false, undefined, limit)
+        .then((result) => {
+          const nextCommits = result?.commits ?? [];
+          setCommits(nextCommits.slice(1));
+        })
+        .catch(() => {})
+        .finally(() => setLoadingMore(false));
+    }, [limit, repoPath, workspaceId, isHomeRepo]);
 
     const dayGroups = useMemo(() => groupCommitsByDay(commits), [commits]);
 
@@ -121,6 +140,26 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
                 </ul>
               </div>
             ))}
+
+            {isHomeRepo && commits.length + 1 >= limit && (
+              <div className="mt-3 pl-7">
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  disabled={loadingMore}
+                  onClick={() => setLimit((prev) => prev + 15)}
+                >
+                  {loadingMore ? (
+                    <span className="flex items-center gap-1.5">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Loading...
+                    </span>
+                  ) : (
+                    "Load more commits"
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

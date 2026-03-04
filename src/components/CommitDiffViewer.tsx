@@ -3,6 +3,7 @@ import {
   jjGetLog,
   jjGetCommitDiff,
   abandonCommit,
+  listCommits,
   type JjLogCommit,
   type JjRevisionDiff,
   type JjDiffHunk,
@@ -92,6 +93,10 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
     onCommitAbandoned,
   }) {
     const [commits, setCommits] = useState<JjLogCommit[]>([]);
+    const [targetBranchCommits, setTargetBranchCommits] = useState<JjLogCommit[]>([]);
+    const [targetBranchLimit, setTargetBranchLimit] = useState(10);
+    const [homeRepoLimit, setHomeRepoLimit] = useState(15);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [loading, setLoading] = useState(true);
     const [expandedCommits, setExpandedCommits] = useState<Set<string>>(
       new Set()
@@ -108,7 +113,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
     const [removingCommitIds, setRemovingCommitIds] = useState<Set<string>>(new Set());
     const { addToast } = useToast();
 
-    const canMove = !!(workspaceId !== null && workspaceId !== undefined && repoPath);
+    const canAction = !!(workspaceId !== null && workspaceId !== undefined && repoPath);
 
     const handleMoveToNew = useCallback((commit: JjLogCommit) => {
       setMoveTarget(commit);
@@ -165,6 +170,8 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
         return;
       }
       setLoading(true);
+      setTargetBranchLimit(10);
+      setHomeRepoLimit(15);
       jjGetLog(workspacePath, targetBranch, isHomeRepo)
         .then((result) => {
           const nextCommits = result?.commits ?? [];
@@ -175,7 +182,47 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
           setCommits([]);
         })
         .finally(() => setLoading(false));
-    }, [workspacePath, targetBranch, isHomeRepo]);
+
+      // Fetch target branch history for workspaces
+      if (!isHomeRepo && workspaceId != null) {
+        listCommits(repoPath, workspaceId, true)
+          .then((result) => {
+            setTargetBranchCommits(result?.target_branch_commits ?? []);
+          })
+          .catch(() => {
+            setTargetBranchCommits([]);
+          });
+      } else {
+        setTargetBranchCommits([]);
+      }
+    }, [workspacePath, targetBranch, isHomeRepo, repoPath, workspaceId]);
+
+    // Re-fetch target branch commits when limit changes (beyond initial load)
+    useEffect(() => {
+      if (targetBranchLimit <= 10) return; // initial load handled above
+      if (isHomeRepo || workspaceId == null) return;
+      setLoadingMore(true);
+      listCommits(repoPath, workspaceId, true, targetBranchLimit)
+        .then((result) => {
+          setTargetBranchCommits(result?.target_branch_commits ?? []);
+        })
+        .catch(() => {})
+        .finally(() => setLoadingMore(false));
+    }, [targetBranchLimit, repoPath, workspaceId, isHomeRepo]);
+
+    // Re-fetch home repo commits when limit changes (beyond initial load)
+    useEffect(() => {
+      if (homeRepoLimit <= 15) return; // initial load handled above
+      if (!isHomeRepo || !workspacePath || !targetBranch) return;
+      setLoadingMore(true);
+      jjGetLog(workspacePath, targetBranch, true, homeRepoLimit)
+        .then((result) => {
+          const nextCommits = result?.commits ?? [];
+          setCommits(nextCommits.slice(1)); // Skip working copy
+        })
+        .catch(() => {})
+        .finally(() => setLoadingMore(false));
+    }, [homeRepoLimit, workspacePath, targetBranch, isHomeRepo]);
 
     // Scroll to commit when scrollToCommitId changes
     useEffect(() => {
@@ -280,6 +327,11 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
       [commits]
     );
 
+    const targetBranchDayGroups = useMemo(
+      () => groupCommitsByDay(targetBranchCommits),
+      [targetBranchCommits]
+    );
+
     if (loading) {
       return (
         <div className="h-full flex items-center justify-center p-4">
@@ -332,7 +384,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                           isExpanded={isExpanded}
                           diffData={diffData}
                           onToggle={() => toggleCommit(commit.commit_id)}
-                          canMove={canMove && !commit.is_immutable}
+                          canAction={canAction && !commit.is_immutable}
                           isRemoving={removingCommitIds.has(commit.commit_id)}
                           onMoveToNew={handleMoveToNew}
                           onMoveToExisting={handleMoveToExisting}
@@ -343,11 +395,88 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                   </div>
                 </div>
               ))}
+
+              {isHomeRepo && commits.length + 1 >= homeRepoLimit && (
+                <div className="mt-3 pl-7">
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    disabled={loadingMore}
+                    onClick={() => setHomeRepoLimit((prev) => prev + 15)}
+                  >
+                    {loadingMore ? (
+                      <span className="flex items-center gap-1.5">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Loading...
+                      </span>
+                    ) : (
+                      "Load more commits"
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {!isHomeRepo && targetBranchCommits.length > 0 && (
+                <>
+                  <div className="border-t border-border my-4 mx-2" />
+                  <p className="text-xs font-semibold text-muted-foreground mb-2 pl-7">
+                    Recent on {targetBranch}
+                  </p>
+                  {targetBranchDayGroups.map((group) => (
+                    <div key={`tb-${group.dayKey}`} className="mt-5 first:mt-0">
+                      <p className="text-xs font-semibold text-muted-foreground mb-1 pl-7">
+                        {group.label}
+                      </p>
+                      <div className="space-y-0">
+                        {group.commits.map((commit) => {
+                          const isExpanded = expandedCommits.has(commit.commit_id);
+                          const diffData = commitDiffs.get(commit.commit_id);
+
+                          return (
+                            <CommitWithDiff
+                              key={commit.commit_id}
+                              commit={commit}
+                              isFirst={false}
+                              isExpanded={isExpanded}
+                              diffData={diffData}
+                              onToggle={() => toggleCommit(commit.commit_id)}
+                              canAction={false}
+                              isRemoving={false}
+                              onMoveToNew={() => {}}
+                              onMoveToExisting={() => {}}
+                              onAbandon={() => {}}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                  {targetBranchCommits.length >= targetBranchLimit && (
+                    <div className="mt-3 pl-7">
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        disabled={loadingMore}
+                        onClick={() => setTargetBranchLimit((prev) => prev + 10)}
+                      >
+                        {loadingMore ? (
+                          <span className="flex items-center gap-1.5">
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            Loading...
+                          </span>
+                        ) : (
+                          "Load more commits"
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>
 
-        {canMove && moveTarget && (
+        {canAction && moveTarget && (
           <>
             <MoveCommitToNewWorkspaceDialog
               open={showNewDialog}
@@ -388,7 +517,7 @@ interface CommitWithDiffProps {
     error?: string;
   };
   onToggle: () => void;
-  canMove: boolean;
+  canAction: boolean;
   isRemoving: boolean;
   onMoveToNew: (commit: JjLogCommit) => void;
   onMoveToExisting: (commit: JjLogCommit) => void;
@@ -401,7 +530,7 @@ function CommitWithDiff({
   isExpanded,
   diffData,
   onToggle,
-  canMove,
+  canAction,
   isRemoving,
   onMoveToNew,
   onMoveToExisting,
@@ -476,7 +605,7 @@ function CommitWithDiff({
       {/* Expanded diff content */}
       {isExpanded && (
         <div className="ml-7 mb-3">
-          {canMove && (
+          {canAction && (
             <div className="flex items-center gap-2 mb-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

@@ -221,12 +221,7 @@ fn handle_workspace_status(matches: &Matches) {
                 }
             };
 
-            let workspace_full_path = Path::new(&repo_path)
-                .join(".treq")
-                .join("workspaces")
-                .join(&workspace.workspace_path);
-
-            match core::workspace_status(workspace_full_path.to_str().unwrap()) {
+            match core::workspace_status(&repo_path, Some(workspace.id)) {
                 Ok(status) => {
                     print_workspace_status_detail(&status);
                 }

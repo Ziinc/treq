@@ -207,9 +207,10 @@ pub fn cleanup_stale_workspaces(repo_path: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn get_workspace_status(
-    workspace_path: String,
+    repo_path: String,
+    workspace_id: Option<i64>,
 ) -> Result<crate::core::WorkspaceStatus, String> {
-    crate::core::workspace_status(&workspace_path)
+    crate::core::workspace_status(&repo_path, workspace_id)
 }
 
 #[tauri::command]
@@ -415,7 +416,7 @@ pub fn check_and_rebase_workspaces(
 pub fn pull_workspace_from_remote(
     state: State<AppState>,
     repo_path: String,
-    workspace_id: i64,
+    workspace_id: Option<i64>,
 ) -> Result<crate::core::PullWorkspaceResult, String> {
     let conflict_style = state.db.lock().unwrap()
         .get_setting("conflict_marker_style")
