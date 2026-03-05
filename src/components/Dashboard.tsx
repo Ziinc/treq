@@ -12,8 +12,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
-import { SplitWorkspaceDialog } from "./SplitWorkspaceDialog";
+import { CreateWorkspaceDialog, type DialogMode } from "./CreateWorkspaceDialog";
 import { CommandPalette } from "./CommandPalette";
 import { WorkspacePicker } from "./WorkspacePicker";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
@@ -29,7 +28,6 @@ import { SettingsPage } from "./SettingsPage";
 import { MergePreviewPage } from "./MergePreviewPage";
 import { useToast } from "./ui/toast";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
-import { useCreateStackedWorkspace } from "../hooks/useCreateStackedWorkspace";
 import { useWorkspaceHierarchy } from "../hooks/useWorkspaceHierarchy";
 import {
   FocusRefreshProvider,
@@ -82,8 +80,7 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-workspace" }) => {
   const [repoPath, setRepoPath] = useState("");
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [showSplitDialog, setShowSplitDialog] = useState(false);
+  const [createDialogMode, setCreateDialogMode] = useState<DialogMode | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
   const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(
     null
@@ -113,7 +110,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
 
   const queryClient = useQueryClient();
   const { addToast } = useToast();
-  const { createStackedWorkspace } = useCreateStackedWorkspace();
   const handleReturnToDashboard = useCallback(() => {
     // Navigate to main repo ShowWorkspace > Code
     setSelectedWorkspace(null);
@@ -134,10 +130,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     }
   }, [selectedWorkspace]);
 
-  const [isCreatingStack, setIsCreatingStack] = useState(false);
-
-  const handleCreateStackedWorkspace = useCallback(async () => {
-    if (!repoPath || isCreatingStack) return;
+  const handleCreateStackedWorkspace = useCallback(() => {
+    if (!repoPath) return;
 
     const parentBranch = selectedWorkspace?.branch_name || currentBranch;
     if (!parentBranch) {
@@ -149,45 +143,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
       return;
     }
 
-    setIsCreatingStack(true);
-    try {
-      const workspaceId = await createStackedWorkspace({
-        repoPath,
-        parentBranch,
-        parentWorkspace: selectedWorkspace,
-      });
-
-      const updatedWorkspaces = await queryClient.fetchQuery({
-        queryKey: ["workspaces", repoPath],
-        queryFn: () => getWorkspaces(repoPath),
-      });
-
-      const newWorkspace = updatedWorkspaces.find((w) => w.id === workspaceId);
-      if (newWorkspace) {
-        setSelectedWorkspace(newWorkspace);
-        setViewMode("show-workspace");
-      }
-    } finally {
-      setIsCreatingStack(false);
-    }
-  }, [
-    repoPath,
-    isCreatingStack,
-    selectedWorkspace,
-    currentBranch,
-    createStackedWorkspace,
-    queryClient,
-    addToast,
-  ]);
+    setCreateDialogMode({
+      type: "stack",
+      parentWorkspace: selectedWorkspace,
+      parentBranch,
+      position: "after",
+    });
+  }, [repoPath, selectedWorkspace, currentBranch, addToast]);
 
   // Keyboard shortcuts
   useKeyboardShortcut("n", true, () => {
-    setShowCreateDialog(true);
+    setCreateDialogMode({ type: "create" });
   });
 
   useKeyboardShortcut("n", true, () => {
     handleCreateStackedWorkspace();
-  }, [selectedWorkspace, currentBranch, createStackedWorkspace], { shift: true });
+  }, [selectedWorkspace, currentBranch], { shift: true });
 
   useKeyboardShortcut("k", true, () => {
     setShowCommandPalette(true);
@@ -198,7 +169,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   });
 
   useKeyboardShortcut("Escape", false, () => {
-    if (showCreateDialog) setShowCreateDialog(false);
+    if (createDialogMode) setCreateDialogMode(null);
     if (showCommandPalette) setShowCommandPalette(false);
     if (showFilePicker) setShowFilePicker(false);
   });
@@ -611,51 +582,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     []
   );
 
-  const { addAfter, addBefore, moveWorkspace } = useWorkspaceHierarchy({
+  const { moveWorkspace } = useWorkspaceHierarchy({
     repoPath,
     workspaces,
     defaultBranch: currentBranch || "main",
   });
 
-  const handleAddAfter = useCallback(async (workspace: Workspace) => {
-    try {
-      const newId = await addAfter(workspace);
-      const updatedWorkspaces = await queryClient.fetchQuery({
-        queryKey: ["workspaces", repoPath],
-        queryFn: () => getWorkspaces(repoPath),
-      });
-      const newWorkspace = updatedWorkspaces.find(w => w.id === newId);
-      if (newWorkspace) {
-        handleSelectWorkspace(newWorkspace);
-      }
-    } catch (error) {
-      addToast({
-        title: "Failed to add workspace",
-        description: error instanceof Error ? error.message : String(error),
-        type: "error",
-      });
-    }
-  }, [addAfter, repoPath, queryClient, addToast, handleSelectWorkspace]);
+  const handleAddAfter = useCallback((workspace: Workspace) => {
+    setCreateDialogMode({
+      type: "stack",
+      parentWorkspace: workspace,
+      parentBranch: workspace.branch_name,
+      position: "after",
+    });
+  }, []);
 
-  const handleAddBefore = useCallback(async (workspace: Workspace) => {
-    try {
-      const newId = await addBefore(workspace);
-      const updatedWorkspaces = await queryClient.fetchQuery({
-        queryKey: ["workspaces", repoPath],
-        queryFn: () => getWorkspaces(repoPath),
-      });
-      const newWorkspace = updatedWorkspaces.find(w => w.id === newId);
-      if (newWorkspace) {
-        handleSelectWorkspace(newWorkspace);
-      }
-    } catch (error) {
-      addToast({
-        title: "Failed to add workspace",
-        description: error instanceof Error ? error.message : String(error),
-        type: "error",
-      });
-    }
-  }, [addBefore, repoPath, queryClient, addToast, handleSelectWorkspace]);
+  const handleAddBefore = useCallback((workspace: Workspace) => {
+    setCreateDialogMode({
+      type: "stack",
+      parentWorkspace: workspace,
+      parentBranch: workspace.branch_name,
+      position: "before",
+    });
+  }, []);
 
   const handleMoveWorkspace = useCallback(async (workspace: Workspace, targetBranch: string | null) => {
     try {
@@ -856,7 +805,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
           onWorkspaceMultiSelect={handleWorkspaceMultiSelect}
           onBulkDelete={handleBulkDelete}
           onDeleteWorkspace={handleDelete}
-          onCreateWorkspace={() => setShowCreateDialog(true)}
+          onCreateWorkspace={() => setCreateDialogMode({ type: "create" })}
           openSettings={openSettings}
           navigateToDashboard={handleReturnToDashboard}
           onOpenCommandPalette={() => setShowCommandPalette(true)}
@@ -870,7 +819,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
               ? "settings"
               : viewMode === "session" || viewMode === "show-workspace"
               ? "session"
-              : null
+              : undefined
           }
         />
       )}
@@ -900,8 +849,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
                     onOpenMergePreview={handleOpenMergePreview}
                     onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
                     onCreateStackedWorkspace={handleCreateStackedWorkspace}
-                    stackCreating={isCreatingStack}
-                    onSplitWorkspace={selectedWorkspace ? () => setShowSplitDialog(true) : undefined}
+                    onSplitWorkspace={selectedWorkspace ? () => setCreateDialogMode({ type: "split", workspace: selectedWorkspace }) : undefined}
                     queryClient={queryClient}
                     onSessionCreated={(sessionData) => {
                       queryClient.invalidateQueries({
@@ -1036,46 +984,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
       {/* Note: MergeDialog removed - git-specific feature */}
 
       <CreateWorkspaceDialog
-        open={showCreateDialog}
-        onOpenChange={setShowCreateDialog}
+        open={createDialogMode !== null}
+        onOpenChange={(open) => { if (!open) setCreateDialogMode(null); }}
         repoPath={repoPath}
+        mode={createDialogMode ?? { type: "create" }}
         onSuccess={async (workspaceId) => {
-          // Invalidate and refetch workspaces
           await queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
-      queryClient.invalidateQueries({ queryKey: ["workspace-statuses", repoPath] });
-          // Force refetch to get the latest data
+          queryClient.invalidateQueries({ queryKey: ["workspace-statuses", repoPath] });
           const updatedWorkspaces = await queryClient.fetchQuery({
             queryKey: ["workspaces", repoPath],
             queryFn: () => getWorkspaces(repoPath),
           });
-          // Find the newly created workspace and navigate to it
           const newWorkspace = updatedWorkspaces.find((w) => w.id === workspaceId);
           if (newWorkspace) {
             handleOpenSession(newWorkspace);
           }
         }}
       />
-
-      {selectedWorkspace && (
-        <SplitWorkspaceDialog
-          open={showSplitDialog}
-          onOpenChange={setShowSplitDialog}
-          workspace={selectedWorkspace}
-          repoPath={repoPath}
-          onSplit={async (newWorkspaceId) => {
-            await queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
-            queryClient.invalidateQueries({ queryKey: ["workspace-statuses", repoPath] });
-            const updatedWorkspaces = await queryClient.fetchQuery({
-              queryKey: ["workspaces", repoPath],
-              queryFn: () => getWorkspaces(repoPath),
-            });
-            const newWorkspace = updatedWorkspaces.find((w) => w.id === newWorkspaceId);
-            if (newWorkspace) {
-              handleOpenSession(newWorkspace);
-            }
-          }}
-        />
-      )}
 
       <CommandPalette
         showCommandPalette={showCommandPalette}
@@ -1089,7 +1014,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         onOpenFilePicker={() => setShowFilePicker(true)}
         onOpenWorkspacePicker={() => setShowWorkspacePicker(true)}
         onOpenWorkspaceDeletion={() => setShowWorkspaceDeletion(true)}
-        onCreateWorkspace={() => setShowCreateDialog(true)}
+        onCreateWorkspace={() => setCreateDialogMode({ type: "create" })}
         onToggleTerminal={() => terminalPaneRef.current?.toggleCollapse()}
         onMaximizeTerminal={() => terminalPaneRef.current?.toggleMaximize()}
         onCreateAgentTerminal={() => terminalPaneRef.current?.createAgentSession()}

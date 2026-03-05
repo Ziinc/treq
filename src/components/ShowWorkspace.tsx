@@ -104,7 +104,6 @@ interface ShowWorkspaceProps {
   onOpenMergePreview?: () => void;
   onOpenBranchSwitcher?: () => void;
   onCreateStackedWorkspace?: () => void;
-  stackCreating?: boolean;
   onSplitWorkspace?: () => void;
   queryClient?: QueryClient;
 }
@@ -120,7 +119,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   onOpenMergePreview,
   onOpenBranchSwitcher,
   onCreateStackedWorkspace,
-  stackCreating,
   onSplitWorkspace,
 }) {
   const workingDirectory = workspace ? getFullWorkspacePath(workspace) : (repositoryPath || "");
@@ -1190,21 +1188,14 @@ const handleSync = useCallback(async () => {
                           variant="default"
                           size="sm"
                           onClick={onCreateStackedWorkspace}
-                          disabled={stackCreating}
                           className="gap-1 px-2 py-1"
                         >
-                          {stackCreating ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Layers className="w-4 h-4" />
-                          )}
+                          <Layers className="w-4 h-4" />
                           Stack
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        {stackCreating
-                          ? "Creating stacked workspace..."
-                          : `Create stacked workspace from ${branchTitle}`}
+                        {`Create stacked workspace from ${branchTitle}`}
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -1234,20 +1225,14 @@ const handleSync = useCallback(async () => {
                           variant="default"
                           size="sm"
                           onClick={onCreateStackedWorkspace}
-                          disabled={stackCreating || rebasing || conflictedFiles.length > 0}
+                          disabled={rebasing || conflictedFiles.length > 0}
                         >
-                          {stackCreating ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Layers className="w-4 h-4" />
-                          )}
+                          <Layers className="w-4 h-4" />
                           Stack
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        {stackCreating
-                          ? "Creating stacked workspace..."
-                          : rebasing
+                        {rebasing
                           ? "Rebasing in progress..."
                           : conflictedFiles.length > 0
                           ? `Cannot stack: ${conflictedFiles.length} conflict${conflictedFiles.length === 1 ? '' : 's'} detected`
