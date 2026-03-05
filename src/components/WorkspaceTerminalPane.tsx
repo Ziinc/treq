@@ -560,7 +560,7 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
           {/* Pane Header */}
           <div className="h-8 min-h-[32px] flex items-center justify-between px-2 border-b bg-muted/30 flex-shrink-0">
             <div className="flex items-center gap-2 font-medium text-muted-foreground">
-              <Terminal className="w-3.5 h-3.5" />
+              <Terminal className="w-4 h-4" />
               <span>Terminals</span>
               {totalTerminals > 0 && (
                 <span className="text-xs bg-muted px-1.5 py-0.5 rounded">
@@ -701,21 +701,22 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
                 // Each terminal gets min 40% of scroll container viewport width
                 const minTerminalPx = containerWidth * 0.4 || 300;
                 const groupMinWidth = group.terminals.length * minTerminalPx;
+                const groupMaxWidth = workspaceGroups.length > 1 && group.terminals.length === 1 ? containerWidth * 0.5 : undefined;
                 return (
-                <div key={group.workspaceKey} data-workspace-group={group.workspaceKey} className={cn("flex flex-col min-h-0 flex-shrink-0", groupIndex > 0 && "border-l-2 border-border")} style={{ minWidth: groupMinWidth, flex: "1 0 auto" }}>
+                <div key={group.workspaceKey} data-workspace-group={group.workspaceKey} className={cn("flex flex-col min-h-0 flex-shrink-0", groupIndex > 0 && "border-l-2 border-border")} style={{ minWidth: groupMinWidth, maxWidth: groupMaxWidth, flex: "1 0 auto" }}>
                   {/* Horizontal workspace indicator header - sticky so it stays visible when scrolling */}
                   <div
-                    className="h-8 flex items-center gap-2 px-2 border-b border-border bg-muted/20 flex-shrink-0 sticky left-0 z-10 overflow-hidden cursor-pointer hover:bg-muted/40 transition-colors"
+                    className="h-8 flex items-center gap-2 px-2 border-b border-border bg-gray-700/100 flex-shrink-0 sticky left-0 z-10 overflow-hidden cursor-pointer hover:bg-muted/40 transition-colors"
                     style={{ width: containerWidth > 0 ? containerWidth : undefined }}
                     onClick={() => onNavigateToWorkspace?.(group.workspaceKey, group.isMainRepo)}
                   >
                     {group.isMainRepo ? (
-                      <Home className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                      <Home className="w-4 h-4 text-gray-200 flex-shrink-0" />
                     ) : (
-                      <GitBranch className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                      <GitBranch className="w-4 h-4 text-gray-200 flex-shrink-0" />
                     )}
                     <span
-                      className="text-sm text-muted-foreground font-mono truncate"
+                      className="text-sm text-gray-200 truncate font-mono"
                       title={group.isMainRepo ? (currentBranch || "main") : group.workspaceName}
                     >
                       {group.isMainRepo ? (currentBranch || "main") : group.workspaceName}

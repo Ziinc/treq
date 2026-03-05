@@ -203,7 +203,7 @@ const CodeLine = memo(function CodeLine({
               className="w-5 h-5 flex items-center justify-center rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors"
               title="Add comment"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-4 h-4" />
             </button>
           )}
         </span>
@@ -377,7 +377,7 @@ const FileContentView = memo(function FileContentView({
                   onClick={handleCopyPath}
                   className="p-1 hover:bg-muted rounded transition-colors text-muted-foreground hover:text-foreground"
                 >
-                  {copiedPath ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copiedPath ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                 </button>
               </TooltipTrigger>
               <TooltipContent>

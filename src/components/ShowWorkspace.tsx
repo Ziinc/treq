@@ -946,9 +946,9 @@ const handleSync = useCallback(async () => {
                   className={showCommittedChanges ? "bg-blue-500/20 hover:bg-blue-500/30 text-blue-700 dark:text-blue-300" : ""}
                 >
                   {showCommittedChanges ? (
-                    <Eye className="w-3.5 h-3.5 mr-1.5" />
+                    <Eye className="w-4 h-4 mr-1.5" />
                   ) : (
-                    <EyeOff className="w-3.5 h-3.5 mr-1.5" />
+                    <EyeOff className="w-4 h-4 mr-1.5" />
                   )}
                   Committed
                 </Button>
@@ -1194,9 +1194,9 @@ const handleSync = useCallback(async () => {
                           className="gap-1 px-2 py-1"
                         >
                           {stackCreating ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <Loader2 className="w-4 h-4 animate-spin" />
                           ) : (
-                            <Layers className="w-3.5 h-3.5" />
+                            <Layers className="w-4 h-4" />
                           )}
                           Stack
                         </Button>

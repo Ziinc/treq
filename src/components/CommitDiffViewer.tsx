@@ -608,7 +608,7 @@ function CommitWithDiff({
           <div className="flex items-center gap-1.5">
             <ChevronRight
               className={cn(
-                "w-3.5 h-3.5 text-muted-foreground transition-transform flex-shrink-0",
+                "w-4 h-4 text-muted-foreground transition-transform flex-shrink-0",
                 isExpanded && "rotate-90"
               )}
             />
@@ -657,7 +657,7 @@ function CommitWithDiff({
                   <button
                     className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-md border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    <ArrowRightLeft className="w-3.5 h-3.5" />
+                    <ArrowRightLeft className="w-4 h-4" />
                     Move commit
                   </button>
                 </DropdownMenuTrigger>
@@ -675,7 +675,7 @@ function CommitWithDiff({
                 onClick={() => onAbandon(commit)}
                 disabled={isRemoving}
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <Trash2 className="w-4 h-4" />
                 Delete commit
               </button>
             </div>
@@ -683,7 +683,7 @@ function CommitWithDiff({
           <div className="border border-border rounded-md overflow-hidden">
           {diffData?.loading ? (
             <div className="flex items-center gap-2 p-3 text-sm text-muted-foreground">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <Loader2 className="w-4 h-4 animate-spin" />
               Loading diff...
             </div>
           ) : diffData?.error ? (
@@ -964,11 +964,11 @@ function CommitDiffContent({ diff, onCreateAgentWithComment }: CommitDiffContent
             >
               <ChevronRight
                 className={cn(
-                  "w-3.5 h-3.5 text-muted-foreground transition-transform flex-shrink-0",
+                  "w-4 h-4 text-muted-foreground transition-transform flex-shrink-0",
                   isFileExpanded && "rotate-90"
                 )}
               />
-              <FileText className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+              <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
               <span className="text-sm font-mono truncate flex-1">
                 {file.path}
               </span>

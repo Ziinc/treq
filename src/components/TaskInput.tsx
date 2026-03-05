@@ -366,7 +366,7 @@ export const TaskInput: React.FC<TaskInputProps> = ({
                 className="h-7 text-xs px-2 gap-1"
                 onClick={() => setFilePickerOpen(true)}
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="w-4 h-4" />
                 File
               </Button>
               <Button
@@ -375,7 +375,7 @@ export const TaskInput: React.FC<TaskInputProps> = ({
                 className="h-7 text-xs px-2 gap-1"
                 onClick={handleAttachFromFinder}
               >
-                <Paperclip className="w-3.5 h-3.5" />
+                <Paperclip className="w-4 h-4" />
                 Attach
               </Button>
             </div>
