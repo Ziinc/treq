@@ -286,7 +286,7 @@ Worktrees let you work on multiple branches simultaneously, each in its own dire
 
 Choose **Create new branch** and enter a name like `add-user-profile`. Treq applies your branch naming pattern (default: `treq/{name}`). Alternatively, select **From existing branch** to check out an existing local or remote branch.
 
-Select a **base branch** (usually `main`) and optionally add a **plan title** to remember what you're working on. Click **Create Worktree**—Treq creates the directory, checks out the branch, and runs any configured post-create commands.
+Select a **base branch** (usually `main`) and optionally add a **plan title** to remember what you're working on. Click **Create Worktree**—Treq creates the directory and checks out the branch.
 
 ## Working in Your Worktree
 
@@ -294,7 +294,7 @@ Click **Open** on the worktree card to open a terminal session. The working dire
 
 ## Configuration
 
-Configure branch naming patterns in Settings → Repository → Branch Pattern. Examples: `treq/{name}`, `feature/{name}`, or `{user}/{name}`. Post-create commands (like `npm install`) run automatically after creation.
+Configure branch naming patterns in Settings → Repository → Branch Pattern. Examples: `treq/{name}`, `feature/{name}`, or `{user}/{name}`.
 
 ## Troubleshooting
 

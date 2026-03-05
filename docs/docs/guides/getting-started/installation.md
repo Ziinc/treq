@@ -20,7 +20,7 @@ Download the latest version for your platform from the [GitHub Releases page](ht
 
 Click **Select Repository** or the folder icon, navigate to a Git repository, and select the folder containing `.git`. Treq verifies the repository, checks for existing worktrees, and initializes the `.treq` folder for metadata.
 
-Optionally configure settings through the gear icon: branch naming pattern, post-create commands (like `npm install`), and terminal preferences. You can change these anytime.
+Optionally configure settings through the gear icon: branch naming pattern and terminal preferences. You can change these anytime.
 
 ## Troubleshooting
 

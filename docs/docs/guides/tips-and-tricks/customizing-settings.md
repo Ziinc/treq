@@ -12,8 +12,6 @@ Open settings with the gear icon (⚙️) in the sidebar. Settings are split int
 
 **Branch naming pattern**: Construct branch names using variables like `{name}` (intent from plan), `{user}` (git username), and `{date}` (YYYY-MM-DD). Examples: `feature/{name}`, `dev/{user}`, `bugfix/{name}-{date}`.
 
-**Post-create commands**: Commands to run after creating worktrees, such as `npm ci` or `npm ci && npm run build && npm run dev`. Useful for installing dependencies or starting dev servers automatically.
-
 **Copy files**: If dependencies are already present in the repository, use this to copy specific files or directories from `.gitignore` (like `node_modules/`) to new worktrees instead of reinstalling.
 
 ## Terminal Settings

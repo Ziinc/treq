@@ -28,7 +28,7 @@ Your main repository remains untouched at the root. All worktrees live in `.treq
 
 Click **Select Repository** or the folder icon, navigate to your project's root (the folder containing `.git`), and open it. Treq verifies it's a valid Git repository, creates the `.treq/` structure, scans for existing worktrees, and displays the dashboard.
 
-Configure repository-specific settings in Settings → Repository Settings. Set your **branch naming pattern** (e.g., `treq/{name}` or `feature/{name}`) and **post-create commands** (e.g., `npm install` or `pip install -r requirements.txt`) to run automatically after creating worktrees.
+Configure repository-specific settings in Settings → Repository Settings. Set your **branch naming pattern** (e.g., `treq/{name}` or `feature/{name}`).
 
 ## Main Repository vs Worktrees
 
