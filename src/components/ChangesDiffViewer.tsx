@@ -2024,18 +2024,6 @@ export const ChangesDiffViewer = memo(
         setSelectedStagedFiles(new Set());
       }, []);
 
-      // Discard selected staged files
-      const handleDiscardSelectedStagedFiles = useCallback(() => {
-        selectedStagedFiles.forEach((path) => {
-          setStagedFiles((prev) => {
-            const next = new Set(prev);
-            next.delete(path);
-            return next;
-          });
-        });
-        setSelectedStagedFiles(new Set());
-      }, [selectedStagedFiles]);
-
       // Unstage all files
       const handleUnstageAllFiles = useCallback(() => {
         setStagedFiles(new Set());
@@ -3548,8 +3536,6 @@ export const ChangesDiffViewer = memo(
                               : null
                           }
                           onFileSelect={handleStagedFileSelect}
-                          onDiscardAll={handleDiscardSelectedStagedFiles}
-                          discardAllLabel="Discard selected changes"
                           onSelectAll={handleSelectAllStaged}
                           onUnstage={handleUnstageFile}
                           onUnstageAll={handleUnstageAllFiles}
