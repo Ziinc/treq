@@ -32,9 +32,6 @@ Treq provides a dashboard interface showing all worktrees in use, branch names a
 
 ### Automated Workflows
 
-**Post-create commands**: Treq allows you to configure commands that run automatically after creating a new worktree. For example, you might set up `npm install && npm run dev` to install dependencies and start a development server. These commands are stored per-repository, allowing different projects to have their own setup workflows.
-
-
 **Branch naming patterns**: You can customize branch naming patterns to maintain consistency across your team. For instance, you might use a pattern like `treq/{name}` to prefix all branches created through Treq. The system automatically sanitizes branch names to ensure they comply with Git's naming requirements.
 
 ### Parallel Agent Terminals
@@ -64,8 +61,7 @@ Each worktree can have multiple terminal sessions with independent shell environ
 1. User initiates creation (UI or CLI)
 2. Treq validates branch name and path
 3. Creates the worktree
-4. Runs post-create commands
-5. Opens terminal session (optional)
+4. Opens terminal session (optional)
 6. Updates dashboard
 
 ### Update Flow
@@ -113,7 +109,6 @@ Treq caches expensive git operations:
 Long-running operations run in background:
 - Repository scanning
 - Divergence calculation
-- Post-create commands
 
 ## Settings & Configuration
 
@@ -121,7 +116,6 @@ Long-running operations run in background:
 
 Scoped by repository path:
 - Branch naming pattern
-- Post-create commands
 - Default base branch
 - Ignored file patterns
 

@@ -28,7 +28,7 @@ The terminal supports all standard operations: `Cmd+C` to copy (or interrupt), `
 
 Configure terminal appearance in Settings → Terminal: font family (monospace fonts like Fira Code or JetBrains Mono), font size (12-16px recommended), default shell (bash, zsh, fish, or custom path), and scrollback buffer size.
 
-To run commands automatically when a worktree is created, configure post-create commands in Settings → Repository (e.g., `npm install && npm run dev`). For session-specific initialization, set environment variables with `export` or add logic to your shell's RC file.
+For session-specific initialization, set environment variables with `export` or add logic to your shell's RC file.
 
 ## Closing Sessions
 
