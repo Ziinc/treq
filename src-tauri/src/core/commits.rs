@@ -276,14 +276,10 @@ pub fn create_commit(
             let result = jj::jj_commit(workspace_dir_str, message)
                 .map_err(|e| format!("Failed to create commit: {}", e))?;
 
-            // Trigger auto-rebase in background (fire-and-forget)
-            let repo_path_owned = repo_path.to_string();
-            let workspace_dir_owned = workspace_dir.to_string_lossy().to_string();
-            std::thread::spawn(move || {
-                if let Ok(branch) = jj::get_workspace_branch(&workspace_dir_owned) {
-                    let _ = crate::auto_rebase::rebase_after_commit(&repo_path_owned, &branch);
-                }
-            });
+            // Run auto-rebase synchronously so jj state is settled before returning
+            if let Ok(branch) = jj::get_workspace_branch(workspace_dir_str) {
+                let _ = crate::auto_rebase::rebase_after_commit(repo_path, &branch);
+            }
 
             Ok(result)
         }
