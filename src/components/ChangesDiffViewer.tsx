@@ -537,7 +537,7 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
                   className="text-muted-foreground hover:text-foreground flex-shrink-0"
                   title="Copy file path"
                 >
-                  <Copy className="w-3.5 h-3.5" />
+                  <Copy className="w-4 h-4" />
                 </button>
               </div>
             </div>

@@ -566,7 +566,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
       const index = scopedSessions.length + 1;
       let name = options?.name;
       if (!name) {
-        name = `Claude Session ${index}`;
+        name = `Claude ${index}`;
       }
 
       const sessionId = await createSession(repoPath, workspaceId, name);

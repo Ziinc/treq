@@ -592,7 +592,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                         className="w-full gap-1 bg-secondary/50 hover:bg-secondary"
                         aria-label="Create new workspace"
                       >
-                        <GitBranchPlusIcon className="w-3.5 h-3.5" />
+                        <GitBranchPlusIcon className="w-4 h-4" />
                         <span className="truncate">Workspace</span>
                       </Button>
                     </TooltipTrigger>

@@ -602,7 +602,7 @@ export const SplitWorkspaceDialog: React.FC<SplitWorkspaceDialogProps> = ({
           <Button onClick={handleSplit} disabled={!canSubmit} variant="ghost">
             {loading ? (
               <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                <Loader2 className="w-4 h-4 animate-spin mr-1" />
                 Splitting...
               </>
             ) : (

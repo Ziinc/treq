@@ -7,6 +7,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "./ui/dropdown-menu";
+import { Button } from "./ui/button";
 
 interface ModelSelectorProps {
   currentModel: string | null;
@@ -47,14 +48,17 @@ export function ModelSelector({ currentModel, onModelChange, disabled }: ModelSe
         <Tooltip>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="xs"
                 disabled={disabled}
-                className="h-5 w-5 rounded-sm hover:bg-muted flex items-center justify-center opacity-60 hover:opacity-100 transition-opacity disabled:opacity-30"
+                className="bg-transparent text-gray-200 hover:bg-muted/20 hover:text-gray-200"
                 aria-label={`Model: ${getCurrentModelLabel()}`}
               >
-                <Sparkles className="w-3 h-3 text-muted-foreground" />
-              </button>
+                <Sparkles className="w-4 h-4 text-gray-200" />
+                {getCurrentModelLabel()}
+              </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
           <TooltipContent>{getCurrentModelLabel()}</TooltipContent>

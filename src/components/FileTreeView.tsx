@@ -160,7 +160,7 @@ export const FileTreeView: React.FC<FileTreeViewProps> = ({
             className="flex items-center gap-2 w-full px-2 py-1 rounded-md hover:bg-muted/60"
             onClick={() => toggleNode(node.path)}
           >
-            {isOpen ? <FolderOpen className="w-3.5 h-3.5" /> : <Folder className="w-3.5 h-3.5" />}
+            {isOpen ? <FolderOpen className="w-4 h-4" /> : <Folder className="w-4 h-4" />}
             <span className="font-medium text-left font-mono">{node.name}</span>
             {hasChanges && <StatusPip status="M" className="ml-auto" />}
           </button>
@@ -185,7 +185,7 @@ export const FileTreeView: React.FC<FileTreeViewProps> = ({
         )}
       >
         <div className="flex items-center gap-2">
-          <FileText className="w-3.5 h-3.5 text-muted-foreground" />
+          <FileText className="w-4 h-4 text-muted-foreground" />
           <span className="truncate text-left font-mono">{node.name}</span>
           <StatusPip status={node.status} />
         </div>

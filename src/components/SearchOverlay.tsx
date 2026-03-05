@@ -85,7 +85,7 @@ export function SearchOverlay({
               disabled={!query.trim()}
               aria-label="Find previous"
             >
-              <ChevronUp className="w-3.5 h-3.5" />
+              <ChevronUp className="w-4 h-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Previous (Shift+Enter)</TooltipContent>
@@ -103,7 +103,7 @@ export function SearchOverlay({
               disabled={!query.trim()}
               aria-label="Find next"
             >
-              <ChevronDown className="w-3.5 h-3.5" />
+              <ChevronDown className="w-4 h-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Next (Enter)</TooltipContent>
@@ -120,7 +120,7 @@ export function SearchOverlay({
               onClick={onClose}
               aria-label="Close search"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Close (Esc)</TooltipContent>
