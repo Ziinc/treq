@@ -32,6 +32,7 @@ import { MoveCommitToNewWorkspaceDialog } from "./MoveCommitToNewWorkspaceDialog
 import { MoveCommitToExistingWorkspaceDialog } from "./MoveCommitToExistingWorkspaceDialog";
 import { CommentInput } from "./CommentInput";
 import { useToast } from "./ui/toast";
+import { ask } from "@tauri-apps/plugin-dialog";
 
 interface CommitDiffViewerProps {
   workspacePath: string;
@@ -142,7 +143,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
       if (!repoPath || !workspaceId) return;
 
       const firstLine = commit.description.split("\n")[0] || "(no message)";
-      const confirmed = window.confirm(`Abandon this commit?\n\n${commit.short_id} — ${firstLine}`);
+      const confirmed = await ask(`Abandon commit ${commit.short_id} — ${firstLine}?`, { title: "Delete Commit", kind: "warning" });
       if (!confirmed) return;
 
       try {
