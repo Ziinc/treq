@@ -128,6 +128,7 @@ pub fn create_workspace(
     intent: Option<String>,
     moved_files: Option<Vec<String>>,
     source_branch: Option<&str>,
+    included_copy_files: Option<Vec<String>>,
 ) -> Result<local_db::Workspace, String> {
     // snapshot working copy of repo
     let _ = jj::jj_get_changed_files(repo_path);
@@ -169,6 +170,21 @@ pub fn create_workspace(
         .and_then(|name| name.to_str())
         .ok_or("Failed to extract workspace name from path")?
         .to_string();
+
+    // Copy included files/directories from repo to new workspace
+    if let Some(ref patterns) = included_copy_files {
+        if !patterns.is_empty() {
+            let ws_full = Path::new(repo_path)
+                .join(".treq")
+                .join("workspaces")
+                .join(&workspace_path);
+            copy_included_files(
+                repo_path,
+                ws_full.to_str().unwrap_or_default(),
+                patterns,
+            )?;
+        }
+    }
 
     let workspace_id = local_db::add_workspace(
         repo_path,
@@ -463,7 +479,7 @@ pub fn stack_workspace(
         None => format!("{}-1", base),
     };
 
-    let mut workspace = create_workspace(repo_path, &target, None, None, Some(&base))?;
+    let mut workspace = create_workspace(repo_path, &target, None, None, Some(&base), None)?;
 
     // Set the target_branch to the parent workspace's branch for conflict detection
     local_db::update_workspace_target_branch(repo_path, workspace.id, &base)
@@ -1180,6 +1196,7 @@ pub fn split_workspace(
                 intent.clone(),
                 None,
                 Some(&source_target),
+                None,
             )?;
 
             let new_full_path = Path::new(repo_path)
@@ -1381,4 +1398,54 @@ pub fn pull_workspace_from_remote(
         was_diverged: true,
         commits_rebased,
     })
+}
+
+/// Copies files/directories listed in `patterns` from `repo_path` into `workspace_dir`.
+/// Each pattern is an exact file or directory name relative to the repo root.
+/// Missing patterns are silently skipped.
+pub fn copy_included_files(
+    repo_path: &str,
+    workspace_dir: &str,
+    patterns: &[String],
+) -> Result<(), String> {
+    let repo = Path::new(repo_path);
+    let workspace = Path::new(workspace_dir);
+
+    for pattern in patterns {
+        let source = repo.join(pattern);
+        if !source.exists() {
+            continue;
+        }
+        let dest = workspace.join(pattern);
+        if source.is_file() {
+            if let Some(parent) = dest.parent() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| format!("Failed to create directory {:?}: {}", parent, e))?;
+            }
+            std::fs::copy(&source, &dest)
+                .map_err(|e| format!("Failed to copy file {:?}: {}", source, e))?;
+        } else if source.is_dir() {
+            copy_dir_recursive(&source, &dest)?;
+        }
+    }
+    Ok(())
+}
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(dst)
+        .map_err(|e| format!("Failed to create directory {:?}: {}", dst, e))?;
+    for entry in
+        std::fs::read_dir(src).map_err(|e| format!("Failed to read directory {:?}: {}", src, e))?
+    {
+        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if src_path.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else {
+            std::fs::copy(&src_path, &dst_path)
+                .map_err(|e| format!("Failed to copy file {:?}: {}", src_path, e))?;
+        }
+    }
+    Ok(())
 }

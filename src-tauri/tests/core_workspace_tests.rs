@@ -30,6 +30,7 @@ fn test_can_create_workspace() {
         Some("new feature".to_string()),
         None, // moved_files
         None, // source_branch (defaults to current)
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -116,6 +117,7 @@ fn test_can_create_workspace_from_remote_branch() {
         Some("feature-remote".to_string()),
         None, // moved_files
         None,
+        None,
     )
     .expect("Failed to create workspace from remote branch");
 
@@ -168,6 +170,7 @@ fn test_can_create_stacked_workspace() {
         &repo.repo_path,
         "feat/base",
         Some("feature-base".to_string()),
+        None,
         None,
         None,
     )
@@ -292,6 +295,7 @@ fn test_can_merge_workspace_into_home_repo() {
         &repo.repo_path,
         "feature-merge",
         Some("merging feature".to_string()),
+        None,
         None,
         None,
     )
@@ -434,6 +438,7 @@ fn test_can_squash_merge_workspace_into_home_repo() {
         Some("squashing feature".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -492,6 +497,7 @@ fn test_can_rebase_merge_workspace_into_home_repo() {
         &repo.repo_path,
         "feature-rebase",
         Some("rebasing feature".to_string()),
+        None,
         None,
         None,
     )
@@ -563,6 +569,7 @@ fn test_can_delete_workspace() {
         Some("delete feature".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
     let workspace_name = workspace.workspace_name;
@@ -621,6 +628,7 @@ fn test_can_update_workspace() {
         Some("initial feature".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -653,6 +661,7 @@ fn test_update_workspace_target_branch_perform_rebase() {
         &repo.repo_path,
         "feat/initial",
         Some("initial feature".to_string()),
+        None,
         None,
         None,
     )
@@ -729,6 +738,7 @@ fn test_can_list_workspaces() {
         Some("feature-a".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
     treq_lib::core::create_workspace(
@@ -737,12 +747,14 @@ fn test_can_list_workspaces() {
         Some("feature-b".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
     treq_lib::core::create_workspace(
         &repo.repo_path,
         "feat/c",
         Some("feature-c".to_string()),
+        None,
         None,
         None,
     )
@@ -781,6 +793,7 @@ fn test_workspace_conflict_detection() {
         &repo.repo_path,
         "base",
         Some("feature-base".to_string()),
+        None,
         None,
         None,
     )
@@ -938,6 +951,7 @@ fn test_push_workspace_to_remote() {
         Some("test workspace".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1001,6 +1015,7 @@ fn test_push_home_repo_to_remote() {
         Some("test".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1056,6 +1071,7 @@ fn test_moved_files_from_main_repo() {
         "feat/refactor",
         Some("refactor code".to_string()),
         Some(moved_files.clone()),
+        None,
         None,
     )
     .expect("Failed to create workspace");
@@ -1118,6 +1134,7 @@ fn test_split_workspace_move_files_after() {
         &repo.repo_path,
         "feat/source",
         Some("source feature".to_string()),
+        None,
         None,
         None,
     )
@@ -1206,6 +1223,7 @@ fn test_split_workspace_move_files_before() {
         &repo.repo_path,
         "feat/source-before",
         Some("source feature".to_string()),
+        None,
         None,
         None,
     )
@@ -1298,6 +1316,7 @@ fn test_split_workspace_copy_files_after() {
         Some("copy source".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create source workspace");
 
@@ -1359,6 +1378,7 @@ fn test_split_workspace_copy_files_before() {
         &repo.repo_path,
         "feat/copy-source-before",
         Some("copy before source".to_string()),
+        None,
         None,
         None,
     )
@@ -1424,6 +1444,7 @@ fn test_split_workspace_move_commits_after() {
         &repo.repo_path,
         "feat/commit-source",
         Some("commit source".to_string()),
+        None,
         None,
         None,
     )
@@ -1506,6 +1527,7 @@ fn test_split_workspace_move_commits_before() {
         &repo.repo_path,
         "feat/commit-before-source",
         Some("commit before source".to_string()),
+        None,
         None,
         None,
     )
@@ -1593,6 +1615,7 @@ fn test_moved_files_from_workspace_to_workspace() {
         Some("base feature".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create base workspace");
 
@@ -1617,6 +1640,7 @@ fn test_moved_files_from_workspace_to_workspace() {
         Some("extract components".to_string()),
         Some(moved_files.clone()),
         Some("feat/base"),
+        None,
     )
     .expect("Failed to create stacked workspace");
 
@@ -1661,6 +1685,7 @@ fn test_rename_workspace_dry_run_valid_name() {
         &repo.repo_path,
         "feat/original",
         Some("original feature".to_string()),
+        None,
         None,
         None,
     )
@@ -1715,6 +1740,7 @@ fn test_rename_workspace_dry_run_clashes_with_existing_branch() {
         Some("feature a".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace A");
 
@@ -1722,6 +1748,7 @@ fn test_rename_workspace_dry_run_clashes_with_existing_branch() {
         &repo.repo_path,
         "feat/b",
         Some("feature b".to_string()),
+        None,
         None,
         None,
     )
@@ -1762,6 +1789,7 @@ fn test_rename_workspace_dry_run_same_name() {
         Some("original feature".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1792,6 +1820,7 @@ fn test_rename_workspace_success() {
         &repo.repo_path,
         "feat/original",
         Some("original feature".to_string()),
+        None,
         None,
         None,
     )
@@ -1852,6 +1881,7 @@ fn test_rename_workspace_updates_child_target_branches() {
         Some("parent feature".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create parent workspace");
 
@@ -1908,6 +1938,7 @@ fn test_rename_workspace_sets_not_on_remote() {
         Some("original feature".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1945,6 +1976,7 @@ fn test_recover_workspace_after_jj_reinit() {
         &repo.repo_path,
         "feat/test-recover",
         Some("recovery test".to_string()),
+        None,
         None,
         None,
     )
@@ -2018,6 +2050,7 @@ fn test_recover_multiple_workspaces_after_jj_reinit() {
         Some("feature a".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace 1");
 
@@ -2025,6 +2058,7 @@ fn test_recover_multiple_workspaces_after_jj_reinit() {
         &repo.repo_path,
         "feat/recover-b",
         Some("feature b".to_string()),
+        None,
         None,
         None,
     )
@@ -2079,6 +2113,7 @@ fn test_recover_workspace_preserves_bookmark() {
         &repo.repo_path,
         "feat/test-bookmark",
         Some("bookmark test".to_string()),
+        None,
         None,
         None,
     )
@@ -2149,6 +2184,7 @@ fn test_recover_skips_already_registered_workspaces() {
         Some("already registered".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -2178,6 +2214,7 @@ fn test_recover_handles_missing_workspace_dir() {
         &repo.repo_path,
         "feat/missing-dir",
         Some("missing dir test".to_string()),
+        None,
         None,
         None,
     )
@@ -2214,6 +2251,7 @@ fn test_empty_commits_excluded_from_commits_ahead() {
         &repo.repo_path,
         "feat/empty-filter",
         Some("empty filter test".to_string()),
+        None,
         None,
         None,
     )
@@ -2269,6 +2307,7 @@ fn test_merge_abandons_empty_commits() {
         Some("merge empty test".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -2321,6 +2360,7 @@ fn test_squash_merge_with_empty_commits() {
         &repo.repo_path,
         "feat/squash-empty",
         Some("squash empty test".to_string()),
+        None,
         None,
         None,
     )
@@ -2379,6 +2419,7 @@ fn test_rebase_merge_with_empty_commits() {
         Some("rebase empty test".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -2428,6 +2469,7 @@ fn test_list_workspace_statuses_commits_ahead() {
         &repo.repo_path,
         "feat/commits-ahead",
         Some("test commits ahead".to_string()),
+        None,
         None,
         None,
     )
@@ -2493,6 +2535,7 @@ fn test_workspace_status_not_on_remote() {
         Some("test not on remote".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -2524,6 +2567,7 @@ fn test_workspace_status_in_sync() {
         &repo.repo_path,
         "feat/in-sync",
         Some("test in sync".to_string()),
+        None,
         None,
         None,
     )
@@ -2565,6 +2609,7 @@ fn test_workspace_status_ahead_of_remote() {
         &repo.repo_path,
         "feat/ahead",
         Some("test ahead".to_string()),
+        None,
         None,
         None,
     )
@@ -2609,6 +2654,7 @@ fn test_workspace_status_behind_remote() {
         &repo.repo_path,
         "feat/behind",
         Some("test behind".to_string()),
+        None,
         None,
         None,
     )
@@ -2705,6 +2751,7 @@ fn test_workspace_status_diverged() {
         Some("test diverged".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -2779,6 +2826,7 @@ fn test_pull_workspace_resolves_divergence() {
         &repo.repo_path,
         "feat/pull-diverged",
         Some("test pull diverged".to_string()),
+        None,
         None,
         None,
     )
@@ -2890,6 +2938,7 @@ fn test_pull_workspace_no_divergence() {
         Some("test pull no divergence".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -2957,6 +3006,7 @@ fn test_jj_get_sync_status_baseline_in_sync() {
         &repo.repo_path,
         "feat/sync-baseline",
         Some("sync status baseline test".to_string()),
+        None,
         None,
         None,
     )
@@ -3028,6 +3078,7 @@ fn test_jj_get_sync_status_ahead_after_local_commit() {
         Some("sync status ahead test".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -3080,6 +3131,7 @@ fn test_jj_get_sync_status_returns_to_sync_after_push() {
         &repo.repo_path,
         "feat/sync-push",
         Some("sync status push test".to_string()),
+        None,
         None,
         None,
     )
@@ -3162,6 +3214,7 @@ fn test_jj_get_sync_status_multiple_commits_ahead() {
         Some("sync status multiple ahead test".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -3219,6 +3272,7 @@ fn test_workspace_push_pull_with_workspace_status() {
         &repo.repo_path,
         "feat/status-sync-test",
         Some("workspace status sync test".to_string()),
+        None,
         None,
         None,
     )
@@ -3416,6 +3470,7 @@ fn test_workspace_status_with_workspace_id() {
         Some("workspace status test".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -3467,5 +3522,104 @@ fn test_workspace_status_with_workspace_id() {
         RemoteSyncStatus::InSync,
         "Should be InSync after push+pull, got {:?}",
         status.partial.remote_sync
+    );
+}
+
+// =============================================================================
+// Test: create_workspace copies included files and directories
+// =============================================================================
+
+#[test]
+fn test_create_workspace_copies_included_files() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    // Create files in the repo root to be copied
+    repo.create_file("node_modules/pkg/index.js", "module.exports = {}")
+        .expect("Failed to create node_modules file");
+    repo.create_file(".env", "SECRET=abc")
+        .expect("Failed to create .env file");
+
+    let patterns = vec!["node_modules".to_string(), ".env".to_string()];
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/copy-test",
+        Some("copy test".to_string()),
+        None,
+        None,
+        Some(patterns),
+    )
+    .expect("Failed to create workspace");
+
+    let ws_dir = repo.workspaces_dir().join(&workspace.workspace_path);
+
+    // Verify files were copied
+    assert!(
+        ws_dir.join("node_modules/pkg/index.js").exists(),
+        "node_modules/pkg/index.js should be copied to workspace"
+    );
+    assert_eq!(
+        fs::read_to_string(ws_dir.join("node_modules/pkg/index.js")).unwrap(),
+        "module.exports = {}"
+    );
+    assert!(
+        ws_dir.join(".env").exists(),
+        ".env should be copied to workspace"
+    );
+    assert_eq!(
+        fs::read_to_string(ws_dir.join(".env")).unwrap(),
+        "SECRET=abc"
+    );
+}
+
+#[test]
+fn test_create_workspace_copies_nested_directories() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    repo.create_file("config/sub/file.toml", "[settings]\nkey = true")
+        .expect("Failed to create nested config file");
+
+    let patterns = vec!["config".to_string()];
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/nested-copy",
+        Some("nested copy test".to_string()),
+        None,
+        None,
+        Some(patterns),
+    )
+    .expect("Failed to create workspace");
+
+    let ws_dir = repo.workspaces_dir().join(&workspace.workspace_path);
+    let copied = ws_dir.join("config/sub/file.toml");
+
+    assert!(copied.exists(), "config/sub/file.toml should be copied to workspace");
+    assert_eq!(
+        fs::read_to_string(copied).unwrap(),
+        "[settings]\nkey = true"
+    );
+}
+
+#[test]
+fn test_create_workspace_skips_missing_included_files() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let patterns = vec!["nonexistent".to_string()];
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/skip-missing",
+        Some("skip missing test".to_string()),
+        None,
+        None,
+        Some(patterns),
+    )
+    .expect("Failed to create workspace");
+
+    let ws_dir = repo.workspaces_dir().join(&workspace.workspace_path);
+
+    // Workspace should exist but not contain the nonexistent pattern
+    assert!(ws_dir.exists(), "Workspace directory should exist");
+    assert!(
+        !ws_dir.join("nonexistent").exists(),
+        "nonexistent should not be in workspace"
     );
 }

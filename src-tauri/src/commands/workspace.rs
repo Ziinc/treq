@@ -59,7 +59,7 @@ pub fn add_workspace_to_db(
 /// Delegates to core::create_workspace() for all workspace creation logic
 #[tauri::command]
 pub fn create_workspace(
-    _state: State<AppState>,
+    state: State<AppState>,
     repo_path: String,
     branch_name: String,
     source_branch: Option<String>,
@@ -87,6 +87,20 @@ pub fn create_workspace(
         })
         .unwrap_or((None, None));
 
+    // Read included_copy_files setting from DB
+    let included_copy_files = {
+        let db = state.db.lock().unwrap();
+        db.get_repo_setting(&repo_path, "included_copy_files")
+            .ok()
+            .flatten()
+            .map(|s| {
+                s.lines()
+                    .map(|l| l.trim().to_string())
+                    .filter(|l| !l.is_empty())
+                    .collect::<Vec<_>>()
+            })
+    };
+
     // Delegate to core layer for all workspace creation
     let workspace = crate::core::create_workspace(
         &repo_path,
@@ -94,6 +108,7 @@ pub fn create_workspace(
         intent,
         moved_files,
         source_branch.as_deref(),
+        included_copy_files,
     )?;
 
     // Initialize rebase flag to trigger rebase on first view

@@ -101,7 +101,7 @@ pub fn move_commit_to_new_workspace(
         .to_string();
 
     // Create the new workspace
-    let new_workspace = super::create_workspace(repo_path, branch_name, intent, None, None)?;
+    let new_workspace = super::create_workspace(repo_path, branch_name, intent, None, None, None)?;
 
     // Squash the commit into the new workspace's working copy
     jj::squash_commit_to_workspace(
