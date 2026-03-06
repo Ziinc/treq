@@ -18,6 +18,7 @@ fn test_jj_get_log_diff_stats_with_multiline_output() {
         Some("diff stats test".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -72,6 +73,7 @@ fn test_jj_get_log_diff_stats_with_modifications() {
         &repo.repo_path,
         "feat/diff-mods",
         Some("diff modifications test".to_string()),
+        None,
         None,
         None,
     )
@@ -138,6 +140,7 @@ fn test_move_commit_to_new_workspace() {
         &repo.repo_path,
         "feat/source",
         Some("source workspace".to_string()),
+        None,
         None,
         None,
     )
@@ -208,6 +211,7 @@ fn test_move_commit_to_existing_workspace() {
         Some("source workspace".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create source workspace");
 
@@ -232,6 +236,7 @@ fn test_move_commit_to_existing_workspace() {
         &repo.repo_path,
         "feat/target",
         Some("target workspace".to_string()),
+        None,
         None,
         None,
     )
@@ -264,6 +269,7 @@ fn test_abandon_commit() {
         &repo.repo_path,
         "feat/abandon-test",
         Some("abandon test".to_string()),
+        None,
         None,
         None,
     )
@@ -317,6 +323,7 @@ fn test_commit_diff_added_files() {
         &repo.repo_path,
         "feat/commit-diff-add",
         Some("commit diff add test".to_string()),
+        None,
         None,
         None,
     )
@@ -393,6 +400,7 @@ fn test_commit_diff_modified_files() {
         Some("commit diff mod test".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -445,6 +453,7 @@ fn test_commit_diff_deleted_files() {
         &repo.repo_path,
         "feat/commit-diff-del",
         Some("commit diff del test".to_string()),
+        None,
         None,
         None,
     )
@@ -500,6 +509,7 @@ fn test_commit_diff_invalid_change_id() {
         Some("commit diff invalid test".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -524,6 +534,7 @@ fn test_list_commits() {
         &repo.repo_path,
         "feat/list-commits",
         Some("list commits test".to_string()),
+        None,
         None,
         None,
     )
@@ -583,6 +594,7 @@ fn test_list_commits_excludes_base_branch_commits() {
         &repo.repo_path,
         "feat/after-base",
         Some("test base exclusion".to_string()),
+        None,
         None,
         None,
     )
@@ -646,6 +658,7 @@ fn test_list_commits_working_copy_diff_stats() {
         &repo.repo_path,
         "feat/wc-diff-stats",
         Some("working copy diff stats test".to_string()),
+        None,
         None,
         None,
     )
@@ -754,6 +767,7 @@ fn test_list_commits_with_target_branch_history() {
         Some("target history test".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -821,6 +835,7 @@ fn test_list_commits_target_branch_history_limits_to_10() {
         Some("limit test".to_string()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -845,6 +860,7 @@ fn test_list_commits_without_target_branch_history() {
         &repo.repo_path,
         "feat/no-history",
         Some("no history test".to_string()),
+        None,
         None,
         None,
     )

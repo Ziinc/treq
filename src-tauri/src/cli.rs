@@ -112,6 +112,7 @@ fn handle_workspace_add(matches: &Matches) {
         intent,
         None,
         source_branch.as_deref(),
+        None,
     ) {
         Ok(workspace) => {
             println!("Created workspace: {}", workspace.branch_name);
