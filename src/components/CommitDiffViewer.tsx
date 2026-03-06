@@ -794,6 +794,41 @@ function CommitDiffContent({ diff, onCreateAgentWithComment }: CommitDiffContent
     });
   };
 
+  const buildSelectionRange = (
+    filePath: string,
+    fromHunk: number,
+    fromLine: number,
+    toHunk: number,
+    toLine: number
+  ): { hunkIndex: number; lineIndex: number; content: string }[] | null => {
+    const fileDiff = diff.hunks_by_file.find((f) => f.path === filePath);
+    if (!fileDiff) return null;
+
+    const lines: { hunkIndex: number; lineIndex: number; content: string }[] = [];
+
+    const fromGlobal = getGlobalLineIndex(fileDiff.hunks, fromHunk, fromLine);
+    const toGlobal = getGlobalLineIndex(fileDiff.hunks, toHunk, toLine);
+
+    const startGlobal = Math.min(fromGlobal, toGlobal);
+    const endGlobal = Math.max(fromGlobal, toGlobal);
+
+    let globalIdx = 0;
+    for (let hi = 0; hi < fileDiff.hunks.length; hi++) {
+      for (let li = 0; li < fileDiff.hunks[hi].lines.length; li++) {
+        if (globalIdx >= startGlobal && globalIdx <= endGlobal) {
+          lines.push({
+            hunkIndex: hi,
+            lineIndex: li,
+            content: fileDiff.hunks[hi].lines[li],
+          });
+        }
+        globalIdx++;
+      }
+    }
+
+    return lines;
+  };
+
   const handleLineMouseDown = (
     e: React.MouseEvent,
     filePath: string,
@@ -803,6 +838,25 @@ function CommitDiffContent({ diff, onCreateAgentWithComment }: CommitDiffContent
   ) => {
     if (!onCreateAgentWithComment) return;
     e.preventDefault();
+
+    // Shift-click: extend selection from existing anchor
+    if (e.shiftKey && selectionAnchor && selectionAnchor.filePath === filePath) {
+      const lines = buildSelectionRange(
+        filePath,
+        selectionAnchor.hunkIndex,
+        selectionAnchor.lineIndex,
+        hunkIndex,
+        lineIndex
+      );
+      if (lines) {
+        setDiffLineSelection({ filePath, lines });
+      }
+      // Don't reset anchor or start drag
+      setShowCommentInput(false);
+      setPendingComment(null);
+      return;
+    }
+
     setIsSelecting(true);
     setSelectionAnchor({ filePath, hunkIndex, lineIndex });
     setDiffLineSelection({
@@ -821,33 +875,16 @@ function CommitDiffContent({ diff, onCreateAgentWithComment }: CommitDiffContent
   ) => {
     if (!isSelecting || !selectionAnchor || selectionAnchor.filePath !== filePath) return;
 
-    // Build selection from anchor to current position
-    const fileDiff = diff.hunks_by_file.find((f) => f.path === filePath);
-    if (!fileDiff) return;
-
-    const lines: { hunkIndex: number; lineIndex: number; content: string }[] = [];
-
-    const anchorGlobal = getGlobalLineIndex(fileDiff.hunks, selectionAnchor.hunkIndex, selectionAnchor.lineIndex);
-    const currentGlobal = getGlobalLineIndex(fileDiff.hunks, hunkIndex, lineIndex);
-
-    const startGlobal = Math.min(anchorGlobal, currentGlobal);
-    const endGlobal = Math.max(anchorGlobal, currentGlobal);
-
-    let globalIdx = 0;
-    for (let hi = 0; hi < fileDiff.hunks.length; hi++) {
-      for (let li = 0; li < fileDiff.hunks[hi].lines.length; li++) {
-        if (globalIdx >= startGlobal && globalIdx <= endGlobal) {
-          lines.push({
-            hunkIndex: hi,
-            lineIndex: li,
-            content: fileDiff.hunks[hi].lines[li],
-          });
-        }
-        globalIdx++;
-      }
+    const lines = buildSelectionRange(
+      filePath,
+      selectionAnchor.hunkIndex,
+      selectionAnchor.lineIndex,
+      hunkIndex,
+      lineIndex
+    );
+    if (lines) {
+      setDiffLineSelection({ filePath, lines });
     }
-
-    setDiffLineSelection({ filePath, lines });
   };
 
   const handleLineMouseUp = () => {

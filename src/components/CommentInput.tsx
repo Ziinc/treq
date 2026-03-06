@@ -64,7 +64,7 @@ export const CommentInput: React.FC<CommentInputProps> = memo(
         : null;
 
     return (
-      <div className="bg-muted/60 border-y border-border/40 px-4 py-3 font-sans text-base">
+      <div className="bg-muted border border-border rounded-md mx-2 my-1 px-4 py-3 font-sans text-base">
         {filePath && lineLabel && (
           <div className="mb-2 text-md text-muted-foreground">
             {filePath}:{lineLabel}
