@@ -259,7 +259,8 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
         .replace(/\\/g, '\\\\')  // Escape backslashes first
         .replace(/"/g, '\\"')    // Escape double quotes
         .replace(/`/g, '\\`')    // Escape backticks (command substitution)
-        .replace(/\$/g, '\\$');  // Escape dollar signs (variable expansion)
+        .replace(/\$/g, '\\$')   // Escape dollar signs (variable expansion)
+        .replace(/!/g, '\\!');   // Escape ! (zsh history expansion)
       autoCommand += ` -- "${escapedPrompt}"`;
     }
 
