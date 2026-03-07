@@ -53,9 +53,11 @@ import {
   startFileWatcher,
   stopFileWatcher,
   jjTrackWorkspaceBookmarks,
+  initRepo
 } from "../lib/api";
 import { Loader2 } from "lucide-react";
 import { getFullWorkspacePath } from "../lib/utils";
+import { Onboarding } from "./Onboarding";
 
 // Loading spinner component for Suspense fallback
 const LoadingSpinner = () => (
@@ -412,6 +414,36 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     },
   });
 
+  const handleOpenRepository = useCallback(async () => {
+    const selected = await selectFolder();
+    if (!selected) return;
+
+    try {
+      await initRepo(selected);
+    } catch (error) {
+      addToast({
+        title: "Failed to open repository",
+        description: error instanceof Error ? error.message : String(error),
+        type: "error",
+      });
+      return;
+    }
+
+    await setSetting("repo_path", selected);
+    setRepoPath(selected);
+    setSelectedWorkspace(null);
+    setActiveSessionId(null);
+    setSessionSelectedFile(null);
+    queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+    queryClient.invalidateQueries({ queryKey: ["sessions"] });
+
+    addToast({
+      title: "Repository Opened",
+      description: `Now viewing ${selected.split("/").pop() || selected}`,
+      type: "success",
+    });
+  }, [addToast, queryClient]);
+
   // Consolidate all Tauri event listeners
   useEffect(() => {
     const listeners = [
@@ -434,36 +466,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         setViewMode("settings");
       }),
       // Menu open repository
-      listen("menu-open-repository", async () => {
-        const selected = await selectFolder();
-        if (!selected) return;
+      listen("menu-open-repository", () => handleOpenRepository()),
+      // Menu factory reset
+      listen("menu-factory-reset", async () => {
+        const confirmed = await ask("Clear the saved repository path and return to the start screen?", {
+          title: "Factory Reset",
+          kind: "warning",
+        });
+        if (!confirmed) return;
 
-        const isRepo = await jjIsWorkspace(selected);
-        if (!isRepo) {
-          addToast({
-            title: "Not a JJ Repository",
-            description:
-              "Please select a folder that contains a jj repository.",
-            type: "error",
-          });
-          return;
-        }
-
-        await setSetting("repo_path", selected);
-        setRepoPath(selected);
+        await setSetting("repo_path", "");
+        setRepoPath("");
         setSelectedWorkspace(null);
-
-        // Reset session state
         setActiveSessionId(null);
         setSessionSelectedFile(null);
-
-        // Invalidate queries to force immediate refresh
-        queryClient.invalidateQueries({ queryKey: ["workspaces"] });
-        queryClient.invalidateQueries({ queryKey: ["sessions"] });
+        queryClient.clear();
 
         addToast({
-          title: "Repository Opened",
-          description: `Now viewing ${selected.split("/").pop() || selected}`,
+          title: "Factory Reset Complete",
+          description: "Repository path cleared.",
           type: "success",
         });
       }),
@@ -508,6 +529,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     queryClient,
     selectedWorkspace,
     deleteWorkspaceMutation,
+    handleOpenRepository,
   ]);
 
   // Note: Git merge functionality removed - using JJ now
@@ -793,6 +815,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
       repoPath={repoPath}
       onBranchUpdate={setCurrentBranch}
     >
+    {!repoPath ? (
+      <Onboarding onOpenRepo={handleOpenRepository} />
+    ) : (
     <div className="flex h-screen bg-background">
       {/* WorkspaceSidebar - shown in session and settings views */}
       {showSidebar && (
@@ -1044,6 +1069,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         onSelect={handleOpenSession}
       />
     </div>
+    )}
     </FocusRefreshProvider>
   );
 };

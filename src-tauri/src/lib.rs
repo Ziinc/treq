@@ -1,5 +1,5 @@
 mod auto_rebase;
-mod binary_paths;
+pub mod binary_paths;
 mod cli;
 mod commands;
 pub mod conflict_markers;
@@ -196,8 +196,13 @@ pub fn run() {
                     .accelerator("CmdOrCtrl+Shift+R")
                     .build(app)?;
 
+                    let factory_reset_item =
+                        MenuItemBuilder::with_id("factory_reset", "Factory Reset").build(app)?;
+
                     SubmenuBuilder::new(app, "Developer")
                         .item(&force_rebase_item)
+                        .separator()
+                        .item(&factory_reset_item)
                         .build()?
                 };
 
@@ -217,7 +222,7 @@ pub fn run() {
                     .item(&learn_more_item)
                     .build()?;
 
-                let mut menu_builder = MenuBuilder::new(app)
+                let menu_builder = MenuBuilder::new(app)
                     .item(&app_menu)
                     .item(&file_menu)
                     .item(&edit_menu)
@@ -226,9 +231,7 @@ pub fn run() {
 
                 // Add Developer menu in debug mode
                 #[cfg(debug_assertions)]
-                {
-                    menu_builder = menu_builder.item(&developer_menu);
-                }
+                let menu_builder = menu_builder.item(&developer_menu);
 
                 let menu = menu_builder.item(&window_menu).item(&help_menu).build()?;
 
@@ -276,8 +279,13 @@ pub fn run() {
                     .accelerator("CmdOrCtrl+Shift+R")
                     .build(app)?;
 
+                    let factory_reset_item =
+                        MenuItemBuilder::with_id("factory_reset", "Factory Reset").build(app)?;
+
                     SubmenuBuilder::new(app, "Developer")
                         .item(&force_rebase_item)
+                        .separator()
+                        .item(&factory_reset_item)
                         .build()?
                 };
 
@@ -301,6 +309,7 @@ pub fn run() {
                 "open" => emit_to_focused(app, "menu-open-repository", ()),
                 "open_new_window" => emit_to_focused(app, "menu-open-in-new-window", ()),
                 "force_rebase_workspace" => emit_to_focused(app, "menu-force-rebase-workspace", ()),
+                "factory_reset" => emit_to_focused(app, "menu-factory-reset", ()),
                 "learn_more" => {
                     #[cfg(target_os = "macos")]
                     {
@@ -358,7 +367,7 @@ pub fn run() {
             commands::list_commits,
             commands::jj_split,
             commands::jj_is_workspace,
-            commands::jj_init,
+            commands::init_repo,
             commands::jj_rebase_onto,
             commands::jj_get_conflicted_files,
             commands::jj_get_default_branch,
