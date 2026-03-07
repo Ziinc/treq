@@ -22,8 +22,6 @@ import {
 import { cn, getFullWorkspacePath } from "../lib/utils";
 import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
 import { useToast } from "./ui/toast";
-import { Button } from "./ui/button";
-import { Textarea } from "./ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "./ui/tooltip";
 import { getFileStatusTextColor, getStatusBgColor } from "../lib/git-status-colors";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
@@ -44,6 +42,7 @@ import {
 } from "./ui/context-menu";
 import { revealItemInDir, openUrl } from "@tauri-apps/plugin-opener";
 import { useEditorApps } from "../hooks/useEditorApps";
+import { CommentInput } from "./CommentInput";
 
 // Helper to check if file is binary
 function isBinaryFile(path: string): boolean {
@@ -86,6 +85,7 @@ function filterHiddenEntries(entries: DirectoryEntry[]): DirectoryEntry[] {
 
 // Virtualization constants
 const LINE_HEIGHT = 24;
+const COMMENT_ROW_HEIGHT = 165;
 
 // TreeNode component - memoized to prevent unnecessary re-renders
 interface TreeNodeProps {
@@ -231,7 +231,7 @@ interface FileContentViewProps {
   basePath: string;
   fileHunks: Map<number, "add" | "modify" | "delete">;
   deletionMarkers: Set<number>;
-  getItemHeight: () => number;
+  getItemHeight: (index: number) => number;
   onSetHoveredLine: (lineNum: number | null) => void;
   fontSize: number;
   hoveredLine: number | null;
@@ -245,8 +245,6 @@ interface FileContentViewProps {
   pendingComment: { startLine: number; endLine: number; lineContent: string[] } | null;
   onSubmitComment: (text: string) => void;
   onCancelComment: () => void;
-  scrollOffset: number;
-  onScrollOffsetChange: (offset: number) => void;
   listRef: React.RefObject<ListImperativeAPI>;
   // Search props
   isSearchOpen: boolean;
@@ -283,8 +281,6 @@ const FileContentView = memo(function FileContentView({
   pendingComment,
   onSubmitComment,
   onCancelComment,
-  scrollOffset,
-  onScrollOffsetChange,
   listRef,
   isSearchOpen,
   searchQuery,
@@ -406,12 +402,8 @@ const FileContentView = memo(function FileContentView({
           listRef={listRef}
           style={{ height: window.innerHeight, width: "100%" }}
           className="px-4 pb-4"
-          rowCount={lines.length}
+          rowCount={lines.length + (showCommentInput && pendingComment ? 1 : 0)}
           rowHeight={getItemHeight}
-          onScroll={(e: unknown) => {
-            const scrollEvent = e as { scrollOffset: number };
-            onScrollOffsetChange(scrollEvent.scrollOffset);
-          }}
           rowComponent={({
             index,
             style,
@@ -419,19 +411,38 @@ const FileContentView = memo(function FileContentView({
             index: number;
             style: React.CSSProperties;
           }) => {
-            const lineNum = index + 1;
-            let line = lines[index];
+            // Comment row is inserted at index = pendingComment.endLine (after last selected line)
+            if (showCommentInput && pendingComment && index === pendingComment.endLine) {
+              return (
+                <div style={style}>
+                  <CommentInput
+                    onSubmit={onSubmitComment}
+                    onCancel={onCancelComment}
+                    filePath={relativePath ?? undefined}
+                    startLine={pendingComment.startLine}
+                    endLine={pendingComment.endLine}
+                  />
+                </div>
+              );
+            }
+
+            // For rows after the comment row, adjust index to account for inserted row
+            const lineIndex = showCommentInput && pendingComment && index > pendingComment.endLine
+              ? index - 1
+              : index;
+            const lineNum = lineIndex + 1;
+            let line = lines[lineIndex];
             const diffStatus = fileHunks.get(lineNum);
             const hasDeletionMarker = deletionMarkers.has(lineNum);
 
             // Apply search highlighting if there's a query
             if (searchQuery) {
               // Find which global match index corresponds to this line
-              const lineMatches = searchMatches.filter(m => m.lineNumber === index);
+              const lineMatches = searchMatches.filter(m => m.lineNumber === lineIndex);
               if (lineMatches.length > 0) {
                 // Find global index of first match on this line
-                const firstMatchGlobalIndex = searchMatches.findIndex(m => m.lineNumber === index);
-                const isCurrentMatchOnLine = searchMatches[currentMatchIndex]?.lineNumber === index;
+                const firstMatchGlobalIndex = searchMatches.findIndex(m => m.lineNumber === lineIndex);
+                const isCurrentMatchOnLine = searchMatches[currentMatchIndex]?.lineNumber === lineIndex;
                 const currentMatchOffset = isCurrentMatchOnLine ?
                   currentMatchIndex - firstMatchGlobalIndex : -1;
 
@@ -464,59 +475,6 @@ const FileContentView = memo(function FileContentView({
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           rowProps={{} as any}
         />
-        {/* Comment form overlay - positioned right after the selected line */}
-        {showCommentInput && pendingComment && (
-          <div
-            className="absolute left-4 right-4 z-10 bg-muted/60 border border-border/40 rounded px-4 py-3 shadow-lg"
-            style={{
-              // Line N (1-indexed) occupies y: (N-1)*LINE_HEIGHT to N*LINE_HEIGHT
-              // To position after line N, we want top = N*LINE_HEIGHT
-              // Subtract scrollOffset for viewport coords, subtract additional LINE_HEIGHT for observed offset
-              top: `${pendingComment.endLine * LINE_HEIGHT - scrollOffset - LINE_HEIGHT}px`,
-            }}
-          >
-            <div className="mb-2 text-md text-muted-foreground">
-              <span>
-                {selectedFile && basePath && selectedFile.startsWith(basePath + "/")
-                  ? selectedFile.slice(basePath.length + 1)
-                  : selectedFile}
-                :L{pendingComment.startLine}
-                {pendingComment.startLine !== pendingComment.endLine &&
-                  `-${pendingComment.endLine}`}
-              </span>
-            </div>
-            <Textarea
-              id="comment-textarea"
-              placeholder="Describe what you want to change..."
-              className="mb-2 text-sm font-sans"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  onCancelComment();
-                } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                  const target = e.target as HTMLTextAreaElement;
-                  onSubmitComment(target.value);
-                }
-              }}
-            />
-            <div className="flex justify-end items-center gap-2">
-              <Button size="sm" variant="ghost" onClick={onCancelComment}>
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => {
-                  const textarea = document.getElementById("comment-textarea") as HTMLTextAreaElement;
-                  if (textarea) {
-                    onSubmitComment(textarea.value);
-                  }
-                }}
-              >
-                Request changes
-              </Button>
-            </div>
-          </div>
-        )}
         {/* Search overlay */}
         <SearchOverlay
           isVisible={isSearchOpen}
@@ -845,7 +803,6 @@ export const FileBrowser = memo(function FileBrowser({
     lineContent: string[];
   } | null>(null);
   const [hoveredLine, setHoveredLine] = useState<number | null>(null);
-  const [scrollOffset, setScrollOffset] = useState(0);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearchQuery = useDebounce(searchQuery, 150);
@@ -977,7 +934,6 @@ export const FileBrowser = memo(function FileBrowser({
   const handleFileClick = useCallback(
     async (path: string) => {
       setSelectedFile(path);
-      setScrollOffset(0); // Reset scroll when switching files
 
       // Check if binary file
       if (isBinaryFile(path)) {
@@ -1113,7 +1069,14 @@ export const FileBrowser = memo(function FileBrowser({
       const lines = fileContent.split("\n");
       let start: number, end: number, selectedLines: string[];
 
-      if (lineNum !== undefined) {
+      if (lineNum !== undefined && lineSelection &&
+          lineNum >= lineSelection.startLine && lineNum <= lineSelection.endLine &&
+          lineSelection.startLine !== lineSelection.endLine) {
+        // Multi-line selection exists and includes this line — use it
+        start = lineSelection.startLine;
+        end = lineSelection.endLine;
+        selectedLines = lines.slice(start - 1, end);
+      } else if (lineNum !== undefined) {
         // Single line comment from + button
         start = lineNum;
         end = lineNum;
@@ -1331,9 +1294,12 @@ export const FileBrowser = memo(function FileBrowser({
   );
 
   // Calculate item height for virtualization
-  const getItemHeight = useCallback(() => {
+  const getItemHeight = useCallback((index: number) => {
+    if (showCommentInput && pendingComment && index === pendingComment.endLine) {
+      return COMMENT_ROW_HEIGHT;
+    }
     return LINE_HEIGHT;
-  }, []);
+  }, [showCommentInput, pendingComment]);
 
   // Memoize file content data for virtualization
   const fileContentData = useMemo(() => {
@@ -1391,8 +1357,6 @@ export const FileBrowser = memo(function FileBrowser({
         pendingComment={pendingComment}
         onSubmitComment={handleSubmitComment}
         onCancelComment={handleCancelComment}
-        scrollOffset={scrollOffset}
-        onScrollOffsetChange={setScrollOffset}
         listRef={listRef}
         isSearchOpen={isSearchOpen}
         searchQuery={debouncedSearchQuery}
