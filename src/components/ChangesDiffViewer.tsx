@@ -3147,8 +3147,6 @@ export const ChangesDiffViewer = memo(
                 pendingComment.hunkId === hunk.id &&
                 lineIndex === pendingComment.displayAtLineIndex;
               const selected = isLineSelected(filePath, hunkIndex, lineIndex);
-              const prevSelected = selected && lineIndex > 0 && isLineSelected(filePath, hunkIndex, lineIndex - 1);
-              const nextSelected = selected && isLineSelected(filePath, hunkIndex, lineIndex + 1);
 
               // Search highlight info for this line
               const searchKey = `${filePath}:${hunkIndex}:${lineIndex}`;
@@ -3169,9 +3167,7 @@ export const ChangesDiffViewer = memo(
                     className={cn(
                       "group flex items-stretch",
                       getLineTypeClass(line),
-                      selected && "!bg-blue-500/30 border-l border-r border-l-blue-500/50 border-r-blue-500/50",
-                      selected && !prevSelected && "border-t border-t-blue-500/50",
-                      selected && !nextSelected && "border-b border-b-blue-500/50"
+                      selected && "!bg-blue-500/10"
                     )}
                     onMouseEnter={() =>
                       handleLineMouseEnter(filePath, hunkIndex, lineIndex)

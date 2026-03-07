@@ -1148,7 +1148,7 @@ function HunkView({
               className={cn(
                 "group flex",
                 bgClass,
-                selected && "!bg-blue-500/30 ring-1 ring-inset ring-blue-500/50"
+                selected && "!bg-blue-500/10"
               )}
               onMouseEnter={() => onLineMouseEnter(filePath, hunkIndex, i)}
               onMouseUp={onLineMouseUp}
