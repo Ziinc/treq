@@ -258,9 +258,15 @@ pub struct JjVerifier;
 
 #[allow(dead_code)]
 impl JjVerifier {
+    /// Get the jj binary path, using treq's binary detection (same as jj.rs internals).
+    fn jj_binary() -> String {
+        treq_lib::binary_paths::detect_binary("jj")
+            .unwrap_or_else(|| "jj".to_string())
+    }
+
     /// Get list of jj workspaces via `jj workspace list`
     pub fn list_workspaces(repo_path: &str) -> Result<Vec<String>, String> {
-        let output = Command::new("jj")
+        let output = Command::new(Self::jj_binary())
             .current_dir(repo_path)
             .args(["workspace", "list"])
             .output()
@@ -291,7 +297,7 @@ impl JjVerifier {
 
     /// Get jj log output for a workspace
     pub fn get_log(workspace_path: &str, limit: usize) -> Result<String, String> {
-        let output = Command::new("jj")
+        let output = Command::new(Self::jj_binary())
             .current_dir(workspace_path)
             .args(["log", "-n", &limit.to_string(), "--no-graph"])
             .output()
@@ -309,7 +315,7 @@ impl JjVerifier {
 
     /// Get jj log output for a workspace
     pub fn get_log_previous_commit(workspace_path: &str) -> Result<String, String> {
-        let output = Command::new("jj")
+        let output = Command::new(Self::jj_binary())
             .current_dir(workspace_path)
             .args(["log", "-n", "1", "--no-graph", "-r", "@-"])
             .output()
@@ -326,7 +332,7 @@ impl JjVerifier {
     }
     /// Get current bookmark (branch) for a workspace
     pub fn get_current_bookmark(workspace_path: &str) -> Result<Option<String>, String> {
-        let output = Command::new("jj")
+        let output = Command::new(Self::jj_binary())
             .current_dir(workspace_path)
             .args(["bookmark", "list", "--all"])
             .output()
@@ -358,7 +364,7 @@ impl JjVerifier {
 
     /// Get list of all bookmarks in workspace
     pub fn list_bookmarks(repo_path: &str) -> Result<Vec<String>, String> {
-        let output = Command::new("jj")
+        let output = Command::new(Self::jj_binary())
             .current_dir(repo_path)
             .args(["bookmark", "list", "--all"])
             .output()
@@ -393,7 +399,7 @@ impl JjVerifier {
 
     /// Check if jj working copy has changes (is dirty)
     pub fn has_changes(workspace_path: &str) -> Result<bool, String> {
-        let output = Command::new("jj")
+        let output = Command::new(Self::jj_binary())
             .current_dir(workspace_path)
             .args(["diff", "--stat"])
             .output()
@@ -412,7 +418,7 @@ impl JjVerifier {
 
     /// Get jj status output
     pub fn get_status(workspace_path: &str) -> Result<String, String> {
-        let output = Command::new("jj")
+        let output = Command::new(Self::jj_binary())
             .current_dir(workspace_path)
             .args(["status"])
             .output()
@@ -435,7 +441,7 @@ impl JjVerifier {
 
     /// Get the parent commit of the current working copy
     pub fn get_parent_info(workspace_path: &str) -> Result<String, String> {
-        let output = Command::new("jj")
+        let output = Command::new(Self::jj_binary())
             .current_dir(workspace_path)
             .args([
                 "log",
@@ -483,7 +489,7 @@ impl JjVerifier {
         let has_git = git_path.exists();
 
         // Try running jj status to verify it's a valid jj workspace
-        let jj_works = Command::new("jj")
+        let jj_works = Command::new(Self::jj_binary())
             .current_dir(workspace_path)
             .args(["status"])
             .output()

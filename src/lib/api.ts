@@ -173,6 +173,11 @@ export interface FileSearchResult {
   relative_path: string;
 }
 
+// app apis
+
+export const initRepo = (repo_path: string): Promise<void> =>
+  invoke("init_repo", { repoPath: repo_path });
+
 // Database API
 export const getWorkspaces = (repo_path: string): Promise<Workspace[]> =>
   invoke("get_workspaces", { repoPath: repo_path });
@@ -471,9 +476,6 @@ export const jjGetLog = (
   limit?: number
 ): Promise<JjLogResult> =>
   invoke("jj_get_log", { workspacePath, targetBranch, isHomeRepo: isHomeRepo ?? null, limit: limit ?? null });
-
-export const jjInit = (repo_path: string): Promise<string> =>
-  invoke("jj_init", { repoPath: repo_path });
 
 export const jjGetCommitsAhead = (
   workspacePath: string,

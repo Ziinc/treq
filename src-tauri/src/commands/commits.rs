@@ -150,13 +150,6 @@ pub fn jj_is_workspace(repo_path: String) -> bool {
     jj::is_jj_workspace(&repo_path)
 }
 
-/// Manually initialize jj for a repository
-#[tauri::command]
-pub fn jj_init(state: State<AppState>, repo_path: String) -> Result<bool, String> {
-    let db = state.db.lock().unwrap();
-    jj::ensure_jj_initialized(&db, &repo_path).map_err(|e| e.to_string())
-}
-
 /// Rebase workspace onto a target branch
 #[tauri::command]
 pub fn jj_rebase_onto(
