@@ -104,7 +104,10 @@ interface ShowWorkspaceProps {
   onOpenMergePreview?: () => void;
   onOpenBranchSwitcher?: () => void;
   onCreateStackedWorkspace?: () => void;
+  onCreateWorkspaceFromHome?: () => void;
   onSplitWorkspace?: () => void;
+  /** When true, show Create Workspace button on home repo (no workspace for current branch) */
+  showCreateWorkspaceFromHome?: boolean;
   queryClient?: QueryClient;
 }
 
@@ -119,7 +122,9 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   onOpenMergePreview,
   onOpenBranchSwitcher,
   onCreateStackedWorkspace,
+  onCreateWorkspaceFromHome,
   onSplitWorkspace,
+  showCreateWorkspaceFromHome,
 }) {
   const workingDirectory = workspace ? getFullWorkspacePath(workspace) : (repositoryPath || "");
   const effectiveRepoPath = workspace?.repo_path || repositoryPath || "";
@@ -1196,6 +1201,27 @@ const handleSync = useCallback(async () => {
                       </TooltipTrigger>
                       <TooltipContent>
                         {`Create stacked workspace from ${branchTitle}`}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                {/* Create Workspace button when no workspace exists for current branch */}
+                {showCreateWorkspaceFromHome && onCreateWorkspaceFromHome && (
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={onCreateWorkspaceFromHome}
+                          className="gap-1 px-2 py-1"
+                        >
+                          <GitBranch className="w-4 h-4" />
+                          Create Workspace
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Create a workspace from {branchTitle}. Optionally select file changes to move into it.
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>

@@ -45,7 +45,8 @@ import { useCreateStackedWorkspace } from "../hooks/useCreateStackedWorkspace";
 export type DialogMode =
   | { type: "create" }
   | { type: "stack"; parentWorkspace: Workspace | null; parentBranch: string; position: "before" | "after" }
-  | { type: "split"; workspace: Workspace };
+  | { type: "split"; workspace: Workspace }
+  | { type: "createFromHome"; currentBranch: string };
 
 interface CreateWorkspaceDialogProps {
   open: boolean;
@@ -128,6 +129,38 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
           console.error("[CreateWorkspaceDialog] Failed to fetch remote branches:", err);
         });
       }
+    } else if (mode.type === "createFromHome") {
+      setSelectedFiles(new Set());
+      setIntent("");
+      setBranchName("");
+      setDataLoading(true);
+      Promise.all([
+        jjGetChangedFiles(repoPath),
+        getWorkspaces(repoPath),
+      ])
+        .then(([files, allWorkspaces]) => {
+          setChangedFiles(files);
+          setWorkspaces(allWorkspaces);
+          const existingBranches = new Set(allWorkspaces.map((w) => w.branch_name));
+          let index = 1;
+          const base = mode.currentBranch || "main";
+          let candidate = `${base}-ws-${index}`;
+          while (existingBranches.has(candidate)) {
+            index++;
+            candidate = `${base}-ws-${index}`;
+          }
+          setBranchName(candidate);
+          setIsEditingBranch(true);
+        })
+        .catch((err) => {
+          console.error("Failed to load data for create from home:", err);
+          setChangedFiles([]);
+          setBranchName(`${mode.currentBranch || "main"}-ws-1`);
+          setIsEditingBranch(true);
+        })
+        .finally(() => {
+          setDataLoading(false);
+        });
     } else if (mode.type === "stack") {
       setPosition(mode.position);
 
@@ -192,7 +225,7 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
 
   // Load workspaces and branches when dialog opens (create and stack modes)
   useEffect(() => {
-    if (open && repoPath && mode.type !== "split") {
+    if (open && repoPath && mode.type !== "split" && mode.type !== "createFromHome") {
       getWorkspaces(repoPath)
         .then(setWorkspaces)
         .catch((err) => console.error("Failed to load workspaces:", err));
@@ -229,7 +262,7 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
 
   // Auto-generate branch name from intent (create and stack modes only)
   useEffect(() => {
-    if (mode.type === "split") return; // Split has its own branch naming
+    if (mode.type === "split" || mode.type === "createFromHome") return; // Split/createFromHome have their own branch naming
     if (!isEditingBranch && intent.trim()) {
       const generatedBranch = applyBranchNamePattern(branchPattern, intent);
       setBranchName(generatedBranch);
@@ -304,6 +337,7 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
       const hasSelection = activeTab === "files" ? selectedFiles.size > 0 : selectedCommits.size > 0;
       return hasSelection;
     }
+    if (mode.type === "createFromHome") return true;
     return true;
   })();
 
@@ -452,10 +486,49 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
     }
   };
 
+  const handleCreateFromHomeSubmit = async () => {
+    if (mode.type !== "createFromHome") return;
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const metadata = JSON.stringify({
+        intent: intent.trim() || undefined,
+        moved_files: selectedFiles.size > 0 ? Array.from(selectedFiles) : undefined,
+      });
+
+      const workspaceId = await createWorkspace(
+        repoPath,
+        branchName,
+        undefined,
+        metadata
+      );
+
+      addToast({
+        title: "Workspace created",
+        description: selectedFiles.size > 0
+          ? `Created ${branchName} with ${selectedFiles.size} file(s) moved`
+          : `Created workspace for branch ${branchName}`,
+        type: "success",
+      });
+
+      onSuccess(workspaceId);
+      onOpenChange(false);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setError(errorMsg);
+      addToast({ title: "Failed to create workspace", description: errorMsg, type: "error" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = () => {
     if (mode.type === "create") handleCreateSubmit();
     else if (mode.type === "stack") handleStackSubmit();
     else if (mode.type === "split") handleSplitSubmit();
+    else if (mode.type === "createFromHome") handleCreateFromHomeSubmit();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -516,12 +589,16 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
     ? "Create New Workspace"
     : mode.type === "stack"
     ? "Create Stacked Workspace"
+    : mode.type === "createFromHome"
+    ? "Create Workspace from Branch"
     : "Split Workspace";
 
   const dialogDescription = mode.type === "create"
     ? "Create a new workspace for parallel development"
     : mode.type === "stack"
     ? `Create a stacked workspace on ${mode.type === "stack" ? mode.parentBranch : ""}`
+    : mode.type === "createFromHome"
+    ? "Create a workspace from the current branch. Optionally select file changes to move into the new workspace."
     : "Move or copy files/commits to a new workspace";
 
   // In stack mode, if parent workspace targets the default/external branch (root of stack),
@@ -544,11 +621,15 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
     if (loading) {
       if (mode.type === "create") return "Creating...";
       if (mode.type === "stack") return "Creating...";
+      if (mode.type === "createFromHome") return "Creating...";
       return "Splitting...";
     }
     if (mode.type === "split") {
       const count = selectedFiles.size + selectedCommits.size;
       return `Split ${count} item${count !== 1 ? "s" : ""}`;
+    }
+    if (mode.type === "createFromHome") {
+      return selectedFiles.size > 0 ? `Create with ${selectedFiles.size} file(s)` : "Create Workspace";
     }
     return "Create";
   })();
@@ -563,16 +644,16 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
 
         <div className="grid gap-4 py-2">
           {/* Loading state for split mode */}
-          {mode.type === "split" && dataLoading && (
+          {(mode.type === "split" || mode.type === "createFromHome") && dataLoading && (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
               <span className="ml-2 text-sm text-muted-foreground">
-                Loading workspace data...
+                {mode.type === "createFromHome" ? "Loading changed files..." : "Loading workspace data..."}
               </span>
             </div>
           )}
 
-          {!(mode.type === "split" && dataLoading) && (
+          {!((mode.type === "split" || mode.type === "createFromHome") && dataLoading) && (
             <>
               {/* Target branch selector (create mode only) — first in form */}
               {mode.type === "create" && (
@@ -825,6 +906,59 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
                 </Tabs>
               )}
 
+              {/* File selection (createFromHome: optional files to move to new workspace) */}
+              {mode.type === "createFromHome" && (
+                <div className="grid gap-2">
+                  <Label>Active file changes (optional)</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Select file changes to move into the new workspace. Leave empty to create a workspace from the current branch only.
+                  </p>
+                  <div className="max-h-[200px] overflow-y-auto border rounded-md">
+                    {changedFiles.length === 0 ? (
+                      <div className="p-4 text-sm text-muted-foreground text-center">
+                        No changed files in working copy
+                      </div>
+                    ) : (
+                      changedFiles.map((file) => (
+                        <label
+                          key={file.path}
+                          className="flex items-center gap-2 px-3 py-1.5 hover:bg-muted/50 cursor-pointer border-b last:border-b-0"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedFiles.has(file.path)}
+                            onChange={() => toggleFile(file.path)}
+                            className="rounded"
+                          />
+                          <span className={cn("text-xs font-mono w-4 text-center", statusColor(file.status))}>
+                            {statusIcon(file.status)}
+                          </span>
+                          <span className="text-sm truncate">{file.path}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                  {changedFiles.length > 0 && (
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedFiles(new Set(changedFiles.map((f) => f.path)))}
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        Select all
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedFiles(new Set())}
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Intent */}
               <div className="grid gap-2">
                 <Label htmlFor="intent">Intent / Description {mode.type === "create" ? "(optional)" : "(optional)"}</Label>
@@ -835,6 +969,8 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
                   placeholder={
                     mode.type === "split"
                       ? "What will this new workspace focus on?"
+                      : mode.type === "createFromHome"
+                      ? "What will this workspace focus on?"
                       : "e.g., Add dark mode to settings"
                   }
                   rows={mode.type === "create" ? 3 : 2}
@@ -864,6 +1000,8 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
                     placeholder={
                       mode.type === "split"
                         ? `${mode.type === "split" ? mode.workspace.branch_name : ""}-split-1`
+                        : mode.type === "createFromHome"
+                        ? `${mode.currentBranch || "main"}-ws-1`
                         : branchPattern.replace("{name}", "example")
                     }
                     className={branchStatus ? "pr-10" : ""}

@@ -874,7 +874,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
                     onOpenMergePreview={handleOpenMergePreview}
                     onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
                     onCreateStackedWorkspace={handleCreateStackedWorkspace}
+                    onCreateWorkspaceFromHome={() => setCreateDialogMode({ type: "createFromHome", currentBranch: currentBranch || "main" })}
                     onSplitWorkspace={selectedWorkspace ? () => setCreateDialogMode({ type: "split", workspace: selectedWorkspace }) : undefined}
+                    showCreateWorkspaceFromHome={!selectedWorkspace && !!currentBranch && !workspaces.some((w) => w.branch_name === currentBranch)}
                     queryClient={queryClient}
                     onSessionCreated={(sessionData) => {
                       queryClient.invalidateQueries({
