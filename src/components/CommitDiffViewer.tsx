@@ -125,8 +125,6 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
     const [removingCommitIds, setRemovingCommitIds] = useState<Set<string>>(new Set());
     const { addToast } = useToast();
 
-    const canAction = !!(workspaceId !== null && workspaceId !== undefined && repoPath);
-
     const handleMoveToNew = useCallback((commit: JjLogCommit) => {
       setMoveTarget(commit);
       setShowNewDialog(true);
@@ -218,7 +216,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
         .then((result) => {
           setTargetBranchCommits(result?.target_branch_commits ?? []);
         })
-        .catch(() => {})
+        .catch(() => { })
         .finally(() => setLoadingMore(false));
     }, [targetBranchLimit, repoPath, workspaceId, isHomeRepo]);
 
@@ -232,7 +230,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
           const nextCommits = result?.commits ?? [];
           setCommits(nextCommits.slice(1)); // Skip working copy
         })
-        .catch(() => {})
+        .catch(() => { })
         .finally(() => setLoadingMore(false));
     }, [homeRepoLimit, workspacePath, targetBranch, isHomeRepo]);
 
@@ -396,7 +394,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                           isExpanded={isExpanded}
                           diffData={diffData}
                           onToggle={() => toggleCommit(commit.commit_id)}
-                          canAction={canAction && !commit.is_immutable}
+                          canAction={!commit.is_immutable}
                           isRemoving={removingCommitIds.has(commit.commit_id)}
                           onMoveToNew={handleMoveToNew}
                           onMoveToExisting={handleMoveToExisting}
@@ -455,9 +453,9 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                               onToggle={() => toggleCommit(commit.commit_id)}
                               canAction={false}
                               isRemoving={false}
-                              onMoveToNew={() => {}}
-                              onMoveToExisting={() => {}}
-                              onAbandon={() => {}}
+                              onMoveToNew={() => { }}
+                              onMoveToExisting={() => { }}
+                              onAbandon={() => { }}
                               onCreateAgentWithComment={onCreateAgentWithComment}
                             />
                           );
@@ -490,7 +488,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
           </div>
         </div>
 
-        {canAction && moveTarget && (
+        {moveTarget && (
           <>
             <MoveCommitToNewWorkspaceDialog
               open={showNewDialog}
@@ -553,7 +551,6 @@ function CommitWithDiff({
   isExpanded,
   diffData,
   onToggle,
-  canAction,
   isRemoving,
   onMoveToNew,
   onMoveToExisting,
@@ -651,52 +648,52 @@ function CommitWithDiff({
       {/* Expanded diff content */}
       {isExpanded && (
         <div className="ml-7 mb-3">
-          {canAction && (
-            <div className="flex items-center gap-2 mb-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-md border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <ArrowRightLeft className="w-4 h-4" />
-                    Move commit
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem onClick={() => onMoveToNew(commit)}>
-                    Move to New Workspace
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onMoveToExisting(commit)}>
-                    Move to Existing Workspace
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <button
-                className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-md border border-border hover:bg-muted text-muted-foreground hover:text-destructive transition-colors"
-                onClick={() => onAbandon(commit)}
-                disabled={isRemoving}
-              >
-                <Trash2 className="w-4 h-4" />
-                Delete commit
-              </button>
-            </div>
-          )}
+
+          <div className="flex items-center gap-2 mb-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-md border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ArrowRightLeft className="w-4 h-4" />
+                  Move commit
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onClick={() => onMoveToNew(commit)}>
+                  Move to New Workspace
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onMoveToExisting(commit)}>
+                  Move to Existing Workspace
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <button
+              className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-md border border-border hover:bg-muted text-muted-foreground hover:text-destructive transition-colors"
+              onClick={() => onAbandon(commit)}
+              disabled={isRemoving}
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete commit
+            </button>
+          </div>
+
           <div className="border border-border rounded-md overflow-hidden">
-          {diffData?.loading ? (
-            <div className="flex items-center gap-2 p-3 text-sm text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Loading diff...
-            </div>
-          ) : diffData?.error ? (
-            <div className="p-3 text-sm text-destructive">
-              Failed to load diff: {diffData.error}
-            </div>
-          ) : diffData?.diff ? (
-            <CommitDiffContent
-              diff={diffData.diff}
-              onCreateAgentWithComment={onCreateAgentWithComment ? handleAgentComment : undefined}
-            />
-          ) : null}
+            {diffData?.loading ? (
+              <div className="flex items-center gap-2 p-3 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Loading diff...
+              </div>
+            ) : diffData?.error ? (
+              <div className="p-3 text-sm text-destructive">
+                Failed to load diff: {diffData.error}
+              </div>
+            ) : diffData?.diff ? (
+              <CommitDiffContent
+                diff={diffData.diff}
+                onCreateAgentWithComment={onCreateAgentWithComment ? handleAgentComment : undefined}
+              />
+            ) : null}
           </div>
         </div>
       )}
@@ -1207,7 +1204,7 @@ function HunkView({
             {showCommentInputHere && pendingComment && (
               <CommentInput
                 key={`comment-${pendingComment.filePath}-${hunkIndex}-${pendingComment.displayAtLineIndex}`}
-                onSubmit={() => {}}
+                onSubmit={() => { }}
                 onSubmitWithMode={onCommentSubmit}
                 onCancel={onCommentCancel}
                 filePath={pendingComment.filePath}
