@@ -26,6 +26,7 @@ import {
   ListEnd,
   ListPlus,
   Pencil,
+  Layers2,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { GitBranchPlusIcon } from "./ui/icons";
@@ -56,7 +57,10 @@ interface WorkspaceSidebarProps {
   selectedWorkspaceId?: number | null;
   selectedWorkspaceIds?: Set<number>;
   onWorkspaceClick?: (workspace: Workspace) => void;
-  onWorkspaceMultiSelect?: (workspace: Workspace | null, event: React.MouseEvent) => void;
+  onWorkspaceMultiSelect?: (
+    workspace: Workspace | null,
+    event: React.MouseEvent
+  ) => void;
   onBulkDelete?: () => void;
   onDeleteWorkspace?: (workspace: Workspace) => void;
   onCreateWorkspace?: () => void;
@@ -70,7 +74,6 @@ interface WorkspaceSidebarProps {
   onMoveWorkspace?: (workspace: Workspace, targetBranch: string | null) => void;
   onSelectStack?: (workspaceIds: Set<number>) => void;
 }
-
 
 // Shared context menu items for both home repo and workspaces
 const PathContextMenuItems: React.FC<{
@@ -189,8 +192,10 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
     });
 
     const statuses = workspaceStatuses ?? [];
-    const workspaces = useMemo(() => statuses.map(s => s.current), [statuses]);
-
+    const workspaces = useMemo(
+      () => statuses.map((s) => s.current),
+      [statuses]
+    );
 
     const [renameTarget, setRenameTarget] = useState<Workspace | null>(null);
 
@@ -204,11 +209,14 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
       return getWorkspaceTitleFromUtils(workspace);
     }, []);
 
-
     const handleContainerClick = useCallback(
       (e: React.MouseEvent) => {
         // Clear selection when clicking on the container background (not on workspace items)
-        if (e.target === e.currentTarget && selectedWorkspaceIds && selectedWorkspaceIds.size > 0) {
+        if (
+          e.target === e.currentTarget &&
+          selectedWorkspaceIds &&
+          selectedWorkspaceIds.size > 0
+        ) {
           // Create a fake workspace click event to trigger the clear logic
           // We'll pass null to signal clearing selection
           if (onWorkspaceMultiSelect) {
@@ -227,12 +235,12 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
         if (e.shiftKey) {
           // Shift+double-click: select workspace + descendants
           const descendants = getDescendants(workspaces, workspace.branch_name);
-          const ids = new Set([workspace.id, ...descendants.map(w => w.id)]);
+          const ids = new Set([workspace.id, ...descendants.map((w) => w.id)]);
           onSelectStack(ids);
         } else {
           // Double-click: select entire stack
           const stack = getEntireStack(workspaces, workspace.branch_name);
-          const ids = new Set(stack.map(w => w.id));
+          const ids = new Set(stack.map((w) => w.id));
           onSelectStack(ids);
         }
       },
@@ -244,12 +252,14 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
         if (!onMoveWorkspace) return;
 
         const draggedId = parseInt(result.draggableId, 10);
-        const draggedWorkspace = workspaces.find(w => w.id === draggedId);
+        const draggedWorkspace = workspaces.find((w) => w.id === draggedId);
         if (!draggedWorkspace) return;
 
         if (result.combine) {
           // Dropped onto another workspace → set target to that workspace's branch
-          const targetWorkspace = workspaces.find(w => String(w.id) === result.combine!.draggableId);
+          const targetWorkspace = workspaces.find(
+            (w) => String(w.id) === result.combine!.draggableId
+          );
           if (targetWorkspace && targetWorkspace.id !== draggedWorkspace.id) {
             onMoveWorkspace(draggedWorkspace, targetWorkspace.branch_name);
           }
@@ -275,9 +285,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
               className="flex items-center gap-2 flex-1 px-3 py-1.5 rounded-lg border border-border bg-muted/50 hover:bg-muted text-muted-foreground transition-colors"
             >
               <Search className="w-4 h-4 shrink-0" />
-              <span className="flex-1 text-left truncate">
-                {repoName}
-              </span>
+              <span className="flex-1 text-left truncate">{repoName}</span>
               <span className="text-[10px] text-muted-foreground/60 shrink-0">
                 ⌘K
               </span>
@@ -289,7 +297,9 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                     type="button"
                     onClick={() => openSettings("application")}
                     className={`h-9 w-9 rounded-lg hover:bg-muted flex items-center justify-center transition-colors border border-border ${
-                      currentPage === "settings" ? "bg-primary/20" : "bg-muted/50"
+                      currentPage === "settings"
+                        ? "bg-primary/20"
+                        : "bg-muted/50"
                     }`}
                     aria-label="Settings"
                   >
@@ -318,13 +328,25 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                   <TooltipTrigger asChild>
                     <div
                       className={`relative flex items-center text-sm tracking-wide px-2 py-1 rounded-md transition-colors cursor-pointer ${
-                        selectedWorkspaceId === null ? "bg-primary/20" : "hover:bg-muted/50"
+                        selectedWorkspaceId === null
+                          ? "bg-primary/20"
+                          : "hover:bg-muted/50"
                       }`}
                       onClick={() => onWorkspaceClick?.(undefined as any)}
                     >
-                      <Home className={`w-3 h-3 mr-1 shrink-0 ${selectedWorkspaceId === null ? "text-primary" : "text-muted-foreground"}`} />
+                      <Home
+                        className={`w-3 h-3 mr-1 shrink-0 ${
+                          selectedWorkspaceId === null
+                            ? "text-primary"
+                            : "text-muted-foreground"
+                        }`}
+                      />
                       <span
-                        className={`flex-1 min-w-0 truncate font-mono ${selectedWorkspaceId === null ? "text-primary font-medium" : "text-muted-foreground"}`}
+                        className={`flex-1 min-w-0 truncate font-mono ${
+                          selectedWorkspaceId === null
+                            ? "text-primary font-medium"
+                            : "text-muted-foreground"
+                        }`}
                         title={currentBranch || "Unknown"}
                       >
                         {currentBranch || "unknown"}
@@ -363,260 +385,282 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 
             {/* Workspaces section */}
             <DragDropContext onDragEnd={handleDragEnd}>
-            <Droppable droppableId="sidebar-root" isCombineEnabled>
-            {(droppableProvided) => (
-            <div
-              className="space-y-1"
-              ref={droppableProvided.innerRef}
-              {...droppableProvided.droppableProps}
-            >
-              {flattenedNodes.map((node, index) => {
-                const workspace = node.status.current;
-                const isSelected =
-                  selectedWorkspaceIds?.has(workspace.id) ||
-                  selectedWorkspaceId === workspace.id;
-                const indentStyle = { paddingLeft: `${16 + (node.depth - 1) * 6}px`};
-                const wsCommitsAhead = node.status.commits_ahead;
-                const isConflicted = node.status.has_conflicts;
-                const isChanged = node.status.has_changes;
-                
-                return (
-                  <div key={workspace.id}>
-                  {index > 0 && onAddBefore && (
-                    <div className="group/divider relative flex items-center h-2 mx-2 -my-1">
-                      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-transparent group-hover/divider:bg-border transition-colors" />
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            aria-label="Stack before"
-                            className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 top-1/2 z-10 p-1 rounded bg-transparent hover:bg-foreground/10 text-muted-foreground opacity-0 group-hover/divider:opacity-100 transition-all"
-                            onClick={() => onAddBefore(workspace)}
-                          >
-                            <ListPlus className="w-3 h-3" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="right">Insert workspace into stack</TooltipContent>
-                      </Tooltip>
-                    </div>
-                  )}
-                  <Draggable
-                    draggableId={String(workspace.id)}
-                    index={index}
-                  >
-                  {(dragProvided, dragSnapshot) => (
+              <Droppable droppableId="sidebar-root" isCombineEnabled>
+                {(droppableProvided) => (
                   <div
-                    ref={dragProvided.innerRef}
-                    {...dragProvided.draggableProps}
-                    {...dragProvided.dragHandleProps}
+                    className="space-y-1"
+                    ref={droppableProvided.innerRef}
+                    {...droppableProvided.droppableProps}
                   >
-                  <ContextMenu>
-                    <Tooltip>
-                      <ContextMenuTrigger asChild>
-                        <TooltipTrigger asChild>
-                          <div
-                            style={indentStyle}
-                            className={cn(
-                              "group/workspace relative flex items-center text-sm tracking-wide pr-2 rounded-md transition-colors cursor-pointer py-1",
-                              {
-                                "bg-primary/20": isSelected,
-                                "hover:bg-muted/50": !isSelected,
-                                "bg-primary/10": dragSnapshot.combineTargetFor,
-                                "opacity-50": dragSnapshot.isDragging,
-                                "font-bold": wsCommitsAhead > 0,
-                                "text-destructive": isConflicted && !isChanged,
-                                "text-slate-400": isChanged && !isConflicted,
-                              },
-                            )}
-                            onClick={(e) =>
-                              onWorkspaceMultiSelect
-                                ? onWorkspaceMultiSelect(workspace, e)
-                                : onWorkspaceClick?.(workspace)
-                            }
-                            onDoubleClick={(e) => handleDoubleClick(workspace, e)}
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest px-2 py-1">
+                      Workspaces
+                    </h4>
+                    {flattenedNodes.map((node, index) => {
+                      const workspace = node.status.current;
+                      const isSelected =
+                        selectedWorkspaceIds?.has(workspace.id) ||
+                        selectedWorkspaceId === workspace.id;
+                      const indentStyle = {
+                        paddingLeft: `${16 + (node.depth - 1) * 6}px`,
+                      };
+                      const wsCommitsAhead = node.status.commits_ahead;
+                      const isConflicted = node.status.has_conflicts;
+                      const isChanged = node.status.has_changes;
+
+                      return (
+                        <div key={workspace.id}>
+                          <Draggable
+                            draggableId={String(workspace.id)}
+                            index={index}
                           >
-                            {node.depth === 0 ? (
-                              <GitBranch
-                                className={`w-3 h-3 mr-1 shrink-0 ${
-                                  isSelected ? "text-primary" : "text-muted-foreground"
-                                }`}
-                              />
-                            ) : (
-                              <CornerLeftUp
-                                className={`w-3 h-3 mr-1 shrink-0 ${
-                                  isSelected ? "text-primary" : "text-muted-foreground"
-                                }`}
-                              />
+                            {(dragProvided, dragSnapshot) => (
+                              <div
+                                ref={dragProvided.innerRef}
+                                {...dragProvided.draggableProps}
+                                {...dragProvided.dragHandleProps}
+                              >
+                                <ContextMenu>
+                                  <Tooltip>
+                                    <ContextMenuTrigger asChild>
+                                      <TooltipTrigger asChild>
+                                        <div
+                                          style={indentStyle}
+                                          className={cn(
+                                            "group/workspace relative flex items-center text-sm tracking-wide pr-4 rounded-sm transition-colors cursor-pointer py-1",
+                                            {
+                                              "bg-primary/20": isSelected,
+                                              "hover:bg-muted/50": !isSelected,
+                                              "bg-primary/10":
+                                                dragSnapshot.combineTargetFor,
+                                              "opacity-50":
+                                                dragSnapshot.isDragging,
+                                              "font-bold": wsCommitsAhead > 0,
+                                              "text-destructive":
+                                                isConflicted && !isChanged,
+                                              "text-slate-400":
+                                                isChanged && !isConflicted,
+                                            }
+                                          )}
+                                          onClick={(e) =>
+                                            onWorkspaceMultiSelect
+                                              ? onWorkspaceMultiSelect(
+                                                  workspace,
+                                                  e
+                                                )
+                                              : onWorkspaceClick?.(workspace)
+                                          }
+                                          onDoubleClick={(e) =>
+                                            handleDoubleClick(workspace, e)
+                                          }
+                                        >
+                                          {node.depth === 0 ? (
+                                            <GitBranch
+                                              className={`w-3 h-3 mr-1 shrink-0 ${
+                                                isSelected
+                                                  ? "text-primary"
+                                                  : "text-muted-foreground"
+                                              }`}
+                                            />
+                                          ) : (
+                                            <CornerLeftUp
+                                              className={`w-3 h-3 mr-1 shrink-0 ${
+                                                isSelected
+                                                  ? "text-primary"
+                                                  : "text-muted-foreground"
+                                              }`}
+                                            />
+                                          )}
+                                          <span
+                                            className={`flex-1 min-w-0 truncate font-mono ${
+                                              isSelected
+                                                ? "text-primary font-medium"
+                                                : "text-muted-foreground"
+                                            } `}
+                                          >
+                                            {getWorkspaceTitle(workspace)}
+                                          </span>
+                                          {/* Hover action buttons */}
+                                          <div className="flex items-center gap-1 shrink-0 -mr-3">
+                                            <span
+                                              className={cn(
+                                                " group-hover/workspace:opacity-100 transition-opacity",
+                                                {
+                                                  "opacity-100": isSelected,
+                                                  "opacity-0": !isSelected,
+                                                }
+                                              )}
+                                            >
+                                              <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                  <Button
+                                                    size="icon-xs"
+                                                    variant="ghost"
+                                                    className="text-foreground"
+                                                    aria-label="Stack a workspace"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      onAddAfter?.(workspace);
+                                                    }}
+                                                  >
+                                                    <Layers2 className="w-4 h-4" />
+                                                  </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent side="bottom">
+                                                  Stack workspace
+                                                </TooltipContent>
+                                              </Tooltip>
+                                            </span>
+                                            {wsCommitsAhead > 0 && (
+                                              <span className="opacity-100 shrink-0 inline-flex items-center justify-center w-4 h-4 rounded text-xs font-medium leading-none bg-slate-400 text-primary-foreground mr-1">
+                                                {wsCommitsAhead}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </TooltipTrigger>
+                                    </ContextMenuTrigger>
+                                    {!dragSnapshot.isDragging && (
+                                      <TooltipContent
+                                        side="right"
+                                        className="font-mono"
+                                      >
+                                        <div className="flex items-center gap-1.5">
+                                          <GitBranch className="w-3 h-3" />
+                                          <span>
+                                            {getWorkspaceTitle(workspace)}
+                                          </span>
+                                        </div>
+                                        <div className="font-sans mt-1">
+                                          {wsCommitsAhead > 1 && (
+                                            <span>
+                                              {wsCommitsAhead} commits ahead of
+                                              target branch
+                                            </span>
+                                          )}
+                                          {wsCommitsAhead === 1 && (
+                                            <span>
+                                              {wsCommitsAhead} commit ahead of
+                                              target branch
+                                            </span>
+                                          )}
+                                        </div>
+                                      </TooltipContent>
+                                    )}
+                                  </Tooltip>
+                                  <ContextMenuContent>
+                                    <ContextMenuItem
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(
+                                          getWorkspaceTitle(workspace)
+                                        );
+                                      }}
+                                    >
+                                      <GitBranch className="w-4 h-4 mr-2" />
+                                      Copy branch name
+                                    </ContextMenuItem>
+                                    <ContextMenuItem
+                                      onClick={() => setRenameTarget(workspace)}
+                                    >
+                                      <Pencil className="w-4 h-4 mr-2" />
+                                      Rename Workspace
+                                    </ContextMenuItem>
+                                    <ContextMenuSeparator />
+                                    <PathContextMenuItems
+                                      relativePath={
+                                        workspace.workspace_path.startsWith("/")
+                                          ? repoPath &&
+                                            workspace.workspace_path.startsWith(
+                                              repoPath
+                                            )
+                                            ? workspace.workspace_path.slice(
+                                                repoPath.length + 1
+                                              )
+                                            : workspace.workspace_path
+                                          : `.treq/workspaces/${workspace.workspace_path}`
+                                      }
+                                      fullPath={getFullWorkspacePath(workspace)}
+                                      additionalItems={
+                                        <>
+                                          <ContextMenuSeparator />
+                                          <ContextMenuItem
+                                            className="text-destructive focus:text-destructive"
+                                            onClick={() =>
+                                              onDeleteWorkspace?.(workspace)
+                                            }
+                                          >
+                                            <Trash2 className="w-4 h-4 mr-2" />
+                                            Delete Workspace
+                                          </ContextMenuItem>
+                                        </>
+                                      }
+                                    />
+                                  </ContextMenuContent>
+                                </ContextMenu>
+                                {dragSnapshot.combineTargetFor && (
+                                  <div className="relative h-0">
+                                    <div className="absolute left-0 right-0 top-0 h-[2px] bg-primary rounded-full" />
+                                  </div>
+                                )}
+                              </div>
                             )}
-                            <span
-                              className={`flex-1 min-w-0 truncate font-mono ${
-                                isSelected ? "text-primary font-medium" : "text-muted-foreground"
-                              } `}
-                            >
-                              {getWorkspaceTitle(workspace)}
-                            </span>
-                            {/* Hover action buttons */}
-                            <div className="flex items-center gap-1 shrink-0 -mr-3">
+                          </Draggable>
+                        </div>
+                      );
+                    })}
+                    {droppableProvided.placeholder}
 
-                            <span className="opacity-0 group-hover/workspace:opacity-100 transition-opacity">
-                              {node.depth === 0 && onAddBefore && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <button
-                                      type="button"
-                                      aria-label="Stack before"
-                                      className="p-1 rounded hover:bg-slate-300 text-muted-foreground"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        onAddBefore(workspace);
-                                      }}
-                                    >
-                                      <ListStart className="w-3 h-3" />
-                                    </button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="bottom">Stack new workspace before</TooltipContent>
-                                </Tooltip>
-                              )}
-                              {onAddAfter && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <button
-                                      type="button"
-                                      aria-label="Insert workspace after"
-                                      className="p-1 rounded hover:bg-slate-300 text-muted-foreground"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        onAddAfter(workspace);
-                                      }}
-                                    >
-                                      <ListEnd className="w-3 h-3" />
-                                    </button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="bottom">Stack new workspace after</TooltipContent>
-                                </Tooltip>
-                              )}
-                            </span>
-                            {wsCommitsAhead > 0 &&  (<span className="opacity-100 shrink-0 inline-flex items-center justify-center w-4 h-4 rounded text-xs font-medium leading-none bg-slate-400 text-primary-foreground mr-1">
-                              {wsCommitsAhead}
-                            </span>)}
-                            </div>
-                          </div>
-                        </TooltipTrigger>
-                      </ContextMenuTrigger>
-                      {!dragSnapshot.isDragging && (
-                        <TooltipContent side="right" className="font-mono">
-                          <div className="flex items-center gap-1.5">
-                            <GitBranch className="w-3 h-3" />
-                            <span>{getWorkspaceTitle(workspace)}</span>
-                          </div>
-                          <div className="font-sans mt-1">
-                            {wsCommitsAhead > 1 && (<span>{wsCommitsAhead} commits ahead of target branch</span>)}
-                            {wsCommitsAhead === 1 && (<span>{wsCommitsAhead} commit ahead of target branch</span>)}
-                          </div>
-                        </TooltipContent>
-                      )}
-                    </Tooltip>
-                    <ContextMenuContent>
-                      <ContextMenuItem
-                        onClick={() => {
-                          navigator.clipboard.writeText(getWorkspaceTitle(workspace));
-                        }}
-                      >
-                        <GitBranch className="w-4 h-4 mr-2" />
-                        Copy branch name
-                      </ContextMenuItem>
-                      <ContextMenuItem onClick={() => setRenameTarget(workspace)}>
-                        <Pencil className="w-4 h-4 mr-2" />
-                        Rename Workspace
-                      </ContextMenuItem>
-                      <ContextMenuSeparator />
-                      <PathContextMenuItems
-                        relativePath={
-                          workspace.workspace_path.startsWith("/")
-                            ? repoPath && workspace.workspace_path.startsWith(repoPath)
-                              ? workspace.workspace_path.slice(repoPath.length + 1)
-                              : workspace.workspace_path
-                            : `.treq/workspaces/${workspace.workspace_path}`
-                        }
-                        fullPath={getFullWorkspacePath(workspace)}
-                        additionalItems={
-                          <>
-                            <ContextMenuSeparator />
-                            <ContextMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onClick={() => onDeleteWorkspace?.(workspace)}
-                            >
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Delete Workspace
-                            </ContextMenuItem>
-                          </>
-                        }
-                      />
-                    </ContextMenuContent>
-                  </ContextMenu>
-                  {dragSnapshot.combineTargetFor && (
-                    <div className="relative h-0">
-                      <div className="absolute left-0 right-0 top-0 h-[2px] bg-primary rounded-full" />
-                    </div>
-                  )}
-                  </div>
-                  )}
-                  </Draggable>
-                  </div>
-                );
-              })}
-              {droppableProvided.placeholder}
-
-              {/* Show delete button when workspaces are selected, otherwise show create buttons */}
-              {selectedWorkspaceIds && selectedWorkspaceIds.size > 0 ? (
-                <button
-                  type="button"
-                  onClick={onBulkDelete}
-                  className="flex items-center justify-center gap-1 w-full px-2 py-1.5 text-destructive hover:bg-destructive/10 rounded-md transition-colors"
-                >
-                  <Trash2 className="w-3 h-3" />
-                  <span>
-                    Delete {selectedWorkspaceIds.size} workspace
-                    {selectedWorkspaceIds.size > 1 ? "s" : ""}
-                  </span>
-                </button>
-              ) : (
-                onCreateWorkspace && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
+                    {/* Show delete button when workspaces are selected, otherwise show create buttons */}
+                    {selectedWorkspaceIds && selectedWorkspaceIds.size > 0 ? (
+                      <button
                         type="button"
-                        onClick={onCreateWorkspace}
-                        variant="ghost"
-                        size="sm"
-                        className="w-full gap-1 bg-secondary/50 hover:bg-secondary"
-                        aria-label="Create new workspace"
+                        onClick={onBulkDelete}
+                        className="flex items-center justify-center gap-1 w-full px-2 py-1.5 text-destructive hover:bg-destructive/10 rounded-md transition-colors"
                       >
-                        <GitBranchPlusIcon className="w-4 h-4" />
-                        <span className="truncate">Workspace</span>
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                      Create new workspace
-                    </TooltipContent>
-                  </Tooltip>
-                )
-              )}
-            </div>
-            )}
-            </Droppable>
+                        <Trash2 className="w-3 h-3" />
+                        <span>
+                          Delete {selectedWorkspaceIds.size} workspace
+                          {selectedWorkspaceIds.size > 1 ? "s" : ""}
+                        </span>
+                      </button>
+                    ) : (
+                      onCreateWorkspace && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              onClick={onCreateWorkspace}
+                              variant="ghost"
+                              size="sm"
+                              className="w-full gap-1 bg-secondary/50 hover:bg-secondary"
+                              aria-label="Create new workspace"
+                            >
+                              <GitBranchPlusIcon className="w-4 h-4" />
+                              <span className="truncate">Workspace</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">
+                            Create new workspace
+                          </TooltipContent>
+                        </Tooltip>
+                      )
+                    )}
+                  </div>
+                )}
+              </Droppable>
             </DragDropContext>
           </div>
         </div>
-      {renameTarget && repoPath && (
-        <RenameWorkspaceDialog
-          open={!!renameTarget}
-          onOpenChange={(open) => { if (!open) setRenameTarget(null); }}
-          repoPath={repoPath}
-          workspace={renameTarget}
-          onSuccess={() => setRenameTarget(null)}
-        />
-      )}
+        {renameTarget && repoPath && (
+          <RenameWorkspaceDialog
+            open={!!renameTarget}
+            onOpenChange={(open) => {
+              if (!open) setRenameTarget(null);
+            }}
+            repoPath={repoPath}
+            workspace={renameTarget}
+            onSuccess={() => setRenameTarget(null)}
+          />
+        )}
       </TooltipProvider>
     );
   }
