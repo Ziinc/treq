@@ -86,6 +86,7 @@ import {
   GitCommitHorizontal,
   RefreshCw,
   Split,
+  Layers2,
 } from "lucide-react";
 import { TargetBranchSelector } from "./TargetBranchSelector";
 import { TaskInput } from "./TaskInput";
@@ -1195,7 +1196,7 @@ const handleSync = useCallback(async () => {
                           onClick={onCreateStackedWorkspace}
                           className="gap-1 px-2 py-1"
                         >
-                          <Layers className="w-4 h-4" />
+                          <Layers2 className="w-4 h-4" />
                           Stack
                         </Button>
                       </TooltipTrigger>
@@ -1253,7 +1254,7 @@ const handleSync = useCallback(async () => {
                           onClick={onCreateStackedWorkspace}
                           disabled={rebasing || conflictedFiles.length > 0}
                         >
-                          <Layers className="w-4 h-4" />
+                          <Layers2 className="w-4 h-4" />
                           Stack
                         </Button>
                       </TooltipTrigger>
