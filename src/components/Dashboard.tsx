@@ -12,7 +12,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { CreateWorkspaceDialog, type DialogMode } from "./CreateWorkspaceDialog";
+import { UnifiedWorkspaceDialog, type WorkspaceDialogDefaults } from "./UnifiedWorkspaceDialog";
 import { CommandPalette } from "./CommandPalette";
 import { WorkspacePicker } from "./WorkspacePicker";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
@@ -82,7 +82,7 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-workspace" }) => {
   const [repoPath, setRepoPath] = useState("");
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
-  const [createDialogMode, setCreateDialogMode] = useState<DialogMode | null>(null);
+  const [unifiedDialogDefaults, setUnifiedDialogDefaults] = useState<WorkspaceDialogDefaults | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
   const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(
     null
@@ -135,27 +135,28 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   const handleCreateStackedWorkspace = useCallback(() => {
     if (!repoPath) return;
 
-    const parentBranch = selectedWorkspace?.branch_name || currentBranch;
-    if (!parentBranch) {
+    if (selectedWorkspace) {
+      setUnifiedDialogDefaults({
+        targetBranch: selectedWorkspace.branch_name,
+        sourceWorkspace: selectedWorkspace,
+      });
+    } else if (currentBranch) {
+      setUnifiedDialogDefaults({
+        targetBranch: currentBranch,
+        sourceWorkspace: null,
+      });
+    } else {
       addToast({
         title: "Cannot create stacked workspace",
         description: "No parent branch available",
         type: "error",
       });
-      return;
     }
-
-    setCreateDialogMode({
-      type: "stack",
-      parentWorkspace: selectedWorkspace,
-      parentBranch,
-      position: "after",
-    });
   }, [repoPath, selectedWorkspace, currentBranch, addToast]);
 
   // Keyboard shortcuts
   useKeyboardShortcut("n", true, () => {
-    setCreateDialogMode({ type: "create" });
+    setUnifiedDialogDefaults({});
   });
 
   useKeyboardShortcut("n", true, () => {
@@ -171,7 +172,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   });
 
   useKeyboardShortcut("Escape", false, () => {
-    if (createDialogMode) setCreateDialogMode(null);
+    if (unifiedDialogDefaults) setUnifiedDialogDefaults(null);
     if (showCommandPalette) setShowCommandPalette(false);
     if (showFilePicker) setShowFilePicker(false);
   });
@@ -611,20 +612,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   });
 
   const handleAddAfter = useCallback((workspace: Workspace) => {
-    setCreateDialogMode({
-      type: "stack",
-      parentWorkspace: workspace,
-      parentBranch: workspace.branch_name,
-      position: "after",
+    setUnifiedDialogDefaults({
+      targetBranch: workspace.branch_name,
+      sourceWorkspace: workspace,
     });
   }, []);
 
   const handleAddBefore = useCallback((workspace: Workspace) => {
-    setCreateDialogMode({
-      type: "stack",
-      parentWorkspace: workspace,
-      parentBranch: workspace.branch_name,
-      position: "before",
+    setUnifiedDialogDefaults({
+      targetBranch: workspace.branch_name,
+      sourceWorkspace: workspace,
     });
   }, []);
 
@@ -830,7 +827,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
           onWorkspaceMultiSelect={handleWorkspaceMultiSelect}
           onBulkDelete={handleBulkDelete}
           onDeleteWorkspace={handleDelete}
-          onCreateWorkspace={() => setCreateDialogMode({ type: "create" })}
+          onCreateWorkspace={() => setUnifiedDialogDefaults({})}
           openSettings={openSettings}
           navigateToDashboard={handleReturnToDashboard}
           onOpenCommandPalette={() => setShowCommandPalette(true)}
@@ -874,9 +871,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
                     onOpenMergePreview={handleOpenMergePreview}
                     onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
                     onCreateStackedWorkspace={handleCreateStackedWorkspace}
-                    onCreateWorkspaceFromHome={() => setCreateDialogMode({ type: "createFromHome", currentBranch: currentBranch || "main" })}
-                    onSplitWorkspace={selectedWorkspace ? () => setCreateDialogMode({ type: "split", workspace: selectedWorkspace }) : undefined}
-                    showCreateWorkspaceFromHome={!selectedWorkspace && !!currentBranch && !workspaces.some((w) => w.branch_name === currentBranch)}
+                    onMoveCommitToNewWorkspace={(commit, workspace) => {
+                      const firstLine = commit.description.split("\n")[0] || undefined;
+                      setUnifiedDialogDefaults({
+                        targetBranch: workspace?.branch_name,
+                        sourceWorkspace: workspace ?? null,
+                        preSelectedCommits: [commit.change_id],
+                        intent: firstLine,
+                        activeTab: "commits",
+                      });
+                    }}
+                    onMoveCommitToExistingWorkspace={(commit, workspace) => {
+                      setUnifiedDialogDefaults({
+                        targetBranch: workspace?.branch_name,
+                        sourceWorkspace: workspace ?? null,
+                        preSelectedCommits: [commit.change_id],
+                        activeTab: "commits",
+                      });
+                      // Note: dialog will open in "move to existing" mode via defaults
+                    }}
+                    onMoveFilesToNewWorkspace={(files, workspace) => {
+                      setUnifiedDialogDefaults({
+                        targetBranch: workspace?.branch_name,
+                        sourceWorkspace: workspace ?? null,
+                        preSelectedFiles: files,
+                        activeTab: "changes",
+                      });
+                    }}
                     queryClient={queryClient}
                     onSessionCreated={(sessionData) => {
                       queryClient.invalidateQueries({
@@ -1010,11 +1031,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
       {/* Global Dialogs */}
       {/* Note: MergeDialog removed - git-specific feature */}
 
-      <CreateWorkspaceDialog
-        open={createDialogMode !== null}
-        onOpenChange={(open) => { if (!open) setCreateDialogMode(null); }}
+      <UnifiedWorkspaceDialog
+        open={unifiedDialogDefaults !== null}
+        onOpenChange={(open) => { if (!open) setUnifiedDialogDefaults(null); }}
         repoPath={repoPath}
-        mode={createDialogMode ?? { type: "create" }}
+        defaults={unifiedDialogDefaults ?? {}}
         onSuccess={async (workspaceId) => {
           await queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
           queryClient.invalidateQueries({ queryKey: ["workspace-statuses", repoPath] });
@@ -1041,7 +1062,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         onOpenFilePicker={() => setShowFilePicker(true)}
         onOpenWorkspacePicker={() => setShowWorkspacePicker(true)}
         onOpenWorkspaceDeletion={() => setShowWorkspaceDeletion(true)}
-        onCreateWorkspace={() => setCreateDialogMode({ type: "create" })}
+        onCreateWorkspace={() => setUnifiedDialogDefaults({})}
         onToggleTerminal={() => terminalPaneRef.current?.toggleCollapse()}
         onMaximizeTerminal={() => terminalPaneRef.current?.toggleMaximize()}
         onCreateAgentTerminal={() => terminalPaneRef.current?.createAgentSession()}

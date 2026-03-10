@@ -81,11 +81,9 @@ import {
   ChevronLeft,
   Eye,
   EyeOff,
-  Layers,
   FileDiff,
   GitCommitHorizontal,
   RefreshCw,
-  Split,
   Layers2,
 } from "lucide-react";
 import { TargetBranchSelector } from "./TargetBranchSelector";
@@ -105,10 +103,12 @@ interface ShowWorkspaceProps {
   onOpenMergePreview?: () => void;
   onOpenBranchSwitcher?: () => void;
   onCreateStackedWorkspace?: () => void;
-  onCreateWorkspaceFromHome?: () => void;
-  onSplitWorkspace?: () => void;
-  /** When true, show Create Workspace button on home repo (no workspace for current branch) */
-  showCreateWorkspaceFromHome?: boolean;
+  /** Called when user wants to move a commit to a new workspace */
+  onMoveCommitToNewWorkspace?: (commit: import("../lib/api").JjLogCommit, workspace: Workspace | null) => void;
+  /** Called when user wants to move a commit to an existing workspace */
+  onMoveCommitToExistingWorkspace?: (commit: import("../lib/api").JjLogCommit, workspace: Workspace | null) => void;
+  /** Called when user wants to move files to a new workspace */
+  onMoveFilesToNewWorkspace?: (files: string[], workspace: Workspace | null) => void;
   queryClient?: QueryClient;
 }
 
@@ -123,9 +123,9 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
   onOpenMergePreview,
   onOpenBranchSwitcher,
   onCreateStackedWorkspace,
-  onCreateWorkspaceFromHome,
-  onSplitWorkspace,
-  showCreateWorkspaceFromHome,
+  onMoveCommitToNewWorkspace,
+  onMoveCommitToExistingWorkspace,
+  onMoveFilesToNewWorkspace,
 }) {
   const workingDirectory = workspace ? getFullWorkspacePath(workspace) : (repositoryPath || "");
   const effectiveRepoPath = workspace?.repo_path || repositoryPath || "";
@@ -1120,6 +1120,8 @@ const handleSync = useCallback(async () => {
             onCommitMoved={() => {}}
             onCommitAbandoned={() => {}}
             onCreateAgentWithComment={handleCreateAgentWithComment}
+            onMoveCommitToNewWorkspace={onMoveCommitToNewWorkspace ? (commit) => onMoveCommitToNewWorkspace(commit, workspace) : undefined}
+            onMoveCommitToExistingWorkspace={onMoveCommitToExistingWorkspace ? (commit) => onMoveCommitToExistingWorkspace(commit, workspace) : undefined}
           />
         ) : (
           <ChangesDiffViewer
@@ -1135,6 +1137,7 @@ const handleSync = useCallback(async () => {
             onCreateAgentWithReview={handleCreateAgentWithReview}
             showCommittedChanges={workspace ? showCommittedChanges : false}
             targetBranch={targetBranch}
+            onMoveFilesToNewWorkspace={onMoveFilesToNewWorkspace ? (files) => onMoveFilesToNewWorkspace(files, workspace) : undefined}
           />
         )}
       </div>
@@ -1206,27 +1209,6 @@ const handleSync = useCallback(async () => {
                     </Tooltip>
                   </TooltipProvider>
                 )}
-                {/* Create Workspace button when no workspace exists for current branch */}
-                {showCreateWorkspaceFromHome && onCreateWorkspaceFromHome && (
-                  <TooltipProvider delayDuration={200}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={onCreateWorkspaceFromHome}
-                          className="gap-1 px-2 py-1"
-                        >
-                          <GitBranch className="w-4 h-4" />
-                          Create Workspace
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        Create a workspace from {branchTitle}. Optionally select file changes to move into it.
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
               </>
             ) : (
               <span className="text-sm font-semibold font-mono">
@@ -1264,31 +1246,6 @@ const handleSync = useCallback(async () => {
                           : conflictedFiles.length > 0
                           ? `Cannot stack: ${conflictedFiles.length} conflict${conflictedFiles.length === 1 ? '' : 's'} detected`
                           : `Create stacked workspace from ${branchTitle}`}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-                {/* Split button for workspace */}
-                {workspace && onSplitWorkspace && (
-                  <TooltipProvider delayDuration={200}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={onSplitWorkspace}
-                          disabled={rebasing || conflictedFiles.length > 0}
-                        >
-                          <Split className="w-4 h-4" />
-                          Split
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {rebasing
-                          ? "Rebasing in progress..."
-                          : conflictedFiles.length > 0
-                          ? `Cannot split: ${conflictedFiles.length} conflict${conflictedFiles.length === 1 ? '' : 's'} detected`
-                          : `Split changes from ${branchTitle} into a new workspace`}
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>

@@ -22,9 +22,6 @@ import {
   Copy,
   FolderOpen,
   CornerLeftUp,
-  ListStart,
-  ListEnd,
-  ListPlus,
   Pencil,
   Layers2,
 } from "lucide-react";
@@ -180,7 +177,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
     onOpenCommandPalette,
     onOpenBranchSwitcher,
     currentPage,
-    onAddBefore,
+    onAddBefore: _onAddBefore,
     onAddAfter,
     onMoveWorkspace,
     onSelectStack,

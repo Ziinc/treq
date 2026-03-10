@@ -28,8 +28,6 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { ArrowRightLeft, ChevronRight, FileText, Loader2, Plus, Trash2 } from "lucide-react";
-import { MoveCommitToNewWorkspaceDialog } from "./MoveCommitToNewWorkspaceDialog";
-import { MoveCommitToExistingWorkspaceDialog } from "./MoveCommitToExistingWorkspaceDialog";
 import { CommentInput } from "./CommentInput";
 import { useToast } from "./ui/toast";
 import { ask } from "@tauri-apps/plugin-dialog";
@@ -53,6 +51,10 @@ interface CommitDiffViewerProps {
     commitShortId: string,
     mode: "plan" | "acceptEdits"
   ) => void;
+  /** Called when user wants to move a commit to a new workspace */
+  onMoveCommitToNewWorkspace?: (commit: JjLogCommit) => void;
+  /** Called when user wants to move a commit to an existing workspace */
+  onMoveCommitToExistingWorkspace?: (commit: JjLogCommit) => void;
 }
 
 interface DayGroup {
@@ -100,9 +102,11 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
     isHomeRepo,
     scrollToCommitId,
     onScrollComplete,
-    onCommitMoved,
+    onCommitMoved: _onCommitMoved,
     onCommitAbandoned,
     onCreateAgentWithComment,
+    onMoveCommitToNewWorkspace,
+    onMoveCommitToExistingWorkspace,
   }) {
     const [commits, setCommits] = useState<JjLogCommit[]>([]);
     const [targetBranchCommits, setTargetBranchCommits] = useState<JjLogCommit[]>([]);
@@ -119,21 +123,16 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Move/abandon commit state
-    const [moveTarget, setMoveTarget] = useState<JjLogCommit | null>(null);
-    const [showNewDialog, setShowNewDialog] = useState(false);
-    const [showExistingDialog, setShowExistingDialog] = useState(false);
     const [removingCommitIds, setRemovingCommitIds] = useState<Set<string>>(new Set());
     const { addToast } = useToast();
 
     const handleMoveToNew = useCallback((commit: JjLogCommit) => {
-      setMoveTarget(commit);
-      setShowNewDialog(true);
-    }, []);
+      onMoveCommitToNewWorkspace?.(commit);
+    }, [onMoveCommitToNewWorkspace]);
 
     const handleMoveToExisting = useCallback((commit: JjLogCommit) => {
-      setMoveTarget(commit);
-      setShowExistingDialog(true);
-    }, []);
+      onMoveCommitToExistingWorkspace?.(commit);
+    }, [onMoveCommitToExistingWorkspace]);
 
     const REMOVE_ANIMATION_MS = 220;
 
@@ -488,30 +487,6 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
           </div>
         </div>
 
-        {moveTarget && (
-          <>
-            <MoveCommitToNewWorkspaceDialog
-              open={showNewDialog}
-              onOpenChange={setShowNewDialog}
-              commit={moveTarget}
-              repoPath={repoPath}
-              sourceWorkspaceId={workspaceId!}
-              onSuccess={() => {
-                onCommitMoved?.();
-              }}
-            />
-            <MoveCommitToExistingWorkspaceDialog
-              open={showExistingDialog}
-              onOpenChange={setShowExistingDialog}
-              commit={moveTarget}
-              repoPath={repoPath}
-              sourceWorkspaceId={workspaceId!}
-              onSuccess={() => {
-                onCommitMoved?.();
-              }}
-            />
-          </>
-        )}
       </>
     );
   }
