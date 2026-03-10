@@ -99,7 +99,6 @@ import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { ChangesSection } from "./ChangesSection";
 import { ConflictsSection } from "./ConflictsSection";
 import { CommittedChangesSection } from "./CommittedChangesSection";
-import { MoveToWorkspaceDialog } from "./MoveToWorkspaceDialog";
 import { FileContextMenu } from "./FileContextMenu";
 import { SearchOverlay } from "./SearchOverlay";
 import { CommentEditInput } from "./CommentEditInput";
@@ -122,6 +121,8 @@ interface ChangesDiffViewerProps {
   conflictedFiles?: string[];
   showCommittedChanges?: boolean;
   targetBranch?: string | null;
+  /** Called when user wants to move selected files to a new workspace */
+  onMoveFilesToNewWorkspace?: (files: string[]) => void;
 }
 
 export interface ChangesDiffViewerHandle {
@@ -796,6 +797,7 @@ export const ChangesDiffViewer = memo(
         conflictedFiles: _conflictedFiles = [], // Not used - we detect conflicts from hunk content
         showCommittedChanges = false,
         targetBranch = null,
+        onMoveFilesToNewWorkspace,
       },
       ref
     ) => {
@@ -1192,7 +1194,6 @@ export const ChangesDiffViewer = memo(
       const [lastSelectedFileIndex, setLastSelectedFileIndex] = useState<
         number | null
       >(null);
-      const [moveDialogOpen, setMoveDialogOpen] = useState(false);
 
       // Staging area state
       const [stagedFiles, setStagedFiles] = useState<Set<string>>(new Set());
@@ -2069,24 +2070,6 @@ export const ChangesDiffViewer = memo(
           setLastSelectedStagedIndex(fileIndex);
         },
         [stagedFiles, files, lastSelectedStagedIndex]
-      );
-
-      // Handler for when files are successfully moved to workspace
-      const handleMoveToWorkspaceSuccess = useCallback(
-        (_workspaceInfo: {
-          id: number;
-          workspacePath: string;
-          branchName: string;
-          metadata: string;
-        }) => {
-          setMoveDialogOpen(false);
-          setSelectedUnstagedFiles(new Set());
-          setLastSelectedFileIndex(null);
-          refresh();
-          // Note: Navigation to the new workspace session is handled by the parent component
-          // when StagingDiffViewer is used within Dashboard. Here we just refresh.
-        },
-        [refresh]
       );
 
       const toggleFileCollapse = useCallback((filePath: string) => {
@@ -3560,7 +3543,9 @@ export const ChangesDiffViewer = memo(
                             : null
                         }
                         onFileSelect={handleFileSelect}
-                        onMoveToWorkspace={() => setMoveDialogOpen(true)}
+                        onMoveToWorkspace={() => {
+                          onMoveFilesToNewWorkspace?.(Array.from(selectedUnstagedFiles));
+                        }}
                         onDiscardAll={handleDiscardAll}
                         onDiscard={handleDiscardFiles}
                         onDeselectAll={() => setSelectedUnstagedFiles(new Set())}
@@ -3996,14 +3981,6 @@ export const ChangesDiffViewer = memo(
               </div>
             )}
 
-          {/* Move to Workspace Dialog */}
-          <MoveToWorkspaceDialog
-            open={moveDialogOpen}
-            onOpenChange={setMoveDialogOpen}
-            repoPath={workspacePath}
-            selectedFiles={Array.from(selectedUnstagedFiles)}
-            onSuccess={handleMoveToWorkspaceSuccess}
-          />
         </div>
       );
     }
