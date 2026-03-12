@@ -15,14 +15,11 @@ _Treq was used to build Treq._
 ## Getting Started
 
 Pre-requisites:
+
 - Git
 - [Jujitsu](https://docs.jj-vcs.dev/latest/install-and-setup/) _You don't need to know how to use it_
 
-
 Download the latest release [here](https://github.com/Ziinc/treq/releases).
-```
-
-```
 
 ## Features
 
