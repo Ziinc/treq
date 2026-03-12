@@ -6,13 +6,13 @@ use crate::binary_paths;
 use crate::core;
 use crate::local_db;
 
-/// Walk up from CWD to find a directory containing `.treq` or `.jj`.
+/// Walk up from CWD to find a directory containing `.treq` or `.git`.
 pub fn detect_repo_path() -> Result<String, String> {
     let cwd = std::env::current_dir().map_err(|e| format!("Failed to get CWD: {}", e))?;
 
     let mut dir = cwd.as_path();
     loop {
-        if dir.join(".treq").is_dir() || dir.join(".jj").is_dir() {
+        if dir.join(".git").is_dir() {
             return dir
                 .to_str()
                 .map(|s| s.to_string())
@@ -24,7 +24,7 @@ pub fn detect_repo_path() -> Result<String, String> {
         }
     }
 
-    Err("Not inside a treq repository (no .treq or .jj directory found)".to_string())
+    Err("Not inside a git repository (no .git directory found)".to_string())
 }
 
 /// Initialize binary paths cache for CLI mode (no database needed).
