@@ -448,12 +448,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         const selected = await selectFolder();
         if (!selected) return;
 
-        const isRepo = await jjIsWorkspace(selected);
-        if (!isRepo) {
+        try {
+          await initRepo(selected);
+        } catch (error) {
           addToast({
-            title: "Not a JJ Repository",
+            title: "Not a Git Repository",
             description:
-              "Please select a folder that contains a jj repository.",
+              "Please select a folder that contains a git repository.",
             type: "error",
           });
           return;
