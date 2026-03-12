@@ -68,7 +68,7 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
           const fullPath = getFullWorkspacePath(workspace);
           const [commits, diffData] = await Promise.all([
             jjGetCommitsAhead(fullPath, targetBranch),
-            jjGetMergeDiff(fullPath, targetBranch),
+            jjGetMergeDiff(workspace.repo_path, workspace.id),
           ]);
 
           setCommitsAhead(commits);

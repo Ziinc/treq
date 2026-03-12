@@ -120,7 +120,6 @@ interface ChangesDiffViewerProps {
   ) => Promise<void>;
   conflictedFiles?: string[];
   showCommittedChanges?: boolean;
-  targetBranch?: string | null;
   /** Called when user wants to move selected files to a new workspace */
   onMoveFilesToNewWorkspace?: (files: string[]) => void;
 }
@@ -796,7 +795,6 @@ export const ChangesDiffViewer = memo(
         onCreateAgentWithReview,
         conflictedFiles: _conflictedFiles = [], // Not used - we detect conflicts from hunk content
         showCommittedChanges = false,
-        targetBranch = null,
         onMoveFilesToNewWorkspace,
       },
       ref
@@ -1372,11 +1370,11 @@ export const ChangesDiffViewer = memo(
       }, [repoPath, workspaceId]);
 
       const refreshCommittedChanges = useCallback(async () => {
-        if (showCommittedChanges && targetBranch) {
+        if (showCommittedChanges && repoPath && workspaceId !== undefined) {
           try {
             const mergeDiff: JjRevisionDiff = await jjGetMergeDiff(
-              workspacePath,
-              targetBranch
+              repoPath,
+              workspaceId
             );
             setCommittedFiles(mergeDiff.files);
 
@@ -1414,7 +1412,7 @@ export const ChangesDiffViewer = memo(
           });
           return [];
         });
-      }, [showCommittedChanges, targetBranch, workspacePath, addToast]);
+      }, [showCommittedChanges, repoPath, workspaceId, addToast]);
 
       // Fetch committed changes when toggle/target changes
       useEffect(() => {

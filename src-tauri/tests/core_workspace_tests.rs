@@ -3623,3 +3623,374 @@ fn test_create_workspace_skips_missing_included_files() {
         "nonexistent should not be in workspace"
     );
 }
+
+// =============================================================================
+// Test: workspace_diff (merge diff) — only workspace changes, exclusions
+// =============================================================================
+
+fn merge_diff_new_workspace(repo: &TestRepo, branch: &str) -> Workspace {
+    treq_lib::core::create_workspace(&repo.repo_path, branch, None, None, None, None).unwrap()
+}
+
+fn merge_diff_write_file(repo: &TestRepo, ws: &Workspace, path: &str, content: &str) {
+    let dir = repo.workspaces_dir().join(&ws.workspace_path);
+    let full = dir.join(path);
+    fs::create_dir_all(full.parent().unwrap()).unwrap();
+    fs::write(&full, content).unwrap();
+}
+
+fn merge_diff_commit(repo: &TestRepo, ws: &Workspace, msg: &str) {
+    treq_lib::core::create_commit(&repo.repo_path, Some(ws.id), msg).unwrap();
+}
+
+fn merge_diff_paths(repo: &TestRepo, ws: &Workspace) -> Vec<String> {
+    treq_lib::core::workspace_diff(&repo.repo_path, ws.id, "git")
+        .unwrap()
+        .files
+        .iter()
+        .map(|f| f.path.clone())
+        .collect()
+}
+
+#[test]
+fn test_only_shows_workspace_changes() {
+    let repo = TestRepo::new().unwrap();
+    repo.commit_file("base.txt", "base", "base").unwrap();
+    let ws = merge_diff_new_workspace(&repo, "feat/ws-only");
+    merge_diff_write_file(&repo, &ws, "new.txt", "new");
+    merge_diff_commit(&repo, &ws, "add new");
+
+    let paths = merge_diff_paths(&repo, &ws);
+    assert!(paths.contains(&"new.txt".into()));
+    assert!(!paths.contains(&"base.txt".into()));
+    assert!(!paths.contains(&"README.md".into()));
+}
+
+#[test]
+fn test_excludes_unmodified_target_files() {
+    let repo = TestRepo::new().unwrap();
+    for f in ["a.txt", "b.txt", "c.txt"] {
+        repo.commit_file(f, f, f).unwrap();
+    }
+    let ws = merge_diff_new_workspace(&repo, "feat/mod-one");
+    merge_diff_write_file(&repo, &ws, "b.txt", "modified");
+    merge_diff_commit(&repo, &ws, "mod b");
+
+    let paths = merge_diff_paths(&repo, &ws);
+    assert_eq!(paths, vec!["b.txt"]);
+}
+
+#[test]
+fn test_empty_when_no_commits() {
+    let repo = TestRepo::new().unwrap();
+    repo.commit_file("x.txt", "x", "x").unwrap();
+    let ws = merge_diff_new_workspace(&repo, "feat/empty");
+    assert!(merge_diff_paths(&repo, &ws).is_empty());
+}
+
+#[test]
+fn test_multiple_workspace_commits() {
+    let repo = TestRepo::new().unwrap();
+    repo.commit_file("target.txt", "t", "t").unwrap();
+    let ws = merge_diff_new_workspace(&repo, "feat/multi");
+    merge_diff_write_file(&repo, &ws, "f1.txt", "1");
+    merge_diff_commit(&repo, &ws, "add f1");
+    merge_diff_write_file(&repo, &ws, "f2.txt", "2");
+    merge_diff_commit(&repo, &ws, "add f2");
+
+    let paths = merge_diff_paths(&repo, &ws);
+    assert!(paths.contains(&"f1.txt".into()));
+    assert!(paths.contains(&"f2.txt".into()));
+    assert!(!paths.contains(&"target.txt".into()));
+}
+
+#[test]
+fn test_excludes_uncommitted_changes() {
+    let repo = TestRepo::new().unwrap();
+    let ws = merge_diff_new_workspace(&repo, "feat/wc");
+    merge_diff_write_file(&repo, &ws, "committed.txt", "c");
+    merge_diff_commit(&repo, &ws, "add committed");
+    merge_diff_write_file(&repo, &ws, "uncommitted.txt", "u");
+
+    let paths = merge_diff_paths(&repo, &ws);
+    assert!(paths.contains(&"committed.txt".into()));
+    assert!(!paths.contains(&"uncommitted.txt".into()));
+}
+
+// =============================================================================
+// Tests: Auto-rebase resolves bookmark conflicts
+// =============================================================================
+
+/// Helper: given a workspace's workspace_path (directory name), return the full path.
+fn workspace_full_path(repo: &TestRepo, ws: &treq_lib::local_db::Workspace) -> String {
+    repo.workspaces_dir()
+        .join(&ws.workspace_path)
+        .to_string_lossy()
+        .to_string()
+}
+
+/// Helper: create a workspace, make a local commit, and push to remote.
+/// Returns (workspace, full_path).
+fn setup_workspace_with_pushed_commit(
+    repo: &TestRepo,
+    branch_name: &str,
+    filename: &str,
+    content: &str,
+) -> treq_lib::local_db::Workspace {
+    // Create workspace
+    let ws = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        branch_name,
+        Some(branch_name.to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let full_path = workspace_full_path(repo, &ws);
+
+    // Make a local commit in the workspace directory via jj
+    let file_path = std::path::Path::new(&full_path).join(filename);
+    std::fs::write(&file_path, content).expect("Failed to write file");
+    jj::jj_commit(&full_path, &format!("Add {}", filename))
+        .expect("Failed to create commit");
+
+    // Push branch to remote via jj (jj manages the git refs)
+    jj::jj_push(&full_path).expect("Failed to push branch via jj");
+
+    // Fetch so jj knows about origin tracking
+    jj::jj_git_fetch(&repo.repo_path).expect("Failed to fetch");
+
+    ws
+}
+
+#[test]
+fn test_auto_rebase_resolves_bookmark_conflict() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+
+    // Create workspace and push a local commit on the workspace branch
+    let ws = setup_workspace_with_pushed_commit(
+        &repo,
+        "feat/conflict-test",
+        "local.txt",
+        "local content",
+    );
+
+    let full_path = workspace_full_path(&repo, &ws);
+
+    // Make another local commit BEFORE the remote diverges (so we have local-only commits)
+    let local_file = std::path::Path::new(&full_path).join("local2.txt");
+    std::fs::write(&local_file, "local2").expect("Failed to write file");
+    jj::jj_commit(&full_path, "Add local2.txt")
+        .expect("Failed to create local commit");
+
+    // Now make a remote commit on the same branch to create divergence
+    repo.remote_commit_on_branch(
+        "feat/conflict-test",
+        "remote.txt",
+        "remote content",
+        "Remote commit on feat/conflict-test",
+    )
+    .expect("Failed to make remote commit");
+
+    // Fetch — this creates the bookmark conflict
+    jj::jj_git_fetch(&repo.repo_path).expect("Failed to fetch");
+
+    // Verify the bookmark is now conflicted
+    assert!(
+        jj::jj_is_bookmark_conflicted(&full_path, "feat/conflict-test"),
+        "Bookmark should be conflicted after divergent fetch"
+    );
+
+    // Run rebase_single_workspace — it should resolve the conflict
+    let result = treq_lib::auto_rebase::rebase_single_workspace(
+        &repo.repo_path,
+        ws.id,
+        "main",
+        true, // force
+        "diff",
+    )
+    .expect("rebase_single_workspace should succeed");
+
+    assert!(result.is_some(), "Should have performed a rebase");
+
+    // Bookmark should no longer be conflicted
+    assert!(
+        !jj::jj_is_bookmark_conflicted(&full_path, "feat/conflict-test"),
+        "Bookmark should not be conflicted after rebase"
+    );
+}
+
+#[test]
+fn test_auto_rebase_resolves_conflict_no_local_commits() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+
+    // Create workspace and push — no extra local commits after push
+    let ws = setup_workspace_with_pushed_commit(
+        &repo,
+        "feat/no-local",
+        "initial.txt",
+        "initial content",
+    );
+
+    let full_path = workspace_full_path(&repo, &ws);
+
+    // Make a remote-only commit to create divergence
+    repo.remote_commit_on_branch(
+        "feat/no-local",
+        "remote_only.txt",
+        "remote only",
+        "Remote-only commit",
+    )
+    .expect("Failed to make remote commit");
+
+    // Fetch — creates bookmark conflict (remote advanced, local didn't)
+    jj::jj_git_fetch(&repo.repo_path).expect("Failed to fetch");
+
+    // Run rebase — should resolve conflict even with no local commits to rebase
+    let result = treq_lib::auto_rebase::rebase_single_workspace(
+        &repo.repo_path,
+        ws.id,
+        "main",
+        true,
+        "diff",
+    )
+    .expect("rebase_single_workspace should succeed with no local commits");
+
+    assert!(result.is_some(), "Should have performed a rebase");
+
+    // Bookmark should not be conflicted
+    assert!(
+        !jj::jj_is_bookmark_conflicted(&full_path, "feat/no-local"),
+        "Bookmark should not be conflicted after resolution"
+    );
+}
+
+#[test]
+fn test_auto_rebase_batch_resolves_bookmark_conflicts() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+
+    // Create two workspaces, push them, then add a local commit on each to enable divergence
+    let ws1 = setup_workspace_with_pushed_commit(
+        &repo,
+        "feat/batch-ws1",
+        "ws1.txt",
+        "ws1 content",
+    );
+    let ws2 = setup_workspace_with_pushed_commit(
+        &repo,
+        "feat/batch-ws2",
+        "ws2.txt",
+        "ws2 content",
+    );
+
+    let full_path1 = workspace_full_path(&repo, &ws1);
+    let full_path2 = workspace_full_path(&repo, &ws2);
+
+    // Set target_branch on both workspaces so check_and_rebase_all processes them
+    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, ws1.id, "origin/main")
+        .expect("Failed to set target branch on ws1");
+    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, ws2.id, "origin/main")
+        .expect("Failed to set target branch on ws2");
+
+    // Advance main on remote so workspaces need rebase
+    repo.remote_commit_file("main_advance.txt", "advance main", "Advance main for batch test")
+        .expect("Failed to advance main");
+
+    // Add a local-only commit on each workspace (diverges from push point)
+    let local1 = std::path::Path::new(&full_path1).join("local_ws1.txt");
+    std::fs::write(&local1, "local ws1").expect("write");
+    jj::jj_commit(&full_path1, "Local commit on ws1").expect("Failed to create local commit ws1");
+
+    let local2 = std::path::Path::new(&full_path2).join("local_ws2.txt");
+    std::fs::write(&local2, "local ws2").expect("write");
+    jj::jj_commit(&full_path2, "Local commit on ws2").expect("Failed to create local commit ws2");
+
+    // Make independent remote commits on both branches to create conflicts
+    repo.remote_commit_on_branch("feat/batch-ws1", "r1.txt", "r1", "Remote on ws1")
+        .expect("Failed to make remote commit on ws1");
+    repo.remote_commit_on_branch("feat/batch-ws2", "r2.txt", "r2", "Remote on ws2")
+        .expect("Failed to make remote commit on ws2");
+
+    // Fetch to manifest conflicts (local and remote both diverged from push point)
+    jj::jj_git_fetch(&repo.repo_path).expect("Failed to fetch");
+
+    assert!(
+        jj::jj_is_bookmark_conflicted(&full_path1, "feat/batch-ws1"),
+        "ws1 bookmark should be conflicted after divergent fetch"
+    );
+    assert!(
+        jj::jj_is_bookmark_conflicted(&full_path2, "feat/batch-ws2"),
+        "ws2 bookmark should be conflicted after divergent fetch"
+    );
+
+    // Run check_and_rebase_all — should resolve both conflicts and rebase onto advanced main
+    treq_lib::auto_rebase::check_and_rebase_all(&repo.repo_path, "diff")
+        .expect("check_and_rebase_all should succeed");
+
+    // Both workspaces should no longer be conflicted
+    assert!(
+        !jj::jj_is_bookmark_conflicted(&full_path1, "feat/batch-ws1"),
+        "ws1 bookmark should not be conflicted after batch rebase"
+    );
+    assert!(
+        !jj::jj_is_bookmark_conflicted(&full_path2, "feat/batch-ws2"),
+        "ws2 bookmark should not be conflicted after batch rebase"
+    );
+}
+
+#[test]
+fn test_auto_rebase_no_conflict_still_works() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+
+    // Create workspace
+    let ws = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/no-conflict",
+        Some("feat/no-conflict".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let full_path = workspace_full_path(&repo, &ws);
+
+    // Make a local commit in the workspace
+    let file_path = std::path::Path::new(&full_path).join("ws_file.txt");
+    std::fs::write(&file_path, "workspace content").expect("Failed to write file");
+    jj::jj_commit(&full_path, "Add ws_file.txt")
+        .expect("Failed to create commit");
+
+    // Advance the target (main) via a remote commit on main
+    repo.remote_commit_file("main_advance.txt", "main advance", "Advance main")
+        .expect("Failed to advance main");
+
+    // Fetch main
+    jj::jj_git_fetch(&repo.repo_path).expect("Failed to fetch");
+
+    // No conflict on workspace branch
+    assert!(
+        !jj::jj_is_bookmark_conflicted(&full_path, "feat/no-conflict"),
+        "Bookmark should not be conflicted"
+    );
+
+    // rebase_single_workspace should succeed normally (regression test)
+    let result = treq_lib::auto_rebase::rebase_single_workspace(
+        &repo.repo_path,
+        ws.id,
+        "main",
+        true,
+        "diff",
+    )
+    .expect("rebase_single_workspace should succeed on non-conflicted workspace");
+
+    // After rebase, workspace should still not be conflicted
+    assert!(
+        !jj::jj_is_bookmark_conflicted(&full_path, "feat/no-conflict"),
+        "Bookmark should not be conflicted after normal rebase"
+    );
+
+    let _ = result;
+}

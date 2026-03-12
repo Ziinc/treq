@@ -1,4 +1,4 @@
-mod auto_rebase;
+pub mod auto_rebase;
 pub mod binary_paths;
 mod cli;
 mod commands;

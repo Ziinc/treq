@@ -1,6 +1,5 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  jjGetLog,
   jjGetCommitDiff,
   abandonCommit,
   listCommits,
@@ -33,11 +32,8 @@ import { useToast } from "./ui/toast";
 import { ask } from "@tauri-apps/plugin-dialog";
 
 interface CommitDiffViewerProps {
-  workspacePath: string;
   repoPath: string;
   workspaceId: number | null;
-  targetBranch: string | null;
-  isHomeRepo?: boolean;
   scrollToCommitId?: string | null;
   onScrollComplete?: () => void;
   onCommitMoved?: () => void;
@@ -95,11 +91,8 @@ const parseHunkHeader = (
 
 export const CommitDiffViewer = memo<CommitDiffViewerProps>(
   function CommitDiffViewer({
-    workspacePath,
     repoPath,
     workspaceId,
-    targetBranch,
-    isHomeRepo,
     scrollToCommitId,
     onScrollComplete,
     onCommitMoved: _onCommitMoved,
@@ -108,8 +101,10 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
     onMoveCommitToNewWorkspace,
     onMoveCommitToExistingWorkspace,
   }) {
+    const isHomeRepo = workspaceId == null;
     const [commits, setCommits] = useState<JjLogCommit[]>([]);
     const [targetBranchCommits, setTargetBranchCommits] = useState<JjLogCommit[]>([]);
+    const [targetBranchCommitsBranch, setTargetBranchCommitsBranch] = useState<string | null>(null);
     const [targetBranchLimit, setTargetBranchLimit] = useState(10);
     const [homeRepoLimit, setHomeRepoLimit] = useState(15);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -174,37 +169,32 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 
     // Fetch commits
     useEffect(() => {
-      if (!workspacePath || !targetBranch) {
+      if (!repoPath) {
         setLoading(false);
         return;
       }
       setLoading(true);
       setTargetBranchLimit(10);
       setHomeRepoLimit(15);
-      jjGetLog(workspacePath, targetBranch, isHomeRepo)
+      listCommits(repoPath, workspaceId, !isHomeRepo)
         .then((result) => {
           const nextCommits = result?.commits ?? [];
           setCommits(nextCommits.slice(1)); // Skip working copy
+          if (!isHomeRepo) {
+            setTargetBranchCommits(result?.target_branch_commits ?? []);
+            setTargetBranchCommitsBranch(result?.target_branch ?? null);
+          } else {
+            setTargetBranchCommits([]);
+            setTargetBranchCommitsBranch(null);
+          }
         })
         .catch((err) => {
           console.error("Failed to fetch commit history:", err);
           setCommits([]);
+          setTargetBranchCommits([]);
         })
         .finally(() => setLoading(false));
-
-      // Fetch target branch history for workspaces
-      if (!isHomeRepo && workspaceId != null) {
-        listCommits(repoPath, workspaceId, true)
-          .then((result) => {
-            setTargetBranchCommits(result?.target_branch_commits ?? []);
-          })
-          .catch(() => {
-            setTargetBranchCommits([]);
-          });
-      } else {
-        setTargetBranchCommits([]);
-      }
-    }, [workspacePath, targetBranch, isHomeRepo, repoPath, workspaceId]);
+    }, [repoPath, workspaceId, isHomeRepo]);
 
     // Re-fetch target branch commits when limit changes (beyond initial load)
     useEffect(() => {
@@ -222,16 +212,15 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
     // Re-fetch home repo commits when limit changes (beyond initial load)
     useEffect(() => {
       if (homeRepoLimit <= 15) return; // initial load handled above
-      if (!isHomeRepo || !workspacePath || !targetBranch) return;
+      if (!isHomeRepo || !repoPath) return;
       setLoadingMore(true);
-      jjGetLog(workspacePath, targetBranch, true, homeRepoLimit)
+      listCommits(repoPath, null, false, undefined, homeRepoLimit)
         .then((result) => {
-          const nextCommits = result?.commits ?? [];
-          setCommits(nextCommits.slice(1)); // Skip working copy
+          setCommits((result?.commits ?? []).slice(1)); // Skip working copy
         })
         .catch(() => { })
         .finally(() => setLoadingMore(false));
-    }, [homeRepoLimit, workspacePath, targetBranch, isHomeRepo]);
+    }, [homeRepoLimit, repoPath, isHomeRepo]);
 
     // Scroll to commit when scrollToCommitId changes
     useEffect(() => {
@@ -430,7 +419,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                 <>
                   <div className="border-t border-border my-4 mx-2" />
                   <p className="text-xs font-semibold text-muted-foreground mb-2 pl-7">
-                    Recent on {targetBranch}
+                    Recent on {targetBranchCommitsBranch}
                   </p>
                   {targetBranchDayGroups.map((group) => (
                     <div key={`tb-${group.dayKey}`} className="mt-5 first:mt-0">

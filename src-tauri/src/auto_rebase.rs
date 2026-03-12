@@ -41,6 +41,68 @@ fn convert_to_jj_branch_format(branch: &str, repo_path: &str) -> String {
     jj::convert_git_branch_to_jj_format_public(branch, repo_path)
 }
 
+#[allow(dead_code)]
+struct BookmarkConflictResolution {
+    was_conflicted: bool,
+    local_commits_rebased: usize,
+}
+
+/// If `branch_name` is conflicted (local and remote diverged), resolve it by:
+/// 1. Capturing local-only mutable commits
+/// 2. Pointing the local bookmark to the remote tip
+/// 3. Rebasing any local commits onto the new tip
+/// Returns early (not conflicted) if bookmark is clean.
+fn resolve_bookmark_conflict_if_needed(
+    workspace_path: &str,
+    branch_name: &str,
+    conflict_marker_style: &str,
+) -> Result<BookmarkConflictResolution, String> {
+    if !jj::jj_is_bookmark_conflicted(workspace_path, branch_name) {
+        return Ok(BookmarkConflictResolution {
+            was_conflicted: false,
+            local_commits_rebased: 0,
+        });
+    }
+
+    // Capture local-only commits before resolving the bookmark
+    let remote_ref = format!("{}@origin", branch_name);
+    let local_revset = format!("({}..@-) & mutable()", remote_ref);
+    let local_commit_ids = jj::jj_log_revset_commit_ids(workspace_path, &local_revset)
+        .map_err(|e| format!("Failed to capture local commits: {}", e))?;
+
+    let commits_rebased = local_commit_ids.len();
+
+    // Resolve: point local bookmark to remote tip
+    jj::jj_set_bookmark(workspace_path, branch_name, &remote_ref)
+        .map_err(|e| format!("Failed to resolve bookmark conflict: {}", e))?;
+
+    // Rebase local commits onto resolved bookmark (if any exist)
+    if !local_commit_ids.is_empty() {
+        let ids_revset = local_commit_ids.join(" | ");
+        let roots_revset = format!("roots({})", ids_revset);
+
+        jj::jj_rebase_with_revset(
+            workspace_path,
+            &roots_revset,
+            branch_name,
+            branch_name,
+            conflict_marker_style,
+        )
+        .map_err(|e| format!("Failed to rebase local commits after conflict resolution: {}", e))?;
+    }
+
+    log::info!(
+        "Resolved bookmark conflict for '{}': rebased {} local commit(s) onto remote tip",
+        branch_name,
+        commits_rebased
+    );
+
+    Ok(BookmarkConflictResolution {
+        was_conflicted: true,
+        local_commits_rebased: commits_rebased,
+    })
+}
+
 /// Rebase workspaces targeting a specific branch if they have changes
 pub fn rebase_workspaces_for_target(
     repo_path: &str,
@@ -90,11 +152,31 @@ pub fn rebase_workspaces_for_target(
     let mut bookmark_conflicts = Vec::new();
 
     for workspace in &workspaces_needing_rebase {
+        let full_path = get_full_workspace_path(workspace);
+
+        // Resolve bookmark conflict before building revset — a conflicted bookmark
+        // cannot be used in revsets like roots(target..branch_name)
+        if let Err(e) = resolve_bookmark_conflict_if_needed(
+            &full_path,
+            &workspace.branch_name,
+            conflict_marker_style,
+        ) {
+            eprintln!(
+                "Warning: Failed to resolve bookmark conflict for workspace '{}': {}",
+                workspace.workspace_name, e
+            );
+            all_success = false;
+            combined_messages.push(format!(
+                "Workspace '{}': Failed to resolve conflict - {}",
+                workspace.workspace_name, e
+            ));
+            continue;
+        }
+
         // Rebase from workspace directory using roots() revset to include entire branch lineage
         // Use workspace bookmark instead of @ to work only with committed changes
         let revset = format!("roots({}..{})", jj_target_branch, workspace.branch_name);
 
-        let full_path = get_full_workspace_path(workspace);
         let rebase_result = jj::jj_rebase_with_revset(
             &full_path, // Run from workspace directory
             &revset,
@@ -256,10 +338,30 @@ pub fn check_and_rebase_all(repo_path: &str, conflict_marker_style: &str) -> Res
         let mut bookmark_conflicts = Vec::new();
 
         for workspace in &workspaces_needing_rebase {
+            let full_path = get_full_workspace_path(workspace);
+
+            // Resolve bookmark conflict before building revset — a conflicted bookmark
+            // cannot be used in revsets like roots(target..branch_name)
+            if let Err(e) = resolve_bookmark_conflict_if_needed(
+                &full_path,
+                &workspace.branch_name,
+                conflict_marker_style,
+            ) {
+                eprintln!(
+                    "Warning: Failed to resolve bookmark conflict for workspace '{}': {}",
+                    workspace.workspace_name, e
+                );
+                all_success = false;
+                combined_messages.push(format!(
+                    "Workspace '{}': Failed to resolve conflict - {}",
+                    workspace.workspace_name, e
+                ));
+                continue;
+            }
+
             // Rebase from workspace directory using roots() revset
             // Use workspace bookmark instead of @ to work only with committed changes
             let revset = format!("roots({}..{})", jj_target_branch, workspace.branch_name);
-            let full_path = get_full_workspace_path(workspace);
 
             match jj::jj_rebase_with_revset(
                 &full_path,
@@ -401,11 +503,21 @@ pub fn rebase_single_workspace(
         }
     }
 
+    let full_path = get_full_workspace_path(&workspace);
+
+    // Resolve bookmark conflict before building revset — a conflicted bookmark
+    // cannot be used in revsets like roots(target..branch_name)
+    resolve_bookmark_conflict_if_needed(&full_path, &workspace.branch_name, conflict_marker_style)
+        .map_err(|e| format!("Failed to resolve bookmark conflict: {}", e))?;
+
     // Perform the rebase from workspace directory using roots() revset.
     // Filter to mutable() commits only to avoid "Commit is immutable" errors
     // when the workspace branch has pushed/immutable commits in its history.
-    let revset = format!("roots(mutable() & ({}..{}))", jj_target_branch, workspace.branch_name);
-    let full_path = get_full_workspace_path(&workspace);
+    // Exclude @ (working copy) with `~ @` to prevent it from being independently
+    // rebased onto target when all remote commits are immutable (jj 0.36+ treats
+    // untracked remote bookmarks as immutable). Without this, @ would be moved
+    // directly onto target, disconnecting it from the remote branch commits.
+    let revset = format!("roots(mutable() & ({}..{}) ~ @)", jj_target_branch, workspace.branch_name);
     let rebase_result = jj::jj_rebase_with_revset(
         &full_path, // Run from workspace directory
         &revset,

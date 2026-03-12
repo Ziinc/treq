@@ -1110,11 +1110,8 @@ const handleSync = useCallback(async () => {
           )
         ) : activeTab === "commits" ? (
           <CommitDiffViewer
-            workspacePath={workspace ? getFullWorkspacePath(workspace) : workingDirectory}
             repoPath={effectiveRepoPath}
             workspaceId={workspace?.id ?? null}
-            targetBranch={targetBranch}
-            isHomeRepo={!workspace}
             scrollToCommitId={scrollToCommitId}
             onScrollComplete={() => setScrollToCommitId(null)}
             onCommitMoved={() => {}}
@@ -1136,7 +1133,6 @@ const handleSync = useCallback(async () => {
             conflictedFiles={conflictedFiles}
             onCreateAgentWithReview={handleCreateAgentWithReview}
             showCommittedChanges={workspace ? showCommittedChanges : false}
-            targetBranch={targetBranch}
             onMoveFilesToNewWorkspace={onMoveFilesToNewWorkspace ? (files) => onMoveFilesToNewWorkspace(files, workspace) : undefined}
           />
         )}
