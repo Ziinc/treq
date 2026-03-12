@@ -316,24 +316,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     cleanup();
   }, [repoPath]);
 
-  // Listen for file changes to update change indicators in real-time
-  useEffect(() => {
-    if (!repoPath) return;
-
-    const unlistenFileChanges = listen<{
-      workspace_id: number;
-      changed_paths: string[];
-    }>("workspace-files-changed", () => {
-      // Invalidate query to refresh all workspace indicators
-      queryClient.invalidateQueries({
-        queryKey: ["workspace-statuses", repoPath],
-      });
-    });
-
-    return () => {
-      unlistenFileChanges.then((fn) => fn());
-    };
-  }, [repoPath, queryClient]);
 
   // Fetch remote branches on app startup when repo is loaded
   useEffect(() => {
