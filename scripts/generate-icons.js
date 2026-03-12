@@ -34,6 +34,10 @@ try {
     '<rect id="logo-white" x="1.213" y="1.434" width="875" height="875" rx="180" ry="180" style="fill:#fff;"/>'
   );
 
+  // Expand the viewBox to add ~9.4% padding on each side (Apple HIG: art should occupy ~81.25% of canvas)
+  // Original viewBox "0 0 880 880" → "-100 -100 1080 1080" adds 100px padding per side (880/1080 ≈ 81.5%)
+  svgContent = svgContent.replace(/viewBox="0 0 880 880"/, 'viewBox="-100 -100 1080 1080"');
+
   // Write the rounded logo SVG
   fs.writeFileSync(roundedLogoPath, svgContent, 'utf-8');
 

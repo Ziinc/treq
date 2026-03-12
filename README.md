@@ -10,16 +10,33 @@ Treq is your AI Code Review Manager, accelerating AI-assisted software developme
 
 _Treq was used to build Treq._
 
+![Code Overview](./assets/screenshots/code.png)
+
+## Getting Started
+
+Pre-requisites:
+- Git
+- [Jujitsu](https://docs.jj-vcs.dev/latest/install-and-setup/) _You don't need to know how to use it_
+
+
+Download the latest release [here](https://github.com/Ziinc/treq/releases).
+```
+
+```
+
 ## Features
 
 ### Code Reviews
 
 Inspect and iterate on each change for a human-in-the-loop agentic workflow.
 
-<!-- insert gif of a review -->
+![Code Review](./assets/screenshots/review.png)
 
 - Review the code diffs just like a familiar Github PR, annotate and comment on code, and then send it to an agent for changes.
 - Spotted an issue when browsing files? Send it to an agent for adjustments in the background.
+- Got a specific commit that you want the agent to work on, review it and send your comments directly to the agent. Did I mention that we have commit management tooling as well?
+
+![Commit History](./assets/screenshots/commits.png)
 
 ### Workspaces
 
@@ -27,17 +44,13 @@ Coding agents work in isolated copies of the codebase, ensuring changes are inde
 
 <!-- insert gif of worktree creation -->
 
-- Workspaces are isolated but and automatically rebased, meaning code never goes stale.
+- Workspaces are isolated but and **automatically rebased**, meaning code never goes stale.
 
-- Got a code conflict? No problem! Let the agent handle it the grunt work.
+- Got a code conflict? Agents can **automatically resolve your conflicts**.
 
-#### Stacked Workspaces
-
-Got a large feature but need to break it up for easier human review? Split developement into stacks, where features can be built incrementally over smaller branches and shipped in bite sized chunks.
+- Stack workspaces and build features incrementally over smaller bite-sized branches. All stacked workspaces automatically rebases on top of each other, **even on top of your uncommitted changes**.
 
 <!-- insert gif of stacking -->
-
-Workspaces can stack on top of each other, automatically rebasing as the underlying code changes.
 
 ## License
 
