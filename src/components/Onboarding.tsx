@@ -16,7 +16,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onOpenRepo }) => {
           </div>
           <CardTitle>Open a Repository</CardTitle>
           <CardDescription>
-            Select a folder containing a jj repository to get started.
+            Select a folder containing a Git repository to get started.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-3">
