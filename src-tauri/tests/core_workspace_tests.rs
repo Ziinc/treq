@@ -615,6 +615,96 @@ fn test_can_delete_workspace() {
 }
 
 // =============================================================================
+// Test: Deleting a parent workspace re-targets its direct children to default branch
+// =============================================================================
+
+#[test]
+fn test_delete_workspace_retargets_children_to_default_branch() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    // Create parent workspace
+    let parent: Workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/parent",
+        Some("parent feature".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create parent workspace");
+
+    // Stack two direct children on the parent
+    let child1: Workspace =
+        treq_lib::core::stack_workspace(&repo.repo_path, Some(&parent), Some("feat/child1"))
+            .expect("Failed to create child1 workspace");
+
+    let child2: Workspace =
+        treq_lib::core::stack_workspace(&repo.repo_path, Some(&parent), Some("feat/child2"))
+            .expect("Failed to create child2 workspace");
+
+    // Stack a grandchild on child1 — should NOT be re-targeted
+    let grandchild: Workspace =
+        treq_lib::core::stack_workspace(&repo.repo_path, Some(&child1), Some("feat/grandchild"))
+            .expect("Failed to create grandchild workspace");
+
+    // Verify initial target branches
+    assert_eq!(
+        child1.target_branch,
+        Some("feat/parent".to_string()),
+        "child1 should target feat/parent"
+    );
+    assert_eq!(
+        child2.target_branch,
+        Some("feat/parent".to_string()),
+        "child2 should target feat/parent"
+    );
+    assert_eq!(
+        grandchild.target_branch,
+        Some("feat/child1".to_string()),
+        "grandchild should target feat/child1"
+    );
+
+    // Delete the parent workspace
+    let result = treq_lib::core::delete_workspace(&repo.repo_path, &parent.id)
+        .expect("Failed to delete parent workspace");
+    assert!(result, "delete_workspace should return true");
+
+    // Both direct children should now target the default branch
+    let workspaces =
+        treq_lib::local_db::get_workspaces(&repo.repo_path).expect("Failed to get workspaces");
+
+    let updated_child1 = workspaces
+        .iter()
+        .find(|w| w.id == child1.id)
+        .expect("child1 should still exist");
+    let updated_child2 = workspaces
+        .iter()
+        .find(|w| w.id == child2.id)
+        .expect("child2 should still exist");
+    let updated_grandchild = workspaces
+        .iter()
+        .find(|w| w.id == grandchild.id)
+        .expect("grandchild should still exist");
+
+    assert_eq!(
+        updated_child1.target_branch,
+        Some("main".to_string()),
+        "child1 target_branch should be re-targeted to main"
+    );
+    assert_eq!(
+        updated_child2.target_branch,
+        Some("main".to_string()),
+        "child2 target_branch should be re-targeted to main"
+    );
+    // Grandchild must NOT be affected — it still targets child1
+    assert_eq!(
+        updated_grandchild.target_branch,
+        Some("feat/child1".to_string()),
+        "grandchild target_branch should remain feat/child1 (not re-targeted)"
+    );
+}
+
+// =============================================================================
 // Test: Can change a workspace target branch
 // =============================================================================
 

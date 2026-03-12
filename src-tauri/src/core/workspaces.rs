@@ -273,6 +273,24 @@ pub fn delete_workspace(repo_path: &str, workspace_id: &i64) -> Result<bool, Str
                 .join(".treq")
                 .join("workspaces")
                 .join(&workspace.workspace_path);
+
+            // Re-target direct children to the default branch
+            let children =
+                local_db::get_workspaces_by_target_branch(repo_path, &workspace.branch_name)
+                    .map_err(|e| format!("Failed to get child workspaces: {}", e))?;
+            if !children.is_empty() {
+                let default_branch = jj::get_default_branch(repo_path)
+                    .unwrap_or_else(|_| "main".to_string());
+                for child in &children {
+                    local_db::update_workspace_target_branch(
+                        repo_path,
+                        child.id,
+                        &default_branch,
+                    )
+                    .map_err(|e| format!("Failed to update child target branch: {}", e))?;
+                }
+            }
+
             // Best effort: log but don't fail if jj/directory removal fails
             // The DB cleanup must always proceed
             if let Err(e) = jj::remove_workspace(repo_path, &workspace_path.to_str().unwrap()) {
