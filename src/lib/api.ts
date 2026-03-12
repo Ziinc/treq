@@ -245,6 +245,12 @@ export const getRepoSetting = (repo_path: string, key: string): Promise<string |
 export const setRepoSetting = (repo_path: string, key: string, value: string): Promise<void> =>
   invoke("set_repo_setting", { repoPath: repo_path, key, value });
 
+export const setWindowRepoPath = (repoPath: string): Promise<void> =>
+  invoke("set_window_repo_path", { repoPath });
+
+export const getWindowRepoPath = (): Promise<string | null> =>
+  invoke("get_window_repo_path");
+
 // Editor Apps API
 export interface EditorAppsResponse {
   cursor: boolean;
