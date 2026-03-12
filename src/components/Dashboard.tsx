@@ -46,7 +46,6 @@ import {
   updateSessionAccess,
   getSessions,
   setSessionModel,
-  jjIsWorkspace,
   jjGitFetch,
   jjGetCurrentBranch,
   startFileWatcher,
