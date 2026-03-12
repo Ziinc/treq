@@ -13,6 +13,7 @@ pub mod pty;
 use commands::file_watcher::WatcherManager;
 use db::Database;
 use pty::PtyManager;
+use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, EventTarget, Manager};
@@ -21,6 +22,7 @@ pub(crate) struct AppState {
     db: Mutex<Database>,
     pty_manager: Mutex<PtyManager>,
     watcher_manager: WatcherManager,
+    window_repo_paths: Mutex<HashMap<String, String>>,
 }
 
 /// Emits an event only to the focused webview window.
@@ -73,16 +75,7 @@ pub fn run() {
                 }
             }
 
-            // --- GUI mode: create window programmatically ---
-            let _window = tauri::WebviewWindowBuilder::new(
-                app,
-                "main",
-                tauri::WebviewUrl::App("index.html".into()),
-            )
-            .title("Treq - Coding Agent Manager")
-            .inner_size(1400.0, 900.0)
-            .build()?;
-            // Initialize database
+            // --- GUI mode: initialize DB first so we can pass saved repo path in the window URL ---
             let app_dir = app
                 .path()
                 .app_data_dir()
@@ -92,6 +85,24 @@ pub fn run() {
 
             let db = Database::new(db_path).expect("Failed to open database");
             db.init().expect("Failed to initialize database");
+
+            // Read saved repo path to embed in the window URL (avoids Onboarding flash)
+            let saved_repo_path = db.get_setting("last_opened_repo_path").ok().flatten();
+            let window_url = if let Some(ref path) = saved_repo_path {
+                let encoded = urlencoding::encode(path).into_owned();
+                format!("index.html?repo={}", encoded)
+            } else {
+                "index.html".to_string()
+            };
+
+            let _window = tauri::WebviewWindowBuilder::new(
+                app,
+                "main",
+                tauri::WebviewUrl::App(window_url.into()),
+            )
+            .title("Treq - Coding Agent Manager")
+            .inner_size(1400.0, 900.0)
+            .build()?;
 
             // Load cached binary paths and initialize in-memory cache
             let binary_paths = commands::load_cached_binary_paths(&db);
@@ -111,6 +122,7 @@ pub fn run() {
                 db: Mutex::new(db),
                 pty_manager: Mutex::new(pty_manager),
                 watcher_manager,
+                window_repo_paths: Mutex::new(HashMap::new()),
             };
 
             app.manage(app_state);
@@ -413,6 +425,8 @@ pub fn run() {
             commands::load_pending_review,
             commands::save_pending_review,
             commands::clear_pending_review,
+            commands::set_window_repo_path,
+            commands::get_window_repo_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

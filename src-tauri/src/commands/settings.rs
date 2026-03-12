@@ -1,6 +1,6 @@
 use crate::AppState;
 use std::collections::HashMap;
-use tauri::State;
+use tauri::{State, Window};
 use crate::core;
 
 #[tauri::command]
@@ -51,4 +51,24 @@ pub fn set_repo_setting(
     let db = state.db.lock().unwrap();
     db.set_repo_setting(&repo_path, &key, &value)
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_window_repo_path(
+    state: State<AppState>,
+    window: Window,
+    repo_path: String,
+) -> Result<(), String> {
+    let mut map = state.window_repo_paths.lock().unwrap();
+    map.insert(window.label().to_string(), repo_path);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_window_repo_path(
+    state: State<AppState>,
+    window: Window,
+) -> Result<Option<String>, String> {
+    let map = state.window_repo_paths.lock().unwrap();
+    Ok(map.get(window.label()).cloned())
 }

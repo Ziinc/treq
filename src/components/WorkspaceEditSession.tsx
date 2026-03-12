@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Terminal } from "./Terminal";
 import { Button } from "./ui/button";
 import { X, GitBranch } from "lucide-react";
-import { Workspace, getSetting } from "../lib/api";
+import { Workspace, getWindowRepoPath } from "../lib/api";
 import { cn } from "../lib/utils";
 
 // Define types locally since git API was removed
@@ -37,7 +37,7 @@ export const WorkspaceEditSession: React.FC<WorkspaceEditSessionProps> = ({
 
     const loadMainRepoPath = async () => {
       try {
-        const repoPath = await getSetting("repo_path");
+        const repoPath = await getWindowRepoPath();
         if (!isCancelled) {
           setMainRepoPath(repoPath || null);
         }

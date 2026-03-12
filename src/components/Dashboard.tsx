@@ -52,7 +52,8 @@ import {
   startFileWatcher,
   stopFileWatcher,
   jjTrackWorkspaceBookmarks,
-  initRepo
+  initRepo,
+  setWindowRepoPath,
 } from "../lib/api";
 import { Loader2 } from "lucide-react";
 import { getFullWorkspacePath } from "../lib/utils";
@@ -79,7 +80,10 @@ interface DashboardProps {
   initialViewMode?: ViewMode;
 }
 export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-workspace" }) => {
-  const [repoPath, setRepoPath] = useState("");
+  const [repoPath, setRepoPath] = useState(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get("repo") || "";
+  });
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [unifiedDialogDefaults, setUnifiedDialogDefaults] = useState<WorkspaceDialogDefaults | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
@@ -176,28 +180,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     if (showFilePicker) setShowFilePicker(false);
   });
 
-  // Load repo path from URL params (for new windows) or saved settings
+  // Initialize repo from URL param (set by backend on startup, or by "Open in New Window")
   useEffect(() => {
     const loadInitialRepo = async () => {
-      // Check URL params first (for new windows opened via "Open in New Window...")
-      const urlParams = new URLSearchParams(window.location.search);
-      const urlRepoPath = urlParams.get("repo");
-
-      if (urlRepoPath) {
-        // Check if it's a jj workspace
-        const isValid = await jjIsWorkspace(urlRepoPath);
-        if (isValid) {
-          try { await initRepo(urlRepoPath); } catch (e) { console.error("Failed to init repo:", e); }
-          setRepoPath(urlRepoPath);
-          return;
-        }
-      }
-
-      // Fall back to saved setting (for main window)
-      const savedPath = await getSetting("repo_path");
-      if (savedPath) {
-        try { await initRepo(savedPath); } catch (e) { console.error("Failed to init saved repo:", e); }
-        setRepoPath(savedPath);
+      if (repoPath) {
+        try { await initRepo(repoPath); } catch (e) { console.error("Failed to init repo:", e); }
+        await setWindowRepoPath(repoPath);
       }
     };
 
@@ -394,7 +382,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
       return;
     }
 
-    await setSetting("repo_path", selected);
+    await setSetting("last_opened_repo_path", selected);
+    await setWindowRepoPath(selected);
     setRepoPath(selected);
     setSelectedWorkspace(null);
     setActiveSessionId(null);
@@ -440,7 +429,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         });
         if (!confirmed) return;
 
-        await setSetting("repo_path", "");
+        await setSetting("last_opened_repo_path", "");
+        await setWindowRepoPath("");
         setRepoPath("");
         setSelectedWorkspace(null);
         setActiveSessionId(null);
