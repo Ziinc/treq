@@ -56,7 +56,9 @@ export function FocusRefreshProvider({
     if (!repoPath) return;
 
     let lastFocusTime = 0;
-    const FOCUS_DEBOUNCE_MS = 2000;
+    let lastRebaseTime = 0;
+    const FOCUS_DEBOUNCE_MS = 5000;
+    const REBASE_DEBOUNCE_MS = 10000;
 
     const notifySubscribers = async (phase: FocusPhase) => {
       const callbacks = Array.from(subscribersRef.current.get(phase) || []);
@@ -82,17 +84,20 @@ export function FocusRefreshProvider({
           console.error("Failed to get current branch:", error)
         );
 
-      try {
-        // Step 3: Rebase workspaces
-        await checkAndRebaseWorkspaces(repoPath);
-      } catch (error) {
-        console.error("Auto-rebase failed:", error);
+      // Step 3: Rebase — independent, longer debounce
+      const shouldRebase = now - lastRebaseTime >= REBASE_DEBOUNCE_MS;
+      if (shouldRebase) {
+        lastRebaseTime = now;
+        try {
+          await checkAndRebaseWorkspaces(repoPath);
+        } catch (error) {
+          console.error("Auto-rebase failed:", error);
+        }
+        // Step 4: Notify afterRebase subscribers (only when rebase ran)
+        await notifySubscribers("afterRebase");
       }
 
-      // Step 4: Notify afterRebase subscribers
-      await notifySubscribers("afterRebase");
-
-      // Step 5: Notify afterInvalidate subscribers
+      // Step 5: Notify afterInvalidate subscribers (every debounced focus)
       await notifySubscribers("afterInvalidate");
     };
 
