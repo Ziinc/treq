@@ -42,9 +42,6 @@ jobs:
           cache-on-failure: true
           workspaces: "./src-tauri -> target"
 
-      - name: install frontend dependencies
-        run: npm ci # change this to npm, pnpm or bun depending on which one you use.
-
       # Certificate import handled by tauri-action with auto-detect
       # Manual certificate import commented out - tauri-action handles this automatically
       # Uncomment this section if auto-detect fails
