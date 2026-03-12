@@ -35,7 +35,6 @@ import {
 } from "../hooks/useAppFocusHandler";
 import {
   getWorkspaces,
-  rebuildWorkspaces,
   deleteWorkspace,
   cleanupStaleWorkspaces,
   getSetting,
@@ -188,6 +187,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
         // Check if it's a jj workspace
         const isValid = await jjIsWorkspace(urlRepoPath);
         if (isValid) {
+          try { await initRepo(urlRepoPath); } catch (e) { console.error("Failed to init repo:", e); }
           setRepoPath(urlRepoPath);
           return;
         }
@@ -196,6 +196,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
       // Fall back to saved setting (for main window)
       const savedPath = await getSetting("repo_path");
       if (savedPath) {
+        try { await initRepo(savedPath); } catch (e) { console.error("Failed to init saved repo:", e); }
         setRepoPath(savedPath);
       }
     };
@@ -352,25 +353,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     };
     fetchRemotes();
   }, [repoPath]);
-
-  // Rebuild workspaces from filesystem if database is empty
-  useEffect(() => {
-    const rebuildIfNeeded = async () => {
-      if (repoPath && workspaces.length === 0) {
-        try {
-          const rebuilt = await rebuildWorkspaces(repoPath);
-          if (rebuilt.length > 0) {
-            queryClient.invalidateQueries({
-              queryKey: ["workspaces", repoPath],
-            });
-          }
-        } catch (error) {
-          console.error("Failed to rebuild workspaces:", error);
-        }
-      }
-    };
-    rebuildIfNeeded();
-  }, [repoPath, workspaces.length, queryClient]);
 
   // Note: Git cache preloader removed since we're using JJ now
 

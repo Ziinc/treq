@@ -229,11 +229,6 @@ pub fn get_workspace_status(
 }
 
 #[tauri::command]
-pub fn rebuild_workspaces(repo_path: String) -> Result<Vec<Workspace>, String> {
-    local_db::rebuild_workspaces_from_filesystem(&repo_path)
-}
-
-#[tauri::command]
 pub fn update_workspace_metadata(
     repo_path: String,
     id: i64,
