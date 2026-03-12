@@ -327,7 +327,11 @@ pub fn set_workspace_target_branch(
         // Using mutable() filters out any pushed/immutable commits that may exist
         // in the range, preventing "Commit is immutable" errors when the workspace
         // branch (or part of it) has already been pushed to a remote.
-        let revset = format!("roots(mutable() & ({}..{}))", jj_target_branch, jj_workspace_branch);
+        // Exclude @ (working copy) with `~ @` to prevent it from being independently
+        // rebased onto target when all remote commits are immutable (jj 0.36+ treats
+        // untracked remote bookmarks as immutable). Without this, @ would be moved
+        // directly onto target, disconnecting it from the remote branch commits.
+        let revset = format!("roots(mutable() & ({}..{}) ~ @)", jj_target_branch, jj_workspace_branch);
         jj::jj_rebase_with_revset(&workspace_path, &revset, &jj_target_branch, &jj_workspace_branch, &conflict_style)
             .map_err(|e| e.to_string())?
     } else {

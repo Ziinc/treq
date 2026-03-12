@@ -484,10 +484,10 @@ export const jjGetCommitsAhead = (
   invoke("jj_get_commits_ahead", { workspacePath, targetBranch });
 
 export const jjGetMergeDiff = (
-  workspacePath: string,
-  targetBranch: string
+  repoPath: string,
+  workspaceId: number
 ): Promise<JjRevisionDiff> =>
-  invoke("jj_get_merge_diff", { workspacePath, targetBranch });
+  invoke("jj_get_merge_diff", { repoPath, workspaceId });
 
 export const jjCreateMerge = (
   workspacePath: string,

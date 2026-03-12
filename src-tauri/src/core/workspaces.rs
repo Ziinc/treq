@@ -1431,6 +1431,43 @@ pub fn copy_included_files(
     Ok(())
 }
 
+/// Gets the combined diff of all workspace commits relative to the target branch.
+///
+/// This shows only the changes introduced by the workspace's own commits,
+/// excluding changes already present on the target branch.
+///
+/// # Arguments
+/// * `repo_path`              - Path to the repository root
+/// * `workspace_id`           - ID of the workspace
+/// * `conflict_marker_style`  - Conflict marker style (e.g. "git")
+///
+/// # Returns
+/// The parsed revision diff on success, or an error string.
+pub fn workspace_diff(
+    repo_path: &str,
+    workspace_id: i64,
+    conflict_marker_style: &str,
+) -> Result<jj::JjRevisionDiff, String> {
+    let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
+        .map_err(|e| format!("Failed to get workspace: {}", e))?
+        .ok_or_else(|| format!("Workspace not found: {}", workspace_id))?;
+
+    let target_branch = workspace.target_branch
+        .as_deref()
+        .unwrap_or("main");
+
+    let workspace_dir = Path::new(repo_path)
+        .join(".treq")
+        .join("workspaces")
+        .join(&workspace.workspace_path);
+    let workspace_dir_str = workspace_dir
+        .to_str()
+        .ok_or("Failed to convert workspace path to string")?;
+
+    jj::jj_get_merge_diff(workspace_dir_str, target_branch, conflict_marker_style)
+        .map_err(|e| format!("Failed to get workspace diff: {}", e))
+}
+
 fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
     std::fs::create_dir_all(dst)
         .map_err(|e| format!("Failed to create directory {:?}: {}", dst, e))?;
