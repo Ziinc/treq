@@ -339,7 +339,6 @@ pub fn run() {
             commands::abandon_commit,
             commands::rename_workspace,
             commands::cleanup_stale_workspaces,
-            commands::rebuild_workspaces,
             commands::update_workspace_metadata,
             commands::update_workspace_not_on_remote,
             commands::list_workspace_statuses,

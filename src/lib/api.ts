@@ -182,9 +182,6 @@ export const initRepo = (repo_path: string): Promise<void> =>
 export const getWorkspaces = (repo_path: string): Promise<Workspace[]> =>
   invoke("get_workspaces", { repoPath: repo_path });
 
-export const rebuildWorkspaces = (repo_path: string): Promise<Workspace[]> =>
-  invoke("rebuild_workspaces", { repoPath: repo_path });
-
 export const addWorkspaceToDb = (
   repo_path: string,
   workspace_name: string,

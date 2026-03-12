@@ -73,7 +73,6 @@ vi.mock("../src/lib/api", async () => {
     }),
     getWorkspaces: vi.fn().mockResolvedValue([]),
     getSessions: vi.fn().mockResolvedValue([]),
-    rebuildWorkspaces: vi.fn().mockResolvedValue([]),
     createSession: vi.fn().mockResolvedValue(1),
     updateSessionAccess: vi.fn().mockResolvedValue(undefined),
     getSessionModel: vi.fn().mockResolvedValue(null),
