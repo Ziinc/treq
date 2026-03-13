@@ -1895,11 +1895,8 @@ export const ChangesDiffViewer = memo(
 
       // Scroll to file in the diff container
       const scrollToFileIfNeeded = useCallback(
-        (fileIndex: number) => {
-          const file = files[fileIndex];
-          if (!file) return;
-
-          const filePath = file.path;
+        (filePath: string) => {
+          if (!filePath) return;
 
           // Expand large changeset if it's collapsed
           setLargeChangesetExpanded(true);
@@ -1936,7 +1933,7 @@ export const ChangesDiffViewer = memo(
             }
           }, 50);
         },
-        [files]
+        []
       );
 
       // File selection handler - VSCode-style click selection
@@ -1981,7 +1978,7 @@ export const ChangesDiffViewer = memo(
           setLastSelectedFileIndex(fileIndex);
 
           // Smart scroll to file
-          scrollToFileIfNeeded(fileIndex);
+          scrollToFileIfNeeded(path);
         },
         [lastSelectedFileIndex, files, scrollToFileIfNeeded]
       );
@@ -3567,12 +3564,7 @@ export const ChangesDiffViewer = memo(
                       onFileSelect={(path, event) => {
                         event.preventDefault();
                         setActiveFilePath(path);
-
-                        // Scroll to the file in the diff view
-                        const fileElement = document.getElementById(`file-${path.replace(/\//g, "-")}`);
-                        if (fileElement) {
-                          fileElement.scrollIntoView({ behavior: "smooth", block: "start" });
-                        }
+                        scrollToFileIfNeeded(path);
                       }}
                       workspacePath={workspacePath}
                     />
