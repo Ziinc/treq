@@ -18,7 +18,7 @@ import {
 } from "../ui/tooltip";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
-import { ptyClose, setSessionModel, getSessionModel } from "../../lib/api";
+import { ptyClose, setSessionModel, getSessionModel, getTreqBinDir } from "../../lib/api";
 import {
   ChevronDown,
   ChevronUp,
@@ -109,6 +109,7 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
     const [isModelLoaded, setIsModelLoaded] = useState(false);
     const [terminalInstanceKey, setTerminalInstanceKey] = useState(0);
     const [pendingModelReset, setPendingModelReset] = useState(false);
+    const [treqBinDir, setTreqBinDir] = useState<string | null>(null);
 
     const terminalId = `claude-${sessionData.sessionId}`;
     const isHidden = collapsed;
@@ -119,7 +120,7 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
     const pendingPromptRef = useRef(sessionData.pendingPrompt);
     const permissionModeRef = useRef(sessionData.permissionMode);
 
-    // Load session model on mount
+    // Load session model and treq bin dir on mount
     useEffect(() => {
       const loadModel = async () => {
         try {
@@ -135,6 +136,7 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
         }
       };
       loadModel();
+      getTreqBinDir().then(setTreqBinDir).catch(() => {});
     }, [sessionData.repoPath, sessionData.sessionId]);
 
     // Handle terminal output
@@ -294,6 +296,11 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
     ].join("\\n");
 
     autoCommand += ` --append-system-prompt "${treqSystemPrompt}"`;
+
+    // Prepend PATH export so treq CLI is available inside Claude sessions
+    if (treqBinDir) {
+      autoCommand = `export PATH="${treqBinDir}:$PATH"; ` + autoCommand;
+    }
 
     // If there's a pending prompt, add it as a positional argument after --
     if (pendingPromptRef.current) {

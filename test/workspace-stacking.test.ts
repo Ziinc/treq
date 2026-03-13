@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { generateStackedIntent, generateStackedBranchName } from '../src/lib/utils';
+import { generateStackedIntent, generateStackedBranchName, sanitizeForBranchName, applyBranchNamePattern } from '../src/lib/utils';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useCreateStackedWorkspace } from '../src/hooks/useCreateStackedWorkspace';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -29,6 +29,56 @@ describe('generateStackedIntent', () => {
   test('generates intent without parent intent', () => {
     const result = generateStackedIntent(null, 'main');
     expect(result).toBe('Stacked from main');
+  });
+});
+
+describe('sanitizeForBranchName', () => {
+  test('basic sanitization', () => {
+    expect(sanitizeForBranchName('Add dark mode')).toBe('add-dark-mode');
+  });
+
+  test('truncation does not leave trailing hyphen', () => {
+    // 50 chars of 'a' + '-b' would truncate to 50 chars ending in '-'
+    const longText = 'a'.repeat(49) + '-b extra';
+    const result = sanitizeForBranchName(longText);
+    expect(result).not.toMatch(/-$/);
+  });
+
+  test('removes trailing single-character alphabetic part', () => {
+    // 'r' is a middle part here, not trailing — no stripping
+    expect(sanitizeForBranchName('add r feature')).toBe('add-r-feature');
+    // 'r' is the trailing part here — should be stripped
+    expect(sanitizeForBranchName('feat-thing-r')).toBe('feat-thing');
+    // numeric trailing part should NOT be stripped (e.g. stack index)
+    expect(sanitizeForBranchName('stack-1')).toBe('stack-1');
+  });
+
+  test('returns unnamed for empty/whitespace input', () => {
+    expect(sanitizeForBranchName('')).toBe('unnamed');
+    expect(sanitizeForBranchName('   ')).toBe('unnamed');
+  });
+});
+
+describe('applyBranchNamePattern', () => {
+  test('applies pattern correctly', () => {
+    expect(applyBranchNamePattern('treq/{name}', 'add dark mode')).toBe('treq/add-dark-mode');
+  });
+
+  test('no trailing slash when name is empty after sanitization', () => {
+    const result = applyBranchNamePattern('treq/{name}', '');
+    expect(result).not.toMatch(/[/.\-]$/);
+  });
+
+  test('strips trailing separator from pattern result', () => {
+    // pattern with trailing separator after name
+    const result = applyBranchNamePattern('{name}/', 'add-feature');
+    expect(result).not.toMatch(/[/.\-]$/);
+  });
+
+  test('strips trailing single-char alphabetic part after pattern separator', () => {
+    expect(applyBranchNamePattern('treq/{name}', 'feat-thing-r')).toBe('treq/feat-thing');
+    // numeric single-char should NOT be stripped
+    expect(applyBranchNamePattern('treq/{name}', 'stack-1')).toBe('treq/stack-1');
   });
 });
 

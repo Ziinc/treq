@@ -23,15 +23,31 @@ export function formatBytes(bytes: number): string {
  * Converts to lowercase, removes special chars, replaces spaces with hyphens
  */
 export function sanitizeForBranchName(text: string): string {
-  const sanitized = text
+  let sanitized = text
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, '')
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .substring(0, 50); // Limit to 50 chars
-  
+    .substring(0, 50)        // truncate first
+    .replace(/^-+|-+$/g, ''); // then trim hyphens
+
+  // Remove trailing single-character alphabetic parts (e.g., "feat-thing-r" → "feat-thing")
+  sanitized = sanitized.replace(/(-[a-z])$/, '');
+
   return sanitized || 'unnamed';
+}
+
+/** Remove trailing single-char parts and trailing separators from a branch name */
+function cleanBranchNameTrailing(name: string): string {
+  let result = name;
+  // Loop: strip trailing separator+single-char, then trailing separators
+  let prev: string;
+  do {
+    prev = result;
+    result = result.replace(/[/.\-][a-z]$/, '');
+    result = result.replace(/[/.\-]+$/, '');
+  } while (result !== prev);
+  return result;
 }
 
 /**
@@ -41,7 +57,8 @@ export function sanitizeForBranchName(text: string): string {
  */
 export function applyBranchNamePattern(pattern: string, name: string): string {
   const sanitized = sanitizeForBranchName(name);
-  return pattern.replace(/\{name\}/g, sanitized);
+  const result = cleanBranchNameTrailing(pattern.replace(/\{name\}/g, sanitized));
+  return result || 'unnamed';
 }
 
 /**
