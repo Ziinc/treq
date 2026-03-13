@@ -781,7 +781,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
           onWorkspaceMultiSelect={handleWorkspaceMultiSelect}
           onBulkDelete={handleBulkDelete}
           onDeleteWorkspace={handleDelete}
-          onCreateWorkspace={() => setUnifiedDialogDefaults({})}
           openSettings={openSettings}
           navigateToDashboard={handleReturnToDashboard}
           onOpenCommandPalette={() => setShowCommandPalette(true)}

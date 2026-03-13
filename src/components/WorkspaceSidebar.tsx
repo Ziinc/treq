@@ -26,7 +26,6 @@ import {
   Layers2,
 } from "lucide-react";
 import { Button } from "./ui/button";
-import { GitBranchPlusIcon } from "./ui/icons";
 import {
   Tooltip,
   TooltipContent,
@@ -60,7 +59,6 @@ interface WorkspaceSidebarProps {
   ) => void;
   onBulkDelete?: () => void;
   onDeleteWorkspace?: (workspace: Workspace) => void;
-  onCreateWorkspace?: () => void;
   openSettings?: (tab?: string) => void;
   navigateToDashboard?: () => void;
   onOpenCommandPalette?: () => void;
@@ -171,7 +169,6 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
     onWorkspaceMultiSelect,
     onBulkDelete,
     onDeleteWorkspace,
-    onCreateWorkspace,
     openSettings,
     navigateToDashboard: _navigateToDashboard,
     onOpenCommandPalette,
@@ -607,7 +604,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                     {droppableProvided.placeholder}
 
                     {/* Show delete button when workspaces are selected, otherwise show create buttons */}
-                    {selectedWorkspaceIds && selectedWorkspaceIds.size > 0 ? (
+                    {selectedWorkspaceIds && selectedWorkspaceIds.size > 0 && (
                       <button
                         type="button"
                         onClick={onBulkDelete}
@@ -619,27 +616,6 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                           {selectedWorkspaceIds.size > 1 ? "s" : ""}
                         </span>
                       </button>
-                    ) : (
-                      onCreateWorkspace && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type="button"
-                              onClick={onCreateWorkspace}
-                              variant="ghost"
-                              size="sm"
-                              className="w-full gap-1 bg-secondary/50 hover:bg-secondary"
-                              aria-label="Create new workspace"
-                            >
-                              <GitBranchPlusIcon className="w-4 h-4" />
-                              <span className="truncate">Workspace</span>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom">
-                            Create new workspace
-                          </TooltipContent>
-                        </Tooltip>
-                      )
                     )}
                   </div>
                 )}
