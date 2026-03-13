@@ -1,4 +1,4 @@
-import React, { memo } from "react";
+import React, { memo, useEffect, useState } from "react";
 import { X, Terminal } from "lucide-react";
 import { ConsolidatedTerminal } from "../ConsolidatedTerminal";
 import {
@@ -9,6 +9,7 @@ import {
 } from "../ui/tooltip";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
+import { getTreqBinDir } from "../../lib/api";
 import {
   type ShellTerminalData,
   type TerminalRefsMap,
@@ -39,6 +40,15 @@ export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
     width,
   }) {
     const isHidden = collapsed;
+    const [pathAutoCommand, setPathAutoCommand] = useState<string | undefined>(undefined);
+
+    useEffect(() => {
+      getTreqBinDir().then((binDir) => {
+        setPathAutoCommand(`export PATH="${binDir}:$PATH"`);
+      }).catch(() => {
+        // silently ignore — treq PATH injection is best-effort
+      });
+    }, []);
 
     return (
       <div
@@ -93,6 +103,7 @@ export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
             }}
             sessionId={terminalData.id}
             workingDirectory={terminalData.workingDirectory}
+            autoCommand={pathAutoCommand}
             onSessionError={onSessionError}
             onClose={onClose}
             containerClassName="h-full w-full overflow-hidden"

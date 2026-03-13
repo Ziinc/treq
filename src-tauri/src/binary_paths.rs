@@ -39,7 +39,30 @@ pub fn get_extended_path() -> String {
         }
     }
 
+    // Add the directory containing the running treq binary so `treq` is
+    // available in PTY sessions without modifying the user's shell config.
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let exe_dir_str = exe_dir.to_string_lossy().to_string();
+            if !exe_dir_str.is_empty() && !all_paths.contains(&exe_dir_str) {
+                all_paths.push(exe_dir_str);
+            }
+        }
+    }
+
     all_paths.join(":")
+}
+
+/// Get the directory containing the running treq executable
+pub fn get_exe_dir() -> Option<String> {
+    let exe_path = std::env::current_exe().ok()?;
+    let exe_dir = exe_path.parent()?;
+    let dir_str = exe_dir.to_string_lossy().to_string();
+    if dir_str.is_empty() {
+        None
+    } else {
+        Some(dir_str)
+    }
 }
 
 /// Detect binary path using `which` command with extended PATH

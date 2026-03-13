@@ -996,3 +996,6 @@ export const abandonCommit = (
     workspaceId,
     commitChangeId,
   });
+
+export const getTreqBinDir = (): Promise<string> =>
+  invoke("get_treq_bin_dir");
