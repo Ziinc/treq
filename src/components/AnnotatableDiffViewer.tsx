@@ -39,7 +39,7 @@ interface BranchDiffFileDiff {
   is_binary?: boolean;
   binary_message?: string;
   hunks?: BranchDiffHunk[];
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface CommentInput {

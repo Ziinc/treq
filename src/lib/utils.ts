@@ -44,8 +44,8 @@ function cleanBranchNameTrailing(name: string): string {
   let prev: string;
   do {
     prev = result;
-    result = result.replace(/[/.\-][a-z]$/, '');
-    result = result.replace(/[/.\-]+$/, '');
+    result = result.replace(/[/.-][a-z]$/, '');
+    result = result.replace(/[/.-]+$/, '');
   } while (result !== prev);
   return result;
 }

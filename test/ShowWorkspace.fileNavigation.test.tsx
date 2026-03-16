@@ -1,9 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, waitFor, screen } from "./test-utils";
 import { ShowWorkspace } from "../src/components/ShowWorkspace";
 import * as api from "../src/lib/api";
-import { act } from "@testing-library/react";
-
 // Mock Tauri APIs
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(() => {}),

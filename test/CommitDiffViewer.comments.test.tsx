@@ -213,7 +213,7 @@ describe("CommitDiffViewer - Comments", () => {
     // Get the line number gutters for lines 1 and 3 (0-indexed: 1 and 2)
     // Each line row has two gutter divs with cursor-pointer
     const line1Gutters = hunkLines[1].querySelectorAll("[class*='cursor-pointer']");
-    const line3Gutters = hunkLines[2].querySelectorAll("[class*='cursor-pointer']");
+    const _line3Gutters = hunkLines[2].querySelectorAll("[class*='cursor-pointer']");
 
     // mouseDown on line 1 gutter
     fireEvent.mouseDown(line1Gutters[0]);

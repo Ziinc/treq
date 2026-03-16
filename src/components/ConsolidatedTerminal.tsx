@@ -528,7 +528,7 @@ export const ConsolidatedTerminal = forwardRef<
               if (files.length > 0 && isPtyReadyRef.current) {
                 // In Tauri/Electron, files have a 'path' property
                 const paths = files
-                  .map((f: any) => f.path)
+                  .map((f: File & { path?: string }) => f.path)
                   .filter(Boolean)
                   .join(" ");
                 if (paths) {

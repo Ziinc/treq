@@ -2967,7 +2967,7 @@ export const ChangesDiffViewer = memo(
                 return next;
               });
             }
-          } catch (error) {
+          } catch {
             // Silently ignore - lines may not exist (e.g., beginning/end of file)
           }
         },

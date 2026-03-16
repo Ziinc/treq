@@ -1,6 +1,6 @@
 import type { JjLogCommit } from "../../src/lib/api";
 
-interface CommitFactoryOptions extends Partial<JjLogCommit> {}
+type CommitFactoryOptions = Partial<JjLogCommit>;
 
 /**
  * Generates random values for commit data

@@ -527,7 +527,7 @@ const WorkspaceTerminalPaneInner = forwardRef<WorkspaceTerminalPaneHandle, Works
       } else {
         setActivePtySessionId(firstTerminal.data.ptySessionId);
       }
-    }, [workingDirectory]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [workingDirectory]);
 
     const totalTerminals = allTerminals.length;
 

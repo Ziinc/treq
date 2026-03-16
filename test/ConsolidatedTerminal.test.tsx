@@ -158,11 +158,11 @@ describe("ConsolidatedTerminal autoCommand behavior", () => {
 
   it("does NOT send autoCommand when component remounts with existing session", async () => {
     // Mock PTY API - session exists
-    const mockPtySessionExists = vi.spyOn(api, "ptySessionExists").mockResolvedValue(true);
+    const _mockPtySessionExists = vi.spyOn(api, "ptySessionExists").mockResolvedValue(true);
     const mockPtyListen = vi.spyOn(api, "ptyListen").mockResolvedValue(() => {});
     const mockPtyWrite = vi.spyOn(api, "ptyWrite").mockResolvedValue(undefined);
 
-    const { unmount, rerender } = render(
+    const { rerender } = render(
       <ConsolidatedTerminal
         sessionId="test-session-3"
         workingDirectory="/test/dir"
@@ -208,7 +208,7 @@ describe("ConsolidatedTerminal global shortcuts", () => {
 
   it("dispatches Cmd+K to window when terminal receives it", async () => {
     // Setup mocks
-    const mockPtySessionExists = vi.spyOn(api, "ptySessionExists").mockResolvedValue(true);
+    const _mockPtySessionExists = vi.spyOn(api, "ptySessionExists").mockResolvedValue(true);
     const mockPtyListen = vi.spyOn(api, "ptyListen").mockResolvedValue(() => {});
 
     // Setup window event listener spy
@@ -242,7 +242,7 @@ describe("ConsolidatedTerminal global shortcuts", () => {
 
   it("dispatches Cmd+P to window when terminal receives it", async () => {
     // Setup mocks
-    const mockPtySessionExists = vi.spyOn(api, "ptySessionExists").mockResolvedValue(true);
+    const _mockPtySessionExists = vi.spyOn(api, "ptySessionExists").mockResolvedValue(true);
     const mockPtyListen = vi.spyOn(api, "ptyListen").mockResolvedValue(() => {});
 
     const windowKeydownSpy = vi.fn();
@@ -272,7 +272,7 @@ describe("ConsolidatedTerminal global shortcuts", () => {
 
   it("dispatches Escape to window when terminal receives it", async () => {
     // Setup mocks
-    const mockPtySessionExists = vi.spyOn(api, "ptySessionExists").mockResolvedValue(true);
+    const _mockPtySessionExists = vi.spyOn(api, "ptySessionExists").mockResolvedValue(true);
     const mockPtyListen = vi.spyOn(api, "ptyListen").mockResolvedValue(() => {});
 
     const windowKeydownSpy = vi.fn();
@@ -302,7 +302,7 @@ describe("ConsolidatedTerminal global shortcuts", () => {
 
   it("does NOT dispatch regular keys to window", async () => {
     // Setup mocks
-    const mockPtySessionExists = vi.spyOn(api, "ptySessionExists").mockResolvedValue(true);
+    const _mockPtySessionExists = vi.spyOn(api, "ptySessionExists").mockResolvedValue(true);
     const mockPtyListen = vi.spyOn(api, "ptyListen").mockResolvedValue(() => {});
 
     const windowKeydownSpy = vi.fn();

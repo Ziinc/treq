@@ -30,8 +30,8 @@ export const AccountSettings: React.FC = () => {
       }
       await exchangeToken(token);
       setCallbackUrl("");
-    } catch (err: any) {
-      setDevError(err.message || "Token exchange failed");
+    } catch (err: unknown) {
+      setDevError(err instanceof Error ? err.message : "Token exchange failed");
     } finally {
       setDevLoading(false);
     }

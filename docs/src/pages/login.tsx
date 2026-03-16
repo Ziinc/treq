@@ -128,7 +128,7 @@ function LoginContent() {
         <div style={styles.card}>
           <h2 style={styles.title}>Reset your password</h2>
           <p style={styles.subtitle}>
-            Enter your email and we'll send you a link to reset your password.
+            Enter your email and we&apos;ll send you a link to reset your password.
           </p>
 
           {error && <div style={styles.error}>{error}</div>}

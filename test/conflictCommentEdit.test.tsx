@@ -261,7 +261,7 @@ describe("Conflict comment edit flow", () => {
   });
 
   it("should show delete button (X) in display mode", async () => {
-    const { container } = await setupSavedComment();
+    await setupSavedComment();
 
     // Find X delete button
     const commentCard = screen.getByText("Test resolution comment").closest("div[class*='cursor-pointer']");

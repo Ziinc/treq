@@ -450,7 +450,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
 
         try {
           await initRepo(selected);
-        } catch (error) {
+        } catch {
           addToast({
             title: "Not a Git Repository",
             description:

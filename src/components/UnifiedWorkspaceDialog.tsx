@@ -247,7 +247,6 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
           .finally(() => setBranchesLoading(false));
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // ── load branch pattern ──────────────────────────────────────────────────
@@ -337,7 +336,6 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
           );
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileHunksMap]);
 
   const getFileSelectionState = useCallback(

@@ -81,8 +81,8 @@ function CallbackContent() {
 
         // Try to open the deep link — will silently fail if protocol isn't registered
         window.location.href = link;
-      } catch (err: any) {
-        setError(err.message || "Authentication failed");
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Authentication failed");
         setStatus("error");
       }
     };
@@ -106,14 +106,14 @@ function CallbackContent() {
       <div style={styles.container}>
         <div style={styles.card}>
           <div style={{ fontSize: "2rem", marginBottom: "1rem" }}>&#10003;</div>
-          <h2 style={styles.title}>You're signed in</h2>
+          <h2 style={styles.title}>You&apos;re signed in</h2>
           <p style={styles.text}>
             Opening Treq desktop app...
           </p>
           {desktopLink && (
             <div style={styles.linkBox}>
               <p style={styles.subtext}>
-                If the app didn't open, click below:
+                If the app didn&apos;t open, click below:
               </p>
               <a href={desktopLink} style={styles.openAppButton}>Open Treq</a>
             </div>
