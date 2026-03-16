@@ -35,13 +35,9 @@ export default defineConfig([
   },
   {
     rules: {
-      // TypeScript handles prop types validation
       "react/prop-types": "off",
-      // Not needed with modern React JSX transform
       "react/react-in-jsx-scope": "off",
-      // Allow display name to be inferred
       "react/display-name": "off",
-      // Allow unused vars prefixed with _
       "@typescript-eslint/no-unused-vars": [
         "error",
         {
@@ -53,7 +49,6 @@ export default defineConfig([
     },
   },
   {
-    // Relaxed rules for config files
     files: ["*.config.{js,ts}", "tailwind.config.js"],
     languageOptions: {
       globals: {
@@ -67,7 +62,10 @@ export default defineConfig([
     },
   },
   {
-    // Relaxed rules for test files
+    files: ["eslint-rules/**/*.js", "scripts/**/*.js"],
+    languageOptions: { globals: globals.node },
+  },
+  {
     files: ["test/**/*.{ts,tsx}"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
