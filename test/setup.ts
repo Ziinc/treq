@@ -97,7 +97,7 @@ vi.mock("../src/hooks/useCachedWorkspaceChanges", () => ({
 if (!navigator.clipboard) {
   Object.defineProperty(navigator, 'clipboard', {
     value: {
-      writeText: async (text: string) => {},
+      writeText: async (_text: string) => {},
     },
     writable: true,
     configurable: true,

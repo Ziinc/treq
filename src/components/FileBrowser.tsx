@@ -92,7 +92,7 @@ interface TreeNodeProps {
   entry: DirectoryEntry;
   depth: number;
   isExpanded: boolean;
-  children: DirectoryEntry[];
+  childEntries: DirectoryEntry[];
   hasChanges: boolean;
   selectedFile: string | null;
   changedFiles: Map<string, ParsedFileChange>;
@@ -649,7 +649,7 @@ const TreeNode = memo(function TreeNode({
   entry,
   depth,
   isExpanded,
-  children,
+  childEntries: children,
   hasChanges,
   selectedFile,
   changedFiles,
@@ -1264,7 +1264,7 @@ export const FileBrowser = memo(function FileBrowser({
           entry={entry}
           depth={depth}
           isExpanded={isExpanded}
-          children={children}
+          childEntries={children}
           hasChanges={hasChanges}
           selectedFile={selectedFile}
           changedFiles={changedFiles}

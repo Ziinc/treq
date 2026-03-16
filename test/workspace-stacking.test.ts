@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { generateStackedIntent, generateStackedBranchName, sanitizeForBranchName, applyBranchNamePattern } from '../src/lib/utils';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook } from '@testing-library/react';
 import { useCreateStackedWorkspace } from '../src/hooks/useCreateStackedWorkspace';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
@@ -66,13 +66,13 @@ describe('applyBranchNamePattern', () => {
 
   test('no trailing slash when name is empty after sanitization', () => {
     const result = applyBranchNamePattern('treq/{name}', '');
-    expect(result).not.toMatch(/[/.\-]$/);
+    expect(result).not.toMatch(/[/.-]$/);
   });
 
   test('strips trailing separator from pattern result', () => {
     // pattern with trailing separator after name
     const result = applyBranchNamePattern('{name}/', 'add-feature');
-    expect(result).not.toMatch(/[/.\-]$/);
+    expect(result).not.toMatch(/[/.-]$/);
   });
 
   test('strips trailing single-char alphabetic part after pattern separator', () => {

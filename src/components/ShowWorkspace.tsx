@@ -1268,7 +1268,7 @@ const handleSync = useCallback(async () => {
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    This branch doesn't exist on remote yet. Push to create it.
+                    This branch doesn&apos;t exist on remote yet. Push to create it.
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>

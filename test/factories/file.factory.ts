@@ -1,6 +1,6 @@
 import type { JjFileChange } from "../../src/lib/api";
 
-interface FileFactoryOptions extends Partial<JjFileChange> {}
+type FileFactoryOptions = Partial<JjFileChange>;
 
 /**
  * Factory function to create mock file change objects

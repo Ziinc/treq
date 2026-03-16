@@ -113,13 +113,13 @@ function ProblemSection(): ReactNode {
 
         <div className={styles.problemList}>
           <div className={styles.problemItem}>
-            Your agent finishes a task, but now you're reviewing a 500-line diff with no context.
+            Your agent finishes a task, but now you&apos;re reviewing a 500-line diff with no context.
           </div>
           <div className={styles.problemItem}>
-            You want multiple agents working in parallel, but they'd step on each other's changes.
+            You want multiple agents working in parallel, but they&apos;d step on each other&apos;s changes.
           </div>
           <div className={styles.problemItem}>
-            Your branches go stale while you're iterating on reviews, and rebasing is a chore.
+            Your branches go stale while you&apos;re iterating on reviews, and rebasing is a chore.
           </div>
           <div className={styles.problemItem}>
             A large feature needs to be broken into smaller PRs, but keeping them in sync is painful.

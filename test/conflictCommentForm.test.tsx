@@ -169,7 +169,7 @@ describe("Standardized conflict comment form", () => {
   });
 
   it("should have label with text-md class", async () => {
-    const { container } = render(
+    render(
       <ChangesDiffViewer
         workspacePath="/test/workspace"
         repoPath="/test/repo"

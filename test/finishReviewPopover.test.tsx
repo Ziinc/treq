@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "./test-utils";
+import { render, screen, waitFor } from "./test-utils";
 import userEvent from "@testing-library/user-event";
 import { ChangesDiffViewer } from "../src/components/ChangesDiffViewer";
 import * as api from "../src/lib/api";

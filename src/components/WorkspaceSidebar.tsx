@@ -214,7 +214,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
           // Create a fake workspace click event to trigger the clear logic
           // We'll pass null to signal clearing selection
           if (onWorkspaceMultiSelect) {
-            onWorkspaceMultiSelect(null as any, e);
+            onWorkspaceMultiSelect(null as Parameters<NonNullable<typeof onWorkspaceMultiSelect>>[0], e);
           }
         }
       },
@@ -326,7 +326,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                           ? "bg-primary/20"
                           : "hover:bg-muted/50"
                       }`}
-                      onClick={() => onWorkspaceClick?.(undefined as any)}
+                      onClick={() => onWorkspaceClick?.(undefined as unknown as Workspace)}
                     >
                       <Home
                         className={`w-3 h-3 mr-1 shrink-0 ${

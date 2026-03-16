@@ -240,7 +240,7 @@ describe("Cancel/Discard review feature", () => {
         },
       ]);
 
-      const { container } = render(
+      render(
         <ChangesDiffViewer
           workspacePath="/test/workspace"
           repoPath="/test/repo"

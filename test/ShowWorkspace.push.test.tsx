@@ -317,8 +317,6 @@ describe("ShowWorkspace Push", () => {
   });
 
   it("does not call jjPush if workspace is not set", async () => {
-    const user = userEvent.setup();
-
     render(
       <ShowWorkspace
         repositoryPath={workspace.repo_path}

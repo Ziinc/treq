@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "./test-utils";
 import { userEvent } from "@testing-library/user-event";
 import { FileBrowser } from "../src/components/FileBrowser";
-import * as api from "../src/lib/api";
 
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(() => {}),
