@@ -62,7 +62,6 @@ pub fn get_local_db_path(repo_path: &str) -> PathBuf {
     Path::new(repo_path).join(".treq").join("local.db")
 }
 
-
 /// Initialize the local database for a repository.
 ///
 /// Creates tables for workspaces, sessions, changed_files, and workspace_files.

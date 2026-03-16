@@ -33,10 +33,7 @@ pub fn list_commits(
                 .to_str()
                 .ok_or("Failed to convert workspace path to string")?;
 
-            let target_branch = workspace
-                .target_branch
-                .as_deref()
-                .unwrap_or("main");
+            let target_branch = workspace.target_branch.as_deref().unwrap_or("main");
 
             let mut result = jj::jj_get_log(workspace_dir_str, target_branch, Some(false), None)
                 .map_err(|e| format!("Failed to list commits: {}", e))?;

@@ -156,4 +156,3 @@ pub fn index_workspace_files(
 
     Ok(())
 }
-

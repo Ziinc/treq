@@ -508,8 +508,7 @@ fn test_can_rebase_merge_workspace_into_home_repo() {
 
     let feature_file = workspace_path.join("rebase-feature.txt");
     fs::write(&feature_file, "rebase feature content").expect("Failed to write feature file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Add rebase feature")
-        .expect("Failed to commit");
+    treq_lib::jj::jj_commit(workspace_path_str, "Add rebase feature").expect("Failed to commit");
 
     treq_lib::core::merge_workspace(
         &repo.repo_path,
@@ -1782,13 +1781,9 @@ fn test_rename_workspace_dry_run_valid_name() {
     .expect("Failed to create workspace");
 
     // Dry run should succeed with a valid new name
-    let result = treq_lib::core::rename_workspace(
-        &repo.repo_path,
-        workspace.id,
-        "feat/new-name",
-        true,
-    )
-    .expect("Failed to dry-run rename workspace");
+    let result =
+        treq_lib::core::rename_workspace(&repo.repo_path, workspace.id, "feat/new-name", true)
+            .expect("Failed to dry-run rename workspace");
 
     assert!(result.success, "Dry run should succeed for valid name");
 
@@ -1802,8 +1797,7 @@ fn test_rename_workspace_dry_run_valid_name() {
     );
 
     // Verify jj bookmarks are unchanged
-    let bookmarks =
-        JjVerifier::list_bookmarks(&repo.repo_path).expect("Failed to list bookmarks");
+    let bookmarks = JjVerifier::list_bookmarks(&repo.repo_path).expect("Failed to list bookmarks");
     assert!(
         bookmarks.iter().any(|b| b == "feat/original"),
         "Original bookmark should still exist after dry run, got: {:?}",
@@ -1845,13 +1839,8 @@ fn test_rename_workspace_dry_run_clashes_with_existing_branch() {
     .expect("Failed to create workspace B");
 
     // Try to rename B to A's branch name (should fail)
-    let result = treq_lib::core::rename_workspace(
-        &repo.repo_path,
-        ws_b.id,
-        "feat/a",
-        true,
-    )
-    .expect("Failed to dry-run rename workspace");
+    let result = treq_lib::core::rename_workspace(&repo.repo_path, ws_b.id, "feat/a", true)
+        .expect("Failed to dry-run rename workspace");
 
     assert!(
         !result.success,
@@ -1884,13 +1873,9 @@ fn test_rename_workspace_dry_run_same_name() {
     .expect("Failed to create workspace");
 
     // Renaming to same name should fail
-    let result = treq_lib::core::rename_workspace(
-        &repo.repo_path,
-        workspace.id,
-        "feat/original",
-        true,
-    )
-    .expect("Failed to dry-run rename workspace");
+    let result =
+        treq_lib::core::rename_workspace(&repo.repo_path, workspace.id, "feat/original", true)
+            .expect("Failed to dry-run rename workspace");
 
     assert!(
         !result.success,
@@ -1917,13 +1902,9 @@ fn test_rename_workspace_success() {
     .expect("Failed to create workspace");
 
     // Actual rename
-    let result = treq_lib::core::rename_workspace(
-        &repo.repo_path,
-        workspace.id,
-        "feat/renamed",
-        false,
-    )
-    .expect("Failed to rename workspace");
+    let result =
+        treq_lib::core::rename_workspace(&repo.repo_path, workspace.id, "feat/renamed", false)
+            .expect("Failed to rename workspace");
 
     assert!(result.success, "Rename should succeed");
     assert_eq!(
@@ -1942,8 +1923,7 @@ fn test_rename_workspace_success() {
     );
 
     // Verify jj bookmarks
-    let bookmarks =
-        JjVerifier::list_bookmarks(&repo.repo_path).expect("Failed to list bookmarks");
+    let bookmarks = JjVerifier::list_bookmarks(&repo.repo_path).expect("Failed to list bookmarks");
     assert!(
         bookmarks.iter().any(|b| b == "feat/renamed"),
         "New bookmark should exist, got: {:?}",
@@ -1976,9 +1956,8 @@ fn test_rename_workspace_updates_child_target_branches() {
     .expect("Failed to create parent workspace");
 
     // Create stacked workspace targeting parent
-    let child =
-        treq_lib::core::stack_workspace(&repo.repo_path, Some(&parent), Some("feat/child"))
-            .expect("Failed to create child workspace");
+    let child = treq_lib::core::stack_workspace(&repo.repo_path, Some(&parent), Some("feat/child"))
+        .expect("Failed to create child workspace");
 
     // Verify child targets parent
     assert_eq!(
@@ -1988,13 +1967,9 @@ fn test_rename_workspace_updates_child_target_branches() {
     );
 
     // Rename parent
-    let result = treq_lib::core::rename_workspace(
-        &repo.repo_path,
-        parent.id,
-        "feat/parent-renamed",
-        false,
-    )
-    .expect("Failed to rename parent workspace");
+    let result =
+        treq_lib::core::rename_workspace(&repo.repo_path, parent.id, "feat/parent-renamed", false)
+            .expect("Failed to rename parent workspace");
 
     assert!(result.success, "Rename should succeed");
     assert!(
@@ -2033,13 +2008,9 @@ fn test_rename_workspace_sets_not_on_remote() {
     .expect("Failed to create workspace");
 
     // Rename workspace
-    let result = treq_lib::core::rename_workspace(
-        &repo.repo_path,
-        workspace.id,
-        "feat/renamed",
-        false,
-    )
-    .expect("Failed to rename workspace");
+    let result =
+        treq_lib::core::rename_workspace(&repo.repo_path, workspace.id, "feat/renamed", false)
+            .expect("Failed to rename workspace");
 
     assert!(result.success, "Rename should succeed");
 
@@ -2075,8 +2046,11 @@ fn test_recover_workspace_after_jj_reinit() {
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
 
     // Add uncommitted file to workspace
-    fs::write(workspace_path.join("uncommitted.txt"), "uncommitted content")
-        .expect("Failed to write file");
+    fs::write(
+        workspace_path.join("uncommitted.txt"),
+        "uncommitted content",
+    )
+    .expect("Failed to write file");
 
     // Verify workspace is registered with jj
     let jj_workspaces_before =
@@ -2377,7 +2351,9 @@ fn test_empty_commits_excluded_from_commits_ahead() {
         commits_ahead.total_count
     );
     assert!(
-        commits_ahead.commits[0].description.contains("Add real file"),
+        commits_ahead.commits[0]
+            .description
+            .contains("Add real file"),
         "The commit should be the real one, got: {}",
         commits_ahead.commits[0].description
     );
@@ -2405,8 +2381,7 @@ fn test_merge_abandons_empty_commits() {
     let workspace_path_str = workspace_path.to_str().unwrap();
 
     // Create a real commit
-    fs::write(workspace_path.join("feature.txt"), "feature content")
-        .expect("Failed to write file");
+    fs::write(workspace_path.join("feature.txt"), "feature content").expect("Failed to write file");
     jj::jj_commit(workspace_path_str, "Add feature").expect("Failed to commit");
 
     // Create empty commits
@@ -2629,7 +2604,10 @@ fn test_workspace_status_not_on_remote() {
     )
     .expect("Failed to create workspace");
 
-    assert!(workspace.not_on_remote, "New workspace should be not_on_remote");
+    assert!(
+        workspace.not_on_remote,
+        "New workspace should be not_on_remote"
+    );
 
     let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
         .expect("Failed to list workspace statuses");
@@ -2763,7 +2741,11 @@ fn test_workspace_status_behind_remote() {
     let clone_dir = repo.temp_dir.path().join("clone");
     let remote_dir = repo.temp_dir.path().join("remote.git");
     Command::new("git")
-        .args(["clone", remote_dir.to_str().unwrap(), clone_dir.to_str().unwrap()])
+        .args([
+            "clone",
+            remote_dir.to_str().unwrap(),
+            clone_dir.to_str().unwrap(),
+        ])
         .output()
         .expect("Failed to clone remote");
     Command::new("git")
@@ -2855,14 +2837,19 @@ fn test_workspace_status_diverged() {
         .expect("Failed to push workspace");
 
     // Make a local commit (don't push)
-    fs::write(workspace_path.join("local-file.txt"), "local content").expect("Failed to write file");
+    fs::write(workspace_path.join("local-file.txt"), "local content")
+        .expect("Failed to write file");
     treq_lib::jj::jj_commit(workspace_path_str, "Local commit").expect("Failed to commit");
 
     // Clone the bare remote, commit and push from the clone to simulate remote-ahead
     let clone_dir = repo.temp_dir.path().join("clone-diverged");
     let remote_dir = repo.temp_dir.path().join("remote.git");
     Command::new("git")
-        .args(["clone", remote_dir.to_str().unwrap(), clone_dir.to_str().unwrap()])
+        .args([
+            "clone",
+            remote_dir.to_str().unwrap(),
+            clone_dir.to_str().unwrap(),
+        ])
         .output()
         .expect("Failed to clone remote");
     Command::new("git")
@@ -2899,7 +2886,10 @@ fn test_workspace_status_diverged() {
 
     assert_eq!(
         status.remote_sync,
-        RemoteSyncStatus::Diverged { ahead: 1, behind: 1 },
+        RemoteSyncStatus::Diverged {
+            ahead: 1,
+            behind: 1
+        },
         "Workspace should be Diverged {{ ahead: 1, behind: 1 }}"
     );
 }
@@ -3129,7 +3119,9 @@ fn test_jj_get_sync_status_baseline_in_sync() {
     // Verify WorkspacePartialStatus shows InSync
     let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
         .expect("Failed to list workspace statuses");
-    let status = statuses.iter().find(|s| s.current.id == workspace.id)
+    let status = statuses
+        .iter()
+        .find(|s| s.current.id == workspace.id)
         .expect("Should find workspace in statuses");
     assert_eq!(
         status.remote_sync,
@@ -3139,12 +3131,9 @@ fn test_jj_get_sync_status_baseline_in_sync() {
     );
 
     // Should be in sync (0, 0)
-    let (ahead, behind) = treq_lib::jj::jj_get_sync_status(
-        workspace_path_str,
-        &workspace.branch_name,
-        false,
-    )
-    .expect("Failed to get sync status at baseline");
+    let (ahead, behind) =
+        treq_lib::jj::jj_get_sync_status(workspace_path_str, &workspace.branch_name, false)
+            .expect("Failed to get sync status at baseline");
     assert_eq!(
         (ahead, behind),
         (0, 0),
@@ -3188,15 +3177,11 @@ fn test_jj_get_sync_status_ahead_after_local_commit() {
     // Make a local-only commit → expect (1, 0)
     fs::write(workspace_path.join("local_only.txt"), "local content\n")
         .expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Local only commit")
-        .expect("Failed to commit");
+    treq_lib::jj::jj_commit(workspace_path_str, "Local only commit").expect("Failed to commit");
 
-    let (ahead, behind) = treq_lib::jj::jj_get_sync_status(
-        workspace_path_str,
-        &workspace.branch_name,
-        false,
-    )
-    .expect("Failed to get sync status after local commit");
+    let (ahead, behind) =
+        treq_lib::jj::jj_get_sync_status(workspace_path_str, &workspace.branch_name, false)
+            .expect("Failed to get sync status after local commit");
     assert_eq!(
         ahead, 1,
         "After local commit, should be 1 ahead, got {}",
@@ -3246,8 +3231,7 @@ fn test_jj_get_sync_status_returns_to_sync_after_push() {
     // Make a local commit then push it
     fs::write(workspace_path.join("local_only.txt"), "local content\n")
         .expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Local only commit")
-        .expect("Failed to commit");
+    treq_lib::jj::jj_commit(workspace_path_str, "Local only commit").expect("Failed to commit");
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
         .expect("Failed to push");
     treq_lib::core::pull_workspace_from_remote(&repo.repo_path, Some(workspace.id), "git")
@@ -3265,7 +3249,9 @@ fn test_jj_get_sync_status_returns_to_sync_after_push() {
     // Verify WorkspacePartialStatus shows InSync
     let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
         .expect("Failed to list workspace statuses");
-    let status = statuses.iter().find(|s| s.current.id == workspace.id)
+    let status = statuses
+        .iter()
+        .find(|s| s.current.id == workspace.id)
         .expect("Should find workspace in statuses");
     assert_eq!(
         status.remote_sync,
@@ -3275,12 +3261,9 @@ fn test_jj_get_sync_status_returns_to_sync_after_push() {
     );
 
     // Should be back in sync (0, 0)
-    let (ahead, behind) = treq_lib::jj::jj_get_sync_status(
-        workspace_path_str,
-        &workspace.branch_name,
-        false,
-    )
-    .expect("Failed to get sync status after push");
+    let (ahead, behind) =
+        treq_lib::jj::jj_get_sync_status(workspace_path_str, &workspace.branch_name, false)
+            .expect("Failed to get sync status after push");
     assert_eq!(
         (ahead, behind),
         (0, 0),
@@ -3322,21 +3305,14 @@ fn test_jj_get_sync_status_multiple_commits_ahead() {
         .expect("Failed to pull");
 
     // Make two local commits → expect (2, 0)
-    fs::write(workspace_path.join("local_2.txt"), "content 2\n")
-        .expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Second local commit")
-        .expect("Failed to commit");
-    fs::write(workspace_path.join("local_3.txt"), "content 3\n")
-        .expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Third local commit")
-        .expect("Failed to commit");
+    fs::write(workspace_path.join("local_2.txt"), "content 2\n").expect("Failed to write file");
+    treq_lib::jj::jj_commit(workspace_path_str, "Second local commit").expect("Failed to commit");
+    fs::write(workspace_path.join("local_3.txt"), "content 3\n").expect("Failed to write file");
+    treq_lib::jj::jj_commit(workspace_path_str, "Third local commit").expect("Failed to commit");
 
-    let (ahead, behind) = treq_lib::jj::jj_get_sync_status(
-        workspace_path_str,
-        &workspace.branch_name,
-        false,
-    )
-    .expect("Failed to get sync status after two local commits");
+    let (ahead, behind) =
+        treq_lib::jj::jj_get_sync_status(workspace_path_str, &workspace.branch_name, false)
+            .expect("Failed to get sync status after two local commits");
     assert_eq!(
         ahead, 2,
         "After two local commits, should be 2 ahead, got {}",
@@ -3372,15 +3348,14 @@ fn test_workspace_push_pull_with_workspace_status() {
     let workspace_path_str = workspace_path.to_str().unwrap();
 
     // Helper closure: get WorkspacePartialStatus for our workspace
-    let get_status =
-        |repo_path: &str, ws_id: i64| -> treq_lib::core::WorkspacePartialStatus {
-            let statuses = treq_lib::core::list_workspace_statuses(repo_path)
-                .expect("Failed to list workspace statuses");
-            statuses
-                .into_iter()
-                .find(|s| s.current.id == ws_id)
-                .expect("Should find workspace in statuses")
-        };
+    let get_status = |repo_path: &str, ws_id: i64| -> treq_lib::core::WorkspacePartialStatus {
+        let statuses = treq_lib::core::list_workspace_statuses(repo_path)
+            .expect("Failed to list workspace statuses");
+        statuses
+            .into_iter()
+            .find(|s| s.current.id == ws_id)
+            .expect("Should find workspace in statuses")
+    };
 
     // Record git branch before any operations
     let branch_before = jj::get_workspace_branch(workspace_path_str)
@@ -3419,8 +3394,7 @@ fn test_workspace_push_pull_with_workspace_status() {
     // Make a local-only commit → expect Ahead { count: 1 }
     fs::write(workspace_path.join("local_only.txt"), "local content\n")
         .expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Local only commit")
-        .expect("Failed to commit");
+    treq_lib::jj::jj_commit(workspace_path_str, "Local only commit").expect("Failed to commit");
 
     let status = get_status(&repo.repo_path, workspace.id);
     assert_eq!(
@@ -3454,14 +3428,10 @@ fn test_workspace_push_pull_with_workspace_status() {
     );
 
     // Make two more local commits → expect Ahead { count: 2 }
-    fs::write(workspace_path.join("local_2.txt"), "content 2\n")
-        .expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Second local commit")
-        .expect("Failed to commit");
-    fs::write(workspace_path.join("local_3.txt"), "content 3\n")
-        .expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Third local commit")
-        .expect("Failed to commit");
+    fs::write(workspace_path.join("local_2.txt"), "content 2\n").expect("Failed to write file");
+    treq_lib::jj::jj_commit(workspace_path_str, "Second local commit").expect("Failed to commit");
+    fs::write(workspace_path.join("local_3.txt"), "content 3\n").expect("Failed to write file");
+    treq_lib::jj::jj_commit(workspace_path_str, "Third local commit").expect("Failed to commit");
 
     let status = get_status(&repo.repo_path, workspace.id);
     assert_eq!(
@@ -3481,12 +3451,16 @@ fn test_pull_home_repo_fetches_remote_commits() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
 
     // Record the git branch before pull
-    let branch_before = jj::get_workspace_branch(&repo.repo_path)
-        .expect("Failed to get git branch before pull");
+    let branch_before =
+        jj::get_workspace_branch(&repo.repo_path).expect("Failed to get git branch before pull");
 
     // Create a commit in the remote
-    repo.remote_commit_file("remote-commit.txt", "from remote\n", "Remote commit on main")
-        .expect("Failed to create remote commit");
+    repo.remote_commit_file(
+        "remote-commit.txt",
+        "from remote\n",
+        "Remote commit on main",
+    )
+    .expect("Failed to create remote commit");
 
     // Pull using home repo (workspace_id = None) — fetches remote refs
     let result = treq_lib::core::pull_workspace_from_remote(&repo.repo_path, None, "git")
@@ -3496,7 +3470,14 @@ fn test_pull_home_repo_fetches_remote_commits() {
     // Verify the remote commit is visible via jj log (main@origin should have advanced)
     let log_output = Command::new("jj")
         .current_dir(&repo.repo_path)
-        .args(["log", "-r", "main@origin", "--no-graph", "-T", r#"description"#])
+        .args([
+            "log",
+            "-r",
+            "main@origin",
+            "--no-graph",
+            "-T",
+            r#"description"#,
+        ])
         .output()
         .expect("Failed to run jj log");
     let log_str = String::from_utf8_lossy(&log_output.stdout);
@@ -3507,8 +3488,8 @@ fn test_pull_home_repo_fetches_remote_commits() {
     );
 
     // Verify pull did not change the git branch (no checkout to different branch/tag)
-    let branch_after = jj::get_workspace_branch(&repo.repo_path)
-        .expect("Failed to get git branch after pull");
+    let branch_after =
+        jj::get_workspace_branch(&repo.repo_path).expect("Failed to get git branch after pull");
     assert_eq!(
         branch_after, branch_before,
         "Pull should not change git branch, was '{}' before but '{}' after",
@@ -3529,7 +3510,10 @@ fn test_workspace_status_home_repo() {
         .expect("workspace_status(None) should succeed");
 
     // Should return a synthetic home workspace
-    assert_eq!(status.partial.current.id, 0, "Home repo workspace id should be 0");
+    assert_eq!(
+        status.partial.current.id, 0,
+        "Home repo workspace id should be 0"
+    );
     assert_eq!(status.partial.current.workspace_name, "home");
 
     // Should be InSync with remote (no local-only commits)
@@ -3541,8 +3525,14 @@ fn test_workspace_status_home_repo() {
     );
 
     // DAG should be empty for home repo
-    assert!(status.dag_nodes.is_empty(), "Home repo should have no DAG nodes");
-    assert!(status.children.is_empty(), "Home repo should have no children");
+    assert!(
+        status.dag_nodes.is_empty(),
+        "Home repo should have no DAG nodes"
+    );
+    assert!(
+        status.children.is_empty(),
+        "Home repo should have no children"
+    );
     assert!(status.target.is_none(), "Home repo should have no target");
 }
 
@@ -3682,7 +3672,10 @@ fn test_create_workspace_copies_nested_directories() {
     let ws_dir = repo.workspaces_dir().join(&workspace.workspace_path);
     let copied = ws_dir.join("config/sub/file.toml");
 
-    assert!(copied.exists(), "config/sub/file.toml should be copied to workspace");
+    assert!(
+        copied.exists(),
+        "config/sub/file.toml should be copied to workspace"
+    );
     assert_eq!(
         fs::read_to_string(copied).unwrap(),
         "[settings]\nkey = true"
@@ -3843,8 +3836,7 @@ fn setup_workspace_with_pushed_commit(
     // Make a local commit in the workspace directory via jj
     let file_path = std::path::Path::new(&full_path).join(filename);
     std::fs::write(&file_path, content).expect("Failed to write file");
-    jj::jj_commit(&full_path, &format!("Add {}", filename))
-        .expect("Failed to create commit");
+    jj::jj_commit(&full_path, &format!("Add {}", filename)).expect("Failed to create commit");
 
     // Push branch to remote via jj (jj manages the git refs)
     jj::jj_push(&full_path).expect("Failed to push branch via jj");
@@ -3872,8 +3864,7 @@ fn test_auto_rebase_resolves_bookmark_conflict() {
     // Make another local commit BEFORE the remote diverges (so we have local-only commits)
     let local_file = std::path::Path::new(&full_path).join("local2.txt");
     std::fs::write(&local_file, "local2").expect("Failed to write file");
-    jj::jj_commit(&full_path, "Add local2.txt")
-        .expect("Failed to create local commit");
+    jj::jj_commit(&full_path, "Add local2.txt").expect("Failed to create local commit");
 
     // Now make a remote commit on the same branch to create divergence
     repo.remote_commit_on_branch(
@@ -3962,18 +3953,8 @@ fn test_auto_rebase_batch_resolves_bookmark_conflicts() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
 
     // Create two workspaces, push them, then add a local commit on each to enable divergence
-    let ws1 = setup_workspace_with_pushed_commit(
-        &repo,
-        "feat/batch-ws1",
-        "ws1.txt",
-        "ws1 content",
-    );
-    let ws2 = setup_workspace_with_pushed_commit(
-        &repo,
-        "feat/batch-ws2",
-        "ws2.txt",
-        "ws2 content",
-    );
+    let ws1 = setup_workspace_with_pushed_commit(&repo, "feat/batch-ws1", "ws1.txt", "ws1 content");
+    let ws2 = setup_workspace_with_pushed_commit(&repo, "feat/batch-ws2", "ws2.txt", "ws2 content");
 
     let full_path1 = workspace_full_path(&repo, &ws1);
     let full_path2 = workspace_full_path(&repo, &ws2);
@@ -3985,8 +3966,12 @@ fn test_auto_rebase_batch_resolves_bookmark_conflicts() {
         .expect("Failed to set target branch on ws2");
 
     // Advance main on remote so workspaces need rebase
-    repo.remote_commit_file("main_advance.txt", "advance main", "Advance main for batch test")
-        .expect("Failed to advance main");
+    repo.remote_commit_file(
+        "main_advance.txt",
+        "advance main",
+        "Advance main for batch test",
+    )
+    .expect("Failed to advance main");
 
     // Add a local-only commit on each workspace (diverges from push point)
     let local1 = std::path::Path::new(&full_path1).join("local_ws1.txt");
@@ -4050,8 +4035,7 @@ fn test_auto_rebase_no_conflict_still_works() {
     // Make a local commit in the workspace
     let file_path = std::path::Path::new(&full_path).join("ws_file.txt");
     std::fs::write(&file_path, "workspace content").expect("Failed to write file");
-    jj::jj_commit(&full_path, "Add ws_file.txt")
-        .expect("Failed to create commit");
+    jj::jj_commit(&full_path, "Add ws_file.txt").expect("Failed to create commit");
 
     // Advance the target (main) via a remote commit on main
     repo.remote_commit_file("main_advance.txt", "main advance", "Advance main")

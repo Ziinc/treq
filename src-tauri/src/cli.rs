@@ -50,7 +50,7 @@ pub fn handle_cli_command(subcommand: &SubcommandMatches) -> bool {
             }
             true
         }
-_ => false,
+        _ => false,
     }
 }
 

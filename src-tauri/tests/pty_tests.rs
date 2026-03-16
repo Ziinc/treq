@@ -436,7 +436,10 @@ fn test_strip_ansi_codes_charset() {
 #[test]
 fn test_line_matches_auto_command_short_line() {
     // Lines shorter than 20 chars should never match
-    assert!(!line_matches_auto_command("short", "some long auto command that is definitely long enough"));
+    assert!(!line_matches_auto_command(
+        "short",
+        "some long auto command that is definitely long enough"
+    ));
 }
 
 #[test]
@@ -463,10 +466,17 @@ fn test_line_matches_auto_command_no_match() {
 
 #[test]
 fn test_line_matches_auto_command_normal_output() {
-    let auto_cmd = "claude --permission-mode acceptEdits --append-system-prompt 'hello world this is a test'";
+    let auto_cmd =
+        "claude --permission-mode acceptEdits --append-system-prompt 'hello world this is a test'";
     // Normal CLI output should not match
-    assert!(!line_matches_auto_command("Hello! How can I help you today?", auto_cmd));
-    assert!(!line_matches_auto_command("Processing your request...", auto_cmd));
+    assert!(!line_matches_auto_command(
+        "Hello! How can I help you today?",
+        auto_cmd
+    ));
+    assert!(!line_matches_auto_command(
+        "Processing your request...",
+        auto_cmd
+    ));
 }
 
 #[test]
@@ -495,7 +505,11 @@ fn test_set_auto_command_on_session() {
 
     // set_auto_command should succeed on an existing session
     let result = manager.set_auto_command("test-auto-cmd", "some long test command string here");
-    assert!(result.is_ok(), "set_auto_command should succeed: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "set_auto_command should succeed: {:?}",
+        result
+    );
 
     let _ = manager.close_session("test-auto-cmd");
 }
@@ -525,7 +539,9 @@ fn test_suppress_echo_filters_command() {
     // Simulate ptyWriteSuppressEcho: set filter then write the MATCHING command.
     // `true` produces no output, so only the echo is filtered.
     let cmd = "true # suppress-test-unique-ident-1234567890";
-    manager.set_auto_command("test-suppress", cmd).expect("set_auto_command");
+    manager
+        .set_auto_command("test-suppress", cmd)
+        .expect("set_auto_command");
     manager
         .write_to_session("test-suppress", &format!("{}\n", cmd))
         .expect("write filtered command");
@@ -605,7 +621,9 @@ fn test_empty_lines_filtered_during_suppression() {
 
     // Set filter and write matching command (triggers seen_command_echo)
     let cmd = "echo TRIGGER_ECHO_MATCH_1234567890_ABCDE";
-    manager.set_auto_command("test-empty-filter", cmd).expect("set_auto_command");
+    manager
+        .set_auto_command("test-empty-filter", cmd)
+        .expect("set_auto_command");
     manager
         .write_to_session("test-empty-filter", &format!("{}\n", cmd))
         .expect("write trigger command");

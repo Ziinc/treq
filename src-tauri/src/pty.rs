@@ -45,7 +45,10 @@ fn process_utf8_chunk(pending: &mut Vec<u8>, new_bytes: &[u8]) -> String {
 /// Strip ANSI escape sequences from a string.
 pub fn strip_ansi_codes(s: &str) -> String {
     // Match CSI sequences (including private modes like ?1h), OSC sequences, and charset designations
-    let re = Regex::new(r"\x1b\[[\x20-\x3f]*[\x30-\x3f]*[\x40-\x7e]|\x1b\][^\x07]*\x07|\x1b\([A-Z]|\x1b[=>]").unwrap();
+    let re = Regex::new(
+        r"\x1b\[[\x20-\x3f]*[\x30-\x3f]*[\x40-\x7e]|\x1b\][^\x07]*\x07|\x1b\([A-Z]|\x1b[=>]",
+    )
+    .unwrap();
     re.replace_all(s, "").to_string()
 }
 

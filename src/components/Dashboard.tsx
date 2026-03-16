@@ -268,7 +268,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     "afterRebase",
     () => {
       if (!repoPath) return;
-      queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
       queryClient.invalidateQueries({
         queryKey: ["workspace-statuses", repoPath],
       });
@@ -287,6 +286,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
   const { data: workspaces = [], refetch: _refetch } = useQuery({
     queryKey: ["workspaces", repoPath],
     queryFn: () => getWorkspaces(repoPath),
+    refetchInterval: 10000,
     enabled: !!repoPath,
   });
 
@@ -388,6 +388,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     setActiveSessionId(null);
     setSessionSelectedFile(null);
     queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+    queryClient.invalidateQueries({ queryKey: ["workspace-statuses"] });
     queryClient.invalidateQueries({ queryKey: ["sessions"] });
 
     addToast({
@@ -689,8 +690,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
     }
   };
 
-  // Note: openSessionWithPrompt removed - was only used by MergeReviewPage which is git-specific
-
   const handleDelete = async (workspace: Workspace) => {
     const confirmed = await ask(`Delete workspace ${workspace.branch_name}?`, {
       title: "Delete Workspace",
@@ -700,8 +699,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialViewMode = "show-wo
       deleteWorkspaceMutation.mutate(workspace);
     }
   };
-
-  // Note: Merge dialog functionality removed - using JJ now
 
   // Handle branch change after switching
   const handleBranchChanged = useCallback(() => {

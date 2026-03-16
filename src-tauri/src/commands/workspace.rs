@@ -299,9 +299,13 @@ pub fn set_workspace_target_branch(
         ));
     }
 
-    let conflict_style = state.db.lock().unwrap()
+    let conflict_style = state
+        .db
+        .lock()
+        .unwrap()
         .get_setting("conflict_marker_style")
-        .ok().flatten()
+        .ok()
+        .flatten()
         .unwrap_or_else(|| "git".to_string());
 
     // Convert Git remote branch format (origin/main) to jj format (main@origin)
@@ -310,8 +314,7 @@ pub fn set_workspace_target_branch(
 
     // Look up the workspace branch name to build a precise revset
     // This avoids trying to rebase immutable commits (e.g. shared history on main)
-    let workspace = local_db::get_workspace_by_id(&repo_path, id)
-        .map_err(|e| e.to_string())?;
+    let workspace = local_db::get_workspace_by_id(&repo_path, id).map_err(|e| e.to_string())?;
 
     let rebase_result = if let Some(ws) = workspace {
         // Convert workspace branch name to jj format as well
@@ -326,9 +329,18 @@ pub fn set_workspace_target_branch(
         // rebased onto target when all remote commits are immutable (jj 0.36+ treats
         // untracked remote bookmarks as immutable). Without this, @ would be moved
         // directly onto target, disconnecting it from the remote branch commits.
-        let revset = format!("roots(mutable() & ({}..{}) ~ @)", jj_target_branch, jj_workspace_branch);
-        jj::jj_rebase_with_revset(&workspace_path, &revset, &jj_target_branch, &jj_workspace_branch, &conflict_style)
-            .map_err(|e| e.to_string())?
+        let revset = format!(
+            "roots(mutable() & ({}..{}) ~ @)",
+            jj_target_branch, jj_workspace_branch
+        );
+        jj::jj_rebase_with_revset(
+            &workspace_path,
+            &revset,
+            &jj_target_branch,
+            &jj_workspace_branch,
+            &conflict_style,
+        )
+        .map_err(|e| e.to_string())?
     } else {
         // Fallback if workspace not found in DB
         jj::jj_rebase_onto(&workspace_path, &jj_target_branch, &conflict_style)
@@ -360,17 +372,26 @@ pub fn check_and_rebase_workspaces(
     default_branch: Option<String>,
     force: Option<bool>,
 ) -> Result<SingleRebaseResult, String> {
-    let conflict_style = state.db.lock().unwrap()
+    let conflict_style = state
+        .db
+        .lock()
+        .unwrap()
         .get_setting("conflict_marker_style")
-        .ok().flatten()
+        .ok()
+        .flatten()
         .unwrap_or_else(|| "git".to_string());
 
     // If workspace_id provided, only rebase that workspace
     if let Some(id) = workspace_id {
         let default_branch = default_branch.unwrap_or_else(|| "main".to_string());
         let force = force.unwrap_or(false);
-        let result =
-            crate::auto_rebase::rebase_single_workspace(&repo_path, id, &default_branch, force, &conflict_style)?;
+        let result = crate::auto_rebase::rebase_single_workspace(
+            &repo_path,
+            id,
+            &default_branch,
+            force,
+            &conflict_style,
+        )?;
 
         match result {
             Some(auto_result) => Ok(SingleRebaseResult {
@@ -432,9 +453,13 @@ pub fn pull_workspace_from_remote(
     repo_path: String,
     workspace_id: Option<i64>,
 ) -> Result<crate::core::PullWorkspaceResult, String> {
-    let conflict_style = state.db.lock().unwrap()
+    let conflict_style = state
+        .db
+        .lock()
+        .unwrap()
         .get_setting("conflict_marker_style")
-        .ok().flatten()
+        .ok()
+        .flatten()
         .unwrap_or_else(|| "git".to_string());
 
     crate::core::pull_workspace_from_remote(&repo_path, workspace_id, &conflict_style)

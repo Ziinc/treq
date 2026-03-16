@@ -24,7 +24,10 @@ fn jj_command(conflict_marker_style: &str) -> Command {
         "snapshot" | "git" => conflict_marker_style,
         _ => "diff",
     };
-    cmd.args(["--config", &format!("ui.conflict-marker-style=\"{}\"", style)]);
+    cmd.args([
+        "--config",
+        &format!("ui.conflict-marker-style=\"{}\"", style),
+    ]);
     cmd
 }
 
@@ -577,7 +580,13 @@ fn recover_orphaned_workspace(
     let workspace_path_str = workspace_dir.to_string_lossy().to_string();
     let add_result = command_for("jj")
         .current_dir(repo_path)
-        .args(["workspace", "add", &workspace_path_str, "--name", workspace_name])
+        .args([
+            "workspace",
+            "add",
+            &workspace_path_str,
+            "--name",
+            workspace_name,
+        ])
         .output();
 
     match add_result {
@@ -647,8 +656,8 @@ fn recover_orphaned_workspace(
 /// Copies everything from backup except .jj and .git directories
 /// (which were freshly created by `jj workspace add`).
 fn restore_backup_files(backup_dir: &Path, target_dir: &Path) -> Result<(), String> {
-    let entries = fs::read_dir(backup_dir)
-        .map_err(|e| format!("Failed to read backup dir: {}", e))?;
+    let entries =
+        fs::read_dir(backup_dir).map_err(|e| format!("Failed to read backup dir: {}", e))?;
 
     for entry in entries {
         let entry = entry.map_err(|e| format!("Failed to read dir entry: {}", e))?;
@@ -673,12 +682,7 @@ fn restore_backup_files(backup_dir: &Path, target_dir: &Path) -> Result<(), Stri
         }
 
         // Move from backup to target
-        fs::rename(&src, &dst).map_err(|e| {
-            format!(
-                "Failed to restore '{}': {}",
-                name_str, e
-            )
-        })?;
+        fs::rename(&src, &dst).map_err(|e| format!("Failed to restore '{}': {}", name_str, e))?;
     }
 
     Ok(())
@@ -2063,14 +2067,7 @@ fn collect_bookmark_conflict_info(
 
     let output = command_for("jj")
         .current_dir(repo_path)
-        .args([
-            "log",
-            "-r",
-            &exact_query,
-            "--no-graph",
-            "-T",
-            template,
-        ])
+        .args(["log", "-r", &exact_query, "--no-graph", "-T", template])
         .output()
         .map_err(|e| JjError::IoError(e.to_string()))?;
 
@@ -2355,7 +2352,10 @@ pub fn jj_push(workspace_path: &str) -> Result<String, JjError> {
 }
 
 /// Get bookmarks on a given revision
-pub fn get_bookmarks_on_revision(workspace_path: &str, revision: &str) -> Result<Vec<String>, JjError> {
+pub fn get_bookmarks_on_revision(
+    workspace_path: &str,
+    revision: &str,
+) -> Result<Vec<String>, JjError> {
     let output = command_for("jj")
         .current_dir(workspace_path)
         .args([
@@ -2721,7 +2721,10 @@ pub fn jj_get_combined_counts(
             // Command failed — likely stale bookmark reference. Fall back to individual queries.
             let stderr = String::from_utf8_lossy(&o.stderr);
             if !not_on_remote {
-                eprintln!("[combined_counts] Union revset failed, falling back: {}", stderr.lines().next().unwrap_or(""));
+                eprintln!(
+                    "[combined_counts] Union revset failed, falling back: {}",
+                    stderr.lines().next().unwrap_or("")
+                );
             }
             // Fall back to individual counts
             let commits_ahead = jj_get_commits_ahead(workspace_path, target_branch)
@@ -2743,6 +2746,36 @@ pub fn jj_get_combined_counts(
             ahead_of_origin: 0,
             behind_origin: 0,
         },
+    }
+}
+
+/// Get only commits ahead of target branch — lightweight alternative to jj_get_combined_counts.
+/// Uses the same revset as the not_on_remote path but without computing ahead/behind origin.
+pub fn jj_get_commits_ahead_count(workspace_path: &str, target_branch: &str) -> usize {
+    if target_branch.starts_with('-') || target_branch.contains('\0') || target_branch.is_empty() {
+        return 0;
+    }
+
+    let revset = format!("({}..@-) ~ empty()", target_branch);
+
+    let output = command_for("jj")
+        .current_dir(workspace_path)
+        .args([
+            "log",
+            "-r",
+            &revset,
+            "--no-graph",
+            "-T",
+            r#"commit_id ++ "\n""#,
+        ])
+        .output();
+
+    match output {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .count(),
+        _ => 0,
     }
 }
 
@@ -3038,7 +3071,11 @@ fn parse_diff_stat(stat: &str) -> (u32, u32) {
 }
 
 /// Build the revset string for jj_get_log based on context
-fn build_jj_get_log_revset(target_branch: &str, is_home_repo: bool, limit: Option<usize>) -> String {
+fn build_jj_get_log_revset(
+    target_branch: &str,
+    is_home_repo: bool,
+    limit: Option<usize>,
+) -> String {
     if is_home_repo {
         let n = limit.unwrap_or(15);
         format!("latest(::@, {})", n)
@@ -3344,7 +3381,14 @@ pub fn jj_abandon_empty_commits(
 
     let output = command_for("jj")
         .current_dir(workspace_path)
-        .args(["log", "-r", &revset, "--no-graph", "-T", "change_id.short(12) ++ \"\\n\""])
+        .args([
+            "log",
+            "-r",
+            &revset,
+            "--no-graph",
+            "-T",
+            "change_id.short(12) ++ \"\\n\"",
+        ])
         .output()
         .map_err(|e| JjError::IoError(e.to_string()))?;
 
@@ -5491,7 +5535,9 @@ target/debug/deps/lib.so    2-sided conflict including 1 deletion and an executa
     fn test_jj_command_snapshot_style() {
         let cmd = jj_command("snapshot");
         let args: Vec<&std::ffi::OsStr> = cmd.get_args().collect();
-        assert!(args.contains(&std::ffi::OsStr::new("ui.conflict-marker-style=\"snapshot\"")));
+        assert!(args.contains(&std::ffi::OsStr::new(
+            "ui.conflict-marker-style=\"snapshot\""
+        )));
     }
 
     #[test]

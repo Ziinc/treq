@@ -188,7 +188,9 @@ impl Database {
         // Migration: Rename repo_path setting to last_opened_repo_path
         if let Ok(Some(repo_path_val)) = self.get_setting("repo_path") {
             let _ = self.set_setting("last_opened_repo_path", &repo_path_val);
-            let _ = self.conn.execute("DELETE FROM settings WHERE key = 'repo_path'", []);
+            let _ = self
+                .conn
+                .execute("DELETE FROM settings WHERE key = 'repo_path'", []);
         }
 
         Ok(())

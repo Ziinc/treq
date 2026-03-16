@@ -26,7 +26,6 @@ export interface WorkspacePartialStatus {
   has_conflicts: boolean;
   has_changes: boolean;
   commits_ahead: number;
-  remote_sync: RemoteSyncStatus;
 }
 
 export interface WorkspaceNode {

@@ -168,13 +168,20 @@ impl TestRepo {
         // Clone the bare remote into a temporary working copy
         Self::run_git(
             &self.temp_dir.path().to_string_lossy(),
-            &["clone", remote_path.to_str().unwrap(), clone_path.to_str().unwrap()],
+            &[
+                "clone",
+                remote_path.to_str().unwrap(),
+                clone_path.to_str().unwrap(),
+            ],
         )?;
 
         let clone_path_str = clone_path.to_string_lossy().to_string();
 
         // Configure git user in the clone
-        Self::run_git(&clone_path_str, &["config", "user.email", "test@example.com"])?;
+        Self::run_git(
+            &clone_path_str,
+            &["config", "user.email", "test@example.com"],
+        )?;
         Self::run_git(&clone_path_str, &["config", "user.name", "Test User"])?;
 
         // Write file, commit, and push from the clone
@@ -235,7 +242,10 @@ impl TestRepo {
         let clone_path_str = clone_path.to_string_lossy().to_string();
 
         // Configure git user in the clone
-        Self::run_git(&clone_path_str, &["config", "user.email", "test@example.com"])?;
+        Self::run_git(
+            &clone_path_str,
+            &["config", "user.email", "test@example.com"],
+        )?;
         Self::run_git(&clone_path_str, &["config", "user.name", "Test User"])?;
 
         // Checkout the target branch (fetch it if it's a remote-tracking branch)
@@ -244,7 +254,12 @@ impl TestRepo {
             // Try checking out from origin
             Self::run_git(
                 &clone_path_str,
-                &["checkout", "-b", branch_name, &format!("origin/{}", branch_name)],
+                &[
+                    "checkout",
+                    "-b",
+                    branch_name,
+                    &format!("origin/{}", branch_name),
+                ],
             )?;
         }
 
@@ -325,8 +340,7 @@ pub struct JjVerifier;
 impl JjVerifier {
     /// Get the jj binary path, using treq's binary detection (same as jj.rs internals).
     fn jj_binary() -> String {
-        treq_lib::binary_paths::detect_binary("jj")
-            .unwrap_or_else(|| "jj".to_string())
+        treq_lib::binary_paths::detect_binary("jj").unwrap_or_else(|| "jj".to_string())
     }
 
     /// Get list of jj workspaces via `jj workspace list`
