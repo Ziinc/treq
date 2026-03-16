@@ -4,19 +4,19 @@ import type { ConsolidatedTerminalHandle } from "../ConsolidatedTerminal";
 export const MIN_TERMINAL_WIDTH = 300;
 
 export interface ClaudeSessionData {
-  sessionId: number;
-  sessionName: string;
-  ptySessionId: string;
-  workspacePath: string | null;
-  repoPath: string;
-  workspaceName?: string | null; // Branch name or null for main repo
-  pendingPrompt?: string; // Optional prompt to send after Claude initializes
-  permissionMode?: 'plan' | 'acceptEdits'; // Permission mode for Claude terminal
+	sessionId: number;
+	sessionName: string;
+	ptySessionId: string;
+	workspacePath: string | null;
+	repoPath: string;
+	workspaceName?: string | null; // Branch name or null for main repo
+	pendingPrompt?: string; // Optional prompt to send after Claude initializes
+	permissionMode?: "plan" | "acceptEdits"; // Permission mode for Claude terminal
 }
 
 export interface ShellTerminalData {
-  id: string;
-  workingDirectory: string;
+	id: string;
+	workingDirectory: string;
 }
 
 export type TerminalRefsMap = Map<string, ConsolidatedTerminalHandle | null>;

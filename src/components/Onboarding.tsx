@@ -1,30 +1,36 @@
 import { FolderOpen } from "lucide-react";
 import { Button } from "./ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "./ui/card";
 
 interface OnboardingProps {
-  onOpenRepo: () => Promise<void>;
+	onOpenRepo: () => Promise<void>;
 }
 
 export const Onboarding: React.FC<OnboardingProps> = ({ onOpenRepo }) => {
-  return (
-    <div className="flex h-screen items-center justify-center bg-background mx-auto">
-      <Card className="w-96">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-2">
-            <FolderOpen className="w-10 h-10 text-muted-foreground" />
-          </div>
-          <CardTitle>Open a Repository</CardTitle>
-          <CardDescription>
-            Select a folder containing a Git repository to get started.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center gap-3">
-          <Button onClick={onOpenRepo} className="w-full">
-            Open Repository
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
-  );
+	return (
+		<div className="flex h-screen items-center justify-center bg-background mx-auto">
+			<Card className="w-96">
+				<CardHeader className="text-center">
+					<div className="flex justify-center mb-2">
+						<FolderOpen className="w-10 h-10 text-muted-foreground" />
+					</div>
+					<CardTitle>Open a Repository</CardTitle>
+					<CardDescription>
+						Select a folder containing a Git repository to get started.
+					</CardDescription>
+				</CardHeader>
+				<CardContent className="flex flex-col items-center gap-3">
+					<Button onClick={onOpenRepo} className="w-full">
+						Open Repository
+					</Button>
+				</CardContent>
+			</Card>
+		</div>
+	);
 };

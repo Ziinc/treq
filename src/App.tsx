@@ -12,53 +12,53 @@ import { PrismThemeLoader } from "./components/PrismThemeLoader";
 import "./index.css";
 
 const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 1,
-    },
-  },
+	defaultOptions: {
+		queries: {
+			refetchOnWindowFocus: false,
+			retry: 1,
+		},
+	},
 });
 
 function AppContent() {
-  // Pre-load all settings in a single batch request
-  useSettingsPreloader();
+	// Pre-load all settings in a single batch request
+	useSettingsPreloader();
 
-  return (
-    <div className="flex h-screen">
-      <ErrorBoundary
-        fallbackTitle="Dashboard crashed"
-        onReset={() => {
-          if (typeof window !== "undefined") {
-            window.location.reload();
-          }
-        }}
-      >
-        <Dashboard />
-      </ErrorBoundary>
-    </div>
-  );
+	return (
+		<div className="flex h-screen">
+			<ErrorBoundary
+				fallbackTitle="Dashboard crashed"
+				onReset={() => {
+					if (typeof window !== "undefined") {
+						window.location.reload();
+					}
+				}}
+			>
+				<Dashboard />
+			</ErrorBoundary>
+		</div>
+	);
 }
 
 function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-      <ThemeProvider>
-        <PrismThemeLoader />
-        <TerminalSettingsProvider>
-          <DiffSettingsProvider>
-            <EditorAppsProvider>
-              <ToastProvider>
-                <AppContent />
-              </ToastProvider>
-            </EditorAppsProvider>
-          </DiffSettingsProvider>
-        </TerminalSettingsProvider>
-      </ThemeProvider>
-      </AuthProvider>
-    </QueryClientProvider>
-  );
+	return (
+		<QueryClientProvider client={queryClient}>
+			<AuthProvider>
+				<ThemeProvider>
+					<PrismThemeLoader />
+					<TerminalSettingsProvider>
+						<DiffSettingsProvider>
+							<EditorAppsProvider>
+								<ToastProvider>
+									<AppContent />
+								</ToastProvider>
+							</EditorAppsProvider>
+						</DiffSettingsProvider>
+					</TerminalSettingsProvider>
+				</ThemeProvider>
+			</AuthProvider>
+		</QueryClientProvider>
+	);
 }
 
 export default App;

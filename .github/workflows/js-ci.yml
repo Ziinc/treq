@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        task: [lint, check, test]
+        task: [lint, check, "check:format", test]
     name: ${{ matrix.task }}
     steps:
       - uses: actions/checkout@v4
