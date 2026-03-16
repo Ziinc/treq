@@ -7,8 +7,12 @@ on:
     branches: [main]
 
 jobs:
-  check:
+  ci:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        task: [lint, check, test]
+    name: ${{ matrix.task }}
     steps:
       - uses: actions/checkout@v4
 
@@ -21,11 +25,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: TypeScript check
-        run: npm run check
-
-      - name: Build
-        run: npm run build
-
-      - name: Test
-        run: npm test
+      - name: ${{ matrix.task }}
+        run: npm run ${{ matrix.task }}
