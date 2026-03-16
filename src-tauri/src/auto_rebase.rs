@@ -88,7 +88,12 @@ fn resolve_bookmark_conflict_if_needed(
             branch_name,
             conflict_marker_style,
         )
-        .map_err(|e| format!("Failed to rebase local commits after conflict resolution: {}", e))?;
+        .map_err(|e| {
+            format!(
+                "Failed to rebase local commits after conflict resolution: {}",
+                e
+            )
+        })?;
     }
 
     log::info!(
@@ -271,7 +276,10 @@ pub fn rebase_after_commit(
 }
 
 /// Check and rebase all workspaces in the repo, grouped by target branch
-pub fn check_and_rebase_all(repo_path: &str, conflict_marker_style: &str) -> Result<Vec<AutoRebaseResult>, String> {
+pub fn check_and_rebase_all(
+    repo_path: &str,
+    conflict_marker_style: &str,
+) -> Result<Vec<AutoRebaseResult>, String> {
     // Get all workspaces
     let all_workspaces = local_db::get_workspaces(repo_path)?;
 
@@ -517,7 +525,10 @@ pub fn rebase_single_workspace(
     // rebased onto target when all remote commits are immutable (jj 0.36+ treats
     // untracked remote bookmarks as immutable). Without this, @ would be moved
     // directly onto target, disconnecting it from the remote branch commits.
-    let revset = format!("roots(mutable() & ({}..{}) ~ @)", jj_target_branch, workspace.branch_name);
+    let revset = format!(
+        "roots(mutable() & ({}..{}) ~ @)",
+        jj_target_branch, workspace.branch_name
+    );
     let rebase_result = jj::jj_rebase_with_revset(
         &full_path, // Run from workspace directory
         &revset,

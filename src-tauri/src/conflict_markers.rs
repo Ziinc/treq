@@ -64,9 +64,7 @@ pub fn parse_conflict_markers(content: &str, file_path: &str) -> Vec<ConflictReg
                 let style = if has_side { "git" } else { "jj" };
                 (num, total, style)
             }
-            None => {
-                (regions.len() + 1, 0, "git")
-            }
+            None => (regions.len() + 1, 0, "git"),
         };
 
         let mut end_line = start_line;

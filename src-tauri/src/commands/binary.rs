@@ -103,7 +103,8 @@ pub fn detect_editor_apps(state: State<'_, AppState>) -> Result<EditorAppsRespon
 /// Return the directory containing the running treq binary
 #[tauri::command]
 pub fn get_treq_bin_dir() -> Result<String, String> {
-    binary_paths::get_exe_dir().ok_or_else(|| "Failed to determine treq binary directory".to_string())
+    binary_paths::get_exe_dir()
+        .ok_or_else(|| "Failed to determine treq binary directory".to_string())
 }
 
 /// Load cached editor apps from database on startup

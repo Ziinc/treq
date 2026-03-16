@@ -81,9 +81,13 @@ pub fn jj_get_file_hunks(
     workspace_path: String,
     file_path: String,
 ) -> Result<Vec<jj::JjDiffHunk>, String> {
-    let conflict_style = state.db.lock().unwrap()
+    let conflict_style = state
+        .db
+        .lock()
+        .unwrap()
         .get_setting("conflict_marker_style")
-        .ok().flatten()
+        .ok()
+        .flatten()
         .unwrap_or_else(|| "git".to_string());
     jj::jj_get_file_hunks(&workspace_path, &file_path, &conflict_style).map_err(|e| e.to_string())
 }
@@ -117,13 +121,29 @@ pub fn jj_restore_all(workspace_path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn create_commit(repo_path: String, workspace_id: Option<i64>, message: String) -> Result<String, String> {
+pub fn create_commit(
+    repo_path: String,
+    workspace_id: Option<i64>,
+    message: String,
+) -> Result<String, String> {
     crate::core::create_commit(&repo_path, workspace_id, &message)
 }
 
 #[tauri::command]
-pub fn list_commits(repo_path: String, workspace_id: Option<i64>, include_target_branch_history: Option<bool>, target_branch_limit: Option<usize>, limit: Option<usize>) -> Result<crate::jj::JjLogResult, String> {
-    crate::core::list_commits(&repo_path, workspace_id, include_target_branch_history.unwrap_or(false), target_branch_limit, limit)
+pub fn list_commits(
+    repo_path: String,
+    workspace_id: Option<i64>,
+    include_target_branch_history: Option<bool>,
+    target_branch_limit: Option<usize>,
+    limit: Option<usize>,
+) -> Result<crate::jj::JjLogResult, String> {
+    crate::core::list_commits(
+        &repo_path,
+        workspace_id,
+        include_target_branch_history.unwrap_or(false),
+        target_branch_limit,
+        limit,
+    )
 }
 
 #[tauri::command]
@@ -157,9 +177,13 @@ pub fn jj_rebase_onto(
     workspace_path: String,
     target_branch: String,
 ) -> Result<jj::JjRebaseResult, String> {
-    let conflict_style = state.db.lock().unwrap()
+    let conflict_style = state
+        .db
+        .lock()
+        .unwrap()
         .get_setting("conflict_marker_style")
-        .ok().flatten()
+        .ok()
+        .flatten()
         .unwrap_or_else(|| "git".to_string());
     jj::jj_rebase_onto(&workspace_path, &target_branch, &conflict_style).map_err(|e| e.to_string())
 }
@@ -216,9 +240,13 @@ pub fn jj_git_fetch_background(repo_path: String) -> Result<(), String> {
 /// Pull changes from remote using jj git fetch + rebase
 #[tauri::command]
 pub fn jj_pull(state: State<AppState>, workspace_path: String) -> Result<String, String> {
-    let conflict_style = state.db.lock().unwrap()
+    let conflict_style = state
+        .db
+        .lock()
+        .unwrap()
         .get_setting("conflict_marker_style")
-        .ok().flatten()
+        .ok()
+        .flatten()
         .unwrap_or_else(|| "git".to_string());
     jj::jj_pull(&workspace_path, &conflict_style).map_err(|e| e.to_string())
 }
@@ -250,9 +278,13 @@ pub fn jj_get_merge_diff(
     repo_path: String,
     workspace_id: i64,
 ) -> Result<jj::JjRevisionDiff, String> {
-    let conflict_style = state.db.lock().unwrap()
+    let conflict_style = state
+        .db
+        .lock()
+        .unwrap()
         .get_setting("conflict_marker_style")
-        .ok().flatten()
+        .ok()
+        .flatten()
         .unwrap_or_else(|| "git".to_string());
     crate::core::workspace_diff(&repo_path, workspace_id, &conflict_style)
 }
@@ -265,9 +297,13 @@ pub fn jj_get_commit_diff(
     workspace_id: Option<i64>,
     revision: String,
 ) -> Result<jj::JjRevisionDiff, String> {
-    let conflict_style = state.db.lock().unwrap()
+    let conflict_style = state
+        .db
+        .lock()
+        .unwrap()
         .get_setting("conflict_marker_style")
-        .ok().flatten()
+        .ok()
+        .flatten()
         .unwrap_or_else(|| "git".to_string());
 
     match workspace_id {
@@ -286,12 +322,22 @@ pub fn jj_create_merge(
     target_branch: String,
     message: String,
 ) -> Result<jj::JjMergeResult, String> {
-    let conflict_style = state.db.lock().unwrap()
+    let conflict_style = state
+        .db
+        .lock()
+        .unwrap()
         .get_setting("conflict_marker_style")
-        .ok().flatten()
+        .ok()
+        .flatten()
         .unwrap_or_else(|| "git".to_string());
-    jj::jj_create_merge_commit(&workspace_path, &workspace_branch, &target_branch, &message, &conflict_style)
-        .map_err(|e| e.to_string())
+    jj::jj_create_merge_commit(
+        &workspace_path,
+        &workspace_branch,
+        &target_branch,
+        &message,
+        &conflict_style,
+    )
+    .map_err(|e| e.to_string())
 }
 
 /// Check if a branch exists locally and/or remotely

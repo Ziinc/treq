@@ -1,13 +1,12 @@
+use crate::core;
 use crate::AppState;
 use std::collections::HashMap;
 use tauri::{State, Window};
-use crate::core;
 
 #[tauri::command]
 pub fn init_repo(_state: State<AppState>, repo_path: String) -> Result<bool, String> {
     core::init(&repo_path).map_err(|e| e.to_string())
 }
-
 
 #[tauri::command]
 pub fn get_setting(state: State<AppState>, key: String) -> Result<Option<String>, String> {
