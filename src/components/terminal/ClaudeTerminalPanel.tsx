@@ -46,15 +46,10 @@ function buildToolPermissionFlags(sessionData: ClaudeSessionData): string {
 	const allowed: string[] = [
 		"Bash(treq st)", // Always allow treq CLI
 		"Bash(treq ls)", // Always allow treq CLI
-		"Read(.)",
-		"Read(./**)",
-		"Edit(./**)",
-		"Write(./**)",
 	];
 
 	if (sessionData.workspacePath) {
 		// Workspace: block parent directory traversal
-		disallowed.push("Read(../../*)");
 	} else {
 		// Home repo: block .treq directory access
 		disallowed.push("Read(.treq/**)", "Edit(.treq/**)", "Write(.treq/**)");
@@ -297,10 +292,7 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
 			"- treq workspace set <name> [-i intent] [-t target_branch] — Update workspace settings",
 			"- treq help — Show all available commands",
 			"",
-			`IMPORTANT: Your working directory is ${agentWorkingDir}. You MUST only create, edit, and delete files within this directory. Do not modify files outside of it.`,
-			sessionData.workspacePath
-				? `This is a workspace directory. Do NOT make changes to files in the main repository or other workspaces.`
-				: `This is the main repository. Do NOT make changes to files inside .treq/workspaces/.`,
+			`IMPORTANT: You must read, write, edit, delete only files in the current working directory.`,
 		].join("\\n");
 
 		autoCommand += ` --append-system-prompt "${treqSystemPrompt}"`;
