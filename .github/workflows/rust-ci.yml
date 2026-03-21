@@ -8,16 +8,16 @@ on:
 
 jobs:
   ci:
-    runs-on: ubuntu-latest
     strategy:
       matrix:
-        include:
-          - job: fmt
-            components: rustfmt
+        os: [ubuntu-latest, macos-latest]
+        job: ["cargo fmt --check", "cargo test --no-fail-fast"]
+        exclude:
+          - os: macos-latest
             command: cargo fmt --check
-          - job: test
-            command: cargo test --no-fail-fast
-    name: ${{ matrix.job }}
+
+    name: ${{ matrix.command }}
+    runs-on: ${{ matrix.os}}
     steps:
       - uses: actions/checkout@v4
 
@@ -27,11 +27,11 @@ jobs:
           components: ${{ matrix.components }}
 
       - uses: Swatinem/rust-cache@v2
-        if: matrix.job == 'test'
+        if: matrix.job == 'cargo test --no-fail-fast'
         with:
           cache-on-failure: true
           workspaces: "./src-tauri -> target"
 
-      - name: ${{ matrix.job }}
+      - name: Run command
         working-directory: src-tauri
         run: ${{ matrix.command }}
