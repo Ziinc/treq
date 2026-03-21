@@ -282,7 +282,7 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
 		}
 
 		// Add treq CLI documentation as system prompt for the Claude agent
-		const agentWorkingDir = sessionData.workspacePath || sessionData.repoPath;
+		// const agentWorkingDir = sessionData.workspacePath || sessionData.repoPath;
 		const treqSystemPrompt = [
 			"You have access to the treq CLI for managing workspaces. Available commands:",
 			"- treq workspace ls — List all workspaces with their status",

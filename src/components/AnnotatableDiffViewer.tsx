@@ -39,7 +39,7 @@ interface BranchDiffFileDiff {
 	is_binary?: boolean;
 	binary_message?: string;
 	hunks?: BranchDiffHunk[];
-	metadata?: Record<string, unknown>;
+	metadata?: string[];
 }
 
 export interface CommentInput {
@@ -314,7 +314,7 @@ const AnnotatableDiffViewerComponent: React.FC<AnnotatableDiffViewerProps> = ({
 					<p className="text-sm font-mono">{diff.path}</p>
 					<p className="text-sm text-muted-foreground">Status: {diff.status}</p>
 				</div>
-				{diff.metadata.length > 0 && (
+				{diff.metadata && diff.metadata.length > 0 && (
 					<div className="text-[10px] text-muted-foreground text-right max-w-xs truncate">
 						{diff.metadata.join(" · ")}
 					</div>
