@@ -88,7 +88,6 @@ vi.mock("../src/lib/api", async () => {
     jjGetConflictedFiles: vi.fn().mockResolvedValue([]),
     jjCreateWorkspace: vi.fn().mockResolvedValue("/Users/test/repo/.treq/workspaces/test"),
     createWorkspace: vi.fn().mockResolvedValue(1),
-    addWorkspaceToDb: vi.fn().mockResolvedValue(1),
     setSetting: vi.fn().mockResolvedValue(undefined),
     jjRemoveWorkspace: vi.fn().mockResolvedValue(undefined),
     deleteWorkspaceFromDb: vi.fn().mockResolvedValue(undefined),

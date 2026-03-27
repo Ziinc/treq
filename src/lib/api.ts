@@ -35,6 +35,17 @@ export interface WorkspaceNode {
 	depth: number;
 }
 
+export interface RepoStatus {
+	current_branch: string;
+	has_changes: boolean;
+	has_conflicts: boolean;
+	remote_sync: RemoteSyncStatus;
+	fetch_error: string | null;
+}
+
+export const getRepoStatus = (repo_path: string): Promise<RepoStatus> =>
+	invoke("get_repo_status", { repoPath: repo_path });
+
 export interface WorkspaceStatus {
 	current: Workspace;
 	has_conflicts: boolean;
@@ -185,21 +196,6 @@ export const initRepo = (repo_path: string): Promise<void> =>
 export const getWorkspaces = (repo_path: string): Promise<Workspace[]> =>
 	invoke("get_workspaces", { repoPath: repo_path });
 
-export const addWorkspaceToDb = (
-	repo_path: string,
-	workspace_name: string,
-	workspace_path: string,
-	branch_name: string,
-	metadata?: string,
-): Promise<number> =>
-	invoke("add_workspace_to_db", {
-		repoPath: repo_path,
-		workspaceName: workspace_name,
-		workspacePath: workspace_path,
-		branchName: branch_name,
-		metadata,
-	});
-
 export const createWorkspace = (
 	repo_path: string,
 	branch_name: string,
@@ -224,9 +220,6 @@ export const deleteWorkspace = (repo_path: string, id: number): Promise<void> =>
 		repoPath: repo_path,
 		id,
 	});
-
-export const cleanupStaleWorkspaces = (repo_path: string): Promise<void> =>
-	invoke("cleanup_stale_workspaces", { repoPath: repo_path });
 
 export const ensureWorkspaceIndexed = (
 	repo_path: string,

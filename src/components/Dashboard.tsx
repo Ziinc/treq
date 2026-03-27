@@ -42,7 +42,6 @@ import {
 import {
 	getWorkspaces,
 	deleteWorkspace,
-	cleanupStaleWorkspaces,
 	getSetting,
 	setSetting,
 	selectFolder,
@@ -52,11 +51,9 @@ import {
 	updateSessionAccess,
 	getSessions,
 	setSessionModel,
-	jjGitFetch,
-	jjGetCurrentBranch,
+	getRepoStatus,
 	startFileWatcher,
 	stopFileWatcher,
-	jjTrackWorkspaceBookmarks,
 	initRepo,
 	setWindowRepoPath,
 } from "../lib/api";
@@ -248,24 +245,27 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		}
 	}, [repoName]);
 
-	// Fetch main repository branch info
+	// Fetch repo status (branch, changes, remote sync) on startup
 	useEffect(() => {
 		if (!repoPath) {
 			setCurrentBranch(null);
 			return;
 		}
 
-		const fetchBranch = async () => {
+		const fetchRepoStatus = async () => {
 			try {
-				const branch = await jjGetCurrentBranch(repoPath);
-				setCurrentBranch(branch);
+				const status = await getRepoStatus(repoPath);
+				setCurrentBranch(status.current_branch);
+				if (status.fetch_error) {
+					console.warn("[Dashboard] Fetch had error:", status.fetch_error);
+				}
 			} catch (error) {
-				console.error("Failed to get current branch:", error);
+				console.error("[Dashboard] Failed to get repo status:", error);
 				setCurrentBranch(null);
 			}
 		};
 
-		fetchBranch();
+		fetchRepoStatus();
 	}, [repoPath]);
 
 	// Manage file watcher lifecycle for selected workspace
@@ -313,58 +313,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		enabled: !!repoPath,
 	});
 
-	// Clean up stale workspace directories on startup
-	useEffect(() => {
-		const cleanup = async () => {
-			if (repoPath) {
-				try {
-					await cleanupStaleWorkspaces(repoPath);
-				} catch (error) {
-					console.error("Failed to cleanup stale workspaces:", error);
-				}
-			}
-		};
-		cleanup();
-	}, [repoPath]);
-
-	// Fetch remote branches on app startup when repo is loaded
-	useEffect(() => {
-		const fetchRemotes = async () => {
-			if (repoPath) {
-				try {
-					await jjGitFetch(repoPath);
-					console.log("[Dashboard] Fetched remote branches on startup");
-
-					// Track remote bookmarks for all workspaces
-					try {
-						const trackingResult = await jjTrackWorkspaceBookmarks(repoPath);
-						if (trackingResult.tracked.length > 0) {
-							console.log(
-								`[Dashboard] Tracked ${trackingResult.tracked.length} remote bookmark(s):`,
-								trackingResult.tracked,
-							);
-						}
-						if (trackingResult.failed.length > 0) {
-							console.warn(
-								`[Dashboard] Failed to track ${trackingResult.failed.length} bookmark(s):`,
-								trackingResult.failed,
-							);
-						}
-					} catch (error) {
-						console.error(
-							"[Dashboard] Failed to track workspace bookmarks:",
-							error,
-						);
-						// Don't show error to user - bookmark tracking failure shouldn't block app
-					}
-				} catch (error) {
-					console.error("[Dashboard] Failed to fetch remote branches:", error);
-					// Don't show error to user - fetch failure shouldn't block app
-				}
-			}
-		};
-		fetchRemotes();
-	}, [repoPath]);
 
 	// Note: Git cache preloader removed since we're using JJ now
 
@@ -737,9 +685,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	const handleBranchChanged = useCallback(() => {
 		// Refresh current branch display
 		if (repoPath) {
-			jjGetCurrentBranch(repoPath)
-				.then((branch) => {
-					setCurrentBranch(branch);
+			getRepoStatus(repoPath)
+				.then((status) => {
+					setCurrentBranch(status.current_branch);
 				})
 				.catch((error) => {
 					console.error("Failed to refresh current branch:", error);

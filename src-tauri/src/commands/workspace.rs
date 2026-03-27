@@ -11,48 +11,13 @@ use tauri::State;
 static INDEXED_WORKSPACES: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
 #[tauri::command]
-pub fn get_workspaces(repo_path: String) -> Result<Vec<Workspace>, String> {
-    crate::core::list_workspaces(&repo_path)
+pub fn get_repo_status(repo_path: String) -> Result<crate::core::RepoStatus, String> {
+    crate::core::repo_status(&repo_path)
 }
 
 #[tauri::command]
-pub fn add_workspace_to_db(
-    repo_path: String,
-    workspace_name: String,
-    workspace_path: String,
-    branch_name: String,
-    metadata: Option<String>,
-) -> Result<i64, String> {
-    // Parse metadata JSON to extract intent and moved_files fields directly
-    let (intent, moved_files) = metadata
-        .and_then(|m| {
-            serde_json::from_str::<serde_json::Value>(&m)
-                .ok()
-                .and_then(|obj| {
-                    let intent = obj.get("intent").and_then(|v| v.as_str()).map(String::from);
-                    let moved_files =
-                        obj.get("moved_files")
-                            .and_then(|v| v.as_array())
-                            .map(|arr| {
-                                arr.iter()
-                                    .filter_map(|v| v.as_str().map(String::from))
-                                    .collect::<Vec<_>>()
-                            });
-                    // Only return Some if moved_files has actual items
-                    let moved_files = moved_files.filter(|v| !v.is_empty());
-                    Some((intent, moved_files))
-                })
-        })
-        .unwrap_or((None, None));
-
-    local_db::add_workspace(
-        &repo_path,
-        workspace_name,
-        workspace_path,
-        branch_name,
-        intent,
-        moved_files,
-    )
+pub fn get_workspaces(repo_path: String) -> Result<Vec<Workspace>, String> {
+    crate::core::list_workspaces(&repo_path)
 }
 
 /// Combined command: creates jj workspace + adds to database atomically
@@ -158,66 +123,6 @@ pub fn merge_workspace(
     };
 
     crate::core::merge_workspace(&repo_path, workspace_id, &message, strategy)
-}
-
-/// Clean up stale workspace directories that don't have corresponding database entries
-/// This should be called on app startup to clean up any orphaned directories
-#[tauri::command]
-pub fn cleanup_stale_workspaces(repo_path: String) -> Result<(), String> {
-    use std::collections::HashSet;
-    use std::path::Path;
-
-    let workspaces_dir = Path::new(&repo_path).join(".treq").join("workspaces");
-
-    // If workspaces directory doesn't exist, nothing to clean up
-    if !workspaces_dir.exists() {
-        return Ok(());
-    }
-
-    // Get all workspace paths from database
-    let db_workspaces = local_db::get_workspaces(&repo_path)
-        .map_err(|e| format!("Failed to get workspaces from database: {}", e))?;
-
-    let db_workspace_paths: HashSet<String> = db_workspaces
-        .into_iter()
-        .map(|w| w.workspace_path)
-        .collect();
-
-    // Iterate through directories in .treq/workspaces
-    let entries = std::fs::read_dir(&workspaces_dir)
-        .map_err(|e| format!("Failed to read workspaces directory: {}", e))?;
-
-    for entry in entries {
-        let entry = match entry {
-            Ok(e) => e,
-            Err(e) => {
-                eprintln!("Warning: Failed to read directory entry: {}", e);
-                continue;
-            }
-        };
-
-        let dir_path = entry.path();
-        if !dir_path.is_dir() {
-            continue;
-        }
-
-        let dir_name = entry.file_name().to_string_lossy().to_string();
-
-        // If this directory doesn't have a corresponding DB entry, it's stale
-        if !db_workspace_paths.contains(&dir_name) {
-            let dir_path_display = dir_path.display();
-            if let Err(e) = std::fs::remove_dir_all(&dir_path) {
-                eprintln!(
-                    "Warning: Failed to remove stale workspace directory {}: {}",
-                    dir_path_display, e
-                );
-            } else {
-                println!("Cleaned up stale workspace directory: {}", dir_path_display);
-            }
-        }
-    }
-
-    Ok(())
 }
 
 #[tauri::command]
@@ -794,102 +699,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_cleanup_stale_workspaces_removes_orphaned_directories() {
-        use crate::local_db;
-
-        // Setup: Create temp directory with workspaces dir
-        let temp_dir = TempDir::new().unwrap();
-        let repo_path = temp_dir.path().to_str().unwrap();
-        let workspaces_dir = temp_dir.path().join(".treq").join("workspaces");
-        fs::create_dir_all(&workspaces_dir).unwrap();
-
-        // Create 3 workspace directories
-        let workspace1_dir = workspaces_dir.join("workspace1");
-        let workspace2_dir = workspaces_dir.join("workspace2");
-        let workspace3_dir = workspaces_dir.join("workspace3");
-
-        fs::create_dir_all(&workspace1_dir).unwrap();
-        fs::create_dir_all(&workspace2_dir).unwrap();
-        fs::create_dir_all(&workspace3_dir).unwrap();
-
-        // Add test files to ensure they need cleanup
-        fs::write(workspace1_dir.join("test.txt"), "test").unwrap();
-        fs::write(workspace2_dir.join("test.txt"), "test").unwrap();
-        fs::write(workspace3_dir.join("test.txt"), "test").unwrap();
-
-        // Initialize database and add only workspace1 to DB (workspace2 and workspace3 are stale)
-        local_db::add_workspace(
-            repo_path,
-            "workspace1".to_string(),
-            "workspace1".to_string(),
-            "branch1".to_string(),
-            None,
-            None,
-        )
-        .unwrap();
-
-        // Verify all 3 directories exist before cleanup
-        assert!(workspace1_dir.exists(), "workspace1 should exist");
-        assert!(workspace2_dir.exists(), "workspace2 should exist");
-        assert!(workspace3_dir.exists(), "workspace3 should exist");
-
-        // Act: Clean up stale workspaces
-        let result = cleanup_stale_workspaces(repo_path.to_string());
-
-        // Assert: Should succeed
-        assert!(result.is_ok(), "cleanup should succeed: {:?}", result);
-
-        // Assert: workspace1 (in DB) should still exist
-        assert!(
-            workspace1_dir.exists(),
-            "workspace1 should still exist (it's in DB)"
-        );
-
-        // Assert: workspace2 and workspace3 (not in DB) should be removed
-        assert!(
-            !workspace2_dir.exists(),
-            "workspace2 should be removed (stale)"
-        );
-        assert!(
-            !workspace3_dir.exists(),
-            "workspace3 should be removed (stale)"
-        );
-    }
-
-    #[test]
-    fn test_cleanup_stale_workspaces_handles_empty_workspaces_dir() {
-        // Setup: Create temp directory with empty workspaces dir
-        let temp_dir = TempDir::new().unwrap();
-        let repo_path = temp_dir.path().to_str().unwrap();
-        let workspaces_dir = temp_dir.path().join(".treq").join("workspaces");
-        fs::create_dir_all(&workspaces_dir).unwrap();
-
-        // Act: Clean up with no workspaces
-        let result = cleanup_stale_workspaces(repo_path.to_string());
-
-        // Assert: Should succeed with no errors
-        assert!(
-            result.is_ok(),
-            "cleanup should succeed with empty directory: {:?}",
-            result
-        );
-    }
-
-    #[test]
-    fn test_cleanup_stale_workspaces_handles_missing_workspaces_dir() {
-        // Setup: Create temp directory without workspaces dir
-        let temp_dir = TempDir::new().unwrap();
-        let repo_path = temp_dir.path().to_str().unwrap();
-
-        // Act: Clean up when workspaces dir doesn't exist
-        let result = cleanup_stale_workspaces(repo_path.to_string());
-
-        // Assert: Should succeed gracefully
-        assert!(
-            result.is_ok(),
-            "cleanup should succeed when workspaces dir missing: {:?}",
-            result
-        );
-    }
 }

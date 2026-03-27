@@ -8,8 +8,7 @@ import {
 } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
-	jjGitFetchBackground,
-	jjGetCurrentBranch,
+	getRepoStatus,
 	checkAndRebaseWorkspaces,
 } from "../lib/api";
 
@@ -72,21 +71,15 @@ export function FocusRefreshProvider({
 			if (now - lastFocusTime < FOCUS_DEBOUNCE_MS) return;
 			lastFocusTime = now;
 
+			// Step 1: Fetch + branch update
 			try {
-				// Step 1: Background git fetch
-				await jjGitFetchBackground(repoPath);
+				const status = await getRepoStatus(repoPath);
+				onBranchUpdate(status.current_branch);
 			} catch (error) {
-				console.debug("Background fetch failed:", error);
+				console.debug("Repo status fetch failed:", error);
 			}
 
-			// Step 2: Branch update (fire-and-forget)
-			jjGetCurrentBranch(repoPath)
-				.then((branch) => onBranchUpdate(branch))
-				.catch((error) =>
-					console.error("Failed to get current branch:", error),
-				);
-
-			// Step 3: Rebase — independent, longer debounce
+			// Step 2: Rebase — independent, longer debounce
 			const shouldRebase = now - lastRebaseTime >= REBASE_DEBOUNCE_MS;
 			if (shouldRebase) {
 				lastRebaseTime = now;
@@ -95,11 +88,11 @@ export function FocusRefreshProvider({
 				} catch (error) {
 					console.error("Auto-rebase failed:", error);
 				}
-				// Step 4: Notify afterRebase subscribers (only when rebase ran)
+				// Step 3: Notify afterRebase subscribers (only when rebase ran)
 				await notifySubscribers("afterRebase");
 			}
 
-			// Step 5: Notify afterInvalidate subscribers (every debounced focus)
+			// Step 4: Notify afterInvalidate subscribers (every debounced focus)
 			await notifySubscribers("afterInvalidate");
 		};
 
