@@ -11,30 +11,30 @@ import { render, RenderOptions } from "@testing-library/react";
  * for testing React components that use React Query hooks and toasts.
  */
 const AllTheProviders = ({ children }: { children: ReactNode }) => {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-        // cacheTime: 0,
-      },
-    },
-  });
+	const queryClient = new QueryClient({
+		defaultOptions: {
+			queries: {
+				retry: false,
+				// cacheTime: 0,
+			},
+		},
+	});
 
-  return (
-    <ThemeProvider>
-      <ToastProvider>
-        <QueryClientProvider client={queryClient}>
-          <DiffSettingsProvider>
-            <TerminalSettingsProvider>{children}</TerminalSettingsProvider>
-          </DiffSettingsProvider>
-        </QueryClientProvider>
-      </ToastProvider>
-    </ThemeProvider>
-  );
+	return (
+		<ThemeProvider>
+			<ToastProvider>
+				<QueryClientProvider client={queryClient}>
+					<DiffSettingsProvider>
+						<TerminalSettingsProvider>{children}</TerminalSettingsProvider>
+					</DiffSettingsProvider>
+				</QueryClientProvider>
+			</ToastProvider>
+		</ThemeProvider>
+	);
 };
 
 const customRender = (ui: React.ReactElement, options?: RenderOptions) =>
-  render(ui, { wrapper: AllTheProviders, ...options });
+	render(ui, { wrapper: AllTheProviders, ...options });
 
 // re-export everything
 export * from "@testing-library/react";
