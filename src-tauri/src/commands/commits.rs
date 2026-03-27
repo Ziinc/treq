@@ -1,4 +1,5 @@
 use crate::conflict_markers;
+use crate::core;
 use crate::jj;
 use crate::AppState;
 use tauri::{AppHandle, State};
@@ -352,13 +353,19 @@ pub fn jj_check_branch_exists(
 /// Get list of branches in the repository
 #[tauri::command]
 pub fn jj_get_branches(repo_path: String) -> Result<Vec<jj::JjBranch>, String> {
-    jj::get_branches(&repo_path).map_err(|e| e.to_string())
+    core::list_repo_branches(&repo_path)
 }
 
 /// Edit/switch to a bookmark (similar to git checkout)
 #[tauri::command]
 pub fn jj_edit_bookmark(repo_path: String, bookmark_name: String) -> Result<String, String> {
     jj::jj_edit_bookmark(&repo_path, &bookmark_name).map_err(|e| e.to_string())
+}
+
+/// Switch the repository working copy to the given bookmark (branch).
+#[tauri::command]
+pub fn switch_repo_branch(repo_path: String, bookmark_name: String) -> Result<String, String> {
+    core::switch_repo_branch(&repo_path, &bookmark_name)
 }
 
 #[derive(Debug, serde::Serialize)]

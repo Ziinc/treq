@@ -313,7 +313,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		enabled: !!repoPath,
 	});
 
-
 	// Note: Git cache preloader removed since we're using JJ now
 
 	const deleteWorkspaceMutation = useMutation({

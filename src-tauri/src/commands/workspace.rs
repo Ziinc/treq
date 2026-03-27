@@ -1,4 +1,3 @@
-use crate::auto_rebase::WorkspaceBookmarkConflict;
 use crate::jj::{self, JjRebaseResult};
 use crate::local_db::{self, Workspace};
 use crate::AppState;
@@ -14,6 +13,14 @@ static INDEXED_WORKSPACES: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 pub fn get_repo_status(repo_path: String) -> Result<crate::core::RepoStatus, String> {
     crate::core::repo_status(&repo_path)
 }
+
+#[tauri::command]
+pub fn get_workspace_changed_files(
+    workspace_path: String,
+) -> Result<Vec<crate::jj::JjFileChange>, String> {
+    crate::jj::jj_get_changed_files(&workspace_path).map_err(|e| e.to_string())
+}
+
 
 #[tauri::command]
 pub fn get_workspaces(repo_path: String) -> Result<Vec<Workspace>, String> {
@@ -134,15 +141,6 @@ pub fn get_workspace_status(
 }
 
 #[tauri::command]
-pub fn update_workspace_metadata(
-    repo_path: String,
-    id: i64,
-    metadata: String,
-) -> Result<(), String> {
-    local_db::update_workspace_metadata(&repo_path, id, &metadata)
-}
-
-#[tauri::command]
 pub fn update_workspace_not_on_remote(
     repo_path: String,
     workspace_id: i64,
@@ -181,6 +179,28 @@ pub fn ensure_workspace_indexed(
     crate::file_indexer::index_workspace_files(&repo_path, workspace_id, &workspace_path)?;
 
     Ok(true)
+}
+
+#[tauri::command]
+pub fn update_workspace(
+    repo_path: String,
+    workspace_id: i64,
+    target_branch: Option<String>,
+    intent: Option<String>,
+) -> Result<Workspace, String> {
+    use crate::core::MaybeEmptyParam;
+
+    let tb = match target_branch {
+        Some(s) if s.is_empty() => MaybeEmptyParam::EmptyValue,
+        Some(s) => MaybeEmptyParam::Some(s),
+        None => MaybeEmptyParam::Omitted,
+    };
+    let int = match intent {
+        Some(s) if s.is_empty() => MaybeEmptyParam::EmptyValue,
+        Some(s) => MaybeEmptyParam::Some(s),
+        None => MaybeEmptyParam::Omitted,
+    };
+    crate::core::update_workspace(&repo_path, workspace_id, tb, int)
 }
 
 #[tauri::command]
@@ -260,15 +280,6 @@ pub fn set_workspace_target_branch(
     Ok(rebase_result)
 }
 
-/// Result structure for single workspace rebase (serializable for frontend)
-#[derive(serde::Serialize)]
-pub struct SingleRebaseResult {
-    pub rebased: bool,
-    pub success: bool,
-    pub message: String,
-    pub bookmark_conflicts: Vec<WorkspaceBookmarkConflict>,
-}
-
 #[tauri::command]
 pub fn check_and_rebase_workspaces(
     state: State<AppState>,
@@ -276,7 +287,7 @@ pub fn check_and_rebase_workspaces(
     workspace_id: Option<i64>,
     default_branch: Option<String>,
     force: Option<bool>,
-) -> Result<SingleRebaseResult, String> {
+) -> Result<crate::core::SingleRebaseResult, String> {
     let conflict_style = state
         .db
         .lock()
@@ -286,69 +297,13 @@ pub fn check_and_rebase_workspaces(
         .flatten()
         .unwrap_or_else(|| "git".to_string());
 
-    // If workspace_id provided, only rebase that workspace
-    if let Some(id) = workspace_id {
-        let default_branch = default_branch.unwrap_or_else(|| "main".to_string());
-        let force = force.unwrap_or(false);
-        let result = crate::auto_rebase::rebase_single_workspace(
-            &repo_path,
-            id,
-            &default_branch,
-            force,
-            &conflict_style,
-        )?;
-
-        match result {
-            Some(auto_result) => Ok(SingleRebaseResult {
-                rebased: true,
-                success: auto_result.rebase_result.success,
-                message: auto_result.rebase_result.message,
-                bookmark_conflicts: auto_result.bookmark_conflicts,
-            }),
-            None => Ok(SingleRebaseResult {
-                rebased: false,
-                success: true,
-                message: "No rebase needed".to_string(),
-                bookmark_conflicts: Vec::new(),
-            }),
-        }
-    } else {
-        // Existing behavior: rebase all workspaces
-        let results = crate::auto_rebase::check_and_rebase_all(&repo_path, &conflict_style)?;
-
-        // Aggregate results
-        let rebased_count: usize = results.iter().map(|r| r.workspaces_rebased.len()).sum();
-        let all_success = results.iter().all(|r| r.rebase_result.success);
-        let bookmark_conflicts: Vec<WorkspaceBookmarkConflict> = results
-            .iter()
-            .flat_map(|r| r.bookmark_conflicts.clone())
-            .collect();
-
-        let mut summary = String::new();
-        for result in &results {
-            summary.push_str(&format!(
-                "Target '{}': rebased {} workspace(s) - {}\n",
-                result.target_branch,
-                result.workspaces_rebased.len(),
-                if result.rebase_result.success {
-                    "success"
-                } else {
-                    "failed"
-                }
-            ));
-        }
-
-        if results.is_empty() {
-            summary.push_str("No workspaces with target branches to rebase\n");
-        }
-
-        Ok(SingleRebaseResult {
-            rebased: rebased_count > 0,
-            success: all_success,
-            message: summary,
-            bookmark_conflicts,
-        })
-    }
+    crate::core::check_and_rebase_workspaces(
+        &repo_path,
+        workspace_id,
+        default_branch,
+        force,
+        &conflict_style,
+    )
 }
 
 /// Pull workspace from remote, automatically resolving divergence

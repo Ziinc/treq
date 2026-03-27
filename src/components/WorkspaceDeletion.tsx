@@ -82,7 +82,10 @@ export const WorkspaceDeletion: React.FC<WorkspaceDeletionProps> = ({
 					Delete workspace
 				</DialogPrimitive.Description>
 			</VisuallyHidden.Root>
-			<div className="bg-background text-foreground rounded-xl border border-border shadow-2xl w-[40vw] max-w-none overflow-hidden">
+			<div
+				data-testid="modal"
+				className="bg-background text-foreground rounded-xl border border-border shadow-2xl w-[40vw] max-w-none overflow-hidden"
+			>
 				{/* Header with warning */}
 				<div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-destructive/10">
 					<AlertTriangle className="w-4 h-4 text-destructive" />

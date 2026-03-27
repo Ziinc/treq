@@ -27,6 +27,7 @@ const DialogContent = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
 	<div
 		ref={ref}
+		data-testid="modal"
 		className={cn(
 			"bg-popover text-popover-foreground p-6 shadow-2xl duration-200 rounded-xl border border-border/50 max-w-lg w-full",
 			className,

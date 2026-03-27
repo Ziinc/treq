@@ -1,7 +1,45 @@
 mod e2e_test_helpers;
 
 use e2e_test_helpers::TestRepo;
-use treq_lib::core::{repo_status, RemoteSyncStatus};
+use treq_lib::core::{list_repo_branches, repo_status, switch_repo_branch, RemoteSyncStatus};
+
+// =============================================================================
+// Test: list_repo_branches
+// =============================================================================
+
+#[test]
+fn test_list_repo_branches_includes_main() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let branches = list_repo_branches(&repo.repo_path)
+        .expect("list_repo_branches should succeed");
+
+    assert!(
+        branches.iter().any(|b| b.name == "main"),
+        "expected 'main' in branches, got: {:?}",
+        branches
+    );
+}
+
+#[test]
+fn test_list_repo_branches_includes_created_branch() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    // Create a new git branch so jj picks it up as a bookmark
+    TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "feature-x"])
+        .expect("Failed to create branch");
+    TestRepo::run_git(&repo.repo_path, &["checkout", "main"])
+        .expect("Failed to switch back to main");
+
+    let branches = list_repo_branches(&repo.repo_path)
+        .expect("list_repo_branches should succeed");
+
+    assert!(
+        branches.iter().any(|b| b.name == "feature-x"),
+        "expected 'feature-x' in branches, got: {:?}",
+        branches
+    );
+}
 
 // =============================================================================
 // Test: repo_status basics
@@ -121,4 +159,43 @@ fn test_repo_status_with_remote_behind() {
         }
         other => panic!("expected Behind, got {:?}", other),
     }
+}
+
+// =============================================================================
+// Test: switch_repo_branch
+// =============================================================================
+
+#[test]
+fn test_switch_repo_branch_switches_to_existing_branch() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "feature-x"])
+        .expect("Failed to create branch");
+    TestRepo::run_git(&repo.repo_path, &["checkout", "main"])
+        .expect("Failed to return to main");
+
+    let result = switch_repo_branch(&repo.repo_path, "feature-x");
+    assert!(result.is_ok(), "Expected Ok, got: {:?}", result);
+    let msg = result.unwrap();
+    assert!(
+        msg.contains("feature-x") || msg.contains("Switched") || msg.contains("Already"),
+        "unexpected message: {}",
+        msg
+    );
+}
+
+#[test]
+fn test_switch_repo_branch_already_on_branch() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let result = switch_repo_branch(&repo.repo_path, "main");
+    assert!(result.is_ok(), "Expected Ok even when already on branch");
+}
+
+#[test]
+fn test_switch_repo_branch_invalid_branch_returns_error() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let result = switch_repo_branch(&repo.repo_path, "nonexistent-branch-xyz");
+    assert!(result.is_err(), "Expected Err for nonexistent branch");
 }

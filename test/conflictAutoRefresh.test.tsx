@@ -33,8 +33,6 @@ describe("Bug #1: Automatic Conflict State Refresh", () => {
     vi.spyOn(api, "getSetting").mockResolvedValue(null);
     vi.spyOn(api, "listDirectory").mockResolvedValue([]);
     vi.spyOn(api, "readFile").mockRejectedValue(new Error("README not found"));
-    vi.spyOn(api, "jjGetDefaultBranch").mockResolvedValue("main");
-    vi.spyOn(api, "jjGetConflictedFiles").mockImplementation(jjGetConflictedFilesMock);
     vi.spyOn(api, "jjGetBranches").mockResolvedValue([]);
     vi.spyOn(api, "setWorkspaceTargetBranch").mockResolvedValue(undefined);
     vi.spyOn(api, "jjGetChangedFiles").mockResolvedValue([]);

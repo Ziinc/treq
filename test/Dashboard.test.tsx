@@ -82,7 +82,6 @@ vi.mock("../src/lib/api", async () => {
     readFile: vi.fn().mockRejectedValue(new Error("README.md not found")),
     preloadWorkspaceGitData: vi.fn().mockResolvedValue(undefined),
     invalidateGitCache: vi.fn().mockResolvedValue(undefined),
-    jjGetDefaultBranch: vi.fn().mockResolvedValue("main"),
     jjGetCurrentBranch: vi.fn().mockResolvedValue("main"),
     jjGetChangedFiles: vi.fn().mockResolvedValue([]),
     jjGetConflictedFiles: vi.fn().mockResolvedValue([]),

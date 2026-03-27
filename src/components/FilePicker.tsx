@@ -77,7 +77,10 @@ export const FilePicker: React.FC<FilePickerProps> = ({
 				<DialogPrimitive.Title>Jump to File</DialogPrimitive.Title>
 				<DialogPrimitive.Description>Jump to file</DialogPrimitive.Description>
 			</VisuallyHidden.Root>
-			<div className="bg-background text-foreground rounded-xl border border-border shadow-2xl w-[40vw] max-w-none overflow-hidden">
+			<div
+				data-testid="modal"
+				className="bg-background text-foreground rounded-xl border border-border shadow-2xl w-[40vw] max-w-none overflow-hidden"
+			>
 				{/* Search Input */}
 				<div className="flex items-center border-b border-border px-3 bg-background">
 					<Command.Input

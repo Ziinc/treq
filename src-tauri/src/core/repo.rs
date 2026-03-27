@@ -8,6 +8,7 @@ use super::workspaces::RemoteSyncStatus;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RepoStatus {
     pub current_branch: String,
+    pub default_branch: String,
     pub has_changes: bool,
     pub has_conflicts: bool,
     pub remote_sync: RemoteSyncStatus,
@@ -86,9 +87,20 @@ pub fn repo_status(repo_path: &str) -> Result<RepoStatus, String> {
 
     Ok(RepoStatus {
         current_branch,
+        default_branch,
         has_changes,
         has_conflicts,
         remote_sync,
         fetch_error,
     })
+}
+
+/// Returns the list of local bookmarks (branches) in the repository.
+pub fn list_repo_branches(repo_path: &str) -> Result<Vec<jj::JjBranch>, String> {
+    jj::get_branches(repo_path).map_err(|e| e.to_string())
+}
+
+/// Switches the repository working copy to the given bookmark (branch).
+pub fn switch_repo_branch(repo_path: &str, bookmark_name: &str) -> Result<String, String> {
+    jj::jj_edit_bookmark(repo_path, bookmark_name).map_err(|e| e.to_string())
 }

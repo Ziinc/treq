@@ -145,12 +145,26 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             Ok(Value::Null)
         }
 
-        "update_workspace_metadata" => {
+        "update_workspace" => {
             let repo_path = get_str(&args, "repoPath")?;
-            let id: i64 = get_i64(&args, "id")?;
-            let metadata = get_str(&args, "metadata")?;
-            treq_lib::local_db::update_workspace_metadata(&repo_path, id, &metadata)?;
-            Ok(Value::Null)
+            let workspace_id: i64 = get_i64(&args, "workspaceId")?;
+            let target_branch = match args.get("targetBranch") {
+                Some(Value::String(s)) if s.is_empty() => treq_lib::core::MaybeEmptyParam::EmptyValue,
+                Some(Value::String(s)) => treq_lib::core::MaybeEmptyParam::Some(s.clone()),
+                _ => treq_lib::core::MaybeEmptyParam::Omitted,
+            };
+            let intent = match args.get("intent") {
+                Some(Value::String(s)) if s.is_empty() => treq_lib::core::MaybeEmptyParam::EmptyValue,
+                Some(Value::String(s)) => treq_lib::core::MaybeEmptyParam::Some(s.clone()),
+                _ => treq_lib::core::MaybeEmptyParam::Omitted,
+            };
+            let workspace = treq_lib::core::update_workspace(
+                &repo_path,
+                workspace_id,
+                target_branch,
+                intent,
+            )?;
+            serde_json::to_value(workspace).map_err(|e| e.to_string())
         }
 
         "update_workspace_not_on_remote" => {
@@ -173,6 +187,26 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             let repo_path = get_str(&args, "repoPath")?;
             let status = treq_lib::core::repo_status(&repo_path)?;
             serde_json::to_value(status).map_err(|e| e.to_string())
+        }
+
+        "list_repo_branches" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let branches = treq_lib::core::list_repo_branches(&repo_path)?;
+            serde_json::to_value(branches).map_err(|e| e.to_string())
+        }
+
+        "switch_repo_branch" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let bookmark_name = get_str(&args, "bookmarkName")?;
+            let result = treq_lib::core::switch_repo_branch(&repo_path, &bookmark_name)?;
+            Ok(Value::String(result))
+        }
+
+        "get_workspace_changed_files" => {
+            let workspace_path = get_str(&args, "workspacePath")?;
+            let files = treq_lib::jj::jj_get_changed_files(&workspace_path)
+                .map_err(|e| e.to_string())?;
+            serde_json::to_value(files).map_err(|e| e.to_string())
         }
 
         // ── Workspace status / core operations ────────────────────────────
@@ -203,6 +237,25 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             let result = treq_lib::core::pull_workspace_from_remote(
                 &repo_path,
                 workspace_id,
+                &conflict_style,
+            )?;
+            serde_json::to_value(result).map_err(|e| e.to_string())
+        }
+
+        "check_and_rebase_workspaces" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let workspace_id: Option<i64> = opt_i64(&args, "workspaceId");
+            let default_branch: Option<String> = args
+                .get("defaultBranch")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let force: Option<bool> = args.get("force").and_then(|v| v.as_bool());
+            let conflict_style = get_conflict_style()?;
+            let result = treq_lib::core::check_and_rebase_workspaces(
+                &repo_path,
+                workspace_id,
+                default_branch,
+                force,
                 &conflict_style,
             )?;
             serde_json::to_value(result).map_err(|e| e.to_string())
@@ -620,7 +673,6 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
         | "jj_edit_bookmark"
         | "jj_track_workspace_bookmarks"
         | "set_workspace_target_branch"
-        | "check_and_rebase_workspaces"
         | "resolve_workspace_bookmark_conflict" => Err(format!(
             "not_implemented: '{}' — this command calls jj::* directly. \
              Migrate UI code to use a core::* equivalent instead.",

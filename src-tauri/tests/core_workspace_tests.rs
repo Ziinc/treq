@@ -158,6 +158,145 @@ fn test_can_create_workspace_from_remote_branch() {
 // TODO: create a workspace from non-default home repo branch
 
 // =============================================================================
+// Test: check_and_rebase_workspaces (core function)
+// =============================================================================
+
+/// Create a workspace and set its target branch. Helper shared across rebase tests.
+fn setup_workspace_with_target(
+    repo: &TestRepo,
+    branch: &str,
+    target: &str,
+) -> treq_lib::local_db::Workspace {
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        branch,
+        Some(format!("test workspace for {}", branch)),
+        None,
+        None,
+        None,
+    )
+    .unwrap_or_else(|e| panic!("Failed to create workspace '{}': {}", branch, e));
+
+    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, workspace.id, target)
+        .unwrap_or_else(|e| panic!("Failed to set target branch: {}", e));
+
+    treq_lib::local_db::get_workspace_by_id(&repo.repo_path, workspace.id)
+        .expect("db lookup should succeed")
+        .expect("workspace should exist after creation")
+}
+
+#[test]
+fn test_check_and_rebase_workspaces_all_succeeds() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let _ws = setup_workspace_with_target(&repo, "feat/rebase-all", "main");
+
+    let result = treq_lib::core::check_and_rebase_workspaces(
+        &repo.repo_path,
+        None,
+        None,
+        None,
+        "git",
+    )
+    .expect("check_and_rebase_workspaces should not error");
+
+    assert!(result.success, "rebase should succeed, message: {}", result.message);
+    assert!(result.bookmark_conflicts.is_empty(), "no bookmark conflicts expected");
+}
+
+#[test]
+fn test_check_and_rebase_workspaces_single_workspace() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let ws = setup_workspace_with_target(&repo, "feat/single-rebase", "main");
+
+    let result = treq_lib::core::check_and_rebase_workspaces(
+        &repo.repo_path,
+        Some(ws.id),
+        Some("main".to_string()),
+        None,
+        "git",
+    )
+    .expect("single-workspace rebase should not error");
+
+    assert!(result.success, "single rebase should succeed, message: {}", result.message);
+}
+
+#[test]
+fn test_check_and_rebase_workspaces_force_bypasses_up_to_date() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let ws = setup_workspace_with_target(&repo, "feat/force-rebase", "main");
+
+    // First call: marks workspace as up-to-date (last_rebased_commit = current main).
+    treq_lib::core::check_and_rebase_workspaces(
+        &repo.repo_path,
+        Some(ws.id),
+        Some("main".to_string()),
+        None,
+        "git",
+    )
+    .expect("first rebase should succeed");
+
+    // Second call with force=true: should rebase even though nothing changed.
+    let result = treq_lib::core::check_and_rebase_workspaces(
+        &repo.repo_path,
+        Some(ws.id),
+        Some("main".to_string()),
+        Some(true),
+        "git",
+    )
+    .expect("forced rebase should not error");
+
+    assert!(
+        result.rebased,
+        "force=true should trigger rebase even when already up-to-date"
+    );
+    assert!(result.success, "forced rebase should succeed");
+}
+
+#[test]
+fn test_check_and_rebase_workspaces_skips_self_rebase() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    // Set target_branch equal to branch_name — should be a no-op.
+    let ws = setup_workspace_with_target(&repo, "feat/self-target", "feat/self-target");
+
+    let result = treq_lib::core::check_and_rebase_workspaces(
+        &repo.repo_path,
+        Some(ws.id),
+        Some("feat/self-target".to_string()),
+        None,
+        "git",
+    )
+    .expect("self-rebase call should not error");
+
+    assert!(
+        !result.rebased,
+        "self-rebase (branch_name == target_branch) should be skipped"
+    );
+    assert!(result.success, "skipped self-rebase should still report success");
+}
+
+#[test]
+fn test_check_and_rebase_workspaces_all_skips_self_rebase() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    // All workspaces target their own branch → nothing to rebase.
+    let _ws = setup_workspace_with_target(&repo, "feat/self-all", "feat/self-all");
+
+    let result = treq_lib::core::check_and_rebase_workspaces(
+        &repo.repo_path,
+        None,
+        None,
+        None,
+        "git",
+    )
+    .expect("check_and_rebase_all with only self-targeting workspaces should not error");
+
+    assert!(
+        !result.rebased,
+        "all-rebase should skip workspaces where branch_name == target_branch"
+    );
+    assert!(result.success);
+}
+
+// =============================================================================
 // Test: Can create a stacked workspace (workspace based on another workspace's branch)
 // =============================================================================
 
@@ -2609,12 +2748,8 @@ fn test_workspace_status_not_on_remote() {
         "New workspace should be not_on_remote"
     );
 
-    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
-        .expect("Failed to list workspace statuses");
-    let status = statuses
-        .iter()
-        .find(|s| s.current.id == workspace.id)
-        .expect("Workspace should exist in statuses");
+    let status = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+        .expect("workspace_status should succeed");
 
     assert_eq!(
         status.remote_sync,
@@ -2651,12 +2786,8 @@ fn test_workspace_status_in_sync() {
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
         .expect("Failed to push workspace");
 
-    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
-        .expect("Failed to list workspace statuses");
-    let status = statuses
-        .iter()
-        .find(|s| s.current.id == workspace.id)
-        .expect("Workspace should exist in statuses");
+    let status = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+        .expect("workspace_status should succeed");
 
     assert_eq!(
         status.remote_sync,
@@ -2696,12 +2827,8 @@ fn test_workspace_status_ahead_of_remote() {
     fs::write(workspace_path.join("file2.txt"), "content 2").expect("Failed to write file");
     treq_lib::jj::jj_commit(workspace_path_str, "Local only commit").expect("Failed to commit");
 
-    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
-        .expect("Failed to list workspace statuses");
-    let status = statuses
-        .iter()
-        .find(|s| s.current.id == workspace.id)
-        .expect("Workspace should exist in statuses");
+    let status = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+        .expect("workspace_status should succeed");
 
     assert_eq!(
         status.remote_sync,
@@ -2795,12 +2922,8 @@ fn test_workspace_status_behind_remote() {
         String::from_utf8_lossy(&set_output.stderr)
     );
 
-    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
-        .expect("Failed to list workspace statuses");
-    let status = statuses
-        .iter()
-        .find(|s| s.current.id == workspace.id)
-        .expect("Workspace should exist in statuses");
+    let status = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+        .expect("workspace_status should succeed");
 
     assert_eq!(
         status.remote_sync,
@@ -2877,12 +3000,8 @@ fn test_workspace_status_diverged() {
     // Fetch in the main repo so jj knows about the remote commit
     treq_lib::jj::jj_git_fetch(&repo.repo_path).expect("Failed to fetch");
 
-    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
-        .expect("Failed to list workspace statuses");
-    let status = statuses
-        .iter()
-        .find(|s| s.current.id == workspace.id)
-        .expect("Workspace should exist in statuses");
+    let status = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+        .expect("workspace_status should succeed");
 
     assert_eq!(
         status.remote_sync,
@@ -2990,12 +3109,8 @@ fn test_pull_workspace_resolves_divergence() {
     );
 
     // Verify sync status is no longer Diverged
-    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
-        .expect("Failed to list workspace statuses");
-    let status = statuses
-        .iter()
-        .find(|s| s.current.id == workspace.id)
-        .expect("Workspace should exist in statuses");
+    let status = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+        .expect("workspace_status should succeed");
 
     assert!(
         !matches!(status.remote_sync, RemoteSyncStatus::Diverged { .. }),
@@ -3116,17 +3231,13 @@ fn test_jj_get_sync_status_baseline_in_sync() {
         "Git branch should remain stable after push+pull"
     );
 
-    // Verify WorkspacePartialStatus shows InSync
-    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
-        .expect("Failed to list workspace statuses");
-    let status = statuses
-        .iter()
-        .find(|s| s.current.id == workspace.id)
-        .expect("Should find workspace in statuses");
+    // Verify workspace_status shows InSync
+    let status = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+        .expect("workspace_status should succeed");
     assert_eq!(
         status.remote_sync,
         RemoteSyncStatus::InSync,
-        "WorkspacePartialStatus should show InSync after push+pull, got {:?}",
+        "workspace_status should show InSync after push+pull, got {:?}",
         status.remote_sync
     );
 
@@ -3246,17 +3357,13 @@ fn test_jj_get_sync_status_returns_to_sync_after_push() {
         branch_before, branch_after
     );
 
-    // Verify WorkspacePartialStatus shows InSync
-    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
-        .expect("Failed to list workspace statuses");
-    let status = statuses
-        .iter()
-        .find(|s| s.current.id == workspace.id)
-        .expect("Should find workspace in statuses");
+    // Verify workspace_status shows InSync
+    let status = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+        .expect("workspace_status should succeed");
     assert_eq!(
         status.remote_sync,
         RemoteSyncStatus::InSync,
-        "WorkspacePartialStatus should show InSync after push+pull, got {:?}",
+        "workspace_status should show InSync after push+pull, got {:?}",
         status.remote_sync
     );
 
@@ -3347,14 +3454,10 @@ fn test_workspace_push_pull_with_workspace_status() {
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
     let workspace_path_str = workspace_path.to_str().unwrap();
 
-    // Helper closure: get WorkspacePartialStatus for our workspace
-    let get_status = |repo_path: &str, ws_id: i64| -> treq_lib::core::WorkspacePartialStatus {
-        let statuses = treq_lib::core::list_workspace_statuses(repo_path)
-            .expect("Failed to list workspace statuses");
-        statuses
-            .into_iter()
-            .find(|s| s.current.id == ws_id)
-            .expect("Should find workspace in statuses")
+    // Helper closure: get WorkspaceStatus for our workspace
+    let get_status = |repo_path: &str, ws_id: i64| -> treq_lib::core::WorkspaceStatus {
+        treq_lib::core::workspace_status(repo_path, Some(ws_id))
+            .expect("workspace_status should succeed")
     };
 
     // Record git branch before any operations
@@ -3518,10 +3621,10 @@ fn test_workspace_status_home_repo() {
 
     // Should be InSync with remote (no local-only commits)
     assert_eq!(
-        status.partial.remote_sync,
+        status.remote_sync,
         RemoteSyncStatus::InSync,
         "Home repo should be InSync initially, got {:?}",
-        status.partial.remote_sync
+        status.remote_sync
     );
 
     // DAG should be empty for home repo
@@ -3569,10 +3672,10 @@ fn test_workspace_status_with_workspace_id() {
     let status = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
         .expect("workspace_status should succeed");
     assert_eq!(
-        status.partial.remote_sync,
+        status.remote_sync,
         RemoteSyncStatus::InSync,
         "Should be InSync after push+pull, got {:?}",
-        status.partial.remote_sync
+        status.remote_sync
     );
     assert_eq!(status.partial.current.id, workspace.id);
 
@@ -3583,10 +3686,10 @@ fn test_workspace_status_with_workspace_id() {
     let status = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
         .expect("workspace_status should succeed");
     assert_eq!(
-        status.partial.remote_sync,
+        status.remote_sync,
         RemoteSyncStatus::Ahead { count: 1 },
         "Should be Ahead {{ count: 1 }} after local commit, got {:?}",
-        status.partial.remote_sync
+        status.remote_sync
     );
 
     // Push + pull → back to InSync
@@ -3598,10 +3701,10 @@ fn test_workspace_status_with_workspace_id() {
     let status = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
         .expect("workspace_status should succeed");
     assert_eq!(
-        status.partial.remote_sync,
+        status.remote_sync,
         RemoteSyncStatus::InSync,
         "Should be InSync after push+pull, got {:?}",
-        status.partial.remote_sync
+        status.remote_sync
     );
 }
 

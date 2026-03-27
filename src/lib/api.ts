@@ -37,6 +37,7 @@ export interface WorkspaceNode {
 
 export interface RepoStatus {
 	current_branch: string;
+	default_branch: string;
 	has_changes: boolean;
 	has_conflicts: boolean;
 	remote_sync: RemoteSyncStatus;
@@ -314,6 +315,11 @@ export const jjGetChangedFiles = (
 ): Promise<JjFileChange[]> =>
 	invoke("jj_get_changed_files", { workspacePath: workspace_path });
 
+export const getWorkspaceChangedFiles = (
+	workspace_path: string,
+): Promise<JjFileChange[]> =>
+	invoke("get_workspace_changed_files", { workspacePath: workspace_path });
+
 export const jjGetFileHunks = (
 	workspace_path: string,
 	file_path: string,
@@ -404,9 +410,6 @@ export const jjGetConflictedFiles = (
 ): Promise<string[]> =>
 	invoke("jj_get_conflicted_files", { workspacePath: workspace_path });
 
-export const jjGetDefaultBranch = (repo_path: string): Promise<string> =>
-	invoke("jj_get_default_branch", { repoPath: repo_path });
-
 export const jjGetCurrentBranch = (workspace_path: string): Promise<string> =>
 	invoke("jj_get_current_branch", { workspacePath: workspace_path });
 
@@ -418,11 +421,23 @@ export interface JjBranch {
 export const jjGetBranches = (repo_path: string): Promise<JjBranch[]> =>
 	invoke("jj_get_branches", { repoPath: repo_path });
 
+export const listRepoBranches = (repo_path: string): Promise<JjBranch[]> =>
+	invoke("list_repo_branches", { repoPath: repo_path });
+
 export const jjEditBookmark = (
 	repo_path: string,
 	bookmark_name: string,
 ): Promise<string> =>
 	invoke("jj_edit_bookmark", {
+		repoPath: repo_path,
+		bookmarkName: bookmark_name,
+	});
+
+export const switchRepoBranch = (
+	repo_path: string,
+	bookmark_name: string,
+): Promise<string> =>
+	invoke("switch_repo_branch", {
 		repoPath: repo_path,
 		bookmarkName: bookmark_name,
 	});
@@ -592,17 +607,6 @@ export const mergeWorkspace = (
 ): Promise<void> =>
 	invoke("merge_workspace", { repoPath, workspaceId, message, mergeStrategy });
 
-export const updateWorkspaceMetadata = (
-	repo_path: string,
-	id: number,
-	metadata: string,
-): Promise<void> =>
-	invoke("update_workspace_metadata", {
-		repoPath: repo_path,
-		id,
-		metadata,
-	});
-
 export const updateWorkspaceNotOnRemote = (
 	repo_path: string,
 	workspace_id: number,
@@ -637,6 +641,19 @@ export const getWorkspaceStatus = (
 	invoke("get_workspace_status", {
 		repoPath: repo_path,
 		workspaceId: workspace_id,
+	});
+
+export const updateWorkspace = (
+	repo_path: string,
+	workspace_id: number,
+	target_branch?: string,
+	intent?: string,
+): Promise<Workspace> =>
+	invoke("update_workspace", {
+		repoPath: repo_path,
+		workspaceId: workspace_id,
+		...(target_branch !== undefined && { targetBranch: target_branch }),
+		...(intent !== undefined && { intent }),
 	});
 
 export const setWorkspaceTargetBranch = (

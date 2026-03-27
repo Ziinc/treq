@@ -519,16 +519,6 @@ pub fn delete_workspace(repo_path: &str, id: i64) -> Result<(), String> {
     Ok(())
 }
 
-pub fn update_workspace_metadata(repo_path: &str, id: i64, metadata: &str) -> Result<(), String> {
-    let conn = get_connection(repo_path)?;
-    conn.execute(
-        "UPDATE workspaces SET metadata = ?1 WHERE id = ?2",
-        params![metadata, id],
-    )
-    .map_err(|e| format!("Failed to update workspace metadata: {}", e))?;
-    Ok(())
-}
-
 pub fn update_workspace_intent(repo_path: &str, id: i64, intent: &str) -> Result<(), String> {
     let conn = get_connection(repo_path)?;
     conn.execute(

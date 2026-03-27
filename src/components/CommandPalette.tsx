@@ -284,7 +284,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 						Command menu
 					</DialogPrimitive.Description>
 				</VisuallyHidden.Root>
-				<div className="bg-background text-foreground rounded-xl border border-border shadow-2xl w-[40vw] max-w-none overflow-hidden">
+				<div
+					data-testid="modal"
+					className="bg-background text-foreground rounded-xl border border-border shadow-2xl w-[40vw] max-w-none overflow-hidden"
+				>
 					<div className="flex items-center border-b border-border px-3 bg-background">
 						<Command.Input
 							placeholder="Type a command or search..."

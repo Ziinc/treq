@@ -32,7 +32,7 @@ import {
 	jjGetFileHunks,
 	getWorkspaces,
 	setWorkspaceTargetBranch,
-	jjGetBranches,
+	listRepoBranches,
 	moveCommitToExistingWorkspace,
 	type BranchStatus,
 	type Workspace,
@@ -231,7 +231,7 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
 			// Load branches for the target branch selector
 			setBranchesLoading(true);
 			jjGitFetchBackground(repoPath).catch(() => {});
-			jjGetBranches(repoPath)
+			listRepoBranches(repoPath)
 				.then((branches) => {
 					setAvailableBranches(
 						branches.map((b) => ({
@@ -255,7 +255,7 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
 				// Fetch branches for target branch selector
 				setBranchesLoading(true);
 				jjGitFetchBackground(repoPath).catch(() => {});
-				jjGetBranches(repoPath)
+				listRepoBranches(repoPath)
 					.then((branches) => {
 						setAvailableBranches(
 							branches.map((b) => ({

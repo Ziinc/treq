@@ -20,12 +20,22 @@ afterEach(() => {
 
 // ── DOM polyfills / browser API stubs ────────────────────────────────────────
 
-global.ResizeObserver = class ResizeObserver {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
+(global as any).ResizeObserver = class ResizeObserver {
+  constructor(cb: any) {
+    (this as any).cb = cb;
+  }
+
+  observe() {
+    (this as any).cb([{ borderBoxSize: { inlineSize: 0, blockSize: 0 } }]);
+  }
+  
+  unobserve() { }
+  disconnect() { }
 };
 
+(global as any).DOMRect = {
+  fromRect: () => ({ top: 0, left: 0, bottom: 0, right: 0, width: 0, height: 0 }),
+};
 // Stub HTMLCanvasElement.getContext to silence jsdom "not implemented" warnings
 HTMLCanvasElement.prototype.getContext = vi.fn(() => null) as typeof HTMLCanvasElement.prototype.getContext;
 
@@ -101,6 +111,11 @@ vi.mock("@tauri-apps/plugin-opener", () => ({
   revealItemInDir: vi.fn(),
   openUrl: vi.fn(),
 }));
+
+// Mock Radix/cmdk/Popover to avoid Portal/floating-ui issues in test env
+vi.mock("../src/components/ui/popover", async () => await import("./mocks/popover"));
+vi.mock("cmdk", async () => await import("./mocks/cmdk"));
+vi.mock("@radix-ui/react-dialog", async () => await import("./mocks/radix-dialog"));
 
 // ── Hook mocks ────────────────────────────────────────────────────────────────
 

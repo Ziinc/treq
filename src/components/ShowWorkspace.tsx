@@ -8,12 +8,12 @@ import {
 	listDirectory,
 	readFile,
 	DirectoryEntry,
-	jjGetDefaultBranch,
 	jjGetConflictedFiles,
-	jjGetBranches,
-	setWorkspaceTargetBranch,
-	jjGetChangedFiles,
+	listRepoBranches,
+	updateWorkspace,
+	getWorkspaceChangedFiles,
 	createSession,
+	getRepoStatus,
 	checkAndRebaseWorkspaces,
 	getWorkspaceStatus,
 	pullWorkspaceFromRemote,
@@ -269,14 +269,14 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 			.then(setReadmeContent)
 			.catch(() => setReadmeContent(null));
 
-		jjGetDefaultBranch(effectiveRepoPath)
-			.then(setDefaultBranch)
+		getRepoStatus(effectiveRepoPath)
+			.then((s) => setDefaultBranch(s.default_branch))
 			.catch(() => setDefaultBranch("main"));
 
 		// Load available branches
 		if (workspace && effectiveRepoPath) {
 			setBranchesLoading(true);
-			jjGetBranches(effectiveRepoPath)
+			listRepoBranches(effectiveRepoPath)
 				.then((branches) => {
 					setAvailableBranches(
 						branches.map((b) => ({
@@ -434,7 +434,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 			let isMounted = true;
 
 			// Refresh changed files whenever workspace changes (for badge count)
-			jjGetChangedFiles(workingDirectory)
+			getWorkspaceChangedFiles(workingDirectory)
 				.then((jjFiles) => {
 					if (!isMounted) return;
 					const parsed = parseJjChangedFiles(jjFiles);
@@ -544,35 +544,21 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 
 			setRebasing(true);
 			try {
-				const result = await setWorkspaceTargetBranch(
-					effectiveRepoPath,
-					workingDirectory,
-					workspace.id,
-					branch,
-				);
+				await updateWorkspace(effectiveRepoPath, workspace.id, branch);
 
-				if (result.success) {
-					addToast({
-						title: "Rebased successfully",
-						description: `Workspace rebased onto ${branch}`,
-						type: "success",
-					});
+				addToast({
+					title: "Rebased successfully",
+					description: `Workspace rebased onto ${branch}`,
+					type: "success",
+				});
 
-					// Invalidate sidebar queries so hierarchy updates
-					queryClient.invalidateQueries({
-						queryKey: ["workspaces", effectiveRepoPath],
-					});
-					queryClient.invalidateQueries({
-						queryKey: ["workspace-statuses", effectiveRepoPath],
-					});
-				} else {
-					addToast({
-						title: "Rebase failed",
-						description: result.message,
-						type: "error",
-					});
-					return;
-				}
+				// Invalidate sidebar queries so hierarchy updates
+				queryClient.invalidateQueries({
+					queryKey: ["workspaces", effectiveRepoPath],
+				});
+				queryClient.invalidateQueries({
+					queryKey: ["workspace-statuses", effectiveRepoPath],
+				});
 
 				setTargetBranch(branch);
 			} catch (error) {
@@ -585,14 +571,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 				setRebasing(false);
 			}
 		},
-		[
-			targetBranch,
-			workspace,
-			effectiveRepoPath,
-			workingDirectory,
-			addToast,
-			queryClient,
-		],
+		[targetBranch, workspace, effectiveRepoPath, addToast, queryClient],
 	);
 
 	// Helper to get status for a directory entry
@@ -724,7 +703,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 				}
 
 				// Refresh changed files after rebase
-				const files = await jjGetChangedFiles(workingDirectory);
+				const files = await getWorkspaceChangedFiles(workingDirectory);
 				const parsed = parseJjChangedFiles(files);
 				const map = new Map<string, ParsedFileChange>();
 				for (const file of parsed) {
@@ -1286,7 +1265,10 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 	return (
 		<>
 			<div className="h-full w-full flex flex-col bg-background">
-				<div className="border-b p-2 flex flex-col gap-1 flex-shrink-0">
+				<div
+					className="border-b p-2 flex flex-col gap-1 flex-shrink-0"
+					data-testid="show-workspace-header"
+				>
 					{/* Row 1: Branch name */}
 					<div className="flex items-center justify-between">
 						<div className="flex items-center gap-2">
@@ -1294,6 +1276,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 							{!workspace ? (
 								<>
 									<button
+										type="button"
 										onClick={onOpenBranchSwitcher}
 										className="text-sm font-semibold font-mono hover:underline cursor-pointer"
 									>

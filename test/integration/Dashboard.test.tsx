@@ -1,45 +1,29 @@
-/**
- * Integration test: Dashboard renders the workspace list from real Rust backend.
- *
- * Uses createTestRepo() to spin up a real jj repo, creates workspaces via
- * createWorkspace(), then renders Dashboard and asserts
- * that the branch names appear in the sidebar.
- *
- * "Not implemented" jj_* commands (jjGetCurrentBranch, jjGitFetch,
- * jjTrackWorkspaceBookmarks) are called by Dashboard on mount but are wrapped
- * in try/catch, so their failures are logged and do not block rendering.
- */
-
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import * as React from "react";
-import { render, screen, waitFor } from "../test-utils";
+import { render, screen, waitFor, within, fireEvent } from "../test-utils";
+import userEvent from "@testing-library/user-event";
 import { createTestRepo, openRepo } from "../utils";
-import { createWorkspace } from "../../src/lib/api";
+import { createWorkspace, getWorkspaces } from "../../src/lib/api";
 import { Dashboard } from "../../src/components/Dashboard";
 
-// ── Stub heavy sub-components not relevant to this test ───────────────────────
-// Using plain div stubs avoids pulling in xterm.js and other heavy deps.
-
-// vi.mock("../../src/components/WorkspaceTerminalPane", async () => {
-//   const { forwardRef } = await import("react");
-//   return {
-//     WorkspaceTerminalPane: forwardRef(function MockTerminalPane() {
-//       return <div data-testid="mock-terminal-pane" />;
-//     }),
-//   };
-// });
-
-vi.mock("../../src/components/ShowWorkspace", () => ({
-  ShowWorkspace: () => <div data-testid="mock-show-workspace" />,
-}));
-
-// ── Tests ─────────────────────────────────────────────────────────────────────
+// Helper: wait for sidebar to show branch name, then return the first matching element
+export async function findSidebarBranchElement(branchName: string): Promise<HTMLElement> {
+  const sidebarRoot = document.querySelector(
+    `.${CSS.escape("group/sidebar")}`,
+  ) as HTMLElement;
+  await waitFor(() => {
+    expect(within(sidebarRoot).getAllByText(branchName).length).toBeGreaterThan(0);
+  });
+  return within(sidebarRoot).getAllByText(branchName)[0];
+}
 
 describe("Dashboard - workspace list", () => {
   let repoPath: string;
+  let repoName: string;
 
   beforeEach(async () => {
     ({ repoPath } = createTestRepo(false));
+    repoName = repoPath.split("/").filter(Boolean).pop()!;
 
     openRepo(repoPath);
 
@@ -47,14 +31,343 @@ describe("Dashboard - workspace list", () => {
     await createWorkspace(repoPath, "feat/beta");
   });
 
-  it("renders workspace branch names in the sidebar", async () => {
+  it("renders workspace sidebar elements correctly branch names in the sidebar", async () => {
     render(<Dashboard />);
 
-    await waitFor(
-      () => {
-        expect(screen.getByText("feat/alpha")).toBeTruthy();
-        expect(screen.getByText("feat/beta")).toBeTruthy();
-      }
+    await waitFor(() => {
+      expect(screen.getByText("feat/alpha")).toBeTruthy();
+      expect(screen.getByText("feat/beta")).toBeTruthy();
+    });
+    expect(screen.getByText(repoName)).toBeTruthy();
+    const sidebarRoot = document.querySelector(
+      `.${CSS.escape("group/sidebar")}`,
     );
+    expect(sidebarRoot).toBeTruthy();
+    // branch name on home repo row in sidebar
+    expect(within(sidebarRoot as HTMLElement).getByText("main")).toBeTruthy();
+  });
+
+  describe("context menu and tooltip", () => {
+    beforeEach(() => {
+      // Ensure clipboard spy is active for each test (spy can be cleared between tests)
+      vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
+    });
+
+    it("should copy relative path when right-clicking home repo and selecting Copy relative path", async () => {
+      render(<Dashboard />);
+
+      // Wait for dashboard to load
+      await waitFor(() => {
+        expect(screen.getAllByText("feat/alpha").length).toBeGreaterThan(0);
+      });
+
+      // Find home repo element - has Home icon (lucide-house class in newer lucide-react)
+      const sidebarRoot = document.querySelector(
+        `.${CSS.escape("group/sidebar")}`,
+      );
+      const homeIcon = sidebarRoot?.querySelector(".lucide-house");
+      const homeRepoElement = homeIcon?.closest(
+        '[class*="cursor-pointer"]',
+      ) as HTMLElement;
+      expect(homeRepoElement).toBeTruthy();
+
+      // Right-click home repo
+      fireEvent.contextMenu(homeRepoElement!);
+
+      // Context menu should appear
+      await waitFor(() => {
+        expect(screen.getByText("Copy relative path")).toBeInTheDocument();
+      });
+
+      // Click "Copy relative path"
+      fireEvent.click(screen.getByText("Copy relative path"));
+
+      // Verify clipboard was called with "."
+      await waitFor(() => {
+        expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(".");
+      });
+    });
+
+    it("should copy full path when right-clicking home repo and selecting Copy full path", async () => {
+      render(<Dashboard />);
+
+      // Wait for dashboard to load
+      await waitFor(() => {
+        expect(screen.getAllByText("feat/alpha").length).toBeGreaterThan(0);
+      });
+
+      // Find home repo element - has bg-primary/20 class when selected
+      const homeRepoElement = document.querySelector(
+        ".bg-primary\\/20",
+      ) as HTMLElement;
+      expect(homeRepoElement).toBeTruthy();
+
+      // Right-click home repo
+      fireEvent.contextMenu(homeRepoElement!);
+
+      // Context menu should appear
+      await waitFor(() => {
+        expect(screen.getByText("Copy full path")).toBeInTheDocument();
+      });
+
+      // Click "Copy full path"
+      fireEvent.click(screen.getByText("Copy full path"));
+
+      // Verify clipboard was called with the repo path
+      await waitFor(() => {
+        expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(
+          repoPath,
+        );
+      });
+    });
+
+    it("should open home repo in Finder when selecting Open in Finder", async () => {
+      const user = userEvent.setup();
+
+      render(<Dashboard />);
+
+      // Wait for dashboard to load
+      await waitFor(() => {
+        expect(screen.getAllByText("feat/alpha").length).toBeGreaterThan(0);
+      });
+
+      // Find home repo element
+      const homeRepoElement = document.querySelector(
+        ".bg-primary\\/20",
+      ) as HTMLElement;
+      expect(homeRepoElement).toBeTruthy();
+
+      // Right-click home repo
+      fireEvent.contextMenu(homeRepoElement!);
+
+      // Context menu should appear with "Open in..."
+      await waitFor(() => {
+        expect(screen.getByText("Open in...")).toBeInTheDocument();
+      });
+
+      // Hover over "Open in..." to show submenu
+      await user.hover(screen.getByText("Open in..."));
+
+      // Submenu should appear with "Open in Finder"
+      await waitFor(() => {
+        expect(screen.getByText("Open in Finder")).toBeInTheDocument();
+      });
+
+      // Click "Open in Finder"
+      fireEvent.click(screen.getByText("Open in Finder"));
+
+      // Verify revealItemInDir was called with repo path
+      const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
+      await waitFor(() => {
+        expect(revealItemInDir).toHaveBeenLastCalledWith(repoPath);
+      });
+    });
+
+    it("should copy workspace relative path using .treq/workspaces/ prefix when workspace_path is a short name", async () => {
+      // Get the actual workspace objects to know the workspace_path
+      const workspaces = await getWorkspaces(repoPath);
+      const alphaWorkspace = workspaces.find(
+        (w) => w.branch_name === "feat/alpha",
+      )!;
+      expect(alphaWorkspace).toBeTruthy();
+
+      render(<Dashboard />);
+
+      // Wait for workspace to appear and find it in the sidebar
+      const alphaElement = await findSidebarBranchElement("feat/alpha");
+
+      // Right-click workspace branch name
+      fireEvent.contextMenu(alphaElement);
+
+      // Context menu should appear
+      await waitFor(() => {
+        expect(screen.getByText("Copy relative path")).toBeInTheDocument();
+      });
+
+      // Click "Copy relative path"
+      fireEvent.click(screen.getByText("Copy relative path"));
+
+      // Verify clipboard was called with relative path (.treq/workspaces/ prefix for short names)
+      await waitFor(() => {
+        expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(
+          `.treq/workspaces/${alphaWorkspace.workspace_path}`,
+        );
+      });
+    });
+
+    it("should copy workspace full path from context menu", async () => {
+      // Get the actual workspace objects to know the workspace_path
+      const workspaces = await getWorkspaces(repoPath);
+      const alphaWorkspace = workspaces.find(
+        (w) => w.branch_name === "feat/alpha",
+      )!;
+      expect(alphaWorkspace).toBeTruthy();
+
+      render(<Dashboard />);
+
+      // Wait for workspace to appear and find it in the sidebar
+      const alphaElement = await findSidebarBranchElement("feat/alpha");
+
+      // Right-click workspace
+      fireEvent.contextMenu(alphaElement);
+
+      // Context menu should appear
+      await waitFor(() => {
+        expect(screen.getByText("Copy full path")).toBeInTheDocument();
+      });
+
+      // Click "Copy full path"
+      fireEvent.click(screen.getByText("Copy full path"));
+
+      // Verify clipboard was called with full path
+      await waitFor(() => {
+        expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(
+          `${repoPath}/.treq/workspaces/${alphaWorkspace.workspace_path}`,
+        );
+      });
+    });
+
+    it("should open workspace in Finder from context menu", async () => {
+      const user = userEvent.setup();
+
+      // Get the actual workspace objects to know the workspace_path
+      const workspaces = await getWorkspaces(repoPath);
+      const alphaWorkspace = workspaces.find(
+        (w) => w.branch_name === "feat/alpha",
+      )!;
+      expect(alphaWorkspace).toBeTruthy();
+
+      render(<Dashboard />);
+
+      // Wait for workspace to appear and find it in the sidebar
+      const alphaElement = await findSidebarBranchElement("feat/alpha");
+
+      // Right-click workspace
+      fireEvent.contextMenu(alphaElement);
+
+      // Context menu should appear with "Open in..."
+      await waitFor(() => {
+        expect(screen.getByText("Open in...")).toBeInTheDocument();
+      });
+
+      // Hover over "Open in..." to show submenu
+      await user.hover(screen.getByText("Open in..."));
+
+      // Submenu should appear with "Open in Finder"
+      await waitFor(() => {
+        expect(screen.getByText("Open in Finder")).toBeInTheDocument();
+      });
+
+      // Click "Open in Finder"
+      fireEvent.click(screen.getByText("Open in Finder"));
+
+      // Verify revealItemInDir was called with workspace path
+      const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
+      await waitFor(() => {
+        expect(revealItemInDir).toHaveBeenLastCalledWith(
+          `${repoPath}/.treq/workspaces/${alphaWorkspace.workspace_path}`,
+        );
+      });
+    });
+  });
+
+  describe("multi-select workspaces", () => {
+    it("should select multiple workspaces with cmd+click", async () => {
+      const user = userEvent.setup();
+      render(<Dashboard />);
+
+      // Wait for workspaces to load
+      const alpha = await findSidebarBranchElement("feat/alpha");
+      const beta = await findSidebarBranchElement("feat/beta");
+
+      const workspace1 = alpha.closest("div");
+      const workspace2 = beta.closest("div");
+
+      // Cmd+click on workspace 1 - should toggle selection
+      await user.keyboard("{Meta>}");
+      await user.click(workspace1!);
+      await user.keyboard("{/Meta}");
+
+      // Workspace 1 should have selected styling
+      expect(workspace1).toHaveClass("bg-primary/20");
+
+      // Cmd+click on workspace 2 - should add to selection
+      await user.keyboard("{Meta>}");
+      await user.click(workspace2!);
+      await user.keyboard("{/Meta}");
+
+      // Both should be selected
+      expect(workspace1).toHaveClass("bg-primary/20");
+      expect(workspace2).toHaveClass("bg-primary/20");
+    });
+
+    it("should select range of workspaces with shift+click", async () => {
+      const user = userEvent.setup();
+      render(<Dashboard />);
+
+      // Wait for workspaces to load
+      const alpha = await findSidebarBranchElement("feat/alpha");
+      const beta = await findSidebarBranchElement("feat/beta");
+
+      const workspace1 = alpha.closest("div");
+      const workspace2 = beta.closest("div");
+
+      // Cmd+click workspace 1 to anchor selection
+      await user.keyboard("{Meta>}");
+      await user.click(workspace1!);
+      await user.keyboard("{/Meta}");
+
+      // Shift+click workspace 2 to select range
+      await user.keyboard("{Shift>}");
+      await user.click(workspace2!);
+      await user.keyboard("{/Shift}");
+
+      // Both workspaces should be selected
+      expect(workspace1).toHaveClass("bg-primary/20");
+      expect(workspace2).toHaveClass("bg-primary/20");
+    });
+
+    it("should show delete button when workspaces are selected", async () => {
+      const user = userEvent.setup();
+      render(<Dashboard />);
+
+      // Wait for workspaces to load
+      const alpha = await findSidebarBranchElement("feat/alpha");
+      const beta = await findSidebarBranchElement("feat/beta");
+
+      await user.keyboard("{Meta>}");
+      await user.click(alpha);
+      await user.click(beta);
+      await user.keyboard("{/Meta}");
+
+      // Delete button should show count
+      await screen.findByText(/delete 2 workspaces/i);
+    });
+
+    it("should not allow selecting the main repository with cmd+click", async () => {
+      const user = userEvent.setup();
+      render(<Dashboard />);
+
+      // Wait for workspaces to load
+      await findSidebarBranchElement("feat/alpha");
+
+      // The main repo row is before the workspace rows in the sidebar
+      const sidebarRoot = document.querySelector(
+        `.${CSS.escape("group/sidebar")}`,
+      );
+      const mainRepoRow = sidebarRoot!.querySelector(
+        "div:has(svg.lucide-house)",
+      );
+
+      // Try to cmd+click the main repository
+      await user.keyboard("{Meta>}");
+      await user.click(mainRepoRow!);
+      await user.keyboard("{/Meta}");
+
+      // Delete button should not appear (main repo should not be selectable)
+      expect(
+        screen.queryByText(/delete.*workspaces?/i),
+      ).not.toBeInTheDocument();
+    });
   });
 });

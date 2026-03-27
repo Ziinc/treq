@@ -4,6 +4,7 @@ use std::path::Path;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::auto_rebase::{self, WorkspaceBookmarkConflict};
 use crate::jj;
 use crate::local_db;
 
@@ -1461,4 +1462,79 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+// =============================================================================
+// Rebase
+// =============================================================================
+
+/// Serializable result returned to callers (including the Tauri frontend).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SingleRebaseResult {
+    pub rebased: bool,
+    pub success: bool,
+    pub message: String,
+    pub bookmark_conflicts: Vec<WorkspaceBookmarkConflict>,
+}
+
+/// Check and optionally rebase workspaces against their target branch.
+///
+/// - `workspace_id = Some(id)` — rebase only that workspace (uses `default_branch` as fallback
+///   when the workspace has no `target_branch` set, and respects `force`).
+/// - `workspace_id = None` — rebase all workspaces in the repo that have a `target_branch`.
+pub fn check_and_rebase_workspaces(
+    repo_path: &str,
+    workspace_id: Option<i64>,
+    default_branch: Option<String>,
+    force: Option<bool>,
+    conflict_style: &str,
+) -> Result<SingleRebaseResult, String> {
+    if let Some(id) = workspace_id {
+        let default_branch = default_branch.unwrap_or_else(|| "main".to_string());
+        let force = force.unwrap_or(false);
+        let result =
+            auto_rebase::rebase_single_workspace(repo_path, id, &default_branch, force, conflict_style)?;
+
+        match result {
+            Some(auto_result) => Ok(SingleRebaseResult {
+                rebased: true,
+                success: auto_result.rebase_result.success,
+                message: auto_result.rebase_result.message,
+                bookmark_conflicts: auto_result.bookmark_conflicts,
+            }),
+            None => Ok(SingleRebaseResult {
+                rebased: false,
+                success: true,
+                message: "No rebase needed".to_string(),
+                bookmark_conflicts: Vec::new(),
+            }),
+        }
+    } else {
+        let results = auto_rebase::check_and_rebase_all(repo_path, conflict_style)?;
+
+        let rebased_count: usize = results.iter().map(|r| r.workspaces_rebased.len()).sum();
+        let all_success = results.iter().all(|r| r.rebase_result.success);
+        let bookmark_conflicts: Vec<WorkspaceBookmarkConflict> =
+            results.iter().flat_map(|r| r.bookmark_conflicts.clone()).collect();
+
+        let mut summary = String::new();
+        for result in &results {
+            summary.push_str(&format!(
+                "Target '{}': rebased {} workspace(s) - {}\n",
+                result.target_branch,
+                result.workspaces_rebased.len(),
+                if result.rebase_result.success { "success" } else { "failed" }
+            ));
+        }
+        if results.is_empty() {
+            summary.push_str("No workspaces with target branches to rebase\n");
+        }
+
+        Ok(SingleRebaseResult {
+            rebased: rebased_count > 0,
+            success: all_success,
+            message: summary,
+            bookmark_conflicts,
+        })
+    }
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { GitBranch, Loader2, ChevronDown, Check } from "lucide-react";
 import { Command } from "cmdk";
 import { Button } from "./ui/button";
@@ -28,8 +28,17 @@ export const TargetBranchSelector: React.FC<TargetBranchSelectorProps> = ({
 }) => {
 	const [open, setOpen] = useState(false);
 
+	useEffect(() => {
+		console.log(branches);
+	}, [branches]);
 	return (
-		<Popover open={open} onOpenChange={setOpen}>
+		<Popover
+			open={open}
+			onOpenChange={(value) => {
+				console.log("openChange", value);
+				setOpen(value);
+			}}
+		>
 			<PopoverTrigger asChild>
 				<Button
 					variant="outline"
@@ -37,6 +46,9 @@ export const TargetBranchSelector: React.FC<TargetBranchSelectorProps> = ({
 					disabled={disabled || loading}
 					className="gap-2"
 					aria-label="Workspace target"
+					onClick={() => {
+						console.log("clicked");
+					}}
 				>
 					{loading ? (
 						<Loader2 className="w-4 h-4 animate-spin" />
@@ -74,7 +86,7 @@ export const TargetBranchSelector: React.FC<TargetBranchSelectorProps> = ({
 											onSelect(branch.name);
 											setOpen(false);
 										}}
-										className="px-3 py-1.5 flex items-center gap-2 cursor-pointer aria-selected:bg-accent font-mono"
+										className="branch-list-item px-3 py-1.5 flex items-center gap-2 cursor-pointer aria-selected:bg-accent font-mono"
 									>
 										<span className="flex-1">{branch.name}</span>
 										{branch.name === targetBranch && (

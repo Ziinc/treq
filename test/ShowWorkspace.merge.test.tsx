@@ -30,7 +30,6 @@ vi.mock("../src/lib/api", async () => {
     getSetting: vi.fn().mockResolvedValue(null),
     listDirectory: vi.fn().mockResolvedValue([]),
     readFile: vi.fn().mockRejectedValue(new Error("README not found")),
-    jjGetDefaultBranch: vi.fn().mockResolvedValue("main"),
     jjGetConflictedFiles: vi.fn().mockResolvedValue([]),
     jjGetBranches: vi.fn().mockResolvedValue([]),
     setWorkspaceTargetBranch: vi.fn().mockResolvedValue({
@@ -76,7 +75,6 @@ describe("ShowWorkspace - Merge Button", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(api.jjGetDefaultBranch).mockResolvedValue("main");
     vi.mocked(api.jjGetConflictedFiles).mockResolvedValue([]);
     vi.mocked(api.jjGetBranches).mockResolvedValue([
       { name: "main", is_current: false },
@@ -113,10 +111,6 @@ describe("ShowWorkspace - Merge Button", () => {
         initialSelectedFile={null}
       />
     );
-
-    await waitFor(() => {
-      expect(api.jjGetDefaultBranch).toHaveBeenCalled();
-    });
 
     // Should not show target branch selector or merge button for main branch
     expect(screen.queryByTestId("target-branch-selector")).not.toBeInTheDocument();

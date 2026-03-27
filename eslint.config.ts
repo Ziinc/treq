@@ -8,6 +8,7 @@ const ignoredGlobs = [
   "docs/.docusaurus/**",
   "docs/build/**",
   ".treq/**",
+  "target/**",
   "src-tauri/target/**",
   "dist/**",
   "node_modules/**",
