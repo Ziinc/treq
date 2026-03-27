@@ -48,3 +48,6 @@ src-tauri/gen/
 /certs/.env.prod
 
 !/certs/.env
+
+# treq-napi
+crates/treq-napi/treq-napi.*.node

@@ -15,6 +15,10 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:ui": "vitest --ui",
+    "build:napi": "cd crates/treq-napi && npm run build:debug",
+    "build:napi:release": "cd crates/treq-napi && npm run build",
+    "test:integration": "npm run build:napi && vitest run --config vitest.config.integration.ts",
+    "test:integration:watch": "vitest --config vitest.config.integration.ts",
     "format": "biome format  --write ./src",
     "check:format": "biome format ./src",
     "check": "tsc",
@@ -62,6 +66,7 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@napi-rs/cli": "^3",
     "@biomejs/biome": "2.4.7",
     "@eslint/css": "^0.14.1",
     "@eslint/js": "^9.39.4",
