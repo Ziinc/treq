@@ -340,7 +340,6 @@ pub fn run() {
             commands::get_treq_bin_dir,
             commands::get_workspaces,
             commands::create_workspace,
-            commands::delete_workspace_from_db,
             commands::delete_workspace,
             commands::push_workspace_to_remote,
             commands::pull_workspace_from_remote,
@@ -365,9 +364,9 @@ pub fn run() {
             commands::set_repo_setting,
             commands::jj_create_workspace,
             commands::jj_list_workspaces,
-            commands::jj_remove_workspace,
+
             commands::jj_get_workspace_info,
-            commands::jj_squash_to_workspace,
+
             commands::jj_get_changed_files,
             commands::jj_get_file_hunks,
             commands::jj_get_file_lines,
@@ -376,14 +375,14 @@ pub fn run() {
             commands::create_commit,
             commands::list_commits,
             commands::jj_split,
-            commands::jj_is_workspace,
+
             commands::get_repo_status,
             commands::get_workspace_changed_files,
             commands::init_repo,
-            commands::jj_rebase_onto,
+
             commands::jj_get_conflicted_files,
             commands::jj_get_default_branch,
-            commands::jj_get_current_branch,
+
             commands::jj_push,
             commands::jj_get_sync_status,
             commands::jj_git_fetch,
@@ -396,6 +395,7 @@ pub fn run() {
             commands::jj_create_merge,
             commands::jj_check_branch_exists,
             commands::jj_get_branches,
+            commands::list_repo_branches,
             commands::jj_edit_bookmark,
             commands::switch_repo_branch,
             commands::jj_track_workspace_bookmarks,

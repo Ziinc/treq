@@ -210,12 +210,6 @@ export const createWorkspace = (
 		metadata: metadata ?? null,
 	});
 
-export const deleteWorkspaceFromDb = (
-	repo_path: string,
-	id: number,
-): Promise<void> =>
-	invoke("delete_workspace_from_db", { repoPath: repo_path, id });
-
 export const deleteWorkspace = (repo_path: string, id: number): Promise<void> =>
 	invoke("delete_workspace", {
 		repoPath: repo_path,
@@ -289,26 +283,6 @@ export const jjCreateWorkspace = (
 		sourceBranch: source_branch ?? null,
 	});
 
-export const jjRemoveWorkspace = (
-	repo_path: string,
-	workspace_path: string,
-): Promise<void> =>
-	invoke("jj_remove_workspace", {
-		repoPath: repo_path,
-		workspacePath: workspace_path,
-	});
-
-export const jjSquashToWorkspace = (
-	source_workspace_path: string,
-	target_workspace_name: string,
-	file_paths?: string[],
-): Promise<string> =>
-	invoke("jj_squash_to_workspace", {
-		sourceWorkspacePath: source_workspace_path,
-		targetWorkspaceName: target_workspace_name,
-		filePaths: file_paths || null,
-	});
-
 // JJ Diff API
 export const jjGetChangedFiles = (
 	workspace_path: string,
@@ -356,9 +330,6 @@ export const jjRestoreFile = (
 export const jjRestoreAll = (workspace_path: string): Promise<string> =>
 	invoke("jj_restore_all", { workspacePath: workspace_path });
 
-export const jjIsWorkspace = (repo_path: string): Promise<boolean> =>
-	invoke("jj_is_workspace", { repoPath: repo_path });
-
 export const createCommit = (
 	repoPath: string,
 	workspaceId: number | null,
@@ -396,22 +367,10 @@ export const jjSplit = (
 		filePaths: file_paths,
 	});
 
-export const jjRebaseOnto = (
-	workspace_path: string,
-	target_branch: string,
-): Promise<JjRebaseResult> =>
-	invoke("jj_rebase_onto", {
-		workspacePath: workspace_path,
-		targetBranch: target_branch,
-	});
-
 export const jjGetConflictedFiles = (
 	workspace_path: string,
 ): Promise<string[]> =>
 	invoke("jj_get_conflicted_files", { workspacePath: workspace_path });
-
-export const jjGetCurrentBranch = (workspace_path: string): Promise<string> =>
-	invoke("jj_get_current_branch", { workspacePath: workspace_path });
 
 export interface JjBranch {
 	name: string;

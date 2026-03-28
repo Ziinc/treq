@@ -52,23 +52,8 @@ pub fn jj_list_workspaces(
 }
 
 #[tauri::command]
-pub fn jj_remove_workspace(repo_path: String, workspace_path: String) -> Result<(), String> {
-    jj::remove_workspace(&repo_path, &workspace_path).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 pub fn jj_get_workspace_info(workspace_path: String) -> Result<jj::WorkspaceInfo, String> {
     jj::get_workspace_info(&workspace_path).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub fn jj_squash_to_workspace(
-    source_workspace_path: String,
-    target_workspace_name: String,
-    file_paths: Option<Vec<String>>,
-) -> Result<String, String> {
-    jj::squash_to_workspace(&source_workspace_path, &target_workspace_name, file_paths)
-        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -165,30 +150,6 @@ pub fn jj_split(
     Ok(result)
 }
 
-/// Check if a path has a jj workspace
-#[tauri::command]
-pub fn jj_is_workspace(repo_path: String) -> bool {
-    jj::is_jj_workspace(&repo_path)
-}
-
-/// Rebase workspace onto a target branch
-#[tauri::command]
-pub fn jj_rebase_onto(
-    state: State<AppState>,
-    workspace_path: String,
-    target_branch: String,
-) -> Result<jj::JjRebaseResult, String> {
-    let conflict_style = state
-        .db
-        .lock()
-        .unwrap()
-        .get_setting("conflict_marker_style")
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| "git".to_string());
-    jj::jj_rebase_onto(&workspace_path, &target_branch, &conflict_style).map_err(|e| e.to_string())
-}
-
 /// Get list of conflicted files in workspace
 #[tauri::command]
 pub fn jj_get_conflicted_files(workspace_path: String) -> Result<Vec<String>, String> {
@@ -199,12 +160,6 @@ pub fn jj_get_conflicted_files(workspace_path: String) -> Result<Vec<String>, St
 #[tauri::command]
 pub fn jj_get_default_branch(repo_path: String) -> Result<String, String> {
     jj::get_default_branch(&repo_path).map_err(|e| e.to_string())
-}
-
-/// Get the current branch of a workspace
-#[tauri::command]
-pub fn jj_get_current_branch(workspace_path: String) -> Result<String, String> {
-    jj::get_workspace_branch(&workspace_path).map_err(|e| e.to_string())
 }
 
 /// Push changes to remote using jj git push
@@ -353,6 +308,11 @@ pub fn jj_check_branch_exists(
 /// Get list of branches in the repository
 #[tauri::command]
 pub fn jj_get_branches(repo_path: String) -> Result<Vec<jj::JjBranch>, String> {
+    core::list_repo_branches(&repo_path)
+}
+
+#[tauri::command]
+pub fn list_repo_branches(repo_path: String) -> Result<Vec<jj::JjBranch>, String> {
     core::list_repo_branches(&repo_path)
 }
 

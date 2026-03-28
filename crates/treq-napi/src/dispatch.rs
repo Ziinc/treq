@@ -131,13 +131,6 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             Ok(Value::Number(serde_json::Number::from(workspace_id)))
         }
 
-        "delete_workspace_from_db" => {
-            let repo_path = get_str(&args, "repoPath")?;
-            let id: i64 = get_i64(&args, "id")?;
-            treq_lib::local_db::delete_workspace(&repo_path, id)?;
-            Ok(Value::Null)
-        }
-
         "delete_workspace" => {
             let repo_path = get_str(&args, "repoPath")?;
             let id: i64 = get_i64(&args, "id")?;
@@ -646,20 +639,20 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
         // ── Direct jj::* commands: not implemented — migrate to core::* ───
         "jj_create_workspace"
         | "jj_list_workspaces"
-        | "jj_remove_workspace"
+
         | "jj_get_workspace_info"
-        | "jj_squash_to_workspace"
+
         | "jj_get_changed_files"
         | "jj_get_file_hunks"
         | "jj_get_file_lines"
         | "jj_restore_file"
         | "jj_restore_all"
         | "jj_split"
-        | "jj_is_workspace"
-        | "jj_rebase_onto"
+
+
         | "jj_get_conflicted_files"
         | "jj_get_default_branch"
-        | "jj_get_current_branch"
+
         | "jj_push"
         | "jj_get_sync_status"
         | "jj_git_fetch"

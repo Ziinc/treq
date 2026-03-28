@@ -89,12 +89,6 @@ pub fn create_workspace(
     Ok(workspace.id)
 }
 
-#[tauri::command]
-pub fn delete_workspace_from_db(repo_path: String, id: i64) -> Result<(), String> {
-    // Cascade delete sessions (handled by DB foreign key constraint)
-    local_db::delete_workspace(&repo_path, id)
-}
-
 /// Unified delete workspace command that handles both filesystem and DB cleanup
 /// Delegates to core::delete_workspace which correctly constructs the full workspace path
 #[tauri::command]

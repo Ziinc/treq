@@ -82,7 +82,7 @@ vi.mock("../src/lib/api", async () => {
 		readFile: vi.fn().mockRejectedValue(new Error("README.md not found")),
 		preloadWorkspaceGitData: vi.fn().mockResolvedValue(undefined),
 		invalidateGitCache: vi.fn().mockResolvedValue(undefined),
-		jjGetCurrentBranch: vi.fn().mockResolvedValue("main"),
+
 		jjGetChangedFiles: vi.fn().mockResolvedValue([]),
 		jjGetConflictedFiles: vi.fn().mockResolvedValue([]),
 		jjCreateWorkspace: vi
@@ -90,8 +90,6 @@ vi.mock("../src/lib/api", async () => {
 			.mockResolvedValue("/Users/test/repo/.treq/workspaces/test"),
 		createWorkspace: vi.fn().mockResolvedValue(1),
 		setSetting: vi.fn().mockResolvedValue(undefined),
-		jjRemoveWorkspace: vi.fn().mockResolvedValue(undefined),
-		deleteWorkspaceFromDb: vi.fn().mockResolvedValue(undefined),
 		checkAndRebaseWorkspaces: vi.fn().mockResolvedValue(undefined),
 	};
 });
@@ -846,27 +844,6 @@ describe("WorkspacesSidebar", () => {
 					}),
 				);
 			});
-
-			// Both workspaces should be deleted
-			await waitFor(() => {
-				expect(api.jjRemoveWorkspace).toHaveBeenCalledWith(
-					"/Users/test/repo",
-					"/path/ws1",
-				);
-				expect(api.jjRemoveWorkspace).toHaveBeenCalledWith(
-					"/Users/test/repo",
-					"/path/ws2",
-				);
-			});
-
-			expect(api.deleteWorkspaceFromDb).toHaveBeenCalledWith(
-				"/Users/test/repo",
-				1,
-			);
-			expect(api.deleteWorkspaceFromDb).toHaveBeenCalledWith(
-				"/Users/test/repo",
-				2,
-			);
 		});
 
 		it("should clear selection when clicking away from workspaces", async () => {
