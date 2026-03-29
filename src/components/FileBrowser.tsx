@@ -15,8 +15,8 @@ import {
 	listDirectory,
 	listDirectoryCached,
 	readFile,
-	jjGetFileHunks,
-	jjGetChangedFiles,
+	getWorkspaceFileHunks,
+	getWorkspaceChangedFiles,
 	ensureWorkspaceIndexed,
 } from "../lib/api";
 import { cn, getFullWorkspacePath } from "../lib/utils";
@@ -944,10 +944,7 @@ export const FileBrowser = memo(function FileBrowser({
 	// Load changed files from JJ
 	useEffect(() => {
 		if (repoPath) {
-			const workspacePath = workspace
-				? getFullWorkspacePath(workspace)
-				: repoPath;
-			jjGetChangedFiles(workspacePath)
+			getWorkspaceChangedFiles(repoPath, workspace?.id ?? null)
 				.then((jjFiles) => {
 					const parsed = parseJjChangedFiles(jjFiles);
 					const map = new Map<string, ParsedFileChange>();
@@ -1072,9 +1069,10 @@ export const FileBrowser = memo(function FileBrowser({
 					: path;
 				if (changedFiles.has(relPath)) {
 					try {
-						const hunks = await jjGetFileHunks(
-							basePath,
-							path.replace(`${basePath}/`, ""),
+						const hunks = await getWorkspaceFileHunks(
+							repoPath,
+							workspace?.id ?? null,
+							relPath,
 						);
 						const lineMap = new Map<number, "add" | "modify" | "delete">();
 						const deletionSet = new Set<number>();

@@ -14,8 +14,8 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { listen } from "@tauri-apps/api/event";
 import { v4 as uuidv4 } from "uuid";
 import {
-	jjGetChangedFiles,
-	jjGetFileHunks,
+	getWorkspaceChangedFiles,
+	getWorkspaceFileHunks,
 	jjRestoreFile,
 	jjRestoreAll,
 	createCommit,
@@ -26,8 +26,8 @@ import {
 	loadPendingReview,
 	savePendingReview,
 	clearPendingReview,
-	jjGetMergeDiff,
-	jjGetFileLines,
+	getWorkspaceDiff,
+	getWorkspaceFileLines,
 	getSetting,
 	parseConflictMarkers,
 	type JjDiffHunk,
@@ -1383,7 +1383,7 @@ export const ChangesDiffViewer = memo(
 				setRefreshing(true);
 				onRefreshingChange?.(true);
 				try {
-					const jjFiles = await jjGetChangedFiles(workspacePath);
+					const jjFiles = await getWorkspaceChangedFiles(repoPath ?? "", workspaceId ?? null);
 					const parsed = parseJjChangedFiles(jjFiles);
 					applyChangedFiles(parsed);
 				} catch (error) {
@@ -1473,7 +1473,7 @@ export const ChangesDiffViewer = memo(
 			const refreshCommittedChanges = useCallback(async () => {
 				if (showCommittedChanges && repoPath && workspaceId !== undefined) {
 					try {
-						const mergeDiff: JjRevisionDiff = await jjGetMergeDiff(
+						const mergeDiff: JjRevisionDiff = await getWorkspaceDiff(
 							repoPath,
 							workspaceId,
 						);
@@ -1723,7 +1723,7 @@ export const ChangesDiffViewer = memo(
 						const results = await Promise.all(
 							filesToLoad.map(async (file) => {
 								try {
-									const hunks = await jjGetFileHunks(workspacePath, file.path);
+									const hunks = await getWorkspaceFileHunks(repoPath ?? "", workspaceId ?? null, file.path);
 									return {
 										filePath: file.path,
 										hunks,
@@ -3080,8 +3080,9 @@ export const ChangesDiffViewer = memo(
 					}
 
 					try {
-						const result = await jjGetFileLines(
-							workspacePath,
+						const result = await getWorkspaceFileLines(
+							repoPath ?? "",
+							workspaceId ?? null,
 							filePath,
 							false, // fromParent=false to get working copy
 							startLine,

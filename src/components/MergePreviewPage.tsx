@@ -3,7 +3,7 @@ import {
 	type Workspace,
 	type MergeStrategy,
 	jjGetCommitsAhead,
-	jjGetMergeDiff,
+	getWorkspaceDiff,
 	mergeWorkspace,
 	type JjCommitsAhead,
 	type JjRevisionDiff,
@@ -68,7 +68,7 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
 					const fullPath = getFullWorkspacePath(workspace);
 					const [commits, diffData] = await Promise.all([
 						jjGetCommitsAhead(fullPath, targetBranch),
-						jjGetMergeDiff(workspace.repo_path, workspace.id),
+						getWorkspaceDiff(workspace.repo_path, workspace.id),
 					]);
 
 					setCommitsAhead(commits);

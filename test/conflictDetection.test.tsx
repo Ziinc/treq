@@ -23,14 +23,14 @@ vi.mock("../src/components/TargetBranchSelector", () => ({
 }));
 
 describe("Conflict Detection", () => {
-	let jjGetConflictedFilesMock: ReturnType<typeof vi.fn>;
+	let listConflictedFilesMock: ReturnType<typeof vi.fn>;
 	let jjGetChangedFilesMock: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
 		vi.clearAllMocks();
 
 		// Set up mocks
-		jjGetConflictedFilesMock = vi.fn().mockResolvedValue([]);
+		listConflictedFilesMock = vi.fn().mockResolvedValue([]);
 		jjGetChangedFilesMock = vi.fn().mockResolvedValue([]);
 
 		vi.spyOn(api, "getSetting").mockResolvedValue(null);
@@ -56,7 +56,7 @@ describe("Conflict Detection", () => {
 	describe("Stale Conflict Alert Bug", () => {
 		it("should show conflict alert when conflicts exist", async () => {
 			// Setup: Mock API to return conflicted files
-			jjGetConflictedFilesMock.mockResolvedValue([
+			listConflictedFilesMock.mockResolvedValue([
 				"src/components/ChangesDiffViewer.tsx",
 			]);
 
@@ -92,7 +92,7 @@ describe("Conflict Detection", () => {
 
 		it("should clear conflict alert when switching to Code tab after conflicts are resolved", async () => {
 			// Setup: Initially return conflicted files
-			jjGetConflictedFilesMock.mockResolvedValueOnce([
+			listConflictedFilesMock.mockResolvedValueOnce([
 				"src/components/ChangesDiffViewer.tsx",
 			]);
 
@@ -122,7 +122,7 @@ describe("Conflict Detection", () => {
 			});
 
 			// Simulate conflicts being resolved - mock returns empty array now
-			jjGetConflictedFilesMock.mockResolvedValue([]);
+			listConflictedFilesMock.mockResolvedValue([]);
 
 			// Switch to Review tab
 			const user = userEvent.setup();
@@ -146,7 +146,7 @@ describe("Conflict Detection", () => {
 
 		it("should refresh conflicts when switching to Code tab", async () => {
 			// Start with no conflicts
-			jjGetConflictedFilesMock.mockResolvedValue([]);
+			listConflictedFilesMock.mockResolvedValue([]);
 
 			const workspace: Workspace = {
 				id: 1,
@@ -181,7 +181,7 @@ describe("Conflict Detection", () => {
 			await user.click(reviewTab);
 
 			// New conflicts appear while in Review tab
-			jjGetConflictedFilesMock.mockResolvedValue([
+			listConflictedFilesMock.mockResolvedValue([
 				"src/components/NewFile.tsx",
 			]);
 
@@ -189,10 +189,10 @@ describe("Conflict Detection", () => {
 			const codeTab = screen.getByRole("tab", { name: /code/i });
 			await user.click(codeTab);
 
-			// Verify jjGetConflictedFiles was called again
+			// Verify listConflictedFiles was called again
 			await waitFor(() => {
 				// Should be called at least twice: initial load + tab switch
-				expect(jjGetConflictedFilesMock).toHaveBeenCalledTimes(2);
+				expect(listConflictedFilesMock).toHaveBeenCalledTimes(2);
 			});
 
 			// Conflict alert should now appear
@@ -203,7 +203,7 @@ describe("Conflict Detection", () => {
 	});
 
 	describe("Workspace Conflict Indicator Bug", () => {
-		it("should call jjGetConflictedFiles on mount with workspace path", async () => {
+		it("should call listConflictedFiles on mount with workspace path", async () => {
 			const workspace: Workspace = {
 				id: 1,
 				repo_path: "/Users/test/repo",
@@ -215,7 +215,7 @@ describe("Conflict Detection", () => {
 				has_conflicts: false,
 			};
 
-			jjGetConflictedFilesMock.mockResolvedValue([]);
+			listConflictedFilesMock.mockResolvedValue([]);
 
 			render(
 				<ShowWorkspace
@@ -228,7 +228,7 @@ describe("Conflict Detection", () => {
 
 			// Wait for API call
 			await waitFor(() => {
-				expect(jjGetConflictedFilesMock).toHaveBeenCalledWith(
+				expect(listConflictedFilesMock).toHaveBeenCalledWith(
 					"/Users/test/repo/.treq/workspaces/test-workspace",
 				);
 			});
@@ -236,7 +236,7 @@ describe("Conflict Detection", () => {
 
 		it("should show conflict indicator in workspace with has_conflicts=true", async () => {
 			// Setup: Mock API to return conflicted files
-			jjGetConflictedFilesMock.mockResolvedValue([
+			listConflictedFilesMock.mockResolvedValue([
 				"src/components/ChangesDiffViewer.tsx",
 			]);
 
@@ -283,7 +283,7 @@ describe("Conflict Detection", () => {
 				has_conflicts: true,
 			};
 
-			jjGetConflictedFilesMock.mockResolvedValueOnce(["src/file1.tsx"]);
+			listConflictedFilesMock.mockResolvedValueOnce(["src/file1.tsx"]);
 
 			const { rerender } = render(
 				<ShowWorkspace
@@ -300,7 +300,7 @@ describe("Conflict Detection", () => {
 			});
 
 			// Conflicts resolved
-			jjGetConflictedFilesMock.mockResolvedValue([]);
+			listConflictedFilesMock.mockResolvedValue([]);
 			const updatedWorkspace = { ...workspace, has_conflicts: false };
 
 			// Re-render with updated workspace

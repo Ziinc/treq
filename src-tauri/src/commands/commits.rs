@@ -62,9 +62,10 @@ pub fn jj_get_changed_files(workspace_path: String) -> Result<Vec<jj::JjFileChan
 }
 
 #[tauri::command]
-pub fn jj_get_file_hunks(
+pub fn get_workspace_file_hunks(
     state: State<AppState>,
-    workspace_path: String,
+    repo_path: String,
+    workspace_id: Option<i64>,
     file_path: String,
 ) -> Result<Vec<jj::JjDiffHunk>, String> {
     let conflict_style = state
@@ -75,25 +76,19 @@ pub fn jj_get_file_hunks(
         .ok()
         .flatten()
         .unwrap_or_else(|| "git".to_string());
-    jj::jj_get_file_hunks(&workspace_path, &file_path, &conflict_style).map_err(|e| e.to_string())
+    crate::core::list_file_hunks(&repo_path, workspace_id, &file_path, &conflict_style)
 }
 
 #[tauri::command]
-pub fn jj_get_file_lines(
-    workspace_path: String,
+pub fn get_workspace_file_lines(
+    repo_path: String,
+    workspace_id: Option<i64>,
     file_path: String,
     from_parent: bool,
     start_line: usize,
     end_line: usize,
 ) -> Result<jj::JjFileLines, String> {
-    jj::jj_get_file_lines(
-        &workspace_path,
-        &file_path,
-        from_parent,
-        start_line,
-        end_line,
-    )
-    .map_err(|e| e.to_string())
+    crate::core::get_file_lines(&repo_path, workspace_id, &file_path, from_parent, start_line, end_line)
 }
 
 #[tauri::command]
@@ -152,8 +147,8 @@ pub fn jj_split(
 
 /// Get list of conflicted files in workspace
 #[tauri::command]
-pub fn jj_get_conflicted_files(workspace_path: String) -> Result<Vec<String>, String> {
-    jj::get_conflicted_files(&workspace_path, None).map_err(|e| e.to_string())
+pub fn list_conflicted_files(workspace_path: String) -> Result<Vec<String>, String> {
+    core::list_conflicted_files(&workspace_path)
 }
 
 /// Get the default branch of the repository (main/master)
@@ -229,7 +224,7 @@ pub fn jj_get_commits_ahead(
 
 /// Get combined diff between workspace and target branch
 #[tauri::command]
-pub fn jj_get_merge_diff(
+pub fn get_workspace_diff(
     state: State<AppState>,
     repo_path: String,
     workspace_id: i64,
@@ -247,7 +242,7 @@ pub fn jj_get_merge_diff(
 
 /// Get diff for a single commit by revision (commit_id or change_id)
 #[tauri::command]
-pub fn jj_get_commit_diff(
+pub fn get_commit_diff(
     state: State<AppState>,
     repo_path: String,
     workspace_id: Option<i64>,
@@ -262,11 +257,7 @@ pub fn jj_get_commit_diff(
         .flatten()
         .unwrap_or_else(|| "git".to_string());
 
-    match workspace_id {
-        Some(id) => crate::core::get_commit_diff(&repo_path, id, &revision, &conflict_style),
-        None => jj::jj_get_commit_diff(&repo_path, &revision, &conflict_style)
-            .map_err(|e| e.to_string()),
-    }
+    crate::core::get_commit_diff(&repo_path, workspace_id, &revision, &conflict_style)
 }
 
 /// Create a merge commit combining workspace changes with target branch

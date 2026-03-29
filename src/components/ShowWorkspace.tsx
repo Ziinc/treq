@@ -8,7 +8,7 @@ import {
 	listDirectory,
 	readFile,
 	DirectoryEntry,
-	jjGetConflictedFiles,
+	listConflictedFiles,
 	listRepoBranches,
 	updateWorkspace,
 	getWorkspaceChangedFiles,
@@ -395,7 +395,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 		const checkConflicts = async () => {
 			if (!isMounted) return;
 			try {
-				await jjGetConflictedFiles(workingDirectory);
+				await listConflictedFiles(workingDirectory);
 				lastConflictErrorRef.current = null;
 			} catch (error) {
 				const errorMessage =
@@ -434,7 +434,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 			let isMounted = true;
 
 			// Refresh changed files whenever workspace changes (for badge count)
-			getWorkspaceChangedFiles(workingDirectory)
+			getWorkspaceChangedFiles(effectiveRepoPath, workspace?.id ?? null)
 				.then((jjFiles) => {
 					if (!isMounted) return;
 					const parsed = parseJjChangedFiles(jjFiles);
@@ -703,7 +703,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 				}
 
 				// Refresh changed files after rebase
-				const files = await getWorkspaceChangedFiles(workingDirectory);
+				const files = await getWorkspaceChangedFiles(effectiveRepoPath, workspace?.id ?? null);
 				const parsed = parseJjChangedFiles(files);
 				const map = new Map<string, ParsedFileChange>();
 				for (const file of parsed) {

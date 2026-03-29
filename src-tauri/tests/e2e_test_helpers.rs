@@ -129,14 +129,57 @@ impl TestRepo {
     /// Create a file in the repository.
     pub fn create_file(&self, relative_path: &str, content: &str) -> Result<PathBuf, String> {
         let file_path = Path::new(&self.repo_path).join(relative_path);
+        Self::write_file_at_path(file_path.clone(), content, false)?;
 
+        Ok(file_path)
+    }
+
+    /// Write or append file content at an absolute path.
+    fn write_file_at_path(
+        file_path: PathBuf,
+        content: &str,
+        append: bool,
+    ) -> Result<(), String> {
         if let Some(parent) = file_path.parent() {
             fs::create_dir_all(parent)
                 .map_err(|e| format!("Failed to create parent dirs: {}", e))?;
         }
 
-        fs::write(&file_path, content).map_err(|e| format!("Failed to write file: {}", e))?;
+        if append {
+            use std::io::Write;
+            let mut file = fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&file_path)
+                .map_err(|e| format!("Failed to open file for append: {}", e))?;
+            file.write_all(content.as_bytes())
+                .map_err(|e| format!("Failed to append file: {}", e))?;
+        } else {
+            fs::write(&file_path, content).map_err(|e| format!("Failed to write file: {}", e))?;
+        }
 
+        Ok(())
+    }
+
+    /// Create or overwrite a file inside a workspace path.
+    pub fn write_workspace_file(
+        workspace_path: &str,
+        relative_path: &str,
+        content: &str,
+    ) -> Result<PathBuf, String> {
+        let file_path = Path::new(workspace_path).join(relative_path);
+        Self::write_file_at_path(file_path.clone(), content, false)?;
+        Ok(file_path)
+    }
+
+    /// Append to a file inside a workspace path.
+    pub fn append_workspace_file(
+        workspace_path: &str,
+        relative_path: &str,
+        content: &str,
+    ) -> Result<PathBuf, String> {
+        let file_path = Path::new(workspace_path).join(relative_path);
+        Self::write_file_at_path(file_path.clone(), content, true)?;
         Ok(file_path)
     }
 
@@ -331,6 +374,30 @@ impl TestRepo {
         }
         fs::read_to_string(&gitignore_path).map_err(|e| format!("Failed to read .gitignore: {}", e))
     }
+}
+
+#[allow(dead_code)]
+pub fn create_test_repo(with_remote: bool) -> Result<TestRepo, String> {
+    if with_remote {
+        TestRepo::with_remote()
+    } else {
+        TestRepo::new()
+    }
+}
+
+#[allow(dead_code)]
+pub fn write_test_file(
+    base_path: &str,
+    relative_path: &str,
+    content: &str,
+    append: bool,
+) -> Result<String, String> {
+    let file_path = if append {
+        TestRepo::append_workspace_file(base_path, relative_path, content)?
+    } else {
+        TestRepo::write_workspace_file(base_path, relative_path, content)?
+    };
+    Ok(file_path.to_string_lossy().to_string())
 }
 
 /// Helpers for verifying jj state

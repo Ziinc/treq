@@ -8,7 +8,7 @@ import {
 	useState,
 } from "react";
 import {
-	jjGetCommitDiff,
+	getCommitDiff,
 	abandonCommit,
 	listCommits,
 	type JjLogCommit,
@@ -158,6 +158,36 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 
 		const REMOVE_ANIMATION_MS = 220;
 
+		const loadCommitDiff = useCallback(
+			async (commitId: string): Promise<JjRevisionDiff> => {
+				const commit = commits.find((c) => c.commit_id === commitId);
+				// Commit IDs resolve more consistently for per-commit diffs; keep
+				// change_id as a fallback for rewritten/alternate revisions.
+				const revisions = [commitId, commit?.change_id].filter(
+					(value, index, values): value is string =>
+						typeof value === "string" &&
+						value.length > 0 &&
+						values.indexOf(value) === index,
+				);
+
+				let lastError: unknown;
+				for (const revision of revisions) {
+					try {
+						const diff = await getCommitDiff(repoPath, workspaceId, revision);
+						if (diff.files.length > 0 || diff.hunks_by_file.length > 0) {
+							return diff;
+						}
+					} catch (error) {
+						lastError = error;
+					}
+				}
+
+				if (lastError) throw lastError;
+				return { files: [], hunks_by_file: [] };
+			},
+			[repoPath, workspaceId, commits],
+		);
+
 		const handleAbandon = useCallback(
 			async (commit: JjLogCommit) => {
 				if (!repoPath || !workspaceId) return;
@@ -292,7 +322,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 						});
 						return next;
 					});
-					jjGetCommitDiff(repoPath, workspaceId, commitId)
+					loadCommitDiff(commitId)
 						.then((diff) => {
 							setCommitDiffs((prev) => {
 								const next = new Map(prev);
@@ -313,7 +343,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 						});
 				}
 			},
-			[repoPath, workspaceId, commitDiffs],
+			[commitDiffs, loadCommitDiff],
 		);
 
 		const toggleCommit = useCallback(
@@ -334,7 +364,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 								});
 								return next;
 							});
-							jjGetCommitDiff(repoPath, workspaceId, commitId)
+							loadCommitDiff(commitId)
 								.then((diff) => {
 									setCommitDiffs((prev) => {
 										const next = new Map(prev);
@@ -358,7 +388,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 					return next;
 				});
 			},
-			[repoPath, workspaceId, commitDiffs],
+			[commitDiffs, loadCommitDiff],
 		);
 
 		const dayGroups = useMemo(() => groupCommitsByDay(commits), [commits]);

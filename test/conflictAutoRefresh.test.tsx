@@ -22,13 +22,13 @@ vi.mock("../src/components/TargetBranchSelector", () => ({
 }));
 
 describe("Bug #1: Automatic Conflict State Refresh", () => {
-	let jjGetConflictedFilesMock: ReturnType<typeof vi.fn>;
+	let listConflictedFilesMock: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
 		vi.clearAllMocks();
 		vi.useFakeTimers();
 
-		jjGetConflictedFilesMock = vi.fn().mockResolvedValue([]);
+		listConflictedFilesMock = vi.fn().mockResolvedValue([]);
 
 		vi.spyOn(api, "getSetting").mockResolvedValue(null);
 		vi.spyOn(api, "listDirectory").mockResolvedValue([]);
@@ -55,7 +55,7 @@ describe("Bug #1: Automatic Conflict State Refresh", () => {
 
 	it("should automatically detect when conflicts are resolved without tab switching", async () => {
 		// Start with conflicts
-		jjGetConflictedFilesMock.mockResolvedValue(["src/file1.tsx"]);
+		listConflictedFilesMock.mockResolvedValue(["src/file1.tsx"]);
 
 		const workspace: Workspace = {
 			id: 1,
@@ -83,7 +83,7 @@ describe("Bug #1: Automatic Conflict State Refresh", () => {
 		});
 
 		// Simulate conflicts being resolved externally
-		jjGetConflictedFilesMock.mockResolvedValue([]);
+		listConflictedFilesMock.mockResolvedValue([]);
 
 		// Advance timers by 2+ seconds to trigger polling
 		vi.advanceTimersByTime(2500);
@@ -101,7 +101,7 @@ describe("Bug #1: Automatic Conflict State Refresh", () => {
 
 	it("should enable merge button automatically when conflicts are resolved", async () => {
 		// Start with conflicts
-		jjGetConflictedFilesMock.mockResolvedValue(["src/file1.tsx"]);
+		listConflictedFilesMock.mockResolvedValue(["src/file1.tsx"]);
 
 		const workspace: Workspace = {
 			id: 1,
@@ -132,7 +132,7 @@ describe("Bug #1: Automatic Conflict State Refresh", () => {
 		expect(mergeButton).toBeDisabled();
 
 		// Resolve conflicts
-		jjGetConflictedFilesMock.mockResolvedValue([]);
+		listConflictedFilesMock.mockResolvedValue([]);
 
 		// Advance timers to trigger polling
 		vi.advanceTimersByTime(2500);
@@ -147,7 +147,7 @@ describe("Bug #1: Automatic Conflict State Refresh", () => {
 	});
 
 	it("should poll for conflicts every 2 seconds when workspace is active", async () => {
-		jjGetConflictedFilesMock.mockResolvedValue([]);
+		listConflictedFilesMock.mockResolvedValue([]);
 
 		const workspace: Workspace = {
 			id: 1,
@@ -171,19 +171,19 @@ describe("Bug #1: Automatic Conflict State Refresh", () => {
 
 		// Wait for initial load
 		await waitFor(() => {
-			expect(jjGetConflictedFilesMock).toHaveBeenCalledTimes(1);
+			expect(listConflictedFilesMock).toHaveBeenCalledTimes(1);
 		});
 
 		// Advance 2 seconds - should trigger second poll
 		vi.advanceTimersByTime(2000);
 		await waitFor(() => {
-			expect(jjGetConflictedFilesMock).toHaveBeenCalledTimes(2);
+			expect(listConflictedFilesMock).toHaveBeenCalledTimes(2);
 		});
 
 		// Advance another 2 seconds - should trigger third poll
 		vi.advanceTimersByTime(2000);
 		await waitFor(() => {
-			expect(jjGetConflictedFilesMock).toHaveBeenCalledTimes(3);
+			expect(listConflictedFilesMock).toHaveBeenCalledTimes(3);
 		});
 	});
 });

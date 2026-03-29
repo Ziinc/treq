@@ -9,7 +9,7 @@ vi.mock("../src/lib/api", async () => {
 	return {
 		...actual,
 		jjGetLog: vi.fn(),
-		jjGetCommitDiff: vi.fn(),
+		getCommitDiff: vi.fn(),
 		abandonCommit: vi.fn(),
 		listCommits: vi.fn(),
 	};
@@ -129,7 +129,7 @@ describe("CommitDiffViewer - Target Branch History", () => {
 			workspace_branch: "feat/test",
 			target_branch_commits: targetBranchCommits,
 		});
-		vi.mocked(api.jjGetCommitDiff).mockResolvedValue({
+		vi.mocked(api.getCommitDiff).mockResolvedValue({
 			files: [],
 			hunks_by_file: [],
 		});

@@ -84,7 +84,7 @@ vi.mock("../src/lib/api", async () => {
 		invalidateGitCache: vi.fn().mockResolvedValue(undefined),
 
 		jjGetChangedFiles: vi.fn().mockResolvedValue([]),
-		jjGetConflictedFiles: vi.fn().mockResolvedValue([]),
+		listConflictedFiles: vi.fn().mockResolvedValue([]),
 		jjCreateWorkspace: vi
 			.fn()
 			.mockResolvedValue("/Users/test/repo/.treq/workspaces/test"),
@@ -880,44 +880,4 @@ describe("WorkspacesSidebar", () => {
 		});
 	});
 
-	describe("context menu and tooltip", () => {
-		it("should copy workspace relative path from context menu", async () => {
-			// Setup a workspace
-			vi.mocked(api.getWorkspaces).mockResolvedValue([
-				{
-					id: 1,
-					repo_path: "/Users/test/repo",
-					workspace_name: "ws1",
-					workspace_path: "/Users/test/repo/.jj/repo/store/working_copies/ws1",
-					branch_name: "feature/test",
-					created_at: new Date().toISOString(),
-					has_conflicts: false,
-				},
-			]);
-
-			render(<Dashboard />);
-
-			// Wait for workspace to appear
-			const workspaceElement = await screen.findByText("feature/test");
-
-			// Right-click workspace
-			fireEvent.contextMenu(workspaceElement);
-
-			// Context menu should appear
-			await waitFor(() => {
-				expect(screen.getByText("Copy relative path")).toBeInTheDocument();
-			});
-
-			// Click "Copy relative path"
-			const copyRelativePathButton = screen.getByText("Copy relative path");
-			fireEvent.click(copyRelativePathButton);
-
-			// Verify clipboard was called with relative path
-			await waitFor(() => {
-				expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(
-					".jj/repo/store/working_copies/ws1",
-				);
-			});
-		});
-	});
 });

@@ -123,11 +123,30 @@ const WorkspaceTerminalPaneInner = forwardRef<
 	useEffect(() => {
 		const el = scrollContainerRef.current;
 		if (!el) return;
+		const getEntryWidth = (entry: ResizeObserverEntry): number => {
+			const sizeFrom = (
+				size:
+					| ResizeObserverSize
+					| ReadonlyArray<ResizeObserverSize>
+					| undefined,
+			): number | undefined => {
+				if (!size) return undefined;
+				if ("inlineSize" in size) return size.inlineSize;
+				return size[0]?.inlineSize;
+			};
+
+			return (
+				entry.contentRect?.width ??
+				sizeFrom(entry.contentBoxSize) ??
+				sizeFrom(entry.borderBoxSize) ??
+				(entry.target as Element).clientWidth
+			);
+		};
 		// Set immediately so sticky headers work from first render
 		setContainerWidth(el.clientWidth);
 		const ro = new ResizeObserver((entries) => {
 			for (const entry of entries) {
-				setContainerWidth(entry.contentRect.width);
+				setContainerWidth(getEntryWidth(entry));
 			}
 		});
 		ro.observe(el);

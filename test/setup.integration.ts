@@ -19,6 +19,10 @@ import { beforeAll, afterEach, vi, expect } from "vitest";
 // Shared DOM polyfills, browser API stubs, Tauri plugin mocks, and hook mocks
 import "./setup.common";
 
+// Keep integration tests deterministic: avoid background auto-rebase races
+// during commit creation in Rust core.
+process.env.TREQ_DISABLE_AUTO_REBASE = "1";
+
 // Load the napi addon (built by `npm run build:napi`)
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const napi = require("../crates/treq-napi");

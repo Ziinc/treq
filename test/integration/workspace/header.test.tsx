@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import * as React from "react";
 import { render, screen, within, waitFor } from "../../test-utils";
-import { findSidebarBranchElement } from "../Dashboard.test";
 import { fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createTestRepo, openRepo } from "../../utils";
+import { createTestRepo, findSidebarBranchElement, openRepo } from "../../utils";
 import { createWorkspace } from "../../../src/lib/api";
 import { Dashboard } from "../../../src/components/Dashboard";
 

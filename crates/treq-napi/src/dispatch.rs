@@ -196,9 +196,59 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
         }
 
         "get_workspace_changed_files" => {
-            let workspace_path = get_str(&args, "workspacePath")?;
-            let files = treq_lib::jj::jj_get_changed_files(&workspace_path)
+            let repo_path = get_str(&args, "repoPath")?;
+            let workspace_id: Option<i64> = opt_i64(&args, "workspaceId");
+            let files = treq_lib::core::list_changed_files(&repo_path, workspace_id)
                 .map_err(|e| e.to_string())?;
+            serde_json::to_value(files).map_err(|e| e.to_string())
+        }
+
+        "get_workspace_file_hunks" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let workspace_id: Option<i64> = opt_i64(&args, "workspaceId");
+            let file_path = get_str(&args, "filePath")?;
+            let conflict_style = get_conflict_style()?;
+            let hunks = treq_lib::core::list_file_hunks(
+                &repo_path,
+                workspace_id,
+                &file_path,
+                &conflict_style,
+            )
+            .map_err(|e| e.to_string())?;
+            serde_json::to_value(hunks).map_err(|e| e.to_string())
+        }
+
+        "get_workspace_file_lines" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let workspace_id: Option<i64> = opt_i64(&args, "workspaceId");
+            let file_path = get_str(&args, "filePath")?;
+            let from_parent = args
+                .get("fromParent")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let start_line = args
+                .get("startLine")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(1) as usize;
+            let end_line = args
+                .get("endLine")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(50) as usize;
+            let result = treq_lib::core::get_file_lines(
+                &repo_path,
+                workspace_id,
+                &file_path,
+                from_parent,
+                start_line,
+                end_line,
+            )
+            .map_err(|e| e.to_string())?;
+            serde_json::to_value(result).map_err(|e| e.to_string())
+        }
+
+        "list_conflicted_files" => {
+            let workspace_path = get_str(&args, "workspacePath")?;
+            let files = treq_lib::core::list_conflicted_files(&workspace_path)?;
             serde_json::to_value(files).map_err(|e| e.to_string())
         }
 
@@ -398,7 +448,7 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             serde_json::to_value(result).map_err(|e| e.to_string())
         }
 
-        "jj_get_merge_diff" => {
+        "get_workspace_diff" => {
             let repo_path = get_str(&args, "repoPath")?;
             let workspace_id: i64 = get_i64(&args, "workspaceId")?;
             let conflict_style = get_conflict_style()?;
@@ -406,25 +456,17 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             serde_json::to_value(result).map_err(|e| e.to_string())
         }
 
-        "jj_get_commit_diff" => {
+        "get_commit_diff" => {
             let repo_path = get_str(&args, "repoPath")?;
             let revision = get_str(&args, "revision")?;
             let conflict_style = get_conflict_style()?;
-            match opt_i64(&args, "workspaceId") {
-                Some(workspace_id) => {
-                    let result = treq_lib::core::get_commit_diff(
-                        &repo_path,
-                        workspace_id,
-                        &revision,
-                        &conflict_style,
-                    )?;
-                    serde_json::to_value(result).map_err(|e| e.to_string())
-                }
-                None => Err(
-                    "not_implemented: 'jj_get_commit_diff' with no workspace_id calls jj::* directly. \
-                     Provide a workspace_id or migrate to core::*.".to_string()
-                ),
-            }
+            let result = treq_lib::core::get_commit_diff(
+                &repo_path,
+                opt_i64(&args, "workspaceId"),
+                &revision,
+                &conflict_style,
+            )?;
+            serde_json::to_value(result).map_err(|e| e.to_string())
         }
 
         // ── Sessions ──────────────────────────────────────────────────────
@@ -643,14 +685,10 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
         | "jj_get_workspace_info"
 
         | "jj_get_changed_files"
-        | "jj_get_file_hunks"
-        | "jj_get_file_lines"
         | "jj_restore_file"
         | "jj_restore_all"
         | "jj_split"
 
-
-        | "jj_get_conflicted_files"
         | "jj_get_default_branch"
 
         | "jj_push"

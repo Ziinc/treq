@@ -11,7 +11,7 @@ vi.mock("../src/lib/api", async () => {
 	return {
 		...actual,
 		jjGetLog: vi.fn(),
-		jjGetCommitDiff: vi.fn(),
+		getCommitDiff: vi.fn(),
 		abandonCommit: vi.fn(),
 		listCommits: vi.fn(),
 	};
@@ -69,7 +69,7 @@ function setupMocks(diff: JjRevisionDiff = mockDiff) {
 		workspace_branch: "feat/test",
 		target_branch_commits: [],
 	});
-	vi.mocked(api.jjGetCommitDiff).mockResolvedValue(diff);
+	vi.mocked(api.getCommitDiff).mockResolvedValue(diff);
 }
 
 async function renderAndExpandCommit(

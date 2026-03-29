@@ -10,7 +10,7 @@ vi.mock("../src/lib/api", async () => {
 	return {
 		...actual,
 		jjGetChangedFiles: vi.fn().mockResolvedValue([]),
-		jjGetConflictedFiles: vi.fn().mockResolvedValue([]),
+		listConflictedFiles: vi.fn().mockResolvedValue([]),
 		jjGetMergeDiff: vi.fn(),
 	};
 });

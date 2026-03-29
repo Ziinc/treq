@@ -362,7 +362,8 @@ fn test_commit_diff_added_files() {
     let change_id = &committed[0].change_id;
 
     // Call get_commit_diff
-    let diff = treq_lib::core::get_commit_diff(&repo.repo_path, workspace.id, change_id, "git")
+    let diff =
+        treq_lib::core::get_commit_diff(&repo.repo_path, Some(workspace.id), change_id, "git")
         .expect("Failed to get commit diff");
 
     // Should have 2 files in the summary
@@ -449,7 +450,7 @@ fn test_commit_diff_modified_files() {
 
     let diff = treq_lib::core::get_commit_diff(
         &repo.repo_path,
-        workspace.id,
+        Some(workspace.id),
         &mod_commit.change_id,
         "git",
     )
@@ -507,7 +508,7 @@ fn test_commit_diff_deleted_files() {
 
     let diff = treq_lib::core::get_commit_diff(
         &repo.repo_path,
-        workspace.id,
+        Some(workspace.id),
         &del_commit.change_id,
         "git",
     )
@@ -543,11 +544,11 @@ fn test_commit_diff_invalid_change_id() {
 
     // Try with a change_id starting with '-' (injection attempt)
     let result =
-        treq_lib::core::get_commit_diff(&repo.repo_path, workspace.id, "-r malicious", "git");
+        treq_lib::core::get_commit_diff(&repo.repo_path, Some(workspace.id), "-r malicious", "git");
     assert!(result.is_err(), "Should reject change_id starting with '-'");
 
     // Try with empty change_id
-    let result = treq_lib::core::get_commit_diff(&repo.repo_path, workspace.id, "", "git");
+    let result = treq_lib::core::get_commit_diff(&repo.repo_path, Some(workspace.id), "", "git");
     assert!(result.is_err(), "Should reject empty change_id");
 }
 

@@ -47,7 +47,7 @@ vi.mock("../src/lib/api", async () => {
 		getSetting: vi.fn().mockResolvedValue(null),
 		listDirectory: vi.fn().mockResolvedValue([]),
 		readFile: vi.fn().mockRejectedValue(new Error("README not found")),
-		jjGetConflictedFiles: vi.fn().mockResolvedValue([]),
+		listConflictedFiles: vi.fn().mockResolvedValue([]),
 		jjGetBranches: vi.fn().mockResolvedValue([]),
 		setWorkspaceTargetBranch: vi.fn().mockResolvedValue(undefined),
 		jjGetChangedFiles: vi.fn().mockResolvedValue([]),

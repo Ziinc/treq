@@ -28,8 +28,8 @@ import {
 	jjGitFetchBackground,
 	splitWorkspace,
 	getWorkspaceStatus,
-	jjGetChangedFiles,
-	jjGetFileHunks,
+	getWorkspaceChangedFiles,
+	getWorkspaceFileHunks,
 	getWorkspaces,
 	setWorkspaceTargetBranch,
 	listRepoBranches,
@@ -192,11 +192,10 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
 
 		// Load workspace data if there's a source workspace
 		if (sourceWorkspace) {
-			const fullPath = getFullWorkspacePath(sourceWorkspace);
 			setDataLoading(true);
 			Promise.all([
 				getWorkspaceStatus(repoPath, sourceWorkspace.id),
-				jjGetChangedFiles(fullPath),
+				getWorkspaceChangedFiles(repoPath, sourceWorkspace.id),
 				getWorkspaces(repoPath),
 			])
 				.then(([status, files, workspaceList]) => {
@@ -218,7 +217,7 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
 		} else if (isHomeRepo) {
 			// Home repo: load changed files + workspaces + branches (for selector)
 			setDataLoading(true);
-			Promise.all([jjGetChangedFiles(repoPath), getWorkspaces(repoPath)])
+			Promise.all([getWorkspaceChangedFiles(repoPath, null), getWorkspaces(repoPath)])
 				.then(([files, workspaceList]) => {
 					setChangedFiles(files);
 					setAllWorkspaces(workspaceList);
@@ -354,7 +353,7 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
 	useEffect(() => {
 		for (const [filePath, data] of fileHunksMap) {
 			if (data.isLoading && data.hunks.length === 0) {
-				jjGetFileHunks(hunkSourcePath, filePath)
+				getWorkspaceFileHunks(repoPath, sourceWorkspace?.id ?? null, filePath)
 					.then((hunks) =>
 						setFileHunksMap((prev) =>
 							new Map(prev).set(filePath, { hunks, isLoading: false }),

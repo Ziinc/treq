@@ -10,9 +10,59 @@
 
 import { afterEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
+import { configure, prettyDOM } from "@testing-library/dom";
 import "@testing-library/jest-dom/vitest";
 
 // ── Cleanup ───────────────────────────────────────────────────────────────────
+
+const getReducedDomSnapshot = (container: HTMLElement): string => {
+	const containerClone = container.cloneNode(true) as HTMLElement;
+
+	for (const element of containerClone.querySelectorAll("*")) {
+		element.removeAttribute("class");
+		element.removeAttribute("style");
+		element.removeAttribute("tabindex");
+		element.removeAttribute("data-state");
+	}
+
+	for (const svg of containerClone.querySelectorAll("svg")) {
+		svg.remove();
+	}
+
+	const divs = Array.from(containerClone.querySelectorAll("div")).reverse();
+	for (const div of divs) {
+		const ownText = Array.from(div.childNodes)
+			.filter((node) => node.nodeType === Node.TEXT_NODE)
+			.map((node) => node.textContent ?? "")
+			.join("")
+			.trim();
+		const hasContent = ownText.length > 0;
+		const isEmptyDiv =
+			div.childElementCount === 0 && div.attributes.length === 0 && !hasContent;
+		if (isEmptyDiv) {
+			div.remove();
+			continue;
+		}
+
+		const shouldUnwrap =
+			div.attributes.length === 0 && div.childElementCount === 1 && !hasContent;
+		if (shouldUnwrap) {
+			const onlyChild = div.firstElementChild;
+			if (onlyChild) {
+				div.replaceWith(onlyChild);
+			}
+		}
+	}
+
+	return prettyDOM(containerClone) || "<empty />";
+};
+
+configure({
+	getElementError: (message, container) => {
+		const reducedSnapshot = getReducedDomSnapshot(container as HTMLElement);
+		return new Error(`${message}\n\n${reducedSnapshot}`);
+	},
+});
 
 afterEach(() => {
 	cleanup();

@@ -368,8 +368,8 @@ pub fn run() {
             commands::jj_get_workspace_info,
 
             commands::jj_get_changed_files,
-            commands::jj_get_file_hunks,
-            commands::jj_get_file_lines,
+            commands::get_workspace_file_hunks,
+            commands::get_workspace_file_lines,
             commands::jj_restore_file,
             commands::jj_restore_all,
             commands::create_commit,
@@ -380,7 +380,7 @@ pub fn run() {
             commands::get_workspace_changed_files,
             commands::init_repo,
 
-            commands::jj_get_conflicted_files,
+            commands::list_conflicted_files,
             commands::jj_get_default_branch,
 
             commands::jj_push,
@@ -390,8 +390,8 @@ pub fn run() {
             commands::jj_pull,
             commands::jj_get_log,
             commands::jj_get_commits_ahead,
-            commands::jj_get_merge_diff,
-            commands::jj_get_commit_diff,
+            commands::get_workspace_diff,
+            commands::get_commit_diff,
             commands::jj_create_merge,
             commands::jj_check_branch_exists,
             commands::jj_get_branches,

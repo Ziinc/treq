@@ -16,9 +16,10 @@ pub fn get_repo_status(repo_path: String) -> Result<crate::core::RepoStatus, Str
 
 #[tauri::command]
 pub fn get_workspace_changed_files(
-    workspace_path: String,
+    repo_path: String,
+    workspace_id: Option<i64>,
 ) -> Result<Vec<crate::jj::JjFileChange>, String> {
-    crate::jj::jj_get_changed_files(&workspace_path).map_err(|e| e.to_string())
+    crate::core::list_changed_files(&repo_path, workspace_id)
 }
 
 

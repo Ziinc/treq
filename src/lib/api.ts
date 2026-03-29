@@ -284,34 +284,34 @@ export const jjCreateWorkspace = (
 	});
 
 // JJ Diff API
-export const jjGetChangedFiles = (
-	workspace_path: string,
-): Promise<JjFileChange[]> =>
-	invoke("jj_get_changed_files", { workspacePath: workspace_path });
-
 export const getWorkspaceChangedFiles = (
-	workspace_path: string,
+	repoPath: string,
+	workspaceId: number | null,
 ): Promise<JjFileChange[]> =>
-	invoke("get_workspace_changed_files", { workspacePath: workspace_path });
+	invoke("get_workspace_changed_files", { repoPath, workspaceId });
 
-export const jjGetFileHunks = (
-	workspace_path: string,
-	file_path: string,
+export const getWorkspaceFileHunks = (
+	repoPath: string,
+	workspaceId: number | null,
+	filePath: string,
 ): Promise<JjDiffHunk[]> =>
-	invoke("jj_get_file_hunks", {
-		workspacePath: workspace_path,
-		filePath: file_path,
+	invoke("get_workspace_file_hunks", {
+		repoPath,
+		workspaceId,
+		filePath,
 	});
 
-export const jjGetFileLines = (
-	workspacePath: string,
+export const getWorkspaceFileLines = (
+	repoPath: string,
+	workspaceId: number | null,
 	filePath: string,
 	fromParent: boolean,
 	startLine: number,
 	endLine: number,
 ): Promise<JjFileLines> =>
-	invoke("jj_get_file_lines", {
-		workspacePath,
+	invoke("get_workspace_file_lines", {
+		repoPath,
+		workspaceId,
 		filePath,
 		fromParent,
 		startLine,
@@ -367,10 +367,10 @@ export const jjSplit = (
 		filePaths: file_paths,
 	});
 
-export const jjGetConflictedFiles = (
+export const listConflictedFiles = (
 	workspace_path: string,
 ): Promise<string[]> =>
-	invoke("jj_get_conflicted_files", { workspacePath: workspace_path });
+	invoke("list_conflicted_files", { workspacePath: workspace_path });
 
 export interface JjBranch {
 	name: string;
@@ -472,12 +472,12 @@ export const checkBranchExists = (
 		branchName: branch_name,
 	});
 
-export const jjGetCommitDiff = (
+export const getCommitDiff = (
 	repoPath: string,
 	workspaceId: number | null,
 	revision: string,
 ): Promise<JjRevisionDiff> =>
-	invoke("jj_get_commit_diff", { repoPath, workspaceId, revision });
+	invoke("get_commit_diff", { repoPath, workspaceId, revision });
 
 export const jjGetLog = (
 	workspacePath: string,
@@ -498,11 +498,11 @@ export const jjGetCommitsAhead = (
 ): Promise<JjCommitsAhead> =>
 	invoke("jj_get_commits_ahead", { workspacePath, targetBranch });
 
-export const jjGetMergeDiff = (
+export const getWorkspaceDiff = (
 	repoPath: string,
 	workspaceId: number,
 ): Promise<JjRevisionDiff> =>
-	invoke("jj_get_merge_diff", { repoPath, workspaceId });
+	invoke("get_workspace_diff", { repoPath, workspaceId });
 
 export const jjCreateMerge = (
 	workspacePath: string,

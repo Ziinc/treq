@@ -29,7 +29,7 @@ vi.mock("../src/lib/api", async () => {
 		getSetting: vi.fn().mockResolvedValue(null),
 		listDirectory: vi.fn().mockResolvedValue([]),
 		readFile: vi.fn().mockRejectedValue(new Error("README not found")),
-		jjGetConflictedFiles: vi.fn().mockResolvedValue([]),
+		listConflictedFiles: vi.fn().mockResolvedValue([]),
 		jjGetBranches: vi.fn().mockResolvedValue([]),
 		setWorkspaceTargetBranch: vi.fn().mockResolvedValue({
 			success: true,
@@ -74,7 +74,7 @@ describe("ShowWorkspace - Merge Button", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
-		vi.mocked(api.jjGetConflictedFiles).mockResolvedValue([]);
+		vi.mocked(api.listConflictedFiles).mockResolvedValue([]);
 		vi.mocked(api.jjGetBranches).mockResolvedValue([
 			{ name: "main", is_current: false },
 			{ name: "feature-one", is_current: true },
@@ -144,7 +144,7 @@ describe("ShowWorkspace - Merge Button", () => {
 	});
 
 	it("disables Merge button when there are conflicts", async () => {
-		vi.mocked(api.jjGetConflictedFiles).mockResolvedValue(["src/file.ts"]);
+		vi.mocked(api.listConflictedFiles).mockResolvedValue(["src/file.ts"]);
 
 		const onOpenMergePreview = vi.fn();
 
@@ -207,7 +207,7 @@ describe("ShowWorkspace - Merge Button", () => {
 	});
 
 	it("should show tooltip when merge button is disabled due to conflicts", async () => {
-		vi.mocked(api.jjGetConflictedFiles).mockResolvedValue([
+		vi.mocked(api.listConflictedFiles).mockResolvedValue([
 			"file1.ts",
 			"file2.ts",
 		]);
@@ -265,7 +265,7 @@ describe("ShowWorkspace - Merge Button", () => {
 		};
 
 		// Workspace 1 has conflicts
-		vi.mocked(api.jjGetConflictedFiles).mockResolvedValue([
+		vi.mocked(api.listConflictedFiles).mockResolvedValue([
 			"file1.ts",
 			"file2.ts",
 		]);
@@ -292,7 +292,7 @@ describe("ShowWorkspace - Merge Button", () => {
 		);
 
 		// Now switch to workspace 2 which has NO conflicts
-		vi.mocked(api.jjGetConflictedFiles).mockResolvedValue([]);
+		vi.mocked(api.listConflictedFiles).mockResolvedValue([]);
 
 		rerender(
 			<ShowWorkspace

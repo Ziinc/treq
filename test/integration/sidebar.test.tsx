@@ -2,24 +2,9 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import * as React from "react";
 import { render, screen, waitFor, within, fireEvent } from "../test-utils";
 import userEvent from "@testing-library/user-event";
-import { createTestRepo, openRepo } from "../utils";
+import { createTestRepo, findSidebarBranchElement, openRepo } from "../utils";
 import { createWorkspace, getWorkspaces } from "../../src/lib/api";
 import { Dashboard } from "../../src/components/Dashboard";
-
-// Helper: wait for sidebar to show branch name, then return the first matching element
-export async function findSidebarBranchElement(
-	branchName: string,
-): Promise<HTMLElement> {
-	const sidebarRoot = document.querySelector(
-		`.${CSS.escape("group/sidebar")}`,
-	) as HTMLElement;
-	await waitFor(() => {
-		expect(within(sidebarRoot).getAllByText(branchName).length).toBeGreaterThan(
-			0,
-		);
-	});
-	return within(sidebarRoot).getAllByText(branchName)[0];
-}
 
 describe("Dashboard - workspace list", () => {
 	let repoPath: string;
