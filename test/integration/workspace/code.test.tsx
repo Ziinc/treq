@@ -11,8 +11,7 @@ import { Dashboard } from "../../../src/components/Dashboard";
 // jj_get_changed_files is not implemented in NAPI integration tests.
 // Mock it here so FileBrowser doesn't trigger the forbidden jj_* invoke.
 vi.mock("../../../src/lib/api", async (importOriginal) => {
-	const actual =
-		await importOriginal<typeof import("../../../src/lib/api")>();
+	const actual = await importOriginal<typeof import("../../../src/lib/api")>();
 	return {
 		...actual,
 		jjGetChangedFiles: vi.fn().mockResolvedValue([]),

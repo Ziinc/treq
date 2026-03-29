@@ -217,7 +217,10 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
 		} else if (isHomeRepo) {
 			// Home repo: load changed files + workspaces + branches (for selector)
 			setDataLoading(true);
-			Promise.all([getWorkspaceChangedFiles(repoPath, null), getWorkspaces(repoPath)])
+			Promise.all([
+				getWorkspaceChangedFiles(repoPath, null),
+				getWorkspaces(repoPath),
+			])
 				.then(([files, workspaceList]) => {
 					setChangedFiles(files);
 					setAllWorkspaces(workspaceList);

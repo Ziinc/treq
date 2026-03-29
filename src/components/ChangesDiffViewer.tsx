@@ -1383,7 +1383,10 @@ export const ChangesDiffViewer = memo(
 				setRefreshing(true);
 				onRefreshingChange?.(true);
 				try {
-					const jjFiles = await getWorkspaceChangedFiles(repoPath ?? "", workspaceId ?? null);
+					const jjFiles = await getWorkspaceChangedFiles(
+						repoPath ?? "",
+						workspaceId ?? null,
+					);
 					const parsed = parseJjChangedFiles(jjFiles);
 					applyChangedFiles(parsed);
 				} catch (error) {
@@ -1723,7 +1726,11 @@ export const ChangesDiffViewer = memo(
 						const results = await Promise.all(
 							filesToLoad.map(async (file) => {
 								try {
-									const hunks = await getWorkspaceFileHunks(repoPath ?? "", workspaceId ?? null, file.path);
+									const hunks = await getWorkspaceFileHunks(
+										repoPath ?? "",
+										workspaceId ?? null,
+										file.path,
+									);
 									return {
 										filePath: file.path,
 										hunks,

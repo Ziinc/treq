@@ -181,9 +181,7 @@ describe("Conflict Detection", () => {
 			await user.click(reviewTab);
 
 			// New conflicts appear while in Review tab
-			listConflictedFilesMock.mockResolvedValue([
-				"src/components/NewFile.tsx",
-			]);
+			listConflictedFilesMock.mockResolvedValue(["src/components/NewFile.tsx"]);
 
 			// Switch back to Code tab - should detect new conflicts
 			const codeTab = screen.getByRole("tab", { name: /code/i });

@@ -82,8 +82,13 @@ async function addSingleReviewComment(
 	_fileName: string,
 	comment: string,
 ) {
-	await user.click((await screen.findAllByRole("button", { name: /add comment/i }))[0]);
-	await user.type(await screen.findByPlaceholderText(/add a comment/i), comment);
+	await user.click(
+		(await screen.findAllByRole("button", { name: /add comment/i }))[0],
+	);
+	await user.type(
+		await screen.findByPlaceholderText(/add a comment/i),
+		comment,
+	);
 
 	const submit = screen
 		.getAllByRole("button", { name: /add comment/i })
@@ -97,7 +102,8 @@ describe("ShowWorkspace - Reviews integration", () => {
 	it("is able to create a commit from Review tab", async () => {
 		const branchName = "feat/reviews-commit";
 		const commitMessage = "Add integration reviews test commit";
-		const { repoPath, workspace, user } = await openReviewWithChange(branchName);
+		const { repoPath, workspace, user } =
+			await openReviewWithChange(branchName);
 
 		await user.type(screen.getByPlaceholderText("Message"), commitMessage);
 		await user.click(screen.getByRole("button", { name: /^commit$/i }));
@@ -106,11 +112,18 @@ describe("ShowWorkspace - Reviews integration", () => {
 
 	it("is able to review a change and start an agent", async () => {
 		const branchName = "feat/reviews-agent";
-		const { repoPath, workspace, user } = await openReviewWithChange(branchName);
+		const { repoPath, workspace, user } =
+			await openReviewWithChange(branchName);
 		const createSessionSpy = vi.spyOn(api, "createSession");
 
-		await addSingleReviewComment(user, REVIEW_FILE, "Please tighten this change");
-		await user.click(await screen.findByRole("button", { name: /finish review/i }));
+		await addSingleReviewComment(
+			user,
+			REVIEW_FILE,
+			"Please tighten this change",
+		);
+		await user.click(
+			await screen.findByRole("button", { name: /finish review/i }),
+		);
 		await user.click(await screen.findByRole("button", { name: /^plan$/i }));
 
 		await waitFor(() => {
@@ -126,7 +139,9 @@ describe("ShowWorkspace - Reviews integration", () => {
 		const branchName = "feat/reviews-viewed";
 		const { user } = await openReviewWithChange(branchName);
 
-		const viewedCheckbox = await screen.findByRole("checkbox", { name: "Viewed" });
+		const viewedCheckbox = await screen.findByRole("checkbox", {
+			name: "Viewed",
+		});
 		expect(viewedCheckbox).toHaveAttribute("aria-checked", "false");
 
 		await user.click(viewedCheckbox);
@@ -145,7 +160,9 @@ describe("ShowWorkspace - Reviews integration", () => {
 			).toBeInTheDocument();
 		});
 
-		await user.click(screen.getByRole("button", { name: "Collapse file diff" }));
+		await user.click(
+			screen.getByRole("button", { name: "Collapse file diff" }),
+		);
 		await waitFor(() => {
 			expect(
 				screen.getByRole("button", { name: "Expand file diff" }),

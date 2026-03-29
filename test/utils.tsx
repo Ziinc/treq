@@ -45,7 +45,12 @@ export function writeWorkspaceFile(
 	content: string,
 	append = false,
 ): string {
-	return getNapiBindings().writeWorkspaceFile(workspacePath, relativePath, content, append);
+	return getNapiBindings().writeWorkspaceFile(
+		workspacePath,
+		relativePath,
+		content,
+		append,
+	);
 }
 
 export function resolveWorkspacePath(
@@ -64,7 +69,12 @@ export function writeRepoFile(
 	content: string,
 	append = false,
 ): string {
-	return getNapiBindings().writeRepoFile(repoPath, relativePath, content, append);
+	return getNapiBindings().writeRepoFile(
+		repoPath,
+		relativePath,
+		content,
+		append,
+	);
 }
 
 export async function commitRepoFile(

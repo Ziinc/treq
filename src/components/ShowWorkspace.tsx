@@ -703,7 +703,10 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 				}
 
 				// Refresh changed files after rebase
-				const files = await getWorkspaceChangedFiles(effectiveRepoPath, workspace?.id ?? null);
+				const files = await getWorkspaceChangedFiles(
+					effectiveRepoPath,
+					workspace?.id ?? null,
+				);
 				const parsed = parseJjChangedFiles(files);
 				const map = new Map<string, ParsedFileChange>();
 				for (const file of parsed) {

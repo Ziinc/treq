@@ -879,5 +879,4 @@ describe("WorkspacesSidebar", () => {
 			).toBeInTheDocument();
 		});
 	});
-
 });
