@@ -8,13 +8,14 @@ import {
 	useState,
 } from "react";
 import {
-	getCommitDiff,
 	abandonCommit,
-	listCommits,
 	type JjLogCommit,
 	type JjRevisionDiff,
 	type JjDiffHunk,
 } from "../lib/api";
+import { loadCommitDiff as _loadCommitDiff } from "../lib/commit-operations";
+import { usePaginatedCommits } from "../hooks/usePaginatedCommits";
+import { useCommitDiffCache } from "../hooks/useCommitDiffCache";
 import {
 	cn,
 	formatRelativeTime,
@@ -22,6 +23,7 @@ import {
 	getDayKey,
 	formatDayLabel,
 } from "../lib/utils";
+import { parseHunkHeader } from "../lib/diff-utils";
 import {
 	Tooltip,
 	TooltipContent,
@@ -92,17 +94,6 @@ function groupCommitsByDay(commits: JjLogCommit[]): DayGroup[] {
 	return groups;
 }
 
-// Parse hunk header to extract starting line numbers
-const parseHunkHeader = (
-	header: string,
-): { oldStart: number; newStart: number } => {
-	const match = header.match(/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
-	if (!match) return { oldStart: 1, newStart: 1 };
-	return {
-		oldStart: parseInt(match[1], 10),
-		newStart: parseInt(match[2], 10),
-	};
-};
 
 export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 	function CommitDiffViewer({
@@ -117,24 +108,20 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 		onMoveCommitToExistingWorkspace,
 	}) {
 		const isHomeRepo = workspaceId == null;
-		const [commits, setCommits] = useState<JjLogCommit[]>([]);
-		const [targetBranchCommits, setTargetBranchCommits] = useState<
-			JjLogCommit[]
-		>([]);
-		const [targetBranchCommitsBranch, setTargetBranchCommitsBranch] = useState<
-			string | null
-		>(null);
-		const [targetBranchLimit, setTargetBranchLimit] = useState(10);
-		const [homeRepoLimit, setHomeRepoLimit] = useState(15);
-		const [loadingMore, setLoadingMore] = useState(false);
-		const [loading, setLoading] = useState(true);
-		const [expandedCommits, setExpandedCommits] = useState<Set<string>>(
-			new Set(),
-		);
-		const [commitDiffs, setCommitDiffs] = useState<
-			Map<string, { diff: JjRevisionDiff; loading: boolean; error?: string }>
-		>(new Map());
 		const containerRef = useRef<HTMLDivElement>(null);
+
+		const {
+			commits,
+			targetBranchCommits,
+			targetBranchCommitsBranch,
+			loading,
+			loadingMore,
+			loadMoreHomeRepo,
+			loadMoreTargetBranch,
+			removeCommit,
+			canLoadMoreHomeRepo,
+			canLoadMoreTargetBranch,
+		} = usePaginatedCommits(repoPath, workspaceId);
 
 		// Move/abandon commit state
 		const [removingCommitIds, setRemovingCommitIds] = useState<Set<string>>(
@@ -159,34 +146,15 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 		const REMOVE_ANIMATION_MS = 220;
 
 		const loadCommitDiff = useCallback(
-			async (commitId: string): Promise<JjRevisionDiff> => {
+			(commitId: string): Promise<JjRevisionDiff> => {
 				const commit = commits.find((c) => c.commit_id === commitId);
-				// Commit IDs resolve more consistently for per-commit diffs; keep
-				// change_id as a fallback for rewritten/alternate revisions.
-				const revisions = [commitId, commit?.change_id].filter(
-					(value, index, values): value is string =>
-						typeof value === "string" &&
-						value.length > 0 &&
-						values.indexOf(value) === index,
-				);
-
-				let lastError: unknown;
-				for (const revision of revisions) {
-					try {
-						const diff = await getCommitDiff(repoPath, workspaceId, revision);
-						if (diff.files.length > 0 || diff.hunks_by_file.length > 0) {
-							return diff;
-						}
-					} catch (error) {
-						lastError = error;
-					}
-				}
-
-				if (lastError) throw lastError;
-				return { files: [], hunks_by_file: [] };
+				return _loadCommitDiff(repoPath, workspaceId, commitId, commit?.change_id);
 			},
 			[repoPath, workspaceId, commits],
 		);
+
+		const { expandedCommits, commitDiffs, fetchAndExpand, toggleCommit } =
+			useCommitDiffCache(loadCommitDiff);
 
 		const handleAbandon = useCallback(
 			async (commit: JjLogCommit) => {
@@ -204,9 +172,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 					setRemovingCommitIds((prev) => new Set(prev).add(commit.commit_id));
 
 					window.setTimeout(() => {
-						setCommits((prev) =>
-							prev.filter((c) => c.commit_id !== commit.commit_id),
-						);
+						removeCommit(commit.commit_id);
 						setRemovingCommitIds((prev) => {
 							const next = new Set(prev);
 							next.delete(commit.commit_id);
@@ -229,63 +195,8 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 					});
 				}
 			},
-			[repoPath, workspaceId, onCommitAbandoned, addToast],
+			[repoPath, workspaceId, onCommitAbandoned, addToast, removeCommit],
 		);
-
-		// Fetch commits
-		useEffect(() => {
-			if (!repoPath) {
-				setLoading(false);
-				return;
-			}
-			setLoading(true);
-			setTargetBranchLimit(10);
-			setHomeRepoLimit(15);
-			listCommits(repoPath, workspaceId, !isHomeRepo)
-				.then((result) => {
-					const nextCommits = result?.commits ?? [];
-					setCommits(nextCommits.slice(1)); // Skip working copy
-					if (!isHomeRepo) {
-						setTargetBranchCommits(result?.target_branch_commits ?? []);
-						setTargetBranchCommitsBranch(result?.target_branch ?? null);
-					} else {
-						setTargetBranchCommits([]);
-						setTargetBranchCommitsBranch(null);
-					}
-				})
-				.catch((err) => {
-					console.error("Failed to fetch commit history:", err);
-					setCommits([]);
-					setTargetBranchCommits([]);
-				})
-				.finally(() => setLoading(false));
-		}, [repoPath, workspaceId, isHomeRepo]);
-
-		// Re-fetch target branch commits when limit changes (beyond initial load)
-		useEffect(() => {
-			if (targetBranchLimit <= 10) return; // initial load handled above
-			if (isHomeRepo || workspaceId == null) return;
-			setLoadingMore(true);
-			listCommits(repoPath, workspaceId, true, targetBranchLimit)
-				.then((result) => {
-					setTargetBranchCommits(result?.target_branch_commits ?? []);
-				})
-				.catch(() => {})
-				.finally(() => setLoadingMore(false));
-		}, [targetBranchLimit, repoPath, workspaceId, isHomeRepo]);
-
-		// Re-fetch home repo commits when limit changes (beyond initial load)
-		useEffect(() => {
-			if (homeRepoLimit <= 15) return; // initial load handled above
-			if (!isHomeRepo || !repoPath) return;
-			setLoadingMore(true);
-			listCommits(repoPath, null, false, undefined, homeRepoLimit)
-				.then((result) => {
-					setCommits((result?.commits ?? []).slice(1)); // Skip working copy
-				})
-				.catch(() => {})
-				.finally(() => setLoadingMore(false));
-		}, [homeRepoLimit, repoPath, isHomeRepo]);
 
 		// Scroll to commit when scrollToCommitId changes
 		useEffect(() => {
@@ -302,94 +213,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 				fetchAndExpand(commit.commit_id);
 				onScrollComplete?.();
 			}
-		}, [scrollToCommitId, loading, commits]);
-
-		const fetchAndExpand = useCallback(
-			(commitId: string) => {
-				setExpandedCommits((prev) => {
-					if (prev.has(commitId)) return prev;
-					const next = new Set(prev);
-					next.add(commitId);
-					return next;
-				});
-				// Fetch diff if not already loaded
-				if (!commitDiffs.has(commitId)) {
-					setCommitDiffs((prev) => {
-						const next = new Map(prev);
-						next.set(commitId, {
-							diff: { files: [], hunks_by_file: [] },
-							loading: true,
-						});
-						return next;
-					});
-					loadCommitDiff(commitId)
-						.then((diff) => {
-							setCommitDiffs((prev) => {
-								const next = new Map(prev);
-								next.set(commitId, { diff, loading: false });
-								return next;
-							});
-						})
-						.catch((err) => {
-							setCommitDiffs((prev) => {
-								const next = new Map(prev);
-								next.set(commitId, {
-									diff: { files: [], hunks_by_file: [] },
-									loading: false,
-									error: String(err),
-								});
-								return next;
-							});
-						});
-				}
-			},
-			[commitDiffs, loadCommitDiff],
-		);
-
-		const toggleCommit = useCallback(
-			(commitId: string) => {
-				setExpandedCommits((prev) => {
-					const next = new Set(prev);
-					if (next.has(commitId)) {
-						next.delete(commitId);
-					} else {
-						next.add(commitId);
-						// Fetch diff if not already loaded
-						if (!commitDiffs.has(commitId)) {
-							setCommitDiffs((prev) => {
-								const next = new Map(prev);
-								next.set(commitId, {
-									diff: { files: [], hunks_by_file: [] },
-									loading: true,
-								});
-								return next;
-							});
-							loadCommitDiff(commitId)
-								.then((diff) => {
-									setCommitDiffs((prev) => {
-										const next = new Map(prev);
-										next.set(commitId, { diff, loading: false });
-										return next;
-									});
-								})
-								.catch((err) => {
-									setCommitDiffs((prev) => {
-										const next = new Map(prev);
-										next.set(commitId, {
-											diff: { files: [], hunks_by_file: [] },
-											loading: false,
-											error: String(err),
-										});
-										return next;
-									});
-								});
-						}
-					}
-					return next;
-				});
-			},
-			[commitDiffs, loadCommitDiff],
-		);
+		}, [scrollToCommitId, loading, commits, fetchAndExpand, onScrollComplete]);
 
 		const dayGroups = useMemo(() => groupCommitsByDay(commits), [commits]);
 
@@ -463,13 +287,13 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 								</div>
 							))}
 
-							{isHomeRepo && commits.length + 1 >= homeRepoLimit && (
+							{isHomeRepo && canLoadMoreHomeRepo(commits.length) && (
 								<div className="mt-3 pl-7">
 									<button
 										type="button"
 										className="text-xs text-muted-foreground hover:text-foreground transition-colors"
 										disabled={loadingMore}
-										onClick={() => setHomeRepoLimit((prev) => prev + 15)}
+										onClick={loadMoreHomeRepo}
 									>
 										{loadingMore ? (
 											<span className="flex items-center gap-1.5">
@@ -523,15 +347,13 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 											</div>
 										</div>
 									))}
-									{targetBranchCommits.length >= targetBranchLimit && (
+									{canLoadMoreTargetBranch(targetBranchCommits.length) && (
 										<div className="mt-3 pl-7">
 											<button
 												type="button"
 												className="text-xs text-muted-foreground hover:text-foreground transition-colors"
 												disabled={loadingMore}
-												onClick={() =>
-													setTargetBranchLimit((prev) => prev + 10)
-												}
+												onClick={loadMoreTargetBranch}
 											>
 												{loadingMore ? (
 													<span className="flex items-center gap-1.5">

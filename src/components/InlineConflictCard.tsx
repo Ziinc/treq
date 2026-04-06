@@ -1,6 +1,4 @@
 import {
-	type Dispatch,
-	type SetStateAction,
 	useEffect,
 	useMemo,
 	useRef,
@@ -33,7 +31,7 @@ interface InlineConflictCardProps {
 	) => void;
 	clearConflictComment: (conflictId: string) => void;
 	toggleConflictComment: (conflictId: string) => void;
-	setOpenConflictComments: Dispatch<SetStateAction<Set<string>>>;
+	closeConflictComment: (conflictId: string) => void;
 	startEditConflictComment: (conflictId: string) => void;
 	cancelEditConflictComment: () => void;
 	saveEditConflictComment: (conflictId: string, newText: string) => void;
@@ -63,7 +61,7 @@ export const InlineConflictCard = ({
 	saveConflictComment,
 	clearConflictComment,
 	toggleConflictComment,
-	setOpenConflictComments,
+	closeConflictComment,
 	startEditConflictComment,
 	cancelEditConflictComment,
 	saveEditConflictComment,
@@ -89,11 +87,7 @@ export const InlineConflictCard = ({
 	}, [registerFileRef]);
 
 	const closeConflictInput = () => {
-		setOpenConflictComments((prev) => {
-			const next = new Set(prev);
-			next.delete(region.id);
-			return next;
-		});
+		closeConflictComment(region.id);
 	};
 
 	return (

@@ -12,7 +12,6 @@ import {
 import { type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { listen } from "@tauri-apps/api/event";
-import { v4 as uuidv4 } from "uuid";
 import {
 	getWorkspaceChangedFiles,
 	getWorkspaceFileHunks,
@@ -93,9 +92,23 @@ import {
 	type ParsedFileChange,
 } from "../lib/git-utils";
 import { escapeRegex, highlightInHtml } from "../lib/text-search";
+import {
+	getLineTypeClass,
+	getLinePrefix,
+	hunksEqual,
+	filesEqual,
+	parseCachedHunks,
+	parseHunkHeader,
+	computeHunkLineNumbers,
+	computeHunksHash,
+} from "../lib/diff-utils";
 import { useDiffSettings } from "../hooks/useDiffSettings";
 import { useEditorApps } from "../hooks/useEditorApps";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
+import { useDiffViewerState } from "../hooks/useDiffViewerState";
+import { useReviewState } from "../hooks/useReviewState";
+import { useConflictState } from "../hooks/useConflictState";
+export type { ConflictComment } from "../hooks/useConflictState";
 import { ChangesSection } from "./ChangesSection";
 import { ConflictsSection } from "./ConflictsSection";
 import { CommittedChangesSection } from "./CommittedChangesSection";
@@ -141,14 +154,6 @@ interface LineComment {
 	lineSide?: "old" | "new";
 }
 
-export interface ConflictComment {
-	id: string;
-	conflictId: string; // references ConflictRegion.id
-	filePath: string;
-	conflictNumber: number;
-	text: string;
-	createdAt: string;
-}
 
 // Extended line selection for staging (supports multi-hunk)
 interface DiffLineSelection {
@@ -178,109 +183,6 @@ export interface DiffSearchData {
 	matchesByKey: Map<string, { firstGlobalIndex: number; count: number }>;
 }
 
-// Helper to get line type styling (background only, text color handled by syntax highlighting)
-const getLineTypeClass = (line: string): string => {
-	if (line.startsWith("+")) return "bg-emerald-500/20";
-	if (line.startsWith("-")) return "bg-red-500/20";
-	return "";
-};
-
-const getLinePrefix = (line: string): string => {
-	if (line.startsWith("+")) return "+";
-	if (line.startsWith("-")) return "-";
-	return " ";
-};
-
-const hunksEqual = (
-	a?: JjDiffHunk[] | null,
-	b?: JjDiffHunk[] | null,
-): boolean => {
-	if (!a && !b) return true;
-	if (!a || !b) return false;
-	if (a.length !== b.length) return false;
-	return JSON.stringify(a) === JSON.stringify(b);
-};
-
-const filesEqual = (a: ParsedFileChange[], b: ParsedFileChange[]): boolean => {
-	if (a.length !== b.length) return false;
-	for (let i = 0; i < a.length; i++) {
-		if (
-			a[i].path !== b[i].path ||
-			a[i].stagedStatus !== b[i].stagedStatus ||
-			a[i].workspaceStatus !== b[i].workspaceStatus ||
-			a[i].isUntracked !== b[i].isUntracked
-		) {
-			return false;
-		}
-	}
-	return true;
-};
-
-const parseCachedHunks = (raw: string): JjDiffHunk[] | null => {
-	try {
-		const parsed = JSON.parse(raw);
-		if (Array.isArray(parsed)) {
-			return parsed as JjDiffHunk[];
-		}
-	} catch {
-		// Silently ignore parse failures
-	}
-	return null;
-};
-
-// Parse hunk header to extract starting line numbers and counts
-const parseHunkHeader = (
-	header: string,
-): {
-	oldStart: number;
-	newStart: number;
-	oldCount: number;
-	newCount: number;
-} => {
-	const match = header.match(/@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
-	if (!match) {
-		return { oldStart: 1, newStart: 1, oldCount: 1, newCount: 1 };
-	}
-	return {
-		oldStart: parseInt(match[1], 10),
-		oldCount: match[2] ? parseInt(match[2], 10) : 1,
-		newStart: parseInt(match[3], 10),
-		newCount: match[4] ? parseInt(match[4], 10) : 1,
-	};
-};
-
-// Compute actual line numbers for each line in a hunk
-const computeHunkLineNumbers = (
-	hunk: JjDiffHunk,
-): Array<{ old?: number; new?: number }> => {
-	const { oldStart, newStart } = parseHunkHeader(hunk.header);
-	let oldLine = oldStart;
-	let newLine = newStart;
-
-	return hunk.lines.map((line) => {
-		if (line.startsWith("+")) {
-			return { new: newLine++ };
-		} else if (line.startsWith("-")) {
-			return { old: oldLine++ };
-		} else {
-			// Context line - both increment
-			return { old: oldLine++, new: newLine++ };
-		}
-	});
-};
-
-// Compute a simple hash of file hunks for change detection
-const computeHunksHash = (hunks: JjDiffHunk[]): string => {
-	// Create a string from all hunk content and hash it
-	const content = hunks.map((h) => h.header + h.lines.join("")).join("|");
-	// Simple hash function (djb2)
-	let hash = 5381;
-	for (let i = 0; i < content.length; i++) {
-		hash = (hash << 5) + hash + content.charCodeAt(i);
-		hash = hash & hash; // Convert to 32bit integer
-	}
-	return hash.toString(16);
-};
 
 // CommentInput extracted to ./CommentInput.tsx
 
@@ -820,15 +722,25 @@ export const ChangesDiffViewer = memo(
 			const [fileActionTarget, setFileActionTarget] = useState<string | null>(
 				null,
 			);
-			const [collapsedFiles, setCollapsedFiles] = useState<Set<string>>(
-				new Set(),
-			);
-			const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-				new Set(),
-			);
-			const [expandedLargeDiffs, setExpandedLargeDiffs] = useState<Set<string>>(
-				new Set(),
-			);
+			const {
+				collapsedFiles,
+				collapseFile,
+				expandFile,
+				toggleFileCollapse,
+				expandedLargeDiffs,
+				toggleLargeDiff,
+				collapsedSections,
+				toggleSection,
+				isSearchOpen,
+				searchQuery,
+				debouncedSearchQuery,
+				currentMatchIndex,
+				searchFocusTrigger,
+				openSearch,
+				closeSearch,
+				setSearchQuery,
+				setCurrentMatchIndex,
+			} = useDiffViewerState();
 			const [largeChangesetExpanded, setLargeChangesetExpanded] =
 				useState(false);
 
@@ -867,12 +779,6 @@ export const ChangesDiffViewer = memo(
 			// Active file tracking (for sidebar highlighting)
 			const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
 
-			// Search state
-			const [isSearchOpen, setIsSearchOpen] = useState(false);
-			const [searchQuery, setSearchQuery] = useState("");
-			const debouncedSearchQuery = useDebounce(searchQuery, 150);
-			const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
-			const [searchFocusTrigger, setSearchFocusTrigger] = useState(0);
 
 			// Committed changes state
 			const [committedFiles, setCommittedFiles] = useState<JjFileChange[]>([]);
@@ -883,70 +789,52 @@ export const ChangesDiffViewer = memo(
 			const conflictFileRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
 			// Review/comment state
-			const [comments, setComments] = useState<LineComment[]>([]);
-			const [conflictComments, setConflictComments] = useState<
-				Map<string, ConflictComment>
-			>(new Map());
-			const [openConflictComments, setOpenConflictComments] = useState<
-				Set<string>
-			>(new Set());
-			const [editingConflictCommentId, setEditingConflictCommentId] = useState<
-				string | null
-			>(null);
-			const [showCommentInput, setShowCommentInput] = useState(false);
-			const [reviewPopoverOpen, setReviewPopoverOpen] = useState(false);
-			const [finalReviewComment, setFinalReviewComment] = useState("");
-			const [showCancelDialog, setShowCancelDialog] = useState(false);
-			const [copiedReview, setCopiedReview] = useState(false);
-			const [hasUserAddedComments, setHasUserAddedComments] = useState(false);
-			const [editingCommentId, setEditingCommentId] = useState<string | null>(
-				null,
-			);
-
-			// Track if user is in review mode (actively reviewing, not just viewing persisted comments)
-			const isInReviewMode = useMemo(() => {
-				return (
-					hasUserAddedComments ||
-					showCommentInput ||
-					reviewPopoverOpen ||
-					finalReviewComment.trim().length > 0
-				);
-			}, [
-				hasUserAddedComments,
+			const {
+				comments,
+				setComments,
+				pendingComment,
+				setPendingComment,
 				showCommentInput,
+				setShowCommentInput,
+				editingCommentId,
 				reviewPopoverOpen,
+				setReviewPopoverOpen,
 				finalReviewComment,
-			]);
-
-			const [actualConflictedFiles, setActualConflictedFiles] = useState<
-				string[]
-			>([]);
-			const [conflictRegionsByFile, setConflictRegionsByFile] = useState<
-				Map<string, ConflictRegion[]>
-			>(new Map());
-			const conflictLineLookups = useMemo(() => {
-				const map = new Map<string, Map<number, ConflictRegion>>();
-				for (const [filePath, regions] of conflictRegionsByFile) {
-					if (!regions || regions.length === 0) continue;
-					const lineMap = new Map<number, ConflictRegion>();
-					for (const region of regions) {
-						for (let line = region.startLine; line <= region.endLine; line++) {
-							lineMap.set(line, region);
-						}
-					}
-					map.set(filePath, lineMap);
-				}
-				return map;
-			}, [conflictRegionsByFile]);
-			const firstConflictRegionIdByFile = useMemo(() => {
-				const map = new Map<string, string>();
-				for (const [filePath, regions] of conflictRegionsByFile) {
-					if (regions && regions.length > 0) {
-						map.set(filePath, regions[0].id);
-					}
-				}
-				return map;
-			}, [conflictRegionsByFile]);
+				setFinalReviewComment,
+				showCancelDialog,
+				setShowCancelDialog,
+				copiedReview,
+				setCopiedReview,
+				sendingReview,
+				setSendingReview,
+				setHasUserAddedComments,
+				isInReviewMode,
+				addComment: addCommentToState,
+				cancelComment,
+				deleteComment,
+				startEditComment,
+				cancelEditComment,
+				saveEditComment,
+			} = useReviewState();
+			const {
+				actualConflictedFiles,
+				setActualConflictedFiles,
+				conflictRegionsByFile,
+				setConflictRegionsByFile,
+				conflictLineLookups,
+				firstConflictRegionIdByFile,
+				conflictComments,
+				setConflictComments,
+				openConflictComments,
+				editingConflictCommentId,
+				saveConflictComment,
+				clearConflictComment,
+				startEditConflictComment,
+				cancelEditConflictComment,
+				saveEditConflictComment,
+				toggleConflictComment,
+				closeConflictComment,
+			} = useConflictState();
 
 			const filesWithMarkers = useMemo(() => {
 				const result: { filePath: string; content: string }[] = [];
@@ -1172,18 +1060,17 @@ export const ChangesDiffViewer = memo(
 
 			// Clamp currentMatchIndex when matches change
 			useEffect(() => {
-				if (searchData.matches.length === 0) {
-					setCurrentMatchIndex(0);
-				} else if (currentMatchIndex >= searchData.matches.length) {
+				if (
+					searchData.matches.length === 0 ||
+					currentMatchIndex >= searchData.matches.length
+				) {
 					setCurrentMatchIndex(0);
 				}
-			}, [searchData.matches.length]);
+			}, [searchData.matches.length, setCurrentMatchIndex]);
 
 			// Reset search state when workspace changes
 			useEffect(() => {
-				setIsSearchOpen(false);
-				setSearchQuery("");
-				setCurrentMatchIndex(0);
+				closeSearch();
 			}, [workspacePath]);
 
 			// Load conflict marker style setting
@@ -1194,15 +1081,7 @@ export const ChangesDiffViewer = memo(
 			}, []);
 
 			// Keyboard shortcut: Ctrl/Cmd+F
-			useKeyboardShortcut(
-				"f",
-				true,
-				() => {
-					setIsSearchOpen(true);
-					setSearchFocusTrigger((n) => n + 1);
-				},
-				[],
-			);
+			useKeyboardShortcut("f", true, openSearch, []);
 
 			// Search navigation handlers
 			const scrollToSearchMatch = useCallback(
@@ -1232,7 +1111,7 @@ export const ChangesDiffViewer = memo(
 				const next = (currentMatchIndex + 1) % searchData.matches.length;
 				setCurrentMatchIndex(next);
 				scrollToSearchMatch(next);
-			}, [currentMatchIndex, searchData.matches.length, scrollToSearchMatch]);
+			}, [currentMatchIndex, searchData.matches.length, scrollToSearchMatch, setCurrentMatchIndex]);
 
 			const handleSearchPrevious = useCallback(() => {
 				if (searchData.matches.length === 0) return;
@@ -1241,13 +1120,11 @@ export const ChangesDiffViewer = memo(
 					searchData.matches.length;
 				setCurrentMatchIndex(prev);
 				scrollToSearchMatch(prev);
-			}, [currentMatchIndex, searchData.matches.length, scrollToSearchMatch]);
+			}, [currentMatchIndex, searchData.matches.length, scrollToSearchMatch, setCurrentMatchIndex]);
 
 			const handleSearchClose = useCallback(() => {
-				setIsSearchOpen(false);
-				setSearchQuery("");
-				setCurrentMatchIndex(0);
-			}, []);
+				closeSearch();
+			}, [closeSearch]);
 
 			// Track stale files that changed while user is in review mode
 			const [staleFiles, setStaleFiles] = useState<Set<string>>(new Set());
@@ -1258,17 +1135,7 @@ export const ChangesDiffViewer = memo(
 				string,
 				FileHunksData
 			> | null>(null);
-			const [sendingReview, setSendingReview] = useState(false);
-			// Pending comment data (used for both single and multi-line)
-			const [pendingComment, setPendingComment] = useState<{
-				filePath: string;
-				hunkId: string;
-				displayAtLineIndex: number; // Where to show the inline input
-				startLine: number; // Actual file line number (1-indexed)
-				endLine: number; // Actual file line number (1-indexed)
-				lineContent: string[];
-				lineSide: "old" | "new";
-			} | null>(null);
+			// sendingReview and pendingComment come from useReviewState above
 
 			// Viewed files state - maps file path to { viewed_at, content_hash }
 			const [viewedFiles, setViewedFiles] = useState<
@@ -1616,7 +1483,7 @@ export const ChangesDiffViewer = memo(
 							new Map(prev).set(filePath, { viewedAt: now, contentHash }),
 						);
 						// Collapse the file
-						setCollapsedFiles((prev) => new Set(prev).add(filePath));
+						collapseFile(filePath);
 					} catch {
 						// Silently ignore mark failures
 					}
@@ -1634,11 +1501,7 @@ export const ChangesDiffViewer = memo(
 							return next;
 						});
 						// Expand the file
-						setCollapsedFiles((prev) => {
-							const next = new Set(prev);
-							next.delete(filePath);
-							return next;
-						});
+						expandFile(filePath);
 					} catch {
 						// Silently ignore unmark failures
 					}
@@ -2003,18 +1866,10 @@ export const ChangesDiffViewer = memo(
 				setLargeChangesetExpanded(true);
 
 				// Expand the file first
-				setCollapsedFiles((prev) => {
-					const next = new Set(prev);
-					next.delete(filePath);
-					return next;
-				});
+				expandFile(filePath);
 
 				// Also expand large diff for this file
-				setExpandedLargeDiffs((prev) => {
-					const next = new Set(prev);
-					next.add(filePath);
-					return next;
-				});
+				toggleLargeDiff(filePath);
 
 				// Use setTimeout to wait for React to re-render after expanding
 				setTimeout(() => {
@@ -2164,29 +2019,6 @@ export const ChangesDiffViewer = memo(
 				[stagedFiles, files, lastSelectedStagedIndex],
 			);
 
-			const toggleFileCollapse = useCallback((filePath: string) => {
-				setCollapsedFiles((prev) => {
-					const next = new Set(prev);
-					if (next.has(filePath)) {
-						next.delete(filePath);
-					} else {
-						next.add(filePath);
-					}
-					return next;
-				});
-			}, []);
-
-			const toggleLargeDiff = useCallback((filePath: string) => {
-				setExpandedLargeDiffs((prev) => {
-					const next = new Set(prev);
-					if (next.has(filePath)) {
-						next.delete(filePath);
-					} else {
-						next.add(filePath);
-					}
-					return next;
-				});
-			}, []);
 
 			// Line selection handlers for staging and comments
 			const handleLineMouseDown = useCallback(
@@ -2364,31 +2196,14 @@ export const ChangesDiffViewer = memo(
 					document.removeEventListener("mouseup", handleGlobalMouseUp);
 			}, [isSelecting]);
 
-			// Comment management
+			// Comment management — delegates to useReviewState; also clears selection UI
 			const addComment = useCallback(
 				(text: string) => {
-					if (!text.trim() || !pendingComment) return;
-
-					const newComment: LineComment = {
-						id: uuidv4(),
-						filePath: pendingComment.filePath,
-						hunkId: pendingComment.hunkId,
-						startLine: pendingComment.startLine,
-						endLine: pendingComment.endLine,
-						lineContent: pendingComment.lineContent,
-						text: text.trim(),
-						createdAt: new Date().toISOString(),
-						lineSide: pendingComment.lineSide,
-					};
-
-					setComments((prev) => [...prev, newComment]);
-					setHasUserAddedComments(true);
-					setShowCommentInput(false);
-					setPendingComment(null);
+					addCommentToState(text);
 					setDiffLineSelection(null);
 					setContextMenuPosition(null);
 				},
-				[pendingComment],
+				[addCommentToState],
 			);
 
 			// Handle adding comment from multi-line diff selection (context menu)
@@ -2453,115 +2268,7 @@ export const ChangesDiffViewer = memo(
 				setContextMenuPosition(null);
 			}, [diffLineSelection, allFileHunks]);
 
-			const cancelComment = useCallback(() => {
-				setShowCommentInput(false);
-				setPendingComment(null);
-			}, []);
-
-			const deleteComment = useCallback((commentId: string) => {
-				setComments((prev) => prev.filter((c) => c.id !== commentId));
-			}, []);
-
-			const startEditComment = useCallback((commentId: string) => {
-				setEditingCommentId(commentId);
-			}, []);
-
-			const cancelEditComment = useCallback(() => {
-				setEditingCommentId(null);
-			}, []);
-
-			const saveEditComment = useCallback(
-				(commentId: string, newText: string) => {
-					if (!newText.trim()) return;
-
-					setComments((prev) =>
-						prev.map((comment) =>
-							comment.id === commentId
-								? { ...comment, text: newText.trim() }
-								: comment,
-						),
-					);
-					setEditingCommentId(null);
-				},
-				[],
-			);
-
 			// Conflict comment management
-			const saveConflictComment = useCallback(
-				(
-					conflictId: string,
-					filePath: string,
-					conflictNumber: number,
-					text: string,
-				) => {
-					if (!text.trim()) return;
-
-					const comment: ConflictComment = {
-						id: uuidv4(),
-						conflictId,
-						filePath,
-						conflictNumber,
-						text: text.trim(),
-						createdAt: new Date().toISOString(),
-					};
-
-					setConflictComments((prev) => {
-						const next = new Map(prev);
-						next.set(conflictId, comment);
-						return next;
-					});
-				},
-				[],
-			);
-
-			const clearConflictComment = useCallback((conflictId: string) => {
-				setConflictComments((prev) => {
-					const next = new Map(prev);
-					next.delete(conflictId);
-					return next;
-				});
-			}, []);
-
-			const startEditConflictComment = useCallback((conflictId: string) => {
-				setEditingConflictCommentId(conflictId);
-			}, []);
-
-			const cancelEditConflictComment = useCallback(() => {
-				setEditingConflictCommentId(null);
-			}, []);
-
-			const saveEditConflictComment = useCallback(
-				(conflictId: string, newText: string) => {
-					if (!newText.trim()) return;
-
-					setConflictComments((prev) => {
-						const next = new Map(prev);
-						const existingComment = prev.get(conflictId);
-						if (existingComment) {
-							next.set(conflictId, {
-								...existingComment,
-								text: newText.trim(),
-							});
-						}
-						return next;
-					});
-					setEditingConflictCommentId(null);
-				},
-				[],
-			);
-
-			const toggleConflictComment = useCallback((conflictId: string) => {
-				setOpenConflictComments((prev) => {
-					const next = new Set(prev);
-					if (next.has(conflictId)) {
-						next.delete(conflictId);
-					} else {
-						next.add(conflictId);
-					}
-					return next;
-				});
-			}, []);
-
 			// Copy line location to clipboard
 			const handleCopyLineLocation = useCallback(async () => {
 				try {
@@ -2926,17 +2633,7 @@ export const ChangesDiffViewer = memo(
 				],
 			);
 
-			const toggleSectionCollapse = useCallback((sectionId: string) => {
-				setCollapsedSections((prev) => {
-					const next = new Set(prev);
-					if (next.has(sectionId)) {
-						next.delete(sectionId);
-					} else {
-						next.add(sectionId);
-					}
-					return next;
-				});
-			}, []);
+			const toggleSectionCollapse = toggleSection;
 
 			// Check if a comment is outdated (its referenced line no longer exists)
 			const isCommentOutdated = useCallback(
@@ -3230,7 +2927,7 @@ export const ChangesDiffViewer = memo(
 												saveConflictComment={saveConflictComment}
 												clearConflictComment={clearConflictComment}
 												toggleConflictComment={toggleConflictComment}
-												setOpenConflictComments={setOpenConflictComments}
+												closeConflictComment={closeConflictComment}
 												startEditConflictComment={startEditConflictComment}
 												cancelEditConflictComment={cancelEditConflictComment}
 												saveEditConflictComment={saveEditConflictComment}
@@ -3652,17 +3349,11 @@ export const ChangesDiffViewer = memo(
 												// Expand large changeset if collapsed (matches Changes file click behavior)
 												setLargeChangesetExpanded(true);
 												// Uncollapse the file containing this conflict
-												setCollapsedFiles((prev) => {
-													const next = new Set(prev);
-													next.delete(path);
-													return next;
-												});
-												// Expand large diff for this file
-												setExpandedLargeDiffs((prev) => {
-													const next = new Set(prev);
-													next.add(path);
-													return next;
-												});
+												expandFile(path);
+												// Expand large diff for this file (force expand, not toggle)
+												if (!expandedLargeDiffs.has(path)) {
+													toggleLargeDiff(path);
+												}
 												setTimeout(() => {
 													const el = conflictFileRefs.current.get(path);
 													if (el) {
@@ -3983,10 +3674,7 @@ export const ChangesDiffViewer = memo(
 							<SearchOverlay
 								isVisible={isSearchOpen}
 								query={searchQuery}
-								onQueryChange={(q) => {
-									setSearchQuery(q);
-									setCurrentMatchIndex(0);
-								}}
+								onQueryChange={setSearchQuery}
 								onNext={handleSearchNext}
 								onPrevious={handleSearchPrevious}
 								onClose={handleSearchClose}
@@ -4088,8 +3776,8 @@ export const ChangesDiffViewer = memo(
 																				toggleConflictComment={
 																					toggleConflictComment
 																				}
-																				setOpenConflictComments={
-																					setOpenConflictComments
+																				closeConflictComment={
+																					closeConflictComment
 																				}
 																				startEditConflictComment={
 																					startEditConflictComment
