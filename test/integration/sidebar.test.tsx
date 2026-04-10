@@ -1,6 +1,6 @@
 import * as React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "../test-utils";
+import { fireEvent, render, screen, waitFor, within } from "../test-utils";
 import userEvent from "@testing-library/user-event";
 import { createTestRepo, findSidebarBranchElement, openRepo } from "../utils";
 import { createWorkspace, getWorkspaces } from "../../src/lib/api";
@@ -66,7 +66,7 @@ describe("Dashboard - workspace list", () => {
 			expect(homeRepoElement).toBeTruthy();
 
 			// Right-click home repo
-			await user.contextMenu(homeRepoElement!);
+			fireEvent.contextMenu(homeRepoElement!);
 
 			// Context menu should appear
 			await screen.findByText("Copy relative path");
@@ -92,7 +92,7 @@ describe("Dashboard - workspace list", () => {
 			expect(homeRepoElement).toBeTruthy();
 
 			// Right-click home repo
-			await user.contextMenu(homeRepoElement!);
+			fireEvent.contextMenu(homeRepoElement!);
 
 			// Context menu should appear
 			await screen.findByText("Copy full path");
@@ -118,7 +118,7 @@ describe("Dashboard - workspace list", () => {
 			expect(homeRepoElement).toBeTruthy();
 
 			// Right-click home repo
-			await user.contextMenu(homeRepoElement!);
+			fireEvent.contextMenu(homeRepoElement!);
 
 			// Context menu should appear with "Open in..."
 			await screen.findByText("Open in...");
@@ -130,11 +130,13 @@ describe("Dashboard - workspace list", () => {
 			await screen.findByText("Open in Finder");
 
 			// Click "Open in Finder"
-			await user.click(screen.getByText("Open in Finder"));
+			fireEvent.click(screen.getByText("Open in Finder"));
 
 			// Verify revealItemInDir was called with repo path
 			const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
-			expect(revealItemInDir).toHaveBeenLastCalledWith(repoPath);
+			await waitFor(() => {
+				expect(revealItemInDir).toHaveBeenLastCalledWith(repoPath);
+			});
 		});
 
 		it("should copy workspace relative path using .treq/workspaces/ prefix when workspace_path is a short name", async () => {
@@ -149,7 +151,7 @@ describe("Dashboard - workspace list", () => {
 			const alphaElement = await findSidebarBranchElement("feat/alpha");
 
 			// Right-click workspace branch name
-			await user.contextMenu(alphaElement);
+			fireEvent.contextMenu(alphaElement);
 
 			// Context menu should appear
 			await screen.findByText("Copy relative path");
@@ -175,7 +177,7 @@ describe("Dashboard - workspace list", () => {
 			const alphaElement = await findSidebarBranchElement("feat/alpha");
 
 			// Right-click workspace
-			await user.contextMenu(alphaElement);
+			fireEvent.contextMenu(alphaElement);
 
 			// Context menu should appear
 			await screen.findByText("Copy full path");
@@ -201,7 +203,7 @@ describe("Dashboard - workspace list", () => {
 			const alphaElement = await findSidebarBranchElement("feat/alpha");
 
 			// Right-click workspace
-			await user.contextMenu(alphaElement);
+			fireEvent.contextMenu(alphaElement);
 
 			// Context menu should appear with "Open in..."
 			await screen.findByText("Open in...");
@@ -213,13 +215,15 @@ describe("Dashboard - workspace list", () => {
 			await screen.findByText("Open in Finder");
 
 			// Click "Open in Finder"
-			await user.click(screen.getByText("Open in Finder"));
+			fireEvent.click(screen.getByText("Open in Finder"));
 
 			// Verify revealItemInDir was called with workspace path
 			const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
-			expect(revealItemInDir).toHaveBeenLastCalledWith(
-				`${repoPath}/.treq/workspaces/${alphaWorkspace.workspace_path}`,
-			);
+			await waitFor(() => {
+				expect(revealItemInDir).toHaveBeenLastCalledWith(
+					`${repoPath}/.treq/workspaces/${alphaWorkspace.workspace_path}`,
+				);
+			});
 		});
 	});
 

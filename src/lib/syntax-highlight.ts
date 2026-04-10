@@ -1,4 +1,5 @@
-// Import languages (add more as needed)
+import Prism from "prismjs";
+// Import languages after Prism core – components reference the global `Prism` object
 import "prismjs/components/prism-bash";
 import "prismjs/components/prism-c";
 import "prismjs/components/prism-cpp";
@@ -18,7 +19,6 @@ import "prismjs/components/prism-scss";
 import "prismjs/components/prism-sql";
 import "prismjs/components/prism-tsx";
 import "prismjs/components/prism-yaml";
-import Prism from "prismjs";
 
 const extensionToLanguage: Record<string, string> = {
 	".bash": "bash",
