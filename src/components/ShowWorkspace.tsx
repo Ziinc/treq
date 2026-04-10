@@ -1,40 +1,36 @@
+/* eslint-disable max-lines, max-params, max-nested-callbacks */
+
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { QueryClient, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import {
-	Workspace,
-	listDirectory,
-	readFile,
 	DirectoryEntry,
-	listConflictedFiles,
-	listRepoBranches,
-	updateWorkspace,
-	getWorkspaceChangedFiles,
+	type SingleRebaseResult,
+	Workspace,
+	type WorkspaceBookmarkConflict,
+	checkAndRebaseWorkspaces,
 	createSession,
 	getRepoStatus,
-	checkAndRebaseWorkspaces,
+	getWorkspaceChangedFiles,
 	getWorkspaceStatus,
-	pullWorkspaceFromRemote,
 	jjGitFetch,
-	pushWorkspaceToRemote,
 	listCommits,
+	listConflictedFiles,
+	listDirectory,
+	listRepoBranches,
+	pullWorkspaceFromRemote,
+	pushWorkspaceToRemote,
+	readFile,
 	resolveBookmarkConflict,
-	type SingleRebaseResult,
-	type WorkspaceBookmarkConflict,
+	updateWorkspace,
 } from "../lib/api";
 import { getStatusBgColor } from "../lib/git-status-colors";
-import { parseJjChangedFiles, type ParsedFileChange } from "../lib/git-utils";
-import { getFullWorkspacePath } from "../lib/utils";
+import { type ParsedFileChange, parseJjChangedFiles } from "../lib/git-utils";
+import { cn, getFullWorkspacePath } from "../lib/utils";
 import { useFocusRefreshSubscription } from "../hooks/useAppFocusHandler";
 
-// Define BranchListItem locally since git API was removed
-export interface BranchListItem {
-	name: string;
-	full_name: string;
-	is_current: boolean;
-}
 
 import {
 	ChangesDiffViewer,
@@ -49,10 +45,10 @@ import { Button } from "./ui/button";
 import { useToast } from "./ui/toast";
 import {
 	DropdownMenu,
-	DropdownMenuTrigger,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuSeparator,
+	DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import {
 	Tooltip,
@@ -62,29 +58,28 @@ import {
 } from "./ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import {
-	Loader2,
-	GitBranch,
-	GitCompareArrows,
-	MoreVertical,
-	Upload,
 	AlertTriangle,
 	ArrowRight,
-	File,
-	Folder,
-	Trash2,
-	Search,
-	Code2,
 	ChevronLeft,
+	Code2,
 	Eye,
 	EyeOff,
+	File,
 	FileDiff,
+	Folder,
+	GitBranch,
 	GitCommitHorizontal,
-	RefreshCw,
+	GitCompareArrows,
 	Layers2,
+	Loader2,
+	MoreVertical,
+	RefreshCw,
+	Search,
+	Trash2,
+	Upload,
 } from "lucide-react";
-import { TargetBranchSelector } from "./TargetBranchSelector";
+import { TargetBranchSelector, type BranchListItem } from "./TargetBranchSelector";
 import { TaskInput } from "./TaskInput";
-import { cn } from "../lib/utils";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import type { SessionCreationInfo } from "../types/sessions";
 
@@ -117,7 +112,7 @@ interface ShowWorkspaceProps {
 	queryClient?: QueryClient;
 }
 
-export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
+export const ShowWorkspace = memo<ShowWorkspaceProps>(({
 	repositoryPath,
 	workspace,
 	mainRepoBranch,
@@ -131,7 +126,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 	onMoveCommitToNewWorkspace,
 	onMoveCommitToExistingWorkspace,
 	onMoveFilesToNewWorkspace,
-}) {
+}) => {
 	const workingDirectory = workspace
 		? getFullWorkspacePath(workspace)
 		: repositoryPath || "";
@@ -281,8 +276,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 					setAvailableBranches(
 						branches.map((b) => ({
 							name: b.name,
-							full_name: b.name,
-							is_current: b.is_current,
+							fullName: b.name,
+							isCurrent: b.is_current,
 						})),
 					);
 				})
@@ -586,7 +581,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 			}
 			// For directories, check if any child has changes
 			for (const [path] of changedFiles) {
-				if (path.startsWith(fullPath + "/")) {
+				if (path.startsWith(`${fullPath  }/`)) {
 					return "M"; // Show modified indicator if any child changed
 				}
 			}
@@ -830,7 +825,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 		) => {
 			try {
 				// Format comment as markdown
-				const relativePath = filePath.startsWith(workingDirectory + "/")
+				const relativePath = filePath.startsWith(`${workingDirectory  }/`)
 					? filePath.slice(workingDirectory.length + 1)
 					: filePath;
 
@@ -1197,7 +1192,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 						workspaceId={workspace?.id ?? null}
 						scrollToCommitId={scrollToCommitId}
 						onScrollComplete={() => setScrollToCommitId(null)}
-						onCommitMoved={() => {}}
 						onCommitAbandoned={() => {}}
 						onCreateAgentWithComment={handleCreateAgentWithComment}
 						onMoveCommitToNewWorkspace={
@@ -1260,7 +1254,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(function ShowWorkspace({
 	// Truncate intent at 100 characters
 	const truncatedIntent =
 		workspaceIntent && workspaceIntent.length > 100
-			? workspaceIntent.substring(0, 100) + "..."
+			? `${workspaceIntent.substring(0, 100)  }...`
 			: workspaceIntent;
 
 	const isTruncated = workspaceIntent && workspaceIntent.length > 100;

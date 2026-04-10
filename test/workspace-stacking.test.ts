@@ -1,9 +1,9 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
-	generateStackedIntent,
-	generateStackedBranchName,
-	sanitizeForBranchName,
 	applyBranchNamePattern,
+	generateStackedBranchName,
+	generateStackedIntent,
+	sanitizeForBranchName,
 } from "../src/lib/utils";
 import { renderHook } from "@testing-library/react";
 import { useCreateStackedWorkspace } from "../src/hooks/useCreateStackedWorkspace";
@@ -44,7 +44,7 @@ describe("sanitizeForBranchName", () => {
 
 	test("truncation does not leave trailing hyphen", () => {
 		// 50 chars of 'a' + '-b' would truncate to 50 chars ending in '-'
-		const longText = "a".repeat(49) + "-b extra";
+		const longText = `${"a".repeat(49)  }-b extra`;
 		const result = sanitizeForBranchName(longText);
 		expect(result).not.toMatch(/-$/);
 	});

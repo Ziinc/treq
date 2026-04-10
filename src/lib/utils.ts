@@ -11,11 +11,11 @@ export function cn(...inputs: ClassValue[]) {
 export function formatBytes(bytes: number): string {
 	if (bytes === 0) return "0 B";
 
-	const k = 1024;
+	const kilobyte = 1024;
 	const sizes = ["B", "KB", "MB", "GB", "TB"];
-	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	const exponent = Math.floor(Math.log(bytes) / Math.log(kilobyte));
 
-	return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
+	return `${(bytes / Math.pow(kilobyte, exponent)).toFixed(2)} ${sizes[exponent]}`;
 }
 
 /**
@@ -152,13 +152,13 @@ export function formatFullTimestamp(timestamp: string): string {
 	if (!date) return timestamp;
 
 	return date.toLocaleString(undefined, {
-		year: "numeric",
-		month: "long",
 		day: "numeric",
 		hour: "2-digit",
 		minute: "2-digit",
+		month: "long",
 		second: "2-digit",
 		timeZoneName: "short",
+		year: "numeric",
 	});
 }
 
@@ -193,8 +193,8 @@ export function formatDayLabel(timestamp: string): string {
 	if (diffDays === 1) return "Yesterday";
 
 	return date.toLocaleDateString(undefined, {
-		month: "short",
 		day: "numeric",
+		month: "short",
 		year: "numeric",
 	});
 }

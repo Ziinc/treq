@@ -32,8 +32,7 @@ export const ReviewSummaryPanel: React.FC<ReviewSummaryPanelProps> = ({
 	onMerge,
 	isRequestingChanges = false,
 	commitCount = 0,
-}) => {
-	return (
+}) => (
 		<div className="h-full flex flex-col border-l bg-card">
 			<div className="p-4 border-b space-y-2">
 				<div>
@@ -131,4 +130,3 @@ export const ReviewSummaryPanel: React.FC<ReviewSummaryPanelProps> = ({
 			</div>
 		</div>
 	);
-};

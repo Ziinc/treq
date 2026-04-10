@@ -1,5 +1,5 @@
-import * as React from "react";
 import * as ContextMenuPrimitive from "@radix-ui/react-context-menu";
+import * as React from "react";
 import { cn } from "../../lib/utils";
 
 const ContextMenu = ContextMenuPrimitive.Root;
@@ -165,14 +165,12 @@ ContextMenuSeparator.displayName = ContextMenuPrimitive.Separator.displayName;
 const ContextMenuShortcut = ({
 	className,
 	...props
-}: React.HTMLAttributes<HTMLSpanElement>) => {
-	return (
-		<span
-			className={cn("ml-auto text-sm tracking-widest opacity-60", className)}
-			{...props}
-		/>
-	);
-};
+}: React.HTMLAttributes<HTMLSpanElement>) => (
+	<span
+		className={cn("ml-auto text-sm tracking-widest opacity-60", className)}
+		{...props}
+	/>
+);
 ContextMenuShortcut.displayName = "ContextMenuShortcut";
 
 export {

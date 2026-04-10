@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, waitFor } from "./test-utils";
 import { ConsolidatedTerminal } from "../src/components/ConsolidatedTerminal";
 import * as api from "../src/lib/api";

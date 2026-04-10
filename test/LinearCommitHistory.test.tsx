@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, waitFor } from "./test-utils";
 import { LinearCommitHistory } from "../src/components/LinearCommitHistory";
 import * as api from "../src/lib/api";

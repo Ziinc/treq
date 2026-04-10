@@ -1,10 +1,15 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
 import * as React from "react";
-import { render, screen, waitFor, within, fireEvent } from "../test-utils";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, within } from "../test-utils";
 import userEvent from "@testing-library/user-event";
 import { createTestRepo, findSidebarBranchElement, openRepo } from "../utils";
 import { createWorkspace, getWorkspaces } from "../../src/lib/api";
 import { Dashboard } from "../../src/components/Dashboard";
+
+const findWorkspaceByBranchName = (
+	workspaces: Awaited<ReturnType<typeof getWorkspaces>>,
+	branchName: string,
+) => workspaces.find((workspace) => workspace.branch_name === branchName);
 
 describe("Dashboard - workspace list", () => {
 	let repoPath: string;
@@ -23,10 +28,8 @@ describe("Dashboard - workspace list", () => {
 	it("renders workspace sidebar elements correctly branch names in the sidebar", async () => {
 		render(<Dashboard />);
 
-		await waitFor(() => {
-			expect(screen.getByText("feat/alpha")).toBeTruthy();
-			expect(screen.getByText("feat/beta")).toBeTruthy();
-		});
+		await screen.findByText("feat/alpha");
+		await screen.findByText("feat/beta");
 		expect(screen.getByText(repoName)).toBeTruthy();
 		const sidebarRoot = document.querySelector(
 			`.${CSS.escape("group/sidebar")}`,
@@ -37,7 +40,10 @@ describe("Dashboard - workspace list", () => {
 	});
 
 	describe("context menu and tooltip", () => {
+		let user: ReturnType<typeof userEvent.setup>;
+
 		beforeEach(() => {
+			user = userEvent.setup();
 			// Ensure clipboard spy is active for each test (spy can be cleared between tests)
 			vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
 		});
@@ -46,9 +52,8 @@ describe("Dashboard - workspace list", () => {
 			render(<Dashboard />);
 
 			// Wait for dashboard to load
-			await waitFor(() => {
-				expect(screen.getAllByText("feat/alpha").length).toBeGreaterThan(0);
-			});
+			const matches = await screen.findAllByText("feat/alpha");
+			expect(matches.length).toBeGreaterThan(0);
 
 			// Find home repo element - has Home icon (lucide-house class in newer lucide-react)
 			const sidebarRoot = document.querySelector(
@@ -61,29 +66,24 @@ describe("Dashboard - workspace list", () => {
 			expect(homeRepoElement).toBeTruthy();
 
 			// Right-click home repo
-			fireEvent.contextMenu(homeRepoElement!);
+			await user.contextMenu(homeRepoElement!);
 
 			// Context menu should appear
-			await waitFor(() => {
-				expect(screen.getByText("Copy relative path")).toBeInTheDocument();
-			});
+			await screen.findByText("Copy relative path");
 
 			// Click "Copy relative path"
-			fireEvent.click(screen.getByText("Copy relative path"));
+			await user.click(screen.getByText("Copy relative path"));
 
 			// Verify clipboard was called with "."
-			await waitFor(() => {
-				expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(".");
-			});
+			expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(".");
 		});
 
 		it("should copy full path when right-clicking home repo and selecting Copy full path", async () => {
 			render(<Dashboard />);
 
 			// Wait for dashboard to load
-			await waitFor(() => {
-				expect(screen.getAllByText("feat/alpha").length).toBeGreaterThan(0);
-			});
+			const matches = await screen.findAllByText("feat/alpha");
+			expect(matches.length).toBeGreaterThan(0);
 
 			// Find home repo element - has bg-primary/20 class when selected
 			const homeRepoElement = document.querySelector(
@@ -92,33 +92,24 @@ describe("Dashboard - workspace list", () => {
 			expect(homeRepoElement).toBeTruthy();
 
 			// Right-click home repo
-			fireEvent.contextMenu(homeRepoElement!);
+			await user.contextMenu(homeRepoElement!);
 
 			// Context menu should appear
-			await waitFor(() => {
-				expect(screen.getByText("Copy full path")).toBeInTheDocument();
-			});
+			await screen.findByText("Copy full path");
 
 			// Click "Copy full path"
-			fireEvent.click(screen.getByText("Copy full path"));
+			await user.click(screen.getByText("Copy full path"));
 
 			// Verify clipboard was called with the repo path
-			await waitFor(() => {
-				expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(
-					repoPath,
-				);
-			});
+			expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(repoPath);
 		});
 
 		it("should open home repo in Finder when selecting Open in Finder", async () => {
-			const user = userEvent.setup();
-
 			render(<Dashboard />);
 
 			// Wait for dashboard to load
-			await waitFor(() => {
-				expect(screen.getAllByText("feat/alpha").length).toBeGreaterThan(0);
-			});
+			const matches = await screen.findAllByText("feat/alpha");
+			expect(matches.length).toBeGreaterThan(0);
 
 			// Find home repo element
 			const homeRepoElement = document.querySelector(
@@ -127,37 +118,29 @@ describe("Dashboard - workspace list", () => {
 			expect(homeRepoElement).toBeTruthy();
 
 			// Right-click home repo
-			fireEvent.contextMenu(homeRepoElement!);
+			await user.contextMenu(homeRepoElement!);
 
 			// Context menu should appear with "Open in..."
-			await waitFor(() => {
-				expect(screen.getByText("Open in...")).toBeInTheDocument();
-			});
+			await screen.findByText("Open in...");
 
 			// Hover over "Open in..." to show submenu
 			await user.hover(screen.getByText("Open in..."));
 
 			// Submenu should appear with "Open in Finder"
-			await waitFor(() => {
-				expect(screen.getByText("Open in Finder")).toBeInTheDocument();
-			});
+			await screen.findByText("Open in Finder");
 
 			// Click "Open in Finder"
-			fireEvent.click(screen.getByText("Open in Finder"));
+			await user.click(screen.getByText("Open in Finder"));
 
 			// Verify revealItemInDir was called with repo path
 			const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
-			await waitFor(() => {
-				expect(revealItemInDir).toHaveBeenLastCalledWith(repoPath);
-			});
+			expect(revealItemInDir).toHaveBeenLastCalledWith(repoPath);
 		});
 
 		it("should copy workspace relative path using .treq/workspaces/ prefix when workspace_path is a short name", async () => {
 			// Get the actual workspace objects to know the workspace_path
 			const workspaces = await getWorkspaces(repoPath);
-			const alphaWorkspace = workspaces.find(
-				(w) => w.branch_name === "feat/alpha",
-			)!;
+			const alphaWorkspace = findWorkspaceByBranchName(workspaces, "feat/alpha")!;
 			expect(alphaWorkspace).toBeTruthy();
 
 			render(<Dashboard />);
@@ -166,30 +149,24 @@ describe("Dashboard - workspace list", () => {
 			const alphaElement = await findSidebarBranchElement("feat/alpha");
 
 			// Right-click workspace branch name
-			fireEvent.contextMenu(alphaElement);
+			await user.contextMenu(alphaElement);
 
 			// Context menu should appear
-			await waitFor(() => {
-				expect(screen.getByText("Copy relative path")).toBeInTheDocument();
-			});
+			await screen.findByText("Copy relative path");
 
 			// Click "Copy relative path"
-			fireEvent.click(screen.getByText("Copy relative path"));
+			await user.click(screen.getByText("Copy relative path"));
 
 			// Verify clipboard was called with relative path (.treq/workspaces/ prefix for short names)
-			await waitFor(() => {
-				expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(
-					`.treq/workspaces/${alphaWorkspace.workspace_path}`,
-				);
-			});
+			expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(
+				`.treq/workspaces/${alphaWorkspace.workspace_path}`,
+			);
 		});
 
 		it("should copy workspace full path from context menu", async () => {
 			// Get the actual workspace objects to know the workspace_path
 			const workspaces = await getWorkspaces(repoPath);
-			const alphaWorkspace = workspaces.find(
-				(w) => w.branch_name === "feat/alpha",
-			)!;
+			const alphaWorkspace = findWorkspaceByBranchName(workspaces, "feat/alpha")!;
 			expect(alphaWorkspace).toBeTruthy();
 
 			render(<Dashboard />);
@@ -198,32 +175,24 @@ describe("Dashboard - workspace list", () => {
 			const alphaElement = await findSidebarBranchElement("feat/alpha");
 
 			// Right-click workspace
-			fireEvent.contextMenu(alphaElement);
+			await user.contextMenu(alphaElement);
 
 			// Context menu should appear
-			await waitFor(() => {
-				expect(screen.getByText("Copy full path")).toBeInTheDocument();
-			});
+			await screen.findByText("Copy full path");
 
 			// Click "Copy full path"
-			fireEvent.click(screen.getByText("Copy full path"));
+			await user.click(screen.getByText("Copy full path"));
 
 			// Verify clipboard was called with full path
-			await waitFor(() => {
-				expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(
-					`${repoPath}/.treq/workspaces/${alphaWorkspace.workspace_path}`,
-				);
-			});
+			expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(
+				`${repoPath}/.treq/workspaces/${alphaWorkspace.workspace_path}`,
+			);
 		});
 
 		it("should open workspace in Finder from context menu", async () => {
-			const user = userEvent.setup();
-
 			// Get the actual workspace objects to know the workspace_path
 			const workspaces = await getWorkspaces(repoPath);
-			const alphaWorkspace = workspaces.find(
-				(w) => w.branch_name === "feat/alpha",
-			)!;
+			const alphaWorkspace = findWorkspaceByBranchName(workspaces, "feat/alpha")!;
 			expect(alphaWorkspace).toBeTruthy();
 
 			render(<Dashboard />);
@@ -232,37 +201,36 @@ describe("Dashboard - workspace list", () => {
 			const alphaElement = await findSidebarBranchElement("feat/alpha");
 
 			// Right-click workspace
-			fireEvent.contextMenu(alphaElement);
+			await user.contextMenu(alphaElement);
 
 			// Context menu should appear with "Open in..."
-			await waitFor(() => {
-				expect(screen.getByText("Open in...")).toBeInTheDocument();
-			});
+			await screen.findByText("Open in...");
 
 			// Hover over "Open in..." to show submenu
 			await user.hover(screen.getByText("Open in..."));
 
 			// Submenu should appear with "Open in Finder"
-			await waitFor(() => {
-				expect(screen.getByText("Open in Finder")).toBeInTheDocument();
-			});
+			await screen.findByText("Open in Finder");
 
 			// Click "Open in Finder"
-			fireEvent.click(screen.getByText("Open in Finder"));
+			await user.click(screen.getByText("Open in Finder"));
 
 			// Verify revealItemInDir was called with workspace path
 			const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
-			await waitFor(() => {
-				expect(revealItemInDir).toHaveBeenLastCalledWith(
-					`${repoPath}/.treq/workspaces/${alphaWorkspace.workspace_path}`,
-				);
-			});
+			expect(revealItemInDir).toHaveBeenLastCalledWith(
+				`${repoPath}/.treq/workspaces/${alphaWorkspace.workspace_path}`,
+			);
 		});
 	});
 
 	describe("multi-select workspaces", () => {
+		let user: ReturnType<typeof userEvent.setup>;
+
+		beforeEach(() => {
+			user = userEvent.setup();
+		});
+
 		it("should select multiple workspaces with cmd+click", async () => {
-			const user = userEvent.setup();
 			render(<Dashboard />);
 
 			// Wait for workspaces to load
@@ -291,7 +259,6 @@ describe("Dashboard - workspace list", () => {
 		});
 
 		it("should select range of workspaces with shift+click", async () => {
-			const user = userEvent.setup();
 			render(<Dashboard />);
 
 			// Wait for workspaces to load
@@ -317,7 +284,6 @@ describe("Dashboard - workspace list", () => {
 		});
 
 		it("should show delete button when workspaces are selected", async () => {
-			const user = userEvent.setup();
 			render(<Dashboard />);
 
 			// Wait for workspaces to load
@@ -334,7 +300,6 @@ describe("Dashboard - workspace list", () => {
 		});
 
 		it("should not allow selecting the main repository with cmd+click", async () => {
-			const user = userEvent.setup();
 			render(<Dashboard />);
 
 			// Wait for workspaces to load

@@ -12,8 +12,7 @@ interface OnboardingProps {
 	onOpenRepo: () => Promise<void>;
 }
 
-export const Onboarding: React.FC<OnboardingProps> = ({ onOpenRepo }) => {
-	return (
+export const Onboarding: React.FC<OnboardingProps> = ({ onOpenRepo }) => (
 		<div className="flex h-screen items-center justify-center bg-background mx-auto">
 			<Card className="w-96">
 				<CardHeader className="text-center">
@@ -33,4 +32,3 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onOpenRepo }) => {
 			</Card>
 		</div>
 	);
-};

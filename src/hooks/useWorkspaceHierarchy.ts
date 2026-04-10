@@ -1,9 +1,9 @@
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-	setWorkspaceTargetBranch,
-	getWorkspaces,
 	type Workspace,
+	getWorkspaces,
+	setWorkspaceTargetBranch,
 } from "../lib/api";
 import { getFullWorkspacePath } from "../lib/utils";
 import { isDescendantOf } from "../lib/workspace-tree";

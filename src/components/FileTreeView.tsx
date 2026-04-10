@@ -1,6 +1,6 @@
-import { useMemo, useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { cn } from "../lib/utils";
-import { Folder, FolderOpen, FileText } from "lucide-react";
+import { FileText, Folder, FolderOpen } from "lucide-react";
 
 // Define BranchDiffFileChange locally since git API was removed
 export interface BranchDiffFileChange {

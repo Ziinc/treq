@@ -1,14 +1,14 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { RepositorySettingsContent } from "./RepositorySettingsContent";
 import { useTheme } from "../hooks/useTheme";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import { useToast } from "./ui/toast";
 import { getSetting, setSetting } from "../lib/api";
-import { Settings, FolderGit2, GitBranch, User } from "lucide-react";
+import { FolderGit2, GitBranch, Settings, User } from "lucide-react";
 import { AccountSettings } from "./AccountSettings";
 import { FEATURES } from "../lib/features";
 

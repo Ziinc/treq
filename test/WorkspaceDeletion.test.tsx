@@ -1,118 +1,82 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "./test-utils";
+import { Workspace } from "../src/lib/api";
 import { WorkspaceDeletion } from "../src/components/WorkspaceDeletion";
 import { userEvent } from "@testing-library/user-event";
-import { Workspace } from "../src/lib/api";
 
-// Mock Tauri APIs
 vi.mock("@tauri-apps/api/event", () => ({
-	listen: vi.fn().mockResolvedValue(() => {}),
 	emit: vi.fn(),
+	listen: vi.fn().mockResolvedValue(() => {}),
 }));
 
 vi.mock("@tauri-apps/api/window", () => ({
-	getCurrentWindow: vi.fn().mockReturnValue({
-		setTitle: vi.fn(),
-		onFocusChanged: vi.fn().mockResolvedValue(() => {}),
-	}),
 	WebviewWindow: vi.fn(),
+	getCurrentWindow: vi.fn().mockReturnValue({
+		onFocusChanged: vi.fn().mockResolvedValue(() => {}),
+		setTitle: vi.fn(),
+	}),
 }));
+
+const makeWorkspace = (id: number, name: string): Workspace => {
+	const serializedWorkspace = `{"branch_name":${JSON.stringify(name)},"created_at":"","id":${id},"not_on_remote":false,"repo_path":"/repo","workspace_name":${JSON.stringify(name)},"workspace_path":${JSON.stringify(`/repo/workspaces/${name}`)}}`;
+	return JSON.parse(serializedWorkspace) as Workspace;
+};
+
+let user: ReturnType<typeof userEvent.setup>;
 
 beforeEach(() => {
 	vi.clearAllMocks();
+	user = userEvent.setup();
 });
 
 describe("WorkspaceDeletion - Search by Branch Name", () => {
 	const mockWorkspaces: Workspace[] = [
-		{
-			id: 1,
-			workspace_name: "test-branch",
-			branch_name: "test-branch",
-			workspace_path: "/repo/workspaces/test-branch",
-			repo_path: "/repo",
-			created_at: "",
-			has_conflicts: false,
-		},
-		{
-			id: 2,
-			workspace_name: "other-branch",
-			branch_name: "other-branch",
-			workspace_path: "/repo/workspaces/other-branch",
-			repo_path: "/repo",
-			created_at: "",
-			has_conflicts: false,
-		},
-		{
-			id: 3,
-			workspace_name: "test-feature",
-			branch_name: "test-feature",
-			workspace_path: "/repo/workspaces/test-feature",
-			repo_path: "/repo",
-			created_at: "",
-			has_conflicts: false,
-		},
+		makeWorkspace(1, "test-branch"),
+		makeWorkspace(2, "other-branch"),
+		makeWorkspace(3, "test-feature"),
 	];
 
 	const defaultProps = {
-		open: true,
-		onOpenChange: vi.fn(),
-		workspaces: mockWorkspaces,
-		repoPath: "/repo",
 		currentWorkspace: null,
 		onDeleteWorkspace: vi.fn(),
+		onOpenChange: vi.fn(),
+		open: true,
+		repoPath: "/repo",
+		workspaces: mockWorkspaces,
 	};
 
 	it("should filter workspaces by branch name when searching", async () => {
-		const user = userEvent.setup();
-
 		render(<WorkspaceDeletion {...defaultProps} />);
 
-		// Initially all workspaces should be visible
-		expect(screen.getByText("test-branch")).toBeInTheDocument();
-		expect(screen.getByText("other-branch")).toBeInTheDocument();
-		expect(screen.getByText("test-feature")).toBeInTheDocument();
+		await screen.findByText("test-branch");
+		await screen.findByText("other-branch");
+		await screen.findByText("test-feature");
 
-		// Type "test" in search input
 		const input = screen.getByPlaceholderText("Search workspaces to delete...");
 		await user.type(input, "test");
 
-		// Wait for filtering to occur
+		await screen.findByText("test-branch");
+		await screen.findByText("test-feature");
 		await waitFor(() => {
-			// Only workspaces with "test" in their name should be visible
-			expect(screen.getByText("test-branch")).toBeInTheDocument();
-			expect(screen.getByText("test-feature")).toBeInTheDocument();
 			expect(screen.queryByText("other-branch")).not.toBeInTheDocument();
 		});
 	});
 
 	it("should be case-insensitive when searching", async () => {
-		const user = userEvent.setup();
-
 		render(<WorkspaceDeletion {...defaultProps} />);
 
 		const input = screen.getByPlaceholderText("Search workspaces to delete...");
 		await user.type(input, "TEST");
 
+		await screen.findByText("test-branch");
+		await screen.findByText("test-feature");
 		await waitFor(() => {
-			// Should still find "test-branch" and "test-feature"
-			expect(screen.getByText("test-branch")).toBeInTheDocument();
-			expect(screen.getByText("test-feature")).toBeInTheDocument();
 			expect(screen.queryByText("other-branch")).not.toBeInTheDocument();
 		});
 	});
 
 	it("should filter current workspace by branch name", async () => {
-		const user = userEvent.setup();
-
-		const currentWorkspace: Workspace = {
-			id: 4,
-			workspace_name: "test-current",
-			branch_name: "test-current",
-			workspace_path: "/repo/workspaces/test-current",
-			repo_path: "/repo",
-			created_at: "",
-			has_conflicts: false,
-		};
+		const currentWorkspace = makeWorkspace(4, "test-current");
 
 		render(
 			<WorkspaceDeletion
@@ -122,42 +86,32 @@ describe("WorkspaceDeletion - Search by Branch Name", () => {
 			/>,
 		);
 
-		// Should see the current workspace label
-		expect(screen.getAllByText("test-current")).toHaveLength(2); // Once in default, once in list
-		expect(screen.getByText("Current workspace (default)")).toBeInTheDocument();
+		// Appears in both the default workspace card and the workspace list.
+		expect(screen.getAllByText("test-current")).toHaveLength(2);
+		await screen.findByText("Current workspace (default)");
 
 		const input = screen.getByPlaceholderText("Search workspaces to delete...");
 		await user.type(input, "test");
 
+		await screen.findByText("Current workspace (default)");
 		await waitFor(() => {
-			// Current workspace should still be visible when searching for "test"
 			expect(screen.getAllByText("test-current").length).toBeGreaterThan(0);
-			expect(
-				screen.getByText("Current workspace (default)"),
-			).toBeInTheDocument();
 			expect(screen.queryByText("other-branch")).not.toBeInTheDocument();
 		});
 	});
 
 	it("should show empty state when no matches found", async () => {
-		const user = userEvent.setup();
-
 		render(<WorkspaceDeletion {...defaultProps} />);
 
 		const input = screen.getByPlaceholderText("Search workspaces to delete...");
 		await user.type(input, "nonexistent");
 
-		await waitFor(() => {
-			expect(
-				screen.getByText("No deletable workspaces found"),
-			).toBeInTheDocument();
-			expect(screen.queryByText("test-branch")).not.toBeInTheDocument();
-			expect(screen.queryByText("other-branch")).not.toBeInTheDocument();
-		});
+		await screen.findByText("No deletable workspaces found");
+		expect(screen.queryByText("test-branch")).not.toBeInTheDocument();
+		expect(screen.queryByText("other-branch")).not.toBeInTheDocument();
 	});
 
 	it("should call onDeleteWorkspace with correct workspace when selected", async () => {
-		const user = userEvent.setup();
 		const onDeleteWorkspace = vi.fn();
 
 		render(
@@ -170,11 +124,7 @@ describe("WorkspaceDeletion - Search by Branch Name", () => {
 		const input = screen.getByPlaceholderText("Search workspaces to delete...");
 		await user.type(input, "test");
 
-		await waitFor(() => {
-			expect(screen.getByText("test-branch")).toBeInTheDocument();
-		});
-
-		const workspaceItem = screen.getByText("test-branch");
+		const workspaceItem = await screen.findByText("test-branch");
 		await user.click(workspaceItem);
 
 		expect(onDeleteWorkspace).toHaveBeenCalledWith(mockWorkspaces[0]);

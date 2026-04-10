@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useMemo } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { getSetting, setSetting } from "../lib/api";
 
 type Theme = "system" | "light" | "dark";
@@ -22,9 +22,7 @@ const ThemeContext = createContext<ThemeContextType>(defaultContextValue);
 
 ThemeContext.displayName = "ThemeContext";
 
-export const useTheme = (): ThemeContextType => {
-	return useContext(ThemeContext);
-};
+export const useTheme = (): ThemeContextType => useContext(ThemeContext);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
 	children,

@@ -8,9 +8,9 @@
  * in one of the backend layers.
  */
 
+import { describe, expect, it } from "vitest";
 import fs from "fs";
 import path from "path";
-import { describe, it, expect } from "vitest";
 
 const ROOT = path.resolve(__dirname, "../..");
 
@@ -41,11 +41,11 @@ function extractApiCommands(content: string): Set<string> {
 function extractDispatchCommands(content: string): Set<string> {
 	const commands = new Set<string>();
 	// Single arm or first in a chain: 8 spaces then a quoted string
-	for (const match of content.matchAll(/^        "([a-z][a-z0-9_]*)"/gm)) {
+	for (const match of content.matchAll(/^ {8}"([a-z][a-z0-9_]*)"/gm)) {
 		commands.add(match[1]);
 	}
 	// Continuation arms in a chain: 8 spaces, pipe, then a quoted string
-	for (const match of content.matchAll(/^        \| "([a-z][a-z0-9_]*)"/gm)) {
+	for (const match of content.matchAll(/^ {8}\| "([a-z][a-z0-9_]*)"/gm)) {
 		commands.add(match[1]);
 	}
 	return commands;
@@ -60,8 +60,8 @@ function extractTauriCommands(content: string): Set<string> {
 	return commands;
 }
 
-function setDiff<T>(a: Set<T>, b: Set<T>): T[] {
-	return [...a].filter((x) => !b.has(x)).sort() as T[];
+function setDiff<T>(setA: Set<T>, setB: Set<T>): T[] {
+	return [...setA].filter((elem) => !setB.has(elem)).sort() as T[];
 }
 
 describe("command consistency", () => {

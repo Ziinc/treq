@@ -5,9 +5,9 @@ interface ResizeDividerProps {
 	onResize: (deltaX: number) => void;
 }
 
-export const ResizeDivider = memo<ResizeDividerProps>(function ResizeDivider({
+export const ResizeDivider = memo<ResizeDividerProps>(({
 	onResize,
-}) {
+}) => {
 	const [isDragging, setIsDragging] = useState(false);
 	const lastXRef = useRef<number>(0);
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "./test-utils";
 import userEvent from "@testing-library/user-event";
 import { ChangesDiffViewer } from "../src/components/ChangesDiffViewer";
@@ -17,8 +17,7 @@ vi.mock("../src/lib/api", async () => {
 });
 
 describe("Copy button in Finish Review popover", () => {
-	const renderComponent = () => {
-		return render(
+	const renderComponent = () => render(
 			<ChangesDiffViewer
 				workspacePath="/test/workspace"
 				repoPath="/test/repo"
@@ -26,7 +25,6 @@ describe("Copy button in Finish Review popover", () => {
 				initialSelectedFile={null}
 			/>,
 		);
-	};
 
 	const setupReviewMode = async () => {
 		// Wait for file to load

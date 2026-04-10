@@ -1,15 +1,15 @@
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+	type Workspace,
 	createWorkspace,
-	setWorkspaceTargetBranch,
 	getRepoSetting,
 	getWorkspaces,
-	type Workspace,
+	setWorkspaceTargetBranch,
 } from "../lib/api";
 import {
-	generateStackedIntent,
 	generateStackedBranchName,
+	generateStackedIntent,
 	getFullWorkspacePath,
 } from "../lib/utils";
 import { useToast } from "../components/ui/toast";

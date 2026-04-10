@@ -1,13 +1,13 @@
+import { checkAndRebaseWorkspaces, getRepoStatus } from "../lib/api";
 import {
+	type ReactNode,
 	createContext,
+	useCallback,
 	useContext,
 	useEffect,
 	useRef,
-	useCallback,
-	type ReactNode,
 } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { getRepoStatus, checkAndRebaseWorkspaces } from "../lib/api";
 
 type FocusPhase = "afterRebase" | "afterInvalidate";
 

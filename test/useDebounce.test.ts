@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { useDebounce } from "../src/hooks/useDebounce";
 

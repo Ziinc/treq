@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "./test-utils";
 import { ChangesDiffViewer } from "../src/components/ChangesDiffViewer";
-import type { JjFileChange, JjDiffHunk } from "../src/lib/api";
+import type { JjDiffHunk, JjFileChange } from "../src/lib/api";
 
 // Mock the API
 vi.mock("../src/lib/api", async () => {

@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest";
 import * as React from "react";
+import { beforeEach, describe, expect, it } from "vitest";
 import userEvent from "@testing-library/user-event";
-import { fireEvent, render, screen, waitFor } from "../../test-utils";
+import { render, screen, waitFor } from "../../test-utils";
 import {
 	commitRepoFile,
 	commitWorkspaceFile,
@@ -39,17 +39,16 @@ describe("ShowWorkspace - Commits tab", () => {
 	let repoPath: string;
 
 	let testWorkspace: WorkspaceRef;
+	let user: ReturnType<typeof userEvent.setup>;
 	beforeEach(async () => {
 		({ repoPath } = createTestRepo(false));
 		openRepo(repoPath);
-		for (let i = 0; i < 13; i++) {
-			await commitRepoFile(
-				repoPath,
-				`target-pagination-${i}.txt`,
-				`target pagination content ${i}`,
-				`Target pagination commit ${i}`,
-			);
-		}
+		user = userEvent.setup();
+		await Promise.all(
+			Array.from({ length: 13 }, (_, idx) =>
+				commitRepoFile(repoPath, `target-pagination-${idx}.txt`, `target pagination content ${idx}`, `Target pagination commit ${idx}`)
+			)
+		);
 
 		testWorkspace = await createWorkspaceRef(repoPath, "feat/commits-it");
 		await commitWorkspaceFile(
@@ -69,7 +68,6 @@ describe("ShowWorkspace - Commits tab", () => {
 	});
 
 	it("renders commit contents, shows per-commit diff, and paginates with load more", async () => {
-		const user = userEvent.setup();
 		await openWorkspaceCommitsTab(user, "feat/commits-it");
 
 		await screen.findByText("Commits diff two");

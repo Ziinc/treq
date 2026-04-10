@@ -1,23 +1,26 @@
-import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
+/* eslint-disable max-lines, max-params, max-nested-callbacks */
+
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+	AlertCircle,
+	Check,
+	Copy,
+	FileText,
 	Folder,
 	FolderOpen,
-	FileText,
 	Loader2,
-	AlertCircle,
-	Copy,
-	Check,
 	Plus,
 } from "lucide-react";
 import { List, type ListImperativeAPI } from "react-window";
-import type { Workspace, DirectoryEntry } from "../lib/api";
 import {
+	type DirectoryEntry,
+	type Workspace,
+	ensureWorkspaceIndexed,
+	getWorkspaceChangedFiles,
+	getWorkspaceFileHunks,
 	listDirectory,
 	listDirectoryCached,
 	readFile,
-	getWorkspaceFileHunks,
-	getWorkspaceChangedFiles,
-	ensureWorkspaceIndexed,
 } from "../lib/api";
 import { cn, getFullWorkspacePath } from "../lib/utils";
 import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
@@ -25,34 +28,34 @@ import { useToast } from "./ui/toast";
 import {
 	Tooltip,
 	TooltipContent,
-	TooltipTrigger,
 	TooltipProvider,
+	TooltipTrigger,
 } from "./ui/tooltip";
 import {
 	getFileStatusTextColor,
 	getStatusBgColor,
 } from "../lib/git-status-colors";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
-import { parseJjChangedFiles, type ParsedFileChange } from "../lib/git-utils";
+import { type ParsedFileChange, parseJjChangedFiles } from "../lib/git-utils";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { useDebounce } from "../hooks/useDebounce";
 import { SearchOverlay } from "./SearchOverlay";
 import {
+	type SearchMatch,
 	findMatches,
 	highlightInHtml,
-	type SearchMatch,
 } from "../lib/text-search";
 import {
 	ContextMenu,
 	ContextMenuContent,
 	ContextMenuItem,
-	ContextMenuTrigger,
-	ContextMenuSub,
-	ContextMenuSubTrigger,
-	ContextMenuSubContent,
 	ContextMenuSeparator,
+	ContextMenuSub,
+	ContextMenuSubContent,
+	ContextMenuSubTrigger,
+	ContextMenuTrigger,
 } from "./ui/context-menu";
-import { revealItemInDir, openUrl } from "@tauri-apps/plugin-opener";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useEditorApps } from "../hooks/useEditorApps";
 import { CommentInput } from "./CommentInput";
 
@@ -111,7 +114,7 @@ interface FileBrowserProps {
 // Filter out .git and .treq files/directories (but keep .github, .gitignore, etc.)
 function filterHiddenEntries(entries: DirectoryEntry[]): DirectoryEntry[] {
 	return entries.filter((entry) => {
-		const name = entry.name;
+		const {name} = entry;
 		return name !== ".git" && name !== ".treq";
 	});
 }
@@ -162,7 +165,7 @@ interface CodeLineProps {
 	onAddComment: (lineNum?: number) => void;
 }
 
-const CodeLine = memo(function CodeLine({
+const CodeLine = memo(({
 	lineNum,
 	htmlContent,
 	diffStatus,
@@ -171,7 +174,7 @@ const CodeLine = memo(function CodeLine({
 	onMouseEnter,
 	onMouseLeave,
 	style,
-	fontSize: _fontSize,
+	fontSize,
 	hoveredLine,
 	isLineSelected,
 	isSelecting,
@@ -179,9 +182,8 @@ const CodeLine = memo(function CodeLine({
 	onLineMouseEnter,
 	onLineMouseUp,
 	onAddComment,
-}: CodeLineProps) {
-	return (
-		<div style={style}>
+}: CodeLineProps) => (
+		<div style={{ ...style, fontSize }}>
 			<div
 				className={cn(
 					"flex items-center group relative hover:bg-muted/30 transition-colors text-sm font-mono leading-normal",
@@ -251,8 +253,7 @@ const CodeLine = memo(function CodeLine({
 				/>
 			</div>
 		</div>
-	);
-});
+	));
 
 // FileContentView component - memoized file content panel
 interface FileContentViewProps {
@@ -304,7 +305,7 @@ interface FileContentViewProps {
 	searchFocusTrigger: number;
 }
 
-const FileContentView = memo(function FileContentView({
+const FileContentView = memo(({
 	selectedFile,
 	isLoadingFile,
 	fileContent,
@@ -337,12 +338,12 @@ const FileContentView = memo(function FileContentView({
 	onSearchPrevious,
 	onSearchClose,
 	searchFocusTrigger,
-}: FileContentViewProps) {
+}: FileContentViewProps) => {
 	const [copied, setCopied] = useState(false);
 	const [copiedPath, setCopiedPath] = useState(false);
 
 	const relativePath =
-		selectedFile && basePath && selectedFile.startsWith(basePath + "/")
+		selectedFile && basePath && selectedFile.startsWith(`${basePath  }/`)
 			? selectedFile.slice(basePath.length + 1)
 			: selectedFile;
 
@@ -565,7 +566,7 @@ const FileContentView = memo(function FileContentView({
 });
 
 // FileTreeContextMenu component for file/directory context menu
-const FileTreeContextMenu = memo(function FileTreeContextMenu({
+const FileTreeContextMenu = memo(({
 	entry,
 	children,
 	getRelativePath,
@@ -575,7 +576,7 @@ const FileTreeContextMenu = memo(function FileTreeContextMenu({
 	children: React.ReactNode;
 	getRelativePath: (path: string) => string;
 	addToast: ReturnType<typeof useToast>["addToast"];
-}) {
+}) => {
 	const editorApps = useEditorApps();
 
 	return (
@@ -718,7 +719,7 @@ const FileTreeContextMenu = memo(function FileTreeContextMenu({
 	);
 });
 
-const TreeNode = memo(function TreeNode({
+const TreeNode = memo(({
 	entry,
 	depth,
 	isExpanded,
@@ -733,7 +734,7 @@ const TreeNode = memo(function TreeNode({
 	renderChildren,
 	getRelativePath,
 	addToast,
-}: TreeNodeProps) {
+}: TreeNodeProps) => {
 	if (entry.is_directory) {
 		return (
 			<FileTreeContextMenu
@@ -801,7 +802,7 @@ const TreeNode = memo(function TreeNode({
 	}
 
 	// File node - derive relative path for changedFiles lookup
-	const relativePath = entry.path.startsWith(basePath + "/")
+	const relativePath = entry.path.startsWith(`${basePath  }/`)
 		? entry.path.slice(basePath.length + 1)
 		: entry.path;
 	const fileStatus = changedFiles.get(relativePath);
@@ -854,13 +855,13 @@ const TreeNode = memo(function TreeNode({
 	);
 });
 
-export const FileBrowser = memo(function FileBrowser({
+export const FileBrowser = memo(({
 	workspace,
 	repoPath,
 	initialSelectedFile,
 	initialExpandedDir,
 	onCreateAgentWithComment,
-}: FileBrowserProps) {
+}: FileBrowserProps) => {
 	// Determine the path and branch to use
 	const basePath = workspace
 		? getFullWorkspacePath(workspace)
@@ -1014,7 +1015,7 @@ export const FileBrowser = memo(function FileBrowser({
 	// Helper function to calculate relative path
 	const getRelativePath = useCallback(
 		(fullPath: string): string => {
-			if (basePath && fullPath.startsWith(basePath + "/")) {
+			if (basePath && fullPath.startsWith(`${basePath  }/`)) {
 				return fullPath.slice(basePath.length + 1);
 			}
 			return fullPath;
@@ -1064,10 +1065,10 @@ export const FileBrowser = memo(function FileBrowser({
 				setFileContent(content);
 
 				// Load hunks for line-level indicators
-				const relPath = path.startsWith(basePath + "/")
+				const relPath = path.startsWith(`${basePath  }/`)
 					? path.slice(basePath.length + 1)
 					: path;
-				if (changedFiles.has(relPath)) {
+				if (changedFiles.has(relPath) && repoPath) {
 					try {
 						const hunks = await getWorkspaceFileHunks(
 							repoPath,
@@ -1132,7 +1133,8 @@ export const FileBrowser = memo(function FileBrowser({
 
 	// Line selection handlers
 	const handleLineMouseDown = useCallback(
-		(e: React.MouseEvent, lineNum: number, _lineContent: string) => {
+		(e: React.MouseEvent, lineNum: number, lineContent: string) => {
+			void lineContent;
 			if (e.button !== 0) return;
 			e.preventDefault();
 			setIsSelecting(true);
@@ -1173,7 +1175,7 @@ export const FileBrowser = memo(function FileBrowser({
 			if (!selectedFile) return;
 
 			const lines = fileContent.split("\n");
-			let start: number, end: number, selectedLines: string[];
+			let end: number, selectedLines: string[], start: number;
 
 			if (
 				lineNum !== undefined &&
@@ -1318,11 +1320,11 @@ export const FileBrowser = memo(function FileBrowser({
 
 	const hasChangedFilesInDirectory = useCallback(
 		(dirPath: string): boolean => {
-			const relDir = dirPath.startsWith(basePath + "/")
+			const relDir = dirPath.startsWith(`${basePath  }/`)
 				? dirPath.slice(basePath.length + 1)
 				: dirPath;
 			for (const [path] of changedFiles) {
-				if (path.startsWith(relDir + "/")) {
+				if (path.startsWith(`${relDir  }/`)) {
 					return true;
 				}
 			}
@@ -1335,11 +1337,11 @@ export const FileBrowser = memo(function FileBrowser({
 		(dirPath: string): ParsedFileChange | undefined => {
 			// Check if any files in this directory are changed
 			// Returns the first found change, or undefined if none
-			const relDir = dirPath.startsWith(basePath + "/")
+			const relDir = dirPath.startsWith(`${basePath  }/`)
 				? dirPath.slice(basePath.length + 1)
 				: dirPath;
 			for (const [path, file] of changedFiles) {
-				if (path.startsWith(relDir + "/")) {
+				if (path.startsWith(`${relDir  }/`)) {
 					return file;
 				}
 			}
@@ -1451,8 +1453,7 @@ export const FileBrowser = memo(function FileBrowser({
 		[rootEntries],
 	);
 
-	const renderFileContent = () => {
-		return (
+	const renderFileContent = () => (
 			<FileContentView
 				selectedFile={selectedFile}
 				isLoadingFile={isLoadingFile}
@@ -1488,7 +1489,6 @@ export const FileBrowser = memo(function FileBrowser({
 				searchFocusTrigger={searchFocusTrigger}
 			/>
 		);
-	};
 
 	return (
 		<div

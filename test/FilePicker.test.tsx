@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, waitFor, screen } from "./test-utils";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "./test-utils";
 import { FilePicker } from "../src/components/FilePicker";
 import * as api from "../src/lib/api";
 import { userEvent } from "@testing-library/user-event";

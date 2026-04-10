@@ -3,16 +3,16 @@ import {
 	ArrowRight,
 	ChevronDown,
 	ChevronRight,
-	Undo2,
 	Minus,
 	Plus,
+	Undo2,
 } from "lucide-react";
 import { GitFileRow } from "./GitFileRow";
 import {
 	Tooltip,
 	TooltipContent,
-	TooltipTrigger,
 	TooltipProvider,
+	TooltipTrigger,
 } from "./ui/tooltip";
 import type { ParsedFileChange } from "../lib/git-utils";
 import type { JjFileChange } from "../lib/api";

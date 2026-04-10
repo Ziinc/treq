@@ -1,10 +1,10 @@
 import {
-	warn,
-	debug,
-	trace,
-	info,
-	error,
 	attachConsole,
+	debug,
+	error,
+	info,
+	trace,
+	warn,
 } from "@tauri-apps/plugin-log";
 
 /**

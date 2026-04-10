@@ -1,230 +1,73 @@
+import type {
+	BookmarkTrackingResult,
+	BranchStatus,
+	EditorAppsResponse,
+	JjBranch,
+	JjCommitsAhead,
+	JjDiffHunk,
+	JjFileChange,
+	JjFileLines,
+	JjLogResult,
+	JjMergeResult,
+	JjRebaseResult,
+	JjRevisionDiff,
+	MergeStrategy,
+	PullWorkspaceResult,
+	RepoStatus,
+	RenameWorkspaceResult,
+	SingleRebaseResult,
+	Workspace,
+	WorkspacePartialStatus,
+	WorkspaceStatus,
+} from "./api-types";
+
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-import { open } from "@tauri-apps/plugin-dialog";
 
-export interface Workspace {
-	id: number;
-	repo_path: string;
-	workspace_name: string;
-	workspace_path: string;
-	branch_name: string;
-	created_at: string;
-	metadata?: string;
-	target_branch?: string | null;
-	not_on_remote: boolean;
-}
+export * from "./api-extra";
+export * from "./api-types";
 
-export type RemoteSyncStatus =
-	| { type: "NotOnRemote" }
-	| { type: "InSync" }
-	| { type: "Ahead"; data: { count: number } }
-	| { type: "Behind"; data: { count: number } }
-	| { type: "Diverged"; data: { ahead: number; behind: number } };
-
-export interface WorkspacePartialStatus {
-	current: Workspace;
-	has_conflicts: boolean;
-	has_changes: boolean;
-	commits_ahead: number;
-}
-
-export interface WorkspaceNode {
-	status: WorkspacePartialStatus;
-	parent_id: number | null;
-	child_ids: number[];
-	depth: number;
-}
-
-export interface RepoStatus {
-	current_branch: string;
-	default_branch: string;
-	has_changes: boolean;
-	has_conflicts: boolean;
-	remote_sync: RemoteSyncStatus;
-	fetch_error: string | null;
-}
-
-export const getRepoStatus = (repo_path: string): Promise<RepoStatus> =>
-	invoke("get_repo_status", { repoPath: repo_path });
-
-export interface WorkspaceStatus {
-	current: Workspace;
-	has_conflicts: boolean;
-	has_changes: boolean;
-	remote_sync: RemoteSyncStatus;
-	target: Workspace | null;
-	children: Workspace[];
-	dag_nodes: WorkspaceNode[];
-	conflicted_workspace_ids: number[];
-	commits_ahead_of_target: {
-		hash: string;
-		timestamp: string;
-		message: string;
-	}[];
-}
-
-export interface Session {
-	id: number;
-	workspace_id: number | null;
-	name: string;
-	created_at: string;
-	last_accessed: string;
-	model?: string | null;
-}
-
-export interface WorkspaceInfo {
-	name: string;
-	path: string;
-	branch: string;
-	is_colocated: boolean;
-}
-
-// JJ Diff Types (no staging concept - working copy only)
-export interface JjDiffHunk {
-	id: string;
-	header: string;
-	lines: string[];
-	patch: string;
-}
-
-export interface JjFileChange {
-	path: string;
-	status: string;
-	previous_path?: string | null;
-}
-
-export interface JjFileLines {
-	lines: string[];
-	start_line: number;
-	end_line: number;
-}
-
-export interface JjRebaseResult {
-	success: boolean;
-	message: string;
-}
-
-export interface BookmarkConflictCommit {
-	commit_id: string;
-	short_commit_id: string;
-	change_id: string;
-	description: string;
-	author_name: string;
-	timestamp: string;
-	diff_summary: string;
-}
-
-export interface WorkspaceBookmarkConflict {
-	workspace_id: number;
-	workspace_name: string;
-	workspace_path: string;
-	branch_name: string;
-	bookmark: string;
-	commits: BookmarkConflictCommit[];
-}
-
-export interface JjLogCommit {
-	commit_id: string;
-	short_id: string;
-	change_id: string;
-	description: string;
-	author_name: string;
-	timestamp: string;
-	parent_ids: string[];
-	is_working_copy: boolean;
-	bookmarks: string[];
-	is_immutable: boolean;
-	insertions: number;
-	deletions: number;
-}
-
-export interface JjLogResult {
-	commits: JjLogCommit[];
-	target_branch: string;
-	workspace_branch: string;
-	target_branch_commits?: JjLogCommit[];
-}
-
-export interface JjCommitsAhead {
-	commits: JjLogCommit[];
-	total_count: number;
-}
-
-export interface JjMergeResult {
-	success: boolean;
-	message: string;
-	has_conflicts: boolean;
-	conflicted_files: string[];
-	merge_commit_id: string | null;
-}
-
-export type MergeStrategy = "merge" | "squash" | "rebase";
-
-export interface JjFileDiff {
-	path: string;
-	hunks: JjDiffHunk[];
-}
-
-export interface JjRevisionDiff {
-	files: JjFileChange[];
-	hunks_by_file: JjFileDiff[];
-}
-
-export interface DirectoryEntry {
-	name: string;
-	path: string;
-	is_directory: boolean;
-}
-
-export interface CachedDirectoryEntry {
-	name: string;
-	path: string;
-	is_directory: boolean;
-	relative_path: string;
-}
-
-export interface FileSearchResult {
-	file_path: string;
-	relative_path: string;
-}
-
-// app apis
-
-export const initRepo = (repo_path: string): Promise<void> =>
-	invoke("init_repo", { repoPath: repo_path });
+export const initRepo = (repoPath: string): Promise<void> =>
+	invoke("init_repo", { repoPath });
 
 // Database API
-export const getWorkspaces = (repo_path: string): Promise<Workspace[]> =>
-	invoke("get_workspaces", { repoPath: repo_path });
+export const getWorkspaces = (repoPath: string): Promise<Workspace[]> =>
+	invoke("get_workspaces", { repoPath });
+
+export const getRepoStatus = (repoPath: string): Promise<RepoStatus> =>
+	invoke("get_repo_status", { repoPath });
 
 export const createWorkspace = (
-	repo_path: string,
-	branch_name: string,
-	source_branch?: string,
-	metadata?: string,
-): Promise<number> =>
-	invoke("create_workspace", {
-		repoPath: repo_path,
-		branchName: branch_name,
-		sourceBranch: source_branch ?? null,
+	...args: [
+		repoPath: string,
+		branchName: string,
+		sourceBranch?: string,
+		metadata?: string,
+	]
+): Promise<number> => {
+	const [repoPath, branchName, sourceBranch, metadata] = args;
+	return invoke("create_workspace", {
+		repoPath,
+		branchName,
+		sourceBranch: sourceBranch ?? null,
 		metadata: metadata ?? null,
 	});
+};
 
-export const deleteWorkspace = (repo_path: string, id: number): Promise<void> =>
+export const deleteWorkspace = (repoPath: string, id: number): Promise<void> =>
 	invoke("delete_workspace", {
-		repoPath: repo_path,
+		repoPath,
 		id,
 	});
 
 export const ensureWorkspaceIndexed = (
-	repo_path: string,
-	workspace_id: number | null,
-	workspace_path: string,
+	repoPath: string,
+	workspaceId: number | null,
+	workspacePath: string,
 ): Promise<boolean> =>
 	invoke("ensure_workspace_indexed", {
-		repoPath: repo_path,
-		workspaceId: workspace_id,
-		workspacePath: workspace_path,
+		repoPath,
+		workspaceId,
+		workspacePath,
 	});
 
 export const getSetting = (key: string): Promise<string | null> =>
@@ -239,17 +82,17 @@ export const setSetting = (key: string, value: string): Promise<void> =>
 	invoke("set_setting", { key, value });
 
 export const getRepoSetting = (
-	repo_path: string,
+	repoPath: string,
 	key: string,
 ): Promise<string | null> =>
-	invoke("get_repo_setting", { repoPath: repo_path, key });
+	invoke("get_repo_setting", { repoPath, key });
 
 export const setRepoSetting = (
-	repo_path: string,
+	repoPath: string,
 	key: string,
 	value: string,
 ): Promise<void> =>
-	invoke("set_repo_setting", { repoPath: repo_path, key, value });
+	invoke("set_repo_setting", { repoPath, key, value });
 
 export const setWindowRepoPath = (repoPath: string): Promise<void> =>
 	invoke("set_window_repo_path", { repoPath });
@@ -257,31 +100,28 @@ export const setWindowRepoPath = (repoPath: string): Promise<void> =>
 export const getWindowRepoPath = (): Promise<string | null> =>
 	invoke("get_window_repo_path");
 
-// Editor Apps API
-export interface EditorAppsResponse {
-	cursor: boolean;
-	vscode: boolean;
-	zed: boolean;
-}
-
 export const detectEditorApps = (): Promise<EditorAppsResponse> =>
 	invoke("detect_editor_apps");
 
 // JJ Workspace API
 export const jjCreateWorkspace = (
-	repo_path: string,
-	workspace_name: string,
-	branch: string,
-	new_branch: boolean,
-	source_branch?: string,
-): Promise<string> =>
-	invoke("jj_create_workspace", {
-		repoPath: repo_path,
-		workspaceName: workspace_name,
+	...args: [
+		repoPath: string,
+		workspaceName: string,
+		branch: string,
+		newBranch: boolean,
+		sourceBranch?: string,
+	]
+): Promise<string> => {
+	const [repoPath, workspaceName, branch, newBranch, sourceBranch] = args;
+	return invoke("jj_create_workspace", {
+		repoPath,
+		workspaceName,
 		branch,
-		newBranch: new_branch,
-		sourceBranch: source_branch ?? null,
+		newBranch,
+		sourceBranch: sourceBranch ?? null,
 	});
+};
 
 // JJ Diff API
 export const getWorkspaceChangedFiles = (
@@ -302,14 +142,17 @@ export const getWorkspaceFileHunks = (
 	});
 
 export const getWorkspaceFileLines = (
-	repoPath: string,
-	workspaceId: number | null,
-	filePath: string,
-	fromParent: boolean,
-	startLine: number,
-	endLine: number,
-): Promise<JjFileLines> =>
-	invoke("get_workspace_file_lines", {
+	...args: [
+		repoPath: string,
+		workspaceId: number | null,
+		filePath: string,
+		fromParent: boolean,
+		startLine: number,
+		endLine: number,
+	]
+): Promise<JjFileLines> => {
+	const [repoPath, workspaceId, filePath, fromParent, startLine, endLine] = args;
+	return invoke("get_workspace_file_lines", {
 		repoPath,
 		workspaceId,
 		filePath,
@@ -317,18 +160,19 @@ export const getWorkspaceFileLines = (
 		startLine,
 		endLine,
 	});
+};
 
 export const jjRestoreFile = (
-	workspace_path: string,
-	file_path: string,
+	workspacePath: string,
+	filePath: string,
 ): Promise<string> =>
 	invoke("jj_restore_file", {
-		workspacePath: workspace_path,
-		filePath: file_path,
+		workspacePath,
+		filePath,
 	});
 
-export const jjRestoreAll = (workspace_path: string): Promise<string> =>
-	invoke("jj_restore_all", { workspacePath: workspace_path });
+export const jjRestoreAll = (workspacePath: string): Promise<string> =>
+	invoke("jj_restore_all", { workspacePath });
 
 export const createCommit = (
 	repoPath: string,
@@ -342,78 +186,72 @@ export const createCommit = (
 	});
 
 export const listCommits = (
-	repoPath: string,
-	workspaceId: number | null,
-	includeTargetBranchHistory?: boolean,
-	targetBranchLimit?: number,
-	limit?: number,
-): Promise<JjLogResult> =>
-	invoke("list_commits", {
+	...args: [
+		repoPath: string,
+		workspaceId: number | null,
+		includeTargetBranchHistory?: boolean,
+		targetBranchLimit?: number,
+		limit?: number,
+	]
+): Promise<JjLogResult> => {
+	const [repoPath, workspaceId, includeTargetBranchHistory, targetBranchLimit, limit] =
+		args;
+	return invoke("list_commits", {
 		repoPath,
 		workspaceId,
 		includeTargetBranchHistory: includeTargetBranchHistory ?? false,
 		targetBranchLimit: targetBranchLimit ?? null,
 		limit: limit ?? null,
 	});
+};
 
 export const jjSplit = (
-	workspace_path: string,
+	workspacePath: string,
 	message: string,
-	file_paths: string[],
+	filePaths: string[],
 ): Promise<string> =>
 	invoke("jj_split", {
-		workspacePath: workspace_path,
+		workspacePath,
 		message,
-		filePaths: file_paths,
+		filePaths,
 	});
 
 export const listConflictedFiles = (
-	workspace_path: string,
+	workspacePath: string,
 ): Promise<string[]> =>
-	invoke("list_conflicted_files", { workspacePath: workspace_path });
+	invoke("list_conflicted_files", { workspacePath });
 
-export interface JjBranch {
-	name: string;
-	is_current: boolean;
-}
+export const jjGetBranches = (repoPath: string): Promise<JjBranch[]> =>
+	invoke("jj_get_branches", { repoPath });
 
-export const jjGetBranches = (repo_path: string): Promise<JjBranch[]> =>
-	invoke("jj_get_branches", { repoPath: repo_path });
-
-export const listRepoBranches = (repo_path: string): Promise<JjBranch[]> =>
-	invoke("list_repo_branches", { repoPath: repo_path });
+export const listRepoBranches = (repoPath: string): Promise<JjBranch[]> =>
+	invoke("list_repo_branches", { repoPath });
 
 export const jjEditBookmark = (
-	repo_path: string,
-	bookmark_name: string,
+	repoPath: string,
+	bookmarkName: string,
 ): Promise<string> =>
 	invoke("jj_edit_bookmark", {
-		repoPath: repo_path,
-		bookmarkName: bookmark_name,
+		repoPath,
+		bookmarkName,
 	});
 
 export const switchRepoBranch = (
-	repo_path: string,
-	bookmark_name: string,
+	repoPath: string,
+	bookmarkName: string,
 ): Promise<string> =>
 	invoke("switch_repo_branch", {
-		repoPath: repo_path,
-		bookmarkName: bookmark_name,
+		repoPath,
+		bookmarkName,
 	});
 
-export interface BookmarkTrackingResult {
-	tracked: string[];
-	failed: [string, string][];
-	already_tracked: string[];
-}
-
 export const jjTrackWorkspaceBookmarks = (
-	repo_path: string,
+	repoPath: string,
 ): Promise<BookmarkTrackingResult> =>
-	invoke("jj_track_workspace_bookmarks", { repoPath: repo_path });
+	invoke("jj_track_workspace_bookmarks", { repoPath });
 
-export const jjPush = (workspace_path: string): Promise<string> =>
-	invoke("jj_push", { workspacePath: workspace_path });
+export const jjPush = (workspacePath: string): Promise<string> =>
+	invoke("jj_push", { workspacePath });
 
 export interface SyncStatus {
 	ahead: number;
@@ -421,55 +259,41 @@ export interface SyncStatus {
 }
 
 export const jjGetSyncStatus = (
-	workspace_path: string,
-	branch_name: string,
-	not_on_remote: boolean = false,
+	workspacePath: string,
+	branchName: string,
+	notOnRemote: boolean = false,
 ): Promise<[number, number]> =>
 	invoke("jj_get_sync_status", {
-		workspacePath: workspace_path,
-		branchName: branch_name,
-		notOnRemote: not_on_remote,
+		workspacePath,
+		branchName,
+		notOnRemote,
 	});
 
-export const jjGitFetch = (repo_path: string): Promise<string> =>
-	invoke("jj_git_fetch", { repoPath: repo_path });
+export const jjGitFetch = (repoPath: string): Promise<string> =>
+	invoke("jj_git_fetch", { repoPath });
 
-export const jjGitFetchBackground = (repo_path: string): Promise<void> =>
-	invoke("jj_git_fetch_background", { repoPath: repo_path });
+export const jjGitFetchBackground = (repoPath: string): Promise<void> =>
+	invoke("jj_git_fetch_background", { repoPath });
 
-export const jjPull = (workspace_path: string): Promise<string> =>
-	invoke("jj_pull", { workspacePath: workspace_path });
-
-export interface PullWorkspaceResult {
-	success: boolean;
-	message: string;
-	was_diverged: boolean;
-	commits_rebased: number;
-}
+export const jjPull = (workspacePath: string): Promise<string> =>
+	invoke("jj_pull", { workspacePath });
 
 export const pullWorkspaceFromRemote = (
-	repo_path: string,
-	workspace_id: number | null,
+	repoPath: string,
+	workspaceId: number | null,
 ): Promise<PullWorkspaceResult> =>
 	invoke("pull_workspace_from_remote", {
-		repoPath: repo_path,
-		workspaceId: workspace_id,
+		repoPath,
+		workspaceId,
 	});
 
-export interface BranchStatus {
-	local_exists: boolean;
-	remote_exists: boolean;
-	remote_name?: string; // The remote name (e.g., "origin") if remote exists
-	remote_ref?: string; // Full remote ref (e.g., "origin/branch") if remote exists
-}
-
 export const checkBranchExists = (
-	repo_path: string,
-	branch_name: string,
+	repoPath: string,
+	branchName: string,
 ): Promise<BranchStatus> =>
 	invoke("jj_check_branch_exists", {
-		repoPath: repo_path,
-		branchName: branch_name,
+		repoPath,
+		branchName,
 	});
 
 export const getCommitDiff = (
@@ -480,17 +304,21 @@ export const getCommitDiff = (
 	invoke("get_commit_diff", { repoPath, workspaceId, revision });
 
 export const jjGetLog = (
-	workspacePath: string,
-	targetBranch: string,
-	isHomeRepo?: boolean,
-	limit?: number,
-): Promise<JjLogResult> =>
-	invoke("jj_get_log", {
+	...args: [
+		workspacePath: string,
+		targetBranch: string,
+		isHomeRepo?: boolean,
+		limit?: number,
+	]
+): Promise<JjLogResult> => {
+	const [workspacePath, targetBranch, isHomeRepo, limit] = args;
+	return invoke("jj_get_log", {
 		workspacePath,
 		targetBranch,
 		isHomeRepo: isHomeRepo ?? null,
 		limit: limit ?? null,
 	});
+};
 
 export const jjGetCommitsAhead = (
 	workspacePath: string,
@@ -505,29 +333,37 @@ export const getWorkspaceDiff = (
 	invoke("get_workspace_diff", { repoPath, workspaceId });
 
 export const jjCreateMerge = (
-	workspacePath: string,
-	workspaceBranch: string,
-	targetBranch: string,
-	message: string,
-): Promise<JjMergeResult> =>
-	invoke("jj_create_merge", {
+	...args: [
+		workspacePath: string,
+		workspaceBranch: string,
+		targetBranch: string,
+		message: string,
+	]
+): Promise<JjMergeResult> => {
+	const [workspacePath, workspaceBranch, targetBranch, message] = args;
+	return invoke("jj_create_merge", {
 		workspacePath,
 		workspaceBranch,
 		targetBranch,
 		message,
 	});
+};
 
 export const splitWorkspace = (
-	repoPath: string,
-	workspaceId: number,
-	branchName: string,
-	intent: string | null,
-	filePaths: string[] | null,
-	commitIds: string[] | null,
-	mode: "move" | "copy",
-	position: "before" | "after",
-): Promise<number> =>
-	invoke("split_workspace", {
+	...args: [
+		repoPath: string,
+		workspaceId: number,
+		branchName: string,
+		intent: string | null,
+		filePaths: string[] | null,
+		commitIds: string[] | null,
+		mode: "move" | "copy",
+		position: "before" | "after",
+	]
+): Promise<number> => {
+	const [repoPath, workspaceId, branchName, intent, filePaths, commitIds, mode, position] =
+		args;
+	return invoke("split_workspace", {
 		repoPath,
 		workspaceId,
 		branchName,
@@ -537,516 +373,151 @@ export const splitWorkspace = (
 		mode,
 		position,
 	});
-
-export interface RenameWorkspaceResult {
-	success: boolean;
-	message: string;
-	workspace: Workspace | null;
-	updated_children_ids: number[];
-}
+};
 
 export const renameWorkspace = (
-	repoPath: string,
-	workspaceId: number,
-	newBranchName: string,
-	dryRun: boolean,
-): Promise<RenameWorkspaceResult> =>
-	invoke("rename_workspace", {
+	...args: [
+		repoPath: string,
+		workspaceId: number,
+		newBranchName: string,
+		dryRun: boolean,
+	]
+): Promise<RenameWorkspaceResult> => {
+	const [repoPath, workspaceId, newBranchName, dryRun] = args;
+	return invoke("rename_workspace", {
 		repoPath,
 		workspaceId,
 		newBranchName,
 		dryRun,
 	});
+};
 
 export const mergeWorkspace = (
-	repoPath: string,
-	workspaceId: number,
-	message: string,
-	mergeStrategy: MergeStrategy,
-): Promise<void> =>
-	invoke("merge_workspace", { repoPath, workspaceId, message, mergeStrategy });
+	...args: [
+		repoPath: string,
+		workspaceId: number,
+		message: string,
+		mergeStrategy: MergeStrategy,
+	]
+): Promise<void> => {
+	const [repoPath, workspaceId, message, mergeStrategy] = args;
+	return invoke("merge_workspace", { repoPath, workspaceId, message, mergeStrategy });
+};
 
 export const updateWorkspaceNotOnRemote = (
-	repo_path: string,
-	workspace_id: number,
-	not_on_remote: boolean,
+	repoPath: string,
+	workspaceId: number,
+	notOnRemote: boolean,
 ): Promise<void> =>
 	invoke("update_workspace_not_on_remote", {
-		repoPath: repo_path,
-		workspaceId: workspace_id,
-		notOnRemote: not_on_remote,
+		repoPath,
+		workspaceId,
+		notOnRemote,
 	});
 
 export const pushWorkspaceToRemote = (
-	repo_path: string,
-	workspace_id: number | null,
+	repoPath: string,
+	workspaceId: number | null,
 ): Promise<string> =>
 	invoke("push_workspace_to_remote", {
-		repoPath: repo_path,
-		workspaceId: workspace_id,
+		repoPath,
+		workspaceId,
 	});
 
 export const listWorkspaceStatuses = (
-	repo_path: string,
+	repoPath: string,
 ): Promise<WorkspacePartialStatus[]> =>
 	invoke("list_workspace_statuses", {
-		repoPath: repo_path,
+		repoPath,
 	});
 
 export const getWorkspaceStatus = (
-	repo_path: string,
-	workspace_id: number | null,
+	repoPath: string,
+	workspaceId: number | null,
 ): Promise<WorkspaceStatus> =>
 	invoke("get_workspace_status", {
-		repoPath: repo_path,
-		workspaceId: workspace_id,
+		repoPath,
+		workspaceId,
 	});
 
 export const updateWorkspace = (
-	repo_path: string,
-	workspace_id: number,
-	target_branch?: string,
-	intent?: string,
-): Promise<Workspace> =>
-	invoke("update_workspace", {
-		repoPath: repo_path,
-		workspaceId: workspace_id,
-		...(target_branch !== undefined && { targetBranch: target_branch }),
+	...args: [
+		repoPath: string,
+		workspaceId: number,
+		targetBranch?: string,
+		intent?: string,
+	]
+): Promise<Workspace> => {
+	const [repoPath, workspaceId, targetBranch, intent] = args;
+	return invoke("update_workspace", {
+		repoPath,
+		workspaceId,
+		...(targetBranch !== undefined && { targetBranch }),
 		...(intent !== undefined && { intent }),
 	});
+};
 
 export const setWorkspaceTargetBranch = (
-	repo_path: string,
-	workspace_path: string,
-	id: number,
-	target_branch: string,
-): Promise<JjRebaseResult> =>
-	invoke("set_workspace_target_branch", {
-		repoPath: repo_path,
-		workspacePath: workspace_path,
+	...args: [
+		repoPath: string,
+		workspacePath: string,
+		id: number,
+		targetBranch: string,
+	]
+): Promise<JjRebaseResult> => {
+	const [repoPath, workspacePath, id, targetBranch] = args;
+	return invoke("set_workspace_target_branch", {
+		repoPath,
+		workspacePath,
 		id,
-		targetBranch: target_branch,
+		targetBranch,
 	});
+};
 
 // Alias for tests
 export const jjSetWorkspaceTarget = (
-	workspace_path: string,
-	target_branch: string,
+	workspacePath: string,
+	targetBranch: string,
 ): Promise<void> =>
 	invoke("set_workspace_target_branch", {
-		workspacePath: workspace_path,
-		targetBranch: target_branch,
+		workspacePath,
+		targetBranch,
 	});
-
-export interface SingleRebaseResult {
-	rebased: boolean;
-	success: boolean;
-	message: string;
-	bookmark_conflicts?: WorkspaceBookmarkConflict[];
-}
 
 export const checkAndRebaseWorkspaces = (
-	repo_path: string,
-	workspace_id?: number | null,
-	default_branch?: string | null,
-	force?: boolean,
-): Promise<SingleRebaseResult> =>
-	invoke("check_and_rebase_workspaces", {
-		repoPath: repo_path,
-		workspaceId: workspace_id ?? null,
-		defaultBranch: default_branch ?? null,
+	...args: [
+		repoPath: string,
+		workspaceId?: number | null,
+		defaultBranch?: string | null,
+		force?: boolean,
+	]
+): Promise<SingleRebaseResult> => {
+	const [repoPath, workspaceId, defaultBranch, force] = args;
+	return invoke("check_and_rebase_workspaces", {
+		repoPath,
+		workspaceId: workspaceId ?? null,
+		defaultBranch: defaultBranch ?? null,
 		force: force ?? null,
 	});
+};
 
 export const resolveBookmarkConflict = (
-	repo_path: string,
-	workspace_id: number,
-	workspace_path: string,
-	branch_name: string,
-	revision_id: string,
-): Promise<JjRebaseResult> =>
-	invoke("resolve_workspace_bookmark_conflict", {
-		repoPath: repo_path,
-		workspaceId: workspace_id,
-		workspacePath: workspace_path,
-		branchName: branch_name,
-		revisionId: revision_id,
+	...args: [
+		repoPath: string,
+		workspaceId: number,
+		workspacePath: string,
+		branchName: string,
+		revisionId: string,
+	]
+): Promise<JjRebaseResult> => {
+	const [repoPath, workspaceId, workspacePath, branchName, revisionId] = args;
+	return invoke("resolve_workspace_bookmark_conflict", {
+		repoPath,
+		workspaceId,
+		workspacePath,
+		branchName,
+		revisionId,
 	});
+};
 
 // PTY API
-export const ptyCreateSession = (
-	session_id: string,
-	working_dir?: string,
-	shell?: string,
-	initial_command?: string,
-	suppress_echo_for?: string,
-): Promise<void> =>
-	invoke("pty_create_session", {
-		sessionId: session_id,
-		workingDir: working_dir,
-		shell,
-		initialCommand: initial_command,
-		suppressEchoFor: suppress_echo_for,
-	});
-
-export const ptyWrite = (session_id: string, data: string): Promise<void> =>
-	invoke("pty_write", { sessionId: session_id, data });
-
-export const ptyWriteSuppressEcho = (
-	session_id: string,
-	data: string,
-): Promise<void> =>
-	invoke("pty_write_suppress_echo", { sessionId: session_id, data });
-
-export const ptyResize = (
-	session_id: string,
-	rows: number,
-	cols: number,
-): Promise<void> => invoke("pty_resize", { sessionId: session_id, rows, cols });
-
-export const ptyClose = (session_id: string): Promise<void> =>
-	invoke("pty_close", { sessionId: session_id });
-
-export const ptySessionExists = (session_id: string): Promise<boolean> =>
-	invoke("pty_session_exists", { sessionId: session_id });
-
-export const ptyListen = (
-	session_id: string,
-	callback: (data: string) => void,
-) =>
-	listen<string>(`pty-data-${session_id}`, (event) => callback(event.payload));
-
-// File System API
-export const readFile = (path: string): Promise<string> =>
-	invoke("read_file", { path });
-
-export const listDirectory = (path: string): Promise<DirectoryEntry[]> =>
-	invoke("list_directory", { path });
-
-export const listDirectoryCached = (
-	repoPath: string,
-	workspaceId: number | null,
-	parentPath: string,
-): Promise<CachedDirectoryEntry[]> =>
-	invoke("list_directory_cached", {
-		repoPath,
-		workspaceId,
-		parentPath,
-	});
-
-export const searchWorkspaceFiles = (
-	repoPath: string,
-	workspaceId: number | null,
-	query: string,
-	limit?: number,
-): Promise<FileSearchResult[]> =>
-	invoke("search_workspace_files", {
-		repoPath,
-		workspaceId,
-		query,
-		limit: limit ?? 50,
-	});
-
-// Folder picker
-export const selectFolder = async (): Promise<string | null> => {
-	const selected = await open({
-		directory: true,
-		multiple: false,
-		title: "Select Folder",
-	});
-	return selected;
-};
-
-// Session management API
-export const createSession = (
-	repo_path: string,
-	workspaceId: number | null,
-	name: string,
-): Promise<number> =>
-	invoke("create_session", { repoPath: repo_path, workspaceId, name });
-
-export const getSessions = (repo_path: string): Promise<Session[]> =>
-	invoke("get_sessions", { repoPath: repo_path });
-
-export const updateSessionAccess = (
-	repo_path: string,
-	id: number,
-): Promise<void> =>
-	invoke("update_session_access", { repoPath: repo_path, id });
-
-export const updateSessionName = (
-	repo_path: string,
-	id: number,
-	name: string,
-): Promise<void> =>
-	invoke("update_session_name", { repoPath: repo_path, id, name });
-
-export const deleteSession = (repo_path: string, id: number): Promise<void> =>
-	invoke("delete_session", { repoPath: repo_path, id });
-
-export const getSessionModel = (
-	repo_path: string,
-	id: number,
-): Promise<string | null> =>
-	invoke("get_session_model", { repoPath: repo_path, id });
-
-export const setSessionModel = (
-	repo_path: string,
-	id: number,
-	model: string | null,
-): Promise<void> =>
-	invoke("set_session_model", { repoPath: repo_path, id, model });
-
-// File view tracking API
-export interface FileView {
-	id: number;
-	workspace_path: string;
-	file_path: string;
-	viewed_at: string;
-	content_hash: string;
-}
-
-export const markFileViewed = (
-	workspacePath: string,
-	filePath: string,
-	contentHash: string,
-): Promise<void> =>
-	invoke("mark_file_viewed", { workspacePath, filePath, contentHash });
-
-export const unmarkFileViewed = (
-	workspacePath: string,
-	filePath: string,
-): Promise<void> => invoke("unmark_file_viewed", { workspacePath, filePath });
-
-export const getViewedFiles = (workspacePath: string): Promise<FileView[]> =>
-	invoke("get_viewed_files", { workspacePath });
-
-export const clearAllViewedFiles = (workspacePath: string): Promise<void> =>
-	invoke("clear_all_viewed_files", { workspacePath });
-
-// Git remotes API (stub - backend not implemented)
-export const gitListRemotes = (_repoPath: string): Promise<string[]> =>
-	Promise.resolve(["origin"]);
-
-// Diff cache API (in-memory stub implementation)
-const diffCache = new Map<string, { data: string; timestamp: number }>();
-
-export interface DiffCacheEntry {
-	data: string;
-	timestamp: number;
-}
-
-export const getDiffCache = async (
-	workspacePath: string,
-	cacheType: string,
-	filePath?: string,
-): Promise<DiffCacheEntry | null> => {
-	const key = filePath
-		? `${workspacePath}:${cacheType}:${filePath}`
-		: `${workspacePath}:${cacheType}`;
-	return diffCache.get(key) ?? null;
-};
-
-export const setDiffCache = async (
-	workspacePath: string,
-	cacheType: string,
-	data: unknown,
-	filePath?: string,
-): Promise<void> => {
-	const key = filePath
-		? `${workspacePath}:${cacheType}:${filePath}`
-		: `${workspacePath}:${cacheType}`;
-	diffCache.set(key, {
-		data: typeof data === "string" ? data : JSON.stringify(data),
-		timestamp: Date.now(),
-	});
-};
-
-// Branch diff types for merge review
-export type DiffLineKind = "context" | "addition" | "deletion";
-
-export interface BranchDiffLine {
-	kind: DiffLineKind;
-	old_line?: number | null;
-	new_line?: number | null;
-	content: string;
-}
-
-export interface BranchDiffFileDiff {
-	path: string;
-	lines: BranchDiffLine[];
-}
-
-export interface BranchDiffFileChange {
-	path: string;
-	status: string;
-}
-
-export interface BranchCommitInfo {
-	hash: string;
-	abbreviated_hash: string;
-	message: string;
-	author_name: string;
-	author_email: string;
-	timestamp: string;
-}
-
-// Branch diff functions (stub implementations - backend not yet implemented)
-export const gitGetChangedFilesBetweenBranches = (
-	_repoPath: string,
-	_baseBranch: string,
-	_headBranch: string,
-): Promise<BranchDiffFileChange[]> => Promise.resolve([]);
-
-export const gitGetDiffBetweenBranches = (
-	_repoPath: string,
-	_baseBranch: string,
-	_headBranch: string,
-): Promise<BranchDiffFileDiff[]> => Promise.resolve([]);
-
-export const gitGetCommitsBetweenBranches = (
-	_repoPath: string,
-	_baseBranch: string,
-	_headBranch: string,
-	_limit?: number,
-): Promise<BranchCommitInfo[]> => Promise.resolve([]);
-
-// Pending review persistence
-export interface LineComment {
-	id: string;
-	filePath: string;
-	hunkId: string;
-	startLine: number;
-	endLine: number;
-	lineContent: string[];
-	text: string;
-	createdAt: string;
-	lineSide?: "old" | "new";
-}
-
-export interface PendingReview {
-	id: number;
-	workspace_id: number;
-	comments: LineComment[];
-	viewed_files: string[];
-	summary_text: string | null;
-	created_at: string;
-	updated_at: string;
-}
-
-export const loadPendingReview = (
-	repoPath: string,
-	workspaceId: number,
-): Promise<PendingReview | null> =>
-	invoke<{
-		id: number;
-		workspace_id: number;
-		comments: string;
-		viewed_files: string | null;
-		summary_text: string | null;
-		created_at: string;
-		updated_at: string;
-	} | null>("load_pending_review", { repoPath, workspaceId }).then((result) => {
-		if (!result) return null;
-		return {
-			id: result.id,
-			workspace_id: result.workspace_id,
-			comments: JSON.parse(result.comments),
-			viewed_files: result.viewed_files ? JSON.parse(result.viewed_files) : [],
-			summary_text: result.summary_text,
-			created_at: result.created_at,
-			updated_at: result.updated_at,
-		};
-	});
-
-export const savePendingReview = (
-	repoPath: string,
-	workspaceId: number,
-	comments: LineComment[],
-	viewedFiles?: string[],
-	summaryText?: string,
-): Promise<number> =>
-	invoke("save_pending_review", {
-		repoPath,
-		workspaceId,
-		comments: JSON.stringify(comments),
-		viewedFiles: viewedFiles ? JSON.stringify(viewedFiles) : null,
-		summaryText: summaryText ?? null,
-	});
-
-export const clearPendingReview = (
-	repoPath: string,
-	workspaceId: number,
-): Promise<void> => invoke("clear_pending_review", { repoPath, workspaceId });
-
-// File Watcher API
-export const startFileWatcher = (
-	workspaceId: number,
-	workspacePath: string,
-): Promise<void> =>
-	invoke("start_file_watcher", { workspaceId, workspacePath });
-
-export const stopFileWatcher = (
-	workspaceId: number,
-	workspacePath: string,
-): Promise<void> => invoke("stop_file_watcher", { workspaceId, workspacePath });
-
-// Conflict marker parsing
-export interface ConflictRegion {
-	id: string;
-	filePath: string;
-	conflictNumber: number;
-	totalConflicts: number;
-	startLine: number;
-	endLine: number;
-	content: string;
-	markerStyle: "jj" | "git";
-}
-
-export const parseConflictMarkers = (
-	content: string,
-	filePath: string,
-): Promise<ConflictRegion[]> =>
-	invoke("parse_conflict_markers", { content, filePath });
-
-// Move commit API
-export const moveCommitToNewWorkspace = (
-	repoPath: string,
-	sourceWorkspaceId: number,
-	commitChangeId: string,
-	branchName: string,
-	intent: string | null,
-): Promise<number> =>
-	invoke("move_commit_to_new_workspace", {
-		repoPath,
-		sourceWorkspaceId,
-		commitChangeId,
-		branchName,
-		intent,
-	});
-
-export const moveCommitToExistingWorkspace = (
-	repoPath: string,
-	sourceWorkspaceId: number,
-	commitChangeId: string,
-	targetWorkspaceId: number,
-): Promise<void> =>
-	invoke("move_commit_to_existing_workspace", {
-		repoPath,
-		sourceWorkspaceId,
-		commitChangeId,
-		targetWorkspaceId,
-	});
-
-export const abandonCommit = (
-	repoPath: string,
-	workspaceId: number,
-	commitChangeId: string,
-): Promise<void> =>
-	invoke("abandon_commit", {
-		repoPath,
-		workspaceId,
-		commitChangeId,
-	});
-
-export const getTreqBinDir = (): Promise<string> => invoke("get_treq_bin_dir");

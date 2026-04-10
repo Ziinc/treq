@@ -1,38 +1,18 @@
 import React, {
+	forwardRef,
 	memo,
 	useCallback,
 	useEffect,
+	useImperativeHandle,
 	useMemo,
 	useRef,
 	useState,
-	useImperativeHandle,
-	forwardRef,
 } from "react";
 import { type ConsolidatedTerminalHandle } from "./ConsolidatedTerminal";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipProvider,
-	TooltipTrigger,
-} from "./ui/tooltip";
-import { Button } from "./ui/button";
-import { cn } from "../lib/utils";
 import { ptyClose } from "../lib/api";
-import {
-	ChevronDown,
-	ChevronUp,
-	Bot,
-	Terminal,
-	Maximize2,
-	Minimize2,
-	GitBranch,
-	Home,
-} from "lucide-react";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
-import { ClaudeTerminalPanel } from "./terminal/ClaudeTerminalPanel";
-import { ResizeDivider } from "./terminal/ResizeDivider";
-import { ShellTerminalPanel } from "./terminal/ShellTerminalPanel";
 import { type ClaudeSessionData } from "./terminal/types";
+import { WorkspaceTerminalPaneView } from "./WorkspaceTerminalPaneView";
 
 // Shell terminal data
 interface ShellTerminalData {
@@ -76,7 +56,7 @@ interface WorkspaceGroup {
 const WorkspaceTerminalPaneInner = forwardRef<
 	WorkspaceTerminalPaneHandle,
 	WorkspaceTerminalPaneProps
->(function WorkspaceTerminalPane(
+>((
 	{
 		workingDirectory,
 		onSessionError,
@@ -89,7 +69,7 @@ const WorkspaceTerminalPaneInner = forwardRef<
 		className,
 	},
 	ref,
-) {
+) => {
 	// Shared pane state
 	const [collapsed, setCollapsed] = useState(true);
 	const [maximized, setMaximized] = useState(false);
@@ -574,7 +554,7 @@ const WorkspaceTerminalPaneInner = forwardRef<
 		});
 
 		// Set the first terminal in the group as active
-		const firstTerminal = matchingGroup.terminals[0];
+		const [firstTerminal] = matchingGroup.terminals;
 		if (firstTerminal.type === "shell") {
 			setActivePtySessionId(firstTerminal.data.id);
 		} else {
@@ -585,309 +565,33 @@ const WorkspaceTerminalPaneInner = forwardRef<
 	const totalTerminals = allTerminals.length;
 
 	return (
-		<div ref={paneRef} className={className} style={{ display: "contents" }}>
-			{!collapsed && !maximized && (
-				<div
-					className="relative flex-shrink-0 h-1 group"
-					onMouseDown={handleHeightResizeMouseDown}
-				>
-					<div
-						className={cn(
-							"absolute inset-x-0 top-0 h-1 bg-border transition-colors",
-							"group-hover:bg-primary/50",
-							isResizingHeight && "bg-primary",
-						)}
-					/>
-					<div className="absolute inset-x-0 -top-1 h-3 cursor-ns-resize" />
-				</div>
-			)}
-
-			{/* Bottom Terminal Pane */}
-			<div
-				className="flex flex-col border-t bg-background flex-shrink-0 overflow-hidden"
-				style={{
-					height: collapsed ? 32 : maximized ? "100%" : `${height}%`,
-					maxHeight: collapsed ? 32 : maximized ? "100%" : "60%",
-				}}
-			>
-				{/* Pane Header */}
-				<div className="h-8 min-h-[32px] flex items-center justify-between px-2 border-b bg-muted/30 flex-shrink-0">
-					<div className="flex items-center gap-2 font-medium text-muted-foreground">
-						<Terminal className="w-4 h-4" />
-						<span>Terminals</span>
-						{totalTerminals > 0 && (
-							<span className="text-xs bg-muted px-1.5 py-0.5 rounded">
-								{totalTerminals}
-							</span>
-						)}
-					</div>
-
-					<div className="flex items-center gap-2">
-						{/* New Agent button */}
-						<TooltipProvider>
-							<Tooltip>
-								<TooltipTrigger asChild>
-									<Button
-										type="button"
-										onClick={handleCreateAgentSession}
-										variant={totalTerminals === 0 ? "default" : "ghost"}
-										className={cn(
-											"h-6 px-2 rounded-sm gap-1",
-											totalTerminals === 0
-												? ""
-												: "text-muted-foreground hover:text-foreground",
-										)}
-										aria-label="New Agent"
-									>
-										<Bot className="w-4 h-4" />
-										Agent
-									</Button>
-								</TooltipTrigger>
-								<TooltipContent>New Agent Session (⌘+])</TooltipContent>
-							</Tooltip>
-						</TooltipProvider>
-						{/* New Shell button */}
-						<TooltipProvider>
-							<Tooltip>
-								<TooltipTrigger asChild>
-									<Button
-										type="button"
-										onClick={handleAddShell}
-										variant="ghost"
-										className="h-6 px-2 rounded-sm gap-1 text-muted-foreground hover:text-foreground"
-										aria-label="New Shell"
-									>
-										<Terminal className="w-4 h-4" /> Shell
-									</Button>
-								</TooltipTrigger>
-								<TooltipContent>New Shell (⌘+\)</TooltipContent>
-							</Tooltip>
-						</TooltipProvider>
-						{/* Expand/Maximize/Restore button */}
-						{collapsed && totalTerminals > 0 ? (
-							<TooltipProvider>
-								<Tooltip>
-									<TooltipTrigger asChild>
-										<Button
-											type="button"
-											onClick={() => setCollapsed(false)}
-											variant="ghost"
-											className="h-5 w-5 rounded-sm p-0"
-											aria-label="Expand terminal"
-										>
-											<ChevronUp className="w-3 h-3" />
-										</Button>
-									</TooltipTrigger>
-									<TooltipContent>Expand (⌘+J)</TooltipContent>
-								</Tooltip>
-							</TooltipProvider>
-						) : maximized ? (
-							<TooltipProvider>
-								<Tooltip>
-									<TooltipTrigger asChild>
-										<Button
-											type="button"
-											onClick={() => setMaximized(false)}
-											variant="ghost"
-											className="h-5 w-5 rounded-sm p-0"
-											aria-label="Restore terminal"
-										>
-											<Minimize2 className="w-3 h-3" />
-										</Button>
-									</TooltipTrigger>
-									<TooltipContent>Restore</TooltipContent>
-								</Tooltip>
-							</TooltipProvider>
-						) : (
-							<TooltipProvider>
-								<Tooltip>
-									<TooltipTrigger asChild>
-										<Button
-											type="button"
-											onClick={() => setMaximized(true)}
-											variant="ghost"
-											className="h-5 w-5 rounded-sm p-0"
-											aria-label="Maximize terminal"
-										>
-											<Maximize2 className="w-3 h-3" />
-										</Button>
-									</TooltipTrigger>
-									<TooltipContent>Maximize (⌘+⌃+J)</TooltipContent>
-								</Tooltip>
-							</TooltipProvider>
-						)}
-						{/* Collapse button (always visible when not collapsed) */}
-						{!collapsed && (
-							<TooltipProvider>
-								<Tooltip>
-									<TooltipTrigger asChild>
-										<Button
-											type="button"
-											onClick={() => {
-												setCollapsed(true);
-												setMaximized(false);
-											}}
-											variant="ghost"
-											className="h-5 w-5 rounded-sm p-0"
-											aria-label="Collapse terminal"
-										>
-											<ChevronDown className="w-3 h-3" />
-										</Button>
-									</TooltipTrigger>
-									<TooltipContent>Collapse (⌘+J)</TooltipContent>
-								</Tooltip>
-							</TooltipProvider>
-						)}
-					</div>
-				</div>
-
-				{/* Terminal Content - fills width, scrolls horizontally when needed */}
-				{!collapsed && (
-					<div
-						ref={scrollContainerRef}
-						className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden flex"
-						style={{
-							backgroundColor: "#1e1e1e",
-						}}
-					>
-						{workspaceGroups.map((group, groupIndex) => {
-							// Each terminal gets min 40% of scroll container viewport width
-							const minTerminalPx = containerWidth * 0.4 || 300;
-							const groupMinWidth = group.terminals.length * minTerminalPx;
-							const groupMaxWidth =
-								workspaceGroups.length > 1 && group.terminals.length === 1
-									? containerWidth * 0.5
-									: undefined;
-							return (
-								<div
-									key={group.workspaceKey}
-									data-workspace-group={group.workspaceKey}
-									className={cn(
-										"flex flex-col min-h-0 flex-shrink-0",
-										groupIndex > 0 && "border-l-2 border-border",
-									)}
-									style={{
-										minWidth: groupMinWidth,
-										maxWidth: groupMaxWidth,
-										flex: "1 0 auto",
-									}}
-								>
-									{/* Horizontal workspace indicator header - sticky so it stays visible when scrolling */}
-									<div
-										className="h-8 flex items-center gap-2 px-2 border-b border-border bg-gray-700/100 flex-shrink-0 sticky left-0 z-10 overflow-hidden cursor-pointer hover:bg-muted/40 transition-colors"
-										style={{
-											width: containerWidth > 0 ? containerWidth : undefined,
-										}}
-										onClick={() =>
-											onNavigateToWorkspace?.(
-												group.workspaceKey,
-												group.isMainRepo,
-											)
-										}
-									>
-										{group.isMainRepo ? (
-											<Home className="w-4 h-4 text-gray-200 flex-shrink-0" />
-										) : (
-											<GitBranch className="w-4 h-4 text-gray-200 flex-shrink-0" />
-										)}
-										<span
-											className="text-sm text-gray-200 truncate font-mono"
-											title={
-												group.isMainRepo
-													? currentBranch || "main"
-													: group.workspaceName
-											}
-										>
-											{group.isMainRepo
-												? currentBranch || "main"
-												: group.workspaceName}
-										</span>
-									</div>
-									{/* Terminals in this group */}
-									<div className="flex min-h-0 flex-1">
-										{group.terminals.map((terminal, index) => {
-											const isLastInGroup =
-												index === group.terminals.length - 1;
-											const nextTerminal = group.terminals[index + 1];
-
-											if (terminal.type === "shell") {
-												const terminalId = terminal.data.id;
-												return (
-													<React.Fragment key={terminalId}>
-														<ShellTerminalPanel
-															terminalData={terminal.data}
-															collapsed={collapsed}
-															isActive={activePtySessionId === terminalId}
-															onFocus={() => setActivePtySessionId(terminalId)}
-															onClose={() => handleCloseShell(terminalId)}
-															canClose={true}
-															onSessionError={onSessionError}
-															terminalRefs={terminalRefs}
-															width={terminalWidths.get(terminalId)}
-														/>
-														{!isLastInGroup && nextTerminal && (
-															<ResizeDivider
-																onResize={(deltaX) => {
-																	const nextId =
-																		nextTerminal.type === "shell"
-																			? nextTerminal.data.id
-																			: `claude-${nextTerminal.data.sessionId}`;
-																	handleTerminalResize(
-																		terminalId,
-																		nextId,
-																		deltaX,
-																	);
-																}}
-															/>
-														)}
-													</React.Fragment>
-												);
-											} else {
-												const terminalId = `claude-${terminal.data.sessionId}`;
-												const ptyId = terminal.data.ptySessionId;
-												return (
-													<React.Fragment key={terminalId}>
-														<ClaudeTerminalPanel
-															sessionData={terminal.data}
-															collapsed={collapsed}
-															isActive={activePtySessionId === ptyId}
-															onFocus={() => setActivePtySessionId(ptyId)}
-															onClose={() =>
-																handleCloseClaudeSession(
-																	terminal.data.sessionId,
-																)
-															}
-															onSessionError={onSessionError}
-															terminalRefs={terminalRefs}
-															width={terminalWidths.get(terminalId)}
-														/>
-														{!isLastInGroup && nextTerminal && (
-															<ResizeDivider
-																onResize={(deltaX) => {
-																	const nextId =
-																		nextTerminal.type === "shell"
-																			? nextTerminal.data.id
-																			: `claude-${nextTerminal.data.sessionId}`;
-																	handleTerminalResize(
-																		terminalId,
-																		nextId,
-																		deltaX,
-																	);
-																}}
-															/>
-														)}
-													</React.Fragment>
-												);
-											}
-										})}
-									</div>
-								</div>
-							);
-						})}
-					</div>
-				)}
-			</div>
-		</div>
+		<WorkspaceTerminalPaneView
+			paneRef={paneRef}
+			className={className}
+			collapsed={collapsed}
+			maximized={maximized}
+			height={height}
+			isResizingHeight={isResizingHeight}
+			handleHeightResizeMouseDown={handleHeightResizeMouseDown}
+			totalTerminals={totalTerminals}
+			handleCreateAgentSession={handleCreateAgentSession}
+			handleAddShell={handleAddShell}
+			setCollapsed={setCollapsed}
+			setMaximized={setMaximized}
+			scrollContainerRef={scrollContainerRef}
+			workspaceGroups={workspaceGroups}
+			containerWidth={containerWidth}
+			onNavigateToWorkspace={onNavigateToWorkspace}
+			currentBranch={currentBranch}
+			activePtySessionId={activePtySessionId}
+			setActivePtySessionId={setActivePtySessionId}
+			handleCloseShell={handleCloseShell}
+			onSessionError={onSessionError}
+			terminalRefs={terminalRefs}
+			terminalWidths={terminalWidths}
+			handleTerminalResize={handleTerminalResize}
+			handleCloseClaudeSession={handleCloseClaudeSession}
+		/>
 	);
 });
 

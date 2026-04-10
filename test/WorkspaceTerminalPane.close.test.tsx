@@ -1,9 +1,10 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "./test-utils";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen } from "./test-utils";
+import type { ClaudeSessionData } from "../src/components/terminal/types";
 import React from "react";
 import { WorkspaceTerminalPane } from "../src/components/WorkspaceTerminalPane";
-import type { ClaudeSessionData } from "../src/components/terminal/types";
 import { ptyClose } from "../src/lib/api";
+import { userEvent } from "@testing-library/user-event";
 
 vi.mock("../src/components/terminal/ClaudeTerminalPanel", () => ({
 	ClaudeTerminalPanel: ({ onClose }: { onClose?: () => void }) => (
@@ -33,16 +34,22 @@ vi.mock("../src/lib/api", async (importOriginal) => {
 });
 
 const makeSession = (id: number): ClaudeSessionData => ({
-	sessionId: id,
 	ptySessionId: `claude-pty-${id}`,
 	repoPath: "/test/repo",
-	workspacePath: "/test/repo/.treq/workspaces/ws1",
-	workspaceName: "ws1",
+	sessionId: id,
 	sessionName: `Session ${id}`,
+	workspaceName: "ws1",
+	workspacePath: "/test/repo/.treq/workspaces/ws1",
+});
+
+let user: ReturnType<typeof userEvent.setup>;
+
+beforeEach(() => {
+	user = userEvent.setup();
 });
 
 describe("WorkspaceTerminalPane close buttons", () => {
-	it("calls onCloseSession and ptyClose when Claude close button is clicked", () => {
+	it("calls onCloseSession and ptyClose when Claude close button is clicked", async () => {
 		const onCloseSession = vi.fn();
 		const session = makeSession(1);
 
@@ -56,7 +63,7 @@ describe("WorkspaceTerminalPane close buttons", () => {
 		);
 
 		const closeButton = screen.getByLabelText("Close session");
-		fireEvent.click(closeButton);
+		await user.click(closeButton);
 
 		expect(onCloseSession).toHaveBeenCalledWith(1);
 		expect(ptyClose).toHaveBeenCalledWith(session.ptySessionId);
@@ -73,12 +80,12 @@ describe("WorkspaceTerminalPane close buttons", () => {
 
 		// Add a shell terminal via the "New Shell" button
 		const newShellButton = screen.getByLabelText("New Shell");
-		fireEvent.click(newShellButton);
+		await user.click(newShellButton);
 
 		expect(screen.getByTestId("shell-terminal-panel")).toBeInTheDocument();
 
 		const closeButton = screen.getByLabelText("Close shell");
-		fireEvent.click(closeButton);
+		await user.click(closeButton);
 
 		expect(
 			screen.queryByTestId("shell-terminal-panel"),

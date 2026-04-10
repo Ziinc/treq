@@ -4,13 +4,13 @@ import {
 	ContextMenu,
 	ContextMenuContent,
 	ContextMenuItem,
-	ContextMenuTrigger,
-	ContextMenuSub,
-	ContextMenuSubTrigger,
-	ContextMenuSubContent,
 	ContextMenuSeparator,
+	ContextMenuSub,
+	ContextMenuSubContent,
+	ContextMenuSubTrigger,
+	ContextMenuTrigger,
 } from "./ui/context-menu";
-import { revealItemInDir, openUrl } from "@tauri-apps/plugin-opener";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useToast } from "./ui/toast";
 import { useEditorApps } from "../hooks/useEditorApps";
 
@@ -20,17 +20,17 @@ interface FileContextMenuProps {
 	children: React.ReactNode;
 }
 
-export const FileContextMenu = memo(function FileContextMenu({
+export const FileContextMenu = memo(({
 	filePath,
 	workspacePath,
 	children,
-}: FileContextMenuProps) {
+}: FileContextMenuProps) => {
 	const { addToast } = useToast();
 	const editorApps = useEditorApps();
 
 	const getRelativePath = useCallback(
 		(fullPath: string): string => {
-			if (workspacePath && fullPath.startsWith(workspacePath + "/")) {
+			if (workspacePath && fullPath.startsWith(`${workspacePath  }/`)) {
 				return fullPath.slice(workspacePath.length + 1);
 			}
 			return fullPath;

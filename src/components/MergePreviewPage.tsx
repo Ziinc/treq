@@ -1,12 +1,12 @@
 import { memo, useCallback, useEffect, useState } from "react";
 import {
-	type Workspace,
-	type MergeStrategy,
-	jjGetCommitsAhead,
-	getWorkspaceDiff,
-	mergeWorkspace,
 	type JjCommitsAhead,
 	type JjRevisionDiff,
+	type MergeStrategy,
+	type Workspace,
+	getWorkspaceDiff,
+	jjGetCommitsAhead,
+	mergeWorkspace,
 } from "../lib/api";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
@@ -21,13 +21,13 @@ import {
 } from "./ui/dropdown-menu";
 import {
 	ArrowLeft,
-	GitMerge,
-	GitCommitHorizontal,
-	GitBranch,
-	Loader2,
-	FileText,
-	ChevronRight,
 	ChevronDown,
+	ChevronRight,
+	FileText,
+	GitBranch,
+	GitCommitHorizontal,
+	GitMerge,
+	Loader2,
 } from "lucide-react";
 import { cn, getFullWorkspacePath } from "../lib/utils";
 
@@ -39,12 +39,11 @@ export interface MergePreviewPageProps {
 }
 
 export const MergePreviewPage = memo<MergePreviewPageProps>(
-	function MergePreviewPage({
+	({
 		workspace,
-		repoPath: _repoPath,
 		onCancel,
 		onMergeComplete,
-	}) {
+	}) => {
 		const { addToast } = useToast();
 
 		// State

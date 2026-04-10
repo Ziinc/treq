@@ -1,22 +1,23 @@
-import { describe, it, expect, beforeEach } from "vitest";
 import * as React from "react";
-import { render, screen, within, waitFor } from "../../test-utils";
-import { fireEvent } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
 	createTestRepo,
 	findSidebarBranchElement,
 	openRepo,
 } from "../../utils";
-import { createWorkspace } from "../../../src/lib/api";
+import { fireEvent, render, screen, waitFor, within } from "../../test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
+import { createWorkspace } from "../../../src/lib/api";
+import userEvent from "@testing-library/user-event";
 
 describe("ShowWorkspace - header", () => {
 	let repoPath: string;
+	let user: ReturnType<typeof userEvent.setup>;
 
 	beforeEach(() => {
 		({ repoPath } = createTestRepo(false));
 		openRepo(repoPath);
+		user = userEvent.setup();
 	});
 
 	it("shows current branch name of the repo in the header", async () => {
@@ -32,7 +33,6 @@ describe("ShowWorkspace - header", () => {
 	it("shows branch list and can switch home repo to a workspace branch", async () => {
 		await createWorkspace(repoPath, "feat/alpha");
 		await createWorkspace(repoPath, "feat/beta");
-		const user = userEvent.setup();
 		render(<Dashboard />);
 
 		const header = await screen.findByTestId("show-workspace-header");

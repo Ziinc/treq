@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as React from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs";
 import path from "path";
-import { render, screen, waitFor, fireEvent } from "../../test-utils";
+import { fireEvent, render, screen, waitFor } from "../../test-utils";
 import userEvent from "@testing-library/user-event";
 import { createTestRepo, openRepo } from "../../utils";
 import { createWorkspace } from "../../../src/lib/api";
@@ -20,10 +20,12 @@ vi.mock("../../../src/lib/api", async (importOriginal) => {
 
 describe("ShowWorkspace - Code tab", () => {
 	let repoPath: string;
+	let user: ReturnType<typeof userEvent.setup>;
 
 	beforeEach(() => {
 		({ repoPath } = createTestRepo(false));
 		openRepo(repoPath);
+		user = userEvent.setup();
 	});
 
 	it("shows Code tab", async () => {
@@ -48,7 +50,6 @@ describe("ShowWorkspace - Code tab", () => {
 	});
 
 	it("clicking a non-readme file opens FileBrowser and allows line comments to start an agent", async () => {
-		const user = userEvent.setup();
 		vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
 
 		// The Dashboard starts in home-repo mode (selectedWorkspace === null),

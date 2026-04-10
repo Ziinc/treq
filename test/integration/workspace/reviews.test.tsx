@@ -1,7 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
 import * as React from "react";
-import userEvent from "@testing-library/user-event";
-import { render, screen, waitFor } from "../../test-utils";
+import * as api from "../../../src/lib/api";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	createTestRepo,
 	findSidebarBranchElement,
@@ -10,13 +9,14 @@ import {
 	writeWorkspaceFile,
 } from "../../utils";
 import {
+	type Workspace,
 	createWorkspace,
 	getWorkspaces,
 	listCommits,
-	type Workspace,
 } from "../../../src/lib/api";
-import * as api from "../../../src/lib/api";
+import { render, screen, waitFor } from "../../test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
+import userEvent from "@testing-library/user-event";
 
 const REVIEW_FILE = "reviews-flow.txt";
 
@@ -42,11 +42,10 @@ async function setupWorkspaceWithChange(branchName: string): Promise<{
 		"first review line\nsecond review line\n",
 	);
 
-	return { repoPath, workspace, fileName: REVIEW_FILE };
+	return { fileName: REVIEW_FILE, repoPath, workspace };
 }
 
-async function openReviewTab(branchName: string) {
-	const user = userEvent.setup();
+async function openReviewTab(user: ReturnType<typeof userEvent.setup>, branchName: string) {
 	render(<Dashboard />);
 
 	await user.click(await findSidebarBranchElement(branchName));
@@ -54,14 +53,11 @@ async function openReviewTab(branchName: string) {
 	const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
 	await user.click(reviewTab);
 	await screen.findByRole("tab", { name: /^Review/, selected: true });
-
-	return user;
 }
 
 async function openReviewWithChange(branchName: string) {
 	const fixture = await setupWorkspaceWithChange(branchName);
-	const user = await openReviewTab(branchName);
-	return { ...fixture, user };
+	return fixture;
 }
 
 async function expectCommitCreated(
@@ -99,11 +95,17 @@ async function addSingleReviewComment(
 }
 
 describe("ShowWorkspace - Reviews integration", () => {
+	let user: ReturnType<typeof userEvent.setup>;
+
+	beforeEach(() => {
+		user = userEvent.setup();
+	});
+
 	it("is able to create a commit from Review tab", async () => {
 		const branchName = "feat/reviews-commit";
 		const commitMessage = "Add integration reviews test commit";
-		const { repoPath, workspace, user } =
-			await openReviewWithChange(branchName);
+		const { repoPath, workspace } = await openReviewWithChange(branchName);
+		await openReviewTab(user, branchName);
 
 		await user.type(screen.getByPlaceholderText("Message"), commitMessage);
 		await user.click(screen.getByRole("button", { name: /^commit$/i }));
@@ -112,8 +114,8 @@ describe("ShowWorkspace - Reviews integration", () => {
 
 	it("is able to review a change and start an agent", async () => {
 		const branchName = "feat/reviews-agent";
-		const { repoPath, workspace, user } =
-			await openReviewWithChange(branchName);
+		const { repoPath, workspace } = await openReviewWithChange(branchName);
+		await openReviewTab(user, branchName);
 		const createSessionSpy = vi.spyOn(api, "createSession");
 
 		await addSingleReviewComment(
@@ -137,7 +139,8 @@ describe("ShowWorkspace - Reviews integration", () => {
 
 	it("is able to mark files as viewed and expand/collapse files", async () => {
 		const branchName = "feat/reviews-viewed";
-		const { user } = await openReviewWithChange(branchName);
+		await openReviewWithChange(branchName);
+		await openReviewTab(user, branchName);
 
 		const viewedCheckbox = await screen.findByRole("checkbox", {
 			name: "Viewed",

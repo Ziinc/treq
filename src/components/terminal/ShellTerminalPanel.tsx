@@ -1,5 +1,5 @@
 import React, { memo, useEffect, useState } from "react";
-import { X, Terminal } from "lucide-react";
+import { Terminal, X } from "lucide-react";
 import { ConsolidatedTerminal } from "../ConsolidatedTerminal";
 import {
 	Tooltip,
@@ -25,7 +25,7 @@ interface ShellTerminalPanelProps {
 }
 
 export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
-	function ShellTerminalPanel({
+	({
 		terminalData,
 		collapsed,
 		isActive,
@@ -35,7 +35,7 @@ export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
 		onSessionError,
 		terminalRefs,
 		width,
-	}) {
+	}) => {
 		const isHidden = collapsed;
 		const [pathAutoCommand, setPathAutoCommand] = useState<string | undefined>(
 			undefined,

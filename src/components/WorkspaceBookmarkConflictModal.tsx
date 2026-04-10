@@ -9,7 +9,7 @@ import {
 } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { cn, formatFullTimestamp, formatRelativeTime } from "../lib/utils";
-import { Loader2, GitBranch } from "lucide-react";
+import { GitBranch, Loader2 } from "lucide-react";
 
 interface WorkspaceBookmarkConflictModalProps {
 	conflict: WorkspaceBookmarkConflict | null;

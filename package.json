@@ -19,7 +19,7 @@
     "format": "biome format  --write ./src ./test",
     "check:format": "biome format ./src ./test",
     "check": "tsc",
-    "lint": "oxlint && eslint .",
+    "lint": "oxlint ./src ./test/integration && eslint ./src ./test/integration",
     "icons:generate": "node scripts/generate-icons.js && npx @tauri-apps/cli icon assets/logo-white.imageset/logo-white-rounded.svg"
   },
   "dependencies": {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "./test-utils";
 import userEvent from "@testing-library/user-event";
 import * as api from "../src/lib/api";
@@ -35,16 +35,14 @@ describe("Tab switching and refresh - basic functionality", () => {
 			{ path: "file3.txt", status: "A", previous_path: null },
 		]);
 
-		vi.mocked(api.jjGetFileHunks).mockImplementation(async (_, filePath) => {
-			return [
+		vi.mocked(api.jjGetFileHunks).mockImplementation(async (_, filePath) => [
 				{
 					id: `${filePath}-hunk-1`,
 					header: "@@ -1,2 +1,3 @@",
 					lines: [" line 1", `+content from ${filePath}`, " line 3"],
 					patch: "...",
 				},
-			];
-		});
+			]);
 
 		vi.mocked(api.loadPendingReview).mockResolvedValue([]);
 

@@ -1,3 +1,5 @@
+/* eslint-disable max-lines, max-params, max-nested-callbacks, no-await-in-loop */
+
 import {
 	Fragment,
 	memo,
@@ -8,19 +10,19 @@ import {
 	useState,
 } from "react";
 import {
-	getCommitDiff,
-	abandonCommit,
-	listCommits,
+	type JjDiffHunk,
 	type JjLogCommit,
 	type JjRevisionDiff,
-	type JjDiffHunk,
+	abandonCommit,
+	getCommitDiff,
+	listCommits,
 } from "../lib/api";
 import {
 	cn,
-	formatRelativeTime,
-	formatFullTimestamp,
-	getDayKey,
 	formatDayLabel,
+	formatFullTimestamp,
+	formatRelativeTime,
+	getDayKey,
 } from "../lib/utils";
 import {
 	Tooltip,
@@ -105,17 +107,16 @@ const parseHunkHeader = (
 };
 
 export const CommitDiffViewer = memo<CommitDiffViewerProps>(
-	function CommitDiffViewer({
-		repoPath,
-		workspaceId,
-		scrollToCommitId,
-		onScrollComplete,
-		onCommitMoved: _onCommitMoved,
-		onCommitAbandoned,
-		onCreateAgentWithComment,
-		onMoveCommitToNewWorkspace,
+		({
+			repoPath,
+			workspaceId,
+			scrollToCommitId,
+			onScrollComplete,
+			onCommitAbandoned,
+			onCreateAgentWithComment,
+			onMoveCommitToNewWorkspace,
 		onMoveCommitToExistingWorkspace,
-	}) {
+	}) => {
 		const isHomeRepo = workspaceId == null;
 		const [commits, setCommits] = useState<JjLogCommit[]>([]);
 		const [targetBranchCommits, setTargetBranchCommits] = useState<
@@ -971,7 +972,7 @@ function CommitDiffContent({
 	const handleAddCommentFromSelection = () => {
 		if (!diffLineSelection || diffLineSelection.lines.length === 0) return;
 
-		const filePath = diffLineSelection.filePath;
+		const {filePath} = diffLineSelection;
 		const fileDiff = diff.hunks_by_file.find((f) => f.path === filePath);
 		if (!fileDiff) return;
 

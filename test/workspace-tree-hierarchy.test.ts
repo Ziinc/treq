@@ -1,11 +1,11 @@
-import { describe, test, expect } from "vitest";
+import { describe, expect, test } from "vitest";
 import type { Workspace } from "../src/lib/api";
 
 // Import functions we'll implement
 import {
 	getDescendants,
-	getStackRoot,
 	getEntireStack,
+	getStackRoot,
 	isDescendantOf,
 } from "../src/lib/workspace-tree";
 

@@ -2,25 +2,25 @@
  * Status colors for different change types (works with jj and git)
  */
 export const STATUS_COLORS = {
-	A: {
-		bg: "bg-green-500",
-		text: "text-green-500",
-	},
-	M: {
-		bg: "bg-yellow-500",
-		text: "text-yellow-500",
-	},
-	D: {
-		bg: "bg-red-500",
-		text: "text-red-500",
-	},
-	R: {
-		bg: "bg-blue-500",
-		text: "text-blue-500",
-	},
 	"??": {
 		bg: "bg-green-500",
 		text: "text-green-500",
+	},
+	"A": {
+		bg: "bg-green-500",
+		text: "text-green-500",
+	},
+	"D": {
+		bg: "bg-red-500",
+		text: "text-red-500",
+	},
+	"M": {
+		bg: "bg-yellow-500",
+		text: "text-yellow-500",
+	},
+	"R": {
+		bg: "bg-blue-500",
+		text: "text-blue-500",
 	},
 } as const;
 

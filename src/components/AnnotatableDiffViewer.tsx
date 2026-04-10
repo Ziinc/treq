@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
-import { cn } from "../lib/utils";
-import { Textarea } from "./ui/textarea";
+import { Loader2, MessageCircle, X } from "lucide-react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "./ui/button";
-import { MessageCircle, Loader2, X } from "lucide-react";
+import { Textarea } from "./ui/textarea";
+import { cn } from "../lib/utils";
 
 // Type definitions - Git API removed, needs JJ equivalent
 type DiffLineKind = "context" | "addition" | "deletion" | "meta";
@@ -76,15 +76,15 @@ interface DraftState {
 }
 
 const lineKindStyles: Record<DiffLineKind, string> = {
-	context: "bg-transparent",
 	addition: "bg-green-500/10",
+	context: "bg-transparent",
 	deletion: "bg-red-500/10",
 	meta: "bg-muted/40",
 };
 
 const lineKindPrefix: Record<DiffLineKind, string> = {
-	context: " ",
 	addition: "+",
+	context: " ",
 	deletion: "-",
 	meta: " ",
 };
@@ -140,16 +140,16 @@ const AnnotatableDiffViewerComponent: React.FC<AnnotatableDiffViewerProps> = ({
 		}
 
 		onAddComment({
+			contextAfter: draft.contextAfter,
+			contextBefore: draft.contextBefore,
 			filePath: diff?.path || "",
-			lineKey: draft.lineKey,
 			kind: draft.kind,
-			oldLine: draft.oldLine,
-			newLine: draft.newLine,
+			lineKey: draft.lineKey,
 			lineLabel: draft.lineLabel,
 			lineText: draft.lineText,
+			newLine: draft.newLine,
+			oldLine: draft.oldLine,
 			text: draftText.trim(),
-			contextBefore: draft.contextBefore,
-			contextAfter: draft.contextAfter,
 		});
 		setDraft(null);
 		setDraftText("");
@@ -230,25 +230,24 @@ const AnnotatableDiffViewerComponent: React.FC<AnnotatableDiffViewerProps> = ({
 					after.push(`${lineKindPrefix[line.kind]}${line.text}`);
 				}
 			}
-			return { before, after };
+			return { after, before };
 		};
 
 		if (!diff.hunks) return [];
 
 		return diff.hunks.flatMap((hunk, hunkIndex) =>
 			hunk.lines.map((line, lineIndex) => ({
-				hunkIndex,
-				lineIndex,
-				line,
 				context: buildContext(hunk.lines, lineIndex, 3),
+				hunkIndex,
+				line,
+				lineIndex,
 			})),
 		);
 	}, [diff]);
 
 	const renderLineNumbers = (
 		lineKey: string,
-		oldLine?: number | null,
-		newLine?: number | null,
+		lineNums: { newLine?: number | null; oldLine?: number | null },
 		onClick?: () => void,
 	) => (
 		<div className="flex flex-col items-center text-[11px] text-muted-foreground">
@@ -257,14 +256,14 @@ const AnnotatableDiffViewerComponent: React.FC<AnnotatableDiffViewerProps> = ({
 				onClick={onClick}
 				className="w-full text-left hover:text-foreground"
 			>
-				{typeof oldLine === "number" ? oldLine : ""}
+				{typeof lineNums.oldLine === "number" ? lineNums.oldLine : ""}
 			</button>
 			<button
 				type="button"
 				onClick={onClick}
 				className="w-full text-left hover:text-foreground"
 			>
-				{typeof newLine === "number" ? newLine : ""}
+				{typeof lineNums.newLine === "number" ? lineNums.newLine : ""}
 			</button>
 			{commentCountByLine.get(lineKey) && (
 				<div className="flex items-center gap-1 text-[10px] text-primary">
@@ -338,14 +337,14 @@ const AnnotatableDiffViewerComponent: React.FC<AnnotatableDiffViewerProps> = ({
 								const lineKey = `${diff.path}:${hunkIndex}:${lineIndex}`;
 								const lineLabel = formatLineLabel(line.old_line, line.new_line);
 								const location: DraftState = {
+									contextAfter: context.after,
+									contextBefore: context.before,
+									kind: line.kind,
 									lineKey,
 									lineLabel,
-									kind: line.kind,
-									oldLine: line.old_line,
-									newLine: line.new_line,
 									lineText: line.text,
-									contextBefore: context.before,
-									contextAfter: context.after,
+									newLine: line.new_line,
+									oldLine: line.old_line,
 								};
 
 								return (
@@ -362,8 +361,7 @@ const AnnotatableDiffViewerComponent: React.FC<AnnotatableDiffViewerProps> = ({
 									>
 										{renderLineNumbers(
 											lineKey,
-											line.old_line,
-											line.new_line,
+											{ newLine: line.new_line, oldLine: line.old_line },
 											() => handleStartDraft(location),
 										)}
 										<div className="space-y-1">

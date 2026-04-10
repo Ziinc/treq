@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { getFileName, escapeBashString } from "../src/lib/utils";
+import { describe, expect, it } from "vitest";
+import { escapeBashString, getFileName } from "../src/lib/utils";
 
 describe("getFileName", () => {
 	it("extracts filename from path with directories", () => {

@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
@@ -46,13 +46,11 @@ function makeWorkspace(
 describe("useWorkspaceHierarchy", () => {
 	let queryClient: QueryClient;
 
-	const wrapper = ({ children }: { children: React.ReactNode }) => {
-		return React.createElement(
+	const wrapper = ({ children }: { children: React.ReactNode }) => React.createElement(
 			QueryClientProvider,
 			{ client: queryClient },
 			children,
 		);
-	};
 
 	beforeEach(() => {
 		vi.clearAllMocks();

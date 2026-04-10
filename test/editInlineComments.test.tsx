@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "./test-utils";
 import userEvent from "@testing-library/user-event";
 import * as api from "../src/lib/api";
@@ -16,8 +16,7 @@ vi.mock("../src/lib/api", async () => {
 });
 
 describe("Edit inline comments", () => {
-	const renderComponent = () => {
-		return render(
+	const renderComponent = () => render(
 			<ChangesDiffViewer
 				workspacePath="/test/workspace"
 				repoPath="/test/repo"
@@ -25,7 +24,6 @@ describe("Edit inline comments", () => {
 				initialSelectedFile={null}
 			/>,
 		);
-	};
 
 	const addCommentToLine = async () => {
 		await waitFor(() => {

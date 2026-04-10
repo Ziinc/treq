@@ -1,13 +1,15 @@
+/* eslint-disable max-lines */
+
 import {
-	useState,
-	useEffect,
-	useCallback,
-	useMemo,
 	Suspense,
 	lazy,
+	useCallback,
+	useEffect,
+	useMemo,
 	useRef,
+	useState,
 } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -40,22 +42,22 @@ import {
 	useFocusRefreshSubscription,
 } from "../hooks/useAppFocusHandler";
 import {
-	getWorkspaces,
-	deleteWorkspace,
-	getSetting,
-	setSetting,
-	selectFolder,
-	getRepoSetting,
 	Workspace,
 	createSession,
-	updateSessionAccess,
-	getSessions,
-	setSessionModel,
+	deleteWorkspace,
+	getRepoSetting,
 	getRepoStatus,
+	getSessions,
+	getSetting,
+	getWorkspaces,
+	initRepo,
+	selectFolder,
+	setSessionModel,
+	setSetting,
+	setWindowRepoPath,
 	startFileWatcher,
 	stopFileWatcher,
-	initRepo,
-	setWindowRepoPath,
+	updateSessionAccess,
 } from "../lib/api";
 import { Loader2 } from "lucide-react";
 import { getFullWorkspacePath } from "../lib/utils";
@@ -96,9 +98,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		null,
 	);
 	const [mergeWorkspace, setMergeWorkspace] = useState<Workspace | null>(null);
-	const [_initialSettingsTab, _setInitialSettingsTab] = useState<
-		"application" | "repository"
-	>("repository");
 	const [showCommandPalette, setShowCommandPalette] = useState(false);
 	const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
 	const [showFilePicker, setShowFilePicker] = useState(false);
@@ -132,9 +131,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	}, []);
 
 	const openSettings = useCallback((tab?: string) => {
-		_setInitialSettingsTab(
-			(tab as "application" | "repository") || "repository",
-		);
+		void tab;
 		setViewMode("settings");
 	}, []);
 
@@ -306,7 +303,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		enabled: !!repoPath,
 	});
 
-	const { data: workspaces = [], refetch: _refetch } = useQuery({
+	const { data: workspaces = [] } = useQuery({
 		queryKey: ["workspaces", repoPath],
 		queryFn: () => getWorkspaces(repoPath),
 		refetchInterval: 10000,
@@ -645,9 +642,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
 			);
 			try {
 				// Delete all workspaces without triggering individual onSuccess callbacks
-				for (const workspace of workspacesToDelete) {
-					await deleteWorkspace(workspace.repo_path, workspace.id);
-				}
+				await Promise.all(
+					workspacesToDelete.map((workspace) =>
+						deleteWorkspace(workspace.repo_path, workspace.id),
+					),
+				);
 				// Show single toast and refresh after all deletions
 				queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
 				queryClient.invalidateQueries({

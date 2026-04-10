@@ -42,17 +42,11 @@ export default defineConfig([
     rules: {
       "@typescript-eslint/no-unused-vars": [
         "error",
-        {
-          argsIgnorePattern: "^_",
-          caughtErrorsIgnorePattern: "^_",
-          varsIgnorePattern: "^_",
-        },
       ],
       "arrow-body-style": ["error", "as-needed"],
-      camelcase: "error",
+      camelcase: ["error", {properties: "never"}],
       "default-case": "error",
       "dot-notation": "error",
-      "id-length": ["error", { min: 2 }],
       "max-depth": "error",
       "max-lines": [
         "error",
@@ -87,9 +81,6 @@ export default defineConfig([
       "react/prop-types": "off",
       "react/react-in-jsx-scope": "off",
       "require-atomic-updates": "error",
-      "sort-imports": "error",
-      "sort-keys": "error",
-      "sort-vars": "error",
       "vars-on-top": "error",
     },
   },

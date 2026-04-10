@@ -1,8 +1,8 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "./test-utils";
+import type { ClaudeSessionData } from "../src/components/terminal/types";
 import React from "react";
 import { WorkspaceTerminalPane } from "../src/components/WorkspaceTerminalPane";
-import type { ClaudeSessionData } from "../src/components/terminal/types";
 
 vi.mock("../src/components/terminal/ClaudeTerminalPanel", () => ({
 	ClaudeTerminalPanel: () => <div data-testid="claude-terminal-panel" />,
@@ -16,12 +16,12 @@ vi.mock("../src/lib/api", async (importOriginal) => {
 });
 
 const makeSession = (id: number): ClaudeSessionData => ({
-	sessionId: id,
 	ptySessionId: `claude-pty-${id}`,
 	repoPath: "/test/repo",
-	workspacePath: "/test/repo/.treq/workspaces/ws1",
-	workspaceName: "ws1",
+	sessionId: id,
 	sessionName: `Session ${id}`,
+	workspaceName: "ws1",
+	workspacePath: "/test/repo/.treq/workspaces/ws1",
 });
 
 const isExpanded = () => screen.queryByLabelText("Collapse terminal") !== null;

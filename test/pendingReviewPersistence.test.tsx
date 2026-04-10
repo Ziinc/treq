@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "./test-utils";
 import userEvent from "@testing-library/user-event";
 import { ChangesDiffViewer } from "../src/components/ChangesDiffViewer";
@@ -21,8 +21,7 @@ vi.mock("../src/lib/api", async () => {
 describe("Pending review persistence", () => {
 	const mockOnCreateAgentWithReview = vi.fn().mockResolvedValue(undefined);
 
-	const renderComponent = () => {
-		return render(
+	const renderComponent = () => render(
 			<ChangesDiffViewer
 				workspacePath="/test/workspace"
 				repoPath="/test/repo"
@@ -31,7 +30,6 @@ describe("Pending review persistence", () => {
 				onCreateAgentWithReview={mockOnCreateAgentWithReview}
 			/>,
 		);
-	};
 
 	const setupReviewMode = async () => {
 		// Wait for file to load
@@ -220,7 +218,7 @@ describe("Pending review persistence", () => {
 			);
 
 			// Verify save was called with correct params
-			const calls = vi.mocked(api.savePendingReview).mock.calls;
+			const {calls} = vi.mocked(api.savePendingReview).mock;
 			expect(calls.length).toBeGreaterThan(0);
 			expect(calls[0][0]).toBe("/test/repo");
 			expect(calls[0][1]).toBe(1);

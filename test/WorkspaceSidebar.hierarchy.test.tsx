@@ -1,5 +1,5 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "./test-utils";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import { fireEvent, render, screen } from "./test-utils";
 import userEvent from "@testing-library/user-event";
 import { WorkspaceSidebar } from "../src/components/WorkspaceSidebar";
 import type { Workspace } from "../src/lib/api";

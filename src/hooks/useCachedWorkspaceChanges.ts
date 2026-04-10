@@ -16,9 +16,11 @@ interface CachedWorkspaceChangesResult {
  * via the jjGetChangedFiles calls in the component.
  */
 export function useCachedWorkspaceChanges(
-	_workspacePath: string,
-	_options: UseCachedWorkspaceChangesOptions = {},
+	workspacePath: string,
+	options: UseCachedWorkspaceChangesOptions = {},
 ): CachedWorkspaceChangesResult {
+	void workspacePath;
+	void options;
 	const refreshCallbackRef = useRef<(() => void) | null>(null);
 
 	const refresh = useCallback(async () => {

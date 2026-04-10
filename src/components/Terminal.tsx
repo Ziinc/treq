@@ -10,8 +10,7 @@ export const Terminal: React.FC<TerminalProps> = ({
 	sessionId,
 	workingDir,
 	shell,
-}) => {
-	return (
+}) => (
 		<ConsolidatedTerminal
 			sessionId={sessionId}
 			workingDirectory={workingDir}
@@ -19,4 +18,3 @@ export const Terminal: React.FC<TerminalProps> = ({
 			containerClassName="h-full w-full"
 		/>
 	);
-};

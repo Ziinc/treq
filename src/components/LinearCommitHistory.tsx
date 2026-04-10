@@ -1,11 +1,11 @@
 import { memo, useEffect, useMemo, useState } from "react";
-import { listCommits, type JjLogCommit } from "../lib/api";
+import { type JjLogCommit, listCommits } from "../lib/api";
 import {
 	cn,
-	formatRelativeTime,
-	formatFullTimestamp,
-	getDayKey,
 	formatDayLabel,
+	formatFullTimestamp,
+	formatRelativeTime,
+	getDayKey,
 } from "../lib/utils";
 import {
 	Tooltip,
@@ -46,7 +46,7 @@ function groupCommitsByDay(commits: JjLogCommit[]): DayGroup[] {
 }
 
 export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
-	function LinearCommitHistory({ repoPath, workspaceId, onCommitClick }) {
+	({ repoPath, workspaceId, onCommitClick }) => {
 		const [commits, setCommits] = useState<JjLogCommit[]>([]);
 		const [loading, setLoading] = useState(true);
 		const [limit, setLimit] = useState(15);

@@ -2,7 +2,7 @@ import { Command } from "cmdk";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { GitBranch } from "lucide-react";
-import { Workspace, Session } from "../lib/api";
+import { Session, Workspace } from "../lib/api";
 
 interface WorkspacePickerProps {
 	open: boolean;

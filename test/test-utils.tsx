@@ -4,7 +4,7 @@ import { ToastProvider } from "../src/components/ui/toast";
 import { TerminalSettingsProvider } from "../src/hooks/useTerminalSettings";
 import { ThemeProvider } from "../src/hooks/useTheme";
 import { DiffSettingsProvider } from "../src/hooks/useDiffSettings";
-import { render, RenderOptions } from "@testing-library/react";
+import { RenderOptions, render } from "@testing-library/react";
 
 /**
  * Creates a wrapper component with QueryClientProvider and ToastProvider

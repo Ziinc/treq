@@ -1,10 +1,10 @@
 import React, {
+	type KeyboardEvent as ReactKeyboardEvent,
 	memo,
 	useCallback,
 	useEffect,
 	useRef,
 	useState,
-	type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import {
 	ConsolidatedTerminal,
@@ -19,19 +19,19 @@ import {
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
 import {
-	ptyClose,
-	setSessionModel,
 	getSessionModel,
 	getTreqBinDir,
+	ptyClose,
+	setSessionModel,
 } from "../../lib/api";
 import {
+	Bot,
 	ChevronDown,
 	ChevronUp,
-	X,
-	Search,
-	RotateCw,
 	Loader2,
-	Bot,
+	RotateCw,
+	Search,
+	X,
 } from "lucide-react";
 import { ModelSelector } from "../ModelSelector";
 import { Input } from "../ui/input";
@@ -84,7 +84,7 @@ export interface ClaudeTerminalPanelProps {
 }
 
 export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
-	function ClaudeTerminalPanel({
+	({
 		sessionData,
 		collapsed,
 		isActive,
@@ -95,7 +95,7 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
 		onTerminalIdle,
 		terminalRefs,
 		width,
-	}) {
+	}) => {
 		const { addToast } = useToast();
 		const searchInputRef = useRef<HTMLInputElement>(null);
 		const [searchVisible, setSearchVisible] = useState(false);
@@ -299,7 +299,7 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
 
 		// Prepend PATH export so treq CLI is available inside Claude sessions
 		if (treqBinDir) {
-			autoCommand = `export PATH="${treqBinDir}:$PATH"; ` + autoCommand;
+			autoCommand = `export PATH="${treqBinDir}:$PATH"; ${  autoCommand}`;
 		}
 
 		// If there's a pending prompt, add it as a positional argument after --

@@ -1,17 +1,17 @@
-import { useState } from "react";
-import { useAuth } from "../hooks/useAuth";
+import {
+	CreditCard,
+	Crown,
+	ExternalLink,
+	Loader2,
+	LogOut,
+	User,
+} from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { WEB_URL } from "../lib/supabase";
-import {
-	User,
-	CreditCard,
-	LogOut,
-	ExternalLink,
-	Crown,
-	Loader2,
-} from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { useAuth } from "../hooks/useAuth";
+import { useState } from "react";
 
 const isDev = import.meta.env.DEV;
 
@@ -78,7 +78,7 @@ export const AccountSettings: React.FC = () => {
 						<div className="flex gap-2">
 							<Input
 								value={callbackUrl}
-								onChange={(e) => setCallbackUrl(e.target.value)}
+								onChange={(event) => setCallbackUrl(event.target.value)}
 								placeholder="treq://auth/callback?token=..."
 								className="text-xs font-mono"
 							/>
@@ -104,7 +104,7 @@ export const AccountSettings: React.FC = () => {
 		user.user_metadata?.avatar_url || user.user_metadata?.picture;
 	const fullName =
 		user.user_metadata?.full_name || user.user_metadata?.name || "User";
-	const email = user.email;
+	const {email} = user;
 
 	const isPro =
 		subscription?.plan === "pro" && subscription?.status === "active";

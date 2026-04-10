@@ -19,7 +19,7 @@ function isUserEventSetupCall(node) {
   }
 
   if (node.callee.type !== "MemberExpression" || node.callee.computed) {
-    return false;
+  return false;s;
   }
 
   return (

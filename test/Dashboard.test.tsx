@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within, act, fireEvent } from "./test-utils";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor, within } from "./test-utils";
 import userEvent from "@testing-library/user-event";
 import { Dashboard } from "../src/components/Dashboard";
 import * as api from "../src/lib/api";

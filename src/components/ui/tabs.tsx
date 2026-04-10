@@ -32,13 +32,11 @@ export const Tabs: React.FC<TabsProps> = ({
 	orientation = "horizontal",
 	className,
 	children,
-}) => {
-	return (
-		<TabsContext.Provider value={{ value, onValueChange, orientation }}>
-			<div className={className}>{children}</div>
-		</TabsContext.Provider>
-	);
-};
+}) => (
+	<TabsContext.Provider value={{ onValueChange, orientation, value }}>
+		<div className={className}>{children}</div>
+	</TabsContext.Provider>
+);
 
 interface TabsListProps {
 	className?: string;

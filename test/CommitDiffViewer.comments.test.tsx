@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, waitFor, screen, fireEvent } from "./test-utils";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "./test-utils";
 import userEvent from "@testing-library/user-event";
 import { CommitDiffViewer } from "../src/components/CommitDiffViewer";
 import * as api from "../src/lib/api";

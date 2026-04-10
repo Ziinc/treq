@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, waitFor, screen } from "./test-utils";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "./test-utils";
 import { CommitDiffViewer } from "../src/components/CommitDiffViewer";
 import * as api from "../src/lib/api";
 import { createMockCommit } from "./factories/commit.factory";

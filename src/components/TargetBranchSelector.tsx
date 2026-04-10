@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { GitBranch, Loader2, ChevronDown, Check } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, ChevronDown, GitBranch, Loader2 } from "lucide-react";
 import { Command } from "cmdk";
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -7,8 +7,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 // Define BranchListItem locally since git API was removed
 export interface BranchListItem {
 	name: string;
-	full_name: string;
-	is_current: boolean;
+	fullName: string;
+	isCurrent: boolean;
 }
 
 interface TargetBranchSelectorProps {
@@ -80,7 +80,7 @@ export const TargetBranchSelector: React.FC<TargetBranchSelectorProps> = ({
 								</Command.Empty>
 								{branches.map((branch) => (
 									<Command.Item
-										key={branch.full_name}
+										key={branch.fullName}
 										value={branch.name}
 										onSelect={() => {
 											onSelect(branch.name);

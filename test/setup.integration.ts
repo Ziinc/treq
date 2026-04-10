@@ -14,7 +14,7 @@
 import os from "os";
 import path from "path";
 import fs from "fs";
-import { beforeAll, afterEach, vi, expect } from "vitest";
+import { afterEach, beforeAll, expect, vi } from "vitest";
 
 // Shared DOM polyfills, browser API stubs, Tauri plugin mocks, and hook mocks
 import "./setup.common";
