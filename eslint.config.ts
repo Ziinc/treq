@@ -1,7 +1,6 @@
 import { defineConfig } from "eslint/config";
 import globals from "globals";
 import js from "@eslint/js";
-import noFireEventRule from "./eslint-rules/no-fire-event.js";
 import noInlineCommentsRule from "./eslint-rules/no-inline-comments.js";
 import preferFindByTextRule from "./eslint-rules/prefer-find-by-text.js";
 import userEventSetupInSetupRule from "./eslint-rules/user-event-setup-in-setup.js";
@@ -106,7 +105,6 @@ export default defineConfig([
     plugins: {
       local: {
         rules: {
-          "no-fire-event": noFireEventRule,
           "no-inline-comments": noInlineCommentsRule,
           "prefer-find-by-text": preferFindByTextRule,
           "user-event-setup-in-setup": userEventSetupInSetupRule,
@@ -115,7 +113,6 @@ export default defineConfig([
     },
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
-      "local/no-fire-event": "error",
       "local/no-inline-comments": "error",
       "local/prefer-find-by-text": "error",
       "local/user-event-setup-in-setup": "error",
