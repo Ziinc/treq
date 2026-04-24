@@ -32,9 +32,14 @@ const CommandRoot: React.FC<CommandProps> = ({
 	</div>
 );
 
-const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = (
-	props,
-) => <input {...props} />;
+interface CommandInputProps
+	extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "onChange"> {
+	onValueChange?: (value: string) => void;
+}
+
+const Input: React.FC<CommandInputProps> = ({ onValueChange, ...props }) => (
+	<input {...props} onChange={(e) => onValueChange?.(e.target.value)} />
+);
 
 const List: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
 	children,

@@ -61,7 +61,7 @@ describe("Multi-line selection in diff viewer", () => {
 		await waitFor(() => {
 			expect(screen.getAllByText(/test\.txt/).length).toBeGreaterThan(0);
 		});
-		await user.click(screen.getAllByText(/test\.txt/)[0]);
+		await screen.clickByText(/test\.txt/);
 
 		// Wait for lines to render
 		await waitFor(() => {
@@ -136,7 +136,7 @@ describe("Multi-line selection in diff viewer", () => {
 		await waitFor(() => {
 			expect(screen.getAllByText(/test\.txt/).length).toBeGreaterThan(0);
 		});
-		await user.click(screen.getAllByText(/test\.txt/)[0]);
+		await screen.clickByText(/test\.txt/);
 
 		// Wait for lines to render
 		await waitFor(() => {
@@ -190,7 +190,7 @@ describe("Multi-line selection in diff viewer", () => {
 		await waitFor(() => {
 			expect(screen.getAllByText(/test\.txt/).length).toBeGreaterThan(0);
 		});
-		await user.click(screen.getAllByText(/test\.txt/)[0]);
+		await screen.clickByText(/test\.txt/);
 
 		// Wait for lines to render
 		await waitFor(() => {
@@ -245,7 +245,7 @@ describe("Multi-line selection in diff viewer", () => {
 		await waitFor(() => {
 			expect(screen.getAllByText(/test\.txt/).length).toBeGreaterThan(0);
 		});
-		await user.click(screen.getAllByText(/test\.txt/)[0]);
+		await screen.clickByText(/test\.txt/);
 
 		// Wait for lines to render
 		await waitFor(() => {
@@ -304,7 +304,7 @@ describe("Multi-line selection in diff viewer", () => {
 		await waitFor(() => {
 			expect(screen.getAllByText(/test\.txt/).length).toBeGreaterThan(0);
 		});
-		await user.click(screen.getAllByText(/test\.txt/)[0]);
+		await screen.clickByText(/test\.txt/);
 
 		// Wait for lines to render
 		await waitFor(() => {

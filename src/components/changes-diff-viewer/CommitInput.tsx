@@ -3,10 +3,10 @@ import React, {
 	memo,
 	useCallback,
 	useImperativeHandle,
+	type KeyboardEvent as ReactKeyboardEvent,
 	useRef,
 	useState,
 } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";

@@ -15,7 +15,7 @@
     "test:run": "vitest run",
     "test:ui": "vitest --ui",
     "build:napi": "cd crates/treq-napi && npm run build:debug",
-    "test": "npm run build:napi && DEBUG_PRINT_LIMIT=10000 vitest run --config vitest.config.integration.ts",
+    "test": "npm run build:napi && DEBUG_PRINT_LIMIT=50 vitest run --config vitest.config.integration.ts",
     "format": "biome format  --write ./src ./test",
     "check:format": "biome format ./src ./test",
     "check": "tsc",

@@ -1,9 +1,12 @@
 import { defineConfig } from "eslint/config";
 import globals from "globals";
 import js from "@eslint/js";
+import noDocumentDispatchEventRule from "./eslint-rules/no-document-dispatch-event.js";
 import noInlineCommentsRule from "./eslint-rules/no-inline-comments.js";
 import preferFindByTextRule from "./eslint-rules/prefer-find-by-text.js";
 import userEventSetupInSetupRule from "./eslint-rules/user-event-setup-in-setup.js";
+import preferClickByQueryRule from "./eslint-rules/prefer-click-by-query.js";
+import noBannedClassSelectorRule from "./eslint-rules/no-banned-class-selector.js";
 import pluginReact from "eslint-plugin-react";
 import tseslint from "typescript-eslint";
 
@@ -105,17 +108,24 @@ export default defineConfig([
     plugins: {
       local: {
         rules: {
+          "no-document-dispatch-event": noDocumentDispatchEventRule,
           "no-inline-comments": noInlineCommentsRule,
+          "prefer-click-by-query": preferClickByQueryRule,
           "prefer-find-by-text": preferFindByTextRule,
           "user-event-setup-in-setup": userEventSetupInSetupRule,
+          "no-banned-class-selector": noBannedClassSelectorRule,
         },
       },
     },
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
+      "max-nested-callbacks": "off",
+      "local/no-document-dispatch-event": "error",
       "local/no-inline-comments": "error",
+      "local/prefer-click-by-query": "error",
       "local/prefer-find-by-text": "error",
       "local/user-event-setup-in-setup": "error",
+      "local/no-banned-class-selector": "error",
     },
   },
 ]);

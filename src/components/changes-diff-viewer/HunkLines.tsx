@@ -25,87 +25,7 @@ import {
 	getLineTypeClass,
 	parseHunkHeader,
 } from "./utils";
-import type {
-	ConflictComment,
-	DiffLineSelection,
-	DiffSearchData,
-	LineComment,
-	PendingComment,
-} from "./types";
-import type { ConflictRegion, JjDiffHunk } from "../../lib/api";
-
-interface HunkLinesProps {
-	hunk: JjDiffHunk;
-	hunkIndex: number;
-	filePath: string;
-	conflictLineLookups: Map<string, Map<number, ConflictRegion>>;
-	firstConflictRegionIdByFile: Map<string, string>;
-	expandedContext: Map<string, string[]>;
-	conflictComments: Map<string, ConflictComment>;
-	openConflictComments: Set<string>;
-	editingConflictCommentId: string | null;
-	searchData: DiffSearchData;
-	debouncedSearchQuery: string;
-	currentMatchIndex: number;
-	diffLineSelection: DiffLineSelection | null;
-	showCommentInput: boolean;
-	pendingComment: PendingComment | null;
-	editingCommentId: string | null;
-	comments: LineComment[];
-	conflictFileRefs: React.MutableRefObject<Map<string, HTMLDivElement>>;
-	diffFontSize: number;
-	handleExpandContext: (
-		filePath: string,
-		hunkIndex: number,
-		direction: "before" | "after",
-	) => void;
-	handleLineMouseDown: (
-		e: React.MouseEvent,
-		filePath: string,
-		hunkIndex: number,
-		lineIndex: number,
-		lineContent: string,
-		isStaged: boolean,
-	) => void;
-	handleLineMouseEnter: (
-		filePath: string,
-		hunkIndex: number,
-		lineIndex: number,
-	) => void;
-	handleLineMouseUp: () => void;
-	handleAddCommentFromSelection: () => void;
-	isLineSelected: (
-		filePath: string,
-		hunkIndex: number,
-		lineIndex: number,
-	) => boolean;
-	saveConflictComment: (args: {
-		conflictId: string;
-		filePath: string;
-		conflictNumber: number;
-		text: string;
-	}) => void;
-	clearConflictComment: (conflictId: string) => void;
-	toggleConflictComment: (conflictId: string) => void;
-	setOpenConflictComments: React.Dispatch<React.SetStateAction<Set<string>>>;
-	startEditConflictComment: (commentId: string) => void;
-	cancelEditConflictComment: () => void;
-	saveEditConflictComment: (commentId: string, text: string) => void;
-	addComment: (text: string) => void;
-	cancelComment: () => void;
-	deleteComment: (commentId: string) => void;
-	startEditComment: (commentId: string) => void;
-	cancelEditComment: () => void;
-	saveEditComment: (commentId: string, text: string) => void;
-	setPendingComment: React.Dispatch<React.SetStateAction<PendingComment | null>>;
-	setShowCommentInput: React.Dispatch<React.SetStateAction<boolean>>;
-	getCommentsForLine: (
-		filePath: string,
-		hunkId: string,
-		lineNumber: number,
-		side: "old" | "new",
-	) => LineComment[];
-}
+import type { HunkLinesProps } from "./types";
 
 const HunkLines: React.FC<HunkLinesProps> = memo(
 	({
@@ -335,6 +255,7 @@ const HunkLines: React.FC<HunkLinesProps> = memo(
 								}}
 							>
 								<div
+									data-testid="line-gutter"
 									className="w-24 flex-shrink-0 text-muted-foreground select-none border-r border-border/40 flex items-center gap-[4px] cursor-pointer hover:bg-muted/50"
 									onMouseDown={(event) =>
 										handleLineMouseDown(
@@ -438,6 +359,7 @@ const HunkLines: React.FC<HunkLinesProps> = memo(
 															<Tooltip>
 																<TooltipTrigger asChild>
 																	<div
+																		data-testid="inline-comment-card"
 																		className="group bg-background rounded-md p-[12px] border border-border/60 cursor-pointer hover:shadow-md transition-shadow"
 																		onClick={() =>
 																			startEditComment(comment.id)

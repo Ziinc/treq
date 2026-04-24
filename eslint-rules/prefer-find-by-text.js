@@ -10,9 +10,36 @@ export default {
     messages: {
       preferFindByText:
         "Prefer `await screen.findByText(...)` instead of `expect(screen.getByText(...)).toBeInTheDocument()`.",
+      preferFindByTextOverWaitFor:
+        "Prefer `await screen.findByText(...)` instead of `await waitFor(() => { expect(screen.getByText(...)).toBeInTheDocument() })`.",
     },
   },
   create(context) {
+    const sourceCode = context.sourceCode;
+
+    function isWaitForCall(node) {
+      return (
+        node.type === "CallExpression" &&
+        node.callee.type === "Identifier" &&
+        node.callee.name === "waitFor"
+      );
+    }
+
+    function findEnclosingWaitFor(toBeInDocNode) {
+      const ancestors = sourceCode.getAncestors(toBeInDocNode);
+      for (let i = ancestors.length - 1; i >= 0; i--) {
+        const ancestor = ancestors[i];
+        const isCallback =
+          ancestor.type === "ArrowFunctionExpression" ||
+          ancestor.type === "FunctionExpression";
+        if (!isCallback) continue;
+        const parent = ancestor.parent;
+        if (!parent || !isWaitForCall(parent)) continue;
+        if (parent.arguments.includes(ancestor)) return parent;
+      }
+      return null;
+    }
+
     function isScreenGetByTextCall(node) {
       if (node.type !== "CallExpression") {
         return false;
@@ -68,6 +95,15 @@ export default {
           matcherTarget.type !== "CallExpression" ||
           !isExpectScreenGetByTextCall(matcherTarget)
         ) {
+          return;
+        }
+
+        const waitForNode = findEnclosingWaitFor(node);
+        if (waitForNode) {
+          context.report({
+            node: waitForNode,
+            messageId: "preferFindByTextOverWaitFor",
+          });
           return;
         }
 

@@ -185,6 +185,7 @@ const CodeLine = memo(({
 }: CodeLineProps) => (
 		<div style={{ ...style, fontSize }}>
 			<div
+				data-testid="code-line"
 				className={cn(
 					"flex items-center group relative hover:bg-muted/30 transition-colors text-sm font-mono leading-normal",
 					diffStatus === "add" && "bg-emerald-500/10",

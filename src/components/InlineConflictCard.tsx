@@ -216,12 +216,12 @@ export const InlineConflictCard = ({
           endLine={region.end_line}
           comment={conflictComments.get(region.id)}
           onSave={(text) => {
-            saveConflictComment(
-              region.id,
-              region.file_path,
-              region.conflict_number,
-              text
-            );
+            saveConflictComment({
+              conflictId: region.id,
+              filePath: region.file_path,
+              conflictNumber: region.conflict_number,
+              text,
+            });
             closeConflictInput();
           }}
           onClear={() => {

@@ -644,8 +644,8 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
                 .into_iter()
                 .map(|f| {
                     serde_json::json!({
-                        "filePath": f.file_path,
-                        "relativePath": f.relative_path,
+                        "file_path": f.file_path,
+                        "relative_path": f.relative_path,
                     })
                 })
                 .collect();
@@ -662,7 +662,10 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
 
         // ── ensure_workspace_indexed ──────────────────────────────────────
         "ensure_workspace_indexed" => {
-            // For tests: always report as not-yet-indexed (so indexing runs)
+            let repo_path = get_str(&args, "repoPath")?;
+            let workspace_id: Option<i64> = opt_i64(&args, "workspaceId");
+            let workspace_path = get_str(&args, "workspacePath")?;
+            treq_lib::file_indexer::index_workspace_files(&repo_path, workspace_id, &workspace_path)?;
             Ok(Value::Bool(true))
         }
 

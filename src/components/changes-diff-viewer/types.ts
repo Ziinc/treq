@@ -1,4 +1,4 @@
-import type { JjDiffHunk, JjFileChange, LineComment as ApiLineComment } from "../../lib/api";
+import type { ConflictRegion, JjDiffHunk, JjFileChange, LineComment as ApiLineComment } from "../../lib/api";
 import type { ParsedFileChange } from "../../lib/git-utils";
 import type { useToast } from "../ui/toast";
 
@@ -131,3 +131,78 @@ export interface FileRowComponentProps {
 }
 
 export type { ApiLineComment, JjFileChange };
+
+export interface HunkLinesProps {
+	hunk: JjDiffHunk;
+	hunkIndex: number;
+	filePath: string;
+	conflictLineLookups: Map<string, Map<number, ConflictRegion>>;
+	firstConflictRegionIdByFile: Map<string, string>;
+	expandedContext: Map<string, string[]>;
+	conflictComments: Map<string, ConflictComment>;
+	openConflictComments: Set<string>;
+	editingConflictCommentId: string | null;
+	searchData: DiffSearchData;
+	debouncedSearchQuery: string;
+	currentMatchIndex: number;
+	diffLineSelection: DiffLineSelection | null;
+	showCommentInput: boolean;
+	pendingComment: PendingComment | null;
+	editingCommentId: string | null;
+	comments: LineComment[];
+	conflictFileRefs: React.MutableRefObject<Map<string, HTMLDivElement>>;
+	diffFontSize: number;
+	handleExpandContext: (
+		filePath: string,
+		hunkIndex: number,
+		direction: "before" | "after",
+	) => void;
+	// eslint-disable-next-line max-params
+	handleLineMouseDown: (
+		e: React.MouseEvent,
+		filePath: string,
+		hunkIndex: number,
+		lineIndex: number,
+		lineContent: string,
+		isStaged: boolean,
+	) => void;
+	handleLineMouseEnter: (
+		filePath: string,
+		hunkIndex: number,
+		lineIndex: number,
+	) => void;
+	handleLineMouseUp: () => void;
+	handleAddCommentFromSelection: () => void;
+	isLineSelected: (
+		filePath: string,
+		hunkIndex: number,
+		lineIndex: number,
+	) => boolean;
+	saveConflictComment: (args: {
+		conflictId: string;
+		filePath: string;
+		conflictNumber: number;
+		text: string;
+	}) => void;
+	clearConflictComment: (conflictId: string) => void;
+	toggleConflictComment: (conflictId: string) => void;
+	setOpenConflictComments: React.Dispatch<React.SetStateAction<Set<string>>>;
+	startEditConflictComment: (commentId: string) => void;
+	cancelEditConflictComment: () => void;
+	saveEditConflictComment: (commentId: string, text: string) => void;
+	addComment: (text: string) => void;
+	cancelComment: () => void;
+	deleteComment: (commentId: string) => void;
+	startEditComment: (commentId: string) => void;
+	cancelEditComment: () => void;
+	saveEditComment: (commentId: string, text: string) => void;
+	setPendingComment: React.Dispatch<React.SetStateAction<PendingComment | null>>;
+	setShowCommentInput: React.Dispatch<React.SetStateAction<boolean>>;
+	// eslint-disable-next-line max-params
+	getCommentsForLine: (
+		filePath: string,
+		hunkId: string,
+		lineNumber: number,
+		side: "old" | "new",
+	) => LineComment[];
+}

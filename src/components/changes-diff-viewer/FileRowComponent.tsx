@@ -1,4 +1,4 @@
-import React, { memo } from "react";
+import React, { memo, useMemo } from "react";
 import {
 	Check,
 	ChevronDown,
@@ -25,7 +25,6 @@ import { highlightInHtml } from "../../lib/text-search";
 import { isBinaryFile } from "../../lib/git-utils";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEditorApps } from "../../hooks/useEditorApps";
-import { useMemo } from "react";
 import type { FileRowComponentProps, HighlightedLineProps } from "./types";
 
 const HighlightedLine: React.FC<HighlightedLineProps> = memo(
