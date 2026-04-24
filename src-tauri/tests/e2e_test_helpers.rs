@@ -543,6 +543,22 @@ impl JjVerifier {
         Ok(bookmarks)
     }
 
+    /// Return the commit id the bookmark currently points to, or None if the bookmark doesn't resolve.
+    pub fn get_bookmark_commit_id(repo_path: &str, bookmark: &str) -> Result<Option<String>, String> {
+        let output = Command::new(Self::jj_binary())
+            .current_dir(repo_path)
+            .args(["log", "-r", bookmark, "-n", "1", "--no-graph", "-T", "commit_id"])
+            .output()
+            .map_err(|e| format!("Failed to execute jj log: {}", e))?;
+
+        if !output.status.success() {
+            return Ok(None);
+        }
+
+        let id = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if id.is_empty() { Ok(None) } else { Ok(Some(id)) }
+    }
+
     /// Check if jj working copy has changes (is dirty)
     pub fn has_changes(workspace_path: &str) -> Result<bool, String> {
         let output = Command::new(Self::jj_binary())
