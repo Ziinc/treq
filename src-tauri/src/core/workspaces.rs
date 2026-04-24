@@ -1559,9 +1559,7 @@ pub fn commit_workspace(
     let result = jj::jj_commit(workspace_dir_str, message)
         .map_err(|e| format!("Failed to create commit: {}", e))?;
 
-    if let Ok(branch) = jj::get_workspace_branch(workspace_dir_str) {
-        let _ = auto_rebase::rebase_after_commit(repo_path, &branch);
-    }
+    let _ = auto_rebase::rebase_after_commit(repo_path, &workspace.branch_name);
 
     Ok(result)
 }

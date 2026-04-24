@@ -8,7 +8,7 @@ use e2e_test_helpers::TestRepo;
 fn bench_commit_workspace(c: &mut Criterion) {
     let mut group = c.benchmark_group("commit_workspace");
     // Each iteration requires real git+jj subprocess calls, so keep sample size low.
-    group.sample_size(20);
+    group.sample_size(100);
 
     group.bench_function("create_commit", |b| {
         b.iter_batched(

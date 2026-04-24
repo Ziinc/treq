@@ -1,6 +1,13 @@
 use jj_lib::config::{ConfigLayer, ConfigSource, StackedConfig};
+use jj_lib::git;
+use jj_lib::gitignore::GitIgnoreFile;
+use jj_lib::matchers::EverythingMatcher;
+use jj_lib::op_store::RefTarget;
+use jj_lib::ref_name::WorkspaceNameBuf;
+use jj_lib::repo::{Repo as _, StoreFactories};
 use jj_lib::settings::UserSettings;
-use jj_lib::workspace::Workspace;
+use jj_lib::workspace::{default_working_copy_factories, Workspace};
+use jj_lib::working_copy::SnapshotOptions;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
@@ -213,8 +220,9 @@ pub fn is_jj_workspace(repo_path: &str) -> bool {
     Path::new(repo_path).join(".jj").exists()
 }
 
-/// Get git user.name and user.email from git config
-fn get_git_user_config(repo_path: &str) -> (String, String) {
+/// Get git user.name and user.email by shelling out to git config.
+/// Used once during repo init to cache values into the local db.
+fn read_git_user_config_from_git(repo_path: &str) -> (String, String) {
     let name = command_for("git")
         .current_dir(repo_path)
         .args(["config", "--get", "user.name"])
@@ -234,6 +242,37 @@ fn get_git_user_config(repo_path: &str) -> (String, String) {
         .unwrap_or_else(|| "treq@localhost".to_string());
 
     (name, email)
+}
+
+/// Persist git user config to the local db so that subsequent calls don't
+/// need to shell out to git. Safe to call multiple times (idempotent).
+pub fn cache_git_user_config(
+    db: &crate::db::Database,
+    repo_path: &str,
+) -> Result<(String, String), JjError> {
+    let (name, email) = read_git_user_config_from_git(repo_path);
+    db.set_repo_setting(repo_path, "git_user_name", &name)
+        .map_err(|e| JjError::ConfigError(format!("Failed to cache user.name: {}", e)))?;
+    db.set_repo_setting(repo_path, "git_user_email", &email)
+        .map_err(|e| JjError::ConfigError(format!("Failed to cache user.email: {}", e)))?;
+    Ok((name, email))
+}
+
+/// Read cached git user.name / user.email from the local db. Falls back to
+/// reading from git (and caching) when the db has no entry yet.
+fn get_git_user_config(repo_path: &str) -> (String, String) {
+    let db_path = local_db::get_local_db_path(repo_path);
+    if let Ok(db) = crate::db::Database::new(db_path) {
+        let cached_name = db.get_repo_setting(repo_path, "git_user_name").ok().flatten();
+        let cached_email = db.get_repo_setting(repo_path, "git_user_email").ok().flatten();
+        if let (Some(n), Some(e)) = (cached_name, cached_email) {
+            return (n, e);
+        }
+        if let Ok((n, e)) = cache_git_user_config(&db, repo_path) {
+            return (n, e);
+        }
+    }
+    read_git_user_config_from_git(repo_path)
 }
 
 /// Create UserSettings with reasonable defaults for Treq
@@ -343,9 +382,8 @@ fn init_jj_for_git_repo(repo_path: &str) -> Result<(), JjError> {
     // This links jj to the existing git repository
     let git_repo_path = path.join(".git");
 
-    Workspace::init_external_git(&settings, path, &git_repo_path)
+    futures::executor::block_on(Workspace::init_external_git(&settings, path, &git_repo_path))
         .map_err(|e| JjError::InitFailed(e.to_string()))?;
-
     // Ensure .gitignore entries
     ensure_gitignore_entries(repo_path)?;
 
@@ -381,6 +419,9 @@ pub fn ensure_jj_initialized(db: &crate::db::Database, repo_path: &str) -> Resul
     if !Path::new(repo_path).join(".git").exists() {
         return Err(JjError::NotGitRepository);
     }
+
+    // Cache git user config so subsequent commits don't shell out
+    let _ = cache_git_user_config(db, repo_path);
 
     // Initialize jj
     init_jj_for_git_repo(repo_path)?;
@@ -491,8 +532,6 @@ pub fn create_workspace(
                     branch_name, e
                 );
                 // Don't fail workspace creation for tracking errors
-            } else {
-                eprintln!("Successfully set up tracking for '{}@origin'", branch_name);
             }
         }
         Err(e) => {
@@ -1673,68 +1712,141 @@ pub fn derive_repo_path_from_workspace(workspace_path: &str) -> Option<String> {
     None
 }
 
-/// Commit with message and create new working copy
+/// Commit with message and create new working copy using jj-lib (no subprocess)
 pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError> {
-    let repo_path = derive_repo_path_from_workspace(workspace_path);
+    let repo_path_opt = derive_repo_path_from_workspace(workspace_path);
 
-    // Get branch name - different logic for workspaces vs main repo
-    let branch = if let Some(ref rp) = repo_path {
-        // For workspaces: extract just the workspace name from the full path
-        let path = Path::new(workspace_path);
-        let workspace_name = path
+    // Resolve branch: workspace DB for sub-workspaces, .git/HEAD file for main repo
+    let branch = if let Some(ref rp) = repo_path_opt {
+        let ws_name = Path::new(workspace_path)
             .file_name()
             .and_then(|n| n.to_str())
             .ok_or_else(|| JjError::IoError("Invalid workspace path".to_string()))?;
-
-        // Get branch_name from the workspace record in db
-        let workspace = local_db::get_workspace_by_path(rp, workspace_name)
+        let ws = local_db::get_workspace_by_path(rp, ws_name)
             .map_err(|e| JjError::IoError(format!("Failed to query workspace: {}", e)))?
             .ok_or_else(|| JjError::WorkspaceNotFound(workspace_path.to_string()))?;
-        workspace.branch_name
+        ws.branch_name
     } else {
-        // For main repo: require git to be on a branch
-        let git_branch = get_workspace_branch(workspace_path).map_err(|e| {
-            JjError::IoError(format!("Failed to determine current git branch: {}", e))
-        })?;
-
-        if git_branch.is_empty() || git_branch == "HEAD" {
+        let b = read_git_head_branch(workspace_path)
+            .map_err(|e| JjError::IoError(format!("Failed to determine branch: {}", e)))?;
+        if b.is_empty() || b == "HEAD" {
             return Err(JjError::IoError(
                 "Git is not checked out to a branch. Please checkout a branch before committing."
                     .to_string(),
             ));
         }
-        git_branch
+        b
     };
 
-    // Now commit with message (sets message on current change and creates new empty change)
-    let commit = command_for("jj")
-        .current_dir(workspace_path)
-        .args(["commit", "-m", message])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
+    let settings_path = repo_path_opt.as_deref().unwrap_or(workspace_path);
+    let settings = create_user_settings(settings_path)?;
+    let mut workspace = Workspace::load(
+        &settings,
+        Path::new(workspace_path),
+        &StoreFactories::default(),
+        &default_working_copy_factories(),
+    )
+    .map_err(|e| JjError::IoError(format!("Failed to load workspace: {}", e)))?;
 
-    if !commit.status.success() {
-        return Err(JjError::IoError(
-            String::from_utf8_lossy(&commit.stderr).to_string(),
-        ));
-    }
+    let repo = futures::executor::block_on(workspace.repo_loader().load_at_head())
+        .map_err(|e| JjError::IoError(format!("Failed to load repo: {}", e)))?;
 
-    // Set the bookmark to point at @- (the commit with the actual content)
-    jj_set_bookmark(workspace_path, &branch, "@-")
-        .map_err(|e| JjError::IoError(format!("Failed to advance bookmark '{}': {}", branch, e)))?;
+    // Snapshot working copy to capture file changes.
+    // Load .gitignore and .git/info/exclude from the main repo so that
+    // build artifacts, node_modules, etc. don't explode snapshot time.
+    let ignore_repo_root = repo_path_opt.as_deref().unwrap_or(workspace_path);
+    let base_ignores = GitIgnoreFile::empty()
+        .chain_with_file("", Path::new(ignore_repo_root).join(".gitignore"))
+        .unwrap_or_else(|_| GitIgnoreFile::empty())
+        .chain_with_file(
+            "",
+            Path::new(ignore_repo_root)
+                .join(".git")
+                .join("info")
+                .join("exclude"),
+        )
+        .unwrap_or_else(|_| GitIgnoreFile::empty());
 
-    // Only checkout branch in git for main repo (not workspaces)
-    if repo_path.is_none() {
-        let checkout = command_for("git")
-            .current_dir(workspace_path)
-            .args(["checkout", &branch])
-            .output();
-        if let Err(e) = checkout {
-            eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
-        }
-    }
+    let opts = SnapshotOptions {
+        base_ignores,
+        progress: None,
+        start_tracking_matcher: &EverythingMatcher,
+        force_tracking_matcher: &EverythingMatcher,
+        // Match jj CLI default: refuse to auto-track files larger than 1 MiB.
+        max_new_file_size: 1024 * 1024,
+    };
+    let workspace_name: WorkspaceNameBuf = workspace.workspace_name().to_owned();
+    let mut locked_ws = workspace
+        .start_working_copy_mutation()
+        .map_err(|e| JjError::IoError(format!("Failed to lock working copy: {}", e)))?;
+    let (new_tree, _stats) = futures::executor::block_on(locked_ws.locked_wc().snapshot(&opts))
+        .map_err(|e| JjError::IoError(format!("Snapshot failed: {}", e)))?;
+
+    // Start transaction
+    let mut tx = repo.start_transaction();
+
+    let wc_commit_id = tx
+        .repo()
+        .view()
+        .get_wc_commit_id(&workspace_name)
+        .cloned()
+        .ok_or_else(|| JjError::IoError("No working-copy commit found".to_string()))?;
+    let wc_commit = tx
+        .repo()
+        .store()
+        .get_commit(&wc_commit_id)
+        .map_err(|e| JjError::IoError(format!("Failed to load wc commit: {}", e)))?;
+
+    // Rewrite @ with new tree + description, using detached builder to avoid borrow conflict
+    let mut builder = tx.repo_mut().rewrite_commit(&wc_commit).detach();
+    builder.set_tree(new_tree);
+    builder.set_description(message);
+    let committed = futures::executor::block_on(builder.write(tx.repo_mut()))
+        .map_err(|e| JjError::IoError(format!("Failed to write commit: {}", e)))?;
+
+    // Create empty successor as new @
+    let new_wc = futures::executor::block_on(
+        tx.repo_mut()
+            .new_commit(vec![committed.id().clone()], committed.tree())
+            .write(),
+    )
+    .map_err(|e| JjError::IoError(format!("Failed to create wc commit: {}", e)))?;
+
+    futures::executor::block_on(tx.repo_mut().edit(workspace_name.clone(), &new_wc))
+        .map_err(|e| JjError::IoError(format!("Failed to update wc pointer: {}", e)))?;
+
+    // Advance the branch bookmark to the committed change
+    let ref_name = jj_lib::ref_name::RefName::new(&branch);
+    tx.repo_mut()
+        .set_local_bookmark_target(ref_name, RefTarget::normal(committed.id().clone()));
+
+    // Rebase any descendants of the rewritten commit (required by jj-lib before commit)
+    futures::executor::block_on(tx.repo_mut().rebase_descendants())
+        .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
+
+    // Export to git refs (colocated); ignore errors for non-git backends
+    let _ = git::export_refs(tx.repo_mut());
+
+    // Commit the transaction and finalize working copy
+    let new_repo = futures::executor::block_on(tx.commit("commit_workspace"))
+        .map_err(|e| JjError::IoError(format!("Failed to commit transaction: {}", e)))?;
+    futures::executor::block_on(locked_ws.finish(new_repo.op_id().clone()))
+        .map_err(|e| JjError::IoError(format!("Failed to finish wc mutation: {}", e)))?;
 
     Ok(format!("Committed successfully to branch '{}'", branch))
+}
+
+/// Read the current git branch from .git/HEAD without shelling out
+fn read_git_head_branch(repo_path: &str) -> Result<String, String> {
+    let head_path = Path::new(repo_path).join(".git").join("HEAD");
+    let content = fs::read_to_string(&head_path)
+        .map_err(|e| format!("Failed to read .git/HEAD: {}", e))?;
+    let trimmed = content.trim();
+    if let Some(branch) = trimmed.strip_prefix("ref: refs/heads/") {
+        Ok(branch.to_string())
+    } else {
+        Ok("HEAD".to_string())
+    }
 }
 
 /// Split selected files from working copy into a new parent commit
@@ -2318,8 +2430,6 @@ pub fn jj_push(workspace_path: &str) -> Result<String, JjError> {
                     "Warning: Could not set up tracking: {}. Attempting push anyway...\n",
                     e
                 ));
-            } else {
-                tracking_message.push_str("Successfully set up tracking.\n");
             }
         }
         Err(e) => {
