@@ -196,7 +196,22 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 											className={`relative flex items-center text-sm tracking-wide px-2 py-1 rounded-md transition-colors cursor-pointer ${
 												selectedWorkspaceId === null ? "bg-primary/20" : "hover:bg-muted/50"
 											}`}
-											onClick={() => onWorkspaceClick?.(undefined as unknown as Workspace)}
+											onClick={(e) => {
+												if (
+													selectedWorkspaceIds &&
+													selectedWorkspaceIds.size > 0 &&
+													onWorkspaceMultiSelect
+												) {
+													onWorkspaceMultiSelect(
+														null as Parameters<
+															NonNullable<typeof onWorkspaceMultiSelect>
+														>[0],
+														e,
+													);
+													return;
+												}
+												onWorkspaceClick?.(undefined as unknown as Workspace);
+											}}
 										>
 											<Home
 												className={`w-3 h-3 mr-1 shrink-0 ${

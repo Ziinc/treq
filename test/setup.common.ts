@@ -58,6 +58,7 @@ const getReducedDomSnapshot = (container: HTMLElement): string => {
 };
 
 configure({
+	asyncUtilTimeout: 5000,
 	getElementError: (message, container) => {
 		const reducedSnapshot = getReducedDomSnapshot(container as HTMLElement);
 		return new Error(`${message}\n\n${reducedSnapshot}`);

@@ -28,13 +28,15 @@ export function useKeyboardShortcut(
 			const target = event.target as HTMLElement | null;
 			const activeElement = document.activeElement as HTMLElement | null;
 
-			// Don't intercept events in input elements
+			// Don't intercept plain-key shortcuts when typing in inputs.
+			// Meta shortcuts (Ctrl/Cmd+X) should still work.
 			if (
-				target?.tagName === "INPUT" ||
-				target?.tagName === "TEXTAREA" ||
-				(target &&
-					typeof (target as HTMLElement).getAttribute === "function" &&
-					(target as HTMLElement).getAttribute("contenteditable") === "true")
+				!ctrlOrCmd &&
+				(target?.tagName === "INPUT" ||
+					target?.tagName === "TEXTAREA" ||
+					(target &&
+						typeof (target as HTMLElement).getAttribute === "function" &&
+						(target as HTMLElement).getAttribute("contenteditable") === "true"))
 			) {
 				return;
 			}
