@@ -38,36 +38,6 @@ import { Input } from "../ui/input";
 import { useToast } from "../ui/toast";
 import { type ClaudeSessionData } from "./types";
 
-function buildToolPermissionFlags(sessionData: ClaudeSessionData): string {
-	const disallowed: string[] = [
-		"Bash(jj *)", // Block direct jj commands in all contexts
-	];
-
-	const allowed: string[] = [
-		"Bash(treq st)", // Always allow treq CLI
-		"Bash(treq ls)", // Always allow treq CLI
-	];
-
-	if (sessionData.workspacePath) {
-		// Workspace: block parent directory traversal
-	} else {
-		// Home repo: block .treq directory access
-		disallowed.push("Read(.treq/**)", "Edit(.treq/**)", "Write(.treq/**)");
-	}
-
-	const parts: string[] = [];
-	if (disallowed.length > 0) {
-		parts.push(
-			`--disallowedTools "${disallowed.map((d) => `${d}`).join(",")}"`,
-		);
-	}
-	if (allowed.length > 0) {
-		parts.push(`--allowedTools "${allowed.map((a) => `${a}`).join(",")}"`);
-	}
-	return parts.join(" ");
-}
-
-// Claude terminal panel with header
 export interface ClaudeTerminalPanelProps {
 	sessionData: ClaudeSessionData;
 	collapsed: boolean;
@@ -273,12 +243,6 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
 		autoCommand += permissionModeArg;
 		if (sessionModel) {
 			autoCommand += ` --model="${sessionModel}"`;
-		}
-
-		// Add tool permission restrictions based on context
-		const toolPermissionFlags = buildToolPermissionFlags(sessionData);
-		if (toolPermissionFlags) {
-			autoCommand += ` ${toolPermissionFlags}`;
 		}
 
 		// Add treq CLI documentation as system prompt for the Claude agent
