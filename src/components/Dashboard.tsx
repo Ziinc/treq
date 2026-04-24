@@ -37,10 +37,7 @@ import { MergePreviewPage } from "./MergePreviewPage";
 import { useToast } from "./ui/toast";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { useWorkspaceHierarchy } from "../hooks/useWorkspaceHierarchy";
-import {
-	FocusRefreshProvider,
-	useFocusRefreshSubscription,
-} from "../hooks/useAppFocusHandler";
+import { FocusRefreshProvider } from "../hooks/useAppFocusHandler";
 import {
 	Workspace,
 	createSession,
@@ -287,14 +284,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		selectedWorkspace?.repo_path,
 		selectedWorkspace?.workspace_path,
 	]);
-
-	// After focus rebase completes, invalidate workspace queries
-	useFocusRefreshSubscription("afterRebase", () => {
-		if (!repoPath) return;
-		queryClient.invalidateQueries({
-			queryKey: ["workspace-statuses", repoPath],
-		});
-	}, [repoPath, queryClient]);
 
 	const { data: sessions = [] } = useQuery({
 		queryKey: ["sessions", repoPath],

@@ -1,4 +1,4 @@
-import { checkAndRebaseWorkspaces, getRepoStatus } from "../lib/api";
+import { getRepoStatus } from "../lib/api";
 import {
 	type ReactNode,
 	createContext,
@@ -9,7 +9,7 @@ import {
 } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-type FocusPhase = "afterRebase" | "afterInvalidate";
+type FocusPhase = "afterInvalidate";
 
 type FocusCallback = () => void | Promise<void>;
 
@@ -33,10 +33,7 @@ export function FocusRefreshProvider({
 	children,
 }: FocusRefreshProviderProps) {
 	const subscribersRef = useRef<Map<FocusPhase, Set<FocusCallback>>>(
-		new Map([
-			["afterRebase", new Set()],
-			["afterInvalidate", new Set()],
-		]),
+		new Map([["afterInvalidate", new Set()]]),
 	);
 
 	const subscribe = useCallback(
@@ -54,9 +51,7 @@ export function FocusRefreshProvider({
 		if (!repoPath) return;
 
 		let lastFocusTime = 0;
-		let lastRebaseTime = 0;
 		const FOCUS_DEBOUNCE_MS = 5000;
-		const REBASE_DEBOUNCE_MS = 10000;
 
 		const notifySubscribers = async (phase: FocusPhase) => {
 			const callbacks = Array.from(subscribersRef.current.get(phase) || []);
@@ -68,7 +63,6 @@ export function FocusRefreshProvider({
 			if (now - lastFocusTime < FOCUS_DEBOUNCE_MS) return;
 			lastFocusTime = now;
 
-			// Step 1: Fetch + branch update
 			try {
 				const status = await getRepoStatus(repoPath);
 				onBranchUpdate(status.current_branch);
@@ -76,20 +70,6 @@ export function FocusRefreshProvider({
 				console.debug("Repo status fetch failed:", error);
 			}
 
-			// Step 2: Rebase — independent, longer debounce
-			const shouldRebase = now - lastRebaseTime >= REBASE_DEBOUNCE_MS;
-			if (shouldRebase) {
-				lastRebaseTime = now;
-				try {
-					await checkAndRebaseWorkspaces(repoPath);
-				} catch (error) {
-					console.error("Auto-rebase failed:", error);
-				}
-				// Step 3: Notify afterRebase subscribers (only when rebase ran)
-				await notifySubscribers("afterRebase");
-			}
-
-			// Step 4: Notify afterInvalidate subscribers (every debounced focus)
 			await notifySubscribers("afterInvalidate");
 		};
 
