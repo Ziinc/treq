@@ -23,7 +23,7 @@ fn test_jj_get_log_diff_stats_with_multiline_output() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().unwrap();
+    let _workspace_path_str = workspace_path.to_str().unwrap();
 
     // Create multiple files to trigger multiline diff.stat() output
     // (diff.stat() shows per-file stats + a summary line)
@@ -38,7 +38,8 @@ fn test_jj_get_log_diff_stats_with_multiline_output() {
     )
     .expect("Failed to write file_b");
 
-    treq_lib::jj::jj_commit(workspace_path_str, "Add two files").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add two files")
+        .expect("Failed to commit");
 
     // Now call list_commits — this should correctly parse the multiline diff.stat() output
     let result =
@@ -90,7 +91,7 @@ fn test_jj_get_log_diff_stats_with_modifications() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().unwrap();
+    let _workspace_path_str = workspace_path.to_str().unwrap();
 
     // First commit: create files
     fs::write(
@@ -100,7 +101,8 @@ fn test_jj_get_log_diff_stats_with_modifications() {
     .expect("Failed to write file");
     fs::write(workspace_path.join("another.txt"), "content\n")
         .expect("Failed to write another file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Initial files").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial files")
+        .expect("Failed to commit");
 
     // Second commit: modify and delete lines across multiple files
     fs::write(
@@ -109,7 +111,8 @@ fn test_jj_get_log_diff_stats_with_modifications() {
     )
     .expect("Failed to modify file");
     fs::remove_file(workspace_path.join("another.txt")).expect("Failed to delete file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Modify and delete").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Modify and delete")
+        .expect("Failed to commit");
 
     let result =
         treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
@@ -168,7 +171,8 @@ fn test_move_commit_to_new_workspace() {
 
     // Add a file to the source workspace and commit it
     fs::write(source_path.join("moved.txt"), "moved content").expect("Failed to write file");
-    treq_lib::jj::jj_commit(source_path_str, "Commit to move").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, source.id, "Commit to move")
+        .expect("Failed to commit");
 
     // Get the change_id of the committed change
     let commits_ahead = treq_lib::jj::jj_get_commits_ahead(source_path_str, "main")
@@ -237,7 +241,8 @@ fn test_move_commit_to_existing_workspace() {
 
     // Add a file to the source workspace and commit it
     fs::write(source_path.join("moved.txt"), "moved content").expect("Failed to write file");
-    treq_lib::jj::jj_commit(source_path_str, "Commit to move").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, source.id, "Commit to move")
+        .expect("Failed to commit");
 
     // Get the change_id of the committed change
     let commits_ahead = treq_lib::jj::jj_get_commits_ahead(source_path_str, "main")
@@ -297,7 +302,8 @@ fn test_abandon_commit() {
 
     // Add a file and commit
     fs::write(workspace_path.join("abandon-me.txt"), "content").expect("Failed to write");
-    treq_lib::jj::jj_commit(workspace_path_str, "Commit to abandon").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Commit to abandon")
+        .expect("Failed to commit");
 
     // Get the change_id
     let commits_ahead = treq_lib::jj::jj_get_commits_ahead(workspace_path_str, "main")
@@ -347,12 +353,13 @@ fn test_commit_diff_added_files() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().unwrap();
+    let _workspace_path_str = workspace_path.to_str().unwrap();
 
     // Create files and commit
     fs::write(workspace_path.join("hello.txt"), "hello world\n").expect("Failed to write file");
     fs::write(workspace_path.join("foo.txt"), "foo\nbar\nbaz\n").expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Add two files").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add two files")
+        .expect("Failed to commit");
 
     // Get the commit's change_id from the log
     let log = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
@@ -424,7 +431,7 @@ fn test_commit_diff_modified_files() {
     // First commit: create a file
     fs::write(workspace_path.join("data.txt"), "line 1\nline 2\nline 3\n")
         .expect("Failed to write file");
-    treq_lib::core::create_commit(&repo.repo_path, Some(workspace.id), "Create data file")
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Create data file")
         .expect("Failed to commit");
 
     // Second commit: modify the file
@@ -433,7 +440,7 @@ fn test_commit_diff_modified_files() {
         "line 1\nchanged line 2\nline 3\nnew line 4\n",
     )
     .expect("Failed to write file");
-    treq_lib::core::create_commit(&repo.repo_path, Some(workspace.id), "Modify data file")
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Modify data file")
         .expect("Failed to commit");
 
     // Get commits
@@ -485,16 +492,18 @@ fn test_commit_diff_deleted_files() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().unwrap();
+    let _workspace_path_str = workspace_path.to_str().unwrap();
 
     // First commit: create a file
     fs::write(workspace_path.join("temp.txt"), "temporary content\n")
         .expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Add temp file").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add temp file")
+        .expect("Failed to commit");
 
     // Second commit: delete the file
     fs::remove_file(workspace_path.join("temp.txt")).expect("Failed to delete file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Delete temp file").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Delete temp file")
+        .expect("Failed to commit");
 
     // Get commits
     let log = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
@@ -574,12 +583,12 @@ fn test_list_commits() {
 
     // First commit
     fs::write(workspace_path.join("hello.txt"), "hello\n").expect("Failed to write file");
-    treq_lib::core::create_commit(&repo.repo_path, Some(workspace.id), "Add hello")
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add hello")
         .expect("Failed to commit");
 
     // Second commit
     fs::write(workspace_path.join("world.txt"), "world\n").expect("Failed to write file");
-    treq_lib::core::create_commit(&repo.repo_path, Some(workspace.id), "Add world")
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add world")
         .expect("Failed to commit");
 
     let result =
@@ -650,7 +659,7 @@ fn test_list_commits_excludes_base_branch_commits() {
     // Make a commit on the workspace branch
     fs::write(workspace_path.join("branch_file.txt"), "branch content\n")
         .expect("Failed to write file");
-    treq_lib::core::create_commit(&repo.repo_path, Some(workspace.id), "Branch commit")
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Branch commit")
         .expect("Failed to commit");
 
     let result =
@@ -835,7 +844,7 @@ fn test_list_commits_with_target_branch_history() {
     // Make a commit on the workspace branch
     fs::write(workspace_path.join("branch_file.txt"), "branch content\n")
         .expect("Failed to write file");
-    treq_lib::core::create_commit(&repo.repo_path, Some(workspace.id), "Branch commit")
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Branch commit")
         .expect("Failed to commit");
 
     // Call with include_target_branch_history=true

@@ -1538,3 +1538,30 @@ pub fn check_and_rebase_workspaces(
         })
     }
 }
+
+pub fn commit_workspace(
+    repo_path: &str,
+    workspace_id: i64,
+    message: &str,
+) -> Result<String, String> {
+    let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
+        .map_err(|e| format!("Failed to get workspace: {}", e))?
+        .ok_or_else(|| format!("Workspace not found: {}", workspace_id))?;
+
+    let workspace_dir = Path::new(repo_path)
+        .join(".treq")
+        .join("workspaces")
+        .join(&workspace.workspace_path);
+    let workspace_dir_str = workspace_dir
+        .to_str()
+        .ok_or("Failed to convert workspace path to string")?;
+
+    let result = jj::jj_commit(workspace_dir_str, message)
+        .map_err(|e| format!("Failed to create commit: {}", e))?;
+
+    if let Ok(branch) = jj::get_workspace_branch(workspace_dir_str) {
+        let _ = auto_rebase::rebase_after_commit(repo_path, &branch);
+    }
+
+    Ok(result)
+}

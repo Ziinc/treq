@@ -441,12 +441,13 @@ fn test_can_merge_workspace_into_home_repo() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().unwrap();
+    let _workspace_path_str = workspace_path.to_str().unwrap();
 
     // Add a file to the workspace and commit
     let feature_file = workspace_path.join("merge-feature.txt");
     fs::write(&feature_file, "merge feature content").expect("Failed to write feature file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Add merge feature").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add merge feature")
+        .expect("Failed to commit");
 
     // Get workspace status - should show commits ahead of target
     let status = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
@@ -582,11 +583,12 @@ fn test_can_squash_merge_workspace_into_home_repo() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().unwrap();
+    let _workspace_path_str = workspace_path.to_str().unwrap();
 
     let feature_file = workspace_path.join("squash-feature.txt");
     fs::write(&feature_file, "squash feature content").expect("Failed to write feature file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Add squash feature").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add squash feature")
+        .expect("Failed to commit");
 
     treq_lib::core::merge_workspace(
         &repo.repo_path,
@@ -643,11 +645,12 @@ fn test_can_rebase_merge_workspace_into_home_repo() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().unwrap();
+    let _workspace_path_str = workspace_path.to_str().unwrap();
 
     let feature_file = workspace_path.join("rebase-feature.txt");
     fs::write(&feature_file, "rebase feature content").expect("Failed to write feature file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Add rebase feature").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add rebase feature")
+        .expect("Failed to commit");
 
     treq_lib::core::merge_workspace(
         &repo.repo_path,
@@ -1192,7 +1195,7 @@ fn test_push_workspace_to_remote() {
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
     let test_file = workspace_path.join("test-push.txt");
     fs::write(&test_file, "test push content").expect("Failed to write test file");
-    treq_lib::jj::jj_commit(workspace_path.to_str().unwrap(), "Add test push file")
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add test push file")
         .expect("Failed to commit");
 
     // Test 4: Push workspace to remote (should succeed now)
@@ -1683,10 +1686,12 @@ fn test_split_workspace_move_commits_after() {
 
     // Create multiple commits in the source workspace
     fs::write(source_path.join("commit1.txt"), "commit 1 content").expect("Failed to write");
-    treq_lib::jj::jj_commit(source_path_str, "First commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, source.id, "First commit")
+        .expect("Failed to commit");
 
     fs::write(source_path.join("commit2.txt"), "commit 2 content").expect("Failed to write");
-    treq_lib::jj::jj_commit(source_path_str, "Second commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, source.id, "Second commit")
+        .expect("Failed to commit");
 
     // Get commits ahead of main to extract change_ids
     let commits_ahead = treq_lib::jj::jj_get_commits_ahead(source_path_str, "main")
@@ -1766,10 +1771,12 @@ fn test_split_workspace_move_commits_before() {
 
     // Create commits
     fs::write(source_path.join("early.txt"), "early content").expect("Failed to write");
-    treq_lib::jj::jj_commit(source_path_str, "Early commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, source.id, "Early commit")
+        .expect("Failed to commit");
 
     fs::write(source_path.join("late.txt"), "late content").expect("Failed to write");
-    treq_lib::jj::jj_commit(source_path_str, "Late commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, source.id, "Late commit")
+        .expect("Failed to commit");
 
     // Get commits
     let commits_ahead =
@@ -2465,7 +2472,8 @@ fn test_empty_commits_excluded_from_commits_ahead() {
 
     // Create a real commit with content
     fs::write(workspace_path.join("real.txt"), "real content").expect("Failed to write file");
-    jj::jj_commit(workspace_path_str, "Add real file").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add real file")
+        .expect("Failed to commit");
 
     // Create empty commits via `jj new` (these have no file changes)
     Command::new("jj")
@@ -2521,7 +2529,8 @@ fn test_merge_abandons_empty_commits() {
 
     // Create a real commit
     fs::write(workspace_path.join("feature.txt"), "feature content").expect("Failed to write file");
-    jj::jj_commit(workspace_path_str, "Add feature").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add feature")
+        .expect("Failed to commit");
 
     // Create empty commits
     Command::new("jj")
@@ -2575,7 +2584,8 @@ fn test_squash_merge_with_empty_commits() {
 
     // Create a real commit
     fs::write(workspace_path.join("squash.txt"), "squash content").expect("Failed to write file");
-    jj::jj_commit(workspace_path_str, "Add squash file").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add squash file")
+        .expect("Failed to commit");
 
     // Create empty commits
     Command::new("jj")
@@ -2632,7 +2642,8 @@ fn test_rebase_merge_with_empty_commits() {
 
     // Create a real commit
     fs::write(workspace_path.join("rebase.txt"), "rebase content").expect("Failed to write file");
-    jj::jj_commit(workspace_path_str, "Add rebase file").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add rebase file")
+        .expect("Failed to commit");
 
     // Create empty commits
     Command::new("jj")
@@ -2680,7 +2691,7 @@ fn test_list_workspace_statuses_commits_ahead() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().unwrap();
+    let _workspace_path_str = workspace_path.to_str().unwrap();
 
     // Fresh workspace should have 0 commits ahead
     let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
@@ -2696,7 +2707,8 @@ fn test_list_workspace_statuses_commits_ahead() {
 
     // Make first commit
     fs::write(workspace_path.join("file1.txt"), "content 1").expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "First commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "First commit")
+        .expect("Failed to commit");
 
     let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
         .expect("Failed to list workspace statuses");
@@ -2711,7 +2723,8 @@ fn test_list_workspace_statuses_commits_ahead() {
 
     // Make second commit
     fs::write(workspace_path.join("file2.txt"), "content 2").expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Second commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Second commit")
+        .expect("Failed to commit");
 
     let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
         .expect("Failed to list workspace statuses");
@@ -2779,7 +2792,7 @@ fn test_workspace_status_in_sync() {
     // Add a commit so there's something to push
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
     fs::write(workspace_path.join("file.txt"), "content").expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path.to_str().unwrap(), "Initial commit")
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit")
         .expect("Failed to commit");
 
     // Push to remote
@@ -2815,17 +2828,19 @@ fn test_workspace_status_ahead_of_remote() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().unwrap();
+    let _workspace_path_str = workspace_path.to_str().unwrap();
 
     // Add initial commit and push
     fs::write(workspace_path.join("file1.txt"), "content 1").expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Initial commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit")
+        .expect("Failed to commit");
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
         .expect("Failed to push workspace");
 
     // Make a local commit without pushing
     fs::write(workspace_path.join("file2.txt"), "content 2").expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Local only commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Local only commit")
+        .expect("Failed to commit");
 
     let status = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
         .expect("workspace_status should succeed");
@@ -2860,7 +2875,8 @@ fn test_workspace_status_behind_remote() {
 
     // Add initial commit and push
     fs::write(workspace_path.join("file1.txt"), "content 1").expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Initial commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit")
+        .expect("Failed to commit");
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
         .expect("Failed to push workspace");
 
@@ -2951,18 +2967,20 @@ fn test_workspace_status_diverged() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().unwrap();
+    let _workspace_path_str = workspace_path.to_str().unwrap();
 
     // Add initial commit and push
     fs::write(workspace_path.join("file1.txt"), "content 1").expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Initial commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit")
+        .expect("Failed to commit");
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
         .expect("Failed to push workspace");
 
     // Make a local commit (don't push)
     fs::write(workspace_path.join("local-file.txt"), "local content")
         .expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Local commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Local commit")
+        .expect("Failed to commit");
 
     // Clone the bare remote, commit and push from the clone to simulate remote-ahead
     let clone_dir = repo.temp_dir.path().join("clone-diverged");
@@ -3036,14 +3054,16 @@ fn test_pull_workspace_resolves_divergence() {
 
     // Add initial commit B and push
     fs::write(workspace_path.join("file1.txt"), "content 1").expect("Failed to write file");
-    jj::jj_commit(workspace_path_str, "Commit B").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Commit B")
+        .expect("Failed to commit");
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
         .expect("Failed to push workspace");
 
     // Make local commit D (don't push)
     fs::write(workspace_path.join("local-file.txt"), "local content")
         .expect("Failed to write file");
-    jj::jj_commit(workspace_path_str, "Local commit D").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Local commit D")
+        .expect("Failed to commit");
 
     // Clone the bare remote, commit C, push from clone to simulate remote-ahead
     let clone_dir = repo.temp_dir.path().join("clone-pull-diverged");
@@ -3138,11 +3158,12 @@ fn test_pull_workspace_no_divergence() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().unwrap();
+    let _workspace_path_str = workspace_path.to_str().unwrap();
 
     // Add initial commit and push
     fs::write(workspace_path.join("file1.txt"), "content 1").expect("Failed to write file");
-    jj::jj_commit(workspace_path_str, "Initial commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit")
+        .expect("Failed to commit");
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
         .expect("Failed to push workspace");
 
@@ -3213,7 +3234,7 @@ fn test_jj_get_sync_status_baseline_in_sync() {
     // Make a commit and push to establish the remote branch
     fs::write(workspace_path.join("initial.txt"), "initial content\n")
         .expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Initial commit on branch")
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit on branch")
         .expect("Failed to commit");
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
         .expect("Failed to push");
@@ -3278,7 +3299,7 @@ fn test_jj_get_sync_status_ahead_after_local_commit() {
     // Establish remote branch
     fs::write(workspace_path.join("initial.txt"), "initial content\n")
         .expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Initial commit on branch")
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit on branch")
         .expect("Failed to commit");
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
         .expect("Failed to push");
@@ -3288,7 +3309,8 @@ fn test_jj_get_sync_status_ahead_after_local_commit() {
     // Make a local-only commit → expect (1, 0)
     fs::write(workspace_path.join("local_only.txt"), "local content\n")
         .expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Local only commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Local only commit")
+        .expect("Failed to commit");
 
     let (ahead, behind) =
         treq_lib::jj::jj_get_sync_status(workspace_path_str, &workspace.branch_name, false)
@@ -3329,7 +3351,7 @@ fn test_jj_get_sync_status_returns_to_sync_after_push() {
     // Establish remote branch
     fs::write(workspace_path.join("initial.txt"), "initial content\n")
         .expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Initial commit on branch")
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit on branch")
         .expect("Failed to commit");
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
         .expect("Failed to push");
@@ -3342,7 +3364,8 @@ fn test_jj_get_sync_status_returns_to_sync_after_push() {
     // Make a local commit then push it
     fs::write(workspace_path.join("local_only.txt"), "local content\n")
         .expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Local only commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Local only commit")
+        .expect("Failed to commit");
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
         .expect("Failed to push");
     treq_lib::core::pull_workspace_from_remote(&repo.repo_path, Some(workspace.id), "git")
@@ -3404,7 +3427,7 @@ fn test_jj_get_sync_status_multiple_commits_ahead() {
     // Establish remote branch
     fs::write(workspace_path.join("initial.txt"), "initial content\n")
         .expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Initial commit on branch")
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit on branch")
         .expect("Failed to commit");
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
         .expect("Failed to push");
@@ -3413,9 +3436,11 @@ fn test_jj_get_sync_status_multiple_commits_ahead() {
 
     // Make two local commits → expect (2, 0)
     fs::write(workspace_path.join("local_2.txt"), "content 2\n").expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Second local commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Second local commit")
+        .expect("Failed to commit");
     fs::write(workspace_path.join("local_3.txt"), "content 3\n").expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Third local commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Third local commit")
+        .expect("Failed to commit");
 
     let (ahead, behind) =
         treq_lib::jj::jj_get_sync_status(workspace_path_str, &workspace.branch_name, false)
@@ -3467,7 +3492,7 @@ fn test_workspace_push_pull_with_workspace_status() {
     // Make a commit and push to establish the remote branch
     fs::write(workspace_path.join("initial.txt"), "initial content\n")
         .expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Initial commit on branch")
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit on branch")
         .expect("Failed to commit");
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
         .expect("Failed to push");
@@ -3497,7 +3522,8 @@ fn test_workspace_push_pull_with_workspace_status() {
     // Make a local-only commit → expect Ahead { count: 1 }
     fs::write(workspace_path.join("local_only.txt"), "local content\n")
         .expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Local only commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Local only commit")
+        .expect("Failed to commit");
 
     let status = get_status(&repo.repo_path, workspace.id);
     assert_eq!(
@@ -3532,9 +3558,11 @@ fn test_workspace_push_pull_with_workspace_status() {
 
     // Make two more local commits → expect Ahead { count: 2 }
     fs::write(workspace_path.join("local_2.txt"), "content 2\n").expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Second local commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Second local commit")
+        .expect("Failed to commit");
     fs::write(workspace_path.join("local_3.txt"), "content 3\n").expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "Third local commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Third local commit")
+        .expect("Failed to commit");
 
     let status = get_status(&repo.repo_path, workspace.id);
     assert_eq!(
@@ -3658,11 +3686,12 @@ fn test_workspace_status_with_workspace_id() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().unwrap();
+    let _workspace_path_str = workspace_path.to_str().unwrap();
 
     // Push initial commit to establish remote branch
     fs::write(workspace_path.join("initial.txt"), "initial\n").expect("Failed to write");
-    treq_lib::jj::jj_commit(workspace_path_str, "Initial commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit")
+        .expect("Failed to commit");
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
         .expect("Failed to push");
     treq_lib::core::pull_workspace_from_remote(&repo.repo_path, Some(workspace.id), "git")
@@ -3681,7 +3710,8 @@ fn test_workspace_status_with_workspace_id() {
 
     // Make a local commit → should be Ahead
     fs::write(workspace_path.join("local.txt"), "local\n").expect("Failed to write");
-    treq_lib::jj::jj_commit(workspace_path_str, "Local commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Local commit")
+        .expect("Failed to commit");
 
     let status = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
         .expect("workspace_status should succeed");
@@ -3826,7 +3856,7 @@ fn merge_diff_write_file(repo: &TestRepo, ws: &Workspace, path: &str, content: &
 }
 
 fn merge_diff_commit(repo: &TestRepo, ws: &Workspace, msg: &str) {
-    treq_lib::core::create_commit(&repo.repo_path, Some(ws.id), msg).unwrap();
+    treq_lib::core::commit_workspace(&repo.repo_path, ws.id, msg).unwrap();
 }
 
 fn merge_diff_paths(repo: &TestRepo, ws: &Workspace) -> Vec<String> {
@@ -3939,7 +3969,8 @@ fn setup_workspace_with_pushed_commit(
     // Make a local commit in the workspace directory via jj
     let file_path = std::path::Path::new(&full_path).join(filename);
     std::fs::write(&file_path, content).expect("Failed to write file");
-    jj::jj_commit(&full_path, &format!("Add {}", filename)).expect("Failed to create commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, ws.id, &format!("Add {}", filename))
+        .expect("Failed to create commit");
 
     // Push branch to remote via jj (jj manages the git refs)
     jj::jj_push(&full_path).expect("Failed to push branch via jj");
@@ -3967,7 +3998,8 @@ fn test_auto_rebase_resolves_bookmark_conflict() {
     // Make another local commit BEFORE the remote diverges (so we have local-only commits)
     let local_file = std::path::Path::new(&full_path).join("local2.txt");
     std::fs::write(&local_file, "local2").expect("Failed to write file");
-    jj::jj_commit(&full_path, "Add local2.txt").expect("Failed to create local commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, ws.id, "Add local2.txt")
+        .expect("Failed to create local commit");
 
     // Now make a remote commit on the same branch to create divergence
     repo.remote_commit_on_branch(
@@ -4079,11 +4111,13 @@ fn test_auto_rebase_batch_resolves_bookmark_conflicts() {
     // Add a local-only commit on each workspace (diverges from push point)
     let local1 = std::path::Path::new(&full_path1).join("local_ws1.txt");
     std::fs::write(&local1, "local ws1").expect("write");
-    jj::jj_commit(&full_path1, "Local commit on ws1").expect("Failed to create local commit ws1");
+    treq_lib::core::commit_workspace(&repo.repo_path, ws1.id, "Local commit on ws1")
+        .expect("Failed to create local commit ws1");
 
     let local2 = std::path::Path::new(&full_path2).join("local_ws2.txt");
     std::fs::write(&local2, "local ws2").expect("write");
-    jj::jj_commit(&full_path2, "Local commit on ws2").expect("Failed to create local commit ws2");
+    treq_lib::core::commit_workspace(&repo.repo_path, ws2.id, "Local commit on ws2")
+        .expect("Failed to create local commit ws2");
 
     // Make independent remote commits on both branches to create conflicts
     repo.remote_commit_on_branch("feat/batch-ws1", "r1.txt", "r1", "Remote on ws1")
@@ -4138,7 +4172,8 @@ fn test_auto_rebase_no_conflict_still_works() {
     // Make a local commit in the workspace
     let file_path = std::path::Path::new(&full_path).join("ws_file.txt");
     std::fs::write(&file_path, "workspace content").expect("Failed to write file");
-    jj::jj_commit(&full_path, "Add ws_file.txt").expect("Failed to create commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, ws.id, "Add ws_file.txt")
+        .expect("Failed to create commit");
 
     // Advance the target (main) via a remote commit on main
     repo.remote_commit_file("main_advance.txt", "main advance", "Advance main")

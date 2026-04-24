@@ -3,9 +3,6 @@ use std::path::Path;
 use crate::jj;
 use crate::local_db;
 
-fn auto_rebase_enabled() -> bool {
-    std::env::var("TREQ_DISABLE_AUTO_REBASE").ok().as_deref() != Some("1")
-}
 
 /// Lists commits for a workspace by its database ID, or for the home repo
 /// when no workspace ID is provided.
@@ -250,51 +247,3 @@ pub fn get_commit_diff(
         .map_err(|e| format!("Failed to get commit diff: {}", e))
 }
 
-/// Creates a commit in a workspace with the given message.
-///
-/// # Arguments
-/// * `repo_path`    - Path to the repository root
-/// * `workspace_id` - ID of the workspace to commit in
-/// * `message`      - Commit message
-///
-/// # Returns
-/// The commit output string on success, or an error string.
-pub fn create_commit(
-    repo_path: &str,
-    workspace_id: Option<i64>,
-    message: &str,
-) -> Result<String, String> {
-    match workspace_id {
-        Some(id) => {
-            let workspace = local_db::get_workspace_by_id(repo_path, id)
-                .map_err(|e| format!("Failed to get workspace: {}", e))?
-                .ok_or_else(|| format!("Workspace not found: {}", id))?;
-
-            let workspace_dir = Path::new(repo_path)
-                .join(".treq")
-                .join("workspaces")
-                .join(&workspace.workspace_path);
-            let workspace_dir_str = workspace_dir
-                .to_str()
-                .ok_or("Failed to convert workspace path to string")?;
-
-            let result = jj::jj_commit(workspace_dir_str, message)
-                .map_err(|e| format!("Failed to create commit: {}", e))?;
-
-            // Run auto-rebase synchronously so jj state is settled before returning.
-            // Integration tests can disable this with TREQ_DISABLE_AUTO_REBASE=1.
-            if auto_rebase_enabled() {
-                if let Ok(branch) = jj::get_workspace_branch(workspace_dir_str) {
-                    let _ = crate::auto_rebase::rebase_after_commit(repo_path, &branch);
-                }
-            }
-
-            Ok(result)
-        }
-        None => {
-            let result = jj::jj_commit(repo_path, message)
-                .map_err(|e| format!("Failed to create commit: {}", e))?;
-            Ok(result)
-        }
-    }
-}

@@ -104,10 +104,10 @@ pub fn jj_restore_all(workspace_path: String) -> Result<String, String> {
 #[tauri::command]
 pub fn create_commit(
     repo_path: String,
-    workspace_id: Option<i64>,
+    workspace_id: i64,
     message: String,
 ) -> Result<String, String> {
-    crate::core::create_commit(&repo_path, workspace_id, &message)
+    crate::core::commit_workspace(&repo_path, workspace_id, &message)
 }
 
 #[tauri::command]

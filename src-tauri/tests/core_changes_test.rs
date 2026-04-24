@@ -53,7 +53,8 @@ fn test_list_conflicted_files_no_conflicts() {
     // Write a clean file and commit — no conflicts
     fs::write(workspace_path.join("clean.txt"), "no conflicts here")
         .expect("Failed to write file");
-    treq_lib::jj::jj_commit(workspace_path_str, "clean commit").expect("Failed to commit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "clean commit")
+        .expect("Failed to commit");
 
     let result = treq_lib::core::list_conflicted_files(workspace_path_str)
         .expect("list_conflicted_files should succeed on clean workspace");
@@ -89,7 +90,7 @@ fn test_list_conflicted_files_with_conflicts() {
     // In workspace: create conflict.txt and commit → sibling change A
     fs::write(workspace_path.join("conflict.txt"), "workspace version\n")
         .expect("Failed to write conflict.txt in workspace");
-    treq_lib::jj::jj_commit(workspace_path_str, "workspace commit")
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "workspace commit")
         .expect("Failed to commit in workspace");
 
     let ws_change_id =

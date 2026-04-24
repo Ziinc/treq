@@ -42,6 +42,11 @@ urlencoding = "2"
 [dev-dependencies]
 mockall = "0.14.0"
 tempfile = "3"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "commit_workspace"
+harness = false
 # =============================================================================
 # Profile Configuration
 # =============================================================================
