@@ -51,8 +51,7 @@ fn test_list_conflicted_files_no_conflicts() {
     let workspace_path_str = workspace_path.to_str().unwrap();
 
     // Write a clean file and commit — no conflicts
-    fs::write(workspace_path.join("clean.txt"), "no conflicts here")
-        .expect("Failed to write file");
+    fs::write(workspace_path.join("clean.txt"), "no conflicts here").expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "clean commit")
         .expect("Failed to commit");
 
@@ -103,8 +102,7 @@ fn test_list_conflicted_files_with_conflicts() {
         "main version\n",
     )
     .expect("Failed to write conflict.txt in main repo");
-    treq_lib::jj::jj_commit(&repo.repo_path, "main commit")
-        .expect("Failed to commit in main repo");
+    treq_lib::jj::jj_commit(&repo.repo_path, "main commit").expect("Failed to commit in main repo");
 
     let main_change_id =
         get_change_id(&repo.repo_path, "@-").expect("Failed to get main change_id");

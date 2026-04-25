@@ -135,11 +135,7 @@ impl TestRepo {
     }
 
     /// Write or append file content at an absolute path.
-    fn write_file_at_path(
-        file_path: PathBuf,
-        content: &str,
-        append: bool,
-    ) -> Result<(), String> {
+    fn write_file_at_path(file_path: PathBuf, content: &str, append: bool) -> Result<(), String> {
         if let Some(parent) = file_path.parent() {
             fs::create_dir_all(parent)
                 .map_err(|e| format!("Failed to create parent dirs: {}", e))?;
@@ -280,7 +276,8 @@ impl TestRepo {
                 remote_path.to_str().unwrap(),
                 clone_path.to_str().unwrap(),
             ],
-        )?;
+        )
+        .expect("Failed to clone remote");
 
         let clone_path_str = clone_path.to_string_lossy().to_string();
 
@@ -288,22 +285,25 @@ impl TestRepo {
         Self::run_git(
             &clone_path_str,
             &["config", "user.email", "test@example.com"],
-        )?;
-        Self::run_git(&clone_path_str, &["config", "user.name", "Test User"])?;
+        )
+        .expect("Failed to configure git user email");
+        Self::run_git(&clone_path_str, &["config", "user.name", "Test User"])
+            .expect("Failed to configure git user name");
 
-        // Checkout the target branch (fetch it if it's a remote-tracking branch)
-        let checkout_result = Self::run_git(&clone_path_str, &["checkout", branch_name]);
-        if checkout_result.is_err() {
-            // Try checking out from origin
-            Self::run_git(
+        // Checkout the target branch. In a fresh clone the branch may exist only as
+        // origin/<branch>, so fall back to creating a local branch from that ref.
+        if let Err(local_checkout_err) = Self::run_git(&clone_path_str, &["checkout", branch_name])
+        {
+            let remote_ref = format!("origin/{}", branch_name);
+            if let Err(remote_checkout_err) = Self::run_git(
                 &clone_path_str,
-                &[
-                    "checkout",
-                    "-b",
-                    branch_name,
-                    &format!("origin/{}", branch_name),
-                ],
-            )?;
+                &["checkout", "-b", branch_name, &remote_ref],
+            ) {
+                return Err(format!(
+                    "Failed to checkout branch '{}' in remote clone. Local checkout error: {} Fallback checkout from '{}' error: {}",
+                    branch_name, local_checkout_err, remote_ref, remote_checkout_err
+                ));
+            }
         }
 
         // Write file, commit, and push from the clone
@@ -313,11 +313,12 @@ impl TestRepo {
                 .map_err(|e| format!("Failed to create parent dirs: {}", e))?;
         }
         fs::write(&file_path, content)
-            .map_err(|e| format!("Failed to write file in remote clone: {}", e))?;
+            .map_err(|e| format!("Failed to write file in remote clone: {}", e))
+            .expect("Failed to write file");
 
-        Self::run_git(&clone_path_str, &["add", relative_path])?;
-        Self::run_git(&clone_path_str, &["commit", "-m", message])?;
-        Self::run_git(&clone_path_str, &["push", "origin", branch_name])?;
+        Self::run_git(&clone_path_str, &["add", relative_path]).expect("Failed to add file");
+        Self::run_git(&clone_path_str, &["commit", "-m", message]).expect("Failed to commit");
+        Self::run_git(&clone_path_str, &["push", "origin", branch_name]).expect("Failed to push");
 
         // Clean up the clone
         fs::remove_dir_all(&clone_path)
@@ -544,10 +545,22 @@ impl JjVerifier {
     }
 
     /// Return the commit id the bookmark currently points to, or None if the bookmark doesn't resolve.
-    pub fn get_bookmark_commit_id(repo_path: &str, bookmark: &str) -> Result<Option<String>, String> {
+    pub fn get_bookmark_commit_id(
+        repo_path: &str,
+        bookmark: &str,
+    ) -> Result<Option<String>, String> {
         let output = Command::new(Self::jj_binary())
             .current_dir(repo_path)
-            .args(["log", "-r", bookmark, "-n", "1", "--no-graph", "-T", "commit_id"])
+            .args([
+                "log",
+                "-r",
+                bookmark,
+                "-n",
+                "1",
+                "--no-graph",
+                "-T",
+                "commit_id",
+            ])
             .output()
             .map_err(|e| format!("Failed to execute jj log: {}", e))?;
 
@@ -556,7 +569,11 @@ impl JjVerifier {
         }
 
         let id = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if id.is_empty() { Ok(None) } else { Ok(Some(id)) }
+        if id.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(id))
+        }
     }
 
     /// Check if jj working copy has changes (is dirty)

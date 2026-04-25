@@ -371,7 +371,7 @@ fn test_commit_diff_added_files() {
     // Call get_commit_diff
     let diff =
         treq_lib::core::get_commit_diff(&repo.repo_path, Some(workspace.id), change_id, "git")
-        .expect("Failed to get commit diff");
+            .expect("Failed to get commit diff");
 
     // Should have 2 files in the summary
     assert_eq!(

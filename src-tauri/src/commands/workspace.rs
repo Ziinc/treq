@@ -22,7 +22,6 @@ pub fn get_workspace_changed_files(
     crate::core::list_changed_files(&repo_path, workspace_id)
 }
 
-
 #[tauri::command]
 pub fn get_workspaces(repo_path: String) -> Result<Vec<Workspace>, String> {
     crate::core::list_workspaces(&repo_path)
@@ -648,5 +647,4 @@ mod tests {
             "Workspace should be removed from database even if directory was missing"
         );
     }
-
 }

@@ -37,13 +37,11 @@ import { MergePreviewPage } from "./MergePreviewPage";
 import { useToast } from "./ui/toast";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { useWorkspaceHierarchy } from "../hooks/useWorkspaceHierarchy";
-import { FocusRefreshProvider } from "../hooks/useAppFocusHandler";
 import {
 	Workspace,
 	createSession,
 	deleteWorkspace,
 	getRepoSetting,
-	getRepoStatus,
 	getSessions,
 	getSetting,
 	getWorkspaces,
@@ -239,27 +237,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		}
 	}, [repoName]);
 
-	// Fetch repo status (branch, changes, remote sync) on startup
 	useEffect(() => {
 		if (!repoPath) {
 			setCurrentBranch(null);
-			return;
 		}
-
-		const fetchRepoStatus = async () => {
-			try {
-				const status = await getRepoStatus(repoPath);
-				setCurrentBranch(status.current_branch);
-				if (status.fetch_error) {
-					console.warn("[Dashboard] Fetch had error:", status.fetch_error);
-				}
-			} catch (error) {
-				console.error("[Dashboard] Failed to get repo status:", error);
-				setCurrentBranch(null);
-			}
-		};
-
-		fetchRepoStatus();
 	}, [repoPath]);
 
 	// Manage file watcher lifecycle for selected workspace
@@ -670,17 +651,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
 	// Handle branch change after switching
 	const handleBranchChanged = useCallback(() => {
-		// Refresh current branch display
-		if (repoPath) {
-			getRepoStatus(repoPath)
-				.then((status) => {
-					setCurrentBranch(status.current_branch);
-				})
-				.catch((error) => {
-					console.error("Failed to refresh current branch:", error);
-				});
-		}
-
 		// Refresh workspace data
 		queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
 		queryClient.invalidateQueries({
@@ -731,8 +701,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	);
 
 	return (
-		<FocusRefreshProvider repoPath={repoPath} onBranchUpdate={setCurrentBranch}>
-			{!repoPath ? (
+		!repoPath ? (
 				<Onboarding onOpenRepo={handleOpenRepository} />
 			) : (
 				<div className="flex h-screen bg-background">
@@ -1040,7 +1009,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
 						onSelect={handleOpenSession}
 					/>
 				</div>
-			)}
-		</FocusRefreshProvider>
+			)
 	);
 };

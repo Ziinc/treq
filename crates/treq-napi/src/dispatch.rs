@@ -417,9 +417,9 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
         // ── Commits ───────────────────────────────────────────────────────
         "create_commit" => {
             let repo_path = get_str(&args, "repoPath")?;
-            let workspace_id: Option<i64> = opt_i64(&args, "workspaceId");
+            let workspace_id: i64 = get_i64(&args, "workspaceId")?;
             let message = get_str(&args, "message")?;
-            let result = treq_lib::core::create_commit(&repo_path, workspace_id, &message)?;
+            let result = treq_lib::core::commit_workspace(&repo_path, workspace_id, &message)?;
             Ok(Value::String(result))
         }
 

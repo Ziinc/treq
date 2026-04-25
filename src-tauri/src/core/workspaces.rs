@@ -134,6 +134,22 @@ pub fn create_workspace(
     // snapshot working copy of repo
     let _ = jj::jj_get_changed_files(repo_path);
 
+    let stacked_source_workspace = source_branch
+        .map(|src_branch| {
+            local_db::get_workspace_by_branch(repo_path, src_branch)
+                .map_err(|e| format!("Failed to get source workspace: {}", e))
+        })
+        .transpose()?
+        .flatten();
+
+    if let Some(source_workspace) = &stacked_source_workspace {
+        let source_workspace_path = Path::new(repo_path)
+            .join(".treq")
+            .join("workspaces")
+            .join(&source_workspace.workspace_path);
+        let _ = jj::jj_get_changed_files(&source_workspace_path.to_string_lossy());
+    }
+
     let branches =
         jj::get_branches(repo_path).map_err(|e| format!("Failed to get branches: {}", e))?;
 
@@ -198,6 +214,15 @@ pub fn create_workspace(
         local_db::update_workspace_not_on_remote(repo_path, workspace_id, true)?;
     }
 
+    if let Some(source_workspace) = &stacked_source_workspace {
+        local_db::update_workspace_target_branch(
+            repo_path,
+            workspace_id,
+            &source_workspace.branch_name,
+        )
+        .map_err(|e| format!("Failed to set target branch: {}", e))?;
+    }
+
     let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
         .map_err(|e| format!("Failed to get workspace from db: {}", e))?;
     let workspace = match workspace {
@@ -215,9 +240,7 @@ pub fn create_workspace(
         if !files.is_empty() {
             let source_workspace_path = if let Some(src_branch) = source_branch {
                 // For stacked workspaces, squash from the source workspace
-                let source_ws = local_db::get_workspace_by_branch(repo_path, src_branch)
-                    .map_err(|e| format!("Failed to get source workspace: {}", e))?;
-                match source_ws {
+                match stacked_source_workspace.as_ref() {
                     Some(ws) => {
                         let workspace_dir = Path::new(repo_path)
                             .join(".treq")
@@ -225,7 +248,20 @@ pub fn create_workspace(
                             .join(&ws.workspace_path);
                         workspace_dir.to_string_lossy().to_string()
                     }
-                    None => repo_path.to_string(),
+                    None => {
+                        let source_ws = local_db::get_workspace_by_branch(repo_path, src_branch)
+                            .map_err(|e| format!("Failed to get source workspace: {}", e))?;
+                        match source_ws {
+                            Some(ws) => {
+                                let workspace_dir = Path::new(repo_path)
+                                    .join(".treq")
+                                    .join("workspaces")
+                                    .join(&ws.workspace_path);
+                                workspace_dir.to_string_lossy().to_string()
+                            }
+                            None => repo_path.to_string(),
+                        }
+                    }
                 }
             } else {
                 // For regular workspaces, squash from the repo root
@@ -396,9 +432,21 @@ pub fn list_workspaces(repo_path: &str) -> Result<Vec<local_db::Workspace>, Stri
 pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspacePartialStatus>, String> {
     // Phase 1: Sequential snapshotting — captures changed files to avoid duplicate jj calls
     let workspaces_with_changes = list_workspaces_with_changes(repo_path)?;
+    let default_branch = jj::get_default_branch(repo_path).unwrap_or_else(|_| "main".to_string());
+
+    // Build a map of branch_name → changed file paths for overlap-based conflict detection.
+    // A stacked workspace conflicts with its target when both have modified the same file.
+    let changes_by_branch: HashMap<String, HashSet<String>> = workspaces_with_changes
+        .iter()
+        .map(|(ws, files)| {
+            let paths: HashSet<String> = files.iter().map(|f| f.path.clone()).collect();
+            (ws.branch_name.clone(), paths)
+        })
+        .collect();
 
     // Phase 2: Parallel read-only status queries per workspace
     let repo_path_owned = repo_path.to_string();
+    let default_branch_owned = default_branch;
     let statuses: Vec<WorkspacePartialStatus> = workspaces_with_changes
         .into_par_iter()
         .map(|(workspace, changed_files)| {
@@ -412,12 +460,27 @@ pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspacePartialSt
 
             let has_changes = !changed_files.is_empty();
 
-            let has_conflicts =
+            // Check for file-path overlap with target branch: if both this workspace and its
+            // target have modified the same files, there is a logical conflict.
+            let my_paths: HashSet<String> = changed_files.iter().map(|f| f.path.clone()).collect();
+            let has_path_overlap = workspace
+                .target_branch
+                .as_ref()
+                .and_then(|target| changes_by_branch.get(target))
+                .map(|target_paths| !my_paths.is_empty() && !my_paths.is_disjoint(target_paths))
+                .unwrap_or(false);
+
+            let has_jj_conflict =
                 jj::get_conflicted_files(&workspace_path, workspace.target_branch.as_deref())
                     .map(|files| !files.is_empty())
                     .unwrap_or(false);
 
-            let target_branch = workspace.target_branch.as_deref().unwrap_or("main");
+            let has_conflicts = has_path_overlap || has_jj_conflict;
+
+            let target_branch = workspace
+                .target_branch
+                .as_deref()
+                .unwrap_or(default_branch_owned.as_str());
 
             let commits_ahead = jj::jj_get_commits_ahead_count(&workspace_path, target_branch);
 
@@ -431,43 +494,6 @@ pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspacePartialSt
         .collect();
 
     Ok(statuses)
-}
-
-pub fn stack_workspace(
-    repo_path: &str,
-    source_workspace: Option<&local_db::Workspace>,
-    branch_name: Option<&str>,
-) -> Result<local_db::Workspace, String> {
-    let base = match source_workspace {
-        Some(workspace) => {
-            let workspace_path = Path::new(repo_path)
-                .join(".treq")
-                .join("workspaces")
-                .join(&workspace.workspace_path)
-                .to_str()
-                .expect("not a valid path")
-                .to_string();
-            let _ = jj::jj_get_changed_files(&workspace_path);
-            workspace.branch_name.clone()
-        }
-        None => "main".to_string(),
-    };
-
-    let target = match branch_name {
-        Some(branch) => branch.to_string(),
-        None => format!("{}-1", base),
-    };
-
-    let mut workspace = create_workspace(repo_path, &target, None, None, Some(&base), None)?;
-
-    // Set the target_branch to the parent workspace's branch for conflict detection
-    local_db::update_workspace_target_branch(repo_path, workspace.id, &base)
-        .map_err(|e| format!("Failed to set target branch: {}", e))?;
-
-    // Update the workspace object to reflect the change
-    workspace.target_branch = Some(base);
-
-    Ok(workspace)
 }
 
 /// Gets the status of a workspace, including parent, children, and full DAG hierarchy.
@@ -753,13 +779,39 @@ fn build_dag_recursive(
         .expect("not a valid path")
         .to_string();
 
-    let has_changes = jj::jj_get_changed_files(&workspace_path)
-        .map(|files| !files.is_empty())
+    let changed_files = jj::jj_get_changed_files(&workspace_path).unwrap_or_default();
+    let has_changes = !changed_files.is_empty();
+
+    // Check for file-path overlap with the target branch (same logic as list_workspace_statuses).
+    let my_paths: HashSet<String> = changed_files.iter().map(|f| f.path.clone()).collect();
+    let has_path_overlap = workspace
+        .target_branch
+        .as_ref()
+        .map(|target_branch| {
+            let target_changed = local_db::get_workspace_by_branch(repo_path, target_branch)
+                .ok()
+                .flatten()
+                .map(|target_ws| {
+                    let target_ws_path = Path::new(repo_path)
+                        .join(".treq")
+                        .join("workspaces")
+                        .join(&target_ws.workspace_path)
+                        .to_string_lossy()
+                        .to_string();
+                    jj::jj_get_changed_files(&target_ws_path).unwrap_or_default()
+                })
+                .unwrap_or_default();
+            let target_paths: HashSet<String> =
+                target_changed.iter().map(|f| f.path.clone()).collect();
+            !my_paths.is_empty() && !my_paths.is_disjoint(&target_paths)
+        })
         .unwrap_or(false);
-    let has_conflicts =
+
+    let has_jj_conflict =
         jj::get_conflicted_files(&workspace_path, workspace.target_branch.as_deref())
             .map(|files| !files.is_empty())
             .unwrap_or(false);
+    let has_conflicts = has_path_overlap || has_jj_conflict;
 
     dag_nodes.push(WorkspaceNode {
         status: WorkspacePartialStatus {
@@ -1111,7 +1163,14 @@ pub fn split_workspace(
     match position {
         SplitPosition::After => {
             // Create new workspace stacked on source
-            let new_workspace = stack_workspace(repo_path, Some(&source), Some(branch_name))?;
+            let new_workspace = create_workspace(
+                repo_path,
+                branch_name,
+                intent.clone(),
+                None,
+                Some(&source.branch_name),
+                None,
+            )?;
 
             let new_full_path = Path::new(repo_path)
                 .join(".treq")
@@ -1120,12 +1179,6 @@ pub fn split_workspace(
                 .to_str()
                 .ok_or("Failed to construct new workspace path")?
                 .to_string();
-
-            // Update intent if provided
-            if let Some(ref intent_str) = intent {
-                local_db::update_workspace_intent(repo_path, new_workspace.id, intent_str)
-                    .map_err(|e| format!("Failed to update intent: {}", e))?;
-            }
 
             if has_files {
                 let files = file_paths.unwrap();
@@ -1492,8 +1545,13 @@ pub fn check_and_rebase_workspaces(
     if let Some(id) = workspace_id {
         let default_branch = default_branch.unwrap_or_else(|| "main".to_string());
         let force = force.unwrap_or(false);
-        let result =
-            auto_rebase::rebase_single_workspace(repo_path, id, &default_branch, force, conflict_style)?;
+        let result = auto_rebase::rebase_single_workspace(
+            repo_path,
+            id,
+            &default_branch,
+            force,
+            conflict_style,
+        )?;
 
         match result {
             Some(auto_result) => Ok(SingleRebaseResult {
@@ -1514,8 +1572,10 @@ pub fn check_and_rebase_workspaces(
 
         let rebased_count: usize = results.iter().map(|r| r.workspaces_rebased.len()).sum();
         let all_success = results.iter().all(|r| r.rebase_result.success);
-        let bookmark_conflicts: Vec<WorkspaceBookmarkConflict> =
-            results.iter().flat_map(|r| r.bookmark_conflicts.clone()).collect();
+        let bookmark_conflicts: Vec<WorkspaceBookmarkConflict> = results
+            .iter()
+            .flat_map(|r| r.bookmark_conflicts.clone())
+            .collect();
 
         let mut summary = String::new();
         for result in &results {
@@ -1523,7 +1583,11 @@ pub fn check_and_rebase_workspaces(
                 "Target '{}': rebased {} workspace(s) - {}\n",
                 result.target_branch,
                 result.workspaces_rebased.len(),
-                if result.rebase_result.success { "success" } else { "failed" }
+                if result.rebase_result.success {
+                    "success"
+                } else {
+                    "failed"
+                }
             ));
         }
         if results.is_empty() {

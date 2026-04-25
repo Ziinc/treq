@@ -28,12 +28,10 @@ pub fn repo_status(repo_path: &str) -> Result<RepoStatus, String> {
     let fetch_error = jj::jj_git_fetch(repo_path).err().map(|e| e.to_string());
 
     // Step 2: current branch (git HEAD)
-    let current_branch = jj::get_workspace_branch(repo_path)
-        .unwrap_or_else(|_| "main".to_string());
+    let current_branch = jj::get_workspace_branch(repo_path).unwrap_or_else(|_| "main".to_string());
 
     // Step 3: default branch for conflict/change checks
-    let default_branch = jj::get_default_branch(repo_path)
-        .unwrap_or_else(|_| "main".to_string());
+    let default_branch = jj::get_default_branch(repo_path).unwrap_or_else(|_| "main".to_string());
 
     // Step 4: uncommitted changes
     let has_changes = jj::jj_get_changed_files(repo_path)

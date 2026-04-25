@@ -9,7 +9,6 @@ import {
 } from "../../../lib/api";
 import { type ParsedFileChange, parseJjChangedFiles } from "../../../lib/git-utils";
 import { useCachedWorkspaceChanges } from "../../../hooks/useCachedWorkspaceChanges";
-import { useFocusRefreshSubscription } from "../../../hooks/useAppFocusHandler";
 import { listen } from "@tauri-apps/api/event";
 import type { useToast } from "../../ui/toast";
 import type { FileHunksData } from "../types";
@@ -87,8 +86,6 @@ export function useFileLoading({
 	}, [workspacePath, applyChangedFilesRef, addToast, onRefreshingChange]);
 
 	useEffect(() => { loadChangedFiles(); }, [workspacePath]);
-
-	useFocusRefreshSubscription("afterInvalidate", () => { loadChangedFiles(); }, [loadChangedFiles]);
 
 	useEffect(() => {
 		if (!workspaceId) return;

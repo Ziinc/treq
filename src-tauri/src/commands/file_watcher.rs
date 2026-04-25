@@ -1,4 +1,4 @@
-use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{new_debouncer, DebounceEventResult, Debouncer, FileIdMap};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -72,7 +72,6 @@ impl WatcherManager {
         .map_err(|e| format!("Failed to create watcher: {}", e))?;
 
         debouncer
-            .watcher()
             .watch(&path, RecursiveMode::Recursive)
             .map_err(|e| format!("Failed to watch path: {}", e))?;
 

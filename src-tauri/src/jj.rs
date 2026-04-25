@@ -2,12 +2,13 @@ use jj_lib::config::{ConfigLayer, ConfigSource, StackedConfig};
 use jj_lib::git;
 use jj_lib::gitignore::GitIgnoreFile;
 use jj_lib::matchers::EverythingMatcher;
-use jj_lib::op_store::RefTarget;
-use jj_lib::ref_name::WorkspaceNameBuf;
+use jj_lib::op_store::{RefTarget, RemoteRef};
+use jj_lib::ref_name::{RefName, RemoteName, RemoteRefSymbol, WorkspaceNameBuf};
 use jj_lib::repo::{Repo as _, StoreFactories};
+use jj_lib::rewrite::merge_commit_trees;
 use jj_lib::settings::UserSettings;
-use jj_lib::workspace::{default_working_copy_factories, Workspace};
-use jj_lib::working_copy::SnapshotOptions;
+use jj_lib::working_copy::{SnapshotOptions, WorkingCopyFreshness};
+use jj_lib::workspace::{default_working_copy_factories, default_working_copy_factory, Workspace};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
@@ -263,8 +264,14 @@ pub fn cache_git_user_config(
 fn get_git_user_config(repo_path: &str) -> (String, String) {
     let db_path = local_db::get_local_db_path(repo_path);
     if let Ok(db) = crate::db::Database::new(db_path) {
-        let cached_name = db.get_repo_setting(repo_path, "git_user_name").ok().flatten();
-        let cached_email = db.get_repo_setting(repo_path, "git_user_email").ok().flatten();
+        let cached_name = db
+            .get_repo_setting(repo_path, "git_user_name")
+            .ok()
+            .flatten();
+        let cached_email = db
+            .get_repo_setting(repo_path, "git_user_email")
+            .ok()
+            .flatten();
         if let (Some(n), Some(e)) = (cached_name, cached_email) {
             return (n, e);
         }
@@ -382,8 +389,12 @@ fn init_jj_for_git_repo(repo_path: &str) -> Result<(), JjError> {
     // This links jj to the existing git repository
     let git_repo_path = path.join(".git");
 
-    futures::executor::block_on(Workspace::init_external_git(&settings, path, &git_repo_path))
-        .map_err(|e| JjError::InitFailed(e.to_string()))?;
+    futures::executor::block_on(Workspace::init_external_git(
+        &settings,
+        path,
+        &git_repo_path,
+    ))
+    .map_err(|e| JjError::InitFailed(e.to_string()))?;
     // Ensure .gitignore entries
     ensure_gitignore_entries(repo_path)?;
 
@@ -459,93 +470,270 @@ pub fn create_workspace(
 ) -> Result<String, JjError> {
     let repo_path_buf = Path::new(repo_path);
 
-    // Validate main repo has jj initialized
     if !is_jj_workspace(repo_path) {
         return Err(JjError::NotGitRepository);
     }
 
-    // Compute workspace path
     let sanitized_name = sanitize_workspace_name(workspace_name);
     let workspace_dir = repo_path_buf
         .join(".treq")
         .join("workspaces")
         .join(&sanitized_name);
 
-    let workspace_path_str = workspace_dir.to_string_lossy().to_string();
+    // Ensure workspace directory exists (init_workspace_with_existing_repo requires it)
+    if !workspace_dir.exists() {
+        fs::create_dir_all(&workspace_dir).map_err(|e| {
+            JjError::GitWorkspaceError(format!("Failed to create workspace dir: {}", e))
+        })?;
+    }
 
-    // Use jj workspace add for all cases (handles both new and existing bookmarks)
-    let mut jj_cmd = command_for("jj");
-    jj_cmd
-        .current_dir(repo_path)
-        .args(["workspace", "add", &workspace_path_str]);
+    let settings = create_user_settings(repo_path)?;
 
-    // Determine revision to start from and extract remote name if applicable
-    // Convert git format (origin/branch) to jj format (branch@origin)
-    let _remote_name = if !new_branch {
-        // Existing bookmark: point to that bookmark's revision
-        jj_cmd.args(["--revision", branch_name]);
-        None
-    } else if let Some(source) = source_branch {
-        // Convert source branch format - only treat as remote if prefix is actual remote
-        let jj_ref = convert_git_branch_to_jj_format(source, repo_path);
+    // Load parent workspace and repo
+    let parent_workspace = Workspace::load(
+        &settings,
+        repo_path_buf,
+        &StoreFactories::default(),
+        &default_working_copy_factories(),
+    )
+    .map_err(|e| JjError::GitWorkspaceError(format!("Failed to load parent workspace: {}", e)))?;
 
-        // Check if conversion happened (contains @)
-        let remote_name = if jj_ref.contains('@') && jj_ref != source {
-            // Extract remote name from jj_ref (format: branch@remote)
-            jj_ref.split('@').nth(1).map(|s| s.to_string())
+    let parent_repo = futures::executor::block_on(parent_workspace.repo_loader().load_at_head())
+        .map_err(|e| JjError::GitWorkspaceError(format!("Failed to load repo: {}", e)))?;
+    let git_head_branch = read_git_head_branch(repo_path)
+        .ok()
+        .filter(|branch| !branch.is_empty() && branch != "HEAD");
+
+    // Import git HEAD so the initial git commit (e.g. README.md) is visible in jj op-store.
+    // Also track any remote bookmarks that have a matching local bookmark — mirrors what
+    // `jj git fetch` would do — so that subsequent `jj git push` doesn't refuse due to
+    // untracked remote bookmarks (e.g. main@origin).
+    let parent_repo = {
+        let mut import_tx = parent_repo.start_transaction();
+        let _ = futures::executor::block_on(git::import_head(import_tx.repo_mut()));
+
+        let git_head_id = import_tx
+            .repo()
+            .view()
+            .git_head()
+            .added_ids()
+            .next()
+            .cloned();
+        if let (Some(branch_name), Some(head_id)) = (git_head_branch.as_ref(), git_head_id) {
+            let existing = import_tx
+                .repo()
+                .view()
+                .get_local_bookmark(RefName::new(branch_name));
+            if existing.is_absent() {
+                import_tx.repo_mut().set_local_bookmark_target(
+                    RefName::new(branch_name),
+                    RefTarget::normal(head_id),
+                );
+            }
+        }
+
+        // Collect (name, remote) pairs that have a local counterpart but are untracked.
+        let to_track: Vec<(String, String)> = import_tx
+            .repo()
+            .view()
+            .all_remote_bookmarks()
+            .filter_map(|(sym, remote_ref)| {
+                if remote_ref.is_tracked() {
+                    return None;
+                }
+                let local = import_tx
+                    .repo()
+                    .view()
+                    .get_local_bookmark(sym.name.as_ref());
+                if local.is_absent() {
+                    return None;
+                }
+                Some((
+                    sym.name.as_str().to_string(),
+                    sym.remote.as_str().to_string(),
+                ))
+            })
+            .collect();
+        for (name, remote) in to_track {
+            let sym = RemoteRefSymbol {
+                name: RefName::new(&name),
+                remote: RemoteName::new(&remote),
+            };
+            let _ = import_tx.repo_mut().track_remote_bookmark(sym);
+        }
+
+        if import_tx.repo().has_changes() {
+            futures::executor::block_on(import_tx.commit("import git head")).map_err(|e| {
+                JjError::GitWorkspaceError(format!("Failed to import git head: {}", e))
+            })?
         } else {
-            None
-        };
-
-        jj_cmd.args(["--revision", &jj_ref]);
-        remote_name
-    } else {
-        None
+            parent_repo
+        }
     };
 
-    let output = jj_cmd.output().map_err(|e| {
-        JjError::GitWorkspaceError(format!("Failed to execute jj workspace add: {}", e))
-    })?;
+    // Collect remote names from view (avoids subprocess for branch format conversion)
+    let remote_names: HashSet<String> = parent_repo
+        .view()
+        .all_remote_bookmarks()
+        .map(|(sym, _)| sym.remote.as_str().to_string())
+        .collect();
 
-    if !output.status.success() {
-        return Err(JjError::GitWorkspaceError(
-            String::from_utf8_lossy(&output.stderr).to_string(),
-        ));
-    }
-
-    // Create/set the bookmark on the new workspace's working copy
-    if let Err(e) = jj_set_bookmark(&workspace_path_str, branch_name, "@") {
-        eprintln!("Warning: Failed to set bookmark '{}': {}", branch_name, e);
-        // Don't fail workspace creation for bookmark errors
-    }
-
-    // Always track the bookmark with origin remote
-    // This ensures bookmarks are tracked even for new local branches
-    match is_bookmark_tracked(&workspace_path_str, branch_name, "origin") {
-        Ok(true) => {
-            eprintln!("Bookmark '{}' is already tracked with origin", branch_name);
-        }
-        Ok(false) => {
-            if let Err(e) = jj_bookmark_track(&workspace_path_str, branch_name, "origin") {
-                eprintln!(
-                    "Warning: Failed to track bookmark '{}@origin': {}",
-                    branch_name, e
-                );
-                // Don't fail workspace creation for tracking errors
+    // Resolve the source commit to use as parent of the new wc commit
+    let source_commit_id = if !new_branch {
+        // Existing local bookmark: use the bookmark's current commit
+        let target = parent_repo
+            .view()
+            .get_local_bookmark(RefName::new(branch_name));
+        target.added_ids().next().cloned().ok_or_else(|| {
+            JjError::GitWorkspaceError(format!("Bookmark '{}' not found", branch_name))
+        })?
+    } else if let Some(source) = source_branch {
+        // Convert git-style prefix (origin/branch) to jj style (branch@origin)
+        let jj_ref = if let Some(slash) = source.find('/') {
+            let prefix = &source[..slash];
+            let suffix = &source[slash + 1..];
+            if remote_names.contains(prefix) {
+                format!("{}@{}", suffix, prefix)
+            } else {
+                source.to_string()
             }
+        } else {
+            source.to_string()
+        };
+
+        if let Some((name, remote)) = jj_ref.split_once('@') {
+            let sym = RemoteRefSymbol {
+                name: RefName::new(name),
+                remote: RemoteName::new(remote),
+            };
+            parent_repo
+                .view()
+                .get_remote_bookmark(sym)
+                .target
+                .added_ids()
+                .next()
+                .cloned()
+                .ok_or_else(|| {
+                    JjError::GitWorkspaceError(format!("Remote bookmark '{}' not found", jj_ref))
+                })?
+        } else {
+            // Local bookmark: prefer a workspace WC commit with the same parents
+            // (represents uncommitted changes on top of the bookmark state).
+            let bookmark_id = parent_repo
+                .view()
+                .get_local_bookmark(RefName::new(&jj_ref))
+                .added_ids()
+                .next()
+                .cloned()
+                .ok_or_else(|| {
+                    JjError::GitWorkspaceError(format!("Bookmark '{}' not found", jj_ref))
+                })?;
+            let bookmark_parents: Vec<_> = parent_repo
+                .store()
+                .get_commit(&bookmark_id)
+                .map(|c| c.parent_ids().to_vec())
+                .unwrap_or_default();
+            let wc_override = parent_repo
+                .view()
+                .wc_commit_ids()
+                .values()
+                .find(|wc_id| {
+                    if *wc_id == &bookmark_id {
+                        return false;
+                    }
+                    parent_repo
+                        .store()
+                        .get_commit(wc_id)
+                        .map(|wc| wc.parent_ids() == bookmark_parents.as_slice())
+                        .unwrap_or(false)
+                })
+                .cloned();
+            wc_override.unwrap_or(bookmark_id)
         }
-        Err(e) => {
-            eprintln!("Warning: Could not determine tracking status: {}", e);
-            // Attempt to track anyway
-            if let Err(e) = jj_bookmark_track(&workspace_path_str, branch_name, "origin") {
-                eprintln!(
-                    "Warning: Failed to track bookmark '{}@origin': {}",
-                    branch_name, e
-                );
-                // Don't fail workspace creation for tracking errors
-            }
+    } else {
+        // Default: use git HEAD (imported above) so git history is included
+        parent_repo
+            .view()
+            .git_head()
+            .added_ids()
+            .next()
+            .cloned()
+            .ok_or_else(|| JjError::GitWorkspaceError("No git HEAD commit found".to_string()))?
+    };
+
+    let new_ws_name: WorkspaceNameBuf = sanitized_name.clone().into();
+
+    // Initialize the new workspace (creates .jj, registers workspace, checks out root commit)
+    let wc_factory = default_working_copy_factory();
+    let (mut new_workspace, new_repo) =
+        futures::executor::block_on(Workspace::init_workspace_with_existing_repo(
+            &workspace_dir,
+            parent_workspace.repo_path(),
+            &parent_repo,
+            &*wc_factory,
+            new_ws_name.clone(),
+        ))
+        .map_err(|e| JjError::GitWorkspaceError(format!("Failed to init workspace: {}", e)))?;
+
+    // Start a transaction on the new repo to move wc to the desired source commit
+    let source_commit = new_repo
+        .store()
+        .get_commit(&source_commit_id)
+        .map_err(|e| JjError::GitWorkspaceError(format!("Failed to get source commit: {}", e)))?;
+
+    let mut tx = new_repo.start_transaction();
+
+    let parent_tree =
+        futures::executor::block_on(merge_commit_trees(tx.repo(), &[source_commit.clone()]))
+            .map_err(|e| JjError::GitWorkspaceError(format!("Failed to merge trees: {}", e)))?;
+
+    // Create new wc commit on top of source_commit (empty, inherits source tree)
+    let new_wc = futures::executor::block_on(
+        tx.repo_mut()
+            .new_commit(vec![source_commit_id.clone()], parent_tree)
+            .write(),
+    )
+    .map_err(|e| JjError::GitWorkspaceError(format!("Failed to create wc commit: {}", e)))?;
+
+    // Point the new workspace's @ to the new wc commit
+    futures::executor::block_on(tx.repo_mut().edit(new_ws_name.clone(), &new_wc))
+        .map_err(|e| JjError::GitWorkspaceError(format!("Failed to set wc: {}", e)))?;
+
+    // Set the local bookmark to the new wc commit
+    tx.repo_mut().set_local_bookmark_target(
+        RefName::new(branch_name),
+        RefTarget::normal(new_wc.id().clone()),
+    );
+
+    // Track branch@origin if the remote bookmark exists and is not yet tracked
+    {
+        let sym = RemoteRefSymbol {
+            name: RefName::new(branch_name),
+            remote: RemoteName::new("origin"),
+        };
+        let remote_ref: RemoteRef = tx.repo().view().get_remote_bookmark(sym).clone();
+        if !remote_ref.target.is_absent() && !remote_ref.is_tracked() {
+            let sym = RemoteRefSymbol {
+                name: RefName::new(branch_name),
+                remote: RemoteName::new("origin"),
+            };
+            let _ = tx.repo_mut().track_remote_bookmark(sym);
         }
     }
+
+    // Rebase any descendants of rewritten commits (required before tx.commit)
+    futures::executor::block_on(tx.repo_mut().rebase_descendants())
+        .map_err(|e| JjError::GitWorkspaceError(format!("Failed to rebase descendants: {}", e)))?;
+
+    // Export to git refs (colocated repo)
+    let _ = git::export_refs(tx.repo_mut());
+
+    let final_repo = futures::executor::block_on(tx.commit("create_workspace"))
+        .map_err(|e| JjError::GitWorkspaceError(format!("Failed to commit transaction: {}", e)))?;
+
+    // Update the physical working copy to match the new wc commit
+    futures::executor::block_on(new_workspace.check_out(final_repo.op_id().clone(), None, &new_wc))
+        .map_err(|e| JjError::GitWorkspaceError(format!("Failed to checkout workspace: {}", e)))?;
 
     Ok(sanitized_name)
 }
@@ -833,6 +1021,17 @@ pub fn list_workspaces(repo_path: &str) -> Result<Vec<WorkspaceInfo>, JjError> {
 
 /// Get the current branch of a workspace
 pub fn get_workspace_branch(workspace_path: &str) -> Result<String, JjError> {
+    if let Some(repo_path) = derive_repo_path_from_workspace(workspace_path) {
+        let ws_name = Path::new(workspace_path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| JjError::IoError("Invalid workspace path".to_string()))?;
+
+        if let Ok(Some(workspace)) = local_db::get_workspace_by_path(&repo_path, ws_name) {
+            return Ok(workspace.branch_name);
+        }
+    }
+
     let output = command_for("git")
         .current_dir(workspace_path)
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
@@ -1076,20 +1275,62 @@ pub fn jj_diff_summary(workspace_path: &str, change_id: &str) -> Result<Vec<Stri
 /// Update a stale workspace working copy
 /// Runs: jj workspace update-stale in the workspace directory
 pub fn update_stale_workspace(workspace_path: &str) -> Result<(), JjError> {
-    let output = command_for("jj")
-        .current_dir(workspace_path)
-        .args(["workspace", "update-stale"])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
-
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(JjError::InitFailed(format!(
-            "Failed to update stale workspace: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )))
+    let path = Path::new(workspace_path);
+    if !path.join(".jj").exists() {
+        return Ok(());
     }
+
+    let repo_path_opt = derive_repo_path_from_workspace(workspace_path);
+    let settings_path = repo_path_opt.as_deref().unwrap_or(workspace_path);
+    let settings = create_user_settings(settings_path)?;
+
+    let mut workspace = Workspace::load(
+        &settings,
+        path,
+        &StoreFactories::default(),
+        &default_working_copy_factories(),
+    )
+    .map_err(|e| JjError::InitFailed(format!("Failed to load workspace: {}", e)))?;
+
+    let repo = futures::executor::block_on(workspace.repo_loader().load_at_head())
+        .map_err(|e| JjError::InitFailed(format!("Failed to load repo: {}", e)))?;
+
+    let workspace_name = workspace.workspace_name().to_owned();
+
+    let wc_commit_id = match repo.view().get_wc_commit_id(&workspace_name) {
+        Some(id) => id.clone(),
+        None => return Ok(()),
+    };
+    let wc_commit = repo
+        .store()
+        .get_commit(&wc_commit_id)
+        .map_err(|e| JjError::InitFailed(format!("Failed to get wc commit: {}", e)))?;
+
+    let mut locked_ws = workspace
+        .start_working_copy_mutation()
+        .map_err(|e| JjError::InitFailed(format!("Failed to lock working copy: {}", e)))?;
+
+    let freshness = futures::executor::block_on(WorkingCopyFreshness::check_stale(
+        locked_ws.locked_wc(),
+        &wc_commit,
+        &repo,
+    ))
+    .map_err(|e| JjError::InitFailed(format!("Failed to check staleness: {}", e)))?;
+
+    match freshness {
+        WorkingCopyFreshness::Fresh => {
+            futures::executor::block_on(locked_ws.finish(repo.op_id().clone()))
+                .map_err(|e| JjError::InitFailed(format!("Failed to finish wc: {}", e)))?;
+        }
+        _ => {
+            futures::executor::block_on(locked_ws.locked_wc().check_out(&wc_commit))
+                .map_err(|e| JjError::InitFailed(format!("Failed to check out: {}", e)))?;
+            futures::executor::block_on(locked_ws.finish(repo.op_id().clone()))
+                .map_err(|e| JjError::InitFailed(format!("Failed to finish wc: {}", e)))?;
+        }
+    }
+
+    Ok(())
 }
 
 /// Edit the working copy of a workspace branch
@@ -1205,13 +1446,14 @@ pub fn jj_workspace_update_stale(workspace_path: &str) -> Result<String, JjError
 // Uses jj CLI for file listing (faster) and git CLI for diffs (reliable)
 // ============================================================================
 
-/// Get list of changed files in working copy using jj status
-/// This is faster than git status for large repos
+/// Get list of changed files in working copy using jj-lib (no subprocess)
+/// Snapshots the working copy and diffs against the parent commit tree.
 pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, JjError> {
-    // Validate workspace path exists and is a directory
-    let path = std::path::Path::new(workspace_path);
+    use futures::StreamExt as _;
+
+    let path = Path::new(workspace_path);
     if !path.exists() {
-        return Ok(Vec::new()); // Return empty list if workspace doesn't exist
+        return Ok(Vec::new());
     }
     if !path.is_dir() {
         return Err(JjError::IoError(format!(
@@ -1219,20 +1461,141 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
             workspace_path
         )));
     }
-
-    let output = command_for("jj")
-        .current_dir(workspace_path)
-        .args(["status", "--no-pager"])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
-
-    if !output.status.success() {
-        // Return empty list on error instead of failing - workspace might not be initialized yet
+    if !path.join(".jj").exists() {
         return Ok(Vec::new());
     }
 
-    let status_output = String::from_utf8_lossy(&output.stdout);
-    parse_jj_status(&status_output)
+    let repo_path_opt = derive_repo_path_from_workspace(workspace_path);
+    let settings_path = repo_path_opt.as_deref().unwrap_or(workspace_path);
+    let settings = match create_user_settings(settings_path) {
+        Ok(s) => s,
+        Err(_) => return Ok(Vec::new()),
+    };
+    let mut workspace = match Workspace::load(
+        &settings,
+        path,
+        &StoreFactories::default(),
+        &default_working_copy_factories(),
+    ) {
+        Ok(ws) => ws,
+        Err(_) => return Ok(Vec::new()),
+    };
+    let repo = match futures::executor::block_on(workspace.repo_loader().load_at_head()) {
+        Ok(r) => r,
+        Err(_) => return Ok(Vec::new()),
+    };
+
+    let ignore_root = repo_path_opt.as_deref().unwrap_or(workspace_path);
+    let base_ignores = GitIgnoreFile::empty()
+        .chain_with_file("", Path::new(ignore_root).join(".gitignore"))
+        .unwrap_or_else(|_| GitIgnoreFile::empty())
+        .chain_with_file(
+            "",
+            Path::new(ignore_root)
+                .join(".git")
+                .join("info")
+                .join("exclude"),
+        )
+        .unwrap_or_else(|_| GitIgnoreFile::empty());
+    let opts = SnapshotOptions {
+        base_ignores,
+        progress: None,
+        start_tracking_matcher: &EverythingMatcher,
+        force_tracking_matcher: &EverythingMatcher,
+        max_new_file_size: 1024 * 1024,
+    };
+
+    let workspace_name = workspace.workspace_name().to_owned();
+
+    // Load current WC commit before locking (needed for tree comparison and diffing)
+    let wc_commit_id = match repo.view().get_wc_commit_id(&workspace_name) {
+        Some(id) => id.clone(),
+        None => return Ok(Vec::new()),
+    };
+    let wc_commit = match repo.store().get_commit(&wc_commit_id) {
+        Ok(c) => c,
+        Err(_) => return Ok(Vec::new()),
+    };
+
+    let mut locked_ws = match workspace.start_working_copy_mutation() {
+        Ok(lws) => lws,
+        Err(_) => return Ok(Vec::new()),
+    };
+    let new_tree = match futures::executor::block_on(locked_ws.locked_wc().snapshot(&opts)) {
+        Ok((tree, _)) => tree,
+        Err(_) => return Ok(Vec::new()), // locked_ws dropped here, lock released
+    };
+
+    // If the tree changed, create a new WC commit and update the op-store so that
+    // subsequent jj_lib loads (e.g. create_workspace for a stacked workspace) see
+    // the snapshotted state.
+    if new_tree.tree_ids() != wc_commit.tree_ids() {
+        let mut tx = repo.start_transaction();
+        let mut builder = tx.repo_mut().rewrite_commit(&wc_commit).detach();
+        builder.set_tree(new_tree.clone());
+        match futures::executor::block_on(builder.write(tx.repo_mut())) {
+            Ok(rewritten_wc) => {
+                let _ = futures::executor::block_on(
+                    tx.repo_mut().edit(workspace_name.clone(), &rewritten_wc),
+                );
+                let _ = futures::executor::block_on(tx.repo_mut().rebase_descendants());
+                match futures::executor::block_on(tx.commit("snapshot working copy")) {
+                    Ok(final_repo) => {
+                        let _ = futures::executor::block_on(
+                            locked_ws.finish(final_repo.op_id().clone()),
+                        );
+                    }
+                    Err(_) => {
+                        let _ = futures::executor::block_on(locked_ws.finish(repo.op_id().clone()));
+                    }
+                }
+            }
+            Err(_) => {
+                let _ = futures::executor::block_on(locked_ws.finish(repo.op_id().clone()));
+            }
+        }
+    } else {
+        let _ = futures::executor::block_on(locked_ws.finish(repo.op_id().clone()));
+    }
+
+    // Get the wc commit's parent tree to diff against
+    let parent_tree = if wc_commit.parent_ids().is_empty() {
+        repo.store().root_commit().tree()
+    } else {
+        match repo.store().get_commit(&wc_commit.parent_ids()[0]) {
+            Ok(parent) => parent.tree(),
+            Err(_) => return Ok(Vec::new()),
+        }
+    };
+
+    let diff_entries = futures::executor::block_on(
+        parent_tree
+            .diff_stream(&new_tree, &EverythingMatcher)
+            .collect::<Vec<_>>(),
+    );
+
+    let mut changes = Vec::new();
+    for entry in diff_entries {
+        let file_path = entry.path.as_internal_file_string().to_string();
+        let values = match entry.values {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let status = if values.before.is_absent() {
+            "A"
+        } else if values.after.is_absent() {
+            "D"
+        } else {
+            "M"
+        };
+        changes.push(JjFileChange {
+            path: file_path,
+            status: status.to_string(),
+            previous_path: None,
+        });
+    }
+
+    Ok(changes)
 }
 
 /// Checks if the working copy is empty (no uncommitted changes)
@@ -1839,8 +2202,8 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
 /// Read the current git branch from .git/HEAD without shelling out
 fn read_git_head_branch(repo_path: &str) -> Result<String, String> {
     let head_path = Path::new(repo_path).join(".git").join("HEAD");
-    let content = fs::read_to_string(&head_path)
-        .map_err(|e| format!("Failed to read .git/HEAD: {}", e))?;
+    let content =
+        fs::read_to_string(&head_path).map_err(|e| format!("Failed to read .git/HEAD: {}", e))?;
     let trimmed = content.trim();
     if let Some(branch) = trimmed.strip_prefix("ref: refs/heads/") {
         Ok(branch.to_string())
@@ -2441,10 +2804,11 @@ pub fn jj_push(workspace_path: &str) -> Result<String, JjError> {
         }
     }
 
-    // Execute the push
+    // Execute the push with explicit bookmark name so new/untracked bookmarks
+    // are pushed even before they have a remote-tracking counterpart.
     let mut cmd = command_for("jj");
     cmd.current_dir(workspace_path);
-    cmd.args(["git", "push"]);
+    cmd.args(["git", "push", "--bookmark", &branch_name]);
 
     let output = cmd.output().map_err(|e| JjError::IoError(e.to_string()))?;
 
@@ -2456,6 +2820,30 @@ pub fn jj_push(workspace_path: &str) -> Result<String, JjError> {
             "{}{}{}",
             tracking_message, stdout, stderr
         )));
+    }
+
+    // Fallback: if jj CLI didn't push the branch (possible version mismatch between
+    // jj_lib and jj CLI), also push directly via git from the main repo path.
+    if let Some(repo_path) = derive_repo_path_from_workspace(workspace_path) {
+        let git_out = std::process::Command::new("git")
+            .current_dir(&repo_path)
+            .args(["push", "origin", &branch_name])
+            .output()
+            .map_err(|e| JjError::IoError(format!("git push fallback failed: {}", e)))?;
+        if !git_out.status.success() {
+            let git_stderr = String::from_utf8_lossy(&git_out.stderr);
+            // Ignore "already up to date" / "Everything up-to-date" - those are fine
+            let msg = git_stderr.to_lowercase();
+            if !msg.contains("up to date")
+                && !msg.contains("up-to-date")
+                && !msg.contains("already exists")
+            {
+                return Err(JjError::IoError(format!(
+                    "git push fallback failed: {}",
+                    git_stderr
+                )));
+            }
+        }
     }
 
     Ok(format!("{}{}{}", tracking_message, stdout, stderr))
@@ -2866,27 +3254,37 @@ pub fn jj_get_commits_ahead_count(workspace_path: &str, target_branch: &str) -> 
         return 0;
     }
 
-    let revset = format!("({}..@-) ~ empty()", target_branch);
-
-    let output = command_for("jj")
-        .current_dir(workspace_path)
-        .args([
-            "log",
-            "-r",
-            &revset,
-            "--no-graph",
-            "-T",
-            r#"commit_id ++ "\n""#,
-        ])
-        .output();
-
-    match output {
-        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
-            .lines()
-            .filter(|l| !l.trim().is_empty())
-            .count(),
-        _ => 0,
+    let mut candidates = vec![target_branch.to_string()];
+    if !target_branch.contains('@') {
+        candidates.push(format!("{}@git", target_branch));
     }
+
+    for candidate in candidates {
+        let revset = format!("({}..@-) ~ empty()", candidate);
+
+        let output = command_for("jj")
+            .current_dir(workspace_path)
+            .args([
+                "log",
+                "-r",
+                &revset,
+                "--no-graph",
+                "-T",
+                r#"commit_id ++ "\n""#,
+            ])
+            .output();
+
+        if let Ok(o) = output {
+            if o.status.success() {
+                return String::from_utf8_lossy(&o.stdout)
+                    .lines()
+                    .filter(|l| !l.trim().is_empty())
+                    .count();
+            }
+        }
+    }
+
+    0
 }
 
 /// Fetch remote branches using jj git fetch (without rebasing)
@@ -3061,55 +3459,43 @@ pub struct JjBranch {
     pub is_current: bool,
 }
 
-/// Get list of branches in the repository
-/// Uses jj bookmark list to get local bookmarks
+/// Get list of branches in the repository using jj-lib (no subprocess)
 pub fn get_branches(repo_path: &str) -> Result<Vec<JjBranch>, JjError> {
-    let output = command_for("jj")
-        .current_dir(repo_path)
-        .args(["bookmark", "list"])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
+    let settings = create_user_settings(repo_path)?;
+    let workspace = Workspace::load(
+        &settings,
+        Path::new(repo_path),
+        &StoreFactories::default(),
+        &default_working_copy_factories(),
+    )
+    .map_err(|e| JjError::IoError(format!("Failed to load workspace: {}", e)))?;
+    let repo = futures::executor::block_on(workspace.repo_loader().load_at_head())
+        .map_err(|e| JjError::IoError(format!("Failed to load repo: {}", e)))?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(JjError::IoError(format!(
-            "Failed to list branches: {}",
-            stderr
-        )));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut branches = Vec::new();
-
-    // Parse jj bookmark list output
-    // Format is typically: "branch_name: commit_id"
-    // or "branch_name (deleted)"
-    // Current bookmark might be marked with * or similar
-    for line in stdout.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-
-        // Check if this is the current bookmark (marked with *)
-        let is_current = line.starts_with('*');
-        let line = if is_current {
-            line.trim_start_matches('*').trim()
-        } else {
-            line
-        };
-
-        // Extract branch name (everything before the colon)
-        if let Some(colon_pos) = line.find(':') {
-            let branch_name = line[..colon_pos].trim().to_string();
-            if !branch_name.is_empty() {
-                branches.push(JjBranch {
-                    name: branch_name,
-                    is_current,
-                });
+    // Determine which commit IDs are parents of the current wc to mark is_current
+    let parent_ids: std::collections::HashSet<jj_lib::backend::CommitId> = {
+        let ws_name = workspace.workspace_name();
+        if let Some(wc_id) = repo.view().get_wc_commit_id(ws_name) {
+            match repo.store().get_commit(wc_id) {
+                Ok(wc_commit) => wc_commit.parent_ids().iter().cloned().collect(),
+                Err(_) => std::collections::HashSet::new(),
             }
+        } else {
+            std::collections::HashSet::new()
         }
-    }
+    };
+
+    let branches = repo
+        .view()
+        .local_bookmarks()
+        .filter_map(|(name, target)| {
+            let is_current = target.added_ids().any(|id| parent_ids.contains(id));
+            Some(JjBranch {
+                name: name.as_str().to_string(),
+                is_current,
+            })
+        })
+        .collect();
 
     Ok(branches)
 }
@@ -3122,15 +3508,31 @@ pub fn get_branches(repo_path: &str) -> Result<Vec<JjBranch>, JjError> {
 ///
 /// # Returns
 /// Returns true if the remote branch exists, false otherwise
+/// Check if a remote bookmark exists using jj-lib (no subprocess).
+/// Expects `branch_ref` in jj format: "name@remote" (e.g. "feature@origin").
 pub fn check_remote_branch_exists(repo_path: &str, branch_ref: &str) -> Result<bool, JjError> {
-    let output = command_for("jj")
-        .current_dir(repo_path)
-        .args(["log", "-r", branch_ref, "-T", "commit_id", "-n", "1"])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
+    let (bookmark_name, remote_name) = match branch_ref.split_once('@') {
+        Some((n, r)) if !n.is_empty() && !r.is_empty() => (n, r),
+        _ => return Ok(false),
+    };
 
-    // If the revision exists, command succeeds
-    Ok(output.status.success() && !output.stdout.is_empty())
+    let settings = create_user_settings(repo_path)?;
+    let workspace = Workspace::load(
+        &settings,
+        Path::new(repo_path),
+        &StoreFactories::default(),
+        &default_working_copy_factories(),
+    )
+    .map_err(|e| JjError::IoError(format!("Failed to load workspace: {}", e)))?;
+    let repo = futures::executor::block_on(workspace.repo_loader().load_at_head())
+        .map_err(|e| JjError::IoError(format!("Failed to load repo: {}", e)))?;
+
+    let symbol = RemoteRefSymbol {
+        name: RefName::new(bookmark_name),
+        remote: RemoteName::new(remote_name),
+    };
+    let remote_ref = repo.view().get_remote_bookmark(symbol);
+    Ok(!remote_ref.target.is_absent())
 }
 
 /// Get commit log from fork point to HEAD for a workspace
@@ -3382,10 +3784,6 @@ pub fn jj_get_commits_ahead(
         return Err(JjError::IoError("Invalid target branch name".to_string()));
     }
 
-    // Revset: commits reachable from @- but not from target_branch, excluding empty commits
-    // Uses @- to exclude the working copy commit, and ~ empty() to exclude empty intermediate commits
-    let revset = format!("({}..@-) ~ empty()", target_branch);
-
     // Use same template as jj_get_log
     let template = concat!(
         "commit_id.short(12) ++ \"\\t\" ++ ",
@@ -3400,19 +3798,37 @@ pub fn jj_get_commits_ahead(
         "diff.stat() ++ \"\\n\""
     );
 
-    let output = command_for("jj")
-        .current_dir(workspace_path)
-        .args(["log", "-r", &revset, "--no-graph", "-T", template])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
+    let mut candidates = vec![target_branch.to_string()];
+    if !target_branch.contains('@') {
+        candidates.push(format!("{}@git", target_branch));
+    }
 
-    if !output.status.success() {
-        return Err(JjError::IoError(
+    let mut stdout = None;
+    let mut last_error = None;
+    for candidate in candidates {
+        // Revset: commits reachable from @- but not from target_branch, excluding empty commits
+        // Uses @- to exclude the working copy commit, and ~ empty() to exclude empty intermediate commits
+        let revset = format!("({}..@-) ~ empty()", candidate);
+
+        let output = command_for("jj")
+            .current_dir(workspace_path)
+            .args(["log", "-r", &revset, "--no-graph", "-T", template])
+            .output()
+            .map_err(|e| JjError::IoError(e.to_string()))?;
+
+        if output.status.success() {
+            stdout = Some(String::from_utf8_lossy(&output.stdout).into_owned());
+            break;
+        }
+
+        last_error = Some(JjError::IoError(
             String::from_utf8_lossy(&output.stderr).to_string(),
         ));
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout = stdout.ok_or_else(|| {
+        last_error.unwrap_or_else(|| JjError::IoError("Failed to get commits ahead".to_string()))
+    })?;
     let mut commits = Vec::new();
 
     // Parse each line of tab-separated output (same logic as jj_get_log)

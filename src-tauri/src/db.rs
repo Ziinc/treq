@@ -261,7 +261,7 @@ impl Database {
         let mut hasher = Sha256::new();
         hasher.update(repo_path.as_bytes());
         let hash = hasher.finalize();
-        let hash_hex = format!("{:x}", hash);
+        let hash_hex: String = hash.iter().map(|byte| format!("{:02x}", byte)).collect();
         format!("repo_{}_{}", &hash_hex[..16], key) // Use first 16 chars of hash
     }
 

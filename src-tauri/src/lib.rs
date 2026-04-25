@@ -53,6 +53,8 @@ pub fn run() {
                 ))
                 .level(log::LevelFilter::Warn)
                 .level_for("treq", log::LevelFilter::Info)
+                // tauri-plugin-log target for JS console forwarding (src/lib/logger.ts)
+                .level_for("webview", log::LevelFilter::Debug)
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
@@ -201,6 +203,13 @@ pub fn run() {
                 // Developer menu (only in debug mode)
                 #[cfg(debug_assertions)]
                 let developer_menu = {
+                    let open_web_inspector = MenuItemBuilder::with_id(
+                        "open_web_inspector",
+                        "Open Web Inspector",
+                    )
+                    .accelerator("CmdOrCtrl+Shift+I")
+                    .build(app)?;
+
                     let force_rebase_item = MenuItemBuilder::with_id(
                         "force_rebase_workspace",
                         "Force Rebase Workspace",
@@ -212,6 +221,8 @@ pub fn run() {
                         MenuItemBuilder::with_id("factory_reset", "Factory Reset").build(app)?;
 
                     SubmenuBuilder::new(app, "Developer")
+                        .item(&open_web_inspector)
+                        .separator()
                         .item(&force_rebase_item)
                         .separator()
                         .item(&factory_reset_item)
@@ -284,6 +295,13 @@ pub fn run() {
                 // Developer menu (only in debug mode)
                 #[cfg(debug_assertions)]
                 let developer_menu = {
+                    let open_web_inspector = MenuItemBuilder::with_id(
+                        "open_web_inspector",
+                        "Open Web Inspector",
+                    )
+                    .accelerator("CmdOrCtrl+Shift+I")
+                    .build(app)?;
+
                     let force_rebase_item = MenuItemBuilder::with_id(
                         "force_rebase_workspace",
                         "Force Rebase Workspace",
@@ -295,6 +313,8 @@ pub fn run() {
                         MenuItemBuilder::with_id("factory_reset", "Factory Reset").build(app)?;
 
                     SubmenuBuilder::new(app, "Developer")
+                        .item(&open_web_inspector)
+                        .separator()
                         .item(&force_rebase_item)
                         .separator()
                         .item(&factory_reset_item)
@@ -320,6 +340,12 @@ pub fn run() {
                 "settings" => emit_to_focused(app, "navigate-to-settings", ()),
                 "open" => emit_to_focused(app, "menu-open-repository", ()),
                 "open_new_window" => emit_to_focused(app, "menu-open-in-new-window", ()),
+                "open_web_inspector" => {
+                    #[cfg(debug_assertions)]
+                    if let Some(w) = app.get_webview_window("main") {
+                        w.open_devtools();
+                    }
+                }
                 "force_rebase_workspace" => emit_to_focused(app, "menu-force-rebase-workspace", ()),
                 "factory_reset" => emit_to_focused(app, "menu-factory-reset", ()),
                 "learn_more" => {
@@ -364,9 +390,7 @@ pub fn run() {
             commands::set_repo_setting,
             commands::jj_create_workspace,
             commands::jj_list_workspaces,
-
             commands::jj_get_workspace_info,
-
             commands::jj_get_changed_files,
             commands::get_workspace_file_hunks,
             commands::get_workspace_file_lines,
@@ -375,14 +399,11 @@ pub fn run() {
             commands::create_commit,
             commands::list_commits,
             commands::jj_split,
-
             commands::get_repo_status,
             commands::get_workspace_changed_files,
             commands::init_repo,
-
             commands::list_conflicted_files,
             commands::jj_get_default_branch,
-
             commands::jj_push,
             commands::jj_get_sync_status,
             commands::jj_git_fetch,

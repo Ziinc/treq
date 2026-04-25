@@ -1,4 +1,4 @@
-use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use std::fs;
 
 #[path = "../tests/e2e_test_helpers.rs"]

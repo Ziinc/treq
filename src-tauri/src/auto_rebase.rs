@@ -96,7 +96,7 @@ fn resolve_bookmark_conflict_if_needed(
         })?;
     }
 
-    log::info!(
+    log::debug!(
         "Resolved bookmark conflict for '{}': rebased {} local commit(s) onto remote tip",
         branch_name,
         commits_rebased

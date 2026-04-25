@@ -11,8 +11,7 @@ use treq_lib::core::{list_repo_branches, repo_status, switch_repo_branch, Remote
 fn test_list_repo_branches_includes_main() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
-    let branches = list_repo_branches(&repo.repo_path)
-        .expect("list_repo_branches should succeed");
+    let branches = list_repo_branches(&repo.repo_path).expect("list_repo_branches should succeed");
 
     assert!(
         branches.iter().any(|b| b.name == "main"),
@@ -31,8 +30,7 @@ fn test_list_repo_branches_includes_created_branch() {
     TestRepo::run_git(&repo.repo_path, &["checkout", "main"])
         .expect("Failed to switch back to main");
 
-    let branches = list_repo_branches(&repo.repo_path)
-        .expect("list_repo_branches should succeed");
+    let branches = list_repo_branches(&repo.repo_path).expect("list_repo_branches should succeed");
 
     assert!(
         branches.iter().any(|b| b.name == "feature-x"),
@@ -129,8 +127,12 @@ fn test_repo_status_with_remote_ahead() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
 
     // Make a local commit that hasn't been pushed
-    repo.commit_file("local_only.txt", "local content", "Local commit not yet pushed")
-        .expect("Failed to commit file");
+    repo.commit_file(
+        "local_only.txt",
+        "local content",
+        "Local commit not yet pushed",
+    )
+    .expect("Failed to commit file");
 
     let status = repo_status(&repo.repo_path).expect("repo_status should succeed");
 
@@ -147,8 +149,12 @@ fn test_repo_status_with_remote_behind() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
 
     // Push a commit from the "remote" side only
-    repo.remote_commit_file("remote_only.txt", "remote content", "Remote commit not yet fetched")
-        .expect("Failed to create remote commit");
+    repo.remote_commit_file(
+        "remote_only.txt",
+        "remote content",
+        "Remote commit not yet fetched",
+    )
+    .expect("Failed to create remote commit");
 
     // repo_status includes fetch, so it will pull the new remote commit info
     let status = repo_status(&repo.repo_path).expect("repo_status should succeed");
@@ -171,8 +177,7 @@ fn test_switch_repo_branch_switches_to_existing_branch() {
 
     TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "feature-x"])
         .expect("Failed to create branch");
-    TestRepo::run_git(&repo.repo_path, &["checkout", "main"])
-        .expect("Failed to return to main");
+    TestRepo::run_git(&repo.repo_path, &["checkout", "main"]).expect("Failed to return to main");
 
     let result = switch_repo_branch(&repo.repo_path, "feature-x");
     assert!(result.is_ok(), "Expected Ok, got: {:?}", result);

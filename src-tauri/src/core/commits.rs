@@ -3,7 +3,6 @@ use std::path::Path;
 use crate::jj;
 use crate::local_db;
 
-
 /// Lists commits for a workspace by its database ID, or for the home repo
 /// when no workspace ID is provided.
 ///
@@ -246,4 +245,3 @@ pub fn get_commit_diff(
     jj::jj_get_commit_diff(workspace_dir_str, commit_change_id, conflict_marker_style)
         .map_err(|e| format!("Failed to get commit diff: {}", e))
 }
-

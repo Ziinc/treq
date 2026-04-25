@@ -88,7 +88,14 @@ pub fn get_workspace_file_lines(
     start_line: usize,
     end_line: usize,
 ) -> Result<jj::JjFileLines, String> {
-    crate::core::get_file_lines(&repo_path, workspace_id, &file_path, from_parent, start_line, end_line)
+    crate::core::get_file_lines(
+        &repo_path,
+        workspace_id,
+        &file_path,
+        from_parent,
+        start_line,
+        end_line,
+    )
 }
 
 #[tauri::command]

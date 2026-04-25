@@ -24,9 +24,14 @@ fn test_create_commit_basic() {
     let log = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
         .expect("list_commits failed");
     assert!(
-        log.commits.iter().any(|c| c.description.contains("add data")),
+        log.commits
+            .iter()
+            .any(|c| c.description.contains("add data")),
         "expected 'add data' in commit log, got: {:?}",
-        log.commits.iter().map(|c| &c.description).collect::<Vec<_>>()
+        log.commits
+            .iter()
+            .map(|c| &c.description)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -66,7 +71,8 @@ fn test_commit_home_repo_advances_branch() {
         .expect("query bookmark")
         .expect("main bookmark should exist after init");
 
-    repo.create_file("home.txt", "home\n").expect("write home file");
+    repo.create_file("home.txt", "home\n")
+        .expect("write home file");
 
     treq_lib::jj::jj_commit(&repo.repo_path, "home repo commit")
         .expect("jj_commit on home repo failed");
@@ -80,9 +86,14 @@ fn test_commit_home_repo_advances_branch() {
     let log = treq_lib::core::list_commits(&repo.repo_path, None, false, None, None)
         .expect("list_commits failed");
     assert!(
-        log.commits.iter().any(|c| c.description.contains("home repo commit")),
+        log.commits
+            .iter()
+            .any(|c| c.description.contains("home repo commit")),
         "expected 'home repo commit' in home repo log, got: {:?}",
-        log.commits.iter().map(|c| &c.description).collect::<Vec<_>>()
+        log.commits
+            .iter()
+            .map(|c| &c.description)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -102,9 +113,12 @@ fn test_commit_workspace_advances_branch() {
     let ws_dir = repo.workspaces_dir().join(&workspace.workspace_path);
     let ws_dir_str = ws_dir.to_string_lossy().to_string();
 
-    let before = e2e_test_helpers::JjVerifier::get_bookmark_commit_id(&repo.repo_path, &workspace.branch_name)
-        .expect("query bookmark")
-        .expect("workspace bookmark should exist after create_workspace");
+    let before = e2e_test_helpers::JjVerifier::get_bookmark_commit_id(
+        &repo.repo_path,
+        &workspace.branch_name,
+    )
+    .expect("query bookmark")
+    .expect("workspace bookmark should exist after create_workspace");
 
     e2e_test_helpers::TestRepo::write_workspace_file(&ws_dir_str, "data.txt", "hello\n")
         .expect("write workspace file");
@@ -112,17 +126,28 @@ fn test_commit_workspace_advances_branch() {
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "workspace advance")
         .expect("commit_workspace failed");
 
-    let after = e2e_test_helpers::JjVerifier::get_bookmark_commit_id(&repo.repo_path, &workspace.branch_name)
-        .expect("query bookmark")
-        .expect("workspace bookmark should still exist");
+    let after = e2e_test_helpers::JjVerifier::get_bookmark_commit_id(
+        &repo.repo_path,
+        &workspace.branch_name,
+    )
+    .expect("query bookmark")
+    .expect("workspace bookmark should still exist");
 
-    assert_ne!(before, after, "workspace bookmark should advance after commit");
+    assert_ne!(
+        before, after,
+        "workspace bookmark should advance after commit"
+    );
 
     let log = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
         .expect("list_commits failed");
     assert!(
-        log.commits.iter().any(|c| c.description.contains("workspace advance")),
+        log.commits
+            .iter()
+            .any(|c| c.description.contains("workspace advance")),
         "expected 'workspace advance' in workspace log, got: {:?}",
-        log.commits.iter().map(|c| &c.description).collect::<Vec<_>>()
+        log.commits
+            .iter()
+            .map(|c| &c.description)
+            .collect::<Vec<_>>()
     );
 }

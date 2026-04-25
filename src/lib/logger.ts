@@ -15,8 +15,10 @@ export async function initLogger(): Promise<() => void> {
 	// Attach console to receive Rust logs in browser devtools
 	const detach = await attachConsole();
 
-	// Forward console methods to Tauri log plugin
-	forwardConsole("log", trace);
+	// Forward console methods to Tauri log plugin (uses target "webview" — see
+	// tauri `level_for("webview", ...)`). `log` must map to `info` (not `trace`)
+	// or default log filters will hide it in the terminal.
+	forwardConsole("log", info);
 	forwardConsole("debug", debug);
 	forwardConsole("info", info);
 	forwardConsole("warn", warn);

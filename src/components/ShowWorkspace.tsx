@@ -12,7 +12,6 @@ import {
 	type WorkspaceBookmarkConflict,
 	checkAndRebaseWorkspaces,
 	createSession,
-	getRepoStatus,
 	getWorkspaceChangedFiles,
 	getWorkspaceStatus,
 	jjGitFetch,
@@ -29,8 +28,6 @@ import {
 import { getStatusBgColor } from "../lib/git-status-colors";
 import { type ParsedFileChange, parseJjChangedFiles } from "../lib/git-utils";
 import { cn, getFullWorkspacePath } from "../lib/utils";
-import { useFocusRefreshSubscription } from "../hooks/useAppFocusHandler";
-
 
 import {
 	ChangesDiffViewer,
@@ -165,7 +162,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(({
 
 	// Target branch and conflicts state
 	const [targetBranch, setTargetBranch] = useState<string | null>(null);
-	const [defaultBranch, setDefaultBranch] = useState<string>("main");
+	const defaultBranch = "main";
 	const [conflictedFiles] = useState<string[]>([]);
 
 	// Committed changes toggle state
@@ -263,10 +260,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(({
 		readFile(`${workingDirectory}/README.md`)
 			.then(setReadmeContent)
 			.catch(() => setReadmeContent(null));
-
-		getRepoStatus(effectiveRepoPath)
-			.then((s) => setDefaultBranch(s.default_branch))
-			.catch(() => setDefaultBranch("main"));
 
 		// Load available branches
 		if (workspace && effectiveRepoPath) {
@@ -372,11 +365,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(({
 		const intervalId = setInterval(performBackgroundFetch, 5 * 60 * 1000);
 		return () => clearInterval(intervalId);
 	}, [repositoryPath, workingDirectory, fetchSyncStatus]);
-
-	// Refresh sync status after focus-triggered rebase + invalidation
-	useFocusRefreshSubscription("afterInvalidate", () => fetchSyncStatus(), [
-		fetchSyncStatus,
-	]);
 
 	// Periodic conflict check when workspace is active
 	const lastConflictErrorRef = useRef<string | null>(null);
