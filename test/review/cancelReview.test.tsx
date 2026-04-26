@@ -17,7 +17,8 @@ vi.mock("../../src/lib/api", async () => {
 });
 
 describe("Cancel/Discard review feature", () => {
-	const renderComponent = () => render(
+	const renderComponent = () =>
+		render(
 			<ChangesDiffViewer
 				workspacePath="/test/workspace"
 				repoPath="/test/repo"

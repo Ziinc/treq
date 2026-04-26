@@ -1,0 +1,11 @@
+id: tauri-api-invoked-command-name
+language: typescript
+severity: hint
+message: Invoked Tauri commands
+files:
+  - src/lib/api.ts
+rule:
+  pattern:
+    context: invoke("$NAME", $$$)
+  kind: call_expression
+  # has:

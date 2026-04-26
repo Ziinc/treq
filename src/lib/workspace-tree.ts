@@ -105,7 +105,9 @@ function computeDepths(node: WorkspaceTreeNode, depth: number): void {
  * Sort tree nodes alphabetically at each level
  */
 function sortTreeAlphabetically(nodes: WorkspaceTreeNode[]): void {
-	nodes.sort((nodeA, nodeB) => nodeA.branchName.localeCompare(nodeB.branchName));
+	nodes.sort((nodeA, nodeB) =>
+		nodeA.branchName.localeCompare(nodeB.branchName),
+	);
 	for (const node of nodes) {
 		sortTreeAlphabetically(node.children);
 	}
@@ -271,7 +273,9 @@ export function getEntireStack(
 	branchName: string,
 ): Workspace[] {
 	const rootBranch = getStackRoot(workspaces, branchName);
-	const root = workspaces.find((workspace) => workspace.branch_name === rootBranch);
+	const root = workspaces.find(
+		(workspace) => workspace.branch_name === rootBranch,
+	);
 	if (!root) return [];
 
 	const descendants = getDescendants(workspaces, rootBranch);
@@ -426,7 +430,11 @@ export function buildTreePreview(
 export function buildStackTreePreview(
 	workspaces: Workspace[],
 	parentWorkspace: Workspace | null,
-	{ newLabel, parentBranch, position }: { newLabel: string; parentBranch: string; position: "before" | "after" },
+	{
+		newLabel,
+		parentBranch,
+		position,
+	}: { newLabel: string; parentBranch: string; position: "before" | "after" },
 ): TreeLine[] {
 	const parent =
 		parentWorkspace ??
@@ -450,7 +458,9 @@ export function buildStackTreePreview(
 		if (
 			ancestorBranches.length === 0 &&
 			parent.target_branch &&
-			!workspaces.some((workspace) => workspace.branch_name === parent.target_branch)
+			!workspaces.some(
+				(workspace) => workspace.branch_name === parent.target_branch,
+			)
 		) {
 			ancestorBranches.unshift(parent.target_branch);
 		} else if (ancestorBranches.length === 0 && !parent.target_branch) {
@@ -460,7 +470,9 @@ export function buildStackTreePreview(
 
 	// Children of parent workspace
 	const children = parent
-		? workspaces.filter((workspace) => workspace.target_branch === parent.branch_name)
+		? workspaces.filter(
+				(workspace) => workspace.target_branch === parent.branch_name,
+			)
 		: [];
 
 	const lines: TreeLine[] = [];
@@ -470,7 +482,9 @@ export function buildStackTreePreview(
 		ancestorBranches.length > 0
 			? ancestorBranches[0]
 			: (parent?.branch_name ?? "main");
-	const isExternalRoot = !workspaces.some((workspace) => workspace.branch_name === topRoot);
+	const isExternalRoot = !workspaces.some(
+		(workspace) => workspace.branch_name === topRoot,
+	);
 
 	let depth = 0;
 	if (isExternalRoot) {
@@ -530,7 +544,9 @@ export function buildStackTreePreview(
 				});
 			} else {
 				// Mark the already-rendered parent line as current
-				const parentLine = lines.find((line) => line.label === parent.branch_name);
+				const parentLine = lines.find(
+					(line) => line.label === parent.branch_name,
+				);
 				if (parentLine) parentLine.isCurrent = true;
 			}
 		}

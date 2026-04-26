@@ -11,10 +11,10 @@ export const Terminal: React.FC<TerminalProps> = ({
 	workingDir,
 	shell,
 }) => (
-		<ConsolidatedTerminal
-			sessionId={sessionId}
-			workingDirectory={workingDir}
-			shell={shell}
-			containerClassName="h-full w-full"
-		/>
-	);
+	<ConsolidatedTerminal
+		sessionId={sessionId}
+		workingDirectory={workingDir}
+		shell={shell}
+		containerClassName="h-full w-full"
+	/>
+);

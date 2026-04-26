@@ -1,12 +1,7 @@
 use crate::local_db;
 use ignore::WalkBuilder;
 
-#[derive(serde::Serialize)]
-pub struct DirectoryEntry {
-    pub name: String,
-    pub path: String,
-    pub is_directory: bool,
-}
+pub type DirectoryEntry = crate::core::WorkspaceEntry;
 
 #[derive(serde::Serialize)]
 pub struct CachedDirectoryEntry {
@@ -66,6 +61,22 @@ pub fn list_directory(path: String) -> Result<Vec<DirectoryEntry>, String> {
     });
 
     Ok(files)
+}
+
+#[tauri::command]
+pub fn ls_workspace(
+    repo_path: String,
+    workspace_id: Option<i64>,
+) -> Result<Vec<DirectoryEntry>, String> {
+    crate::core::ls_workspace(&repo_path, workspace_id)
+}
+
+#[tauri::command]
+pub fn get_workspace_readme(
+    repo_path: String,
+    workspace_id: Option<i64>,
+) -> Result<Option<String>, String> {
+    crate::core::get_workspace_readme(&repo_path, workspace_id)
 }
 
 #[tauri::command]

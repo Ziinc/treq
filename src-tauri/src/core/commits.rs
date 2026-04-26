@@ -40,7 +40,7 @@ pub fn list_commits(
 
             if include_target_branch_history {
                 let limit = target_branch_limit.unwrap_or(10);
-                match jj::jj_get_target_branch_log(workspace_dir_str, target_branch, limit) {
+                match jj::jj_get_target_branch_log(repo_path, target_branch, limit) {
                     Ok(target_commits) => {
                         result.target_branch_commits = target_commits;
                     }
@@ -54,7 +54,7 @@ pub fn list_commits(
             Ok(result)
         }
         None => {
-            let branch = jj::get_workspace_branch(repo_path)
+            let branch = jj::resolve_home_repo_branch(repo_path)
                 .map_err(|e| format!("Failed to get active branch: {}", e))?;
             jj::jj_get_log(repo_path, &branch, Some(true), limit)
                 .map_err(|e| format!("Failed to list commits: {}", e))

@@ -17,7 +17,8 @@ vi.mock("../src/lib/api", async () => {
 });
 
 describe("Copy button in Finish Review popover", () => {
-	const renderComponent = () => render(
+	const renderComponent = () =>
+		render(
 			<ChangesDiffViewer
 				workspacePath="/test/workspace"
 				repoPath="/test/repo"

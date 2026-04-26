@@ -231,18 +231,18 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
 					{ position, newLabel: branchName || "[New Workspace]" },
 				);
 			}
-			return buildStackTreePreview(
-				allWorkspaces,
-				sourceWorkspace,
-				{ newLabel: branchName || "[New Workspace]", parentBranch: sourceWorkspace.branch_name, position },
-			);
+			return buildStackTreePreview(allWorkspaces, sourceWorkspace, {
+				newLabel: branchName || "[New Workspace]",
+				parentBranch: sourceWorkspace.branch_name,
+				position,
+			});
 		}
 		if (targetBranch) {
-			return buildStackTreePreview(
-				allWorkspaces,
-				null,
-				{ newLabel: branchName || "[New Workspace]", parentBranch: targetBranch, position },
-			);
+			return buildStackTreePreview(allWorkspaces, null, {
+				newLabel: branchName || "[New Workspace]",
+				parentBranch: targetBranch,
+				position,
+			});
 		}
 		return [];
 	})();
@@ -450,9 +450,7 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
 					)}
 				</div>
 
-				{error && (
-					<div className="text-sm text-destructive mt-2">{error}</div>
-				)}
+				{error && <div className="text-sm text-destructive mt-2">{error}</div>}
 
 				<div className="flex justify-end gap-2 mt-4 pt-3 border-t border-border">
 					<Button
@@ -463,9 +461,7 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
 						Cancel
 					</Button>
 					<Button onClick={handleSubmit} disabled={!canSubmit}>
-						{loading && (
-							<Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-						)}
+						{loading && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
 						{submitLabel}
 					</Button>
 				</div>

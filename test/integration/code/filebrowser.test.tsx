@@ -35,7 +35,10 @@ async function setupWorkspace(
 		throw new Error(`Workspace not found for id ${workspaceId}`);
 	}
 
-	const workspacePath = resolveWorkspacePath(repoPath, workspace.workspace_path);
+	const workspacePath = resolveWorkspacePath(
+		repoPath,
+		workspace.workspace_path,
+	);
 	for (const [relativePath, content] of Object.entries(files)) {
 		writeWorkspaceFile(workspacePath, relativePath, content);
 	}

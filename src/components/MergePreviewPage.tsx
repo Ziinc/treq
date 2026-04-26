@@ -39,11 +39,7 @@ export interface MergePreviewPageProps {
 }
 
 export const MergePreviewPage = memo<MergePreviewPageProps>(
-	({
-		workspace,
-		onCancel,
-		onMergeComplete,
-	}) => {
+	({ workspace, onCancel, onMergeComplete }) => {
 		const { addToast } = useToast();
 
 		// State
@@ -229,7 +225,12 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
 			<div className="h-full flex flex-col bg-background">
 				{/* Header */}
 				<div className="border-b p-4 flex items-center gap-4 flex-shrink-0">
-					<Button variant="ghost" size="sm" onClick={onCancel} aria-label="Go back">
+					<Button
+						variant="ghost"
+						size="sm"
+						onClick={onCancel}
+						aria-label="Go back"
+					>
 						<ArrowLeft className="w-4 h-4" />
 					</Button>
 					<div className="flex-1">

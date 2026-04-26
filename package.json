@@ -18,10 +18,8 @@
     "test": "npm run build:napi && DEBUG_PRINT_LIMIT=50 vitest run --config vitest.config.integration.ts",
     "format": "biome format  --write ./src ./test",
     "check:format": "biome format ./src ./test",
-    "check": "tsc",
-    "lint": "oxlint ./src ./test/integration && eslint ./src ./test/integration",
-    "lint:rust": "ast-grep scan",
-    "lint:rust:test": "ast-grep test",
+    "check": "tsc && ast-grep test",
+    "lint": "oxlint ./src ./test/integration && eslint ./src ./test/integration && ast-grep scan",
     "icons:generate": "node scripts/generate-icons.js && npx @tauri-apps/cli icon assets/logo-white.imageset/logo-white-rounded.svg"
   },
   "dependencies": {

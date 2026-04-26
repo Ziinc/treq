@@ -6,51 +6,51 @@ import { Dashboard } from "../../src/components/Dashboard";
 import userEvent from "@testing-library/user-event";
 
 describe("Settings integration", () => {
-  let user: ReturnType<typeof userEvent.setup>;
+	let user: ReturnType<typeof userEvent.setup>;
 
-  beforeEach(() => {
-    const { repoPath } = createTestRepo(false);
-    openRepo(repoPath);
-    user = userEvent.setup();
-  });
+	beforeEach(() => {
+		const { repoPath } = createTestRepo(false);
+		openRepo(repoPath);
+		user = userEvent.setup();
+	});
 
-  it("opens settings page, switches between tabs, and saves application settings", async () => {
-    render(<Dashboard />);
+	it("opens settings page, switches between tabs, and saves application settings", async () => {
+		render(<Dashboard />);
 
-    const settingsButton = await screen.findByLabelText("Settings");
-    await user.click(settingsButton);
+		const settingsButton = await screen.findByLabelText("Settings");
+		await user.click(settingsButton);
 
-    await screen.findByText("Settings");
-    await screen.findByRole("button", { name: /save settings/i });
+		await screen.findByText("Settings");
+		await screen.findByRole("button", { name: /save settings/i });
 
-    const repositoryTab = await screen.findByRole("tab", {
-      name: /repository/i,
-    });
-    expect(repositoryTab).toHaveAttribute("data-state", "active");
+		const repositoryTab = await screen.findByRole("tab", {
+			name: /repository/i,
+		});
+		expect(repositoryTab).toHaveAttribute("data-state", "active");
 
-    const terminalPane = await screen.findByText(/Terminals/i);
-    expect(terminalPane).not.toBeVisible();
+		const terminalPane = await screen.findByText(/Terminals/i);
+		expect(terminalPane).not.toBeVisible();
 
-    const applicationTab = await screen.findByRole("tab", {
-      name: /application/i,
-    });
-    await user.click(applicationTab);
-    await screen.findByLabelText(/theme/i);
-    const fontSizeInput = await screen.findByLabelText(/font size/i);
+		const applicationTab = await screen.findByRole("tab", {
+			name: /application/i,
+		});
+		await user.click(applicationTab);
+		await screen.findByLabelText(/theme/i);
+		const fontSizeInput = await screen.findByLabelText(/font size/i);
 
-    expect(
-      screen.queryByLabelText(/branch name pattern/i)
-    ).not.toBeInTheDocument();
+		expect(
+			screen.queryByLabelText(/branch name pattern/i),
+		).not.toBeInTheDocument();
 
-    await user.clear(fontSizeInput);
-    await user.type(fontSizeInput, "17");
-    await user.click(screen.getByRole("button", { name: /save settings/i }));
-    await screen.findByText("Settings Saved");
-    await screen.findByText(/application settings updated successfully/i);
+		await user.clear(fontSizeInput);
+		await user.type(fontSizeInput, "17");
+		await user.click(screen.getByRole("button", { name: /save settings/i }));
+		await screen.findByText("Settings Saved");
+		await screen.findByText(/application settings updated successfully/i);
 
-    await user.click(repositoryTab);
-    await screen.findByLabelText(/branch name pattern/i);
-    await screen.findByLabelText(/claude code model/i);
-    expect(screen.queryByLabelText(/theme/i)).not.toBeInTheDocument();
-  });
+		await user.click(repositoryTab);
+		await screen.findByLabelText(/branch name pattern/i);
+		await screen.findByLabelText(/claude code model/i);
+		expect(screen.queryByLabelText(/theme/i)).not.toBeInTheDocument();
+	});
 });

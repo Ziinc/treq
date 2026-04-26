@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { type ConflictRegion, type JjDiffHunk, getSetting, parseConflictMarkers } from "../../../lib/api";
+import {
+	type ConflictRegion,
+	type JjDiffHunk,
+	getSetting,
+	parseConflictMarkers,
+} from "../../../lib/api";
 import type { ParsedFileChange } from "../../../lib/git-utils";
 import type { FileHunksData } from "../types";
 
@@ -10,9 +15,18 @@ interface UseConflictsParams {
 	committedFiles: import("../../../lib/api").JjFileChange[];
 }
 
-export function useConflicts({ files, allFileHunks, showCommittedChanges, committedFiles }: UseConflictsParams) {
-	const [actualConflictedFiles, setActualConflictedFiles] = useState<string[]>([]);
-	const [conflictRegionsByFile, setConflictRegionsByFile] = useState<Map<string, ConflictRegion[]>>(new Map());
+export function useConflicts({
+	files,
+	allFileHunks,
+	showCommittedChanges,
+	committedFiles,
+}: UseConflictsParams) {
+	const [actualConflictedFiles, setActualConflictedFiles] = useState<string[]>(
+		[],
+	);
+	const [conflictRegionsByFile, setConflictRegionsByFile] = useState<
+		Map<string, ConflictRegion[]>
+	>(new Map());
 	const [conflictMarkerStyle, setConflictMarkerStyle] = useState<string>("git");
 
 	useEffect(() => {
@@ -41,12 +55,17 @@ export function useConflicts({ files, allFileHunks, showCommittedChanges, commit
 		};
 		const allFiles = [
 			...(files && Array.isArray(files) ? files : []),
-			...(showCommittedChanges && committedFiles && Array.isArray(committedFiles) ? committedFiles : []),
+			...(showCommittedChanges &&
+			committedFiles &&
+			Array.isArray(committedFiles)
+				? committedFiles
+				: []),
 		];
 		for (const file of allFiles) {
 			if (!file || !file.path) continue;
 			const fileHunksData = allFileHunks.get(file.path);
-			if (!fileHunksData || fileHunksData.isLoading || !fileHunksData.hunks) continue;
+			if (!fileHunksData || fileHunksData.isLoading || !fileHunksData.hunks)
+				continue;
 			const content = extractContent(fileHunksData.hunks);
 			if (content) result.push({ content, filePath: file.path });
 		}
@@ -59,12 +78,26 @@ export function useConflicts({ files, allFileHunks, showCommittedChanges, commit
 			setConflictRegionsByFile(new Map());
 			return;
 		}
-		const expectedStyle: "jj" | "git" = conflictMarkerStyle === "git" ? "git" : "jj";
+		const expectedStyle: "jj" | "git" =
+			conflictMarkerStyle === "git" ? "git" : "jj";
 		let cancelled = false;
-		const parseFile = ({ filePath, content }: { filePath: string; content: string }) =>
+		const parseFile = ({
+			filePath,
+			content,
+		}: {
+			filePath: string;
+			content: string;
+		}) =>
 			parseConflictMarkers(content, filePath).then((allRegions) => {
-				const filtered = allRegions.filter((r) => r.marker_style === expectedStyle);
-				const regions = filtered.length > 0 ? filtered : allRegions.length > 0 ? allRegions : null;
+				const filtered = allRegions.filter(
+					(r) => r.marker_style === expectedStyle,
+				);
+				const regions =
+					filtered.length > 0
+						? filtered
+						: allRegions.length > 0
+							? allRegions
+							: null;
 				return { filePath, regions };
 			});
 		Promise.all(filesWithMarkers.map(parseFile)).then((results) => {
@@ -72,12 +105,17 @@ export function useConflicts({ files, allFileHunks, showCommittedChanges, commit
 			const conflicted: string[] = [];
 			const regionsByFile = new Map<string, ConflictRegion[]>();
 			for (const { filePath, regions } of results) {
-				if (regions && !regionsByFile.has(filePath)) { conflicted.push(filePath); regionsByFile.set(filePath, regions); }
+				if (regions && !regionsByFile.has(filePath)) {
+					conflicted.push(filePath);
+					regionsByFile.set(filePath, regions);
+				}
 			}
 			setActualConflictedFiles(conflicted);
 			setConflictRegionsByFile(regionsByFile);
 		});
-		return () => { cancelled = true; };
+		return () => {
+			cancelled = true;
+		};
 	}, [filesWithMarkers, conflictMarkerStyle]);
 
 	const conflictLineLookups = useMemo(() => {
@@ -86,7 +124,8 @@ export function useConflicts({ files, allFileHunks, showCommittedChanges, commit
 			if (!regions || regions.length === 0) continue;
 			const lineMap = new Map<number, ConflictRegion>();
 			for (const region of regions) {
-				for (let line = region.start_line; line <= region.end_line; line++) lineMap.set(line, region);
+				for (let line = region.start_line; line <= region.end_line; line++)
+					lineMap.set(line, region);
 			}
 			map.set(filePath, lineMap);
 		}

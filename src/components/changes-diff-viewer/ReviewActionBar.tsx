@@ -1,4 +1,12 @@
-import { AlertTriangle, Check, Copy, MessageSquare, RefreshCw, Send, X } from "lucide-react";
+import {
+	AlertTriangle,
+	Check,
+	Copy,
+	MessageSquare,
+	RefreshCw,
+	Send,
+	X,
+} from "lucide-react";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -12,7 +20,12 @@ import {
 import { Button } from "../ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Textarea } from "../ui/textarea";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from "../ui/tooltip";
 import { cn, getFileName } from "../../lib/utils";
 import type { LineComment } from "./types";
 
@@ -64,25 +77,55 @@ export function ReviewActionBar({
 			{showActionBar && (
 				<div className="sticky top-0 z-10 flex items-center justify-between px-4 py-2 bg-muted/80 backdrop-blur-sm border-b border-border">
 					<div className="flex items-center gap-2 text-sm">
-						<MessageSquare className={`w-4 h-4 ${hasConflicts ? "text-destructive" : "text-primary"}`} />
-						<span className="text-muted-foreground">{totalComments} comment{totalComments !== 1 ? "s" : ""} pending</span>
+						<MessageSquare
+							className={`w-4 h-4 ${hasConflicts ? "text-destructive" : "text-primary"}`}
+						/>
+						<span className="text-muted-foreground">
+							{totalComments} comment{totalComments !== 1 ? "s" : ""} pending
+						</span>
 					</div>
 					<div className="flex items-center gap-2">
-						<Button size="sm" variant="outline" onClick={() => setShowCancelDialog(true)}>
+						<Button
+							size="sm"
+							variant="outline"
+							onClick={() => setShowCancelDialog(true)}
+						>
 							{hasConflicts ? "Reset" : "Discard"}
 						</Button>
-						<Popover open={reviewPopoverOpen} onOpenChange={setReviewPopoverOpen}>
+						<Popover
+							open={reviewPopoverOpen}
+							onOpenChange={setReviewPopoverOpen}
+						>
 							<PopoverTrigger asChild>
-								<Button size="sm" variant="default" className={cn("gap-2", hasConflicts && "bg-destructive hover:bg-destructive/90 text-destructive-foreground")}>
+								<Button
+									size="sm"
+									variant="default"
+									className={cn(
+										"gap-2",
+										hasConflicts &&
+											"bg-destructive hover:bg-destructive/90 text-destructive-foreground",
+									)}
+								>
 									<Send className="w-3 h-3" />
 									{hasConflicts ? "Resolve conflicts..." : "Finish review"}
 								</Button>
 							</PopoverTrigger>
-							<PopoverContent align="end" side="bottom" className="w-80 relative">
+							<PopoverContent
+								align="end"
+								side="bottom"
+								className="w-80 relative"
+							>
 								<TooltipProvider>
 									<Tooltip>
 										<TooltipTrigger asChild>
-											<Button size="icon" variant="ghost" className="h-8 w-8 absolute top-2 right-2" aria-label="Close" onClick={() => setReviewPopoverOpen(false)} disabled={sendingReview}>
+											<Button
+												size="icon"
+												variant="ghost"
+												className="h-8 w-8 absolute top-2 right-2"
+												aria-label="Close"
+												onClick={() => setReviewPopoverOpen(false)}
+												disabled={sendingReview}
+											>
 												<X className="w-4 h-4" />
 											</Button>
 										</TooltipTrigger>
@@ -91,17 +134,60 @@ export function ReviewActionBar({
 								</TooltipProvider>
 								<div className="space-y-3">
 									<div>
-										<h4 className="font-medium text-sm mb-1">{hasConflicts ? "Resolve conflicts" : "Finish your review"}</h4>
-										<p className="text-sm text-muted-foreground">{totalComments} comment{totalComments !== 1 ? "s" : ""} will be submitted.</p>
+										<h4 className="font-medium text-sm mb-1">
+											{hasConflicts
+												? "Resolve conflicts"
+												: "Finish your review"}
+										</h4>
+										<p className="text-sm text-muted-foreground">
+											{totalComments} comment{totalComments !== 1 ? "s" : ""}{" "}
+											will be submitted.
+										</p>
 									</div>
-									<Textarea value={finalReviewComment} onChange={(event) => setFinalReviewComment(event.target.value)} placeholder="Add a summary comment (optional)..." className="min-h-[80px] text-sm" />
+									<Textarea
+										value={finalReviewComment}
+										onChange={(event) =>
+											setFinalReviewComment(event.target.value)
+										}
+										placeholder="Add a summary comment (optional)..."
+										className="min-h-[80px] text-sm"
+									/>
 									<div className="flex justify-between gap-2">
-										<Button size="sm" variant="outline" onClick={handleCopyReview} className="gap-2" disabled={sendingReview}>
-											{copiedReview ? (<><Check className="w-3 h-3" />Copied</>) : (<><Copy className="w-3 h-3" />Copy</>)}
+										<Button
+											size="sm"
+											variant="outline"
+											onClick={handleCopyReview}
+											className="gap-2"
+											disabled={sendingReview}
+										>
+											{copiedReview ? (
+												<>
+													<Check className="w-3 h-3" />
+													Copied
+												</>
+											) : (
+												<>
+													<Copy className="w-3 h-3" />
+													Copy
+												</>
+											)}
 										</Button>
 										<div className="flex gap-2">
-											<Button size="sm" variant="secondary" onClick={() => handleRequestChanges("plan")} disabled={sendingReview}>Plan</Button>
-											<Button size="sm" onClick={() => handleRequestChanges("acceptEdits")} disabled={sendingReview}>Edit</Button>
+											<Button
+												size="sm"
+												variant="secondary"
+												onClick={() => handleRequestChanges("plan")}
+												disabled={sendingReview}
+											>
+												Plan
+											</Button>
+											<Button
+												size="sm"
+												onClick={() => handleRequestChanges("acceptEdits")}
+												disabled={sendingReview}
+											>
+												Edit
+											</Button>
 										</div>
 									</div>
 								</div>
@@ -116,12 +202,15 @@ export function ReviewActionBar({
 					<AlertDialogHeader>
 						<AlertDialogTitle>Discard review?</AlertDialogTitle>
 						<AlertDialogDescription>
-							This will discard all {comments.length} pending comment{comments.length !== 1 ? "s" : ""}. This action cannot be undone.
+							This will discard all {comments.length} pending comment
+							{comments.length !== 1 ? "s" : ""}. This action cannot be undone.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
 						<AlertDialogCancel>Keep reviewing</AlertDialogCancel>
-						<AlertDialogAction onClick={handleCancelReview}>Discard</AlertDialogAction>
+						<AlertDialogAction onClick={handleCancelReview}>
+							Discard
+						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>
@@ -130,17 +219,33 @@ export function ReviewActionBar({
 				<div className="flex items-center justify-between px-4 py-2 bg-amber-500/15 border-b border-amber-500/40">
 					<div className="flex items-center gap-2 text-sm">
 						<AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-300" />
-						<span className="text-amber-800 dark:text-amber-200">{staleFiles.size} file{staleFiles.size !== 1 ? "s" : ""} changed since you started reviewing</span>
-						<span className="text-sm text-amber-700/80 dark:text-amber-300/80">({Array.from(staleFiles).slice(0, 3).map(getFileName).join(", ")}{staleFiles.size > 3 ? ` +${staleFiles.size - 3} more` : ""})</span>
+						<span className="text-amber-800 dark:text-amber-200">
+							{staleFiles.size} file{staleFiles.size !== 1 ? "s" : ""} changed
+							since you started reviewing
+						</span>
+						<span className="text-sm text-amber-700/80 dark:text-amber-300/80">
+							({Array.from(staleFiles).slice(0, 3).map(getFileName).join(", ")}
+							{staleFiles.size > 3 ? ` +${staleFiles.size - 3} more` : ""})
+						</span>
 					</div>
 					<div className="flex items-center gap-2">
 						{getAllOutdatedComments().length > 0 && (
-							<Button size="sm" variant="outline" className="gap-1.5 border-amber-500/60 text-amber-800 dark:text-amber-200 hover:bg-amber-500/25" onClick={handleCopyOutdatedComments}>
+							<Button
+								size="sm"
+								variant="outline"
+								className="gap-1.5 border-amber-500/60 text-amber-800 dark:text-amber-200 hover:bg-amber-500/25"
+								onClick={handleCopyOutdatedComments}
+							>
 								<Copy className="w-3 h-3" />
 								Copy Outdated ({getAllOutdatedComments().length})
 							</Button>
 						)}
-						<Button size="sm" variant="outline" className="gap-1.5 border-amber-500/60 text-amber-800 dark:text-amber-200 hover:bg-amber-500/25" onClick={handleReloadWithPendingChanges}>
+						<Button
+							size="sm"
+							variant="outline"
+							className="gap-1.5 border-amber-500/60 text-amber-800 dark:text-amber-200 hover:bg-amber-500/25"
+							onClick={handleReloadWithPendingChanges}
+						>
 							<RefreshCw className="w-3 h-3" />
 							Reload
 						</Button>

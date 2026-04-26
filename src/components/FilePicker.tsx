@@ -58,7 +58,9 @@ export const FilePicker: React.FC<FilePickerProps> = ({
 	);
 
 	// Get icon based on file extension (can be expanded)
-	const getFileIcon = () => <FileText className="w-4 h-4 text-muted-foreground" />;
+	const getFileIcon = () => (
+		<FileText className="w-4 h-4 text-muted-foreground" />
+	);
 
 	if (!open) {
 		return null;

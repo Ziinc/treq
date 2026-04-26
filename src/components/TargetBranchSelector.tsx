@@ -16,6 +16,7 @@ interface TargetBranchSelectorProps {
 	loading: boolean;
 	targetBranch: string | null;
 	onSelect: (branch: string) => void;
+	onOpenChange?: (open: boolean) => void;
 	disabled?: boolean;
 }
 
@@ -24,19 +25,17 @@ export const TargetBranchSelector: React.FC<TargetBranchSelectorProps> = ({
 	loading,
 	targetBranch,
 	onSelect,
+	onOpenChange,
 	disabled,
 }) => {
 	const [open, setOpen] = useState(false);
 
-	useEffect(() => {
-		console.log(branches);
-	}, [branches]);
 	return (
 		<Popover
 			open={open}
 			onOpenChange={(value) => {
-				console.log("openChange", value);
 				setOpen(value);
+				onOpenChange?.(value);
 			}}
 		>
 			<PopoverTrigger asChild>
@@ -46,9 +45,6 @@ export const TargetBranchSelector: React.FC<TargetBranchSelectorProps> = ({
 					disabled={disabled || loading}
 					className="gap-2"
 					aria-label="Workspace target"
-					onClick={() => {
-						console.log("clicked");
-					}}
 				>
 					{loading ? (
 						<Loader2 className="w-4 h-4 animate-spin" />

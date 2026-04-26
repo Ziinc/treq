@@ -203,12 +203,10 @@ pub fn run() {
                 // Developer menu (only in debug mode)
                 #[cfg(debug_assertions)]
                 let developer_menu = {
-                    let open_web_inspector = MenuItemBuilder::with_id(
-                        "open_web_inspector",
-                        "Open Web Inspector",
-                    )
-                    .accelerator("CmdOrCtrl+Shift+I")
-                    .build(app)?;
+                    let open_web_inspector =
+                        MenuItemBuilder::with_id("open_web_inspector", "Open Web Inspector")
+                            .accelerator("CmdOrCtrl+Shift+I")
+                            .build(app)?;
 
                     let force_rebase_item = MenuItemBuilder::with_id(
                         "force_rebase_workspace",
@@ -295,12 +293,10 @@ pub fn run() {
                 // Developer menu (only in debug mode)
                 #[cfg(debug_assertions)]
                 let developer_menu = {
-                    let open_web_inspector = MenuItemBuilder::with_id(
-                        "open_web_inspector",
-                        "Open Web Inspector",
-                    )
-                    .accelerator("CmdOrCtrl+Shift+I")
-                    .build(app)?;
+                    let open_web_inspector =
+                        MenuItemBuilder::with_id("open_web_inspector", "Open Web Inspector")
+                            .accelerator("CmdOrCtrl+Shift+I")
+                            .build(app)?;
 
                     let force_rebase_item = MenuItemBuilder::with_id(
                         "force_rebase_workspace",
@@ -340,7 +336,8 @@ pub fn run() {
                 "settings" => emit_to_focused(app, "navigate-to-settings", ()),
                 "open" => emit_to_focused(app, "menu-open-repository", ()),
                 "open_new_window" => emit_to_focused(app, "menu-open-in-new-window", ()),
-                "open_web_inspector" => {
+                "open_web_inspector" =>
+                {
                     #[cfg(debug_assertions)]
                     if let Some(w) = app.get_webview_window("main") {
                         w.open_devtools();
@@ -429,6 +426,8 @@ pub fn run() {
             commands::pty_close,
             commands::read_file,
             commands::list_directory,
+            commands::ls_workspace,
+            commands::get_workspace_readme,
             commands::list_directory_cached,
             commands::get_change_indicators,
             commands::search_workspace_files,

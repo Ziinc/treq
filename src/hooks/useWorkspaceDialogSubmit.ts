@@ -83,7 +83,9 @@ export function useWorkspaceDialogSubmit(
 							),
 						),
 					);
-					const targetWs = allWorkspaces.find((w) => w.id === targetWorkspaceId);
+					const targetWs = allWorkspaces.find(
+						(w) => w.id === targetWorkspaceId,
+					);
 					addToast({
 						title: "Commits moved",
 						description: `Moved to workspace: ${targetWs?.branch_name ?? ""}`,
@@ -203,8 +205,11 @@ export function useWorkspaceDialogSubmit(
 							JSON.stringify({ intent: `Workspace for ${targetBranch}` }),
 						);
 						const updatedWorkspaces = await getWorkspaces(repoPath);
-						const createdTarget = updatedWorkspaces.find((w) => w.id === targetWsId);
-						if (createdTarget) targetWorkspacePath = createdTarget.workspace_path;
+						const createdTarget = updatedWorkspaces.find(
+							(w) => w.id === targetWsId,
+						);
+						if (createdTarget)
+							targetWorkspacePath = createdTarget.workspace_path;
 					} else {
 						targetWorkspacePath = existingTarget.workspace_path;
 					}

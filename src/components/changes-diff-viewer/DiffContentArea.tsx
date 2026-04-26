@@ -57,14 +57,38 @@ interface DiffContentAreaProps {
 	comments: LineComment[];
 	conflictFileRefs: React.MutableRefObject<Map<string, HTMLDivElement>>;
 	diffFontSize: number;
-	handleExpandContext: (filePath: string, hunkIndex: number, direction: "before" | "after") => void;
+	handleExpandContext: (
+		filePath: string,
+		hunkIndex: number,
+		direction: "before" | "after",
+	) => void;
 	// eslint-disable-next-line max-params
-	handleLineMouseDown: (e: React.MouseEvent, filePath: string, hunkIndex: number, lineIndex: number, lineContent: string, isStaged: boolean) => void;
-	handleLineMouseEnter: (filePath: string, hunkIndex: number, lineIndex: number) => void;
+	handleLineMouseDown: (
+		e: React.MouseEvent,
+		filePath: string,
+		hunkIndex: number,
+		lineIndex: number,
+		lineContent: string,
+		isStaged: boolean,
+	) => void;
+	handleLineMouseEnter: (
+		filePath: string,
+		hunkIndex: number,
+		lineIndex: number,
+	) => void;
 	handleLineMouseUp: () => void;
 	handleAddCommentFromSelection: () => void;
-	isLineSelected: (filePath: string, hunkIndex: number, lineIndex: number) => boolean;
-	saveConflictComment: (args: { conflictId: string; filePath: string; conflictNumber: number; text: string }) => void;
+	isLineSelected: (
+		filePath: string,
+		hunkIndex: number,
+		lineIndex: number,
+	) => boolean;
+	saveConflictComment: (args: {
+		conflictId: string;
+		filePath: string;
+		conflictNumber: number;
+		text: string;
+	}) => void;
 	clearConflictComment: (conflictId: string) => void;
 	toggleConflictComment: (conflictId: string) => void;
 	setOpenConflictComments: React.Dispatch<React.SetStateAction<Set<string>>>;
@@ -77,10 +101,17 @@ interface DiffContentAreaProps {
 	startEditComment: (commentId: string) => void;
 	cancelEditComment: () => void;
 	saveEditComment: (commentId: string, text: string) => void;
-	setPendingComment: React.Dispatch<React.SetStateAction<PendingComment | null>>;
+	setPendingComment: React.Dispatch<
+		React.SetStateAction<PendingComment | null>
+	>;
 	setShowCommentInput: React.Dispatch<React.SetStateAction<boolean>>;
 	// eslint-disable-next-line max-params
-	getCommentsForLine: (filePath: string, hunkId: string, lineNumber: number, side: "old" | "new") => LineComment[];
+	getCommentsForLine: (
+		filePath: string,
+		hunkId: string,
+		lineNumber: number,
+		side: "old" | "new",
+	) => LineComment[];
 	// file row props
 	collapsedFiles: Set<string>;
 	viewedFiles: Map<string, { viewedAt: string; contentHash: string }>;
@@ -101,55 +132,171 @@ interface DiffContentAreaProps {
 }
 
 export function DiffContentArea({
-	isSearchOpen, searchQuery, setSearchQuery, currentMatchIndex, setCurrentMatchIndex,
-	handleSearchNext, handleSearchPrevious, handleSearchClose, searchFocusTrigger,
-	searchData, debouncedSearchQuery,
-	initialLoading, loadingAllHunks, files, allFileHunks, committedFiles, showCommittedChanges,
-	largeChangesetExpanded, setLargeChangesetExpanded,
-	actualConflictedFiles, conflictRegionsByFile, conflictLineLookups, firstConflictRegionIdByFile,
-	expandedContext, conflictComments, openConflictComments, editingConflictCommentId,
-	diffLineSelection, showCommentInput, pendingComment, editingCommentId, comments,
-	conflictFileRefs, diffFontSize,
-	handleExpandContext, handleLineMouseDown, handleLineMouseEnter, handleLineMouseUp,
-	handleAddCommentFromSelection, isLineSelected,
-	saveConflictComment, clearConflictComment, toggleConflictComment, setOpenConflictComments,
-	startEditConflictComment, cancelEditConflictComment, saveEditConflictComment,
-	addComment, cancelComment, deleteComment, startEditComment, cancelEditComment, saveEditComment,
-	setPendingComment, setShowCommentInput, getCommentsForLine,
-	collapsedFiles, viewedFiles, expandedLargeDiffs, readOnly, fileActionTarget,
-	selectedUnstagedFiles, workspacePath, toggleFileCollapse, toggleLargeDiff,
-	handleMarkFileViewed, handleUnmarkFileViewed, handleDiscardFiles, handleContextMenu,
-	addToast, getOutdatedCommentsForFile, diffContainerRef,
+	isSearchOpen,
+	searchQuery,
+	setSearchQuery,
+	currentMatchIndex,
+	setCurrentMatchIndex,
+	handleSearchNext,
+	handleSearchPrevious,
+	handleSearchClose,
+	searchFocusTrigger,
+	searchData,
+	debouncedSearchQuery,
+	initialLoading,
+	loadingAllHunks,
+	files,
+	allFileHunks,
+	committedFiles,
+	showCommittedChanges,
+	largeChangesetExpanded,
+	setLargeChangesetExpanded,
+	actualConflictedFiles,
+	conflictRegionsByFile,
+	conflictLineLookups,
+	firstConflictRegionIdByFile,
+	expandedContext,
+	conflictComments,
+	openConflictComments,
+	editingConflictCommentId,
+	diffLineSelection,
+	showCommentInput,
+	pendingComment,
+	editingCommentId,
+	comments,
+	conflictFileRefs,
+	diffFontSize,
+	handleExpandContext,
+	handleLineMouseDown,
+	handleLineMouseEnter,
+	handleLineMouseUp,
+	handleAddCommentFromSelection,
+	isLineSelected,
+	saveConflictComment,
+	clearConflictComment,
+	toggleConflictComment,
+	setOpenConflictComments,
+	startEditConflictComment,
+	cancelEditConflictComment,
+	saveEditConflictComment,
+	addComment,
+	cancelComment,
+	deleteComment,
+	startEditComment,
+	cancelEditComment,
+	saveEditComment,
+	setPendingComment,
+	setShowCommentInput,
+	getCommentsForLine,
+	collapsedFiles,
+	viewedFiles,
+	expandedLargeDiffs,
+	readOnly,
+	fileActionTarget,
+	selectedUnstagedFiles,
+	workspacePath,
+	toggleFileCollapse,
+	toggleLargeDiff,
+	handleMarkFileViewed,
+	handleUnmarkFileViewed,
+	handleDiscardFiles,
+	handleContextMenu,
+	addToast,
+	getOutdatedCommentsForFile,
+	diffContainerRef,
 }: DiffContentAreaProps) {
-	const hunkLinesProps = useMemo(() => ({
-		conflictLineLookups, firstConflictRegionIdByFile, expandedContext,
-		conflictComments, openConflictComments, editingConflictCommentId,
-		searchData, debouncedSearchQuery, currentMatchIndex, diffLineSelection,
-		showCommentInput, pendingComment, editingCommentId, comments,
-		conflictFileRefs, diffFontSize,
-		handleExpandContext, handleLineMouseDown, handleLineMouseEnter, handleLineMouseUp,
-		handleAddCommentFromSelection, isLineSelected,
-		saveConflictComment, clearConflictComment, toggleConflictComment, setOpenConflictComments,
-		startEditConflictComment, cancelEditConflictComment, saveEditConflictComment,
-		addComment, cancelComment, deleteComment, startEditComment, cancelEditComment, saveEditComment,
-		setPendingComment, setShowCommentInput, getCommentsForLine,
-	}), [
-		conflictLineLookups, firstConflictRegionIdByFile, expandedContext,
-		conflictComments, openConflictComments, editingConflictCommentId,
-		searchData, debouncedSearchQuery, currentMatchIndex, diffLineSelection,
-		showCommentInput, pendingComment, editingCommentId, comments,
-		conflictFileRefs, diffFontSize,
-		handleExpandContext, handleLineMouseDown, handleLineMouseEnter, handleLineMouseUp,
-		handleAddCommentFromSelection, isLineSelected,
-		saveConflictComment, clearConflictComment, toggleConflictComment, setOpenConflictComments,
-		startEditConflictComment, cancelEditConflictComment, saveEditConflictComment,
-		addComment, cancelComment, deleteComment, startEditComment, cancelEditComment, saveEditComment,
-		setPendingComment, setShowCommentInput, getCommentsForLine,
-	]);
+	const hunkLinesProps = useMemo(
+		() => ({
+			conflictLineLookups,
+			firstConflictRegionIdByFile,
+			expandedContext,
+			conflictComments,
+			openConflictComments,
+			editingConflictCommentId,
+			searchData,
+			debouncedSearchQuery,
+			currentMatchIndex,
+			diffLineSelection,
+			showCommentInput,
+			pendingComment,
+			editingCommentId,
+			comments,
+			conflictFileRefs,
+			diffFontSize,
+			handleExpandContext,
+			handleLineMouseDown,
+			handleLineMouseEnter,
+			handleLineMouseUp,
+			handleAddCommentFromSelection,
+			isLineSelected,
+			saveConflictComment,
+			clearConflictComment,
+			toggleConflictComment,
+			setOpenConflictComments,
+			startEditConflictComment,
+			cancelEditConflictComment,
+			saveEditConflictComment,
+			addComment,
+			cancelComment,
+			deleteComment,
+			startEditComment,
+			cancelEditComment,
+			saveEditComment,
+			setPendingComment,
+			setShowCommentInput,
+			getCommentsForLine,
+		}),
+		[
+			conflictLineLookups,
+			firstConflictRegionIdByFile,
+			expandedContext,
+			conflictComments,
+			openConflictComments,
+			editingConflictCommentId,
+			searchData,
+			debouncedSearchQuery,
+			currentMatchIndex,
+			diffLineSelection,
+			showCommentInput,
+			pendingComment,
+			editingCommentId,
+			comments,
+			conflictFileRefs,
+			diffFontSize,
+			handleExpandContext,
+			handleLineMouseDown,
+			handleLineMouseEnter,
+			handleLineMouseUp,
+			handleAddCommentFromSelection,
+			isLineSelected,
+			saveConflictComment,
+			clearConflictComment,
+			toggleConflictComment,
+			setOpenConflictComments,
+			startEditConflictComment,
+			cancelEditConflictComment,
+			saveEditConflictComment,
+			addComment,
+			cancelComment,
+			deleteComment,
+			startEditComment,
+			cancelEditComment,
+			saveEditComment,
+			setPendingComment,
+			setShowCommentInput,
+			getCommentsForLine,
+		],
+	);
 
 	const renderHunkLines = useCallback(
 		(hunk: JjDiffHunk, hunkIndex: number, fPath: string) => (
-			<HunkLines key={`${fPath}:${hunkIndex}`} hunk={hunk} hunkIndex={hunkIndex} filePath={fPath} {...hunkLinesProps} />
+			<HunkLines
+				key={`${fPath}:${hunkIndex}`}
+				hunk={hunk}
+				hunkIndex={hunkIndex}
+				filePath={fPath}
+				{...hunkLinesProps}
+			/>
 		),
 		[hunkLinesProps],
 	);
@@ -159,7 +306,10 @@ export function DiffContentArea({
 			<SearchOverlay
 				isVisible={isSearchOpen}
 				query={searchQuery}
-				onQueryChange={(q) => { setSearchQuery(q); setCurrentMatchIndex(0); }}
+				onQueryChange={(q) => {
+					setSearchQuery(q);
+					setCurrentMatchIndex(0);
+				}}
 				onNext={handleSearchNext}
 				onPrevious={handleSearchPrevious}
 				onClose={handleSearchClose}
@@ -173,7 +323,8 @@ export function DiffContentArea({
 					<Loader2 className="w-6 h-6 animate-spin" />
 					<span className="ml-2">Loading diffs...</span>
 				</div>
-			) : files.length === 0 && !(showCommittedChanges && committedFiles.length > 0) ? (
+			) : files.length === 0 &&
+				!(showCommittedChanges && committedFiles.length > 0) ? (
 				<div className="h-full flex flex-col items-center justify-center text-muted-foreground">
 					<CheckCircle2 className="w-12 h-12 mb-3 text-muted-foreground/40" />
 					<p className="text-sm">No changes to review</p>
@@ -183,7 +334,8 @@ export function DiffContentArea({
 					let totalLines = 0;
 					for (const [, fileData] of allFileHunks) {
 						if (!fileData.isLoading && fileData.hunks) {
-							for (const hunk of fileData.hunks) totalLines += hunk.lines.length;
+							for (const hunk of fileData.hunks)
+								totalLines += hunk.lines.length;
 						}
 					}
 					if (totalLines > 1000 && !largeChangesetExpanded) {
@@ -192,9 +344,17 @@ export function DiffContentArea({
 								<FileText className="w-12 h-12 opacity-50" />
 								<div className="text-center">
 									<p className="font-medium mb-1">Large changeset</p>
-									<p className="text-sm">{totalLines} lines across {files.length} file{files.length !== 1 ? "s" : ""}</p>
+									<p className="text-sm">
+										{totalLines} lines across {files.length} file
+										{files.length !== 1 ? "s" : ""}
+									</p>
 								</div>
-								<Button variant="outline" onClick={() => setLargeChangesetExpanded(true)}>View changes</Button>
+								<Button
+									variant="outline"
+									onClick={() => setLargeChangesetExpanded(true)}
+								>
+									View changes
+								</Button>
 							</div>
 						);
 					}
@@ -207,25 +367,42 @@ export function DiffContentArea({
 											const regions = conflictRegionsByFile.get(conflictFile);
 											if (!regions || regions.length === 0) return null;
 											return (
-												<div key={`conflict-${conflictFile}`} className="border border-destructive/30 rounded-md overflow-hidden">
+												<div
+													key={`conflict-${conflictFile}`}
+													className="border border-destructive/30 rounded-md overflow-hidden"
+												>
 													<div className="bg-destructive/10 px-3 py-2 flex items-center gap-2">
-														<span className="font-mono text-sm">{conflictFile}</span>
+														<span className="font-mono text-sm">
+															{conflictFile}
+														</span>
 													</div>
 													{regions.map((region, index) => (
 														<Fragment key={region.id}>
-															{index > 0 && <div className="border-t border-border" />}
+															{index > 0 && (
+																<div className="border-t border-border" />
+															)}
 															<InlineConflictCard
 																region={region}
 																conflictComments={conflictComments}
 																openConflictComments={openConflictComments}
-																editingConflictCommentId={editingConflictCommentId}
+																editingConflictCommentId={
+																	editingConflictCommentId
+																}
 																saveConflictComment={saveConflictComment}
 																clearConflictComment={clearConflictComment}
 																toggleConflictComment={toggleConflictComment}
-																setOpenConflictComments={setOpenConflictComments}
-																startEditConflictComment={startEditConflictComment}
-																cancelEditConflictComment={cancelEditConflictComment}
-																saveEditConflictComment={saveEditConflictComment}
+																setOpenConflictComments={
+																	setOpenConflictComments
+																}
+																startEditConflictComment={
+																	startEditConflictComment
+																}
+																cancelEditConflictComment={
+																	cancelEditConflictComment
+																}
+																saveEditConflictComment={
+																	saveEditConflictComment
+																}
 																searchData={searchData}
 																debouncedSearchQuery={debouncedSearchQuery}
 																currentMatchIndex={currentMatchIndex}
@@ -263,31 +440,39 @@ export function DiffContentArea({
 										deleteComment={deleteComment}
 									/>
 								))}
-								{showCommittedChanges && committedFiles.map((file) => (
-									<FileRowComponent
-										key={`committed-${file.path}`}
-										file={{ ...file, stagedStatus: "", workspaceStatus: file.status, isUntracked: false } as ParsedFileChange}
-										allFileHunks={allFileHunks}
-										collapsedFiles={collapsedFiles}
-										viewedFiles={viewedFiles}
-										expandedLargeDiffs={expandedLargeDiffs}
-										diffFontSize={diffFontSize}
-										readOnly={true}
-										fileActionTarget={null}
-										selectedUnstagedFiles={new Set()}
-										workspacePath={workspacePath}
-										toggleFileCollapse={toggleFileCollapse}
-										toggleLargeDiff={toggleLargeDiff}
-										handleMarkFileViewed={handleMarkFileViewed}
-										handleUnmarkFileViewed={handleUnmarkFileViewed}
-										handleDiscardFiles={handleDiscardFiles}
-										handleContextMenu={handleContextMenu}
-										renderHunkLines={renderHunkLines}
-										addToast={addToast}
-										getOutdatedCommentsForFile={() => []}
-										deleteComment={deleteComment}
-									/>
-								))}
+								{showCommittedChanges &&
+									committedFiles.map((file) => (
+										<FileRowComponent
+											key={`committed-${file.path}`}
+											file={
+												{
+													...file,
+													stagedStatus: "",
+													workspaceStatus: file.status,
+													isUntracked: false,
+												} as ParsedFileChange
+											}
+											allFileHunks={allFileHunks}
+											collapsedFiles={collapsedFiles}
+											viewedFiles={viewedFiles}
+											expandedLargeDiffs={expandedLargeDiffs}
+											diffFontSize={diffFontSize}
+											readOnly={true}
+											fileActionTarget={null}
+											selectedUnstagedFiles={new Set()}
+											workspacePath={workspacePath}
+											toggleFileCollapse={toggleFileCollapse}
+											toggleLargeDiff={toggleLargeDiff}
+											handleMarkFileViewed={handleMarkFileViewed}
+											handleUnmarkFileViewed={handleUnmarkFileViewed}
+											handleDiscardFiles={handleDiscardFiles}
+											handleContextMenu={handleContextMenu}
+											renderHunkLines={renderHunkLines}
+											addToast={addToast}
+											getOutdatedCommentsForFile={() => []}
+											deleteComment={deleteComment}
+										/>
+									))}
 							</div>
 						</div>
 					);

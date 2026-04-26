@@ -1,6 +1,7 @@
 import type {
 	BookmarkTrackingResult,
 	BranchStatus,
+	DirectoryEntry,
 	EditorAppsResponse,
 	JjBranch,
 	JjCommitsAhead,
@@ -84,15 +85,13 @@ export const setSetting = (key: string, value: string): Promise<void> =>
 export const getRepoSetting = (
 	repoPath: string,
 	key: string,
-): Promise<string | null> =>
-	invoke("get_repo_setting", { repoPath, key });
+): Promise<string | null> => invoke("get_repo_setting", { repoPath, key });
 
 export const setRepoSetting = (
 	repoPath: string,
 	key: string,
 	value: string,
-): Promise<void> =>
-	invoke("set_repo_setting", { repoPath, key, value });
+): Promise<void> => invoke("set_repo_setting", { repoPath, key, value });
 
 export const setWindowRepoPath = (repoPath: string): Promise<void> =>
 	invoke("set_window_repo_path", { repoPath });
@@ -130,6 +129,18 @@ export const getWorkspaceChangedFiles = (
 ): Promise<JjFileChange[]> =>
 	invoke("get_workspace_changed_files", { repoPath, workspaceId });
 
+export const lsWorkspace = (
+	repoPath: string,
+	workspaceId: number | null,
+): Promise<DirectoryEntry[]> =>
+	invoke("ls_workspace", { repoPath, workspaceId });
+
+export const getWorkspaceReadme = (
+	repoPath: string,
+	workspaceId: number | null,
+): Promise<string | null> =>
+	invoke("get_workspace_readme", { repoPath, workspaceId });
+
 export const getWorkspaceFileHunks = (
 	repoPath: string,
 	workspaceId: number | null,
@@ -151,7 +162,8 @@ export const getWorkspaceFileLines = (
 		endLine: number,
 	]
 ): Promise<JjFileLines> => {
-	const [repoPath, workspaceId, filePath, fromParent, startLine, endLine] = args;
+	const [repoPath, workspaceId, filePath, fromParent, startLine, endLine] =
+		args;
 	return invoke("get_workspace_file_lines", {
 		repoPath,
 		workspaceId,
@@ -194,8 +206,13 @@ export const listCommits = (
 		limit?: number,
 	]
 ): Promise<JjLogResult> => {
-	const [repoPath, workspaceId, includeTargetBranchHistory, targetBranchLimit, limit] =
-		args;
+	const [
+		repoPath,
+		workspaceId,
+		includeTargetBranchHistory,
+		targetBranchLimit,
+		limit,
+	] = args;
 	return invoke("list_commits", {
 		repoPath,
 		workspaceId,
@@ -216,9 +233,7 @@ export const jjSplit = (
 		filePaths,
 	});
 
-export const listConflictedFiles = (
-	workspacePath: string,
-): Promise<string[]> =>
+export const listConflictedFiles = (workspacePath: string): Promise<string[]> =>
 	invoke("list_conflicted_files", { workspacePath });
 
 export const jjGetBranches = (repoPath: string): Promise<JjBranch[]> =>
@@ -361,8 +376,16 @@ export const splitWorkspace = (
 		position: "before" | "after",
 	]
 ): Promise<number> => {
-	const [repoPath, workspaceId, branchName, intent, filePaths, commitIds, mode, position] =
-		args;
+	const [
+		repoPath,
+		workspaceId,
+		branchName,
+		intent,
+		filePaths,
+		commitIds,
+		mode,
+		position,
+	] = args;
 	return invoke("split_workspace", {
 		repoPath,
 		workspaceId,
@@ -401,7 +424,12 @@ export const mergeWorkspace = (
 	]
 ): Promise<void> => {
 	const [repoPath, workspaceId, message, mergeStrategy] = args;
-	return invoke("merge_workspace", { repoPath, workspaceId, message, mergeStrategy });
+	return invoke("merge_workspace", {
+		repoPath,
+		workspaceId,
+		message,
+		mergeStrategy,
+	});
 };
 
 export const updateWorkspaceNotOnRemote = (

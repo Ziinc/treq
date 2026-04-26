@@ -6,19 +6,19 @@ export const STATUS_COLORS = {
 		bg: "bg-green-500",
 		text: "text-green-500",
 	},
-	"A": {
+	A: {
 		bg: "bg-green-500",
 		text: "text-green-500",
 	},
-	"D": {
+	D: {
 		bg: "bg-red-500",
 		text: "text-red-500",
 	},
-	"M": {
+	M: {
 		bg: "bg-yellow-500",
 		text: "text-yellow-500",
 	},
-	"R": {
+	R: {
 		bg: "bg-blue-500",
 		text: "text-blue-500",
 	},

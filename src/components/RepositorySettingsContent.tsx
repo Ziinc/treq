@@ -85,7 +85,7 @@ export const RepositorySettingsContent: React.FC<
 
 	const addPattern = (pattern: string) => {
 		if (includedFiles.trim()) {
-			setIncludedFiles(`${includedFiles  }\n${  pattern}`);
+			setIncludedFiles(`${includedFiles}\n${pattern}`);
 		} else {
 			setIncludedFiles(pattern);
 		}

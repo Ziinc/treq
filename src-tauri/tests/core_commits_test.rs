@@ -814,6 +814,66 @@ fn test_list_commits_home_repo_with_committed_changes() {
     );
 }
 
+#[test]
+fn test_list_commits_workspace_after_home_repo_jj_commits() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    for idx in 0..13 {
+        repo.commit_file(
+            &format!("home_{}.txt", idx),
+            &format!("home content {}\n", idx),
+            &format!("Home commit {}", idx),
+        )
+        .expect("Failed to create home repo commit");
+    }
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/home-regression",
+        Some("home regression".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    fs::write(workspace_path.join("workspace.txt"), "workspace content\n")
+        .expect("Failed to write workspace file");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Workspace commit")
+        .expect("Failed to commit workspace change");
+
+    let result =
+        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), true, None, None)
+            .expect("Workspace list_commits should succeed after home repo jj commits");
+
+    let descriptions: Vec<&str> = result
+        .commits
+        .iter()
+        .filter(|c| !c.is_working_copy)
+        .map(|c| c.description.as_str())
+        .collect();
+    assert!(
+        descriptions.contains(&"Workspace commit"),
+        "Should include workspace commit, got: {:?}",
+        descriptions
+    );
+
+    let expanded_result =
+        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), true, Some(20), None)
+            .expect("Expanded target branch history should succeed");
+    let target_descriptions: Vec<&str> = expanded_result
+        .target_branch_commits
+        .iter()
+        .map(|c| c.description.as_str())
+        .collect();
+    assert!(
+        target_descriptions.contains(&"Home commit 0"),
+        "Expanded target branch history should include oldest home commit, got: {:?}",
+        target_descriptions,
+    );
+}
+
 // =============================================================================
 // Test: list_commits with include_target_branch_history returns target branch commits
 // =============================================================================

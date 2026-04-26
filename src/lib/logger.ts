@@ -19,7 +19,7 @@ export async function initLogger(): Promise<() => void> {
 	// tauri `level_for("webview", ...)`). `log` must map to `info` (not `trace`)
 	// or default log filters will hide it in the terminal.
 	forwardConsole("log", info);
-	forwardConsole("debug", debug);
+	// // forwardConsole("debug", debug);
 	forwardConsole("info", info);
 	forwardConsole("warn", warn);
 	forwardConsole("error", error);

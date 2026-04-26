@@ -52,7 +52,10 @@ export const hunksEqual = (
 	return JSON.stringify(hunksA) === JSON.stringify(hunksB);
 };
 
-export const filesEqual = (filesA: ParsedFileChange[], filesB: ParsedFileChange[]): boolean => {
+export const filesEqual = (
+	filesA: ParsedFileChange[],
+	filesB: ParsedFileChange[],
+): boolean => {
 	if (filesA.length !== filesB.length) return false;
 	for (let idx = 0; idx < filesA.length; idx++) {
 		if (
@@ -118,7 +121,9 @@ export const computeHunkLineNumbers = (
 };
 
 export const computeHunksHash = (hunks: JjDiffHunk[]): string => {
-	const content = hunks.map((hunk) => hunk.header + hunk.lines.join("")).join("|");
+	const content = hunks
+		.map((hunk) => hunk.header + hunk.lines.join(""))
+		.join("|");
 	let hash = 5381;
 	for (let idx = 0; idx < content.length; idx++) {
 		hash = (hash * 33 + content.charCodeAt(idx)) % 4294967296;

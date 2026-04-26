@@ -7,6 +7,8 @@ import preferFindByTextRule from "./eslint-rules/prefer-find-by-text.js";
 import userEventSetupInSetupRule from "./eslint-rules/user-event-setup-in-setup.js";
 import preferClickByQueryRule from "./eslint-rules/prefer-click-by-query.js";
 import noBannedClassSelectorRule from "./eslint-rules/no-banned-class-selector.js";
+import requireTauriApiExportsUsedRule from "./eslint-rules/require-tauri-api-exports-used.js";
+import requireTauriApiCommandWrappersRule from "./eslint-rules/require-tauri-api-command-wrappers.js";
 import pluginReact from "eslint-plugin-react";
 import tseslint from "typescript-eslint";
 
@@ -19,6 +21,17 @@ const ignoredGlobs = [
   "dist/**",
   "node_modules/**",
 ];
+
+const localRules = {
+  "no-document-dispatch-event": noDocumentDispatchEventRule,
+  "no-inline-comments": noInlineCommentsRule,
+  "prefer-click-by-query": preferClickByQueryRule,
+  "prefer-find-by-text": preferFindByTextRule,
+  "user-event-setup-in-setup": userEventSetupInSetupRule,
+  "no-banned-class-selector": noBannedClassSelectorRule,
+  "require-tauri-api-exports-used": requireTauriApiExportsUsedRule,
+  "require-tauri-api-command-wrappers": requireTauriApiCommandWrappersRule,
+};
 
 export default defineConfig([
   {
@@ -104,17 +117,22 @@ export default defineConfig([
     languageOptions: { globals: globals.node },
   },
   {
+    files: ["src/lib/api.ts", "src/lib/api-extra.ts"],
+    plugins: {
+      local: {
+        rules: localRules,
+      },
+    },
+    rules: {
+      "local/require-tauri-api-exports-used": "error",
+      "local/require-tauri-api-command-wrappers": "error",
+    },
+  },
+  {
     files: ["test/**/*.{ts,tsx}"],
     plugins: {
       local: {
-        rules: {
-          "no-document-dispatch-event": noDocumentDispatchEventRule,
-          "no-inline-comments": noInlineCommentsRule,
-          "prefer-click-by-query": preferClickByQueryRule,
-          "prefer-find-by-text": preferFindByTextRule,
-          "user-event-setup-in-setup": userEventSetupInSetupRule,
-          "no-banned-class-selector": noBannedClassSelectorRule,
-        },
+        rules: localRules,
       },
     },
     rules: {

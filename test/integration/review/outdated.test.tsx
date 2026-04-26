@@ -1,16 +1,16 @@
 import * as React from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  createTestRepo,
-  findSidebarBranchElement,
-  openRepo,
-  resolveWorkspacePath,
-  writeWorkspaceFile,
+	createTestRepo,
+	findSidebarBranchElement,
+	openRepo,
+	resolveWorkspacePath,
+	writeWorkspaceFile,
 } from "../../utils";
 import {
-  type Workspace,
-  createWorkspace,
-  getWorkspaces,
+	type Workspace,
+	createWorkspace,
+	getWorkspaces,
 } from "../../../src/lib/api";
 import { savePendingReview } from "../../../src/lib/api-extra";
 import type { LineComment } from "../../../src/lib/api-types";
@@ -19,81 +19,83 @@ import { Dashboard } from "../../../src/components/Dashboard";
 import userEvent from "@testing-library/user-event";
 
 async function setupWorkspaceWithChange(branchName: string): Promise<{
-  repoPath: string;
-  workspace: Workspace;
+	repoPath: string;
+	workspace: Workspace;
 }> {
-  const { repoPath } = createTestRepo(false);
-  openRepo(repoPath);
+	const { repoPath } = createTestRepo(false);
+	openRepo(repoPath);
 
-  const workspaceId = await createWorkspace(repoPath, branchName);
-  const workspace = (await getWorkspaces(repoPath)).find(
-    (item) => item.id === workspaceId
-  );
-  if (!workspace) {
-    throw new Error(`Workspace not found for id ${workspaceId}`);
-  }
+	const workspaceId = await createWorkspace(repoPath, branchName);
+	const workspace = (await getWorkspaces(repoPath)).find(
+		(item) => item.id === workspaceId,
+	);
+	if (!workspace) {
+		throw new Error(`Workspace not found for id ${workspaceId}`);
+	}
 
-  return { repoPath, workspace };
+	return { repoPath, workspace };
 }
 
 async function openReviewTab(
-  user: ReturnType<typeof userEvent.setup>,
-  branchName: string
+	user: ReturnType<typeof userEvent.setup>,
+	branchName: string,
 ) {
-  render(<Dashboard />);
+	render(<Dashboard />);
 
-  await user.click(await findSidebarBranchElement(branchName));
+	await user.click(await findSidebarBranchElement(branchName));
 
-  const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
-  await user.click(reviewTab);
-  await screen.findByRole("tab", { name: /^Review/, selected: true });
+	const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
+	await user.click(reviewTab);
+	await screen.findByRole("tab", { name: /^Review/, selected: true });
 }
 
 describe("Outdated comments - persisted comment with non-existent hunk", () => {
-  let user: ReturnType<typeof userEvent.setup>;
+	let user: ReturnType<typeof userEvent.setup>;
 
-  beforeEach(() => {
-    user = userEvent.setup();
-  });
+	beforeEach(() => {
+		user = userEvent.setup();
+	});
 
-  it("should enter review mode when persisted comment references a non-existent hunk", { timeout: 15000 }, async () => {
-    const branchName = "feat/outdated-comments";
-    const { repoPath, workspace } = await setupWorkspaceWithChange(branchName);
-    const wsPath = resolveWorkspacePath(repoPath, workspace.workspace_path);
+	it("should enter review mode when persisted comment references a non-existent hunk", {
+		timeout: 15000,
+	}, async () => {
+		const branchName = "feat/outdated-comments";
+		const { repoPath, workspace } = await setupWorkspaceWithChange(branchName);
+		const wsPath = resolveWorkspacePath(repoPath, workspace.workspace_path);
 
-    writeWorkspaceFile(wsPath, "test.txt", "first line\nsecond line\n");
+		writeWorkspaceFile(wsPath, "test.txt", "first line\nsecond line\n");
 
-    const outdatedComment: LineComment = {
-      id: "outdated-comment-1",
-      file_path: "test.txt",
-      hunk_id: "nonexistent-hunk-id",
-      start_line: 102,
-      end_line: 102,
-      line_content: ["+old line that was removed"],
-      text: "This line needs work",
-      created_at: new Date().toISOString(),
-    };
-    await savePendingReview(repoPath, workspace.id, [outdatedComment]);
+		const outdatedComment: LineComment = {
+			id: "outdated-comment-1",
+			file_path: "test.txt",
+			hunk_id: "nonexistent-hunk-id",
+			start_line: 102,
+			end_line: 102,
+			line_content: ["+old line that was removed"],
+			text: "This line needs work",
+			created_at: new Date().toISOString(),
+		};
+		await savePendingReview(repoPath, workspace.id, [outdatedComment]);
 
-    await openReviewTab(user, branchName);
+		await openReviewTab(user, branchName);
 
-    await waitFor(
-      () => {
-        expect(
-          screen.queryByRole("button", { name: /finish review/i })
-        ).toBeInTheDocument();
-      },
-      { timeout: 5000 }
-    );
+		await waitFor(
+			() => {
+				expect(
+					screen.queryByRole("button", { name: /finish review/i }),
+				).toBeInTheDocument();
+			},
+			{ timeout: 5000 },
+		);
 
-    await waitFor(() => {
-      expect(screen.getAllByText(/test\.txt/).length).toBeGreaterThan(0);
-    });
+		await waitFor(() => {
+			expect(screen.getAllByText(/test\.txt/).length).toBeGreaterThan(0);
+		});
 
-    await waitFor(() => {
-      expect(
-        screen.getAllByRole("button", { name: /^discard$/i }).length
-      ).toBeGreaterThan(0);
-    });
-  });
+		await waitFor(() => {
+			expect(
+				screen.getAllByRole("button", { name: /^discard$/i }).length,
+			).toBeGreaterThan(0);
+		});
+	});
 });

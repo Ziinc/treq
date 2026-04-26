@@ -25,11 +25,7 @@ import {
 	ContextMenuSubTrigger,
 	ContextMenuTrigger,
 } from "./ui/context-menu";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipTrigger,
-} from "./ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 export const PathContextMenuItems: React.FC<{
 	relativePath: string;
@@ -40,7 +36,9 @@ export const PathContextMenuItems: React.FC<{
 
 	return (
 		<>
-			<ContextMenuItem onClick={() => navigator.clipboard.writeText(relativePath)}>
+			<ContextMenuItem
+				onClick={() => navigator.clipboard.writeText(relativePath)}
+			>
 				<Copy className="w-4 h-4 mr-2" />
 				Copy relative path
 			</ContextMenuItem>
@@ -139,7 +137,8 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 }) => {
 	const workspace = node.status.current;
 	const isSelected =
-		selectedWorkspaceIds?.has(workspace.id) || selectedWorkspaceId === workspace.id;
+		selectedWorkspaceIds?.has(workspace.id) ||
+		selectedWorkspaceId === workspace.id;
 	const indentStyle = {
 		paddingLeft: `${16 + (node.depth - 1) * 6}px`,
 	};
@@ -185,19 +184,25 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 											{node.depth === 0 ? (
 												<GitBranch
 													className={`w-3 h-3 mr-1 shrink-0 ${
-														isSelected ? "text-primary" : "text-muted-foreground"
+														isSelected
+															? "text-primary"
+															: "text-muted-foreground"
 													}`}
 												/>
 											) : (
 												<CornerLeftUp
 													className={`w-3 h-3 mr-1 shrink-0 ${
-														isSelected ? "text-primary" : "text-muted-foreground"
+														isSelected
+															? "text-primary"
+															: "text-muted-foreground"
 													}`}
 												/>
 											)}
 											<span
 												className={`flex-1 min-w-0 truncate font-mono ${
-													isSelected ? "text-primary font-medium" : "text-muted-foreground"
+													isSelected
+														? "text-primary font-medium"
+														: "text-muted-foreground"
 												}`}
 											>
 												{workspaceTitle}
@@ -206,7 +211,10 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 												<span
 													className={cn(
 														"group-hover/workspace:opacity-100 transition-opacity",
-														{ "opacity-100": isSelected, "opacity-0": !isSelected },
+														{
+															"opacity-100": isSelected,
+															"opacity-0": !isSelected,
+														},
 													)}
 												>
 													<Tooltip>
@@ -224,7 +232,9 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 																<Layers2 className="w-4 h-4" />
 															</Button>
 														</TooltipTrigger>
-														<TooltipContent side="bottom">Stack workspace</TooltipContent>
+														<TooltipContent side="bottom">
+															Stack workspace
+														</TooltipContent>
 													</Tooltip>
 												</span>
 												{wsCommitsAhead > 0 && (
@@ -244,17 +254,23 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 										</div>
 										<div className="font-sans mt-1">
 											{wsCommitsAhead > 1 && (
-												<span>{wsCommitsAhead} commits ahead of target branch</span>
+												<span>
+													{wsCommitsAhead} commits ahead of target branch
+												</span>
 											)}
 											{wsCommitsAhead === 1 && (
-												<span>{wsCommitsAhead} commit ahead of target branch</span>
+												<span>
+													{wsCommitsAhead} commit ahead of target branch
+												</span>
 											)}
 										</div>
 									</TooltipContent>
 								)}
 							</Tooltip>
 							<ContextMenuContent>
-								<ContextMenuItem onClick={() => navigator.clipboard.writeText(workspaceTitle)}>
+								<ContextMenuItem
+									onClick={() => navigator.clipboard.writeText(workspaceTitle)}
+								>
 									<GitBranch className="w-4 h-4 mr-2" />
 									Copy branch name
 								</ContextMenuItem>
@@ -266,7 +282,8 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 								<PathContextMenuItems
 									relativePath={
 										workspace.workspace_path.startsWith("/")
-											? repoPath && workspace.workspace_path.startsWith(repoPath)
+											? repoPath &&
+												workspace.workspace_path.startsWith(repoPath)
 												? workspace.workspace_path.slice(repoPath.length + 1)
 												: workspace.workspace_path
 											: `.treq/workspaces/${workspace.workspace_path}`

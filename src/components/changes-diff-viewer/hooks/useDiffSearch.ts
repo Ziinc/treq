@@ -40,7 +40,10 @@ export function useDiffSearch({
 
 	const searchData = useMemo<DiffSearchData>(() => {
 		const matches: DiffSearchData["matches"] = [];
-		const matchesByKey = new Map<string, { firstGlobalIndex: number; count: number }>();
+		const matchesByKey = new Map<
+			string,
+			{ firstGlobalIndex: number; count: number }
+		>();
 		if (!debouncedSearchQuery) return { matches, matchesByKey };
 		const escapedQuery = escapeRegex(debouncedSearchQuery);
 		const regex = new RegExp(escapedQuery, "gi");
@@ -56,9 +59,17 @@ export function useDiffSearch({
 				const matchCount = countLineMatches(lines[idx]);
 				if (matchCount > 0) {
 					const key = `conflict:${region.id}:${idx}`;
-					matchesByKey.set(key, { count: matchCount, firstGlobalIndex: matches.length });
+					matchesByKey.set(key, {
+						count: matchCount,
+						firstGlobalIndex: matches.length,
+					});
 					for (let matchIdx = 0; matchIdx < matchCount; matchIdx++) {
-						matches.push({ filePath: region.file_path, hunkIndex: -1, lineIndex: idx, matchIndexInLine: matchIdx });
+						matches.push({
+							filePath: region.file_path,
+							hunkIndex: -1,
+							lineIndex: idx,
+							matchIndexInLine: matchIdx,
+						});
 					}
 				}
 			}
@@ -72,27 +83,41 @@ export function useDiffSearch({
 			if (collapsedFiles.has(filePath)) return;
 			if (isBinaryFile(filePath)) return;
 			const conflictLineMap = conflictLineLookups.get(filePath);
-			let additions = 0, deletions = 0;
+			let additions = 0,
+				deletions = 0;
 			for (const hunk of fileData.hunks) {
 				for (const line of hunk.lines) {
 					if (line.startsWith("+")) additions++;
 					else if (line.startsWith("-")) deletions++;
 				}
 			}
-			if (additions + deletions > 250 && !expandedLargeDiffs.has(filePath)) return;
+			if (additions + deletions > 250 && !expandedLargeDiffs.has(filePath))
+				return;
 			for (let hunkIndex = 0; hunkIndex < fileData.hunks.length; hunkIndex++) {
 				const hunk = fileData.hunks[hunkIndex];
 				const lineNumbers = computeHunkLineNumbers(hunk);
 				for (let lineIndex = 0; lineIndex < hunk.lines.length; lineIndex++) {
 					const newLineNumber = lineNumbers[lineIndex]?.new;
-					if (newLineNumber !== undefined && conflictLineMap?.has(newLineNumber)) continue;
+					if (
+						newLineNumber !== undefined &&
+						conflictLineMap?.has(newLineNumber)
+					)
+						continue;
 					const lineText = hunk.lines[lineIndex].substring(1);
 					const mc = countLineMatches(lineText);
 					if (mc > 0) {
 						const key = `${filePath}:${hunkIndex}:${lineIndex}`;
-						matchesByKey.set(key, { count: mc, firstGlobalIndex: matches.length });
+						matchesByKey.set(key, {
+							count: mc,
+							firstGlobalIndex: matches.length,
+						});
 						for (let matchIdx = 0; matchIdx < mc; matchIdx++) {
-							matches.push({ filePath, hunkIndex, lineIndex, matchIndexInLine: matchIdx });
+							matches.push({
+								filePath,
+								hunkIndex,
+								lineIndex,
+								matchIndexInLine: matchIdx,
+							});
 						}
 					}
 				}
@@ -103,7 +128,16 @@ export function useDiffSearch({
 			for (const file of committedFiles) processFile(file.path);
 		}
 		return { matches, matchesByKey };
-	}, [debouncedSearchQuery, files, allFileHunks, collapsedFiles, expandedLargeDiffs, showCommittedChanges, committedFiles, conflictLineLookups]);
+	}, [
+		debouncedSearchQuery,
+		files,
+		allFileHunks,
+		collapsedFiles,
+		expandedLargeDiffs,
+		showCommittedChanges,
+		committedFiles,
+		conflictLineLookups,
+	]);
 
 	useEffect(() => {
 		if (searchData.matches.length === 0) {
@@ -119,21 +153,32 @@ export function useDiffSearch({
 		setCurrentMatchIndex(0);
 	}, [workspacePath]);
 
-	useKeyboardShortcut("f", true, () => {
-		setIsSearchOpen(true);
-		setSearchFocusTrigger((prev) => prev + 1);
-	}, []);
+	useKeyboardShortcut(
+		"f",
+		true,
+		() => {
+			setIsSearchOpen(true);
+			setSearchFocusTrigger((prev) => prev + 1);
+		},
+		[],
+	);
 
-	const scrollToSearchMatch = useCallback((matchIdx: number) => {
-		if (!diffContainerRef.current || searchData.matches.length === 0) return;
-		const match = searchData.matches[matchIdx];
-		if (!match) return;
-		const searchId = match.hunkIndex === -1
-			? `conflict:${match.filePath}:${match.lineIndex}`
-			: `${match.filePath}:${match.hunkIndex}:${match.lineIndex}`;
-		const el = diffContainerRef.current.querySelector(`[data-search-id="${CSS.escape(searchId)}"]`);
-		if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-	}, [searchData.matches]);
+	const scrollToSearchMatch = useCallback(
+		(matchIdx: number) => {
+			if (!diffContainerRef.current || searchData.matches.length === 0) return;
+			const match = searchData.matches[matchIdx];
+			if (!match) return;
+			const searchId =
+				match.hunkIndex === -1
+					? `conflict:${match.filePath}:${match.lineIndex}`
+					: `${match.filePath}:${match.hunkIndex}:${match.lineIndex}`;
+			const el = diffContainerRef.current.querySelector(
+				`[data-search-id="${CSS.escape(searchId)}"]`,
+			);
+			if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+		},
+		[searchData.matches],
+	);
 
 	const handleSearchNext = useCallback(() => {
 		if (searchData.matches.length === 0) return;
@@ -144,7 +189,9 @@ export function useDiffSearch({
 
 	const handleSearchPrevious = useCallback(() => {
 		if (searchData.matches.length === 0) return;
-		const prev = (currentMatchIndex - 1 + searchData.matches.length) % searchData.matches.length;
+		const prev =
+			(currentMatchIndex - 1 + searchData.matches.length) %
+			searchData.matches.length;
 		setCurrentMatchIndex(prev);
 		scrollToSearchMatch(prev);
 	}, [currentMatchIndex, searchData.matches.length, scrollToSearchMatch]);

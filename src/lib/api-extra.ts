@@ -42,8 +42,7 @@ export const ptyWrite = (sessionId: string, data: string): Promise<void> =>
 export const ptyWriteSuppressEcho = (
 	sessionId: string,
 	data: string,
-): Promise<void> =>
-	invoke("pty_write_suppress_echo", { sessionId, data });
+): Promise<void> => invoke("pty_write_suppress_echo", { sessionId, data });
 
 export const ptyResize = (
 	sessionId: string,
@@ -113,8 +112,7 @@ export const createSession = (
 	repoPath: string,
 	workspaceId: number | null,
 	name: string,
-): Promise<number> =>
-	invoke("create_session", { repoPath, workspaceId, name });
+): Promise<number> => invoke("create_session", { repoPath, workspaceId, name });
 
 export const getSessions = (repoPath: string): Promise<Session[]> =>
 	invoke("get_sessions", { repoPath });
@@ -122,15 +120,13 @@ export const getSessions = (repoPath: string): Promise<Session[]> =>
 export const updateSessionAccess = (
 	repoPath: string,
 	id: number,
-): Promise<void> =>
-	invoke("update_session_access", { repoPath, id });
+): Promise<void> => invoke("update_session_access", { repoPath, id });
 
 export const updateSessionName = (
 	repoPath: string,
 	id: number,
 	name: string,
-): Promise<void> =>
-	invoke("update_session_name", { repoPath, id, name });
+): Promise<void> => invoke("update_session_name", { repoPath, id, name });
 
 export const deleteSession = (repoPath: string, id: number): Promise<void> =>
 	invoke("delete_session", { repoPath, id });
@@ -138,15 +134,13 @@ export const deleteSession = (repoPath: string, id: number): Promise<void> =>
 export const getSessionModel = (
 	repoPath: string,
 	id: number,
-): Promise<string | null> =>
-	invoke("get_session_model", { repoPath, id });
+): Promise<string | null> => invoke("get_session_model", { repoPath, id });
 
 export const setSessionModel = (
 	repoPath: string,
 	id: number,
 	model: string | null,
-): Promise<void> =>
-	invoke("set_session_model", { repoPath, id, model });
+): Promise<void> => invoke("set_session_model", { repoPath, id, model });
 
 export const markFileViewed = (
 	workspacePath: string,
@@ -319,7 +313,8 @@ export const moveCommitToNewWorkspace = (
 		intent: string | null,
 	]
 ): Promise<number> => {
-	const [repoPath, sourceWorkspaceId, commitChangeId, branchName, intent] = args;
+	const [repoPath, sourceWorkspaceId, commitChangeId, branchName, intent] =
+		args;
 	return invoke("move_commit_to_new_workspace", {
 		repoPath,
 		sourceWorkspaceId,

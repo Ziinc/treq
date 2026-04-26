@@ -97,11 +97,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 				const stored = await getSetting("supabase_session");
 				if (stored) {
 					const tokens = JSON.parse(stored) as Record<string, string>;
-					const {accessToken} = tokens;
-					const {refreshToken} = tokens;
+					const { accessToken } = tokens;
+					const { refreshToken } = tokens;
 					const { data, error } = await supabase.auth.setSession({
-						"access_token": accessToken,
-						"refresh_token": refreshToken,
+						access_token: accessToken,
+						refresh_token: refreshToken,
 					});
 					if (!error && data.session) {
 						setSession(data.session);
@@ -140,8 +140,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
 			const data = await response.json();
 			const { data: sessionData, error } = await supabase.auth.setSession({
-				"access_token": data.access_token as string,
-				"refresh_token": data.refresh_token as string,
+				access_token: data.access_token as string,
+				refresh_token: data.refresh_token as string,
 			});
 
 			if (error) throw error;

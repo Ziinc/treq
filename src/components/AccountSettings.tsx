@@ -104,7 +104,7 @@ export const AccountSettings: React.FC = () => {
 		user.user_metadata?.avatar_url || user.user_metadata?.picture;
 	const fullName =
 		user.user_metadata?.full_name || user.user_metadata?.name || "User";
-	const {email} = user;
+	const { email } = user;
 
 	const isPro =
 		subscription?.plan === "pro" && subscription?.status === "active";

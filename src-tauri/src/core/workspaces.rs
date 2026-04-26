@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use std::sync::{Arc, Mutex, OnceLock};
 
+use ignore::WalkBuilder;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -13,6 +15,13 @@ pub struct WorkspaceCommit {
     pub hash: String,
     pub timestamp: String,
     pub message: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct WorkspaceEntry {
+    pub name: String,
+    pub path: String,
+    pub is_directory: bool,
 }
 
 /// Defines how a workspace is merged into its target branch.
@@ -104,6 +113,95 @@ pub struct WorkspaceMetadata {
     pub intent: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub moved_files: Option<Vec<String>>,
+}
+
+static REPO_COMMIT_LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
+
+fn get_repo_commit_lock(repo_path: &str) -> Arc<Mutex<()>> {
+    let locks = REPO_COMMIT_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut guard = locks.lock().unwrap();
+    guard
+        .entry(repo_path.to_string())
+        .or_insert_with(|| Arc::new(Mutex::new(())))
+        .clone()
+}
+
+fn resolve_workspace_root(repo_path: &str, workspace_id: Option<i64>) -> Result<String, String> {
+    match workspace_id {
+        Some(id) => {
+            let workspace = local_db::get_workspace_by_id(repo_path, id)
+                .map_err(|e| format!("Failed to get workspace: {}", e))?
+                .ok_or_else(|| format!("Workspace not found: {}", id))?;
+            let workspace_path = Path::new(repo_path)
+                .join(".treq")
+                .join("workspaces")
+                .join(&workspace.workspace_path);
+            Ok(workspace_path
+                .to_str()
+                .ok_or("Failed to convert workspace path to string")
+                .map(|path| path.to_string())?)
+        }
+        None => Ok(repo_path.to_string()),
+    }
+}
+
+pub fn ls_workspace(
+    repo_path: &str,
+    workspace_id: Option<i64>,
+) -> Result<Vec<WorkspaceEntry>, String> {
+    let workspace_root = resolve_workspace_root(repo_path, workspace_id)?;
+    let base_path = Path::new(&workspace_root);
+    let mut entries = Vec::new();
+
+    let walker = WalkBuilder::new(&workspace_root)
+        .max_depth(Some(1))
+        .hidden(false)
+        .git_ignore(true)
+        .git_global(true)
+        .git_exclude(true)
+        .parents(true)
+        .build();
+
+    for entry in walker {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let entry_path = entry.path();
+
+        if entry_path == base_path {
+            continue;
+        }
+
+        if let Some(name) = entry_path.file_name().and_then(|name| name.to_str()) {
+            entries.push(WorkspaceEntry {
+                name: name.to_string(),
+                path: entry_path.to_string_lossy().to_string(),
+                is_directory: entry_path.is_dir(),
+            });
+        }
+    }
+
+    entries.sort_by(|a, b| match (a.is_directory, b.is_directory) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.cmp(&b.name),
+    });
+
+    Ok(entries)
+}
+
+pub fn get_workspace_readme(
+    repo_path: &str,
+    workspace_id: Option<i64>,
+) -> Result<Option<String>, String> {
+    let readme = ls_workspace(repo_path, workspace_id)?
+        .into_iter()
+        .find(|entry| !entry.is_directory && entry.name.eq_ignore_ascii_case("README.md"));
+
+    match readme {
+        Some(entry) => std::fs::read_to_string(&entry.path)
+            .map(Some)
+            .map_err(|e| format!("Failed to read workspace README '{}': {}", entry.path, e)),
+        None => Ok(None),
+    }
 }
 
 impl WorkspaceMetadata {
@@ -886,7 +984,7 @@ pub fn merge_workspace(
     match merge_strategy {
         MergeCommit::Merge => {
             jj::jj_create_merge_commit(
-                repo_path,
+                workspace_path_str,
                 &workspace.branch_name,
                 target_branch,
                 message,
@@ -895,13 +993,21 @@ pub fn merge_workspace(
             .map_err(|e| format!("Failed to create merge commit: {}", e))?;
         }
         MergeCommit::Squash => {
-            jj::jj_squash_merge_commit(repo_path, &workspace.branch_name, target_branch, message)
-                .map_err(|e| format!("Failed to squash merge workspace: {}", e))?;
+            jj::jj_squash_merge_commit(
+                workspace_path_str,
+                &workspace.branch_name,
+                target_branch,
+                message,
+            )
+            .map_err(|e| format!("Failed to squash merge workspace: {}", e))?;
         }
         MergeCommit::Rebase => {
-            let rebase_result =
-                jj::jj_rebase_merge_commit(repo_path, &workspace.branch_name, target_branch)
-                    .map_err(|e| format!("Failed to rebase merge workspace: {}", e))?;
+            let rebase_result = jj::jj_rebase_merge_commit(
+                workspace_path_str,
+                &workspace.branch_name,
+                target_branch,
+            )
+            .map_err(|e| format!("Failed to rebase merge workspace: {}", e))?;
 
             if !rebase_result.success {
                 return Err(format!("Rebase merge failed: {}", rebase_result.message));
@@ -1603,27 +1709,25 @@ pub fn check_and_rebase_workspaces(
     }
 }
 
-pub fn commit_workspace(
-    repo_path: &str,
-    workspace_id: i64,
-    message: &str,
-) -> Result<String, String> {
-    let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
-        .map_err(|e| format!("Failed to get workspace: {}", e))?
-        .ok_or_else(|| format!("Workspace not found: {}", workspace_id))?;
 
-    let workspace_dir = Path::new(repo_path)
-        .join(".treq")
-        .join("workspaces")
-        .join(&workspace.workspace_path);
-    let workspace_dir_str = workspace_dir
-        .to_str()
-        .ok_or("Failed to convert workspace path to string")?;
+pub fn commit_workspace<T>(repo_path: &str, workspace_id: T, message: &str) -> Result<String, String>
+where
+    T: Into<Option<i64>>,
+{
+    let workspace_id = workspace_id.into();
+    let repo_commit_lock = get_repo_commit_lock(repo_path);
+    let _repo_commit_guard = repo_commit_lock.lock().unwrap();
+    let workspace_root = resolve_workspace_root(repo_path, workspace_id)?;
 
-    let result = jj::jj_commit(workspace_dir_str, message)
+    let result = jj::jj_commit(&workspace_root, message)
         .map_err(|e| format!("Failed to create commit: {}", e))?;
 
-    let _ = auto_rebase::rebase_after_commit(repo_path, &workspace.branch_name);
+    if let Some(id) = workspace_id {
+        let workspace = local_db::get_workspace_by_id(repo_path, id)
+            .map_err(|e| format!("Failed to get workspace: {}", e))?
+            .ok_or_else(|| format!("Workspace not found: {}", id))?;
+        let _ = auto_rebase::rebase_after_commit(repo_path, &workspace.branch_name);
+    }
 
     Ok(result)
 }

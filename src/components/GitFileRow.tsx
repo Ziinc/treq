@@ -45,7 +45,7 @@ export const GitFileRow = memo<GitFileRowProps>(
 		workspacePath,
 	}) => {
 		const label = formatFileLabel(file.path);
-		const {status} = file;
+		const { status } = file;
 
 		return (
 			<FileContextMenu filePath={file.path} workspacePath={workspacePath || ""}>

@@ -2090,15 +2090,7 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
             .ok_or_else(|| JjError::WorkspaceNotFound(workspace_path.to_string()))?;
         ws.branch_name
     } else {
-        let b = read_git_head_branch(workspace_path)
-            .map_err(|e| JjError::IoError(format!("Failed to determine branch: {}", e)))?;
-        if b.is_empty() || b == "HEAD" {
-            return Err(JjError::IoError(
-                "Git is not checked out to a branch. Please checkout a branch before committing."
-                    .to_string(),
-            ));
-        }
-        b
+        resolve_home_repo_branch(workspace_path)?
     };
 
     let settings_path = repo_path_opt.as_deref().unwrap_or(workspace_path);
@@ -2159,6 +2151,15 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
         .store()
         .get_commit(&wc_commit_id)
         .map_err(|e| JjError::IoError(format!("Failed to load wc commit: {}", e)))?;
+    let workspace_names = tx.repo().view().workspaces_for_wc_commit_id(wc_commit.id());
+    let bookmark_names = tx
+        .repo()
+        .view()
+        .local_bookmarks_for_commit(wc_commit.id())
+        .filter_map(|(name, target)| {
+            (target.as_normal() == Some(wc_commit.id())).then(|| name.to_owned())
+        })
+        .collect::<Vec<_>>();
 
     // Rewrite @ with new tree + description, using detached builder to avoid borrow conflict
     let mut builder = tx.repo_mut().rewrite_commit(&wc_commit).detach();
@@ -2167,27 +2168,39 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     let committed = futures::executor::block_on(builder.write(tx.repo_mut()))
         .map_err(|e| JjError::IoError(format!("Failed to write commit: {}", e)))?;
 
-    // Create empty successor as new @
-    let new_wc = futures::executor::block_on(
+    if repo_path_opt.is_none() {
+        let ref_name = RefName::new(&branch);
         tx.repo_mut()
-            .new_commit(vec![committed.id().clone()], committed.tree())
-            .write(),
-    )
-    .map_err(|e| JjError::IoError(format!("Failed to create wc commit: {}", e)))?;
+            .set_local_bookmark_target(ref_name, RefTarget::normal(committed.id().clone()));
+    }
 
-    futures::executor::block_on(tx.repo_mut().edit(workspace_name.clone(), &new_wc))
-        .map_err(|e| JjError::IoError(format!("Failed to update wc pointer: {}", e)))?;
+    if !workspace_names.is_empty() {
+        let new_wc = futures::executor::block_on(
+            tx.repo_mut()
+                .new_commit(vec![committed.id().clone()], committed.tree())
+                .write(),
+        )
+        .map_err(|e| JjError::IoError(format!("Failed to create wc commit: {}", e)))?;
 
-    // Advance the branch bookmark to the committed change
-    let ref_name = jj_lib::ref_name::RefName::new(&branch);
-    tx.repo_mut()
-        .set_local_bookmark_target(ref_name, RefTarget::normal(committed.id().clone()));
+        for bookmark_name in bookmark_names {
+            tx.repo_mut().set_local_bookmark_target(
+                &bookmark_name,
+                RefTarget::normal(committed.id().clone()),
+            );
+        }
+
+        for name in workspace_names {
+            futures::executor::block_on(tx.repo_mut().edit(name, &new_wc))
+                .map_err(|e| JjError::IoError(format!("Failed to update wc pointer: {}", e)))?;
+        }
+    }
 
     // Rebase any descendants of the rewritten commit (required by jj-lib before commit)
     futures::executor::block_on(tx.repo_mut().rebase_descendants())
         .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
 
-    // Export to git refs (colocated); ignore errors for non-git backends
+    // Keep colocated git refs aligned with jj refs so subsequent branch-based
+    // revsets (for example `main..@`) don't see stale/conflicted bookmarks.
     let _ = git::export_refs(tx.repo_mut());
 
     // Commit the transaction and finalize working copy
@@ -2210,6 +2223,29 @@ fn read_git_head_branch(repo_path: &str) -> Result<String, String> {
     } else {
         Ok("HEAD".to_string())
     }
+}
+
+pub fn resolve_home_repo_branch(repo_path: &str) -> Result<String, JjError> {
+    let git_branch = read_git_head_branch(repo_path)
+        .map_err(|e| JjError::IoError(format!("Failed to determine branch: {}", e)))?;
+    if !git_branch.is_empty() && git_branch != "HEAD" {
+        return Ok(git_branch);
+    }
+
+    let bookmark = get_bookmarks_on_revision(repo_path, "@-")
+        .unwrap_or_default()
+        .into_iter()
+        .find(|name| !name.contains('@'))
+        .unwrap_or_default();
+
+    if bookmark.is_empty() {
+        return Err(JjError::IoError(
+            "Git is not checked out to a branch. Please checkout a branch before committing."
+                .to_string(),
+        ));
+    }
+
+    Ok(bookmark)
 }
 
 /// Split selected files from working copy into a new parent commit
@@ -2894,7 +2930,17 @@ pub fn jj_get_sync_status(
     branch_name: &str,
     not_on_remote: bool,
 ) -> Result<(usize, usize), JjError> {
+    let repo_path = derive_repo_path_from_workspace(workspace_path)
+        .unwrap_or_else(|| workspace_path.to_string());
     let remote_branch = format!("{}@origin", branch_name);
+
+    if !check_remote_branch_exists(&repo_path, &remote_branch)? {
+        return Ok((0, 0));
+    }
+
+    if jj_is_bookmark_conflicted(workspace_path, branch_name) {
+        return jj_get_diverged_sync_counts(workspace_path, branch_name);
+    }
 
     // Count commits ahead (local has, remote doesn't)
     // Using: jj log -r '<remote>..<local>' --no-graph -T 'commit_id\n'
@@ -3590,7 +3636,7 @@ fn build_jj_get_log_revset(
 ) -> String {
     if is_home_repo {
         let n = limit.unwrap_or(15);
-        format!("latest(::@, {})", n)
+        format!("latest(::{}, {})", target_branch, n)
     } else {
         // For workspace: show commits ahead of target branch
         format!("{}..@", target_branch)
@@ -3737,7 +3783,10 @@ pub fn jj_get_target_branch_log(
     target_branch: &str,
     limit: usize,
 ) -> Result<Vec<JjLogCommit>, JjError> {
-    let revset = build_target_branch_revset(target_branch, limit);
+    // Over-fetch slightly so we can drop any working-copy placeholder entries
+    // without shortening the visible target-branch history.
+    let fetch_limit = limit.saturating_add(5);
+    let revset = build_target_branch_revset(target_branch, fetch_limit);
 
     let template = concat!(
         "commit_id.short(12) ++ \"\\t\" ++ ",
@@ -3765,7 +3814,18 @@ pub fn jj_get_target_branch_log(
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    Ok(parse_jj_log_output(&stdout))
+    let mut commits: Vec<JjLogCommit> = parse_jj_log_output(&stdout)
+        .into_iter()
+        .filter(|commit| {
+            !commit.is_working_copy
+                && !(commit.description == "(no description)"
+                    && commit.bookmarks.is_empty()
+                    && commit.insertions == 0
+                    && commit.deletions == 0)
+        })
+        .collect();
+    commits.truncate(limit);
+    Ok(commits)
 }
 
 fn build_target_branch_revset(target_branch: &str, limit: usize) -> String {

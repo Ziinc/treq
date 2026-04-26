@@ -54,16 +54,48 @@ interface FileSidebarProps {
 }
 
 export function FileSidebar({
-	commitInputRef, handleCommit, readOnly, files, commitPending, stagedFiles,
-	initialLoading, actualConflictedFiles, collapsedSections, toggleSectionCollapse,
-	activeFilePath, setActiveFilePath, setLargeChangesetExpanded, setCollapsedFiles,
-	setExpandedLargeDiffs, conflictFileRefs, showCommittedChanges, committedFiles,
-	committedSectionCollapsed, setCommittedSectionCollapsed, scrollToFileIfNeeded,
-	stagedFilesList, selectedStagedFiles, lastSelectedStagedIndex, handleStagedFileSelect,
-	handleSelectAllStaged, handleUnstageFile, handleUnstageAllFiles, setSelectedStagedFiles,
-	unstagedFiles, selectedUnstagedFiles, lastSelectedFileIndex, handleFileSelect,
-	onMoveFilesToNewWorkspace, handleDiscardAll, handleDiscardFiles, setSelectedUnstagedFiles,
-	handleSelectAllUnstaged, handleStageFile, handleStageAllFiles, fileActionTarget, workspacePath,
+	commitInputRef,
+	handleCommit,
+	readOnly,
+	files,
+	commitPending,
+	stagedFiles,
+	initialLoading,
+	actualConflictedFiles,
+	collapsedSections,
+	toggleSectionCollapse,
+	activeFilePath,
+	setActiveFilePath,
+	setLargeChangesetExpanded,
+	setCollapsedFiles,
+	setExpandedLargeDiffs,
+	conflictFileRefs,
+	showCommittedChanges,
+	committedFiles,
+	committedSectionCollapsed,
+	setCommittedSectionCollapsed,
+	scrollToFileIfNeeded,
+	stagedFilesList,
+	selectedStagedFiles,
+	lastSelectedStagedIndex,
+	handleStagedFileSelect,
+	handleSelectAllStaged,
+	handleUnstageFile,
+	handleUnstageAllFiles,
+	setSelectedStagedFiles,
+	unstagedFiles,
+	selectedUnstagedFiles,
+	lastSelectedFileIndex,
+	handleFileSelect,
+	onMoveFilesToNewWorkspace,
+	handleDiscardAll,
+	handleDiscardFiles,
+	setSelectedUnstagedFiles,
+	handleSelectAllUnstaged,
+	handleStageFile,
+	handleStageAllFiles,
+	fileActionTarget,
+	workspacePath,
 }: FileSidebarProps) {
 	return (
 		<div className="w-60 border-r border-border bg-sidebar flex flex-col">
@@ -91,16 +123,26 @@ export function FileSidebar({
 								onFileSelect={(path) => {
 									setActiveFilePath(path);
 									setLargeChangesetExpanded(true);
-									setCollapsedFiles((prev) => { const next = new Set(prev); next.delete(path); return next; });
-									setExpandedLargeDiffs((prev) => { const next = new Set(prev); next.add(path); return next; });
+									setCollapsedFiles((prev) => {
+										const next = new Set(prev);
+										next.delete(path);
+										return next;
+									});
+									setExpandedLargeDiffs((prev) => {
+										const next = new Set(prev);
+										next.add(path);
+										return next;
+									});
 									setTimeout(() => {
 										const el = conflictFileRefs.current.get(path);
-										if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+										if (el)
+											el.scrollIntoView({ behavior: "smooth", block: "start" });
 									}, 50);
 								}}
 							/>
 						)}
-						{files.length === 0 && !(showCommittedChanges && committedFiles.length > 0) ? (
+						{files.length === 0 &&
+						!(showCommittedChanges && committedFiles.length > 0) ? (
 							<div className="flex flex-col items-center justify-center h-full text-center py-12">
 								<CheckCircle2 className="w-12 h-12 text-muted-foreground/40 mb-3" />
 								<p className="text-sm text-muted-foreground">No changes</p>
@@ -115,7 +157,12 @@ export function FileSidebar({
 										onToggleCollapse={() => toggleSectionCollapse("staged")}
 										activeFilePath={activeFilePath}
 										selectedFiles={selectedStagedFiles}
-										lastSelectedPath={lastSelectedStagedIndex !== null && stagedFilesList[lastSelectedStagedIndex] ? stagedFilesList[lastSelectedStagedIndex].path : null}
+										lastSelectedPath={
+											lastSelectedStagedIndex !== null &&
+											stagedFilesList[lastSelectedStagedIndex]
+												? stagedFilesList[lastSelectedStagedIndex].path
+												: null
+										}
 										onFileSelect={handleStagedFileSelect}
 										onSelectAll={handleSelectAllStaged}
 										onUnstage={handleUnstageFile}
@@ -133,9 +180,18 @@ export function FileSidebar({
 									fileActionTarget={fileActionTarget}
 									activeFilePath={activeFilePath}
 									selectedFiles={selectedUnstagedFiles}
-									lastSelectedPath={lastSelectedFileIndex !== null && files[lastSelectedFileIndex] ? files[lastSelectedFileIndex].path : null}
+									lastSelectedPath={
+										lastSelectedFileIndex !== null &&
+										files[lastSelectedFileIndex]
+											? files[lastSelectedFileIndex].path
+											: null
+									}
 									onFileSelect={handleFileSelect}
-									onMoveToWorkspace={() => { onMoveFilesToNewWorkspace?.(Array.from(selectedUnstagedFiles)); }}
+									onMoveToWorkspace={() => {
+										onMoveFilesToNewWorkspace?.(
+											Array.from(selectedUnstagedFiles),
+										);
+									}}
 									onDiscardAll={handleDiscardAll}
 									onDiscard={handleDiscardFiles}
 									onDeselectAll={() => setSelectedUnstagedFiles(new Set())}
@@ -150,9 +206,15 @@ export function FileSidebar({
 							<CommittedChangesSection
 								files={committedFiles}
 								isCollapsed={committedSectionCollapsed}
-								onToggleCollapse={() => setCommittedSectionCollapsed(!committedSectionCollapsed)}
+								onToggleCollapse={() =>
+									setCommittedSectionCollapsed(!committedSectionCollapsed)
+								}
 								activeFilePath={activeFilePath}
-								onFileSelect={(path, event) => { event.preventDefault(); setActiveFilePath(path); scrollToFileIfNeeded(path); }}
+								onFileSelect={(path, event) => {
+									event.preventDefault();
+									setActiveFilePath(path);
+									scrollToFileIfNeeded(path);
+								}}
 								workspacePath={workspacePath}
 							/>
 						)}

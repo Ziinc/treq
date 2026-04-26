@@ -79,10 +79,7 @@ const HunkLines: React.FC<HunkLinesProps> = memo(
 			<Fragment key={hunk.id}>
 				{/* Hunk separator header */}
 				<div
-					className={cn(
-						"flex items-stretch font-mono text-sm",
-						"bg-muted/60",
-					)}
+					className={cn("flex items-stretch font-mono text-sm", "bg-muted/60")}
 				>
 					<div className="w-24 flex-shrink-0 border-r border-border/40" />
 					<div className="w-6 flex-shrink-0" />
@@ -203,8 +200,7 @@ const HunkLines: React.FC<HunkLinesProps> = memo(
 						}
 					}
 
-					const actualLineNum =
-						lineNum?.new ?? lineNum?.old ?? lineIndex + 1;
+					const actualLineNum = lineNum?.new ?? lineNum?.old ?? lineIndex + 1;
 					const currentLineSide: "old" | "new" =
 						lineNum?.old !== undefined && lineNum?.new === undefined
 							? "old"
@@ -312,8 +308,7 @@ const HunkLines: React.FC<HunkLinesProps> = memo(
 											}
 										}}
 										title={
-											diffLineSelection &&
-											diffLineSelection.lines.length > 1
+											diffLineSelection && diffLineSelection.lines.length > 1
 												? "Add comment to selected lines"
 												: "Add comment"
 										}
@@ -361,9 +356,7 @@ const HunkLines: React.FC<HunkLinesProps> = memo(
 																	<div
 																		data-testid="inline-comment-card"
 																		className="group bg-background rounded-md p-[12px] border border-border/60 cursor-pointer hover:shadow-md transition-shadow"
-																		onClick={() =>
-																			startEditComment(comment.id)
-																		}
+																		onClick={() => startEditComment(comment.id)}
 																	>
 																		<div className="flex items-start gap-2">
 																			<Pencil className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5" />
@@ -389,9 +382,7 @@ const HunkLines: React.FC<HunkLinesProps> = memo(
 																		</div>
 																	</div>
 																</TooltipTrigger>
-																<TooltipContent>
-																	Click to edit
-																</TooltipContent>
+																<TooltipContent>Click to edit</TooltipContent>
 															</Tooltip>
 														</TooltipProvider>
 													)}

@@ -1,4 +1,9 @@
-import type { ConflictRegion, JjDiffHunk, JjFileChange, LineComment as ApiLineComment } from "../../lib/api";
+import type {
+	ConflictRegion,
+	JjDiffHunk,
+	JjFileChange,
+	LineComment as ApiLineComment,
+} from "../../lib/api";
 import type { ParsedFileChange } from "../../lib/git-utils";
 import type { useToast } from "../ui/toast";
 
@@ -196,7 +201,9 @@ export interface HunkLinesProps {
 	startEditComment: (commentId: string) => void;
 	cancelEditComment: () => void;
 	saveEditComment: (commentId: string, text: string) => void;
-	setPendingComment: React.Dispatch<React.SetStateAction<PendingComment | null>>;
+	setPendingComment: React.Dispatch<
+		React.SetStateAction<PendingComment | null>
+	>;
 	setShowCommentInput: React.Dispatch<React.SetStateAction<boolean>>;
 	// eslint-disable-next-line max-params
 	getCommentsForLine: (

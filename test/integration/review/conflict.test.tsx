@@ -21,8 +21,14 @@ async function setupConflict(): Promise<{ stackedBranch: string }> {
 	if (!baseWs) throw new Error("Base workspace not found");
 	const basePath = resolveWorkspacePath(repoPath, baseWs.workspace_path);
 
-	const stackedId = await createWorkspace(repoPath, "feat/stacked", "feature-base");
-	const stackedWs = (await getWorkspaces(repoPath)).find((w) => w.id === stackedId);
+	const stackedId = await createWorkspace(
+		repoPath,
+		"feat/stacked",
+		"feature-base",
+	);
+	const stackedWs = (await getWorkspaces(repoPath)).find(
+		(w) => w.id === stackedId,
+	);
 	if (!stackedWs) throw new Error("Stacked workspace not found");
 	const stackedPath = resolveWorkspacePath(repoPath, stackedWs.workspace_path);
 
@@ -32,7 +38,10 @@ async function setupConflict(): Promise<{ stackedBranch: string }> {
 	return { stackedBranch: "feat/stacked" };
 }
 
-async function navigateToReviewTab(user: ReturnType<typeof userEvent.setup>, branchName: string) {
+async function navigateToReviewTab(
+	user: ReturnType<typeof userEvent.setup>,
+	branchName: string,
+) {
 	await user.click(await findSidebarBranchElement(branchName));
 	const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
 	await user.click(reviewTab);
@@ -49,13 +58,18 @@ async function openFirstCommentForm(user: ReturnType<typeof userEvent.setup>) {
 	return (await screen.findAllByPlaceholderText("Add a comment..."))[0];
 }
 
-async function saveComment(user: ReturnType<typeof userEvent.setup>, text: string) {
+async function saveComment(
+	user: ReturnType<typeof userEvent.setup>,
+	text: string,
+) {
 	const textarea = await openFirstCommentForm(user);
 	await user.type(textarea, text);
 	const addBtns = screen.getAllByRole("button", { name: "Add Comment" });
 	await user.click(addBtns[0]);
 	await waitFor(() =>
-		expect(screen.queryAllByPlaceholderText("Add a comment...")).toHaveLength(0),
+		expect(screen.queryAllByPlaceholderText("Add a comment...")).toHaveLength(
+			0,
+		),
 	);
 }
 
@@ -88,7 +102,9 @@ describe("Review - Conflict detection and comments", () => {
 			render(<Dashboard />);
 			await navigateToReviewTab(user, stackedBranch);
 			await openFirstCommentForm(user);
-			expect(screen.getAllByPlaceholderText("Add a comment...").length).toBeGreaterThan(0);
+			expect(
+				screen.getAllByPlaceholderText("Add a comment...").length,
+			).toBeGreaterThan(0);
 		});
 
 		it("closes comment form when toggling off", async () => {
@@ -100,7 +116,9 @@ describe("Review - Conflict detection and comments", () => {
 			await screen.findAllByPlaceholderText("Add a comment...");
 			await user.click(btn);
 			await waitFor(() =>
-				expect(screen.queryAllByPlaceholderText("Add a comment...")).toHaveLength(0),
+				expect(
+					screen.queryAllByPlaceholderText("Add a comment..."),
+				).toHaveLength(0),
 			);
 		});
 
@@ -117,9 +135,13 @@ describe("Review - Conflict detection and comments", () => {
 			render(<Dashboard />);
 			await navigateToReviewTab(user, stackedBranch);
 			await saveComment(user, "my resolution note");
-			expect(screen.queryAllByPlaceholderText("Add a comment...")).toHaveLength(0);
+			expect(screen.queryAllByPlaceholderText("Add a comment...")).toHaveLength(
+				0,
+			);
 			await waitFor(() =>
-				expect(screen.getAllByText("my resolution note").length).toBeGreaterThan(0),
+				expect(
+					screen.getAllByText("my resolution note").length,
+				).toBeGreaterThan(0),
 			);
 		});
 	});
@@ -131,10 +153,18 @@ describe("Review - Conflict detection and comments", () => {
 			await navigateToReviewTab(user, stackedBranch);
 			await saveComment(user, "original note");
 			await screen.clickByText("original note");
-			expect(screen.getAllByDisplayValue("original note").length).toBeGreaterThan(0);
-			expect(screen.getAllByRole("button", { name: "Discard" }).length).toBeGreaterThan(0);
-			expect(screen.getAllByRole("button", { name: "Cancel" }).length).toBeGreaterThan(0);
-			expect(screen.getAllByRole("button", { name: "Save" }).length).toBeGreaterThan(0);
+			expect(
+				screen.getAllByDisplayValue("original note").length,
+			).toBeGreaterThan(0);
+			expect(
+				screen.getAllByRole("button", { name: "Discard" }).length,
+			).toBeGreaterThan(0);
+			expect(
+				screen.getAllByRole("button", { name: "Cancel" }).length,
+			).toBeGreaterThan(0);
+			expect(
+				screen.getAllByRole("button", { name: "Save" }).length,
+			).toBeGreaterThan(0);
 		});
 
 		it("saves edited comment", async () => {
@@ -194,7 +224,9 @@ describe("Review - Conflict detection and comments", () => {
 			await user.type(editTextarea, "updated via shortcut");
 			await user.keyboard("{Meta>}{Enter}{/Meta}");
 			await waitFor(() =>
-				expect(screen.getAllByText("updated via shortcut").length).toBeGreaterThan(0),
+				expect(
+					screen.getAllByText("updated via shortcut").length,
+				).toBeGreaterThan(0),
 			);
 		});
 

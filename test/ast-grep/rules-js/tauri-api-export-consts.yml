@@ -1,0 +1,7 @@
+# Meta-rule: matches every `export const` in the Tauri API modules.
+# The legacy unused-export script used `ast-grep scan` with this file and the
+# $NAME meta-variable. The enforcement now lives in the local ESLint rules.
+id: tauri-api-export-consts
+language: typescript
+rule:
+  pattern: export const $NAME = $$$

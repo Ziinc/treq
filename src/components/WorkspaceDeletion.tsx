@@ -41,7 +41,10 @@ export const WorkspaceDeletion: React.FC<WorkspaceDeletionProps> = ({
 	}, [open, currentWorkspace]);
 
 	// Filter out home repo (workspaces that match the main repo path)
-	const deletableWorkspaces = useMemo(() => workspaces.filter((w) => w.workspace_path !== repoPath), [workspaces, repoPath]);
+	const deletableWorkspaces = useMemo(
+		() => workspaces.filter((w) => w.workspace_path !== repoPath),
+		[workspaces, repoPath],
+	);
 
 	const handleSelect = (value: string) => {
 		if (value.startsWith("current-default")) {

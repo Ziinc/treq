@@ -46,6 +46,12 @@ pub fn write_repo_file_impl(
     e2e_test_helpers::write_test_file(repo_path, relative_path, content, append)
 }
 
+pub fn git_commit_all_impl(repo_path: &str, message: &str) -> Result<(), String> {
+    TestRepo::run_git(repo_path, &["add", "."])?;
+    TestRepo::run_git(repo_path, &["commit", "-m", message])?;
+    Ok(())
+}
+
 #[napi]
 pub fn write_workspace_file(
     workspace_path: String,
@@ -71,4 +77,9 @@ pub fn write_repo_file(
 ) -> napi::Result<String> {
     write_repo_file_impl(&repo_path, &relative_path, &content, append.unwrap_or(false))
         .map_err(napi::Error::from_reason)
+}
+
+#[napi]
+pub fn git_commit_all(repo_path: String, message: String) -> napi::Result<()> {
+    git_commit_all_impl(&repo_path, &message).map_err(napi::Error::from_reason)
 }

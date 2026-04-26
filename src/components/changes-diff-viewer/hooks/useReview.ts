@@ -11,7 +11,11 @@ import type { ParsedFileChange } from "../../../lib/git-utils";
 import { useDebounce } from "../../../hooks/useDebounce";
 import type { useToast } from "../../ui/toast";
 import type { ConflictComment, FileHunksData, LineComment } from "../types";
-import { computeHunksHash, toApiLineComment, toLocalLineComment } from "../utils";
+import {
+	computeHunksHash,
+	toApiLineComment,
+	toLocalLineComment,
+} from "../utils";
 
 interface UseReviewParams {
 	comments: LineComment[];
@@ -20,7 +24,9 @@ interface UseReviewParams {
 	setConflictComments: (comments: Map<string, ConflictComment>) => void;
 	setHasUserAddedComments: (v: boolean) => void;
 	allFileHunks: Map<string, FileHunksData>;
-	setAllFileHunks: React.Dispatch<React.SetStateAction<Map<string, FileHunksData>>>;
+	setAllFileHunks: React.Dispatch<
+		React.SetStateAction<Map<string, FileHunksData>>
+	>;
 	files: ParsedFileChange[];
 	workspacePath: string;
 	repoPath: string | undefined;
@@ -29,9 +35,13 @@ interface UseReviewParams {
 	actualConflictedFiles: string[];
 	setCollapsedFiles: React.Dispatch<React.SetStateAction<Set<string>>>;
 	/** Ref that will be populated with applyChangedFiles after isInReviewMode is computed */
-	applyChangedFilesRef: React.MutableRefObject<(parsed: ParsedFileChange[], forceApply?: boolean) => void>;
+	applyChangedFilesRef: React.MutableRefObject<
+		(parsed: ParsedFileChange[], forceApply?: boolean) => void
+	>;
 	isReloadingRef: React.MutableRefObject<boolean>;
-	onCreateAgentWithReview: ((review: string, mode: "plan" | "acceptEdits") => Promise<void>) | undefined;
+	onCreateAgentWithReview:
+		| ((review: string, mode: "plan" | "acceptEdits") => Promise<void>)
+		| undefined;
 	onReviewSubmitted: (() => void) | undefined;
 	addToast: ReturnType<typeof useToast>["addToast"];
 }
@@ -63,9 +73,16 @@ export function useReview({
 	const [copiedReview, setCopiedReview] = useState(false);
 	const [sendingReview, setSendingReview] = useState(false);
 	const [staleFiles, setStaleFiles] = useState<Set<string>>(new Set());
-	const [pendingFilesData, setPendingFilesData] = useState<ParsedFileChange[] | null>(null);
-	const [pendingHunksData, setPendingHunksData] = useState<Map<string, FileHunksData> | null>(null);
-	const [viewedFiles, setViewedFiles] = useState<Map<string, { viewedAt: string; contentHash: string }>>(new Map());
+	const [pendingFilesData, setPendingFilesData] = useState<
+		ParsedFileChange[] | null
+	>(null);
+	const [pendingHunksData, setPendingHunksData] = useState<Map<
+		string,
+		FileHunksData
+	> | null>(null);
+	const [viewedFiles, setViewedFiles] = useState<
+		Map<string, { viewedAt: string; contentHash: string }>
+	>(new Map());
 
 	useEffect(() => {
 		const loadReview = async () => {
@@ -74,9 +91,13 @@ export function useReview({
 					const pendingReview = await loadPendingReview(repoPath, workspaceId);
 					if (pendingReview) {
 						setComments(pendingReview.comments.map(toLocalLineComment));
-						if (pendingReview.summary_text) setFinalReviewComment(pendingReview.summary_text);
+						if (pendingReview.summary_text)
+							setFinalReviewComment(pendingReview.summary_text);
 						setHasUserAddedComments(pendingReview.comments.length > 0);
-						const loadedComments = await loadPendingReview(repoPath, workspaceId);
+						const loadedComments = await loadPendingReview(
+							repoPath,
+							workspaceId,
+						);
 						if (loadedComments && loadedComments.comments.length > 0) {
 							setComments(loadedComments.comments.map(toLocalLineComment));
 						}
@@ -97,7 +118,13 @@ export function useReview({
 			if (!repoPath || workspaceId === undefined) return;
 			if (debouncedComments.length === 0 && !debouncedSummary.trim()) return;
 			try {
-				await savePendingReview(repoPath, workspaceId, debouncedComments.map(toApiLineComment), undefined, debouncedSummary.trim() || undefined);
+				await savePendingReview(
+					repoPath,
+					workspaceId,
+					debouncedComments.map(toApiLineComment),
+					undefined,
+					debouncedSummary.trim() || undefined,
+				);
 			} catch (error) {
 				console.error("Failed to auto-save review:", error);
 			}
@@ -113,7 +140,11 @@ export function useReview({
 			let hasChanges = false;
 			const next = new Map(prev);
 			for (const [filePath, viewData] of prev.entries()) {
-				if (!currentFilePaths.has(filePath)) { next.delete(filePath); hasChanges = true; continue; }
+				if (!currentFilePaths.has(filePath)) {
+					next.delete(filePath);
+					hasChanges = true;
+					continue;
+				}
 				const fileData = allFileHunks.get(filePath);
 				if (fileData && !fileData.isLoading && fileData.hunks.length > 0) {
 					const currentHash = computeHunksHash(fileData.hunks);
@@ -131,24 +162,46 @@ export function useReview({
 		}
 	}, [files, allFileHunks, workspacePath]);
 
-	const handleMarkFileViewed = useCallback(async (filePath: string) => {
-		const fileData = allFileHunks.get(filePath);
-		const contentHash = fileData?.hunks ? computeHunksHash(fileData.hunks) : "";
-		try {
-			await markFileViewed(workspacePath, filePath, contentHash);
-			const now = new Date().toISOString();
-			setViewedFiles((prev) => new Map(prev).set(filePath, { contentHash, viewedAt: now }));
-			setCollapsedFiles((prev) => new Set(prev).add(filePath));
-		} catch { /* mark-viewed best-effort */ }
-	}, [workspacePath, allFileHunks, setCollapsedFiles]);
+	const handleMarkFileViewed = useCallback(
+		async (filePath: string) => {
+			const fileData = allFileHunks.get(filePath);
+			const contentHash = fileData?.hunks
+				? computeHunksHash(fileData.hunks)
+				: "";
+			try {
+				await markFileViewed(workspacePath, filePath, contentHash);
+				const now = new Date().toISOString();
+				setViewedFiles((prev) =>
+					new Map(prev).set(filePath, { contentHash, viewedAt: now }),
+				);
+				setCollapsedFiles((prev) => new Set(prev).add(filePath));
+			} catch {
+				/* mark-viewed best-effort */
+			}
+		},
+		[workspacePath, allFileHunks, setCollapsedFiles],
+	);
 
-	const handleUnmarkFileViewed = useCallback(async (filePath: string) => {
-		try {
-			await unmarkFileViewed(workspacePath, filePath);
-			setViewedFiles((prev) => { const next = new Map(prev); next.delete(filePath); return next; });
-			setCollapsedFiles((prev) => { const next = new Set(prev); next.delete(filePath); return next; });
-		} catch { /* unmark-viewed best-effort */ }
-	}, [workspacePath, setCollapsedFiles]);
+	const handleUnmarkFileViewed = useCallback(
+		async (filePath: string) => {
+			try {
+				await unmarkFileViewed(workspacePath, filePath);
+				setViewedFiles((prev) => {
+					const next = new Map(prev);
+					next.delete(filePath);
+					return next;
+				});
+				setCollapsedFiles((prev) => {
+					const next = new Set(prev);
+					next.delete(filePath);
+					return next;
+				});
+			} catch {
+				/* unmark-viewed best-effort */
+			}
+		},
+		[workspacePath, setCollapsedFiles],
+	);
 
 	const formatReviewMarkdown = useCallback(() => {
 		let markdown = "";
@@ -157,32 +210,49 @@ export function useReview({
 			for (const comment of conflictComments.values()) {
 				if (comment.text.trim()) {
 					const regions = conflictRegionsByFile.get(comment.filePath);
-					const region = regions?.find((r) => r.conflict_number === comment.conflictNumber);
+					const region = regions?.find(
+						(r) => r.conflict_number === comment.conflictNumber,
+					);
 					let header = `### ${comment.filePath} - Conflict ${comment.conflictNumber}`;
-					if (region) header += ` (lines ${region.start_line}-${region.end_line})`;
+					if (region)
+						header += ` (lines ${region.start_line}-${region.end_line})`;
 					markdown += `${header}\n`;
 					markdown += `> ${comment.text}\n\n`;
 				}
 			}
 		}
-		if (comments.length > 0 || finalReviewComment.trim() || actualConflictedFiles.length > 0) {
+		if (
+			comments.length > 0 ||
+			finalReviewComment.trim() ||
+			actualConflictedFiles.length > 0
+		) {
 			markdown += "## Code Review\n\n";
 			if (actualConflictedFiles.length > 0) {
 				markdown += "### Conflicted Files\n\n";
-				for (const filePath of actualConflictedFiles) markdown += `- ${filePath}\n`;
+				for (const filePath of actualConflictedFiles)
+					markdown += `- ${filePath}\n`;
 				markdown += "\n";
 			}
-			if (finalReviewComment.trim()) { markdown += "### Summary\n"; markdown += `${finalReviewComment.trim()}\n\n`; }
+			if (finalReviewComment.trim()) {
+				markdown += "### Summary\n";
+				markdown += `${finalReviewComment.trim()}\n\n`;
+			}
 			if (comments.length > 0) {
 				markdown += "### Comments\n\n";
-				const commentsByFile = comments.reduce((acc, comment) => {
-					if (!acc[comment.filePath]) acc[comment.filePath] = [];
-					acc[comment.filePath].push(comment);
-					return acc;
-				}, {} as Record<string, LineComment[]>);
+				const commentsByFile = comments.reduce(
+					(acc, comment) => {
+						if (!acc[comment.filePath]) acc[comment.filePath] = [];
+						acc[comment.filePath].push(comment);
+						return acc;
+					},
+					{} as Record<string, LineComment[]>,
+				);
 				for (const [filePath, fileComments] of Object.entries(commentsByFile)) {
 					for (const comment of fileComments) {
-						const lineRef = comment.startLine === comment.endLine ? `${filePath}:${comment.startLine}` : `${filePath}:${comment.startLine}:${comment.endLine}`;
+						const lineRef =
+							comment.startLine === comment.endLine
+								? `${filePath}:${comment.startLine}`
+								: `${filePath}:${comment.startLine}:${comment.endLine}`;
 						markdown += `${lineRef}\n`;
 						markdown += "```\n";
 						markdown += `${comment.lineContent.join("\n")}\n`;
@@ -193,36 +263,69 @@ export function useReview({
 			}
 		}
 		return markdown;
-	}, [comments, conflictComments, finalReviewComment, conflictRegionsByFile, actualConflictedFiles]);
+	}, [
+		comments,
+		conflictComments,
+		finalReviewComment,
+		conflictRegionsByFile,
+		actualConflictedFiles,
+	]);
 
-	const handleRequestChanges = useCallback(async (mode: "plan" | "acceptEdits") => {
-		setSendingReview(true);
-		try {
-			const markdown = formatReviewMarkdown();
-			if (onCreateAgentWithReview) {
-				await onCreateAgentWithReview(markdown, mode);
-			} else {
-				addToast({ title: "No handler provided", description: "onCreateAgentWithReview callback not available", type: "error" });
-				return;
+	const handleRequestChanges = useCallback(
+		async (mode: "plan" | "acceptEdits") => {
+			setSendingReview(true);
+			try {
+				const markdown = formatReviewMarkdown();
+				if (onCreateAgentWithReview) {
+					await onCreateAgentWithReview(markdown, mode);
+				} else {
+					addToast({
+						title: "No handler provided",
+						description: "onCreateAgentWithReview callback not available",
+						type: "error",
+					});
+					return;
+				}
+				if (pendingFilesData)
+					applyChangedFilesRef.current(pendingFilesData, true);
+				if (pendingHunksData) setAllFileHunks(pendingHunksData);
+				setPendingFilesData(null);
+				setPendingHunksData(null);
+				setStaleFiles(new Set());
+				setComments([]);
+				setConflictComments(new Map());
+				setHasUserAddedComments(false);
+				setFinalReviewComment("");
+				setReviewPopoverOpen(false);
+				if (repoPath && workspaceId !== undefined)
+					await clearPendingReview(repoPath, workspaceId);
+				onReviewSubmitted?.();
+			} catch (error) {
+				addToast({
+					description: error instanceof Error ? error.message : String(error),
+					title: "Failed to send review",
+					type: "error",
+				});
+			} finally {
+				setSendingReview(false);
 			}
-			if (pendingFilesData) applyChangedFilesRef.current(pendingFilesData, true);
-			if (pendingHunksData) setAllFileHunks(pendingHunksData);
-			setPendingFilesData(null);
-			setPendingHunksData(null);
-			setStaleFiles(new Set());
-			setComments([]);
-			setConflictComments(new Map());
-			setHasUserAddedComments(false);
-			setFinalReviewComment("");
-			setReviewPopoverOpen(false);
-			if (repoPath && workspaceId !== undefined) await clearPendingReview(repoPath, workspaceId);
-			onReviewSubmitted?.();
-		} catch (error) {
-			addToast({ description: error instanceof Error ? error.message : String(error), title: "Failed to send review", type: "error" });
-		} finally {
-			setSendingReview(false);
-		}
-	}, [onCreateAgentWithReview, formatReviewMarkdown, addToast, onReviewSubmitted, repoPath, workspaceId, pendingFilesData, pendingHunksData, applyChangedFilesRef, setComments, setConflictComments, setHasUserAddedComments, setAllFileHunks]);
+		},
+		[
+			onCreateAgentWithReview,
+			formatReviewMarkdown,
+			addToast,
+			onReviewSubmitted,
+			repoPath,
+			workspaceId,
+			pendingFilesData,
+			pendingHunksData,
+			applyChangedFilesRef,
+			setComments,
+			setConflictComments,
+			setHasUserAddedComments,
+			setAllFileHunks,
+		],
+	);
 
 	const handleCancelReview = useCallback(async () => {
 		try {
@@ -232,12 +335,28 @@ export function useReview({
 			setFinalReviewComment("");
 			setShowCancelDialog(false);
 			setReviewPopoverOpen(false);
-			if (repoPath && workspaceId !== undefined) await clearPendingReview(repoPath, workspaceId);
-			addToast({ title: "Review canceled", description: "All comments have been discarded", type: "success" });
+			if (repoPath && workspaceId !== undefined)
+				await clearPendingReview(repoPath, workspaceId);
+			addToast({
+				title: "Review canceled",
+				description: "All comments have been discarded",
+				type: "success",
+			});
 		} catch (error) {
-			addToast({ description: error instanceof Error ? error.message : String(error), title: "Failed to cancel review", type: "error" });
+			addToast({
+				description: error instanceof Error ? error.message : String(error),
+				title: "Failed to cancel review",
+				type: "error",
+			});
 		}
-	}, [repoPath, workspaceId, addToast, setComments, setConflictComments, setHasUserAddedComments]);
+	}, [
+		repoPath,
+		workspaceId,
+		addToast,
+		setComments,
+		setConflictComments,
+		setHasUserAddedComments,
+	]);
 
 	const handleCopyReview = useCallback(async () => {
 		try {
@@ -246,7 +365,11 @@ export function useReview({
 			setCopiedReview(true);
 			setTimeout(() => setCopiedReview(false), 2000);
 		} catch (error) {
-			addToast({ description: error instanceof Error ? error.message : String(error), title: "Failed to copy", type: "error" });
+			addToast({
+				description: error instanceof Error ? error.message : String(error),
+				title: "Failed to copy",
+				type: "error",
+			});
 		}
 	}, [formatReviewMarkdown, addToast]);
 
@@ -257,33 +380,67 @@ export function useReview({
 			const validComments: LineComment[] = [];
 			for (const comment of comments) {
 				const newFileData = pendingHunksData?.get(comment.filePath);
-				const fileStillExists = pendingFilesData.some((f) => f.path === comment.filePath);
-				if (!fileStillExists || !newFileData) { orphanedComments.push(comment); continue; }
-				const hunkStillExists = newFileData.hunks.some((h) => h.id === comment.hunkId);
-				if (!hunkStillExists) { orphanedComments.push(comment); continue; }
+				const fileStillExists = pendingFilesData.some(
+					(f) => f.path === comment.filePath,
+				);
+				if (!fileStillExists || !newFileData) {
+					orphanedComments.push(comment);
+					continue;
+				}
+				const hunkStillExists = newFileData.hunks.some(
+					(h) => h.id === comment.hunkId,
+				);
+				if (!hunkStillExists) {
+					orphanedComments.push(comment);
+					continue;
+				}
 				validComments.push(comment);
 			}
 			if (orphanedComments.length > 0) {
-				addToast({ description: `${orphanedComments.length} outdated comment${orphanedComments.length > 1 ? "s" : ""} discarded (lines changed)`, title: "Comments discarded", type: "info" });
+				addToast({
+					description: `${orphanedComments.length} outdated comment${orphanedComments.length > 1 ? "s" : ""} discarded (lines changed)`,
+					title: "Comments discarded",
+					type: "info",
+				});
 			}
 			setComments(validComments);
 			applyChangedFilesRef.current(pendingFilesData, true);
 		}
-		if (pendingHunksData) { setAllFileHunks(pendingHunksData); setPendingHunksData(null); }
+		if (pendingHunksData) {
+			setAllFileHunks(pendingHunksData);
+			setPendingHunksData(null);
+		}
 		setStaleFiles(new Set());
 		setPendingFilesData(null);
-		setTimeout(() => { isReloadingRef.current = false; }, 100);
-	}, [pendingFilesData, pendingHunksData, comments, applyChangedFilesRef, isReloadingRef, addToast, setComments, setAllFileHunks]);
+		setTimeout(() => {
+			isReloadingRef.current = false;
+		}, 100);
+	}, [
+		pendingFilesData,
+		pendingHunksData,
+		comments,
+		applyChangedFilesRef,
+		isReloadingRef,
+		addToast,
+		setComments,
+		setAllFileHunks,
+	]);
 
 	return {
-		reviewPopoverOpen, setReviewPopoverOpen,
-		finalReviewComment, setFinalReviewComment,
-		showCancelDialog, setShowCancelDialog,
+		reviewPopoverOpen,
+		setReviewPopoverOpen,
+		finalReviewComment,
+		setFinalReviewComment,
+		showCancelDialog,
+		setShowCancelDialog,
 		copiedReview,
 		sendingReview,
-		staleFiles, setStaleFiles,
-		pendingFilesData, setPendingFilesData,
-		pendingHunksData, setPendingHunksData,
+		staleFiles,
+		setStaleFiles,
+		pendingFilesData,
+		setPendingFilesData,
+		pendingHunksData,
+		setPendingHunksData,
 		viewedFiles,
 		formatReviewMarkdown,
 		handleRequestChanges,

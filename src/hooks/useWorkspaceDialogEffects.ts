@@ -147,7 +147,9 @@ export function useWorkspaceDialogEffects(
 					setWorkspaceStatus(status);
 					setChangedFiles(files);
 					setAllWorkspaces(workspaceList);
-					const others = workspaceList.filter((w) => w.id !== sourceWorkspace.id);
+					const others = workspaceList.filter(
+						(w) => w.id !== sourceWorkspace.id,
+					);
 					if (others.length > 0) setTargetWorkspaceId(others[0].id);
 				})
 				.catch((err) => {
@@ -158,7 +160,10 @@ export function useWorkspaceDialogEffects(
 				.finally(() => setDataLoading(false));
 		} else if (isHomeRepo) {
 			setDataLoading(true);
-			Promise.all([getWorkspaceChangedFiles(repoPath, null), getWorkspaces(repoPath)])
+			Promise.all([
+				getWorkspaceChangedFiles(repoPath, null),
+				getWorkspaces(repoPath),
+			])
 				.then(([files, workspaceList]) => {
 					setChangedFiles(files);
 					setAllWorkspaces(workspaceList);
@@ -183,7 +188,9 @@ export function useWorkspaceDialogEffects(
 		} else {
 			setChangedFiles([]);
 			setWorkspaceStatus(null);
-			getWorkspaces(repoPath).then(setAllWorkspaces).catch(() => setAllWorkspaces([]));
+			getWorkspaces(repoPath)
+				.then(setAllWorkspaces)
+				.catch(() => setAllWorkspaces([]));
 
 			if (!defaults.targetBranch) {
 				setBranchesLoading(true);
@@ -221,7 +228,8 @@ export function useWorkspaceDialogEffects(
 	}, [intent, branchPattern, isEditingBranch]);
 
 	useEffect(() => {
-		if (checkBranchTimeoutRef.current) clearTimeout(checkBranchTimeoutRef.current);
+		if (checkBranchTimeoutRef.current)
+			clearTimeout(checkBranchTimeoutRef.current);
 		if (!branchName.trim()) {
 			setBranchStatusData(null);
 			setIsCheckingBranch(false);
@@ -240,7 +248,8 @@ export function useWorkspaceDialogEffects(
 			}
 		}, 500);
 		return () => {
-			if (checkBranchTimeoutRef.current) clearTimeout(checkBranchTimeoutRef.current);
+			if (checkBranchTimeoutRef.current)
+				clearTimeout(checkBranchTimeoutRef.current);
 		};
 	}, [branchName, repoPath, moveToExisting]);
 

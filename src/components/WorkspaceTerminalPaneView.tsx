@@ -60,15 +60,19 @@ interface WorkspaceTerminalPaneViewProps {
 	setActivePtySessionId: React.Dispatch<React.SetStateAction<string | null>>;
 	handleCloseShell: (terminalId: string) => void | Promise<void>;
 	onSessionError?: (message: string) => void;
-	terminalRefs: React.RefObject<
-		Map<string, ConsolidatedTerminalHandle | null>
-	>;
+	terminalRefs: React.RefObject<Map<string, ConsolidatedTerminalHandle | null>>;
 	terminalWidths: Map<string, number | null>;
-	handleTerminalResize: (leftId: string, rightId: string, deltaX: number) => void;
+	handleTerminalResize: (
+		leftId: string,
+		rightId: string,
+		deltaX: number,
+	) => void;
 	handleCloseClaudeSession: (sessionId: number) => void | Promise<void>;
 }
 
-export const WorkspaceTerminalPaneView: React.FC<WorkspaceTerminalPaneViewProps> = ({
+export const WorkspaceTerminalPaneView: React.FC<
+	WorkspaceTerminalPaneViewProps
+> = ({
 	paneRef,
 	className,
 	collapsed,
@@ -95,7 +99,11 @@ export const WorkspaceTerminalPaneView: React.FC<WorkspaceTerminalPaneViewProps>
 	handleTerminalResize,
 	handleCloseClaudeSession,
 }) => (
-	<div ref={paneRef as React.Ref<HTMLDivElement>} className={className} style={{ display: "contents" }}>
+	<div
+		ref={paneRef as React.Ref<HTMLDivElement>}
+		className={className}
+		style={{ display: "contents" }}
+	>
 		{!collapsed && !maximized && (
 			<div
 				className="relative flex-shrink-0 h-1 group"
@@ -140,7 +148,9 @@ export const WorkspaceTerminalPaneView: React.FC<WorkspaceTerminalPaneViewProps>
 									variant={totalTerminals === 0 ? "default" : "ghost"}
 									className={cn(
 										"h-6 px-2 rounded-sm gap-1",
-										totalTerminals === 0 ? "" : "text-muted-foreground hover:text-foreground",
+										totalTerminals === 0
+											? ""
+											: "text-muted-foreground hover:text-foreground",
 									)}
 									aria-label="New Agent"
 								>
@@ -272,8 +282,15 @@ export const WorkspaceTerminalPaneView: React.FC<WorkspaceTerminalPaneViewProps>
 							>
 								<div
 									className="h-8 flex items-center gap-2 px-2 border-b border-border bg-gray-700/100 flex-shrink-0 sticky left-0 z-10 overflow-hidden cursor-pointer hover:bg-muted/40 transition-colors"
-									style={{ width: containerWidth > 0 ? containerWidth : undefined }}
-									onClick={() => onNavigateToWorkspace?.(group.workspaceKey, group.isMainRepo)}
+									style={{
+										width: containerWidth > 0 ? containerWidth : undefined,
+									}}
+									onClick={() =>
+										onNavigateToWorkspace?.(
+											group.workspaceKey,
+											group.isMainRepo,
+										)
+									}
 								>
 									{group.isMainRepo ? (
 										<Home className="w-4 h-4 text-gray-200 flex-shrink-0" />
@@ -282,9 +299,15 @@ export const WorkspaceTerminalPaneView: React.FC<WorkspaceTerminalPaneViewProps>
 									)}
 									<span
 										className="text-sm text-gray-200 truncate font-mono"
-										title={group.isMainRepo ? currentBranch || "main" : group.workspaceName}
+										title={
+											group.isMainRepo
+												? currentBranch || "main"
+												: group.workspaceName
+										}
 									>
-										{group.isMainRepo ? currentBranch || "main" : group.workspaceName}
+										{group.isMainRepo
+											? currentBranch || "main"
+											: group.workspaceName}
 									</span>
 								</div>
 								<div className="flex min-h-0 flex-1">
@@ -304,7 +327,11 @@ export const WorkspaceTerminalPaneView: React.FC<WorkspaceTerminalPaneViewProps>
 														onClose={() => handleCloseShell(terminalId)}
 														canClose={true}
 														onSessionError={onSessionError}
-														terminalRefs={terminalRefs as React.MutableRefObject<Map<string, ConsolidatedTerminalHandle | null>>}
+														terminalRefs={
+															terminalRefs as React.MutableRefObject<
+																Map<string, ConsolidatedTerminalHandle | null>
+															>
+														}
 														width={terminalWidths.get(terminalId)}
 													/>
 													{!isLastInGroup && nextTerminal && (
@@ -314,7 +341,11 @@ export const WorkspaceTerminalPaneView: React.FC<WorkspaceTerminalPaneViewProps>
 																	nextTerminal.type === "shell"
 																		? nextTerminal.data.id
 																		: `claude-${nextTerminal.data.sessionId}`;
-																handleTerminalResize(terminalId, nextId, deltaX);
+																handleTerminalResize(
+																	terminalId,
+																	nextId,
+																	deltaX,
+																);
 															}}
 														/>
 													)}
@@ -331,9 +362,15 @@ export const WorkspaceTerminalPaneView: React.FC<WorkspaceTerminalPaneViewProps>
 													collapsed={collapsed}
 													isActive={activePtySessionId === ptyId}
 													onFocus={() => setActivePtySessionId(ptyId)}
-													onClose={() => handleCloseClaudeSession(terminal.data.sessionId)}
+													onClose={() =>
+														handleCloseClaudeSession(terminal.data.sessionId)
+													}
 													onSessionError={onSessionError}
-													terminalRefs={terminalRefs as React.MutableRefObject<Map<string, ConsolidatedTerminalHandle | null>>}
+													terminalRefs={
+														terminalRefs as React.MutableRefObject<
+															Map<string, ConsolidatedTerminalHandle | null>
+														>
+													}
 													width={terminalWidths.get(terminalId)}
 												/>
 												{!isLastInGroup && nextTerminal && (

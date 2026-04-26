@@ -107,14 +107,14 @@ const parseHunkHeader = (
 };
 
 export const CommitDiffViewer = memo<CommitDiffViewerProps>(
-		({
-			repoPath,
-			workspaceId,
-			scrollToCommitId,
-			onScrollComplete,
-			onCommitAbandoned,
-			onCreateAgentWithComment,
-			onMoveCommitToNewWorkspace,
+	({
+		repoPath,
+		workspaceId,
+		scrollToCommitId,
+		onScrollComplete,
+		onCommitAbandoned,
+		onCreateAgentWithComment,
+		onMoveCommitToNewWorkspace,
 		onMoveCommitToExistingWorkspace,
 	}) => {
 		const isHomeRepo = workspaceId == null;
@@ -972,7 +972,7 @@ function CommitDiffContent({
 	const handleAddCommentFromSelection = () => {
 		if (!diffLineSelection || diffLineSelection.lines.length === 0) return;
 
-		const {filePath} = diffLineSelection;
+		const { filePath } = diffLineSelection;
 		const fileDiff = diff.hunks_by_file.find((f) => f.path === filePath);
 		if (!fileDiff) return;
 

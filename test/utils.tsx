@@ -13,6 +13,7 @@ type NapiTestBindings = {
 		repoPath: string;
 		tempDirPath: string;
 	};
+	gitCommitAll: (repoPath: string, message: string) => void;
 	writeWorkspaceFile: (
 		workspacePath: string,
 		relativePath: string,
@@ -63,12 +64,12 @@ export function resolveWorkspacePath(
 	return path.join(repoPath, ".treq", "workspaces", workspacePath);
 }
 
-export function writeRepoFile(
+export async function writeRepoFile(
 	repoPath: string,
 	relativePath: string,
 	content: string,
 	append = false,
-): string {
+): Promise<string> {
 	return getNapiBindings().writeRepoFile(
 		repoPath,
 		relativePath,
@@ -83,7 +84,7 @@ export async function commitRepoFile(
 	content: string,
 	message: string,
 ): Promise<void> {
-	writeRepoFile(repoPath, relativePath, `${content}\n`, true);
+	await writeRepoFile(repoPath, relativePath, `${content}\n`, true);
 	await createCommit(repoPath, null, message);
 }
 

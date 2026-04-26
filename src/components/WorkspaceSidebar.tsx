@@ -76,7 +76,10 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 		});
 
 		const statuses = workspaceStatuses ?? [];
-		const workspaces = useMemo(() => statuses.map((s) => s.current), [statuses]);
+		const workspaces = useMemo(
+			() => statuses.map((s) => s.current),
+			[statuses],
+		);
 		const [renameTarget, setRenameTarget] = useState<Workspace | null>(null);
 
 		const flattenedNodes = useMemo(() => {
@@ -158,7 +161,9 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 						>
 							<Search className="w-4 h-4 shrink-0" />
 							<span className="flex-1 text-left truncate">{repoName}</span>
-							<span className="text-[10px] text-muted-foreground/60 shrink-0">⌘K</span>
+							<span className="text-[10px] text-muted-foreground/60 shrink-0">
+								⌘K
+							</span>
 						</button>
 						{openSettings && (
 							<Tooltip>
@@ -167,13 +172,17 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 										type="button"
 										onClick={() => openSettings("application")}
 										className={`h-9 w-9 rounded-lg hover:bg-muted flex items-center justify-center transition-colors border border-border ${
-											currentPage === "settings" ? "bg-primary/20" : "bg-muted/50"
+											currentPage === "settings"
+												? "bg-primary/20"
+												: "bg-muted/50"
 										}`}
 										aria-label="Settings"
 									>
 										<Settings
 											className={`w-4 h-4 ${
-												currentPage === "settings" ? "text-primary" : "text-muted-foreground"
+												currentPage === "settings"
+													? "text-primary"
+													: "text-muted-foreground"
 											}`}
 										/>
 									</button>
@@ -194,7 +203,9 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 										<div
 											data-testid="home-repo-row"
 											className={`relative flex items-center text-sm tracking-wide px-2 py-1 rounded-md transition-colors cursor-pointer ${
-												selectedWorkspaceId === null ? "bg-primary/20" : "hover:bg-muted/50"
+												selectedWorkspaceId === null
+													? "bg-primary/20"
+													: "hover:bg-muted/50"
 											}`}
 											onClick={(e) => {
 												if (
@@ -250,11 +261,16 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 										<ContextMenuSeparator />
 									</>
 								)}
-								<PathContextMenuItems relativePath="." fullPath={repoPath || ""} />
+								<PathContextMenuItems
+									relativePath="."
+									fullPath={repoPath || ""}
+								/>
 							</ContextMenuContent>
 						</ContextMenu>
 
-						{workspaces.length > 0 && <div className="my-2 border-t border-border" />}
+						{workspaces.length > 0 && (
+							<div className="my-2 border-t border-border" />
+						)}
 
 						<DragDropContext onDragEnd={handleDragEnd}>
 							<Droppable droppableId="sidebar-root" isCombineEnabled>

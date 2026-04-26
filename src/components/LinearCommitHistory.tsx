@@ -27,6 +27,25 @@ interface DayGroup {
 	commits: JjLogCommit[];
 }
 
+function normalizeCommits(commits: JjLogCommit[]): JjLogCommit[] {
+	if (commits.length < 2) {
+		return commits;
+	}
+
+	const [first, second, ...rest] = commits;
+	const looksLikeWorkingCopyPlaceholder =
+		first.description === "(no description)" &&
+		first.bookmarks.length === 0 &&
+		!first.is_immutable &&
+		first.parent_ids.includes(second.commit_id);
+
+	if (!looksLikeWorkingCopyPlaceholder) {
+		return commits;
+	}
+
+	return [second, ...rest];
+}
+
 function groupCommitsByDay(commits: JjLogCommit[]): DayGroup[] {
 	const groups: DayGroup[] = [];
 	for (const commit of commits) {
@@ -62,9 +81,8 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 			setLimit(15);
 			listCommits(repoPath, workspaceId)
 				.then((result) => {
-					// Skip the first commit (working copy / uncommitted @)
 					const nextCommits = result?.commits ?? [];
-					setCommits(nextCommits.slice(1));
+					setCommits(normalizeCommits(nextCommits));
 				})
 				.catch((err) => {
 					console.error("Failed to fetch commit history:", err);
@@ -83,7 +101,7 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 			listCommits(repoPath, workspaceId, false, undefined, limit)
 				.then((result) => {
 					const nextCommits = result?.commits ?? [];
-					setCommits(nextCommits.slice(1));
+					setCommits(normalizeCommits(nextCommits));
 				})
 				.catch(() => {})
 				.finally(() => setLoadingMore(false));

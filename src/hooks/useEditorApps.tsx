@@ -27,7 +27,8 @@ const EditorAppsContext =
 
 EditorAppsContext.displayName = "EditorAppsContext";
 
-export const useEditorApps = (): EditorAppsContextType => useContext(EditorAppsContext);
+export const useEditorApps = (): EditorAppsContextType =>
+	useContext(EditorAppsContext);
 
 export const EditorAppsProvider: React.FC<{ children: ReactNode }> = ({
 	children,

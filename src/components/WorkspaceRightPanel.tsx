@@ -1,6 +1,10 @@
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { type JjDiffHunk, type JjFileChange, type WorkspaceStatus } from "../lib/api";
+import {
+	type JjDiffHunk,
+	type JjFileChange,
+	type WorkspaceStatus,
+} from "../lib/api";
 import { cn } from "../lib/utils";
 
 export interface WorkspaceRightPanelProps {

@@ -11,9 +11,7 @@ function generateRandomId(): string {
 
 function generateRandomTimestamp(): string {
 	const date = new Date(2024, 0, Math.floor(Math.random() * 30) + 1);
-	return (
-		`${date.toISOString().split("T")[0]  } ${  date.toTimeString().split(" ")[0]}`
-	);
+	return `${date.toISOString().split("T")[0]} ${date.toTimeString().split(" ")[0]}`;
 }
 
 /**
@@ -77,7 +75,7 @@ export function createMockCommits(
 			createMockCommit({
 				author_name: `Author ${i + 1}`,
 				description: `Commit ${i + 1}`,
-				timestamp: `${timestamp.toISOString().split("T")[0]  } 10:00:00`,
+				timestamp: `${timestamp.toISOString().split("T")[0]} 10:00:00`,
 				...overrides,
 			}),
 		);

@@ -263,7 +263,7 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
 
 		// Prepend PATH export so treq CLI is available inside Claude sessions
 		if (treqBinDir) {
-			autoCommand = `export PATH="${treqBinDir}:$PATH"; ${  autoCommand}`;
+			autoCommand = `export PATH="${treqBinDir}:$PATH"; ${autoCommand}`;
 		}
 
 		// If there's a pending prompt, add it as a positional argument after --
