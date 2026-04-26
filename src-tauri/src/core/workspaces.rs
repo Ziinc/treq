@@ -229,9 +229,6 @@ pub fn create_workspace(
     source_branch: Option<&str>,
     included_copy_files: Option<Vec<String>>,
 ) -> Result<local_db::Workspace, String> {
-    // snapshot working copy of repo
-    let _ = jj::jj_get_changed_files(repo_path);
-
     let stacked_source_workspace = source_branch
         .map(|src_branch| {
             local_db::get_workspace_by_branch(repo_path, src_branch)
@@ -374,13 +371,13 @@ pub fn create_workspace(
             )
             .map_err(|e| format!("Failed to squash files to workspace: {}", e))?;
 
-            // Update the workspace's working copy to reflect the squash
-            let workspace_dir = Path::new(repo_path)
-                .join(".treq")
-                .join("workspaces")
-                .join(&workspace.workspace_path);
-            jj::update_stale_workspace(&workspace_dir.to_string_lossy())
-                .map_err(|e| format!("Failed to update workspace working copy: {}", e))?;
+            // // Update the workspace's working copy to reflect the squash
+            // let workspace_dir = Path::new(repo_path)
+            //     .join(".treq")
+            //     .join("workspaces")
+            //     .join(&workspace.workspace_path);
+            // jj::update_stale_workspace(&workspace_dir.to_string_lossy())
+            //     .map_err(|e| format!("Failed to update workspace working copy: {}", e))?;
         }
     }
 
