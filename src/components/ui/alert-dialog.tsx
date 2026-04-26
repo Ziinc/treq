@@ -1,13 +1,13 @@
 import * as React from "react";
-import { cn } from "../../lib/utils";
 import {
 	Dialog,
 	DialogContent,
+	DialogDescription,
 	DialogHeader,
 	DialogTitle,
-	DialogDescription,
 } from "./dialog";
 import { Button } from "./button";
+import { cn } from "../../lib/utils";
 
 interface AlertDialogProps {
 	open?: boolean;
@@ -23,15 +23,13 @@ const AlertDialog: React.FC<AlertDialogProps> = ({
 	open,
 	onOpenChange,
 	children,
-}) => {
-	return (
-		<AlertDialogContext.Provider value={{ onOpenChange }}>
-			<Dialog open={open} onOpenChange={onOpenChange}>
-				{children}
-			</Dialog>
-		</AlertDialogContext.Provider>
-	);
-};
+}) => (
+	<AlertDialogContext.Provider value={{ onOpenChange }}>
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			{children}
+		</Dialog>
+	</AlertDialogContext.Provider>
+);
 
 const AlertDialogContent = React.forwardRef<
 	HTMLDivElement,
@@ -72,8 +70,8 @@ const AlertDialogCancel = React.forwardRef<
 >(({ className, children, onClick, ...props }, ref) => {
 	const { onOpenChange } = React.useContext(AlertDialogContext);
 
-	const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-		onClick?.(e);
+	const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+		onClick?.(event);
 		onOpenChange?.(false);
 	};
 
@@ -94,19 +92,17 @@ AlertDialogCancel.displayName = "AlertDialogCancel";
 const AlertDialogAction = React.forwardRef<
 	HTMLButtonElement,
 	React.ButtonHTMLAttributes<HTMLButtonElement>
->(({ className, children, onClick, ...props }, ref) => {
-	return (
-		<Button
-			ref={ref}
-			variant="default"
-			onClick={onClick}
-			className={className}
-			{...props}
-		>
-			{children}
-		</Button>
-	);
-});
+>(({ className, children, onClick, ...props }, ref) => (
+	<Button
+		ref={ref}
+		variant="default"
+		onClick={onClick}
+		className={className}
+		{...props}
+	>
+		{children}
+	</Button>
+));
 AlertDialogAction.displayName = "AlertDialogAction";
 
 export {

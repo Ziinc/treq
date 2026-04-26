@@ -1,9 +1,9 @@
-import { useState, useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Command } from "cmdk";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { FileText } from "lucide-react";
-import { searchWorkspaceFiles, FileSearchResult } from "../lib/api";
+import { FileSearchResult, searchWorkspaceFiles } from "../lib/api";
 import { useDebounce } from "../hooks/useDebounce";
 
 interface FilePickerProps {
@@ -23,7 +23,7 @@ export const FilePicker: React.FC<FilePickerProps> = ({
 }) => {
 	const [query, setQuery] = useState("");
 	const [results, setResults] = useState<FileSearchResult[]>([]);
-	const [_isLoading, setIsLoading] = useState(false);
+	const [, setIsLoading] = useState(false);
 
 	const debouncedQuery = useDebounce(query, 150);
 
@@ -58,9 +58,9 @@ export const FilePicker: React.FC<FilePickerProps> = ({
 	);
 
 	// Get icon based on file extension (can be expanded)
-	const getFileIcon = () => {
-		return <FileText className="w-4 h-4 text-muted-foreground" />;
-	};
+	const getFileIcon = () => (
+		<FileText className="w-4 h-4 text-muted-foreground" />
+	);
 
 	if (!open) {
 		return null;
@@ -77,7 +77,10 @@ export const FilePicker: React.FC<FilePickerProps> = ({
 				<DialogPrimitive.Title>Jump to File</DialogPrimitive.Title>
 				<DialogPrimitive.Description>Jump to file</DialogPrimitive.Description>
 			</VisuallyHidden.Root>
-			<div className="bg-background text-foreground rounded-xl border border-border shadow-2xl w-[40vw] max-w-none overflow-hidden">
+			<div
+				data-testid="modal"
+				className="bg-background text-foreground rounded-xl border border-border shadow-2xl w-[40vw] max-w-none overflow-hidden"
+			>
 				{/* Search Input */}
 				<div className="flex items-center border-b border-border px-3 bg-background">
 					<Command.Input

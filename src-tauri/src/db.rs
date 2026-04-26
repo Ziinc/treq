@@ -72,8 +72,7 @@ impl Database {
             [],
         )?;
 
-        // Migration: Rename worktree_path to workspace_path if needed
-        // First, check if the old column exists
+        // Migration: rename worktree_path to workspace_path when old column exists.
         let has_worktree_col: Result<i64, _> = self.conn.query_row(
             "SELECT COUNT(*) FROM pragma_table_info('git_cache') WHERE name='worktree_path'",
             [],
@@ -261,7 +260,7 @@ impl Database {
         let mut hasher = Sha256::new();
         hasher.update(repo_path.as_bytes());
         let hash = hasher.finalize();
-        let hash_hex = format!("{:x}", hash);
+        let hash_hex: String = hash.iter().map(|byte| format!("{:02x}", byte)).collect();
         format!("repo_{}_{}", &hash_hex[..16], key) // Use first 16 chars of hash
     }
 
@@ -275,7 +274,6 @@ impl Database {
         self.set_setting(&composite_key, value)
     }
 
-    #[allow(dead_code)]
     pub fn add_session(&self, session: &Session) -> Result<i64> {
         self.conn.execute(
             "INSERT INTO sessions (workspace_id, type, name, created_at, last_accessed, model)
@@ -291,7 +289,6 @@ impl Database {
         Ok(self.conn.last_insert_rowid())
     }
 
-    #[allow(dead_code)]
     pub fn get_sessions(&self) -> Result<Vec<Session>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, workspace_id, name, created_at, last_accessed, model
@@ -312,7 +309,6 @@ impl Database {
         sessions.collect()
     }
 
-    #[allow(dead_code)]
     pub fn update_session_access(&self, id: i64, last_accessed: &str) -> Result<()> {
         self.conn.execute(
             "UPDATE sessions SET last_accessed = ?1 WHERE id = ?2",
@@ -321,7 +317,6 @@ impl Database {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub fn update_session_name(&self, id: i64, name: &str) -> Result<()> {
         self.conn.execute(
             "UPDATE sessions SET name = ?1 WHERE id = ?2",
@@ -330,7 +325,6 @@ impl Database {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub fn delete_session(&self, id: i64) -> Result<()> {
         self.conn
             .execute("DELETE FROM sessions WHERE id = ?1", [id])?;

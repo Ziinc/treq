@@ -6,21 +6,21 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { Terminal as XTerm, type IDisposable } from "@xterm/xterm";
+import { type IDisposable, Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { LigaturesAddon } from "@xterm/addon-ligatures";
 import { WebglAddon } from "@xterm/addon-webgl";
-import { SearchAddon, ISearchOptions } from "@xterm/addon-search";
+import { ISearchOptions, SearchAddon } from "@xterm/addon-search";
 import { ImageAddon } from "@xterm/addon-image";
 import {
 	ptyCreateSession,
 	ptyListen,
 	ptyResize,
+	ptySessionExists,
 	ptyWrite,
 	ptyWriteSuppressEcho,
-	ptySessionExists,
 } from "../lib/api";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import { cn } from "../lib/utils";
@@ -330,7 +330,7 @@ export const ConsolidatedTerminal = forwardRef<
 
 						const reader = new FileReader();
 						reader.onload = () => {
-							const base64 = (reader.result as string).split(",")[1];
+							const [, base64] = (reader.result as string).split(",");
 							// iTerm2 inline image protocol: OSC 1337 ; File=inline=1:BASE64 BEL
 							const escapeSeq = `\x1b]1337;File=inline=1:${base64}\x07`;
 							xterm.write(escapeSeq);

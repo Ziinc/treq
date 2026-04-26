@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { GitBranch, Loader2, ChevronDown, Check } from "lucide-react";
+import { Check, ChevronDown, GitBranch, Loader2 } from "lucide-react";
 import { Command } from "cmdk";
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -7,8 +7,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 // Define BranchListItem locally since git API was removed
 export interface BranchListItem {
 	name: string;
-	full_name: string;
-	is_current: boolean;
+	fullName: string;
+	isCurrent: boolean;
 }
 
 interface TargetBranchSelectorProps {
@@ -16,6 +16,7 @@ interface TargetBranchSelectorProps {
 	loading: boolean;
 	targetBranch: string | null;
 	onSelect: (branch: string) => void;
+	onOpenChange?: (open: boolean) => void;
 	disabled?: boolean;
 }
 
@@ -24,12 +25,19 @@ export const TargetBranchSelector: React.FC<TargetBranchSelectorProps> = ({
 	loading,
 	targetBranch,
 	onSelect,
+	onOpenChange,
 	disabled,
 }) => {
 	const [open, setOpen] = useState(false);
 
 	return (
-		<Popover open={open} onOpenChange={setOpen}>
+		<Popover
+			open={open}
+			onOpenChange={(value) => {
+				setOpen(value);
+				onOpenChange?.(value);
+			}}
+		>
 			<PopoverTrigger asChild>
 				<Button
 					variant="outline"
@@ -68,13 +76,13 @@ export const TargetBranchSelector: React.FC<TargetBranchSelectorProps> = ({
 								</Command.Empty>
 								{branches.map((branch) => (
 									<Command.Item
-										key={branch.full_name}
+										key={branch.fullName}
 										value={branch.name}
 										onSelect={() => {
 											onSelect(branch.name);
 											setOpen(false);
 										}}
-										className="px-3 py-1.5 flex items-center gap-2 cursor-pointer aria-selected:bg-accent font-mono"
+										className="branch-list-item px-3 py-1.5 flex items-center gap-2 cursor-pointer aria-selected:bg-accent font-mono"
 									>
 										<span className="flex-1">{branch.name}</span>
 										{branch.name === targetBranch && (

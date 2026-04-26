@@ -6,18 +6,18 @@ import { BranchSwitcher } from "./BranchSwitcher";
 import { WorkspaceDeletion } from "./WorkspaceDeletion";
 import { FilePicker } from "./FilePicker";
 import { CmdkFooter } from "./ui/cmdk-footer";
-import { Workspace, Session } from "../lib/api";
+import { Session, Workspace } from "../lib/api";
 import {
-	Home,
-	Settings,
-	GitBranch,
-	FileSearch,
-	Trash2,
-	Plus,
-	Terminal as TerminalIcon,
-	Maximize2,
-	ChevronsUpDown,
 	Bot,
+	ChevronsUpDown,
+	FileSearch,
+	GitBranch,
+	Home,
+	Maximize2,
+	Plus,
+	Settings,
+	Terminal as TerminalIcon,
+	Trash2,
 } from "lucide-react";
 
 interface CommandItem {
@@ -75,10 +75,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 	showCommandPalette,
 	onCommandPaletteChange,
 	workspaces,
-	sessions: _sessions,
 	onNavigateToDashboard,
 	onNavigateToSettings,
-	onOpenWorkspaceSession: _onOpenWorkspaceSession,
 	onOpenBranchSwitcher,
 	onOpenFilePicker,
 	onOpenWorkspacePicker,
@@ -101,7 +99,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 	onFileSelected,
 	selectedWorkspaceId,
 	repoPath,
-	workspaceChangeCounts: _workspaceChangeCounts,
 }) => {
 	// Build command items
 	const items = useMemo<CommandItem[]>(() => {
@@ -284,7 +281,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 						Command menu
 					</DialogPrimitive.Description>
 				</VisuallyHidden.Root>
-				<div className="bg-background text-foreground rounded-xl border border-border shadow-2xl w-[40vw] max-w-none overflow-hidden">
+				<div
+					data-testid="modal"
+					className="bg-background text-foreground rounded-xl border border-border shadow-2xl w-[40vw] max-w-none overflow-hidden"
+				>
 					<div className="flex items-center border-b border-border px-3 bg-background">
 						<Command.Input
 							placeholder="Type a command or search..."

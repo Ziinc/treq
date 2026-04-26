@@ -34,9 +34,9 @@ export function findMatches(text: string, query: string): SearchMatch[] {
 
 		while ((match = regex.exec(line)) !== null) {
 			matches.push({
+				endIndex: match.index + match[0].length,
 				lineNumber,
 				startIndex: match.index,
-				endIndex: match.index + match[0].length,
 			});
 		}
 	});

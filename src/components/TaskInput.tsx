@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FileText, Paperclip, Plus } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Button } from "./ui/button";
@@ -9,8 +9,11 @@ import {
 	TooltipTrigger,
 } from "./ui/tooltip";
 import { FilePicker } from "./FilePicker";
-import { createSession, searchWorkspaceFiles } from "../lib/api";
-import type { FileSearchResult } from "../lib/api";
+import {
+	createSession,
+	searchWorkspaceFiles,
+	type FileSearchResult,
+} from "../lib/api";
 import { useToast } from "./ui/toast";
 import { useDebounce } from "../hooks/useDebounce";
 import { cn } from "../lib/utils";
@@ -109,7 +112,7 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 			const after = taskText.slice(cursorPos);
 			// Add a leading space if cursor is not at start and previous char isn't whitespace
 			const needsSpace = before.length > 0 && !/\s$/.test(before);
-			const text = needsSpace ? " " + insertion : insertion;
+			const text = needsSpace ? ` ${insertion}` : insertion;
 			const newText = before + text + after;
 			setTaskText(newText);
 
@@ -147,7 +150,7 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 		const after = taskText.slice(cursorPos);
 		const needsSpace = before.length > 0 && !/\s$/.test(before);
 		const insertion = paths.map((p) => `'${p}'`).join(" ");
-		const text = (needsSpace ? " " : "") + insertion + " ";
+		const text = `${(needsSpace ? " " : "") + insertion} `;
 		const newText = before + text + after;
 		setTaskText(newText);
 
@@ -193,7 +196,7 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 
 	const handleTextChange = useCallback(
 		(e: React.ChangeEvent<HTMLTextAreaElement>) => {
-			const value = e.target.value;
+			const { value } = e.target;
 			setTaskText(value);
 
 			const cursorPos = e.target.selectionStart;
@@ -231,7 +234,7 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 			setSubmitting(true);
 			try {
 				const sessionName =
-					trimmed.length > 50 ? trimmed.slice(0, 47) + "..." : trimmed;
+					trimmed.length > 50 ? `${trimmed.slice(0, 47)}...` : trimmed;
 
 				const dbSessionId = await createSession(
 					repoPath,

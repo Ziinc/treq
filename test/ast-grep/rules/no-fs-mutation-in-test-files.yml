@@ -1,0 +1,43 @@
+id: no-fs-mutation-in-test-files
+language: rust
+severity: warning
+message: >
+  Do not use direct filesystem mutation in a *_test.rs file. Use the workspace test
+  helper `TestRepo::write_workspace_file` in @src-tauri/tests/e2e_test_helpers.rs
+files:
+  - "src-tauri/**/*_test.rs"
+ignores:
+  # - "**/*_tests.rs"
+  - "**/e2e_test_helpers.rs"
+rule:
+  any:
+    - pattern: fs::write($$$)
+    - pattern: std::fs::write($$$)
+    - pattern: fs::create_dir($$$)
+    - pattern: std::fs::create_dir($$$)
+    - pattern: fs::create_dir_all($$$)
+    - pattern: std::fs::create_dir_all($$$)
+    - pattern: fs::remove_file($$$)
+    - pattern: std::fs::remove_file($$$)
+    - pattern: fs::remove_dir($$$)
+    - pattern: std::fs::remove_dir($$$)
+    - pattern: fs::remove_dir_all($$$)
+    - pattern: std::fs::remove_dir_all($$$)
+    - pattern: fs::rename($$$)
+    - pattern: std::fs::rename($$$)
+    - pattern: fs::copy($$$)
+    - pattern: std::fs::copy($$$)
+    - pattern: fs::hard_link($$$)
+    - pattern: std::fs::hard_link($$$)
+    - pattern: fs::soft_link($$$)
+    - pattern: std::fs::soft_link($$$)
+    - pattern: fs::set_permissions($$$)
+    - pattern: std::fs::set_permissions($$$)
+    - pattern: File::create($$$)
+    - pattern: std::fs::File::create($$$)
+    - pattern: File::create_new($$$)
+    - pattern: std::fs::File::create_new($$$)
+    - pattern: $RECV.open($$$)
+    - pattern: $RECV.write($$$)
+    - pattern: $RECV.write_all($$$)
+    - pattern: $RECV.write_fmt($$$)

@@ -1,5 +1,5 @@
-import * as React from "react";
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
+import * as React from "react";
 import { cn } from "../../lib/utils";
 
 const DropdownMenu = DropdownMenuPrimitive.Root;
@@ -168,14 +168,12 @@ DropdownMenuSeparator.displayName = DropdownMenuPrimitive.Separator.displayName;
 const DropdownMenuShortcut = ({
 	className,
 	...props
-}: React.HTMLAttributes<HTMLSpanElement>) => {
-	return (
-		<span
-			className={cn("ml-auto text-sm tracking-widest opacity-60", className)}
-			{...props}
-		/>
-	);
-};
+}: React.HTMLAttributes<HTMLSpanElement>) => (
+	<span
+		className={cn("ml-auto text-sm tracking-widest opacity-60", className)}
+		{...props}
+	/>
+);
 DropdownMenuShortcut.displayName = "DropdownMenuShortcut";
 
 export {

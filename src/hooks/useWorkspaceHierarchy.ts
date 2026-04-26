@@ -1,9 +1,9 @@
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-	setWorkspaceTargetBranch,
-	getWorkspaces,
 	type Workspace,
+	getWorkspaces,
+	setWorkspaceTargetBranch,
 } from "../lib/api";
 import { getFullWorkspacePath } from "../lib/utils";
 import { isDescendantOf } from "../lib/workspace-tree";
@@ -30,9 +30,7 @@ export function useWorkspaceHierarchy({
 		});
 	}, [queryClient, repoPath]);
 
-	/**
-	 * Add a new workspace after (as a child of) the given workspace.
-	 */
+	// Add a new workspace after (as a child of) the given workspace.
 	const addAfter = useCallback(
 		async (workspace: Workspace): Promise<number> => {
 			const workspaceId = await createStackedWorkspace({
@@ -46,11 +44,7 @@ export function useWorkspaceHierarchy({
 		[repoPath, createStackedWorkspace, invalidate],
 	);
 
-	/**
-	 * Add a new workspace before the given workspace.
-	 * Creates a new workspace C stacked on the original's parent,
-	 * then reparents the original workspace onto C.
-	 */
+	// Add a new workspace before the given workspace by inserting a parent and reparenting.
 	const addBefore = useCallback(
 		async (workspace: Workspace): Promise<number> => {
 			const parentBranch = workspace.target_branch || defaultBranch;
@@ -85,10 +79,7 @@ export function useWorkspaceHierarchy({
 		[repoPath, defaultBranch, createStackedWorkspace, invalidate],
 	);
 
-	/**
-	 * Move a workspace to a new target branch.
-	 * Validates no cycles would be created.
-	 */
+	// Move a workspace to a new target branch while preventing cycles.
 	const moveWorkspace = useCallback(
 		async (
 			workspace: Workspace,

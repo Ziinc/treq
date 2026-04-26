@@ -1,14 +1,6 @@
 use crate::local_db;
 
 #[tauri::command]
-pub fn load_pending_review(
-    repo_path: String,
-    workspace_id: i64,
-) -> Result<Option<local_db::PendingReview>, String> {
-    local_db::get_pending_review(&repo_path, workspace_id)
-}
-
-#[tauri::command]
 pub fn save_pending_review(
     repo_path: String,
     workspace_id: i64,

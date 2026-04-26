@@ -79,28 +79,35 @@ export class ErrorBoundary extends React.Component<
 	}
 
 	private interceptConsole = () => {
+		let capturing = false;
 		const captureLog =
 			(type: ConsoleLog["type"]) =>
 			(...args: unknown[]) => {
-				// Call original console method
 				this.originalConsole[type](...args);
 
-				// Capture the log
-				const timestamp = new Date().toISOString();
-				const serializedArgs = args.map((arg) => {
-					try {
-						return typeof arg === "string" ? arg : JSON.stringify(arg, null, 2);
-					} catch {
-						return String(arg);
-					}
-				});
+				if (capturing) return;
+				capturing = true;
+				try {
+					const timestamp = new Date().toISOString();
+					const serializedArgs = args.map((arg) => {
+						try {
+							return typeof arg === "string"
+								? arg
+								: JSON.stringify(arg, null, 2);
+						} catch {
+							return String(arg);
+						}
+					});
 
-				this.setState((prev) => ({
-					consoleLogs: [
-						...prev.consoleLogs,
-						{ timestamp, type, args: serializedArgs },
-					],
-				}));
+					this.setState((prev) => ({
+						consoleLogs: [
+							...prev.consoleLogs,
+							{ timestamp, type, args: serializedArgs },
+						],
+					}));
+				} finally {
+					capturing = false;
+				}
 			};
 
 		console.log = captureLog("log");

@@ -9,28 +9,33 @@ function isWithinTerminal(element: HTMLElement | null): boolean {
 }
 
 export function useKeyboardShortcut(
-	key: string,
-	ctrlOrCmd: boolean,
-	handler: () => void,
-	deps: unknown[] = [],
-	options?: {
-		shift?: boolean;
-		option?: boolean;
-		requireBothCmdAndCtrl?: boolean;
-	},
+	...args: [
+		key: string,
+		ctrlOrCmd: boolean,
+		handler: () => void,
+		deps?: unknown[],
+		options?: {
+			shift?: boolean;
+			option?: boolean;
+			requireBothCmdAndCtrl?: boolean;
+		},
+	]
 ) {
+	const [key, ctrlOrCmd, handler, deps = [], options] = args;
+
 	useEffect(() => {
 		const handleKeyPress: KeyboardHandler = (event) => {
 			const target = event.target as HTMLElement | null;
 			const activeElement = document.activeElement as HTMLElement | null;
 
-			// Don't intercept events in input elements
+			// Don't intercept plain-key shortcuts in inputs; meta shortcuts (Ctrl/Cmd+X) still apply.
 			if (
-				target?.tagName === "INPUT" ||
-				target?.tagName === "TEXTAREA" ||
-				(target &&
-					typeof (target as HTMLElement).getAttribute === "function" &&
-					(target as HTMLElement).getAttribute("contenteditable") === "true")
+				!ctrlOrCmd &&
+				(target?.tagName === "INPUT" ||
+					target?.tagName === "TEXTAREA" ||
+					(target &&
+						typeof (target as HTMLElement).getAttribute === "function" &&
+						(target as HTMLElement).getAttribute("contenteditable") === "true"))
 			) {
 				return;
 			}
@@ -64,8 +69,7 @@ export function useKeyboardShortcut(
 					if (ctrlOrCmd && !isModifierPressed) return;
 					if (!ctrlOrCmd && isModifierPressed) return;
 
-					// IMPORTANT: When NOT requiring both Cmd+Ctrl, ensure we DON'T have both
-					// This prevents Cmd+J from firing when Cmd+Control+J is pressed
+					// Reject both Cmd+Ctrl when only one modifier is required (avoid Cmd+J on Cmd+Ctrl+J).
 					if (ctrlOrCmd && event.metaKey && event.ctrlKey) return;
 
 					// Check shift key requirements

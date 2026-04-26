@@ -52,8 +52,8 @@ export function parseJjChangedFiles(
 		| Array<{ path: string; status: string; previous_path?: string | null }>,
 ): ParsedFileChange[] {
 	return files.map((file) => ({
+		oldPath: file.previous_path ?? undefined,
 		path: file.path,
 		workspaceStatus: file.status,
-		oldPath: file.previous_path ?? undefined,
 	}));
 }

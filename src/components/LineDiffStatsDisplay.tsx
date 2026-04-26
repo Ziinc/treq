@@ -15,7 +15,7 @@ interface LineDiffStatsDisplayProps {
 }
 
 export const LineDiffStatsDisplay = memo<LineDiffStatsDisplayProps>(
-	function LineDiffStatsDisplay({ stats, isLoading, className, size = "sm" }) {
+	({ stats, isLoading, className, size = "sm" }) => {
 		if (isLoading) {
 			return (
 				<span className={cn("text-muted-foreground", className)}>...</span>

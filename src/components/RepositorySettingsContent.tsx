@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
@@ -85,7 +85,7 @@ export const RepositorySettingsContent: React.FC<
 
 	const addPattern = (pattern: string) => {
 		if (includedFiles.trim()) {
-			setIncludedFiles(includedFiles + "\n" + pattern);
+			setIncludedFiles(`${includedFiles}\n${pattern}`);
 		} else {
 			setIncludedFiles(pattern);
 		}

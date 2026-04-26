@@ -129,14 +129,64 @@ impl TestRepo {
     /// Create a file in the repository.
     pub fn create_file(&self, relative_path: &str, content: &str) -> Result<PathBuf, String> {
         let file_path = Path::new(&self.repo_path).join(relative_path);
+        Self::write_file_at_path(file_path.clone(), content, false)?;
 
+        Ok(file_path)
+    }
+
+    /// Write or append file content at an absolute path.
+    fn write_file_at_path(file_path: PathBuf, content: &str, append: bool) -> Result<(), String> {
         if let Some(parent) = file_path.parent() {
             fs::create_dir_all(parent)
                 .map_err(|e| format!("Failed to create parent dirs: {}", e))?;
         }
 
-        fs::write(&file_path, content).map_err(|e| format!("Failed to write file: {}", e))?;
+        if append {
+            use std::io::Write;
+            let mut file = fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&file_path)
+                .map_err(|e| format!("Failed to open file for append: {}", e))?;
+            file.write_all(content.as_bytes())
+                .map_err(|e| format!("Failed to append file: {}", e))?;
+        } else {
+            fs::write(&file_path, content).map_err(|e| format!("Failed to write file: {}", e))?;
+        }
 
+        Ok(())
+    }
+
+    /// Create or overwrite a file inside a workspace path.
+    pub fn write_workspace_file(
+        workspace_path: &str,
+        relative_path: &str,
+        content: &str,
+    ) -> Result<PathBuf, String> {
+        let file_path = Path::new(workspace_path).join(relative_path);
+        Self::write_file_at_path(file_path.clone(), content, false)?;
+        Ok(file_path)
+    }
+
+    /// Recursively remove a directory (e.g. `.jj` or a workspace path) from tests.
+    /// Keeps `fs::remove_dir_all` out of `*_test.rs` for ast-grep `no-fs-mutation-in-test-files`.
+    pub fn remove_dir_all_path(path: impl AsRef<Path>) -> Result<(), String> {
+        fs::remove_dir_all(path.as_ref()).map_err(|e| e.to_string())
+    }
+
+    /// Remove a single file from tests (avoids `fs::remove_file` in `*_test.rs`).
+    pub fn remove_file_path(path: impl AsRef<Path>) -> Result<(), String> {
+        fs::remove_file(path.as_ref()).map_err(|e| e.to_string())
+    }
+
+    /// Append to a file inside a workspace path.
+    pub fn append_workspace_file(
+        workspace_path: &str,
+        relative_path: &str,
+        content: &str,
+    ) -> Result<PathBuf, String> {
+        let file_path = Path::new(workspace_path).join(relative_path);
+        Self::write_file_at_path(file_path.clone(), content, true)?;
         Ok(file_path)
     }
 
@@ -237,7 +287,8 @@ impl TestRepo {
                 remote_path.to_str().unwrap(),
                 clone_path.to_str().unwrap(),
             ],
-        )?;
+        )
+        .expect("Failed to clone remote");
 
         let clone_path_str = clone_path.to_string_lossy().to_string();
 
@@ -245,22 +296,25 @@ impl TestRepo {
         Self::run_git(
             &clone_path_str,
             &["config", "user.email", "test@example.com"],
-        )?;
-        Self::run_git(&clone_path_str, &["config", "user.name", "Test User"])?;
+        )
+        .expect("Failed to configure git user email");
+        Self::run_git(&clone_path_str, &["config", "user.name", "Test User"])
+            .expect("Failed to configure git user name");
 
-        // Checkout the target branch (fetch it if it's a remote-tracking branch)
-        let checkout_result = Self::run_git(&clone_path_str, &["checkout", branch_name]);
-        if checkout_result.is_err() {
-            // Try checking out from origin
-            Self::run_git(
+        // Checkout the target branch. In a fresh clone the branch may exist only as
+        // origin/<branch>, so fall back to creating a local branch from that ref.
+        if let Err(local_checkout_err) = Self::run_git(&clone_path_str, &["checkout", branch_name])
+        {
+            let remote_ref = format!("origin/{}", branch_name);
+            if let Err(remote_checkout_err) = Self::run_git(
                 &clone_path_str,
-                &[
-                    "checkout",
-                    "-b",
-                    branch_name,
-                    &format!("origin/{}", branch_name),
-                ],
-            )?;
+                &["checkout", "-b", branch_name, &remote_ref],
+            ) {
+                return Err(format!(
+                    "Failed to checkout branch '{}' in remote clone. Local checkout error: {} Fallback checkout from '{}' error: {}",
+                    branch_name, local_checkout_err, remote_ref, remote_checkout_err
+                ));
+            }
         }
 
         // Write file, commit, and push from the clone
@@ -270,11 +324,12 @@ impl TestRepo {
                 .map_err(|e| format!("Failed to create parent dirs: {}", e))?;
         }
         fs::write(&file_path, content)
-            .map_err(|e| format!("Failed to write file in remote clone: {}", e))?;
+            .map_err(|e| format!("Failed to write file in remote clone: {}", e))
+            .expect("Failed to write file");
 
-        Self::run_git(&clone_path_str, &["add", relative_path])?;
-        Self::run_git(&clone_path_str, &["commit", "-m", message])?;
-        Self::run_git(&clone_path_str, &["push", "origin", branch_name])?;
+        Self::run_git(&clone_path_str, &["add", relative_path]).expect("Failed to add file");
+        Self::run_git(&clone_path_str, &["commit", "-m", message]).expect("Failed to commit");
+        Self::run_git(&clone_path_str, &["push", "origin", branch_name]).expect("Failed to push");
 
         // Clean up the clone
         fs::remove_dir_all(&clone_path)
@@ -331,6 +386,30 @@ impl TestRepo {
         }
         fs::read_to_string(&gitignore_path).map_err(|e| format!("Failed to read .gitignore: {}", e))
     }
+}
+
+#[allow(dead_code)]
+pub fn create_test_repo(with_remote: bool) -> Result<TestRepo, String> {
+    if with_remote {
+        TestRepo::with_remote()
+    } else {
+        TestRepo::new()
+    }
+}
+
+#[allow(dead_code)]
+pub fn write_test_file(
+    base_path: &str,
+    relative_path: &str,
+    content: &str,
+    append: bool,
+) -> Result<String, String> {
+    let file_path = if append {
+        TestRepo::append_workspace_file(base_path, relative_path, content)?
+    } else {
+        TestRepo::write_workspace_file(base_path, relative_path, content)?
+    };
+    Ok(file_path.to_string_lossy().to_string())
 }
 
 /// Helpers for verifying jj state
@@ -474,6 +553,38 @@ impl JjVerifier {
             .collect();
 
         Ok(bookmarks)
+    }
+
+    /// Return the commit id the bookmark currently points to, or None if the bookmark doesn't resolve.
+    pub fn get_bookmark_commit_id(
+        repo_path: &str,
+        bookmark: &str,
+    ) -> Result<Option<String>, String> {
+        let output = Command::new(Self::jj_binary())
+            .current_dir(repo_path)
+            .args([
+                "log",
+                "-r",
+                bookmark,
+                "-n",
+                "1",
+                "--no-graph",
+                "-T",
+                "commit_id",
+            ])
+            .output()
+            .map_err(|e| format!("Failed to execute jj log: {}", e))?;
+
+        if !output.status.success() {
+            return Ok(None);
+        }
+
+        let id = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if id.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(id))
+        }
     }
 
     /// Check if jj working copy has changes (is dirty)

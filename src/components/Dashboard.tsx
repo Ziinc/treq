@@ -1,15 +1,16 @@
+/* eslint-disable max-lines */
+
 import {
-	useState,
-	useEffect,
-	useCallback,
-	useMemo,
 	Suspense,
 	lazy,
+	useCallback,
+	useEffect,
+	useMemo,
 	useRef,
+	useState,
 } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
@@ -36,33 +37,28 @@ import { useToast } from "./ui/toast";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { useWorkspaceHierarchy } from "../hooks/useWorkspaceHierarchy";
 import {
-	FocusRefreshProvider,
-	useFocusRefreshSubscription,
-} from "../hooks/useAppFocusHandler";
-import {
-	getWorkspaces,
-	deleteWorkspace,
-	cleanupStaleWorkspaces,
-	getSetting,
-	setSetting,
-	selectFolder,
-	getRepoSetting,
 	Workspace,
 	createSession,
-	updateSessionAccess,
+	deleteWorkspace,
+	getRepoStatus,
+	getRepoSetting,
 	getSessions,
+	getSetting,
+	getWorkspaces,
+	initRepo,
+	listRepoBranches,
+	selectFolder,
 	setSessionModel,
-	jjGitFetch,
-	jjGetCurrentBranch,
+	setSetting,
+	setWindowRepoPath,
 	startFileWatcher,
 	stopFileWatcher,
-	jjTrackWorkspaceBookmarks,
-	initRepo,
-	setWindowRepoPath,
+	updateSessionAccess,
 } from "../lib/api";
 import { Loader2 } from "lucide-react";
 import { getFullWorkspacePath } from "../lib/utils";
 import { Onboarding } from "./Onboarding";
+import type { BranchListItem } from "./TargetBranchSelector";
 
 // Loading spinner component for Suspense fallback
 const LoadingSpinner = () => (
@@ -99,9 +95,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		null,
 	);
 	const [mergeWorkspace, setMergeWorkspace] = useState<Workspace | null>(null);
-	const [_initialSettingsTab, _setInitialSettingsTab] = useState<
-		"application" | "repository"
-	>("repository");
 	const [showCommandPalette, setShowCommandPalette] = useState(false);
 	const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
 	const [showFilePicker, setShowFilePicker] = useState(false);
@@ -135,9 +128,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	}, []);
 
 	const openSettings = useCallback((tab?: string) => {
-		_setInitialSettingsTab(
-			(tab as "application" | "repository") || "repository",
-		);
+		void tab;
 		setViewMode("settings");
 	}, []);
 
@@ -230,43 +221,41 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		loadAppFontSize();
 	}, []);
 
-	// Derive repo name from repo path
-	const repoName = useMemo(
-		() =>
-			repoPath
-				? repoPath.split("/").pop() || repoPath.split("\\").pop() || repoPath
-				: "",
-		[repoPath],
-	);
-
-	// Update window title when repo changes
-	useEffect(() => {
-		if (repoName) {
-			getCurrentWindow().setTitle(`Treq - ${repoName}`);
-		} else {
-			getCurrentWindow().setTitle("Treq");
-		}
-	}, [repoName]);
-
-	// Fetch main repository branch info
 	useEffect(() => {
 		if (!repoPath) {
 			setCurrentBranch(null);
-			return;
 		}
-
-		const fetchBranch = async () => {
-			try {
-				const branch = await jjGetCurrentBranch(repoPath);
-				setCurrentBranch(branch);
-			} catch (error) {
-				console.error("Failed to get current branch:", error);
-				setCurrentBranch(null);
-			}
-		};
-
-		fetchBranch();
 	}, [repoPath]);
+
+	const { data: repoStatus } = useQuery({
+		queryKey: ["repo-status", repoPath],
+		queryFn: () => getRepoStatus(repoPath),
+		enabled: !!repoPath,
+	});
+
+	useEffect(() => {
+		if (!repoPath) return;
+		if (!repoStatus?.current_branch) return;
+		setCurrentBranch(repoStatus.current_branch);
+	}, [repoPath, repoStatus?.current_branch]);
+
+	const {
+		data: availableBranches = [],
+		isFetching: branchesLoading,
+		refetch: loadAvailableBranches,
+	} = useQuery<BranchListItem[]>({
+		queryKey: ["repo-branches", repoPath],
+		enabled: false,
+		staleTime: 5 * 60 * 1000,
+		queryFn: async () => {
+			const jjBranches = await listRepoBranches(repoPath);
+			return jjBranches.map((branch) => ({
+				name: branch.name,
+				fullName: branch.name,
+				isCurrent: branch.is_current,
+			}));
+		},
+	});
 
 	// Manage file watcher lifecycle for selected workspace
 	useEffect(() => {
@@ -291,14 +280,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		selectedWorkspace?.workspace_path,
 	]);
 
-	// After focus rebase completes, invalidate workspace queries
-	useFocusRefreshSubscription("afterRebase", () => {
-		if (!repoPath) return;
-		queryClient.invalidateQueries({
-			queryKey: ["workspace-statuses", repoPath],
-		});
-	}, [repoPath, queryClient]);
-
 	const { data: sessions = [] } = useQuery({
 		queryKey: ["sessions", repoPath],
 		queryFn: () => getSessions(repoPath),
@@ -306,65 +287,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		enabled: !!repoPath,
 	});
 
-	const { data: workspaces = [], refetch: _refetch } = useQuery({
+	const { data: workspaces = [] } = useQuery({
 		queryKey: ["workspaces", repoPath],
 		queryFn: () => getWorkspaces(repoPath),
 		refetchInterval: 10000,
 		enabled: !!repoPath,
 	});
-
-	// Clean up stale workspace directories on startup
-	useEffect(() => {
-		const cleanup = async () => {
-			if (repoPath) {
-				try {
-					await cleanupStaleWorkspaces(repoPath);
-				} catch (error) {
-					console.error("Failed to cleanup stale workspaces:", error);
-				}
-			}
-		};
-		cleanup();
-	}, [repoPath]);
-
-	// Fetch remote branches on app startup when repo is loaded
-	useEffect(() => {
-		const fetchRemotes = async () => {
-			if (repoPath) {
-				try {
-					await jjGitFetch(repoPath);
-					console.log("[Dashboard] Fetched remote branches on startup");
-
-					// Track remote bookmarks for all workspaces
-					try {
-						const trackingResult = await jjTrackWorkspaceBookmarks(repoPath);
-						if (trackingResult.tracked.length > 0) {
-							console.log(
-								`[Dashboard] Tracked ${trackingResult.tracked.length} remote bookmark(s):`,
-								trackingResult.tracked,
-							);
-						}
-						if (trackingResult.failed.length > 0) {
-							console.warn(
-								`[Dashboard] Failed to track ${trackingResult.failed.length} bookmark(s):`,
-								trackingResult.failed,
-							);
-						}
-					} catch (error) {
-						console.error(
-							"[Dashboard] Failed to track workspace bookmarks:",
-							error,
-						);
-						// Don't show error to user - bookmark tracking failure shouldn't block app
-					}
-				} catch (error) {
-					console.error("[Dashboard] Failed to fetch remote branches:", error);
-					// Don't show error to user - fetch failure shouldn't block app
-				}
-			}
-		};
-		fetchRemotes();
-	}, [repoPath]);
 
 	// Note: Git cache preloader removed since we're using JJ now
 
@@ -417,6 +345,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		queryClient.invalidateQueries({ queryKey: ["workspaces"] });
 		queryClient.invalidateQueries({ queryKey: ["workspace-statuses"] });
 		queryClient.invalidateQueries({ queryKey: ["sessions"] });
+		queryClient.invalidateQueries({ queryKey: ["repo-status"] });
 
 		addToast({
 			title: "Repository Opened",
@@ -698,9 +627,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
 			);
 			try {
 				// Delete all workspaces without triggering individual onSuccess callbacks
-				for (const workspace of workspacesToDelete) {
-					await deleteWorkspace(workspace.repo_path, workspace.id);
-				}
+				await Promise.all(
+					workspacesToDelete.map((workspace) =>
+						deleteWorkspace(workspace.repo_path, workspace.id),
+					),
+				);
 				// Show single toast and refresh after all deletions
 				queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
 				queryClient.invalidateQueries({
@@ -709,7 +640,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				handleReturnToDashboard();
 				addToast({
 					title: `${count} Workspace${count > 1 ? "s" : ""} Deleted`,
-					description: `Successfully removed ${count} workspace${count > 1 ? "s" : ""}`,
+					description: `Successfully removed ${count} workspace${
+						count > 1 ? "s" : ""
+					}`,
 					type: "success",
 				});
 			} catch (error) {
@@ -734,24 +667,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	};
 
 	// Handle branch change after switching
-	const handleBranchChanged = useCallback(() => {
-		// Refresh current branch display
-		if (repoPath) {
-			jjGetCurrentBranch(repoPath)
-				.then((branch) => {
-					setCurrentBranch(branch);
-				})
-				.catch((error) => {
-					console.error("Failed to refresh current branch:", error);
-				});
-		}
-
-		// Refresh workspace data
-		queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
-		queryClient.invalidateQueries({
-			queryKey: ["workspace-statuses", repoPath],
-		});
-	}, [repoPath, queryClient]);
+	const handleBranchChanged = useCallback(
+		(branchName?: string) => {
+			if (branchName) {
+				setCurrentBranch(branchName);
+			}
+			void queryClient.invalidateQueries({
+				queryKey: ["repo-status", repoPath],
+			});
+			// Refresh workspace data
+			queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+			queryClient.invalidateQueries({
+				queryKey: ["workspace-statuses", repoPath],
+			});
+		},
+		[repoPath, queryClient],
+	);
 
 	const isSessionView = viewMode === "session" || viewMode === "show-workspace";
 	const showSidebar = true;
@@ -795,317 +726,318 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		[isSessionView],
 	);
 
-	return (
-		<FocusRefreshProvider repoPath={repoPath} onBranchUpdate={setCurrentBranch}>
-			{!repoPath ? (
-				<Onboarding onOpenRepo={handleOpenRepository} />
-			) : (
-				<div className="flex h-screen bg-background">
-					{/* WorkspaceSidebar - shown in session and settings views */}
-					{showSidebar && (
-						<WorkspaceSidebar
-							repoPath={repoPath}
-							currentBranch={currentBranch}
-							selectedWorkspaceId={selectedWorkspace?.id ?? null}
-							selectedWorkspaceIds={selectedWorkspaceIds}
-							onWorkspaceClick={(workspace) => handleSelectWorkspace(workspace)}
-							onWorkspaceMultiSelect={handleWorkspaceMultiSelect}
-							onBulkDelete={handleBulkDelete}
-							onDeleteWorkspace={handleDelete}
-							openSettings={openSettings}
-							navigateToDashboard={handleReturnToDashboard}
-							onOpenCommandPalette={() => setShowCommandPalette(true)}
-							onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
-							onAddBefore={handleAddBefore}
-							onAddAfter={handleAddAfter}
-							onMoveWorkspace={handleMoveWorkspace}
-							onSelectStack={handleSelectStack}
-							currentPage={
-								viewMode === "settings"
-									? "settings"
-									: viewMode === "session" || viewMode === "show-workspace"
-										? "session"
-										: undefined
+	return !repoPath ? (
+		<Onboarding onOpenRepo={handleOpenRepository} />
+	) : (
+		<div className="flex h-screen bg-background">
+			<WorkspaceSidebar
+				repoPath={repoPath}
+				currentBranch={currentBranch}
+				selectedWorkspaceId={selectedWorkspace?.id ?? null}
+				selectedWorkspaceIds={selectedWorkspaceIds}
+				onWorkspaceClick={(workspace) => handleSelectWorkspace(workspace)}
+				onWorkspaceMultiSelect={handleWorkspaceMultiSelect}
+				onBulkDelete={handleBulkDelete}
+				onDeleteWorkspace={handleDelete}
+				openSettings={openSettings}
+				navigateToDashboard={handleReturnToDashboard}
+				onOpenCommandPalette={() => setShowCommandPalette(true)}
+				onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
+				onAddBefore={handleAddBefore}
+				onAddAfter={handleAddAfter}
+				onMoveWorkspace={handleMoveWorkspace}
+				onSelectStack={handleSelectStack}
+				currentPage={
+					viewMode === "settings"
+						? "settings"
+						: viewMode === "session" || viewMode === "show-workspace"
+							? "session"
+							: undefined
+				}
+			/>
+
+			<div className="flex-1 relative" style={mainContentStyle}>
+				{/* Sessions Layer - ALWAYS RENDERED ONCE */}
+				<div
+					className="absolute inset-0 flex flex-col workspace-terminal-container overflow-hidden"
+					style={sessionLayerStyle}
+				>
+					{/* Show workspace views take up remaining space */}
+					{repoPath && (
+						<div className="flex-1 min-h-0 overflow-hidden relative">
+							<ErrorBoundary
+								fallbackTitle="Workspace error"
+								resetKeys={[selectedWorkspace?.id]}
+								onReset={handleReturnToDashboard}
+							>
+								<Suspense fallback={<LoadingSpinner />}>
+									<ShowWorkspace
+										repositoryPath={repoPath}
+										workspace={selectedWorkspace}
+										mainRepoBranch={currentBranch}
+										initialSelectedFile={sessionSelectedFile}
+										availableBranches={availableBranches}
+										branchesLoading={branchesLoading}
+										onLoadAvailableBranches={loadAvailableBranches}
+										onDeleteWorkspace={handleDelete}
+										onOpenFilePicker={() => setShowFilePicker(true)}
+										onOpenMergePreview={handleOpenMergePreview}
+										onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
+										onCreateStackedWorkspace={handleCreateStackedWorkspace}
+										onMoveCommitToNewWorkspace={(commit, workspace) => {
+											const firstLine =
+												commit.description.split("\n")[0] || undefined;
+											setUnifiedDialogDefaults({
+												targetBranch: workspace?.branch_name,
+												sourceWorkspace: workspace ?? null,
+												preSelectedCommits: [commit.change_id],
+												intent: firstLine,
+												activeTab: "commits",
+											});
+										}}
+										onMoveCommitToExistingWorkspace={(commit, workspace) => {
+											setUnifiedDialogDefaults({
+												targetBranch: workspace?.branch_name,
+												sourceWorkspace: workspace ?? null,
+												preSelectedCommits: [commit.change_id],
+												activeTab: "commits",
+											});
+											// Note: dialog will open in "move to existing" mode via defaults
+										}}
+										onMoveFilesToNewWorkspace={(files, workspace) => {
+											setUnifiedDialogDefaults({
+												targetBranch: workspace?.branch_name,
+												sourceWorkspace: workspace ?? null,
+												preSelectedFiles: files,
+												activeTab: "changes",
+											});
+										}}
+										queryClient={queryClient}
+										onSessionCreated={(sessionData) => {
+											queryClient.invalidateQueries({
+												queryKey: ["sessions"],
+											});
+											setActiveSessionId(sessionData.sessionId);
+											if (
+												sessionData.pendingPrompt ||
+												sessionData.permissionMode
+											) {
+												setPendingSessionData((prev) => {
+													const next = new Map(prev);
+													next.set(sessionData.sessionId, {
+														pendingPrompt: sessionData.pendingPrompt,
+														permissionMode: sessionData.permissionMode,
+													});
+													return next;
+												});
+											}
+										}}
+									/>
+								</Suspense>
+							</ErrorBoundary>
+						</div>
+					)}
+					{/* Shared workspace terminal pane - always rendered to preserve state */}
+					<WorkspaceTerminalPane
+						ref={terminalPaneRef}
+						key={repoPath}
+						workingDirectory={
+							selectedWorkspace
+								? getFullWorkspacePath(selectedWorkspace)
+								: repoPath
+						}
+						currentBranch={currentBranch}
+						claudeSessions={claudeSessionsForPane}
+						activeClaudeSessionId={isSessionView ? activeSessionId : null}
+						onActiveSessionChange={(sessionId) => {
+							if (sessionId === null) {
+								setActiveSessionId(null);
+								return;
 							}
+							setActiveSessionId(sessionId);
+							// Find the session to determine view mode
+							const session = sessions.find((s) => s.id === sessionId);
+							if (session) {
+								setViewMode(
+									session.workspace_id ? "show-workspace" : "session",
+								);
+								if (session.workspace_id) {
+									const ws = workspaces.find(
+										(w) => w.id === session.workspace_id,
+									);
+									if (ws) setSelectedWorkspace(ws);
+								}
+							}
+						}}
+						onCloseSession={(sessionId) => {
+							if (activeSessionId === sessionId) {
+								setActiveSessionId(null);
+							}
+						}}
+						onCreateNewSession={(activeWorkspacePath) => {
+							if (activeWorkspacePath) {
+								const ws = workspaces.find(
+									(w) => getFullWorkspacePath(w) === activeWorkspacePath,
+								);
+								handleCreateSessionFromSidebar(ws?.id ?? null);
+							} else {
+								handleCreateSessionFromSidebar(selectedWorkspace?.id ?? null);
+							}
+						}}
+						onNavigateToWorkspace={(workspaceKey, isMainRepo) => {
+							if (isMainRepo) {
+								handleSelectWorkspace(null);
+							} else {
+								const ws = workspaces.find(
+									(w) => w.workspace_path === workspaceKey,
+								);
+								if (ws) {
+									handleSelectWorkspace(ws);
+								}
+							}
+						}}
+					/>
+				</div>
+
+				{/* Content Layer - Dashboard, Settings, Merge-Review, Workspace-Edit */}
+				<div
+					className="absolute inset-0 overflow-auto"
+					style={{
+						visibility: !isSessionView ? "visible" : "hidden",
+						zIndex: !isSessionView ? 10 : 0,
+						pointerEvents: !isSessionView ? "auto" : "none",
+					}}
+				>
+					{/* Settings View */}
+					{viewMode === "settings" && (
+						<SettingsPage
+							repoPath={repoPath}
+							onClose={handleReturnToDashboard}
+							currentBranch={currentBranch}
 						/>
 					)}
 
-					<div className="flex-1 relative" style={mainContentStyle}>
-						{/* Sessions Layer - ALWAYS RENDERED ONCE */}
-						<div
-							className="absolute inset-0 flex flex-col workspace-terminal-container overflow-hidden"
-							style={sessionLayerStyle}
-						>
-							{/* Show workspace views take up remaining space */}
-							{repoPath && (
-								<div className="flex-1 min-h-0 overflow-hidden relative">
-									<ErrorBoundary
-										fallbackTitle="Workspace error"
-										resetKeys={[selectedWorkspace?.id]}
-										onReset={handleReturnToDashboard}
-									>
-										<Suspense fallback={<LoadingSpinner />}>
-											<ShowWorkspace
-												repositoryPath={repoPath}
-												workspace={selectedWorkspace}
-												mainRepoBranch={currentBranch}
-												initialSelectedFile={sessionSelectedFile}
-												onDeleteWorkspace={handleDelete}
-												onOpenFilePicker={() => setShowFilePicker(true)}
-												onOpenMergePreview={handleOpenMergePreview}
-												onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
-												onCreateStackedWorkspace={handleCreateStackedWorkspace}
-												onMoveCommitToNewWorkspace={(commit, workspace) => {
-													const firstLine =
-														commit.description.split("\n")[0] || undefined;
-													setUnifiedDialogDefaults({
-														targetBranch: workspace?.branch_name,
-														sourceWorkspace: workspace ?? null,
-														preSelectedCommits: [commit.change_id],
-														intent: firstLine,
-														activeTab: "commits",
-													});
-												}}
-												onMoveCommitToExistingWorkspace={(
-													commit,
-													workspace,
-												) => {
-													setUnifiedDialogDefaults({
-														targetBranch: workspace?.branch_name,
-														sourceWorkspace: workspace ?? null,
-														preSelectedCommits: [commit.change_id],
-														activeTab: "commits",
-													});
-													// Note: dialog will open in "move to existing" mode via defaults
-												}}
-												onMoveFilesToNewWorkspace={(files, workspace) => {
-													setUnifiedDialogDefaults({
-														targetBranch: workspace?.branch_name,
-														sourceWorkspace: workspace ?? null,
-														preSelectedFiles: files,
-														activeTab: "changes",
-													});
-												}}
-												queryClient={queryClient}
-												onSessionCreated={(sessionData) => {
-													queryClient.invalidateQueries({
-														queryKey: ["sessions"],
-													});
-													setActiveSessionId(sessionData.sessionId);
-													if (
-														sessionData.pendingPrompt ||
-														sessionData.permissionMode
-													) {
-														setPendingSessionData((prev) => {
-															const next = new Map(prev);
-															next.set(sessionData.sessionId, {
-																pendingPrompt: sessionData.pendingPrompt,
-																permissionMode: sessionData.permissionMode,
-															});
-															return next;
-														});
-													}
-												}}
-											/>
-										</Suspense>
-									</ErrorBoundary>
-								</div>
-							)}
-							{/* Shared workspace terminal pane - always rendered to preserve state */}
-							<WorkspaceTerminalPane
-								ref={terminalPaneRef}
-								key={repoPath}
-								workingDirectory={
-									selectedWorkspace
-										? getFullWorkspacePath(selectedWorkspace)
-										: repoPath
-								}
-								currentBranch={currentBranch}
-								claudeSessions={claudeSessionsForPane}
-								activeClaudeSessionId={isSessionView ? activeSessionId : null}
-								onActiveSessionChange={(sessionId) => {
-									if (sessionId === null) {
-										setActiveSessionId(null);
-										return;
-									}
-									setActiveSessionId(sessionId);
-									// Find the session to determine view mode
-									const session = sessions.find((s) => s.id === sessionId);
-									if (session) {
-										setViewMode(
-											session.workspace_id ? "show-workspace" : "session",
-										);
-										if (session.workspace_id) {
-											const ws = workspaces.find(
-												(w) => w.id === session.workspace_id,
-											);
-											if (ws) setSelectedWorkspace(ws);
-										}
-									}
-								}}
-								onCloseSession={(sessionId) => {
-									if (activeSessionId === sessionId) {
-										setActiveSessionId(null);
-									}
-								}}
-								onCreateNewSession={(activeWorkspacePath) => {
-									if (activeWorkspacePath) {
-										const ws = workspaces.find(
-											(w) => getFullWorkspacePath(w) === activeWorkspacePath,
-										);
-										handleCreateSessionFromSidebar(ws?.id ?? null);
-									} else {
-										handleCreateSessionFromSidebar(
-											selectedWorkspace?.id ?? null,
-										);
-									}
-								}}
-								onNavigateToWorkspace={(workspaceKey, isMainRepo) => {
-									if (isMainRepo) {
-										handleSelectWorkspace(null);
-									} else {
-										const ws = workspaces.find(
-											(w) => w.workspace_path === workspaceKey,
-										);
-										if (ws) {
-											handleSelectWorkspace(ws);
-										}
-									}
-								}}
-							/>
-						</div>
-
-						{/* Content Layer - Dashboard, Settings, Merge-Review, Workspace-Edit */}
-						<div
-							className="absolute inset-0 overflow-auto"
-							style={{
-								visibility: !isSessionView ? "visible" : "hidden",
-								zIndex: !isSessionView ? 10 : 0,
-								pointerEvents: !isSessionView ? "auto" : "none",
+					{/* Merge Preview View */}
+					{viewMode === "merge-preview" && mergeWorkspace && (
+						<MergePreviewPage
+							workspace={mergeWorkspace}
+							repoPath={repoPath}
+							onCancel={() => {
+								setMergeWorkspace(null);
+								setViewMode("show-workspace");
 							}}
-						>
-							{/* Settings View */}
-							{viewMode === "settings" && (
-								<SettingsPage
-									repoPath={repoPath}
-									onClose={handleReturnToDashboard}
-									currentBranch={currentBranch}
-								/>
-							)}
-
-							{/* Merge Preview View */}
-							{viewMode === "merge-preview" && mergeWorkspace && (
-								<MergePreviewPage
-									workspace={mergeWorkspace}
-									repoPath={repoPath}
-									onCancel={() => {
-										setMergeWorkspace(null);
-										setViewMode("show-workspace");
-									}}
-									onMergeComplete={async () => {
-										// Automatic workspace deletion on merge temporarily disabled
-										// Delete workspace after successful merge
-										// try {
-										//   await deleteWorkspace(
-										//     mergeWorkspace.repo_path,
-										//     mergeWorkspace.workspace_path,
-										//     mergeWorkspace.id
-										//   );
-										//   // Invalidate workspace queries
-										//   queryClient.invalidateQueries({ queryKey: ["workspaces"] });
-										// } catch (error) {
-										//   addToast({
-										//     title: "Merge succeeded but workspace deletion failed",
-										//     description: "Please manually delete the workspace from the sidebar",
-										//     type: "warning",
-										//   });
-										// } finally {
-										setMergeWorkspace(null);
-										handleReturnToDashboard();
-										// }
-									}}
-								/>
-							)}
-						</div>
-					</div>
-
-					{/* Global Dialogs */}
-					{/* Note: MergeDialog removed - git-specific feature */}
-
-					<UnifiedWorkspaceDialog
-						open={unifiedDialogDefaults !== null}
-						onOpenChange={(open) => {
-							if (!open) setUnifiedDialogDefaults(null);
-						}}
-						repoPath={repoPath}
-						defaults={unifiedDialogDefaults ?? {}}
-						onSuccess={async (workspaceId) => {
-							await queryClient.invalidateQueries({
-								queryKey: ["workspaces", repoPath],
-							});
-							queryClient.invalidateQueries({
-								queryKey: ["workspace-statuses", repoPath],
-							});
-							const updatedWorkspaces = await queryClient.fetchQuery({
-								queryKey: ["workspaces", repoPath],
-								queryFn: () => getWorkspaces(repoPath),
-							});
-							const newWorkspace = updatedWorkspaces.find(
-								(w) => w.id === workspaceId,
-							);
-							if (newWorkspace) {
-								handleOpenSession(newWorkspace);
-							}
-						}}
-					/>
-
-					<CommandPalette
-						showCommandPalette={showCommandPalette}
-						onCommandPaletteChange={setShowCommandPalette}
-						workspaces={workspaces}
-						sessions={sessions}
-						onNavigateToDashboard={handleReturnToDashboard}
-						onNavigateToSettings={() => setViewMode("settings")}
-						onOpenWorkspaceSession={handleOpenSession}
-						onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
-						onOpenFilePicker={() => setShowFilePicker(true)}
-						onOpenWorkspacePicker={() => setShowWorkspacePicker(true)}
-						onOpenWorkspaceDeletion={() => setShowWorkspaceDeletion(true)}
-						onCreateWorkspace={() => setUnifiedDialogDefaults({})}
-						onToggleTerminal={() => terminalPaneRef.current?.toggleCollapse()}
-						onMaximizeTerminal={() => terminalPaneRef.current?.toggleMaximize()}
-						onCreateAgentTerminal={() =>
-							terminalPaneRef.current?.createAgentSession()
-						}
-						onCreateShellTerminal={() =>
-							terminalPaneRef.current?.createShellSession()
-						}
-						hasSelectedWorkspace={!!selectedWorkspace}
-						showBranchSwitcher={showBranchSwitcher}
-						onBranchSwitcherChange={setShowBranchSwitcher}
-						onBranchChanged={handleBranchChanged}
-						showWorkspaceDeletion={showWorkspaceDeletion}
-						onWorkspaceDeletionChange={setShowWorkspaceDeletion}
-						currentWorkspace={selectedWorkspace}
-						onDeleteWorkspace={handleDelete}
-						showFilePicker={showFilePicker}
-						onFilePickerChange={setShowFilePicker}
-						onFileSelected={(filePath) => setSessionSelectedFile(filePath)}
-						selectedWorkspaceId={selectedWorkspace?.id ?? null}
-						repoPath={repoPath}
-						workspaceChangeCounts={undefined}
-					/>
-
-					<WorkspacePicker
-						open={showWorkspacePicker}
-						onOpenChange={setShowWorkspacePicker}
-						workspaces={workspaces}
-						sessions={sessions}
-						workspaceChangeCounts={undefined}
-						onSelect={handleOpenSession}
-					/>
+							onMergeComplete={async () => {
+								// Automatic workspace deletion on merge temporarily disabled
+								// Delete workspace after successful merge
+								// try {
+								//   await deleteWorkspace(
+								//     mergeWorkspace.repo_path,
+								//     mergeWorkspace.workspace_path,
+								//     mergeWorkspace.id
+								//   );
+								//   // Invalidate workspace queries
+								//   queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+								// } catch (error) {
+								//   addToast({
+								//     title: "Merge succeeded but workspace deletion failed",
+								//     description: "Please manually delete the workspace from the sidebar",
+								//     type: "warning",
+								//   });
+								// } finally {
+								setMergeWorkspace(null);
+								setViewMode("show-workspace");
+								handleReturnToDashboard();
+								void queryClient.invalidateQueries({
+									queryKey: ["repo-status", repoPath],
+								});
+								void queryClient.invalidateQueries({
+									queryKey: ["workspaces", repoPath],
+								});
+								void queryClient.invalidateQueries({
+									queryKey: ["workspace-statuses", repoPath],
+								});
+								// }
+							}}
+						/>
+					)}
 				</div>
-			)}
-		</FocusRefreshProvider>
+			</div>
+
+			{/* Global Dialogs */}
+			{/* Note: MergeDialog removed - git-specific feature */}
+
+			<UnifiedWorkspaceDialog
+				open={unifiedDialogDefaults !== null}
+				onOpenChange={(open) => {
+					if (!open) setUnifiedDialogDefaults(null);
+				}}
+				repoPath={repoPath}
+				defaults={unifiedDialogDefaults ?? {}}
+				onSuccess={async (workspaceId) => {
+					await queryClient.invalidateQueries({
+						queryKey: ["workspaces", repoPath],
+					});
+					queryClient.invalidateQueries({
+						queryKey: ["workspace-statuses", repoPath],
+					});
+					const updatedWorkspaces = await queryClient.fetchQuery({
+						queryKey: ["workspaces", repoPath],
+						queryFn: () => getWorkspaces(repoPath),
+					});
+					const newWorkspace = updatedWorkspaces.find(
+						(w) => w.id === workspaceId,
+					);
+					if (newWorkspace) {
+						handleOpenSession(newWorkspace);
+					}
+				}}
+			/>
+
+			<CommandPalette
+				showCommandPalette={showCommandPalette}
+				onCommandPaletteChange={setShowCommandPalette}
+				workspaces={workspaces}
+				sessions={sessions}
+				onNavigateToDashboard={handleReturnToDashboard}
+				onNavigateToSettings={() => setViewMode("settings")}
+				onOpenWorkspaceSession={handleOpenSession}
+				onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
+				onOpenFilePicker={() => setShowFilePicker(true)}
+				onOpenWorkspacePicker={() => setShowWorkspacePicker(true)}
+				onOpenWorkspaceDeletion={() => setShowWorkspaceDeletion(true)}
+				onCreateWorkspace={() => setUnifiedDialogDefaults({})}
+				onToggleTerminal={() => terminalPaneRef.current?.toggleCollapse()}
+				onMaximizeTerminal={() => terminalPaneRef.current?.toggleMaximize()}
+				onCreateAgentTerminal={() =>
+					terminalPaneRef.current?.createAgentSession()
+				}
+				onCreateShellTerminal={() =>
+					terminalPaneRef.current?.createShellSession()
+				}
+				hasSelectedWorkspace={!!selectedWorkspace}
+				showBranchSwitcher={showBranchSwitcher}
+				onBranchSwitcherChange={setShowBranchSwitcher}
+				onBranchChanged={handleBranchChanged}
+				showWorkspaceDeletion={showWorkspaceDeletion}
+				onWorkspaceDeletionChange={setShowWorkspaceDeletion}
+				currentWorkspace={selectedWorkspace}
+				onDeleteWorkspace={handleDelete}
+				showFilePicker={showFilePicker}
+				onFilePickerChange={setShowFilePicker}
+				onFileSelected={(filePath) => setSessionSelectedFile(filePath)}
+				selectedWorkspaceId={selectedWorkspace?.id ?? null}
+				repoPath={repoPath}
+				workspaceChangeCounts={undefined}
+			/>
+
+			<WorkspacePicker
+				open={showWorkspacePicker}
+				onOpenChange={setShowWorkspacePicker}
+				workspaces={workspaces}
+				sessions={sessions}
+				workspaceChangeCounts={undefined}
+				onSelect={handleOpenSession}
+			/>
+		</div>
 	);
 };

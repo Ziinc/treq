@@ -1,10 +1,10 @@
 import React, {
+	type KeyboardEvent as ReactKeyboardEvent,
 	memo,
 	useCallback,
 	useEffect,
 	useRef,
 	useState,
-	type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import {
 	ConsolidatedTerminal,
@@ -19,55 +19,25 @@ import {
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
 import {
-	ptyClose,
-	setSessionModel,
 	getSessionModel,
 	getTreqBinDir,
+	ptyClose,
+	setSessionModel,
 } from "../../lib/api";
 import {
+	Bot,
 	ChevronDown,
 	ChevronUp,
-	X,
-	Search,
-	RotateCw,
 	Loader2,
-	Bot,
+	RotateCw,
+	Search,
+	X,
 } from "lucide-react";
 import { ModelSelector } from "../ModelSelector";
 import { Input } from "../ui/input";
 import { useToast } from "../ui/toast";
 import { type ClaudeSessionData } from "./types";
 
-function buildToolPermissionFlags(sessionData: ClaudeSessionData): string {
-	const disallowed: string[] = [
-		"Bash(jj *)", // Block direct jj commands in all contexts
-	];
-
-	const allowed: string[] = [
-		"Bash(treq st)", // Always allow treq CLI
-		"Bash(treq ls)", // Always allow treq CLI
-	];
-
-	if (sessionData.workspacePath) {
-		// Workspace: block parent directory traversal
-	} else {
-		// Home repo: block .treq directory access
-		disallowed.push("Read(.treq/**)", "Edit(.treq/**)", "Write(.treq/**)");
-	}
-
-	const parts: string[] = [];
-	if (disallowed.length > 0) {
-		parts.push(
-			`--disallowedTools "${disallowed.map((d) => `${d}`).join(",")}"`,
-		);
-	}
-	if (allowed.length > 0) {
-		parts.push(`--allowedTools "${allowed.map((a) => `${a}`).join(",")}"`);
-	}
-	return parts.join(" ");
-}
-
-// Claude terminal panel with header
 export interface ClaudeTerminalPanelProps {
 	sessionData: ClaudeSessionData;
 	collapsed: boolean;
@@ -84,7 +54,7 @@ export interface ClaudeTerminalPanelProps {
 }
 
 export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
-	function ClaudeTerminalPanel({
+	({
 		sessionData,
 		collapsed,
 		isActive,
@@ -95,7 +65,7 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
 		onTerminalIdle,
 		terminalRefs,
 		width,
-	}) {
+	}) => {
 		const { addToast } = useToast();
 		const searchInputRef = useRef<HTMLInputElement>(null);
 		const [searchVisible, setSearchVisible] = useState(false);
@@ -275,12 +245,6 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
 			autoCommand += ` --model="${sessionModel}"`;
 		}
 
-		// Add tool permission restrictions based on context
-		const toolPermissionFlags = buildToolPermissionFlags(sessionData);
-		if (toolPermissionFlags) {
-			autoCommand += ` ${toolPermissionFlags}`;
-		}
-
 		// Add treq CLI documentation as system prompt for the Claude agent
 		// const agentWorkingDir = sessionData.workspacePath || sessionData.repoPath;
 		const treqSystemPrompt = [
@@ -299,7 +263,7 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
 
 		// Prepend PATH export so treq CLI is available inside Claude sessions
 		if (treqBinDir) {
-			autoCommand = `export PATH="${treqBinDir}:$PATH"; ` + autoCommand;
+			autoCommand = `export PATH="${treqBinDir}:$PATH"; ${autoCommand}`;
 		}
 
 		// If there's a pending prompt, add it as a positional argument after --

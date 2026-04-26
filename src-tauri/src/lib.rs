@@ -53,6 +53,8 @@ pub fn run() {
                 ))
                 .level(log::LevelFilter::Warn)
                 .level_for("treq", log::LevelFilter::Info)
+                // tauri-plugin-log target for JS console forwarding (src/lib/logger.ts)
+                .level_for("webview", log::LevelFilter::Debug)
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
@@ -201,6 +203,11 @@ pub fn run() {
                 // Developer menu (only in debug mode)
                 #[cfg(debug_assertions)]
                 let developer_menu = {
+                    let open_web_inspector =
+                        MenuItemBuilder::with_id("open_web_inspector", "Open Web Inspector")
+                            .accelerator("CmdOrCtrl+Shift+I")
+                            .build(app)?;
+
                     let force_rebase_item = MenuItemBuilder::with_id(
                         "force_rebase_workspace",
                         "Force Rebase Workspace",
@@ -212,6 +219,8 @@ pub fn run() {
                         MenuItemBuilder::with_id("factory_reset", "Factory Reset").build(app)?;
 
                     SubmenuBuilder::new(app, "Developer")
+                        .item(&open_web_inspector)
+                        .separator()
                         .item(&force_rebase_item)
                         .separator()
                         .item(&factory_reset_item)
@@ -284,6 +293,11 @@ pub fn run() {
                 // Developer menu (only in debug mode)
                 #[cfg(debug_assertions)]
                 let developer_menu = {
+                    let open_web_inspector =
+                        MenuItemBuilder::with_id("open_web_inspector", "Open Web Inspector")
+                            .accelerator("CmdOrCtrl+Shift+I")
+                            .build(app)?;
+
                     let force_rebase_item = MenuItemBuilder::with_id(
                         "force_rebase_workspace",
                         "Force Rebase Workspace",
@@ -295,6 +309,8 @@ pub fn run() {
                         MenuItemBuilder::with_id("factory_reset", "Factory Reset").build(app)?;
 
                     SubmenuBuilder::new(app, "Developer")
+                        .item(&open_web_inspector)
+                        .separator()
                         .item(&force_rebase_item)
                         .separator()
                         .item(&factory_reset_item)
@@ -320,6 +336,13 @@ pub fn run() {
                 "settings" => emit_to_focused(app, "navigate-to-settings", ()),
                 "open" => emit_to_focused(app, "menu-open-repository", ()),
                 "open_new_window" => emit_to_focused(app, "menu-open-in-new-window", ()),
+                "open_web_inspector" =>
+                {
+                    #[cfg(debug_assertions)]
+                    if let Some(w) = app.get_webview_window("main") {
+                        w.open_devtools();
+                    }
+                }
                 "force_rebase_workspace" => emit_to_focused(app, "menu-force-rebase-workspace", ()),
                 "factory_reset" => emit_to_focused(app, "menu-factory-reset", ()),
                 "learn_more" => {
@@ -335,27 +358,21 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::detect_binaries,
             commands::detect_editor_apps,
             commands::get_treq_bin_dir,
             commands::get_workspaces,
-            commands::add_workspace_to_db,
             commands::create_workspace,
-            commands::delete_workspace_from_db,
             commands::delete_workspace,
             commands::push_workspace_to_remote,
             commands::pull_workspace_from_remote,
             commands::merge_workspace,
             commands::split_workspace,
-            commands::move_commit_to_new_workspace,
             commands::move_commit_to_existing_workspace,
             commands::abandon_commit,
             commands::rename_workspace,
-            commands::cleanup_stale_workspaces,
-            commands::update_workspace_metadata,
-            commands::update_workspace_not_on_remote,
             commands::list_workspace_statuses,
             commands::get_workspace_status,
+            commands::update_workspace,
             commands::set_workspace_target_branch,
             commands::check_and_rebase_workspaces,
             commands::resolve_workspace_bookmark_conflict,
@@ -365,39 +382,23 @@ pub fn run() {
             commands::set_setting,
             commands::get_repo_setting,
             commands::set_repo_setting,
-            commands::jj_create_workspace,
-            commands::jj_list_workspaces,
-            commands::jj_remove_workspace,
-            commands::jj_get_workspace_info,
-            commands::jj_squash_to_workspace,
-            commands::jj_get_changed_files,
-            commands::jj_get_file_hunks,
-            commands::jj_get_file_lines,
+            commands::get_workspace_file_hunks,
+            commands::get_workspace_file_lines,
             commands::jj_restore_file,
             commands::jj_restore_all,
             commands::create_commit,
             commands::list_commits,
             commands::jj_split,
-            commands::jj_is_workspace,
+            commands::get_repo_status,
+            commands::get_workspace_changed_files,
             commands::init_repo,
-            commands::jj_rebase_onto,
-            commands::jj_get_conflicted_files,
-            commands::jj_get_default_branch,
-            commands::jj_get_current_branch,
-            commands::jj_push,
-            commands::jj_get_sync_status,
-            commands::jj_git_fetch,
             commands::jj_git_fetch_background,
-            commands::jj_pull,
-            commands::jj_get_log,
             commands::jj_get_commits_ahead,
-            commands::jj_get_merge_diff,
-            commands::jj_get_commit_diff,
-            commands::jj_create_merge,
+            commands::get_workspace_diff,
+            commands::get_commit_diff,
             commands::jj_check_branch_exists,
-            commands::jj_get_branches,
-            commands::jj_edit_bookmark,
-            commands::jj_track_workspace_bookmarks,
+            commands::list_repo_branches,
+            commands::switch_repo_branch,
             commands::parse_conflict_markers,
             commands::pty_create_session,
             commands::pty_session_exists,
@@ -407,23 +408,19 @@ pub fn run() {
             commands::pty_close,
             commands::read_file,
             commands::list_directory,
+            commands::ls_workspace,
+            commands::get_workspace_readme,
             commands::list_directory_cached,
-            commands::get_change_indicators,
             commands::search_workspace_files,
             commands::create_session,
             commands::get_sessions,
             commands::update_session_access,
-            commands::update_session_name,
-            commands::delete_session,
             commands::get_session_model,
             commands::set_session_model,
             commands::mark_file_viewed,
             commands::unmark_file_viewed,
-            commands::get_viewed_files,
-            commands::clear_all_viewed_files,
             commands::start_file_watcher,
             commands::stop_file_watcher,
-            commands::load_pending_review,
             commands::save_pending_review,
             commands::clear_pending_review,
             commands::set_window_repo_path,

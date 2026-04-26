@@ -18,22 +18,23 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2.10.3", features = [] }
 tauri-plugin-opener = "2.5.2"
-tauri-plugin-dialog = "2.5.0"
+tauri-plugin-dialog = "2.7.0"
 tauri-plugin-log = "2.8.0"
-tauri-plugin-deep-link = "2"
+tauri-plugin-deep-link = "2.4.7"
 tauri-plugin-cli = "2.4.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-rusqlite = { version = "0.32", features = ["bundled"] }
-portable-pty = "0.8"
+rusqlite = { version = "0.39", features = ["bundled"] }
+portable-pty = "0.9"
 chrono = { version = "0.4", features = ["serde"] }
-sha2 = "0.10"
+sha2 = "0.11"
 ignore = "0.4"
-jj-lib = "0.36.0"
-notify = { version = "6.1", default-features = false, features = ["macos_fsevent"] }
-notify-debouncer-full = "0.3"
+jj-lib = "0.40.0"
+futures = "0.3"
+notify = { version = "8.2", default-features = false, features = ["macos_fsevent"] }
+notify-debouncer-full = "0.7"
 log = "0.4"
 regex = "1"
 rayon = "1.10"
@@ -42,6 +43,35 @@ urlencoding = "2"
 [dev-dependencies]
 mockall = "0.14.0"
 tempfile = "3"
+criterion = { version = "0.8.2", features = ["html_reports"] }
+
+[[bench]]
+name = "commit_workspace"
+harness = false
+
+[[bench]]
+name = "create_workspace"
+harness = false
+
+[[bench]]
+name = "auto_rebase"
+harness = false
+
+[[bench]]
+name = "workspace_status"
+harness = false
+
+[[bench]]
+name = "delete_workspace"
+harness = false
+
+[[bench]]
+name = "list_workspace_statuses"
+harness = false
+
+[[bench]]
+name = "workspace_diff"
+harness = false
 # =============================================================================
 # Profile Configuration
 # =============================================================================
@@ -67,4 +97,3 @@ codegen-units = 1       # Single codegen unit for better optimization (slower bu
 strip = true            # Strip symbols from binary (reduces size significantly)
 panic = "abort"         # Abort on panic instead of unwinding (smaller binary)
 incremental = false     # Disable incremental for release builds
-

@@ -1,9 +1,9 @@
-import { useState, useMemo, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Command } from "cmdk";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { Workspace } from "../lib/api";
-import { GitBranch, Home, AlertTriangle } from "lucide-react";
+import { AlertTriangle, GitBranch, Home } from "lucide-react";
 import { CmdkFooter } from "./ui/cmdk-footer";
 
 interface WorkspaceDeletionProps {
@@ -41,9 +41,10 @@ export const WorkspaceDeletion: React.FC<WorkspaceDeletionProps> = ({
 	}, [open, currentWorkspace]);
 
 	// Filter out home repo (workspaces that match the main repo path)
-	const deletableWorkspaces = useMemo(() => {
-		return workspaces.filter((w) => w.workspace_path !== repoPath);
-	}, [workspaces, repoPath]);
+	const deletableWorkspaces = useMemo(
+		() => workspaces.filter((w) => w.workspace_path !== repoPath),
+		[workspaces, repoPath],
+	);
 
 	const handleSelect = (value: string) => {
 		if (value.startsWith("current-default")) {
@@ -56,7 +57,7 @@ export const WorkspaceDeletion: React.FC<WorkspaceDeletionProps> = ({
 		}
 
 		// Extract workspace ID from value format: workspace-{id}-{branch_name}
-		const workspaceId = parseInt(value.split("-")[1]);
+		const workspaceId = parseInt(value.split("-")[1], 10);
 		const workspace = deletableWorkspaces.find((w) => w.id === workspaceId);
 		if (workspace) {
 			onDeleteWorkspace(workspace);
@@ -82,7 +83,10 @@ export const WorkspaceDeletion: React.FC<WorkspaceDeletionProps> = ({
 					Delete workspace
 				</DialogPrimitive.Description>
 			</VisuallyHidden.Root>
-			<div className="bg-background text-foreground rounded-xl border border-border shadow-2xl w-[40vw] max-w-none overflow-hidden">
+			<div
+				data-testid="modal"
+				className="bg-background text-foreground rounded-xl border border-border shadow-2xl w-[40vw] max-w-none overflow-hidden"
+			>
 				{/* Header with warning */}
 				<div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-destructive/10">
 					<AlertTriangle className="w-4 h-4 text-destructive" />

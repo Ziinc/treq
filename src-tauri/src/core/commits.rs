@@ -40,7 +40,7 @@ pub fn list_commits(
 
             if include_target_branch_history {
                 let limit = target_branch_limit.unwrap_or(10);
-                match jj::jj_get_target_branch_log(workspace_dir_str, target_branch, limit) {
+                match jj::jj_get_target_branch_log(repo_path, target_branch, limit) {
                     Ok(target_commits) => {
                         result.target_branch_commits = target_commits;
                     }
@@ -54,7 +54,7 @@ pub fn list_commits(
             Ok(result)
         }
         None => {
-            let branch = jj::get_workspace_branch(repo_path)
+            let branch = jj::resolve_home_repo_branch(repo_path)
                 .map_err(|e| format!("Failed to get active branch: {}", e))?;
             jj::jj_get_log(repo_path, &branch, Some(true), limit)
                 .map_err(|e| format!("Failed to list commits: {}", e))
@@ -214,7 +214,7 @@ pub fn abandon_commit(
 ///
 /// # Arguments
 /// * `repo_path`              - Path to the repository root
-/// * `workspace_id`           - ID of the workspace that owns the commit
+/// * `workspace_id`           - Optional workspace ID that owns the commit
 /// * `commit_change_id`       - The short change-id of the commit to diff
 /// * `conflict_marker_style`  - Conflict marker style (e.g. "git")
 ///
@@ -222,68 +222,26 @@ pub fn abandon_commit(
 /// The parsed revision diff on success, or an error string.
 pub fn get_commit_diff(
     repo_path: &str,
-    workspace_id: i64,
+    workspace_id: Option<i64>,
     commit_change_id: &str,
     conflict_marker_style: &str,
 ) -> Result<jj::JjRevisionDiff, String> {
-    let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
-        .map_err(|e| format!("Failed to get workspace: {}", e))?
-        .ok_or_else(|| format!("Workspace not found: {}", workspace_id))?;
-
-    let workspace_dir = Path::new(repo_path)
-        .join(".treq")
-        .join("workspaces")
-        .join(&workspace.workspace_path);
+    let workspace_dir = match workspace_id {
+        Some(workspace_id) => {
+            let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
+                .map_err(|e| format!("Failed to get workspace: {}", e))?
+                .ok_or_else(|| format!("Workspace not found: {}", workspace_id))?;
+            Path::new(repo_path)
+                .join(".treq")
+                .join("workspaces")
+                .join(&workspace.workspace_path)
+        }
+        None => Path::new(repo_path).to_path_buf(),
+    };
     let workspace_dir_str = workspace_dir
         .to_str()
         .ok_or("Failed to convert workspace path to string")?;
 
     jj::jj_get_commit_diff(workspace_dir_str, commit_change_id, conflict_marker_style)
         .map_err(|e| format!("Failed to get commit diff: {}", e))
-}
-
-/// Creates a commit in a workspace with the given message.
-///
-/// # Arguments
-/// * `repo_path`    - Path to the repository root
-/// * `workspace_id` - ID of the workspace to commit in
-/// * `message`      - Commit message
-///
-/// # Returns
-/// The commit output string on success, or an error string.
-pub fn create_commit(
-    repo_path: &str,
-    workspace_id: Option<i64>,
-    message: &str,
-) -> Result<String, String> {
-    match workspace_id {
-        Some(id) => {
-            let workspace = local_db::get_workspace_by_id(repo_path, id)
-                .map_err(|e| format!("Failed to get workspace: {}", e))?
-                .ok_or_else(|| format!("Workspace not found: {}", id))?;
-
-            let workspace_dir = Path::new(repo_path)
-                .join(".treq")
-                .join("workspaces")
-                .join(&workspace.workspace_path);
-            let workspace_dir_str = workspace_dir
-                .to_str()
-                .ok_or("Failed to convert workspace path to string")?;
-
-            let result = jj::jj_commit(workspace_dir_str, message)
-                .map_err(|e| format!("Failed to create commit: {}", e))?;
-
-            // Run auto-rebase synchronously so jj state is settled before returning
-            if let Ok(branch) = jj::get_workspace_branch(workspace_dir_str) {
-                let _ = crate::auto_rebase::rebase_after_commit(repo_path, &branch);
-            }
-
-            Ok(result)
-        }
-        None => {
-            let result = jj::jj_commit(repo_path, message)
-                .map_err(|e| format!("Failed to create commit: {}", e))?;
-            Ok(result)
-        }
-    }
 }
