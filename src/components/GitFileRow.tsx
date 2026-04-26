@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Undo2, Plus, Minus } from "lucide-react";
+import { Minus, Plus, Undo2 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { FileContextMenu } from "./FileContextMenu";
 
@@ -45,7 +45,7 @@ export const GitFileRow = memo<GitFileRowProps>(
 		workspacePath,
 	}) => {
 		const label = formatFileLabel(file.path);
-		const status = file.status;
+		const { status } = file;
 
 		return (
 			<FileContextMenu filePath={file.path} workspacePath={workspacePath || ""}>

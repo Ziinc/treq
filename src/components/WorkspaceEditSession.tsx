@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Terminal } from "./Terminal";
 import { Button } from "./ui/button";
-import { X, GitBranch } from "lucide-react";
+import { GitBranch, X } from "lucide-react";
 import { Workspace, getWindowRepoPath } from "../lib/api";
 import { cn } from "../lib/utils";
 

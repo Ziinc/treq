@@ -1,12 +1,12 @@
 import { memo, useCallback, useEffect, useState } from "react";
 import {
-	type Workspace,
-	type MergeStrategy,
-	jjGetCommitsAhead,
-	jjGetMergeDiff,
-	mergeWorkspace,
 	type JjCommitsAhead,
 	type JjRevisionDiff,
+	type MergeStrategy,
+	type Workspace,
+	getWorkspaceDiff,
+	jjGetCommitsAhead,
+	mergeWorkspace,
 } from "../lib/api";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
@@ -21,13 +21,13 @@ import {
 } from "./ui/dropdown-menu";
 import {
 	ArrowLeft,
-	GitMerge,
-	GitCommitHorizontal,
-	GitBranch,
-	Loader2,
-	FileText,
-	ChevronRight,
 	ChevronDown,
+	ChevronRight,
+	FileText,
+	GitBranch,
+	GitCommitHorizontal,
+	GitMerge,
+	Loader2,
 } from "lucide-react";
 import { cn, getFullWorkspacePath } from "../lib/utils";
 
@@ -39,12 +39,7 @@ export interface MergePreviewPageProps {
 }
 
 export const MergePreviewPage = memo<MergePreviewPageProps>(
-	function MergePreviewPage({
-		workspace,
-		repoPath: _repoPath,
-		onCancel,
-		onMergeComplete,
-	}) {
+	({ workspace, onCancel, onMergeComplete }) => {
 		const { addToast } = useToast();
 
 		// State
@@ -68,7 +63,7 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
 					const fullPath = getFullWorkspacePath(workspace);
 					const [commits, diffData] = await Promise.all([
 						jjGetCommitsAhead(fullPath, targetBranch),
-						jjGetMergeDiff(workspace.repo_path, workspace.id),
+						getWorkspaceDiff(workspace.repo_path, workspace.id),
 					]);
 
 					setCommitsAhead(commits);
@@ -230,7 +225,12 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
 			<div className="h-full flex flex-col bg-background">
 				{/* Header */}
 				<div className="border-b p-4 flex items-center gap-4 flex-shrink-0">
-					<Button variant="ghost" size="sm" onClick={onCancel}>
+					<Button
+						variant="ghost"
+						size="sm"
+						onClick={onCancel}
+						aria-label="Go back"
+					>
 						<ArrowLeft className="w-4 h-4" />
 					</Button>
 					<div className="flex-1">

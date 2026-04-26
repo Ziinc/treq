@@ -2,7 +2,7 @@ import { Command } from "cmdk";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { GitBranch } from "lucide-react";
-import { Workspace, Session } from "../lib/api";
+import { Session, Workspace } from "../lib/api";
 
 interface WorkspacePickerProps {
 	open: boolean;
@@ -53,7 +53,10 @@ export const WorkspacePicker: React.FC<WorkspacePickerProps> = ({
 					Go to workspace
 				</DialogPrimitive.Description>
 			</VisuallyHidden.Root>
-			<div className="bg-popover text-popover-foreground rounded-xl border border-border/50 shadow-2xl w-[40vw] max-w-none overflow-hidden">
+			<div
+				data-testid="modal"
+				className="bg-popover text-popover-foreground rounded-xl border border-border/50 shadow-2xl w-[40vw] max-w-none overflow-hidden"
+			>
 				{/* Search Input */}
 				<div className="flex items-center border-b border-border px-3">
 					<GitBranch className="w-4 h-4 text-muted-foreground mr-2" />

@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { Check, AlertCircle, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlertCircle, Check, Loader2 } from "lucide-react";
 import {
 	Dialog,
 	DialogContent,
@@ -11,7 +11,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { useToast } from "./ui/toast";
-import { renameWorkspace, type Workspace } from "../lib/api";
+import { type Workspace, renameWorkspace } from "../lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 
 interface RenameWorkspaceDialogProps {

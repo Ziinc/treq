@@ -1,0 +1,10 @@
+/Users/tzeyiing/projects/treq/target-sandbox/debug/deps/clru-40f0bd6cde87c8b5.d: /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/clru-0.6.3/src/lib.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/clru-0.6.3/src/config.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/clru-0.6.3/src/list.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/clru-0.6.3/src/weight.rs
+
+/Users/tzeyiing/projects/treq/target-sandbox/debug/deps/libclru-40f0bd6cde87c8b5.rlib: /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/clru-0.6.3/src/lib.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/clru-0.6.3/src/config.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/clru-0.6.3/src/list.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/clru-0.6.3/src/weight.rs
+
+/Users/tzeyiing/projects/treq/target-sandbox/debug/deps/libclru-40f0bd6cde87c8b5.rmeta: /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/clru-0.6.3/src/lib.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/clru-0.6.3/src/config.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/clru-0.6.3/src/list.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/clru-0.6.3/src/weight.rs
+
+/Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/clru-0.6.3/src/lib.rs:
+/Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/clru-0.6.3/src/config.rs:
+/Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/clru-0.6.3/src/list.rs:
+/Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/clru-0.6.3/src/weight.rs:

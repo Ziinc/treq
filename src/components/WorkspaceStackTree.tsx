@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { GitBranch, CornerLeftUp, AlertTriangle } from "lucide-react";
+import { AlertTriangle, CornerLeftUp, GitBranch } from "lucide-react";
 import { type Workspace, getWorkspaceStatus } from "../lib/api";
 import { getWorkspaceTitle } from "../lib/workspace-utils";
 import { cn } from "../lib/utils";

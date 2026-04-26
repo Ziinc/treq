@@ -1,4 +1,6 @@
-use std::fs;
+mod e2e_test_helpers;
+
+use e2e_test_helpers::TestRepo;
 use std::process::Command;
 use tempfile::TempDir;
 
@@ -18,11 +20,11 @@ fn setup_jj_repo(temp_dir: &TempDir) -> String {
 fn test_get_jj_tracked_files_returns_all_files() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let repo_path = setup_jj_repo(&temp_dir);
+    let repo_path_str = repo_path.as_str();
 
-    fs::write(temp_dir.path().join("file1.txt"), "content1").unwrap();
-    fs::write(temp_dir.path().join("file2.txt"), "content2").unwrap();
-    fs::create_dir(temp_dir.path().join("subdir")).unwrap();
-    fs::write(temp_dir.path().join("subdir/file3.txt"), "content3").unwrap();
+    TestRepo::write_workspace_file(repo_path_str, "file1.txt", "content1").unwrap();
+    TestRepo::write_workspace_file(repo_path_str, "file2.txt", "content2").unwrap();
+    TestRepo::write_workspace_file(repo_path_str, "subdir/file3.txt", "content3").unwrap();
 
     Command::new("jj")
         .args(["status"])
@@ -41,15 +43,16 @@ fn test_get_jj_tracked_files_returns_all_files() {
 fn test_get_jj_tracked_files_includes_unchanged_committed_files() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let repo_path = setup_jj_repo(&temp_dir);
+    let repo_path_str = repo_path.as_str();
 
-    fs::write(temp_dir.path().join("committed.txt"), "committed").unwrap();
+    TestRepo::write_workspace_file(repo_path_str, "committed.txt", "committed").unwrap();
     Command::new("jj")
         .args(["commit", "-m", "initial"])
         .current_dir(&repo_path)
         .output()
         .expect("Failed to commit");
 
-    fs::write(temp_dir.path().join("changed.txt"), "changed").unwrap();
+    TestRepo::write_workspace_file(repo_path_str, "changed.txt", "changed").unwrap();
 
     let files = treq_lib::file_indexer::get_jj_tracked_files(&repo_path).expect("Should get files");
 

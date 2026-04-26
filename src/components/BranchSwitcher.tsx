@@ -1,15 +1,15 @@
-import { useState, useEffect } from "react";
-import { Command } from "cmdk";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
-import { GitBranch, Check, ArrowRight } from "lucide-react";
-import { jjGetBranches, jjEditBookmark } from "../lib/api";
+import { ArrowRight, Check, GitBranch } from "lucide-react";
+import { listRepoBranches, switchRepoBranch } from "../lib/api";
+import { useEffect, useState } from "react";
+import { Command } from "cmdk";
 
 // Type definition - Git API removed, needs JJ equivalent
 interface BranchListItem {
+	isCurrent: boolean;
+	isRemote: boolean;
 	name: string;
-	is_current: boolean;
-	is_remote: boolean;
 }
 
 interface BranchSwitcherProps {
@@ -40,11 +40,11 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
 		setLoading(true);
 		setError(null);
 		try {
-			const jjBranches = await jjGetBranches(repoPath);
-			const branchList: BranchListItem[] = jjBranches.map((b) => ({
-				name: b.name,
-				is_current: b.is_current,
-				is_remote: b.name.includes("@"), // JJ remote refs contain @
+			const jjBranches = await listRepoBranches(repoPath);
+			const branchList: BranchListItem[] = jjBranches.map((branch) => ({
+				isCurrent: branch.is_current,
+				isRemote: branch.name.includes("@"), // JJ remote refs contain @
+				name: branch.name,
 			}));
 			setBranches(branchList);
 		} catch (err) {
@@ -55,7 +55,7 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
 	};
 
 	const handleSelectBranch = async (branch: BranchListItem) => {
-		if (branch.is_current) {
+		if (branch.isCurrent) {
 			onOpenChange(false);
 			return;
 		}
@@ -64,7 +64,7 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
 		setError(null);
 
 		try {
-			await jjEditBookmark(repoPath, branch.name);
+			await switchRepoBranch(repoPath, branch.name);
 			onBranchChanged?.(branch.name);
 			onOpenChange(false);
 		} catch (err) {
@@ -75,9 +75,9 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
 	};
 
 	const groupedBranches = {
-		current: branches.filter((b) => b.is_current),
-		local: branches.filter((b) => !b.is_current && !b.is_remote),
-		remote: branches.filter((b) => !b.is_current && b.is_remote),
+		current: branches.filter((branch) => branch.isCurrent),
+		local: branches.filter((branch) => !branch.isCurrent && !branch.isRemote),
+		remote: branches.filter((branch) => !branch.isCurrent && branch.isRemote),
 	};
 
 	return (
@@ -90,7 +90,10 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({
 				<DialogPrimitive.Title>Switch Branch</DialogPrimitive.Title>
 				<DialogPrimitive.Description>Switch branch</DialogPrimitive.Description>
 			</VisuallyHidden.Root>
-			<div className="bg-popover text-popover-foreground rounded-xl border border-border/50 shadow-2xl w-[40vw] max-w-none overflow-hidden">
+			<div
+				data-testid="modal"
+				className="bg-popover text-popover-foreground rounded-xl border border-border/50 shadow-2xl w-[40vw] max-w-none overflow-hidden"
+			>
 				{/* Search Input */}
 				<div className="flex items-center border-b border-border px-3">
 					<GitBranch className="w-4 h-4 text-muted-foreground mr-2" />

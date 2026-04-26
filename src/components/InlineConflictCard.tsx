@@ -25,12 +25,12 @@ interface InlineConflictCardProps {
 	conflictComments: Map<string, ConflictComment>;
 	openConflictComments: Set<string>;
 	editingConflictCommentId: string | null;
-	saveConflictComment: (
-		conflictId: string,
-		filePath: string,
-		conflictNumber: number,
-		text: string,
-	) => void;
+	saveConflictComment: (args: {
+		conflictId: string;
+		filePath: string;
+		conflictNumber: number;
+		text: string;
+	}) => void;
 	clearConflictComment: (conflictId: string) => void;
 	toggleConflictComment: (conflictId: string) => void;
 	setOpenConflictComments: Dispatch<SetStateAction<Set<string>>>;
@@ -44,9 +44,8 @@ interface InlineConflictCardProps {
 	registerFileRef?: (el: HTMLDivElement | null) => void;
 }
 
-const isConflictMarker = (line: string): boolean => {
-	return /^(<{7}|>{7}|%{7}|\+{7}|-{7}|\|{7}|={7})/.test(line);
-};
+const isConflictMarker = (line: string): boolean =>
+	/^(<{7}|>{7}|%{7}|\+{7}|-{7}|\|{7}|={7})/.test(line);
 
 const getConflictLineBackground = (line: string): string => {
 	if (isConflictMarker(line)) return "";
@@ -211,18 +210,18 @@ export const InlineConflictCard = ({
 			{openConflictComments.has(region.id) && (
 				<ConflictCommentCard
 					conflictId={region.id}
-					filePath={region.filePath}
-					conflictNumber={region.conflictNumber}
-					startLine={region.startLine}
-					endLine={region.endLine}
+					filePath={region.file_path}
+					conflictNumber={region.conflict_number}
+					startLine={region.start_line}
+					endLine={region.end_line}
 					comment={conflictComments.get(region.id)}
 					onSave={(text) => {
-						saveConflictComment(
-							region.id,
-							region.filePath,
-							region.conflictNumber,
+						saveConflictComment({
+							conflictId: region.id,
+							filePath: region.file_path,
+							conflictNumber: region.conflict_number,
 							text,
-						);
+						});
 						closeConflictInput();
 					}}
 					onClear={() => {

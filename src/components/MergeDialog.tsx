@@ -10,7 +10,7 @@ import { Button } from "./ui/button";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import type { Workspace } from "../lib/api";
-import { ArrowRight, AlertTriangle } from "lucide-react";
+import { AlertTriangle, ArrowRight } from "lucide-react";
 
 // Define MergeStrategy locally since git API was removed
 export type MergeStrategy = "regular" | "squash" | "no_ff" | "ff_only";

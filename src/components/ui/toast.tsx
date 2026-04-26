@@ -25,17 +25,19 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 		setToasts((prev) => [...prev, { ...toast, id }]);
 
 		// Auto-remove after 5 seconds
+		const removeById = (prev: Toast[]) =>
+			prev.filter((toast) => toast.id !== id);
 		setTimeout(() => {
-			setToasts((prev) => prev.filter((t) => t.id !== id));
+			setToasts(removeById);
 		}, 5000);
 	}, []);
 
 	const removeToast = React.useCallback((id: string) => {
-		setToasts((prev) => prev.filter((t) => t.id !== id));
+		setToasts((prev) => prev.filter((toast) => toast.id !== id));
 	}, []);
 
 	return (
-		<ToastContext.Provider value={{ toasts, addToast, removeToast }}>
+		<ToastContext.Provider value={{ addToast, removeToast, toasts }}>
 			{children}
 			<div className="fixed bottom-4 left-4 z-50 flex flex-col gap-2">
 				{toasts.map((toast) => (
@@ -52,13 +54,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
 function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
 	const typeStyles = {
-		success:
-			"bg-green-600 dark:bg-green-700 border border-green-500/30 dark:border-green-600/30 text-white",
 		error:
 			"bg-destructive dark:bg-destructive/90 border border-destructive/30 text-destructive-foreground",
+		info: "bg-primary dark:bg-primary/90 border border-primary/30 text-primary-foreground",
+		success:
+			"bg-green-600 dark:bg-green-700 border border-green-500/30 dark:border-green-600/30 text-white",
 		warning:
 			"bg-orange-600 dark:bg-orange-700 border border-orange-500/30 dark:border-orange-600/30 text-white",
-		info: "bg-primary dark:bg-primary/90 border border-primary/30 text-primary-foreground",
 	};
 
 	return (

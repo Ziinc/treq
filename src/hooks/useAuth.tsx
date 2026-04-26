@@ -1,21 +1,21 @@
+import type { Session, User } from "@supabase/supabase-js";
+import { getSetting, setSetting } from "../lib/api";
+import {
+	SUPABASE_ANON_KEY,
+	SUPABASE_URL,
+	WEB_URL,
+	supabase,
+} from "../lib/supabase";
 import {
 	createContext,
+	useCallback,
 	useContext,
 	useEffect,
-	useState,
 	useMemo,
-	useCallback,
+	useState,
 } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import {
-	supabase,
-	SUPABASE_URL,
-	SUPABASE_ANON_KEY,
-	WEB_URL,
-} from "../lib/supabase";
-import { getSetting, setSetting } from "../lib/api";
-import type { User, Session } from "@supabase/supabase-js";
 
 export interface Subscription {
 	status: "active" | "canceled" | "past_due" | "inactive";
@@ -47,9 +47,7 @@ const AuthContext = createContext<AuthContextType>({
 
 AuthContext.displayName = "AuthContext";
 
-export const useAuth = (): AuthContextType => {
-	return useContext(AuthContext);
-};
+export const useAuth = (): AuthContextType => useContext(AuthContext);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 	children,
@@ -64,8 +62,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 			await setSetting(
 				"supabase_session",
 				JSON.stringify({
-					access_token: sess.access_token,
-					refresh_token: sess.refresh_token,
+					accessToken: sess.access_token,
+					refreshToken: sess.refresh_token,
 				}),
 			);
 		} else {
@@ -98,10 +96,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 			try {
 				const stored = await getSetting("supabase_session");
 				if (stored) {
-					const { access_token, refresh_token } = JSON.parse(stored);
+					const tokens = JSON.parse(stored) as Record<string, string>;
+					const { accessToken } = tokens;
+					const { refreshToken } = tokens;
 					const { data, error } = await supabase.auth.setSession({
-						access_token,
-						refresh_token,
+						access_token: accessToken,
+						refresh_token: refreshToken,
 					});
 					if (!error && data.session) {
 						setSession(data.session);
@@ -140,8 +140,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
 			const data = await response.json();
 			const { data: sessionData, error } = await supabase.auth.setSession({
-				access_token: data.access_token,
-				refresh_token: data.refresh_token,
+				access_token: data.access_token as string,
+				refresh_token: data.refresh_token as string,
 			});
 
 			if (error) throw error;

@@ -42,22 +42,31 @@ function AppContent() {
 
 function App() {
 	return (
-		<QueryClientProvider client={queryClient}>
-			<AuthProvider>
-				<ThemeProvider>
-					<PrismThemeLoader />
-					<TerminalSettingsProvider>
-						<DiffSettingsProvider>
-							<EditorAppsProvider>
-								<ToastProvider>
-									<AppContent />
-								</ToastProvider>
-							</EditorAppsProvider>
-						</DiffSettingsProvider>
-					</TerminalSettingsProvider>
-				</ThemeProvider>
-			</AuthProvider>
-		</QueryClientProvider>
+		<ErrorBoundary
+			fallbackTitle="Application failed to initialize"
+			onReset={() => {
+				if (typeof window !== "undefined") {
+					window.location.reload();
+				}
+			}}
+		>
+			<QueryClientProvider client={queryClient}>
+				<AuthProvider>
+					<ThemeProvider>
+						<PrismThemeLoader />
+						<TerminalSettingsProvider>
+							<DiffSettingsProvider>
+								<EditorAppsProvider>
+									<ToastProvider>
+										<AppContent />
+									</ToastProvider>
+								</EditorAppsProvider>
+							</DiffSettingsProvider>
+						</TerminalSettingsProvider>
+					</ThemeProvider>
+				</AuthProvider>
+			</QueryClientProvider>
+		</ErrorBoundary>
 	);
 }
 

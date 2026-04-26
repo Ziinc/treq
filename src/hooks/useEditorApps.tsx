@@ -1,10 +1,10 @@
 import {
+	ReactNode,
 	createContext,
 	useContext,
 	useEffect,
-	useState,
 	useMemo,
-	ReactNode,
+	useState,
 } from "react";
 import { detectEditorApps } from "../lib/api";
 
@@ -27,9 +27,8 @@ const EditorAppsContext =
 
 EditorAppsContext.displayName = "EditorAppsContext";
 
-export const useEditorApps = (): EditorAppsContextType => {
-	return useContext(EditorAppsContext);
-};
+export const useEditorApps = (): EditorAppsContextType =>
+	useContext(EditorAppsContext);
 
 export const EditorAppsProvider: React.FC<{ children: ReactNode }> = ({
 	children,

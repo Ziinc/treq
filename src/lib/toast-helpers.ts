@@ -18,8 +18,8 @@ export function showErrorToast(
 	error: unknown,
 ): void {
 	addToast({
-		title,
 		description: error instanceof Error ? error.message : String(error),
+		title,
 		type: "error",
 	});
 }
@@ -33,8 +33,8 @@ export function showSuccessToast(
 	description: string,
 ): void {
 	addToast({
-		title,
 		description,
+		title,
 		type: "success",
 	});
 }
@@ -48,8 +48,8 @@ export function showInfoToast(
 	description: string,
 ): void {
 	addToast({
-		title,
 		description,
+		title,
 		type: "info",
 	});
 }
@@ -63,8 +63,8 @@ export function showWarningToast(
 	description: string,
 ): void {
 	addToast({
-		title,
 		description,
+		title,
 		type: "warning",
 	});
 }

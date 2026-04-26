@@ -1,0 +1,77 @@
+use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
+use std::fs;
+
+#[path = "../tests/e2e_test_helpers.rs"]
+mod e2e_test_helpers;
+use e2e_test_helpers::TestRepo;
+
+fn write_workspace_file(
+    repo: &TestRepo,
+    ws: &treq_lib::local_db::Workspace,
+    path: &str,
+    content: &str,
+) {
+    let dir = repo.workspaces_dir().join(&ws.workspace_path);
+    let full = dir.join(path);
+    fs::create_dir_all(full.parent().expect("workspace file should have a parent"))
+        .expect("failed to create parent directories");
+    fs::write(full, content).expect("failed to write workspace file");
+}
+
+fn setup_workspace_diff() -> (TestRepo, i64) {
+    let repo = TestRepo::new().expect("failed to init test repo");
+    repo.commit_file("target.txt", "target content\n", "target baseline")
+        .expect("failed to create target baseline");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat-bench-diff",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("failed to create workspace");
+
+    write_workspace_file(&repo, &workspace, "f1.txt", "first committed file\n");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add f1")
+        .expect("failed to commit first diff file");
+
+    write_workspace_file(
+        &repo,
+        &workspace,
+        "nested/f2.txt",
+        "second committed file\n",
+    );
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add f2")
+        .expect("failed to commit second diff file");
+
+    write_workspace_file(&repo, &workspace, "uncommitted.txt", "working copy only\n");
+
+    (repo, workspace.id)
+}
+
+fn bench_workspace_diff(c: &mut Criterion) {
+    let mut group = c.benchmark_group("workspace_diff");
+    group.sample_size(20);
+
+    group.bench_function("committed_changes", |b| {
+        b.iter_batched(
+            setup_workspace_diff,
+            |(repo, workspace_id)| {
+                treq_lib::core::workspace_diff(
+                    std::hint::black_box(&repo.repo_path),
+                    std::hint::black_box(workspace_id),
+                    std::hint::black_box("git"),
+                )
+                .expect("workspace_diff failed");
+            },
+            BatchSize::PerIteration,
+        );
+    });
+
+    group.finish();
+}
+
+criterion_group!(benches, bench_workspace_diff);
+criterion_main!(benches);

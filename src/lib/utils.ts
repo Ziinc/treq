@@ -5,23 +5,18 @@ export function cn(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs));
 }
 
-/**
- * Format bytes into human-readable string (GB, MB, KB, B)
- */
+// Format bytes into a human-readable string (GB, MB, KB, B).
 export function formatBytes(bytes: number): string {
 	if (bytes === 0) return "0 B";
 
-	const k = 1024;
+	const kilobyte = 1024;
 	const sizes = ["B", "KB", "MB", "GB", "TB"];
-	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	const exponent = Math.floor(Math.log(bytes) / Math.log(kilobyte));
 
-	return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
+	return `${(bytes / Math.pow(kilobyte, exponent)).toFixed(2)} ${sizes[exponent]}`;
 }
 
-/**
- * Sanitize text for use in branch names
- * Converts to lowercase, removes special chars, replaces spaces with hyphens
- */
+// Sanitize text for branch names.
 export function sanitizeForBranchName(text: string): string {
 	let sanitized = text
 		.toLowerCase()
@@ -50,11 +45,7 @@ function cleanBranchNameTrailing(name: string): string {
 	return result;
 }
 
-/**
- * Apply branch name pattern with sanitized name
- * @param pattern - Pattern with {name} placeholder (e.g., "treq/{name}")
- * @param name - The name/intent to insert
- */
+// Apply a branch-name pattern with a sanitized name.
 export function applyBranchNamePattern(pattern: string, name: string): string {
 	const sanitized = sanitizeForBranchName(name);
 	const result = cleanBranchNameTrailing(
@@ -63,9 +54,7 @@ export function applyBranchNamePattern(pattern: string, name: string): string {
 	return result || "unnamed";
 }
 
-/**
- * Extract filename from a file path
- */
+// Extract a filename from a file path.
 export function getFileName(path: string): string {
 	if (!path) return "";
 	// Handle both Unix (/) and Windows (\) separators
@@ -73,12 +62,7 @@ export function getFileName(path: string): string {
 	return lastSeparator === -1 ? path : path.slice(lastSeparator + 1);
 }
 
-/**
- * Escape a string for use in bash $'...' syntax
- * Escapes backslashes, single quotes, and newlines to pass multi-line strings correctly
- * @param str - The string to escape
- * @returns Escaped string suitable for bash $'...' syntax
- */
+// Escape a string for bash $'...' syntax.
 export function escapeBashString(str: string): string {
 	return str
 		.replace(/\\/g, "\\\\") // escape backslashes first
@@ -86,16 +70,10 @@ export function escapeBashString(str: string): string {
 		.replace(/\n/g, "\\n"); // escape newlines
 }
 
-/**
- * Parse jj timestamp format ("2025-01-15 10:30:45.000 +08:00") into a Date.
- * Returns null if the timestamp cannot be parsed.
- */
+// Parse a jj timestamp into a Date; return null if invalid.
 function parseTimestamp(timestamp: string): Date | null {
 	try {
-		// Normalize jj format to ISO 8601:
-		//   "2025-01-15 10:30:45.000 +08:00" → "2025-01-15T10:30:45.000+08:00"
-		// Replace first space (between date and time) with T,
-		// then remove space before timezone offset.
+		// Normalize jj format to ISO-8601 before parsing.
 		const iso = timestamp
 			.replace(/^(\d{4}-\d{2}-\d{2})\s/, "$1T")
 			.replace(/\s([+-]\d{2}:\d{2})$/, "$1");
@@ -107,11 +85,7 @@ function parseTimestamp(timestamp: string): Date | null {
 	}
 }
 
-/**
- * Format timestamp as relative time (e.g., "5 minutes ago", "2 hours ago", "3 days ago")
- * @param timestamp - Timestamp in jj format: "YYYY-MM-DD HH:MM:SS.mmm +TZ:TZ"
- * @returns Relative time string
- */
+// Format timestamp as a relative string.
 export function formatRelativeTime(timestamp: string): string {
 	const date = parseTimestamp(timestamp);
 	if (!date) return timestamp;
@@ -142,29 +116,23 @@ export function formatRelativeTime(timestamp: string): string {
 	return `${diffYears} years ago`;
 }
 
-/**
- * Format timestamp for display in tooltip
- * @param timestamp - Timestamp in jj format: "YYYY-MM-DD HH:MM:SS.mmm +TZ:TZ"
- * @returns Formatted timestamp string
- */
+// Format timestamp for tooltip display.
 export function formatFullTimestamp(timestamp: string): string {
 	const date = parseTimestamp(timestamp);
 	if (!date) return timestamp;
 
 	return date.toLocaleString(undefined, {
-		year: "numeric",
-		month: "long",
 		day: "numeric",
 		hour: "2-digit",
 		minute: "2-digit",
+		month: "long",
 		second: "2-digit",
 		timeZoneName: "short",
+		year: "numeric",
 	});
 }
 
-/**
- * Get a "YYYY-MM-DD" day key from a jj timestamp for grouping commits by day.
- */
+// Get a YYYY-MM-DD day key from a jj timestamp.
 export function getDayKey(timestamp: string): string {
 	const date = parseTimestamp(timestamp);
 	if (!date) return "unknown";
@@ -174,10 +142,7 @@ export function getDayKey(timestamp: string): string {
 	return `${year}-${month}-${day}`;
 }
 
-/**
- * Format a jj timestamp into a human-friendly day label.
- * Returns "Today", "Yesterday", or "Jan 15, 2025".
- */
+// Format a jj timestamp into a human-friendly day label.
 export function formatDayLabel(timestamp: string): string {
 	const date = parseTimestamp(timestamp);
 	if (!date) return timestamp;
@@ -193,18 +158,13 @@ export function formatDayLabel(timestamp: string): string {
 	if (diffDays === 1) return "Yesterday";
 
 	return date.toLocaleDateString(undefined, {
-		month: "short",
 		day: "numeric",
+		month: "short",
 		year: "numeric",
 	});
 }
 
-/**
- * Generate stacked workspace intent from parent workspace/branch
- * @param parentIntent - Parent workspace intent (if exists)
- * @param parentBranch - Parent branch name
- * @returns Generated intent string
- */
+// Generate stacked workspace intent from parent workspace/branch.
 export function generateStackedIntent(
 	parentIntent: string | null,
 	parentBranch: string,
@@ -215,13 +175,7 @@ export function generateStackedIntent(
 	return `Stacked from ${parentBranch}`;
 }
 
-/**
- * Generate stacked workspace branch name with enumeration
- * @param branchPattern - Branch naming pattern (e.g., "treq/{name}")
- * @param parentBranch - Parent branch name
- * @param index - Index for uniqueness (always added, starts from 1)
- * @returns Generated branch name (e.g., "treq/main-stack-1", "treq/main-stack-2")
- */
+// Generate a stacked workspace branch name with enumeration.
 export function generateStackedBranchName(
 	branchPattern: string,
 	parentBranch: string,
@@ -231,12 +185,7 @@ export function generateStackedBranchName(
 	return applyBranchNamePattern(branchPattern, baseName);
 }
 
-/**
- * Construct the full workspace path from a Workspace object
- * The workspace_path in the database is just the directory name,
- * so we need to reconstruct the full path: {repo_path}/.treq/workspaces/{workspace_path}
- * Handles legacy workspaces where workspace_path might already be a full absolute path.
- */
+// Construct a full workspace path; preserve legacy absolute workspace paths.
 export function getFullWorkspacePath(workspace: {
 	repo_path: string;
 	workspace_path: string;

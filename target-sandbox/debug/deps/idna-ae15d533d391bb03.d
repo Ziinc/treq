@@ -1,0 +1,10 @@
+/Users/tzeyiing/projects/treq/target-sandbox/debug/deps/idna-ae15d533d391bb03.d: /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/lib.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/deprecated.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/punycode.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/uts46.rs
+
+/Users/tzeyiing/projects/treq/target-sandbox/debug/deps/libidna-ae15d533d391bb03.rlib: /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/lib.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/deprecated.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/punycode.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/uts46.rs
+
+/Users/tzeyiing/projects/treq/target-sandbox/debug/deps/libidna-ae15d533d391bb03.rmeta: /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/lib.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/deprecated.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/punycode.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/uts46.rs
+
+/Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/lib.rs:
+/Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/deprecated.rs:
+/Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/punycode.rs:
+/Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/uts46.rs:

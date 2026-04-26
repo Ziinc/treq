@@ -251,9 +251,7 @@ pub fn init_local_db(repo_path: &str) -> Result<PathBuf, String> {
     )
     .map_err(|e| format!("Failed to create pending_reviews workspace index: {}", e))?;
 
-    // Migration: Rename pending_reviews columns from old schema to new schema
-    // Old columns: comments_json, overall_comment, viewed_files_json
-    // New columns: comments, summary_text, viewed_files
+    // Migration: rename pending_reviews columns from old schema to new schema.
     let has_old_columns: Result<i64, _> = conn.query_row(
         "SELECT COUNT(*) FROM pragma_table_info('pending_reviews') WHERE name IN ('comments_json', 'overall_comment', 'viewed_files_json')",
         [],
@@ -278,11 +276,7 @@ pub fn init_local_db(repo_path: &str) -> Result<PathBuf, String> {
             )
             .map_err(|e| format!("Failed to create pending_reviews_new table: {}", e))?;
 
-            // Migrate data from old table to new table
-            // Map old columns to new columns:
-            // comments_json -> comments
-            // viewed_files_json -> viewed_files
-            // overall_comment -> summary_text
+            // Migrate old pending_reviews column names to new names.
             conn.execute(
                 "INSERT INTO pending_reviews_new
                  SELECT id, workspace_id, comments_json, viewed_files_json, overall_comment, created_at, updated_at
@@ -516,16 +510,6 @@ pub fn delete_workspace(repo_path: &str, id: i64) -> Result<(), String> {
     let conn = get_connection(repo_path)?;
     conn.execute("DELETE FROM workspaces WHERE id = ?1", [id])
         .map_err(|e| format!("Failed to delete workspace: {}", e))?;
-    Ok(())
-}
-
-pub fn update_workspace_metadata(repo_path: &str, id: i64, metadata: &str) -> Result<(), String> {
-    let conn = get_connection(repo_path)?;
-    conn.execute(
-        "UPDATE workspaces SET metadata = ?1 WHERE id = ?2",
-        params![metadata, id],
-    )
-    .map_err(|e| format!("Failed to update workspace metadata: {}", e))?;
     Ok(())
 }
 

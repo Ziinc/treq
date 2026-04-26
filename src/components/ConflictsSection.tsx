@@ -42,11 +42,11 @@ export const ConflictsSection = memo<ConflictsSectionProps>(
 				</div>
 				{!isCollapsed && (
 					<div className="mt-2 overflow-hidden select-none font-sans">
-						{files.map((file) => {
+						{files.map((file, index) => {
 							const label = formatFileLabel(file);
 							return (
 								<div
-									key={file}
+									key={`${file}-${index}`}
 									className={cn(
 										"group/row relative py-1 text-sm flex items-center gap-1 cursor-pointer",
 										activeFilePath === file
