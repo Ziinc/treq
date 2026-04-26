@@ -485,7 +485,7 @@ fn list_workspaces_with_changes(
         .map_err(|e| format!("Failed to get workspaces from db: {}", e))?;
 
     let result: Vec<(local_db::Workspace, Vec<jj::JjFileChange>)> = workspaces
-        .into_iter()
+        .into_par_iter()
         .map(|workspace| {
             let workspace_path = Path::new(repo_path)
                 .join(".treq")
@@ -499,11 +499,6 @@ fn list_workspaces_with_changes(
             // Then check for staleness (can occur if another workspace was snapshotted
             // above, rewriting a parent commit and making this workspace stale).
             let changed_files = jj::jj_get_changed_files(&workspace_path).unwrap_or_default();
-            if let Ok(true) = jj::is_workspace_stale(&workspace_path) {
-                if let Err(update_err) = jj::jj_workspace_update_stale(&workspace_path) {
-                    eprintln!("Failed to update stale workspace: {}", update_err);
-                }
-            }
 
             (workspace, changed_files)
         })
