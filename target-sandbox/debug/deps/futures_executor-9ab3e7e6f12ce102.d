@@ -1,9 +1,0 @@
-/Users/tzeyiing/projects/treq/target-sandbox/debug/deps/futures_executor-9ab3e7e6f12ce102.d: /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/futures-executor-0.3.32/src/lib.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/futures-executor-0.3.32/src/local_pool.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/futures-executor-0.3.32/src/enter.rs
-
-/Users/tzeyiing/projects/treq/target-sandbox/debug/deps/libfutures_executor-9ab3e7e6f12ce102.rlib: /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/futures-executor-0.3.32/src/lib.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/futures-executor-0.3.32/src/local_pool.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/futures-executor-0.3.32/src/enter.rs
-
-/Users/tzeyiing/projects/treq/target-sandbox/debug/deps/libfutures_executor-9ab3e7e6f12ce102.rmeta: /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/futures-executor-0.3.32/src/lib.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/futures-executor-0.3.32/src/local_pool.rs /Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/futures-executor-0.3.32/src/enter.rs
-
-/Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/futures-executor-0.3.32/src/lib.rs:
-/Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/futures-executor-0.3.32/src/local_pool.rs:
-/Users/tzeyiing/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/futures-executor-0.3.32/src/enter.rs:
