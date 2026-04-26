@@ -477,7 +477,7 @@ fn list_workspaces_with_changes(
         .map_err(|e| format!("Failed to get workspaces from db: {}", e))?;
 
     let result: Vec<(local_db::Workspace, Vec<jj::JjFileChange>)> = workspaces
-        .into_par_iter()
+        .into_iter()
         .map(|workspace| {
             let workspace_path = Path::new(repo_path)
                 .join(".treq")
@@ -527,7 +527,7 @@ pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspacePartialSt
     let repo_path_owned = repo_path.to_string();
     let default_branch_owned = default_branch;
     let statuses: Vec<WorkspacePartialStatus> = workspaces_with_changes
-        .into_par_iter()
+        .into_iter()
         .map(|(workspace, changed_files)| {
             let workspace_path = Path::new(&repo_path_owned)
                 .join(".treq")
