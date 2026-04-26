@@ -176,8 +176,12 @@ fn test_can_create_stacked_workspace() {
     let workspace1_path = repo.workspaces_dir().join(&base.workspace_path);
 
     // make an edit to the base workspace.
-    let base_file = workspace1_path.join("base.txt");
-    fs::write(&base_file, "base content").expect("Failed to write base file");
+    TestRepo::write_workspace_file(
+        workspace1_path.to_str().unwrap(),
+        "base.txt",
+        "base content",
+    )
+    .expect("Failed to write base file");
 
     // Create stacked workspace based on the first workspace's branch
     let stacked: Workspace = treq_lib::core::create_workspace(
@@ -294,10 +298,12 @@ fn test_moved_files_from_main_repo() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
     // Create test files in the main repo
-    let file1_path = Path::new(&repo.repo_path).join("feature1.rs");
-    let file2_path = Path::new(&repo.repo_path).join("feature2.rs");
-    fs::write(&file1_path, "// Feature 1 code").expect("Failed to create file1");
-    fs::write(&file2_path, "// Feature 2 code").expect("Failed to create file2");
+    let file1_path = repo
+        .create_file("feature1.rs", "// Feature 1 code")
+        .expect("Failed to create file1");
+    let file2_path = repo
+        .create_file("feature2.rs", "// Feature 2 code")
+        .expect("Failed to create file2");
 
     // Verify files exist in main repo
     assert!(file1_path.exists(), "feature1.rs should exist in main repo");
@@ -385,10 +391,18 @@ fn test_moved_files_from_workspace_to_workspace() {
         .join(&base_workspace.workspace_path);
 
     // Create test files in the base workspace
-    let file1_path = base_path.join("component1.ts");
-    let file2_path = base_path.join("component2.ts");
-    fs::write(&file1_path, "// Component 1").expect("Failed to create component1");
-    fs::write(&file2_path, "// Component 2").expect("Failed to create component2");
+    let file1_path = TestRepo::write_workspace_file(
+        base_path.to_str().unwrap(),
+        "component1.ts",
+        "// Component 1",
+    )
+    .expect("Failed to create component1");
+    let file2_path = TestRepo::write_workspace_file(
+        base_path.to_str().unwrap(),
+        "component2.ts",
+        "// Component 2",
+    )
+    .expect("Failed to create component2");
 
     // jj auto-tracks files, no need to explicitly add them
 

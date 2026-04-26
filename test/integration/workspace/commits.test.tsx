@@ -1,7 +1,7 @@
 import * as React from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import userEvent from "@testing-library/user-event";
-import { render, screen, waitFor } from "../../test-utils";
+import { render, screen } from "../../test-utils";
 import {
 	commitRepoFile,
 	commitWorkspaceFile,
@@ -45,14 +45,16 @@ describe("ShowWorkspace - Commits tab", () => {
 		console.log("repoPath", repoPath);
 		openRepo(repoPath);
 		user = userEvent.setup();
-		for (let idx = 0; idx < 13; idx += 1) {
-			await commitRepoFile(
-				repoPath,
-				`target-pagination-${idx}.txt`,
-				`target pagination content ${idx}`,
-				`Target pagination commit ${idx}`,
-			);
-		}
+		await Promise.all(
+			Array.from({ length: 13 }, (_, idx) =>
+				commitRepoFile(
+					repoPath,
+					`target-pagination-${idx}.txt`,
+					`target pagination content ${idx}`,
+					`Target pagination commit ${idx}`,
+				),
+			),
+		);
 
 		testWorkspace = await createWorkspaceRef(repoPath, "feat/commits-it");
 		await commitWorkspaceFile(

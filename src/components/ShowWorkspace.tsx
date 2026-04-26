@@ -1,10 +1,9 @@
-/* eslint-disable max-lines, max-params, max-nested-callbacks */
+/* eslint-disable max-lines, max-params */
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
-import { listen } from "@tauri-apps/api/event";
 import {
 	DirectoryEntry,
 	type SingleRebaseResult,
@@ -13,19 +12,15 @@ import {
 	checkAndRebaseWorkspaces,
 	createSession,
 	getWorkspaceReadme,
-	getWorkspaceChangedFiles,
 	getWorkspaceStatus,
-	jjGitFetch,
 	lsWorkspace,
-	listCommits,
-	listConflictedFiles,
 	pullWorkspaceFromRemote,
 	pushWorkspaceToRemote,
 	resolveBookmarkConflict,
 	updateWorkspace,
 } from "../lib/api";
 import { getStatusBgColor } from "../lib/git-status-colors";
-import { type ParsedFileChange, parseJjChangedFiles } from "../lib/git-utils";
+import { type ParsedFileChange } from "../lib/git-utils";
 import { cn, getFullWorkspacePath } from "../lib/utils";
 
 import {
@@ -162,7 +157,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 		} | null>(null);
 
 		// Aggregate diff stats (insertions/deletions across all commits)
-		const [diffStats, setDiffStats] = useState<{
+		const [diffStats] = useState<{
 			insertions: number;
 			deletions: number;
 		} | null>(null);
@@ -388,10 +383,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			_setActionPending("push");
 
 			try {
-				const result = await pushWorkspaceToRemote(
-					effectiveRepoPath,
-					workspace?.id ?? null,
-				);
+				await pushWorkspaceToRemote(effectiveRepoPath, workspace?.id ?? null);
 
 				addToast({
 					title: "Pushed to remote",

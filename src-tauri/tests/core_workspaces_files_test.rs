@@ -1,7 +1,6 @@
 mod e2e_test_helpers;
 
 use e2e_test_helpers::TestRepo;
-use std::fs;
 
 #[test]
 fn test_ls_workspace_lists_top_level_entries_and_respects_gitignore() {
@@ -17,11 +16,14 @@ fn test_ls_workspace_lists_top_level_entries_and_respects_gitignore() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    fs::create_dir_all(workspace_path.join("alpha_dir")).expect("Failed to create alpha_dir");
-    fs::write(workspace_path.join("zeta.txt"), "zeta").expect("Failed to write zeta.txt");
-    fs::write(workspace_path.join(".gitignore"), "ignored.txt\n")
+    TestRepo::write_workspace_file(workspace_path.to_str().unwrap(), "alpha_dir/.keep", "")
+        .expect("Failed to create alpha_dir");
+    TestRepo::write_workspace_file(workspace_path.to_str().unwrap(), "zeta.txt", "zeta")
+        .expect("Failed to write zeta.txt");
+    TestRepo::write_workspace_file(workspace_path.to_str().unwrap(), ".gitignore", "ignored.txt\n")
         .expect("Failed to write .gitignore");
-    fs::write(workspace_path.join("ignored.txt"), "ignored").expect("Failed to write ignored.txt");
+    TestRepo::write_workspace_file(workspace_path.to_str().unwrap(), "ignored.txt", "ignored")
+        .expect("Failed to write ignored.txt");
 
     let entries = treq_lib::core::ls_workspace(&repo.repo_path, Some(workspace.id))
         .expect("ls_workspace should succeed");
@@ -67,7 +69,8 @@ fn test_get_workspace_readme_returns_top_level_readme_contents() {
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
     let expected = "# Workspace README\n\nThis is the workspace overview.\n";
-    fs::write(workspace_path.join("README.md"), expected).expect("Failed to write README.md");
+    TestRepo::write_workspace_file(workspace_path.to_str().unwrap(), "README.md", expected)
+        .expect("Failed to write README.md");
 
     let readme = treq_lib::core::get_workspace_readme(&repo.repo_path, Some(workspace.id))
         .expect("get_workspace_readme should succeed");
@@ -83,7 +86,8 @@ fn test_get_workspace_readme_returns_none_when_missing() {
             .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    fs::remove_file(workspace_path.join("README.md")).expect("Failed to remove README.md");
+    TestRepo::remove_file_path(workspace_path.join("README.md"))
+        .expect("Failed to remove README.md");
 
     let readme = treq_lib::core::get_workspace_readme(&repo.repo_path, Some(workspace.id))
         .expect("get_workspace_readme should succeed");

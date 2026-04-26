@@ -1,13 +1,9 @@
 import type {
-	BranchCommitInfo,
-	BranchDiffFileChange,
-	BranchDiffFileDiff,
 	CachedDirectoryEntry,
 	ConflictRegion,
 	DiffCacheEntry,
 	DirectoryEntry,
 	FileSearchResult,
-	FileView,
 	LineComment,
 	PendingReview,
 	Session,
@@ -122,15 +118,6 @@ export const updateSessionAccess = (
 	id: number,
 ): Promise<void> => invoke("update_session_access", { repoPath, id });
 
-export const updateSessionName = (
-	repoPath: string,
-	id: number,
-	name: string,
-): Promise<void> => invoke("update_session_name", { repoPath, id, name });
-
-export const deleteSession = (repoPath: string, id: number): Promise<void> =>
-	invoke("delete_session", { repoPath, id });
-
 export const getSessionModel = (
 	repoPath: string,
 	id: number,
@@ -154,18 +141,6 @@ export const unmarkFileViewed = (
 	filePath: string,
 ): Promise<void> => invoke("unmark_file_viewed", { workspacePath, filePath });
 
-export const getViewedFiles = (workspacePath: string): Promise<FileView[]> =>
-	invoke("get_viewed_files", { workspacePath });
-
-export const clearAllViewedFiles = (workspacePath: string): Promise<void> =>
-	invoke("clear_all_viewed_files", { workspacePath });
-
-// Git remotes API (stub - backend not implemented)
-export const gitListRemotes = (repoPath: string): Promise<string[]> => {
-	void repoPath;
-	return Promise.resolve(["origin"]);
-};
-
 // Diff cache API (in-memory stub implementation)
 const diffCache = new Map<string, { data: string; timestamp: number }>();
 
@@ -179,87 +154,14 @@ export const getDiffCache = async (
 	return diffCache.get(key) ?? null;
 };
 
-export const setDiffCache = async (
-	...args: [
-		workspacePath: string,
-		cacheType: string,
-		data: unknown,
-		filePath?: string,
-	]
-): Promise<void> => {
-	const [workspacePath, cacheType, data, filePath] = args;
-	const key = filePath
-		? `${workspacePath}:${cacheType}:${filePath}`
-		: `${workspacePath}:${cacheType}`;
-	diffCache.set(key, {
-		data: typeof data === "string" ? data : JSON.stringify(data),
-		timestamp: Date.now(),
-	});
-};
-
-// Branch diff functions (stub implementations - backend not yet implemented)
-export const gitGetChangedFilesBetweenBranches = (
-	repoPath: string,
-	baseBranch: string,
-	headBranch: string,
-): Promise<BranchDiffFileChange[]> => {
-	void repoPath;
-	void baseBranch;
-	void headBranch;
-	return Promise.resolve([]);
-};
-
-export const gitGetDiffBetweenBranches = (
-	repoPath: string,
-	baseBranch: string,
-	headBranch: string,
-): Promise<BranchDiffFileDiff[]> => {
-	void repoPath;
-	void baseBranch;
-	void headBranch;
-	return Promise.resolve([]);
-};
-
-export const gitGetCommitsBetweenBranches = (
-	...args: [
-		repoPath: string,
-		baseBranch: string,
-		headBranch: string,
-		limit?: number,
-	]
-): Promise<BranchCommitInfo[]> => {
-	const [repoPath, baseBranch, headBranch, limit] = args;
-	void repoPath;
-	void baseBranch;
-	void headBranch;
-	void limit;
-	return Promise.resolve([]);
-};
-
 export const loadPendingReview = (
 	repoPath: string,
 	workspaceId: number,
-): Promise<PendingReview | null> =>
-	invoke<{
-		id: number;
-		workspace_id: number;
-		comments: string;
-		viewed_files: string | null;
-		summary_text: string | null;
-		created_at: string;
-		updated_at: string;
-	} | null>("load_pending_review", { repoPath, workspaceId }).then((result) => {
-		if (!result) return null;
-		return {
-			id: result.id,
-			workspace_id: result.workspace_id,
-			comments: JSON.parse(result.comments),
-			viewed_files: result.viewed_files ? JSON.parse(result.viewed_files) : [],
-			summary_text: result.summary_text,
-			created_at: result.created_at,
-			updated_at: result.updated_at,
-		};
-	});
+): Promise<PendingReview | null> => {
+	void repoPath;
+	void workspaceId;
+	return Promise.resolve(null);
+};
 
 export const savePendingReview = (
 	...args: [
@@ -302,27 +204,6 @@ export const parseConflictMarkers = (
 	filePath: string,
 ): Promise<ConflictRegion[]> =>
 	invoke("parse_conflict_markers", { content, filePath });
-
-// Move commit API
-export const moveCommitToNewWorkspace = (
-	...args: [
-		repoPath: string,
-		sourceWorkspaceId: number,
-		commitChangeId: string,
-		branchName: string,
-		intent: string | null,
-	]
-): Promise<number> => {
-	const [repoPath, sourceWorkspaceId, commitChangeId, branchName, intent] =
-		args;
-	return invoke("move_commit_to_new_workspace", {
-		repoPath,
-		sourceWorkspaceId,
-		commitChangeId,
-		branchName,
-		intent,
-	});
-};
 
 export const moveCommitToExistingWorkspace = (
 	...args: [

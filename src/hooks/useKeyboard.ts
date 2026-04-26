@@ -28,8 +28,7 @@ export function useKeyboardShortcut(
 			const target = event.target as HTMLElement | null;
 			const activeElement = document.activeElement as HTMLElement | null;
 
-			// Don't intercept plain-key shortcuts when typing in inputs.
-			// Meta shortcuts (Ctrl/Cmd+X) should still work.
+			// Don't intercept plain-key shortcuts in inputs; meta shortcuts (Ctrl/Cmd+X) still apply.
 			if (
 				!ctrlOrCmd &&
 				(target?.tagName === "INPUT" ||
@@ -70,8 +69,7 @@ export function useKeyboardShortcut(
 					if (ctrlOrCmd && !isModifierPressed) return;
 					if (!ctrlOrCmd && isModifierPressed) return;
 
-					// IMPORTANT: When NOT requiring both Cmd+Ctrl, ensure we DON'T have both
-					// This prevents Cmd+J from firing when Cmd+Control+J is pressed
+					// Reject both Cmd+Ctrl when only one modifier is required (avoid Cmd+J on Cmd+Ctrl+J).
 					if (ctrlOrCmd && event.metaKey && event.ctrlKey) return;
 
 					// Check shift key requirements

@@ -205,19 +205,23 @@ const HunkLines: React.FC<HunkLinesProps> = memo(
 						lineNum?.old !== undefined && lineNum?.new === undefined
 							? "old"
 							: "new";
-					const lineComments = getCommentsForLine(
+					const lineComments = getCommentsForLine({
 						filePath,
-						hunk.id,
-						actualLineNum,
-						currentLineSide,
-					);
+						hunkId: hunk.id,
+						lineNumber: actualLineNum,
+						side: currentLineSide,
+					});
 					const showCommentInputHere =
 						showCommentInput &&
 						pendingComment &&
 						pendingComment.filePath === filePath &&
 						pendingComment.hunkId === hunk.id &&
 						lineIndex === pendingComment.displayAtLineIndex;
-					const selected = isLineSelected(filePath, hunkIndex, lineIndex);
+					const selected = isLineSelected({
+						filePath,
+						hunkIndex,
+						lineIndex,
+					});
 
 					const searchKey = `${filePath}:${hunkIndex}:${lineIndex}`;
 					const searchLineData = searchData.matchesByKey.get(searchKey);
@@ -243,7 +247,11 @@ const HunkLines: React.FC<HunkLinesProps> = memo(
 									selected && "!bg-blue-500/10",
 								)}
 								onMouseEnter={() =>
-									handleLineMouseEnter(filePath, hunkIndex, lineIndex)
+									handleLineMouseEnter({
+										filePath,
+										hunkIndex,
+										lineIndex,
+									})
 								}
 								onMouseUp={handleLineMouseUp}
 								onClick={(event) => {
@@ -254,14 +262,14 @@ const HunkLines: React.FC<HunkLinesProps> = memo(
 									data-testid="line-gutter"
 									className="w-24 flex-shrink-0 text-muted-foreground select-none border-r border-border/40 flex items-center gap-[4px] cursor-pointer hover:bg-muted/50"
 									onMouseDown={(event) =>
-										handleLineMouseDown(
+										handleLineMouseDown({
 											event,
 											filePath,
 											hunkIndex,
 											lineIndex,
-											line,
-											false,
-										)
+											lineContent: line,
+											isStaged: false,
+										})
 									}
 								>
 									{lineComments.length > 0 && (

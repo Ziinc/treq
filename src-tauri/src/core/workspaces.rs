@@ -371,13 +371,6 @@ pub fn create_workspace(
             )
             .map_err(|e| format!("Failed to squash files to workspace: {}", e))?;
 
-            // // Update the workspace's working copy to reflect the squash
-            // let workspace_dir = Path::new(repo_path)
-            //     .join(".treq")
-            //     .join("workspaces")
-            //     .join(&workspace.workspace_path);
-            // jj::update_stale_workspace(&workspace_dir.to_string_lossy())
-            //     .map_err(|e| format!("Failed to update workspace working copy: {}", e))?;
         }
     }
 
@@ -415,8 +408,7 @@ pub fn delete_workspace(repo_path: &str, workspace_id: &i64) -> Result<bool, Str
                 }
             }
 
-            // Best effort: log but don't fail if jj/directory removal fails
-            // The DB cleanup must always proceed
+            // Best effort only: DB cleanup must proceed even if jj/directory removal fails.
             if let Err(e) = jj::remove_workspace(repo_path, &workspace_path.to_str().unwrap()) {
                 eprintln!("Warning: Failed to remove workspace directory: {}", e);
             }
@@ -495,9 +487,7 @@ fn list_workspaces_with_changes(
                 .expect("not a valid path")
                 .to_string();
 
-            // Snapshot working copy by running jj status.
-            // Then check for staleness (can occur if another workspace was snapshotted
-            // above, rewriting a parent commit and making this workspace stale).
+            // Snapshot working copy and check staleness from possible parent rewrites.
             let changed_files = jj::jj_get_changed_files(&workspace_path).unwrap_or_default();
 
             (workspace, changed_files)
@@ -524,8 +514,7 @@ pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspacePartialSt
     let workspaces_with_changes = list_workspaces_with_changes(repo_path)?;
     let default_branch = jj::get_default_branch(repo_path).unwrap_or_else(|_| "main".to_string());
 
-    // Build a map of branch_name → changed file paths for overlap-based conflict detection.
-    // A stacked workspace conflicts with its target when both have modified the same file.
+    // Build branch_name->changed paths for overlap-based conflict detection.
     let changes_by_branch: HashMap<String, HashSet<String>> = workspaces_with_changes
         .iter()
         .map(|(ws, files)| {
@@ -550,8 +539,7 @@ pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspacePartialSt
 
             let has_changes = !changed_files.is_empty();
 
-            // Check for file-path overlap with target branch: if both this workspace and its
-            // target have modified the same files, there is a logical conflict.
+            // Detect logical conflicts when workspace and target modified overlapping files.
             let my_paths: HashSet<String> = changed_files.iter().map(|f| f.path.clone()).collect();
             let has_path_overlap = workspace
                 .target_branch
@@ -1342,10 +1330,7 @@ pub fn split_workspace(
             local_db::update_workspace_target_branch(repo_path, new_workspace.id, &source_target)
                 .map_err(|e| format!("Failed to set new workspace target: {}", e))?;
 
-            // Track files to remove from source after rebase (for Move mode).
-            // When splitting "before", the new workspace becomes source's parent.
-            // After rebase, moved files reappear in source via parent inheritance,
-            // so we must explicitly delete them from source's working copy.
+            // In Move mode, track files to remove from source after rebase to avoid inherited reappearance.
             let mut files_to_remove_from_source: Vec<String> = Vec::new();
 
             if has_files {
@@ -1401,9 +1386,7 @@ pub fn split_workspace(
             let _ = jj::update_stale_workspace(&new_full_path);
             let _ = jj::update_stale_workspace(&source_full_path);
 
-            // Remove moved files from source's working copy.
-            // After rebase, these files reappear from the parent; deleting them
-            // creates an explicit removal in source's commit tree.
+            // Remove moved files from source working copy to record explicit removals.
             if !files_to_remove_from_source.is_empty() {
                 let source_dir = Path::new(&source_full_path);
                 for file in &files_to_remove_from_source {
@@ -1513,10 +1496,7 @@ pub fn pull_workspace_from_remote(
         .map_err(|e| format!("Failed to rebase local commits: {}", e))?;
     }
 
-    // Step 6: Refresh working copy
-    // Only update stale — do NOT sync to bookmark, because the working copy
-    // should remain on top of the rebased local commits (D' → @'), not
-    // jump back to the bookmark tip (C).
+    // Step 6: refresh stale working copy only; do not sync bookmark tip here.
     let _ = jj::jj_workspace_update_stale(full_path_str);
 
     Ok(PullWorkspaceResult {

@@ -6,30 +6,10 @@ use std::collections::HashMap;
 use tauri::State;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct BinaryPathsResponse {
-    pub git: Option<String>,
-    pub jj: Option<String>,
-    pub claude: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 pub struct EditorAppsResponse {
     pub cursor: bool,
     pub vscode: bool,
     pub zed: bool,
-}
-
-/// Detect and cache binary paths for required binaries (git, jj, claude)
-#[tauri::command]
-pub fn detect_binaries(state: State<'_, AppState>) -> Result<BinaryPathsResponse, String> {
-    let db = state.db.lock().map_err(|e| e.to_string())?;
-    let detected_paths = crate::core::detect_binaries(&db)?;
-
-    Ok(BinaryPathsResponse {
-        git: detected_paths.get("git").cloned(),
-        jj: detected_paths.get("jj").cloned(),
-        claude: detected_paths.get("claude").cloned(),
-    })
 }
 
 /// Load cached binary paths from database on startup

@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import type { useToast } from "../../ui/toast";
 import { computeHunkLineNumbers } from "../utils";
 import type {
+	CommentLineQuery,
 	ConflictComment,
 	DiffLineSelection,
 	FileHunksData,
@@ -274,22 +275,16 @@ export function useComments({
 		}
 	}, [getAllOutdatedComments, addToast]);
 
-	// eslint-disable-next-line max-params
 	const getCommentsForLine = useCallback(
-		(
-			filePath: string,
-			hunkId: string,
-			actualLineNum: number,
-			currentLineSide: "old" | "new",
-		) =>
+		({ filePath, hunkId, lineNumber, side }: CommentLineQuery) =>
 			comments.filter(
 				(c) =>
 					c.filePath === filePath &&
 					c.hunkId === hunkId &&
-					actualLineNum >= c.startLine &&
-					actualLineNum <= c.endLine &&
+					lineNumber >= c.startLine &&
+					lineNumber <= c.endLine &&
 					!isCommentOutdated(c) &&
-					(c.lineSide === undefined || c.lineSide === currentLineSide),
+					(c.lineSide === undefined || c.lineSide === side),
 			),
 		[comments, isCommentOutdated],
 	);

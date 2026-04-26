@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import type { DiffLineSelection, FileHunksData } from "../types";
+import type {
+	DiffLinePointer,
+	DiffLineSelection,
+	FileHunksData,
+	LineMouseDownPayload,
+} from "../types";
 
 interface UseLineSelectionParams {
 	allFileHunks: Map<string, FileHunksData>;
@@ -13,16 +18,9 @@ export function useLineSelection({
 	const [diffLineSelection, setDiffLineSelection] =
 		useState<DiffLineSelection | null>(null);
 	const [isSelecting, setIsSelecting] = useState(false);
-	const [selectionAnchor, setSelectionAnchor] = useState<{
-		filePath: string;
-		hunkIndex: number;
-		lineIndex: number;
-	} | null>(null);
-	const [, setCurrentDragLine] = useState<{
-		filePath: string;
-		hunkIndex: number;
-		lineIndex: number;
-	} | null>(null);
+	const [selectionAnchor, setSelectionAnchor] =
+		useState<DiffLinePointer | null>(null);
+	const [, setCurrentDragLine] = useState<DiffLinePointer | null>(null);
 	const [contextMenuPosition, setContextMenuPosition] = useState<{
 		x: number;
 		y: number;
@@ -34,19 +32,18 @@ export function useLineSelection({
 		setContextMenuPosition(null);
 	}, []);
 
-	// eslint-disable-next-line max-params
 	const handleLineMouseDown = useCallback(
-		(
-			e: React.MouseEvent,
-			filePath: string,
-			hunkIndex: number,
-			lineIndex: number,
-			lineContent: string,
-			isStaged: boolean,
-		) => {
-			if (e.button !== 0) return;
-			e.preventDefault();
-			e.stopPropagation();
+		({
+			event,
+			filePath,
+			hunkIndex,
+			lineIndex,
+			lineContent,
+			isStaged,
+		}: LineMouseDownPayload) => {
+			if (event.button !== 0) return;
+			event.preventDefault();
+			event.stopPropagation();
 			isDraggingRef.current = false;
 			setIsSelecting(true);
 			setSelectionAnchor({ filePath, hunkIndex, lineIndex });
@@ -61,7 +58,7 @@ export function useLineSelection({
 	);
 
 	const handleLineMouseEnter = useCallback(
-		(filePath: string, hunkIndex: number, lineIndex: number) => {
+		({ filePath, hunkIndex, lineIndex }: DiffLinePointer) => {
 			if (
 				!isSelecting ||
 				!selectionAnchor ||
@@ -142,7 +139,7 @@ export function useLineSelection({
 	);
 
 	const isLineSelected = useCallback(
-		(filePath: string, hunkIndex: number, lineIndex: number) => {
+		({ filePath, hunkIndex, lineIndex }: DiffLinePointer) => {
 			if (!diffLineSelection || diffLineSelection.filePath !== filePath)
 				return false;
 			return diffLineSelection.lines.some(

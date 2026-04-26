@@ -18,11 +18,11 @@ export interface CreateStackedWorkspaceOptions {
 	repoPath: string;
 	parentBranch: string;
 	parentWorkspace: Workspace | null;
-	/** If provided, use this branch name instead of auto-generating */
+	// If provided, use this branch name instead of auto-generating.
 	branchName?: string;
-	/** If provided, use this intent instead of auto-generating */
+	// If provided, use this intent instead of auto-generating.
 	intent?: string;
-	/** Position relative to parent. "before" triggers reparenting. Default: "after" */
+	// Position relative to parent; "before" triggers reparenting. Default: "after".
 	position?: "before" | "after";
 }
 
@@ -87,8 +87,7 @@ export function useCreateStackedWorkspace() {
 				}
 				const metadata = JSON.stringify({ intent });
 
-				// For "before" position, the new workspace targets the parent's parent
-				// and then the original parent gets reparented onto the new workspace
+				// "before": new workspace targets parent's parent; original parent reparents onto the new workspace.
 				const effectiveParentBranch =
 					position === "before" && parentWorkspace?.target_branch
 						? parentWorkspace.target_branch

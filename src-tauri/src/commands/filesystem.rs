@@ -142,13 +142,6 @@ pub fn list_directory_cached(
     Ok(entries)
 }
 
-#[tauri::command]
-pub fn get_change_indicators(_workspace_path: String) -> Result<Vec<String>, String> {
-    // TODO: Implement with jj - for now return empty
-    // This feature shows change indicators in file browser
-    Ok(Vec::new())
-}
-
 #[derive(serde::Serialize)]
 pub struct FileSearchResult {
     pub file_path: String,

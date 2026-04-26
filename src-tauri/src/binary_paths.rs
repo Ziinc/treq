@@ -39,8 +39,7 @@ pub fn get_extended_path() -> String {
         }
     }
 
-    // Add the directory containing the running treq binary so `treq` is
-    // available in PTY sessions without modifying the user's shell config.
+    // Add the running treq binary directory so `treq` is available in PTY sessions.
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
             let exe_dir_str = exe_dir.to_string_lossy().to_string();

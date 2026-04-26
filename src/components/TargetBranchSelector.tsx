@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Check, ChevronDown, GitBranch, Loader2 } from "lucide-react";
 import { Command } from "cmdk";
 import { Button } from "./ui/button";

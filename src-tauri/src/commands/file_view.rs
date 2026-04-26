@@ -1,4 +1,4 @@
-use crate::{db::FileView, AppState};
+use crate::AppState;
 use tauri::State;
 
 #[tauri::command]
@@ -24,22 +24,3 @@ pub fn unmark_file_viewed(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-pub fn get_viewed_files(
-    state: State<AppState>,
-    workspace_path: String,
-) -> Result<Vec<FileView>, String> {
-    let db = state.db.lock().unwrap();
-    db.get_viewed_files(&workspace_path)
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub fn clear_all_viewed_files(
-    state: State<AppState>,
-    workspace_path: String,
-) -> Result<(), String> {
-    let db = state.db.lock().unwrap();
-    db.clear_all_viewed_files(&workspace_path)
-        .map_err(|e| e.to_string())
-}

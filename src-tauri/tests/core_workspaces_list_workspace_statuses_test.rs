@@ -1,7 +1,6 @@
 mod e2e_test_helpers;
 
 use e2e_test_helpers::TestRepo;
-use std::fs;
 
 #[test]
 fn test_workspace_conflict_detection() {
@@ -18,8 +17,9 @@ fn test_workspace_conflict_detection() {
     .expect("Failed to create base workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let file_path = workspace_path.join("README.md");
-    fs::write(&file_path, "some content").expect("Failed to write base file");
+    let workspace_path_str = workspace_path.to_str().expect("utf-8");
+    TestRepo::write_workspace_file(workspace_path_str, "README.md", "some content")
+        .expect("Failed to write base file");
 
     let stacked_workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -33,6 +33,9 @@ fn test_workspace_conflict_detection() {
     let stacked_workspace_path = repo
         .workspaces_dir()
         .join(&stacked_workspace.workspace_path);
+    let stacked_path_str = stacked_workspace_path
+        .to_str()
+        .expect("stacked path utf-8");
 
     let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
         .expect("Failed to list workspace statuses");
@@ -51,7 +54,7 @@ fn test_workspace_conflict_detection() {
     assert_eq!(base_status_before.commits_ahead, 0);
     assert_eq!(stacked_status_before.commits_ahead, 0);
 
-    fs::write(stacked_workspace_path.join("README.md"), "stacked content")
+    TestRepo::write_workspace_file(stacked_path_str, "README.md", "stacked content")
         .expect("Failed to write file");
     let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
         .expect("Failed to list workspace statuses");
@@ -61,12 +64,13 @@ fn test_workspace_conflict_detection() {
         .expect("stacked status should exist");
     assert!(stacked_status_with_change.has_changes);
 
-    fs::write(
-        stacked_workspace_path.join("README.md"),
+    TestRepo::write_workspace_file(
+        stacked_path_str,
+        "README.md",
         "stacked version of README",
     )
     .expect("Failed to write stacked file");
-    fs::write(workspace_path.join("README.md"), "base version of README")
+    TestRepo::write_workspace_file(workspace_path_str, "README.md", "base version of README")
         .expect("Failed to write base file");
 
     let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
@@ -100,6 +104,7 @@ fn test_list_workspace_statuses_commits_ahead() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().expect("utf-8");
 
     let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
         .expect("Failed to list workspace statuses");
@@ -109,7 +114,8 @@ fn test_list_workspace_statuses_commits_ahead() {
         .expect("Workspace should exist in statuses");
     assert_eq!(status.commits_ahead, 0);
 
-    fs::write(workspace_path.join("file1.txt"), "content 1").expect("Failed to write file");
+    TestRepo::write_workspace_file(workspace_path_str, "file1.txt", "content 1")
+        .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "First commit")
         .expect("Failed to commit");
 
@@ -121,7 +127,8 @@ fn test_list_workspace_statuses_commits_ahead() {
         .expect("Workspace should exist in statuses");
     assert_eq!(status.commits_ahead, 1);
 
-    fs::write(workspace_path.join("file2.txt"), "content 2").expect("Failed to write file");
+    TestRepo::write_workspace_file(workspace_path_str, "file2.txt", "content 2")
+        .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Second commit")
         .expect("Failed to commit");
 

@@ -1,6 +1,5 @@
 mod e2e_test_helpers;
 use e2e_test_helpers::TestRepo;
-use std::fs;
 
 #[test]
 fn test_create_commit_basic() {
@@ -16,7 +15,9 @@ fn test_create_commit_basic() {
     .expect("Failed to create workspace");
 
     let ws_dir = repo.workspaces_dir().join(&workspace.workspace_path);
-    fs::write(ws_dir.join("data.txt"), "hello\n").expect("Failed to write file");
+    let ws_dir_str = ws_dir.to_str().expect("utf-8");
+    TestRepo::write_workspace_file(ws_dir_str, "data.txt", "hello\n")
+        .expect("Failed to write file");
 
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "add data")
         .expect("create_commit failed");

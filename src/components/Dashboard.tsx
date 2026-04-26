@@ -11,7 +11,6 @@ import {
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
@@ -221,15 +220,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		loadInitialRepo();
 		loadAppFontSize();
 	}, []);
-
-	// Derive repo name from repo path
-	const repoName = useMemo(
-		() =>
-			repoPath
-				? repoPath.split("/").pop() || repoPath.split("\\").pop() || repoPath
-				: "",
-		[repoPath],
-	);
 
 	useEffect(() => {
 		if (!repoPath) {

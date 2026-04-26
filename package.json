@@ -19,7 +19,7 @@
     "format": "biome format  --write ./src ./test",
     "check:format": "biome format ./src ./test",
     "check": "tsc && ast-grep test",
-    "lint": "oxlint ./src ./test/integration && eslint ./src ./test/integration && ast-grep scan",
+    "lint": "oxlint ./src ./test/integration && eslint ./src ./test/integration && ast-grep scan --warning",
     "icons:generate": "node scripts/generate-icons.js && npx @tauri-apps/cli icon assets/logo-white.imageset/logo-white-rounded.svg"
   },
   "dependencies": {

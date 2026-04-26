@@ -1,7 +1,6 @@
 mod e2e_test_helpers;
 
 use e2e_test_helpers::{JjVerifier, TestRepo};
-use std::fs;
 use std::path::Path;
 use std::process::Command;
 
@@ -172,11 +171,11 @@ fn test_can_merge_workspace_into_home_repo() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let _workspace_path_str = workspace_path.to_str().unwrap();
+    let workspace_path_str = workspace_path.to_str().expect("workspace path should be utf-8");
 
     // Add a file to the workspace and commit
-    let feature_file = workspace_path.join("merge-feature.txt");
-    fs::write(&feature_file, "merge feature content").expect("Failed to write feature file");
+    TestRepo::write_workspace_file(workspace_path_str, "merge-feature.txt", "merge feature content")
+        .expect("Failed to write feature file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add merge feature")
         .expect("Failed to commit");
 
@@ -314,10 +313,14 @@ fn test_can_squash_merge_workspace_into_home_repo() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let _workspace_path_str = workspace_path.to_str().unwrap();
+    let workspace_path_str = workspace_path.to_str().expect("workspace path should be utf-8");
 
-    let feature_file = workspace_path.join("squash-feature.txt");
-    fs::write(&feature_file, "squash feature content").expect("Failed to write feature file");
+    TestRepo::write_workspace_file(
+        workspace_path_str,
+        "squash-feature.txt",
+        "squash feature content",
+    )
+    .expect("Failed to write feature file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add squash feature")
         .expect("Failed to commit");
 
@@ -376,10 +379,14 @@ fn test_can_rebase_merge_workspace_into_home_repo() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let _workspace_path_str = workspace_path.to_str().unwrap();
+    let workspace_path_str = workspace_path.to_str().expect("workspace path should be utf-8");
 
-    let feature_file = workspace_path.join("rebase-feature.txt");
-    fs::write(&feature_file, "rebase feature content").expect("Failed to write feature file");
+    TestRepo::write_workspace_file(
+        workspace_path_str,
+        "rebase-feature.txt",
+        "rebase feature content",
+    )
+    .expect("Failed to write feature file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add rebase feature")
         .expect("Failed to commit");
 
@@ -481,8 +488,7 @@ fn test_update_workspace_target_branch_perform_rebase() {
     .expect("Failed to create workspace");
 
     // create the develop branch
-    let create_branch_args: &[&str] = &["checkout", "-b", "develop"];
-    TestRepo::run_git(&repo.repo_path, create_branch_args)
+    TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "develop"][..])
         .expect("Failed to create develop branch");
 
     // add a commit to the develop branch
@@ -491,8 +497,7 @@ fn test_update_workspace_target_branch_perform_rebase() {
 
     // check out main branch on the home repo
 
-    let checkout_args: &[&str] = &["checkout", "main"];
-    TestRepo::run_git(&repo.repo_path, checkout_args).expect("Failed to checkout main");
+    TestRepo::run_git(&repo.repo_path, &["checkout", "main"][..]).expect("Failed to checkout main");
 
     // change the target branch of the workspace to the develop branch
     let updated = treq_lib::core::update_workspace(
@@ -631,8 +636,9 @@ fn test_push_workspace_to_remote() {
 
     // Test 3: Add a file and commit to the workspace
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let test_file = workspace_path.join("test-push.txt");
-    fs::write(&test_file, "test push content").expect("Failed to write test file");
+    let workspace_path_str = workspace_path.to_str().expect("workspace path should be utf-8");
+    TestRepo::write_workspace_file(workspace_path_str, "test-push.txt", "test push content")
+        .expect("Failed to write test file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add test push file")
         .expect("Failed to commit");
 
@@ -735,11 +741,15 @@ fn test_split_workspace_move_files_after() {
     .expect("Failed to create source workspace");
 
     let source_path = repo.workspaces_dir().join(&source.workspace_path);
+    let source_path_str = source_path.to_str().unwrap();
 
     // Add files to source workspace
-    fs::write(source_path.join("file1.txt"), "content 1").expect("Failed to write file1");
-    fs::write(source_path.join("file2.txt"), "content 2").expect("Failed to write file2");
-    fs::write(source_path.join("file3.txt"), "content 3").expect("Failed to write file3");
+    TestRepo::write_workspace_file(source_path_str, "file1.txt", "content 1")
+        .expect("Failed to write file1");
+    TestRepo::write_workspace_file(source_path_str, "file2.txt", "content 2")
+        .expect("Failed to write file2");
+    TestRepo::write_workspace_file(source_path_str, "file3.txt", "content 3")
+        .expect("Failed to write file3");
 
     // Split: move file1.txt and file2.txt to new workspace, positioned after source
     let new_workspace = treq_lib::core::split_workspace(
@@ -824,9 +834,12 @@ fn test_split_workspace_move_files_before() {
     .expect("Failed to create source workspace");
 
     let source_path = repo.workspaces_dir().join(&source.workspace_path);
+    let source_path_str = source_path.to_str().unwrap();
 
-    fs::write(source_path.join("file1.txt"), "content 1").expect("Failed to write file1");
-    fs::write(source_path.join("file2.txt"), "content 2").expect("Failed to write file2");
+    TestRepo::write_workspace_file(source_path_str, "file1.txt", "content 1")
+        .expect("Failed to write file1");
+    TestRepo::write_workspace_file(source_path_str, "file2.txt", "content 2")
+        .expect("Failed to write file2");
 
     // Split: move file1.txt before source
     let new_workspace = treq_lib::core::split_workspace(
@@ -915,9 +928,12 @@ fn test_split_workspace_copy_files_after() {
     .expect("Failed to create source workspace");
 
     let source_path = repo.workspaces_dir().join(&source.workspace_path);
+    let source_path_str = source_path.to_str().unwrap();
 
-    fs::write(source_path.join("shared.txt"), "shared content").expect("Failed to write");
-    fs::write(source_path.join("unique.txt"), "unique content").expect("Failed to write");
+    TestRepo::write_workspace_file(source_path_str, "shared.txt", "shared content")
+        .expect("Failed to write");
+    TestRepo::write_workspace_file(source_path_str, "unique.txt", "unique content")
+        .expect("Failed to write");
 
     // Copy shared.txt to new workspace after source
     let new_workspace = treq_lib::core::split_workspace(
@@ -979,8 +995,10 @@ fn test_split_workspace_copy_files_before() {
     .expect("Failed to create source workspace");
 
     let source_path = repo.workspaces_dir().join(&source.workspace_path);
+    let source_path_str = source_path.to_str().unwrap();
 
-    fs::write(source_path.join("shared.txt"), "shared content").expect("Failed to write");
+    TestRepo::write_workspace_file(source_path_str, "shared.txt", "shared content")
+        .expect("Failed to write");
 
     let new_workspace = treq_lib::core::split_workspace(
         &repo.repo_path,
@@ -1048,11 +1066,13 @@ fn test_split_workspace_move_commits_after() {
     let source_path_str = source_path.to_str().unwrap();
 
     // Create multiple commits in the source workspace
-    fs::write(source_path.join("commit1.txt"), "commit 1 content").expect("Failed to write");
+    TestRepo::write_workspace_file(source_path_str, "commit1.txt", "commit 1 content")
+        .expect("Failed to write");
     treq_lib::core::commit_workspace(&repo.repo_path, source.id, "First commit")
         .expect("Failed to commit");
 
-    fs::write(source_path.join("commit2.txt"), "commit 2 content").expect("Failed to write");
+    TestRepo::write_workspace_file(source_path_str, "commit2.txt", "commit 2 content")
+        .expect("Failed to write");
     treq_lib::core::commit_workspace(&repo.repo_path, source.id, "Second commit")
         .expect("Failed to commit");
 
@@ -1133,11 +1153,13 @@ fn test_split_workspace_move_commits_before() {
     let source_path_str = source_path.to_str().unwrap();
 
     // Create commits
-    fs::write(source_path.join("early.txt"), "early content").expect("Failed to write");
+    TestRepo::write_workspace_file(source_path_str, "early.txt", "early content")
+        .expect("Failed to write");
     treq_lib::core::commit_workspace(&repo.repo_path, source.id, "Early commit")
         .expect("Failed to commit");
 
-    fs::write(source_path.join("late.txt"), "late content").expect("Failed to write");
+    TestRepo::write_workspace_file(source_path_str, "late.txt", "late content")
+        .expect("Failed to write");
     treq_lib::core::commit_workspace(&repo.repo_path, source.id, "Late commit")
         .expect("Failed to commit");
 
@@ -1487,13 +1509,11 @@ fn test_recover_workspace_after_jj_reinit() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().unwrap();
 
     // Add uncommitted file to workspace
-    fs::write(
-        workspace_path.join("uncommitted.txt"),
-        "uncommitted content",
-    )
-    .expect("Failed to write file");
+    TestRepo::write_workspace_file(workspace_path_str, "uncommitted.txt", "uncommitted content")
+        .expect("Failed to write file");
 
     // Verify workspace is registered with jj
     let jj_workspaces_before =
@@ -1504,7 +1524,8 @@ fn test_recover_workspace_after_jj_reinit() {
     );
 
     // Delete .jj and reinit — recovery should happen automatically during init
-    fs::remove_dir_all(Path::new(&repo.repo_path).join(".jj")).expect("Failed to remove .jj");
+    TestRepo::remove_dir_all_path(Path::new(&repo.repo_path).join(".jj"))
+        .expect("Failed to remove .jj");
     treq_lib::core::init(&repo.repo_path).expect("Failed to reinit");
 
     // After init: workspace should already be recovered in jj
@@ -1534,7 +1555,7 @@ fn test_recover_workspace_after_jj_reinit() {
     );
 
     // jj should detect the uncommitted changes
-    let changed_files = treq_lib::jj::jj_get_changed_files(workspace_path.to_str().unwrap())
+    let changed_files = treq_lib::jj::jj_get_changed_files(workspace_path_str)
         .expect("Failed to get changed files");
     assert!(
         !changed_files.is_empty(),
@@ -1573,13 +1594,18 @@ fn test_recover_multiple_workspaces_after_jj_reinit() {
 
     let ws1_path = repo.workspaces_dir().join(&ws1.workspace_path);
     let ws2_path = repo.workspaces_dir().join(&ws2.workspace_path);
+    let ws1_path_str = ws1_path.to_str().unwrap();
+    let ws2_path_str = ws2_path.to_str().unwrap();
 
     // Add uncommitted files
-    fs::write(ws1_path.join("ws1-file.txt"), "ws1 content").expect("Failed to write");
-    fs::write(ws2_path.join("ws2-file.txt"), "ws2 content").expect("Failed to write");
+    TestRepo::write_workspace_file(ws1_path_str, "ws1-file.txt", "ws1 content")
+        .expect("Failed to write");
+    TestRepo::write_workspace_file(ws2_path_str, "ws2-file.txt", "ws2 content")
+        .expect("Failed to write");
 
     // Delete .jj and reinit — recovery should happen automatically during init
-    fs::remove_dir_all(Path::new(&repo.repo_path).join(".jj")).expect("Failed to remove .jj");
+    TestRepo::remove_dir_all_path(Path::new(&repo.repo_path).join(".jj"))
+        .expect("Failed to remove .jj");
     treq_lib::core::init(&repo.repo_path).expect("Failed to reinit");
 
     // Both should be back in jj after init
@@ -1629,7 +1655,8 @@ fn test_recover_workspace_preserves_bookmark() {
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
 
     // Delete .jj and reinit — recovery should happen automatically during init
-    fs::remove_dir_all(Path::new(&repo.repo_path).join(".jj")).expect("Failed to remove .jj");
+    TestRepo::remove_dir_all_path(Path::new(&repo.repo_path).join(".jj"))
+        .expect("Failed to remove .jj");
     treq_lib::core::init(&repo.repo_path).expect("Failed to reinit");
 
     // Bookmark should exist and point to workspace's @
@@ -1654,7 +1681,8 @@ fn test_ensure_jj_initialized_reinits_when_jj_deleted() {
     assert!(repo.is_jj_initialized(), ".jj should exist after init");
 
     // Delete .jj
-    fs::remove_dir_all(Path::new(&repo.repo_path).join(".jj")).expect("Failed to remove .jj");
+    TestRepo::remove_dir_all_path(Path::new(&repo.repo_path).join(".jj"))
+        .expect("Failed to remove .jj");
     assert!(!repo.is_jj_initialized(), ".jj should be gone");
 
     // Create a DB for ensure_jj_initialized
@@ -1730,8 +1758,9 @@ fn test_recover_handles_missing_workspace_dir() {
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
 
     // Delete .jj AND the workspace directory, then reinit
-    fs::remove_dir_all(Path::new(&repo.repo_path).join(".jj")).expect("Failed to remove .jj");
-    fs::remove_dir_all(&workspace_path).expect("Failed to remove workspace dir");
+    TestRepo::remove_dir_all_path(Path::new(&repo.repo_path).join(".jj"))
+        .expect("Failed to remove .jj");
+    TestRepo::remove_dir_all_path(&workspace_path).expect("Failed to remove workspace dir");
 
     // Init should not error even when workspace dir is missing
     treq_lib::core::init(&repo.repo_path).expect("Failed to reinit");
@@ -1768,7 +1797,8 @@ fn test_empty_commits_excluded_from_commits_ahead() {
     let workspace_path_str = workspace_path.to_str().unwrap();
 
     // Create a real commit with content
-    fs::write(workspace_path.join("real.txt"), "real content").expect("Failed to write file");
+    TestRepo::write_workspace_file(workspace_path_str, "real.txt", "real content")
+        .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add real file")
         .expect("Failed to commit");
 
@@ -1825,7 +1855,8 @@ fn test_merge_abandons_empty_commits() {
     let workspace_path_str = workspace_path.to_str().unwrap();
 
     // Create a real commit
-    fs::write(workspace_path.join("feature.txt"), "feature content").expect("Failed to write file");
+    TestRepo::write_workspace_file(workspace_path_str, "feature.txt", "feature content")
+        .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add feature")
         .expect("Failed to commit");
 
@@ -1880,7 +1911,8 @@ fn test_squash_merge_with_empty_commits() {
     let workspace_path_str = workspace_path.to_str().unwrap();
 
     // Create a real commit
-    fs::write(workspace_path.join("squash.txt"), "squash content").expect("Failed to write file");
+    TestRepo::write_workspace_file(workspace_path_str, "squash.txt", "squash content")
+        .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add squash file")
         .expect("Failed to commit");
 
@@ -1938,7 +1970,8 @@ fn test_rebase_merge_with_empty_commits() {
     let workspace_path_str = workspace_path.to_str().unwrap();
 
     // Create a real commit
-    fs::write(workspace_path.join("rebase.txt"), "rebase content").expect("Failed to write file");
+    TestRepo::write_workspace_file(workspace_path_str, "rebase.txt", "rebase content")
+        .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add rebase file")
         .expect("Failed to commit");
 
@@ -2022,7 +2055,9 @@ fn test_workspace_status_in_sync() {
 
     // Add a commit so there's something to push
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    fs::write(workspace_path.join("file.txt"), "content").expect("Failed to write file");
+    let workspace_path_str = workspace_path.to_str().unwrap();
+    TestRepo::write_workspace_file(workspace_path_str, "file.txt", "content")
+        .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit")
         .expect("Failed to commit");
 
@@ -2059,17 +2094,19 @@ fn test_workspace_status_ahead_of_remote() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let _workspace_path_str = workspace_path.to_str().unwrap();
+    let workspace_path_str = workspace_path.to_str().unwrap();
 
     // Add initial commit and push
-    fs::write(workspace_path.join("file1.txt"), "content 1").expect("Failed to write file");
+    TestRepo::write_workspace_file(workspace_path_str, "file1.txt", "content 1")
+        .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit")
         .expect("Failed to commit");
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
         .expect("Failed to push workspace");
 
     // Make a local commit without pushing
-    fs::write(workspace_path.join("file2.txt"), "content 2").expect("Failed to write file");
+    TestRepo::write_workspace_file(workspace_path_str, "file2.txt", "content 2")
+        .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Local only commit")
         .expect("Failed to commit");
 
@@ -2105,7 +2142,8 @@ fn test_workspace_status_behind_remote() {
     let workspace_path_str = workspace_path.to_str().unwrap();
 
     // Add initial commit and push
-    fs::write(workspace_path.join("file1.txt"), "content 1").expect("Failed to write file");
+    TestRepo::write_workspace_file(workspace_path_str, "file1.txt", "content 1")
+        .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit")
         .expect("Failed to commit");
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
@@ -2113,12 +2151,13 @@ fn test_workspace_status_behind_remote() {
 
     // Clone the bare remote, commit and push from the clone to simulate remote-ahead
     let clone_dir = repo.temp_dir.path().join("clone");
+    let clone_path_str = clone_dir.to_str().unwrap();
     let remote_dir = repo.temp_dir.path().join("remote.git");
     Command::new("git")
         .args([
             "clone",
             remote_dir.to_str().unwrap(),
-            clone_dir.to_str().unwrap(),
+            clone_path_str,
         ])
         .output()
         .expect("Failed to clone remote");
@@ -2127,7 +2166,8 @@ fn test_workspace_status_behind_remote() {
         .args(["checkout", &workspace.branch_name])
         .output()
         .expect("Failed to checkout branch in clone");
-    fs::write(clone_dir.join("remote-file.txt"), "from remote").expect("Failed to write file");
+    TestRepo::write_workspace_file(clone_path_str, "remote-file.txt", "from remote")
+        .expect("Failed to write file");
     Command::new("git")
         .current_dir(&clone_dir)
         .args(["add", "remote-file.txt"])
@@ -2198,29 +2238,31 @@ fn test_workspace_status_diverged() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let _workspace_path_str = workspace_path.to_str().unwrap();
+    let workspace_path_str = workspace_path.to_str().unwrap();
 
     // Add initial commit and push
-    fs::write(workspace_path.join("file1.txt"), "content 1").expect("Failed to write file");
+    TestRepo::write_workspace_file(workspace_path_str, "file1.txt", "content 1")
+        .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit")
         .expect("Failed to commit");
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
         .expect("Failed to push workspace");
 
     // Make a local commit (don't push)
-    fs::write(workspace_path.join("local-file.txt"), "local content")
+    TestRepo::write_workspace_file(workspace_path_str, "local-file.txt", "local content")
         .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Local commit")
         .expect("Failed to commit");
 
     // Clone the bare remote, commit and push from the clone to simulate remote-ahead
     let clone_dir = repo.temp_dir.path().join("clone-diverged");
+    let clone_path_str = clone_dir.to_str().unwrap();
     let remote_dir = repo.temp_dir.path().join("remote.git");
     Command::new("git")
         .args([
             "clone",
             remote_dir.to_str().unwrap(),
-            clone_dir.to_str().unwrap(),
+            clone_path_str,
         ])
         .output()
         .expect("Failed to clone remote");
@@ -2229,7 +2271,8 @@ fn test_workspace_status_diverged() {
         .args(["checkout", &workspace.branch_name])
         .output()
         .expect("Failed to checkout branch in clone");
-    fs::write(clone_dir.join("remote-file.txt"), "from remote").expect("Failed to write file");
+    TestRepo::write_workspace_file(clone_path_str, "remote-file.txt", "from remote")
+        .expect("Failed to write file");
     Command::new("git")
         .current_dir(&clone_dir)
         .args(["add", "remote-file.txt"])
@@ -2284,26 +2327,28 @@ fn test_pull_workspace_resolves_divergence() {
     let workspace_path_str = workspace_path.to_str().unwrap();
 
     // Add initial commit B and push
-    fs::write(workspace_path.join("file1.txt"), "content 1").expect("Failed to write file");
+    TestRepo::write_workspace_file(workspace_path_str, "file1.txt", "content 1")
+        .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Commit B")
         .expect("Failed to commit");
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
         .expect("Failed to push workspace");
 
     // Make local commit D (don't push)
-    fs::write(workspace_path.join("local-file.txt"), "local content")
+    TestRepo::write_workspace_file(workspace_path_str, "local-file.txt", "local content")
         .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Local commit D")
         .expect("Failed to commit");
 
     // Clone the bare remote, commit C, push from clone to simulate remote-ahead
     let clone_dir = repo.temp_dir.path().join("clone-pull-diverged");
+    let clone_path_str = clone_dir.to_str().unwrap();
     let remote_dir = repo.temp_dir.path().join("remote.git");
     Command::new("git")
         .args([
             "clone",
             remote_dir.to_str().unwrap(),
-            clone_dir.to_str().unwrap(),
+            clone_path_str,
         ])
         .output()
         .expect("Failed to clone remote");
@@ -2312,7 +2357,8 @@ fn test_pull_workspace_resolves_divergence() {
         .args(["checkout", &workspace.branch_name])
         .output()
         .expect("Failed to checkout branch in clone");
-    fs::write(clone_dir.join("remote-file.txt"), "from remote").expect("Failed to write file");
+    TestRepo::write_workspace_file(clone_path_str, "remote-file.txt", "from remote")
+        .expect("Failed to write file");
     Command::new("git")
         .current_dir(&clone_dir)
         .args(["add", "remote-file.txt"])
@@ -2389,10 +2435,11 @@ fn test_pull_workspace_no_divergence() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let _workspace_path_str = workspace_path.to_str().unwrap();
+    let workspace_path_str = workspace_path.to_str().unwrap();
 
     // Add initial commit and push
-    fs::write(workspace_path.join("file1.txt"), "content 1").expect("Failed to write file");
+    TestRepo::write_workspace_file(workspace_path_str, "file1.txt", "content 1")
+        .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit")
         .expect("Failed to commit");
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
@@ -2400,12 +2447,13 @@ fn test_pull_workspace_no_divergence() {
 
     // No local changes — simulate remote advancing
     let clone_dir = repo.temp_dir.path().join("clone-pull-no-div");
+    let clone_path_str = clone_dir.to_str().unwrap();
     let remote_dir = repo.temp_dir.path().join("remote.git");
     Command::new("git")
         .args([
             "clone",
             remote_dir.to_str().unwrap(),
-            clone_dir.to_str().unwrap(),
+            clone_path_str,
         ])
         .output()
         .expect("Failed to clone remote");
@@ -2414,7 +2462,8 @@ fn test_pull_workspace_no_divergence() {
         .args(["checkout", &workspace.branch_name])
         .output()
         .expect("Failed to checkout branch in clone");
-    fs::write(clone_dir.join("remote-only.txt"), "remote content").expect("Failed to write file");
+    TestRepo::write_workspace_file(clone_path_str, "remote-only.txt", "remote content")
+        .expect("Failed to write file");
     Command::new("git")
         .current_dir(&clone_dir)
         .args(["add", "remote-only.txt"])
@@ -2463,7 +2512,7 @@ fn test_jj_get_sync_status_baseline_in_sync() {
     let workspace_path_str = workspace_path.to_str().unwrap();
 
     // Make a commit and push to establish the remote branch
-    fs::write(workspace_path.join("initial.txt"), "initial content\n")
+    TestRepo::write_workspace_file(workspace_path_str, "initial.txt", "initial content\n")
         .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit on branch")
         .expect("Failed to commit");
@@ -2528,7 +2577,7 @@ fn test_jj_get_sync_status_ahead_after_local_commit() {
     let workspace_path_str = workspace_path.to_str().unwrap();
 
     // Establish remote branch
-    fs::write(workspace_path.join("initial.txt"), "initial content\n")
+    TestRepo::write_workspace_file(workspace_path_str, "initial.txt", "initial content\n")
         .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit on branch")
         .expect("Failed to commit");
@@ -2538,7 +2587,7 @@ fn test_jj_get_sync_status_ahead_after_local_commit() {
         .expect("Failed to pull");
 
     // Make a local-only commit → expect (1, 0)
-    fs::write(workspace_path.join("local_only.txt"), "local content\n")
+    TestRepo::write_workspace_file(workspace_path_str, "local_only.txt", "local content\n")
         .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Local only commit")
         .expect("Failed to commit");
@@ -2580,7 +2629,7 @@ fn test_jj_get_sync_status_returns_to_sync_after_push() {
     let workspace_path_str = workspace_path.to_str().unwrap();
 
     // Establish remote branch
-    fs::write(workspace_path.join("initial.txt"), "initial content\n")
+    TestRepo::write_workspace_file(workspace_path_str, "initial.txt", "initial content\n")
         .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit on branch")
         .expect("Failed to commit");
@@ -2593,7 +2642,7 @@ fn test_jj_get_sync_status_returns_to_sync_after_push() {
         .expect("Failed to get git branch before local commit");
 
     // Make a local commit then push it
-    fs::write(workspace_path.join("local_only.txt"), "local content\n")
+    TestRepo::write_workspace_file(workspace_path_str, "local_only.txt", "local content\n")
         .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Local only commit")
         .expect("Failed to commit");
@@ -2656,7 +2705,7 @@ fn test_jj_get_sync_status_multiple_commits_ahead() {
     let workspace_path_str = workspace_path.to_str().unwrap();
 
     // Establish remote branch
-    fs::write(workspace_path.join("initial.txt"), "initial content\n")
+    TestRepo::write_workspace_file(workspace_path_str, "initial.txt", "initial content\n")
         .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit on branch")
         .expect("Failed to commit");
@@ -2666,10 +2715,12 @@ fn test_jj_get_sync_status_multiple_commits_ahead() {
         .expect("Failed to pull");
 
     // Make two local commits → expect (2, 0)
-    fs::write(workspace_path.join("local_2.txt"), "content 2\n").expect("Failed to write file");
+    TestRepo::write_workspace_file(workspace_path_str, "local_2.txt", "content 2\n")
+        .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Second local commit")
         .expect("Failed to commit");
-    fs::write(workspace_path.join("local_3.txt"), "content 3\n").expect("Failed to write file");
+    TestRepo::write_workspace_file(workspace_path_str, "local_3.txt", "content 3\n")
+        .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Third local commit")
         .expect("Failed to commit");
 
@@ -2721,7 +2772,7 @@ fn test_workspace_push_pull_with_workspace_status() {
         .expect("Failed to get git branch before operations");
 
     // Make a commit and push to establish the remote branch
-    fs::write(workspace_path.join("initial.txt"), "initial content\n")
+    TestRepo::write_workspace_file(workspace_path_str, "initial.txt", "initial content\n")
         .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit on branch")
         .expect("Failed to commit");
@@ -2751,7 +2802,7 @@ fn test_workspace_push_pull_with_workspace_status() {
     );
 
     // Make a local-only commit → expect Ahead { count: 1 }
-    fs::write(workspace_path.join("local_only.txt"), "local content\n")
+    TestRepo::write_workspace_file(workspace_path_str, "local_only.txt", "local content\n")
         .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Local only commit")
         .expect("Failed to commit");
@@ -2788,10 +2839,12 @@ fn test_workspace_push_pull_with_workspace_status() {
     );
 
     // Make two more local commits → expect Ahead { count: 2 }
-    fs::write(workspace_path.join("local_2.txt"), "content 2\n").expect("Failed to write file");
+    TestRepo::write_workspace_file(workspace_path_str, "local_2.txt", "content 2\n")
+        .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Second local commit")
         .expect("Failed to commit");
-    fs::write(workspace_path.join("local_3.txt"), "content 3\n").expect("Failed to write file");
+    TestRepo::write_workspace_file(workspace_path_str, "local_3.txt", "content 3\n")
+        .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Third local commit")
         .expect("Failed to commit");
 
@@ -2917,10 +2970,11 @@ fn test_workspace_status_with_workspace_id() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let _workspace_path_str = workspace_path.to_str().unwrap();
+    let workspace_path_str = workspace_path.to_str().unwrap();
 
     // Push initial commit to establish remote branch
-    fs::write(workspace_path.join("initial.txt"), "initial\n").expect("Failed to write");
+    TestRepo::write_workspace_file(workspace_path_str, "initial.txt", "initial\n")
+        .expect("Failed to write");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Initial commit")
         .expect("Failed to commit");
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
@@ -2940,7 +2994,8 @@ fn test_workspace_status_with_workspace_id() {
     assert_eq!(status.partial.current.id, workspace.id);
 
     // Make a local commit → should be Ahead
-    fs::write(workspace_path.join("local.txt"), "local\n").expect("Failed to write");
+    TestRepo::write_workspace_file(workspace_path_str, "local.txt", "local\n")
+        .expect("Failed to write");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Local commit")
         .expect("Failed to commit");
 
@@ -2979,9 +3034,8 @@ fn merge_diff_new_workspace(repo: &TestRepo, branch: &str) -> Workspace {
 
 fn merge_diff_write_file(repo: &TestRepo, ws: &Workspace, path: &str, content: &str) {
     let dir = repo.workspaces_dir().join(&ws.workspace_path);
-    let full = dir.join(path);
-    fs::create_dir_all(full.parent().unwrap()).unwrap();
-    fs::write(&full, content).unwrap();
+    let dir_str = dir.to_str().unwrap();
+    TestRepo::write_workspace_file(dir_str, path, content).unwrap();
 }
 
 fn merge_diff_commit(repo: &TestRepo, ws: &Workspace, msg: &str) {

@@ -33,9 +33,7 @@ fn process_utf8_chunk(pending: &mut Vec<u8>, new_bytes: &[u8]) -> String {
                 // Return the valid portion (should always be valid UTF-8)
                 String::from_utf8(valid.to_vec()).unwrap_or_default()
             } else {
-                // Actual invalid UTF-8 byte(s) in the middle
-                // This shouldn't happen with a proper terminal, but handle gracefully
-                // Use lossy conversion and clear pending
+                // Invalid UTF-8 mid-stream: use lossy output (rare for a real PTY)
                 String::from_utf8_lossy(&combined).to_string()
             }
         }
@@ -237,8 +235,7 @@ impl PtyManager {
                                 continue;
                             }
 
-                            // Phase 1: Before we've seen the command echo,
-                            // suppress ALL output (shell prompt, empty lines, etc.)
+                            // Phase 1: before command echo, suppress all output (prompt, blanks, etc.)
                             if !seen_command_echo {
                                 continue;
                             }
@@ -253,12 +250,11 @@ impl PtyManager {
                             non_matching_lines_emitted += 1;
 
                             if non_matching_lines_emitted >= FILTER_STOP_THRESHOLD {
-                                // Stop filtering: clear the auto_command
                                 {
+                                    // Stop filtering by clearing the auto_command
                                     let mut guard = auto_command_reader.lock().unwrap();
                                     *guard = None;
                                 }
-                                // Flush remaining line buffer
                                 if !line_buffer.is_empty() {
                                     let remaining = std::mem::take(&mut line_buffer);
                                     callback(remaining);

@@ -1,7 +1,6 @@
 mod e2e_test_helpers;
 
 use e2e_test_helpers::TestRepo;
-use std::fs;
 use std::process::Command;
 
 fn jj_binary() -> String {
@@ -51,7 +50,8 @@ fn test_list_conflicted_files_no_conflicts() {
     let workspace_path_str = workspace_path.to_str().unwrap();
 
     // Write a clean file and commit — no conflicts
-    fs::write(workspace_path.join("clean.txt"), "no conflicts here").expect("Failed to write file");
+    TestRepo::write_workspace_file(workspace_path_str, "clean.txt", "no conflicts here")
+        .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "clean commit")
         .expect("Failed to commit");
 
@@ -87,7 +87,7 @@ fn test_list_conflicted_files_with_conflicts() {
     let workspace_path_str = workspace_path.to_str().unwrap();
 
     // In workspace: create conflict.txt and commit → sibling change A
-    fs::write(workspace_path.join("conflict.txt"), "workspace version\n")
+    TestRepo::write_workspace_file(workspace_path_str, "conflict.txt", "workspace version\n")
         .expect("Failed to write conflict.txt in workspace");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "workspace commit")
         .expect("Failed to commit in workspace");
@@ -97,11 +97,8 @@ fn test_list_conflicted_files_with_conflicts() {
 
     // In main repo working copy: create conflict.txt with different content and commit → sibling change B
     // Both A and B descend from the same parent (init), so rebasing A onto B creates a conflict.
-    fs::write(
-        std::path::Path::new(&repo.repo_path).join("conflict.txt"),
-        "main version\n",
-    )
-    .expect("Failed to write conflict.txt in main repo");
+    repo.create_file("conflict.txt", "main version\n")
+        .expect("Failed to write conflict.txt in main repo");
     treq_lib::jj::jj_commit(&repo.repo_path, "main commit").expect("Failed to commit in main repo");
 
     let main_change_id =

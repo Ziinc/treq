@@ -34,7 +34,7 @@ interface UseReviewParams {
 	conflictRegionsByFile: Map<string, ConflictRegion[]>;
 	actualConflictedFiles: string[];
 	setCollapsedFiles: React.Dispatch<React.SetStateAction<Set<string>>>;
-	/** Ref that will be populated with applyChangedFiles after isInReviewMode is computed */
+	// Filled with applyChangedFiles once isInReviewMode is known
 	applyChangedFilesRef: React.MutableRefObject<
 		(parsed: ParsedFileChange[], forceApply?: boolean) => void
 	>;
@@ -176,7 +176,7 @@ export function useReview({
 				);
 				setCollapsedFiles((prev) => new Set(prev).add(filePath));
 			} catch {
-				/* mark-viewed best-effort */
+				void 0; // mark-viewed best-effort
 			}
 		},
 		[workspacePath, allFileHunks, setCollapsedFiles],
@@ -197,7 +197,7 @@ export function useReview({
 					return next;
 				});
 			} catch {
-				/* unmark-viewed best-effort */
+				void 0; // unmark-viewed best-effort
 			}
 		},
 		[workspacePath, setCollapsedFiles],

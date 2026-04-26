@@ -29,8 +29,7 @@ fn setup_workspace_with_pushed_commit(
     .expect("Failed to create workspace");
 
     let full_path = workspace_full_path(repo, &ws);
-    let file_path = std::path::Path::new(&full_path).join(filename);
-    std::fs::write(&file_path, content).expect("Failed to write file");
+    TestRepo::write_workspace_file(&full_path, filename, content).expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, ws.id, &format!("Add {}", filename))
         .expect("Failed to create commit");
 
@@ -53,8 +52,8 @@ fn test_auto_rebase_resolves_bookmark_conflict() {
 
     let full_path = workspace_full_path(&repo, &ws);
 
-    let local_file = std::path::Path::new(&full_path).join("local2.txt");
-    std::fs::write(&local_file, "local2").expect("Failed to write file");
+    TestRepo::write_workspace_file(&full_path, "local2.txt", "local2")
+        .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, ws.id, "Add local2.txt")
         .expect("Failed to create local commit");
 
@@ -150,13 +149,11 @@ fn test_auto_rebase_batch_resolves_bookmark_conflicts() {
     )
     .expect("Failed to advance main");
 
-    let local1 = std::path::Path::new(&full_path1).join("local_ws1.txt");
-    std::fs::write(&local1, "local ws1").expect("write");
+    TestRepo::write_workspace_file(&full_path1, "local_ws1.txt", "local ws1").expect("write");
     treq_lib::core::commit_workspace(&repo.repo_path, ws1.id, "Local commit on ws1")
         .expect("Failed to create local commit ws1");
 
-    let local2 = std::path::Path::new(&full_path2).join("local_ws2.txt");
-    std::fs::write(&local2, "local ws2").expect("write");
+    TestRepo::write_workspace_file(&full_path2, "local_ws2.txt", "local ws2").expect("write");
     treq_lib::core::commit_workspace(&repo.repo_path, ws2.id, "Local commit on ws2")
         .expect("Failed to create local commit ws2");
 
@@ -205,8 +202,8 @@ fn test_auto_rebase_no_conflict_still_works() {
 
     let full_path = workspace_full_path(&repo, &ws);
 
-    let file_path = std::path::Path::new(&full_path).join("ws_file.txt");
-    std::fs::write(&file_path, "workspace content").expect("Failed to write file");
+    TestRepo::write_workspace_file(&full_path, "ws_file.txt", "workspace content")
+        .expect("Failed to write file");
     treq_lib::core::commit_workspace(&repo.repo_path, ws.id, "Add ws_file.txt")
         .expect("Failed to create commit");
 

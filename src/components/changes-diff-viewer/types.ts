@@ -89,6 +89,25 @@ export interface PendingComment {
 	lineSide: "old" | "new";
 }
 
+export interface CommentLineQuery {
+	filePath: string;
+	hunkId: string;
+	lineNumber: number;
+	side: "old" | "new";
+}
+
+export interface DiffLinePointer {
+	filePath: string;
+	hunkIndex: number;
+	lineIndex: number;
+}
+
+export interface LineMouseDownPayload extends DiffLinePointer {
+	event: React.MouseEvent;
+	lineContent: string;
+	isStaged: boolean;
+}
+
 export interface CommitInputHandle {
 	focus: () => void;
 }
@@ -162,27 +181,11 @@ export interface HunkLinesProps {
 		hunkIndex: number,
 		direction: "before" | "after",
 	) => void;
-	// eslint-disable-next-line max-params
-	handleLineMouseDown: (
-		e: React.MouseEvent,
-		filePath: string,
-		hunkIndex: number,
-		lineIndex: number,
-		lineContent: string,
-		isStaged: boolean,
-	) => void;
-	handleLineMouseEnter: (
-		filePath: string,
-		hunkIndex: number,
-		lineIndex: number,
-	) => void;
+	handleLineMouseDown: (payload: LineMouseDownPayload) => void;
+	handleLineMouseEnter: (line: DiffLinePointer) => void;
 	handleLineMouseUp: () => void;
 	handleAddCommentFromSelection: () => void;
-	isLineSelected: (
-		filePath: string,
-		hunkIndex: number,
-		lineIndex: number,
-	) => boolean;
+	isLineSelected: (line: DiffLinePointer) => boolean;
 	saveConflictComment: (args: {
 		conflictId: string;
 		filePath: string;
@@ -205,11 +208,5 @@ export interface HunkLinesProps {
 		React.SetStateAction<PendingComment | null>
 	>;
 	setShowCommentInput: React.Dispatch<React.SetStateAction<boolean>>;
-	// eslint-disable-next-line max-params
-	getCommentsForLine: (
-		filePath: string,
-		hunkId: string,
-		lineNumber: number,
-		side: "old" | "new",
-	) => LineComment[];
+	getCommentsForLine: (query: CommentLineQuery) => LineComment[];
 }

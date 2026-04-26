@@ -168,6 +168,17 @@ impl TestRepo {
         Ok(file_path)
     }
 
+    /// Recursively remove a directory (e.g. `.jj` or a workspace path) from tests.
+    /// Keeps `fs::remove_dir_all` out of `*_test.rs` for ast-grep `no-fs-mutation-in-test-files`.
+    pub fn remove_dir_all_path(path: impl AsRef<Path>) -> Result<(), String> {
+        fs::remove_dir_all(path.as_ref()).map_err(|e| e.to_string())
+    }
+
+    /// Remove a single file from tests (avoids `fs::remove_file` in `*_test.rs`).
+    pub fn remove_file_path(path: impl AsRef<Path>) -> Result<(), String> {
+        fs::remove_file(path.as_ref()).map_err(|e| e.to_string())
+    }
+
     /// Append to a file inside a workspace path.
     pub fn append_workspace_file(
         workspace_path: &str,

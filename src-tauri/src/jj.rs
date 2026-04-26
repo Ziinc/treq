@@ -385,8 +385,7 @@ fn init_jj_for_git_repo(repo_path: &str) -> Result<(), JjError> {
 
     let settings = create_user_settings(repo_path)?;
 
-    // Use init_external_git since .git already exists
-    // This links jj to the existing git repository
+    // Use init_external_git to link jj to the existing .git repository.
     let git_repo_path = path.join(".git");
 
     futures::executor::block_on(Workspace::init_external_git(
@@ -504,10 +503,7 @@ pub fn create_workspace(
         .ok()
         .filter(|branch| !branch.is_empty() && branch != "HEAD");
 
-    // Import git HEAD so the initial git commit (e.g. README.md) is visible in jj op-store.
-    // Also track any remote bookmarks that have a matching local bookmark — mirrors what
-    // `jj git fetch` would do — so that subsequent `jj git push` doesn't refuse due to
-    // untracked remote bookmarks (e.g. main@origin).
+    // Import git HEAD and mirror fetch-style bookmark tracking to avoid untracked remote push failures.
     let parent_repo = {
         let mut import_tx = parent_repo.start_transaction();
         let _ = futures::executor::block_on(git::import_head(import_tx.repo_mut()));
@@ -617,8 +613,7 @@ pub fn create_workspace(
                     JjError::GitWorkspaceError(format!("Remote bookmark '{}' not found", jj_ref))
                 })?
         } else {
-            // Local bookmark: prefer a workspace WC commit with the same parents
-            // (represents uncommitted changes on top of the bookmark state).
+            // Prefer a workspace WC commit with same parents (uncommitted changes atop bookmark state).
             let bookmark_id = parent_repo
                 .view()
                 .get_local_bookmark(RefName::new(&jj_ref))
@@ -1057,8 +1052,7 @@ pub fn remove_workspace(repo_path: &str, workspace_path: &str) -> Result<(), JjE
         .and_then(|n| n.to_str())
         .unwrap_or("");
 
-    // Always try to forget the jj workspace first
-    // This ensures jj stops tracking it even if directory is already gone
+    // Always forget the jj workspace first so jj stops tracking even if directory is gone.
     if !workspace_name.is_empty() {
         let output = command_for("jj")
             .current_dir(repo_path)
@@ -1256,8 +1250,7 @@ pub fn jj_diff_summary(workspace_path: &str, change_id: &str) -> Result<Vec<Stri
     let files: Vec<String> = stdout
         .lines()
         .filter_map(|line| {
-            // jj diff --summary format: "M file.txt" or "A file.txt" or "D file.txt"
-            // Renames: "R {old.txt => new.txt}"
+            // Parse jj diff --summary entries like M/A/D paths and R rename records.
             let line = line.trim();
             if line.len() > 2 {
                 let raw_path = &line[2..];
@@ -1339,7 +1332,6 @@ pub fn update_stale_workspace(workspace_path: &str) -> Result<(), JjError> {
 ///
 /// Note: This function is kept for potential future use. After the fix for stale working copies,
 /// we no longer edit working copies from outside their workspace directories.
-#[allow(dead_code)]
 pub fn jj_edit_workspace_working_copy(
     workspace_path: &str,
     branch_name: &str,
@@ -1358,8 +1350,7 @@ pub fn jj_edit_workspace_working_copy(
         }
     }
 
-    // 2. Check if bookmark points to @ (working copy)
-    // If so, we're already at the working copy, no need to create a new one
+    // 2. If bookmark already points to @, no new working copy is needed.
     let bookmark_commit = jj_get_commit_id(workspace_path, branch_name);
     let working_copy_commit = jj_get_commit_id(workspace_path, "@");
 
@@ -1370,8 +1361,7 @@ pub fn jj_edit_workspace_working_copy(
         }
     }
 
-    // 3. Fallback: jj edit <branch> then jj new
-    // This happens when there's no child and bookmark != working copy
+    // 3. Fallback to `jj edit <branch>` then `jj new` when no child exists.
     let edit_result = command_for("jj")
         .current_dir(workspace_path)
         .args(["edit", branch_name])
@@ -1526,9 +1516,7 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
         Err(_) => return Ok(Vec::new()), // locked_ws dropped here, lock released
     };
 
-    // If the tree changed, create a new WC commit and update the op-store so that
-    // subsequent jj_lib loads (e.g. create_workspace for a stacked workspace) see
-    // the snapshotted state.
+    // If tree changed, create a new WC commit and update op-store to expose the snapshotted state.
     if new_tree.tree_ids() != wc_commit.tree_ids() {
         let mut tx = repo.start_transaction();
         let mut builder = tx.repo_mut().rewrite_commit(&wc_commit).detach();
@@ -1634,8 +1622,7 @@ pub fn jj_sync_working_copy_if_safe(
         return Ok(false); // Skip: working copy has uncommitted changes
     }
 
-    // Safe to sync: working copy is empty and needs updating
-    // Run FROM the workspace directory to avoid staleness
+    // Safe to sync only when WC is empty and run from workspace directory.
     let result = command_for("jj")
         .current_dir(workspace_path)
         .args(["edit", branch_name])
@@ -1649,8 +1636,7 @@ pub fn jj_sync_working_copy_if_safe(
         )));
     }
 
-    // Create a new empty working copy so we don't manipulate the bookmark's commit directly
-    // (the bookmark's commit may be immutable)
+    // Create a new empty working copy instead of editing a potentially immutable bookmark commit.
     let result = command_for("jj")
         .current_dir(workspace_path)
         .args(["new"])
@@ -1969,9 +1955,7 @@ pub fn is_bookmark_tracked(
 
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    // Two possible formats for tracked bookmarks:
-    // 1. "bookmark_name@remote_name: hash ..." (all-in-one format)
-    // 2. "bookmark_name: hash ...\n  @remote_name ..." (multi-line format with indented remote)
+    // Handle both single-line and multi-line tracked bookmark output formats.
 
     let all_in_one_pattern = format!("{}@{}:", bookmark_name, remote_name);
     let lines: Vec<&str> = stdout.lines().collect();
@@ -1984,8 +1968,7 @@ pub fn is_bookmark_tracked(
             return Ok(true);
         }
 
-        // Check for multi-line format
-        // Look for line that starts with bookmark_name:
+        // Also handle multi-line format by matching lines that start with bookmark_name.
         if line.starts_with(&format!("{}:", bookmark_name)) {
             // Check if next line (if exists) is an indented remote reference
             if i + 1 < lines.len() {
@@ -2030,8 +2013,7 @@ pub fn jj_edit_bookmark(repo_path: &str, bookmark_name: &str) -> Result<String, 
         }
     }
 
-    // Strategy 3: jj new <bookmark> — works for both mutable and immutable commits
-    // This creates a new empty working copy on top of the bookmark's commit
+    // Strategy 3: `jj new <bookmark>` works for mutable and immutable commits.
     let output = command_for("jj")
         .current_dir(repo_path)
         .args(["new", bookmark_name])
@@ -2106,9 +2088,7 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     let repo = futures::executor::block_on(workspace.repo_loader().load_at_head())
         .map_err(|e| JjError::IoError(format!("Failed to load repo: {}", e)))?;
 
-    // Snapshot working copy to capture file changes.
-    // Load .gitignore and .git/info/exclude from the main repo so that
-    // build artifacts, node_modules, etc. don't explode snapshot time.
+    // Snapshot working copy and load main-repo ignore rules to avoid expensive noise.
     let ignore_repo_root = repo_path_opt.as_deref().unwrap_or(workspace_path);
     let base_ignores = GitIgnoreFile::empty()
         .chain_with_file("", Path::new(ignore_repo_root).join(".gitignore"))
@@ -2197,8 +2177,7 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     futures::executor::block_on(tx.repo_mut().rebase_descendants())
         .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
 
-    // Keep colocated git refs aligned with jj refs so subsequent branch-based
-    // revsets (for example `main..@`) don't see stale/conflicted bookmarks.
+    // Keep colocated git refs aligned with jj refs to avoid stale/conflicted bookmark revsets.
     let _ = git::export_refs(tx.repo_mut());
 
     // Commit the transaction and finalize working copy
@@ -2378,8 +2357,7 @@ pub fn get_conflicted_files(
     if let Some(branch) = target_branch {
         // Validate branch name to prevent injection
         if !branch.starts_with('-') && !branch.contains('\0') && !branch.is_empty() {
-            // Convert git format to jj format (e.g., origin/main -> main@origin)
-            // Derive repo path from workspace path for remote detection
+            // Convert git branch format to jj format using derived repo path for remote detection.
             let repo_path = derive_repo_path_from_workspace(workspace_path)
                 .unwrap_or_else(|| workspace_path.to_string());
             let jj_branch = convert_git_branch_to_jj_format(branch, &repo_path);
@@ -2747,8 +2725,7 @@ pub fn jj_rebase_with_revset(
     let stderr = String::from_utf8_lossy(&output.stderr);
     let combined_message = format!("{}{}", stdout, stderr);
 
-    // Empty revision set means there are no commits to rebase (branch is already
-    // on target, or the revset resolves to nothing). Treat as a successful no-op.
+    // Empty revision sets are successful no-ops when branch is already on target.
     if !output.status.success() && stderr.contains("Empty revision set") {
         return Ok(JjRebaseResult {
             success: true,
@@ -2756,10 +2733,7 @@ pub fn jj_rebase_with_revset(
         });
     }
 
-    // After rebase with -s <revset> -d <target>, jj automatically updates bookmarks
-    // that are included in the revset to point to the rebased commits.
-    // We don't need to manually set the bookmark to @ (which is the working copy).
-    // Working only with committed bookmarks ensures working copies stay isolated.
+    // Rebase updates included bookmarks automatically; keep bookmark operations commit-only for workspace isolation.
 
     Ok(JjRebaseResult {
         success: output.status.success(),
@@ -2807,8 +2781,7 @@ pub fn jj_push(workspace_path: &str) -> Result<String, JjError> {
     // Get current branch name to check/ensure tracking
     let branch_name = get_workspace_branch(workspace_path)?;
 
-    // Ensure bookmark is tracked before pushing
-    // This helps avoid "Non-tracking remote bookmark" warnings
+    // Ensure bookmark is tracked before push to avoid non-tracking bookmark warnings.
     let mut tracking_message = String::new();
 
     match is_bookmark_tracked(workspace_path, &branch_name, "origin") {
@@ -2838,8 +2811,7 @@ pub fn jj_push(workspace_path: &str) -> Result<String, JjError> {
         }
     }
 
-    // Execute the push with explicit bookmark name so new/untracked bookmarks
-    // are pushed even before they have a remote-tracking counterpart.
+    // Push explicit bookmark names so new/untracked bookmarks are still pushed.
     let mut cmd = command_for("jj");
     cmd.current_dir(workspace_path);
     cmd.args(["git", "push", "--bookmark", &branch_name]);
@@ -2856,8 +2828,7 @@ pub fn jj_push(workspace_path: &str) -> Result<String, JjError> {
         )));
     }
 
-    // Fallback: if jj CLI didn't push the branch (possible version mismatch between
-    // jj_lib and jj CLI), also push directly via git from the main repo path.
+    // Fallback to git push when jj CLI and jj_lib behavior diverges.
     if let Some(repo_path) = derive_repo_path_from_workspace(workspace_path) {
         let git_out = std::process::Command::new("git")
             .current_dir(&repo_path)
@@ -2940,8 +2911,7 @@ pub fn jj_get_sync_status(
         return jj_get_diverged_sync_counts(workspace_path, branch_name);
     }
 
-    // Count commits ahead (local has, remote doesn't)
-    // Using: jj log -r '<remote>..<local>' --no-graph -T 'commit_id\n'
+    // Count commits ahead with `jj log <remote>..<local>`.
     let ahead_output = command_for("jj")
         .current_dir(workspace_path)
         .args([
@@ -2969,8 +2939,7 @@ pub fn jj_get_sync_status(
         0
     };
 
-    // Count commits behind (remote has, local doesn't)
-    // Using: jj log -r '<local>..<remote>' --no-graph -T 'commit_id\n'
+    // Count commits behind with `jj log <local>..<remote>`.
     let behind_output = command_for("jj")
         .current_dir(workspace_path)
         .args([
@@ -3206,8 +3175,7 @@ pub fn jj_get_combined_counts(
     let ahead_of_origin_revset = format!("{}..{}", remote_ref, local_ref);
     let behind_origin_revset = format!("{}..{}", local_ref, remote_ref);
 
-    // Union revset: tag each commit with which category it belongs to
-    // We use a template that outputs a tag character per commit
+    // Use a union revset and tag template to classify each commit.
     let union_revset = format!(
         "({}) | ({}) | ({})",
         ahead_of_target_revset, ahead_of_origin_revset, behind_origin_revset
@@ -3343,8 +3311,7 @@ pub fn jj_git_fetch(repo_path: &str) -> Result<String, JjError> {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
-    // Note: jj git fetch may have warnings in stderr even on success
-    // So we only fail if the command itself failed
+    // `jj git fetch` can warn on stderr on success; fail only on non-zero command status.
     if !output.status.success() {
         return Err(JjError::IoError(format!("{}{}", stdout, stderr)));
     }
@@ -3427,8 +3394,7 @@ pub fn check_branch_exists(repo_path: &str, branch_name: &str) -> Result<BranchS
 
     let local_exists = local_check.status.success();
 
-    // Check remote branch existence (origin)
-    // In the future, could check all remotes from `git remote` output
+    // Check branch existence against origin (future: all remotes).
     let remote_name = "origin";
     let remote_ref = format!("refs/remotes/{}/{}", remote_name, branch_name);
     let remote_check = command_for("git")
@@ -3480,8 +3446,7 @@ pub fn get_git_remotes(repo_path: &str) -> std::collections::HashSet<String> {
         return std::collections::HashSet::new();
     }
 
-    // Parse output: "origin git@github.com:user/repo.git"
-    // Extract just the remote name (first word on each line)
+    // Parse `git remote -v` lines and extract the first token as remote name.
     String::from_utf8_lossy(&output.stdout)
         .lines()
         .filter_map(|line| {
@@ -3653,8 +3618,7 @@ pub fn jj_get_log(
     // Build revset based on context (home repo vs workspace)
     let revset = build_jj_get_log_revset(target_branch, is_home_repo.unwrap_or(false), limit);
 
-    // Build template for tab-separated output, using \x1E (Record Separator) between commits
-    // because diff.stat() is multiline (per-file stats + summary line)
+    // Use tab-separated fields and \x1E between commits because diff.stat() is multiline.
     let template = concat!(
         "commit_id.short(12) ++ \"\\t\" ++ ",
         "change_id.short(12) ++ \"\\t\" ++ ",
@@ -3724,8 +3688,7 @@ fn parse_jj_log_output(stdout: &str) -> Vec<JjLogCommit> {
         let bookmarks_str = parts[7];
         let is_immutable = parts[8] == "true";
 
-        // diff.stat() spans from parts[9] (if present) through all remaining lines
-        // The summary line (e.g. "2 files changed, 64 insertions(+), 16 deletions(-)") is the last line
+        // diff.stat() spans parts[9..], with the summary on the final line.
         let mut diff_stat_parts: Vec<&str> = Vec::new();
         if parts.len() > 9 {
             diff_stat_parts.push(parts[9]);
@@ -3781,8 +3744,7 @@ pub fn jj_get_target_branch_log(
     target_branch: &str,
     limit: usize,
 ) -> Result<Vec<JjLogCommit>, JjError> {
-    // Over-fetch slightly so we can drop any working-copy placeholder entries
-    // without shortening the visible target-branch history.
+    // Over-fetch to allow dropping WC placeholders without truncating visible target history.
     let fetch_limit = limit.saturating_add(5);
     let revset = build_target_branch_revset(target_branch, fetch_limit);
 
@@ -3864,8 +3826,7 @@ pub fn jj_get_commits_ahead(
     let mut stdout = None;
     let mut last_error = None;
     for candidate in candidates {
-        // Revset: commits reachable from @- but not from target_branch, excluding empty commits
-        // Uses @- to exclude the working copy commit, and ~ empty() to exclude empty intermediate commits
+        // Revset excludes working-copy and empty commits while selecting @-reachable non-target commits.
         let revset = format!("({}..@-) ~ empty()", candidate);
 
         let output = command_for("jj")

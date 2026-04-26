@@ -20,16 +20,6 @@ pub fn update_session_access(repo_path: String, id: i64) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn update_session_name(repo_path: String, id: i64, name: String) -> Result<(), String> {
-    local_db::update_session_name(&repo_path, id, name)
-}
-
-#[tauri::command]
-pub fn delete_session(repo_path: String, id: i64) -> Result<(), String> {
-    local_db::delete_session(&repo_path, id)
-}
-
-#[tauri::command]
 pub fn get_session_model(repo_path: String, id: i64) -> Result<Option<String>, String> {
     local_db::get_session_model(&repo_path, id)
 }

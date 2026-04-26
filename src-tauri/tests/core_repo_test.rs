@@ -79,11 +79,8 @@ fn test_repo_status_detects_changes() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
     // Write an untracked file so jj sees a working copy change
-    std::fs::write(
-        std::path::Path::new(&repo.repo_path).join("new_file.txt"),
-        "some content",
-    )
-    .expect("Failed to write file");
+    repo.create_file("new_file.txt", "some content")
+        .expect("Failed to write file");
 
     let status = repo_status(&repo.repo_path).expect("repo_status should succeed");
 

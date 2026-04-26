@@ -1,5 +1,4 @@
 import type {
-	BookmarkTrackingResult,
 	BranchStatus,
 	DirectoryEntry,
 	EditorAppsResponse,
@@ -9,7 +8,6 @@ import type {
 	JjFileChange,
 	JjFileLines,
 	JjLogResult,
-	JjMergeResult,
 	JjRebaseResult,
 	JjRevisionDiff,
 	MergeStrategy,
@@ -103,25 +101,6 @@ export const detectEditorApps = (): Promise<EditorAppsResponse> =>
 	invoke("detect_editor_apps");
 
 // JJ Workspace API
-export const jjCreateWorkspace = (
-	...args: [
-		repoPath: string,
-		workspaceName: string,
-		branch: string,
-		newBranch: boolean,
-		sourceBranch?: string,
-	]
-): Promise<string> => {
-	const [repoPath, workspaceName, branch, newBranch, sourceBranch] = args;
-	return invoke("jj_create_workspace", {
-		repoPath,
-		workspaceName,
-		branch,
-		newBranch,
-		sourceBranch: sourceBranch ?? null,
-	});
-};
-
 // JJ Diff API
 export const getWorkspaceChangedFiles = (
 	repoPath: string,
@@ -233,23 +212,8 @@ export const jjSplit = (
 		filePaths,
 	});
 
-export const listConflictedFiles = (workspacePath: string): Promise<string[]> =>
-	invoke("list_conflicted_files", { workspacePath });
-
-export const jjGetBranches = (repoPath: string): Promise<JjBranch[]> =>
-	invoke("jj_get_branches", { repoPath });
-
 export const listRepoBranches = (repoPath: string): Promise<JjBranch[]> =>
 	invoke("list_repo_branches", { repoPath });
-
-export const jjEditBookmark = (
-	repoPath: string,
-	bookmarkName: string,
-): Promise<string> =>
-	invoke("jj_edit_bookmark", {
-		repoPath,
-		bookmarkName,
-	});
 
 export const switchRepoBranch = (
 	repoPath: string,
@@ -260,38 +224,13 @@ export const switchRepoBranch = (
 		bookmarkName,
 	});
 
-export const jjTrackWorkspaceBookmarks = (
-	repoPath: string,
-): Promise<BookmarkTrackingResult> =>
-	invoke("jj_track_workspace_bookmarks", { repoPath });
-
-export const jjPush = (workspacePath: string): Promise<string> =>
-	invoke("jj_push", { workspacePath });
-
 export interface SyncStatus {
 	ahead: number;
 	behind: number;
 }
 
-export const jjGetSyncStatus = (
-	workspacePath: string,
-	branchName: string,
-	notOnRemote: boolean = false,
-): Promise<[number, number]> =>
-	invoke("jj_get_sync_status", {
-		workspacePath,
-		branchName,
-		notOnRemote,
-	});
-
-export const jjGitFetch = (repoPath: string): Promise<string> =>
-	invoke("jj_git_fetch", { repoPath });
-
 export const jjGitFetchBackground = (repoPath: string): Promise<void> =>
 	invoke("jj_git_fetch_background", { repoPath });
-
-export const jjPull = (workspacePath: string): Promise<string> =>
-	invoke("jj_pull", { workspacePath });
 
 export const pullWorkspaceFromRemote = (
 	repoPath: string,
@@ -318,23 +257,6 @@ export const getCommitDiff = (
 ): Promise<JjRevisionDiff> =>
 	invoke("get_commit_diff", { repoPath, workspaceId, revision });
 
-export const jjGetLog = (
-	...args: [
-		workspacePath: string,
-		targetBranch: string,
-		isHomeRepo?: boolean,
-		limit?: number,
-	]
-): Promise<JjLogResult> => {
-	const [workspacePath, targetBranch, isHomeRepo, limit] = args;
-	return invoke("jj_get_log", {
-		workspacePath,
-		targetBranch,
-		isHomeRepo: isHomeRepo ?? null,
-		limit: limit ?? null,
-	});
-};
-
 export const jjGetCommitsAhead = (
 	workspacePath: string,
 	targetBranch: string,
@@ -346,23 +268,6 @@ export const getWorkspaceDiff = (
 	workspaceId: number,
 ): Promise<JjRevisionDiff> =>
 	invoke("get_workspace_diff", { repoPath, workspaceId });
-
-export const jjCreateMerge = (
-	...args: [
-		workspacePath: string,
-		workspaceBranch: string,
-		targetBranch: string,
-		message: string,
-	]
-): Promise<JjMergeResult> => {
-	const [workspacePath, workspaceBranch, targetBranch, message] = args;
-	return invoke("jj_create_merge", {
-		workspacePath,
-		workspaceBranch,
-		targetBranch,
-		message,
-	});
-};
 
 export const splitWorkspace = (
 	...args: [
@@ -432,17 +337,6 @@ export const mergeWorkspace = (
 	});
 };
 
-export const updateWorkspaceNotOnRemote = (
-	repoPath: string,
-	workspaceId: number,
-	notOnRemote: boolean,
-): Promise<void> =>
-	invoke("update_workspace_not_on_remote", {
-		repoPath,
-		workspaceId,
-		notOnRemote,
-	});
-
 export const pushWorkspaceToRemote = (
 	repoPath: string,
 	workspaceId: number | null,
@@ -502,15 +396,8 @@ export const setWorkspaceTargetBranch = (
 	});
 };
 
-// Alias for tests
-export const jjSetWorkspaceTarget = (
-	workspacePath: string,
-	targetBranch: string,
-): Promise<void> =>
-	invoke("set_workspace_target_branch", {
-		workspacePath,
-		targetBranch,
-	});
+// Kept for compatibility with existing mocks/consumers while unused in app runtime.
+// Intentionally left empty.
 
 export const checkAndRebaseWorkspaces = (
 	...args: [
