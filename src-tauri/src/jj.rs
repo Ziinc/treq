@@ -2168,11 +2168,9 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     let committed = futures::executor::block_on(builder.write(tx.repo_mut()))
         .map_err(|e| JjError::IoError(format!("Failed to write commit: {}", e)))?;
 
-    if repo_path_opt.is_none() {
-        let ref_name = RefName::new(&branch);
-        tx.repo_mut()
-            .set_local_bookmark_target(ref_name, RefTarget::normal(committed.id().clone()));
-    }
+    let ref_name = RefName::new(&branch);
+    tx.repo_mut()
+        .set_local_bookmark_target(ref_name, RefTarget::normal(committed.id().clone()));
 
     if !workspace_names.is_empty() {
         let new_wc = futures::executor::block_on(
