@@ -13,18 +13,6 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             Ok(Value::Bool(result))
         }
 
-        // ── detect_binaries ───────────────────────────────────────────────
-        "detect_binaries" => {
-            let state = state::get()?;
-            let db = state.db.lock().map_err(|e| e.to_string())?;
-            let paths = treq_lib::core::detect_binaries(&db)?;
-            Ok(serde_json::json!({
-                "git": paths.get("git"),
-                "jj": paths.get("jj"),
-                "claude": paths.get("claude"),
-            }))
-        }
-
         // ── detect_editor_apps ────────────────────────────────────────────
         "detect_editor_apps" => {
             Ok(serde_json::json!({
@@ -160,21 +148,6 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             serde_json::to_value(workspace).map_err(|e| e.to_string())
         }
 
-        "update_workspace_not_on_remote" => {
-            let repo_path = get_str(&args, "repoPath")?;
-            let workspace_id: i64 = get_i64(&args, "workspaceId")?;
-            let not_on_remote: bool = args
-                .get("notOnRemote")
-                .and_then(|v| v.as_bool())
-                .ok_or("Missing argument: notOnRemote")?;
-            treq_lib::local_db::update_workspace_not_on_remote(
-                &repo_path,
-                workspace_id,
-                not_on_remote,
-            )?;
-            Ok(Value::Null)
-        }
-
         // ── Repo status ───────────────────────────────────────────────────
         "get_repo_status" => {
             let repo_path = get_str(&args, "repoPath")?;
@@ -258,12 +231,6 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             )
             .map_err(|e| e.to_string())?;
             serde_json::to_value(result).map_err(|e| e.to_string())
-        }
-
-        "list_conflicted_files" => {
-            let workspace_path = get_str(&args, "workspacePath")?;
-            let files = treq_lib::core::list_conflicted_files(&workspace_path)?;
-            serde_json::to_value(files).map_err(|e| e.to_string())
         }
 
         // ── Workspace status / core operations ────────────────────────────
@@ -387,25 +354,6 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             serde_json::to_value(result).map_err(|e| e.to_string())
         }
 
-        "move_commit_to_new_workspace" => {
-            let repo_path = get_str(&args, "repoPath")?;
-            let source_workspace_id: i64 = get_i64(&args, "sourceWorkspaceId")?;
-            let commit_change_id = get_str(&args, "commitChangeId")?;
-            let branch_name = get_str(&args, "branchName")?;
-            let intent: Option<String> = args
-                .get("intent")
-                .and_then(|v| v.as_str())
-                .map(String::from);
-            let new_workspace = treq_lib::core::move_commit_to_new_workspace(
-                &repo_path,
-                source_workspace_id,
-                &commit_change_id,
-                &branch_name,
-                intent,
-            )?;
-            Ok(Value::Number(serde_json::Number::from(new_workspace.id)))
-        }
-
         "move_commit_to_existing_workspace" => {
             let repo_path = get_str(&args, "repoPath")?;
             let source_workspace_id: i64 = get_i64(&args, "sourceWorkspaceId")?;
@@ -505,21 +453,6 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             Ok(Value::Null)
         }
 
-        "update_session_name" => {
-            let repo_path = get_str(&args, "repoPath")?;
-            let id: i64 = get_i64(&args, "id")?;
-            let name = get_str(&args, "name")?;
-            treq_lib::local_db::update_session_name(&repo_path, id, name)?;
-            Ok(Value::Null)
-        }
-
-        "delete_session" => {
-            let repo_path = get_str(&args, "repoPath")?;
-            let id: i64 = get_i64(&args, "id")?;
-            treq_lib::local_db::delete_session(&repo_path, id)?;
-            Ok(Value::Null)
-        }
-
         "get_session_model" => {
             let repo_path = get_str(&args, "repoPath")?;
             let id: i64 = get_i64(&args, "id")?;
@@ -560,33 +493,7 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             Ok(Value::Null)
         }
 
-        "get_viewed_files" => {
-            let workspace_path = get_str(&args, "workspacePath")?;
-            let state = state::get()?;
-            let db = state.db.lock().map_err(|e| e.to_string())?;
-            let files = db
-                .get_viewed_files(&workspace_path)
-                .map_err(|e| e.to_string())?;
-            serde_json::to_value(files).map_err(|e| e.to_string())
-        }
-
-        "clear_all_viewed_files" => {
-            let workspace_path = get_str(&args, "workspacePath")?;
-            let state = state::get()?;
-            let db = state.db.lock().map_err(|e| e.to_string())?;
-            db.clear_all_viewed_files(&workspace_path)
-                .map_err(|e| e.to_string())?;
-            Ok(Value::Null)
-        }
-
         // ── Pending review ────────────────────────────────────────────────
-        "load_pending_review" => {
-            let repo_path = get_str(&args, "repoPath")?;
-            let workspace_id: i64 = get_i64(&args, "workspaceId")?;
-            let review = treq_lib::local_db::get_pending_review(&repo_path, workspace_id)?;
-            serde_json::to_value(review).map_err(|e| e.to_string())
-        }
-
         "save_pending_review" => {
             let repo_path = get_str(&args, "repoPath")?;
             let workspace_id: i64 = get_i64(&args, "workspaceId")?;
@@ -636,11 +543,6 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             let entries =
                 list_directory_cached_impl(&repo_path, workspace_id, &parent_path)?;
             serde_json::to_value(entries).map_err(|e| e.to_string())
-        }
-
-        "get_change_indicators" => {
-            // TODO: implement with jj
-            Ok(serde_json::json!([]))
         }
 
         "search_workspace_files" => {
@@ -696,30 +598,13 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
         | "get_window_repo_path" => Ok(Value::Null),
 
         // ── Direct jj::* commands: not implemented — migrate to core::* ───
-        "jj_create_workspace"
-        | "jj_list_workspaces"
-
-        | "jj_get_workspace_info"
-
-        | "jj_get_changed_files"
-        | "jj_restore_file"
+        "jj_restore_file"
         | "jj_restore_all"
         | "jj_split"
 
-        | "jj_get_default_branch"
-
-        | "jj_push"
-        | "jj_get_sync_status"
-        | "jj_git_fetch"
         | "jj_git_fetch_background"
-        | "jj_pull"
-        | "jj_get_log"
         | "jj_get_commits_ahead"
-        | "jj_create_merge"
         | "jj_check_branch_exists"
-        | "jj_get_branches"
-        | "jj_edit_bookmark"
-        | "jj_track_workspace_bookmarks"
         | "set_workspace_target_branch"
         | "resolve_workspace_bookmark_conflict" => Err(format!(
             "not_implemented: '{}' — this command calls jj::* directly. \
