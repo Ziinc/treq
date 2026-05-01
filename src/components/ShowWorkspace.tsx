@@ -217,7 +217,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			],
 			enabled: Boolean(effectiveRepoPath),
 			queryFn: async () => {
-					try {
+				try {
 					const [entries, readme] = await Promise.all([
 						lsWorkspace(effectiveRepoPath, workspace?.id ?? null),
 						getWorkspaceReadme(effectiveRepoPath, workspace?.id ?? null),

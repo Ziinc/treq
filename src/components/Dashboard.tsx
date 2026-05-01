@@ -512,7 +512,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	// Navigate to workspace without creating an agent session
 	const handleSelectWorkspace = useCallback((workspace: Workspace | null) => {
 		setSelectedWorkspace(workspace);
-		setViewMode("show-workspace" );
+		setViewMode("show-workspace");
 	}, []);
 
 	const { moveWorkspace } = useWorkspaceHierarchy({
