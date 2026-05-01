@@ -22,6 +22,8 @@ export function createMockFile(overrides?: FileFactoryOptions): JjFileChange {
 		path: `src/file${randomId}.ts`,
 		status: "M",
 		previous_path: null,
+		changed_line_count: 0,
+		diff_deferred: false,
 		...overrides,
 	};
 }

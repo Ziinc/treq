@@ -20,8 +20,12 @@ fn test_ls_workspace_lists_top_level_entries_and_respects_gitignore() {
         .expect("Failed to create alpha_dir");
     TestRepo::write_workspace_file(workspace_path.to_str().unwrap(), "zeta.txt", "zeta")
         .expect("Failed to write zeta.txt");
-    TestRepo::write_workspace_file(workspace_path.to_str().unwrap(), ".gitignore", "ignored.txt\n")
-        .expect("Failed to write .gitignore");
+    TestRepo::write_workspace_file(
+        workspace_path.to_str().unwrap(),
+        ".gitignore",
+        "ignored.txt\n",
+    )
+    .expect("Failed to write .gitignore");
     TestRepo::write_workspace_file(workspace_path.to_str().unwrap(), "ignored.txt", "ignored")
         .expect("Failed to write ignored.txt");
 

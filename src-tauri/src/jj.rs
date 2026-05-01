@@ -1,20 +1,43 @@
+use chrono::TimeZone;
+use imara_diff::intern::InternedInput;
+use imara_diff::sink::Counter;
+use imara_diff::{diff, Algorithm, UnifiedDiffBuilder};
+use jj_lib::conflict_labels::ConflictLabels;
 use jj_lib::config::{ConfigLayer, ConfigSource, StackedConfig};
+use jj_lib::conflicts::{
+    materialized_diff_stream, MaterializedTreeValue,
+};
+use jj_lib::copies::CopyRecords;
+use jj_lib::file_util;
+use jj_lib::fileset::FilesetAliasesMap;
 use jj_lib::git;
 use jj_lib::gitignore::GitIgnoreFile;
-use jj_lib::matchers::EverythingMatcher;
+use jj_lib::matchers::{NothingMatcher, PrefixMatcher};
+use jj_lib::merge::Diff;
+use jj_lib::merged_tree::MergedTree;
+use jj_lib::object_id::{HexPrefix, ObjectId};
 use jj_lib::op_store::{RefTarget, RemoteRef};
 use jj_lib::ref_name::{RefName, RemoteName, RemoteRefSymbol, WorkspaceNameBuf};
-use jj_lib::repo::{Repo as _, StoreFactories};
+use jj_lib::repo::{ReadonlyRepo, Repo as _, StoreFactories};
+use jj_lib::repo_path::{RepoPath, RepoPathUiConverter};
+use jj_lib::revset::{
+    self, Revset, RevsetAliasesMap, RevsetDiagnostics, RevsetIteratorExt as _, RevsetParseContext,
+    RevsetWorkspaceContext, SymbolResolver,
+};
 use jj_lib::rewrite::merge_commit_trees;
 use jj_lib::settings::UserSettings;
 use jj_lib::working_copy::{SnapshotOptions, WorkingCopyFreshness};
 use jj_lib::workspace::{default_working_copy_factories, default_working_copy_factory, Workspace};
+use jj_lib::workspace_store::{SimpleWorkspaceStore, WorkspaceStore as _};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use futures::StreamExt as _;
+use futures::TryStreamExt as _;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 
 use crate::binary_paths;
 use crate::local_db;
@@ -37,6 +60,428 @@ fn jj_command(conflict_marker_style: &str) -> Command {
         &format!("ui.conflict-marker-style=\"{}\"", style),
     ]);
     cmd
+}
+
+fn chain_ignore_file(base: &Arc<GitIgnoreFile>, prefix: &str, path: PathBuf) -> Arc<GitIgnoreFile> {
+    base.chain_with_file(prefix, path)
+        .unwrap_or_else(|_| base.clone())
+}
+
+fn repo_root_matcher() -> PrefixMatcher {
+    PrefixMatcher::new([RepoPath::root()])
+}
+
+fn git_global_excludes_path(repo_path: &str) -> Option<PathBuf> {
+    let output = command_for("git")
+        .current_dir(repo_path)
+        .args(["config", "--path", "--get", "core.excludesFile"])
+        .output()
+        .ok()?;
+    if output.status.success() {
+        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !path.is_empty() {
+            return Some(PathBuf::from(path));
+        }
+    }
+
+    let config_home = std::env::var_os("XDG_CONFIG_HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")));
+    config_home.map(|dir| dir.join("git").join("ignore"))
+}
+
+fn build_snapshot_base_ignores(ignore_root: &str) -> Arc<GitIgnoreFile> {
+    let mut base_ignores = GitIgnoreFile::empty()
+        .chain("", Path::new("<treq builtins>"), b".jj/\n.treq/\n.jj*/\n")
+        .unwrap_or_else(|_| GitIgnoreFile::empty());
+
+    if let Some(global_excludes) = git_global_excludes_path(ignore_root) {
+        base_ignores = chain_ignore_file(&base_ignores, "", global_excludes);
+    }
+    base_ignores = chain_ignore_file(&base_ignores, "", Path::new(ignore_root).join(".gitignore"));
+    chain_ignore_file(
+        &base_ignores,
+        "",
+        Path::new(ignore_root)
+            .join(".git")
+            .join("info")
+            .join("exclude"),
+    )
+}
+
+struct LoadedWorkspaceRepo {
+    settings: UserSettings,
+    workspace: Workspace,
+    repo: Arc<ReadonlyRepo>,
+    path_converter: RepoPathUiConverter,
+}
+
+fn load_workspace_repo(workspace_path: &str) -> Result<LoadedWorkspaceRepo, JjError> {
+    let repo_path_opt = derive_repo_path_from_workspace(workspace_path);
+    let settings_path = repo_path_opt.as_deref().unwrap_or(workspace_path);
+    let settings = create_user_settings(settings_path)?;
+    let workspace_root = Path::new(workspace_path);
+    let workspace = Workspace::load(
+        &settings,
+        workspace_root,
+        &StoreFactories::default(),
+        &default_working_copy_factories(),
+    )
+    .map_err(|e| JjError::IoError(format!("Failed to load workspace: {}", e)))?;
+    let repo = futures::executor::block_on(workspace.repo_loader().load_at_head())
+        .map_err(|e| JjError::IoError(format!("Failed to load repo: {}", e)))?;
+    let path_converter = RepoPathUiConverter::Fs {
+        cwd: workspace_root.to_path_buf(),
+        base: workspace_root.to_path_buf(),
+    };
+
+    Ok(LoadedWorkspaceRepo {
+        settings,
+        workspace,
+        repo,
+        path_converter,
+    })
+}
+
+fn import_git_head_if_needed(
+    loaded: &mut LoadedWorkspaceRepo,
+    repo_path: &str,
+) -> Result<(), JjError> {
+    let git_head_branch = read_git_head_branch(repo_path)
+        .ok()
+        .filter(|branch| !branch.is_empty() && branch != "HEAD");
+    let mut import_tx = loaded.repo.start_transaction();
+    let _ = futures::executor::block_on(git::import_head(import_tx.repo_mut()));
+
+    let git_head_id = import_tx
+        .repo()
+        .view()
+        .git_head()
+        .added_ids()
+        .next()
+        .cloned();
+    if let (Some(branch_name), Some(head_id)) = (git_head_branch.as_ref(), git_head_id) {
+        let existing = import_tx
+            .repo()
+            .view()
+            .get_local_bookmark(RefName::new(branch_name));
+        if existing.is_absent() {
+            import_tx
+                .repo_mut()
+                .set_local_bookmark_target(RefName::new(branch_name), RefTarget::normal(head_id));
+        }
+    }
+
+    if import_tx.repo().has_changes() {
+        loaded.repo = futures::executor::block_on(import_tx.commit("import git head"))
+            .map_err(|e| JjError::GitWorkspaceError(format!("Failed to import git head: {}", e)))?;
+    }
+
+    Ok(())
+}
+
+fn evaluate_revset<'a>(
+    loaded: &'a LoadedWorkspaceRepo,
+    revset_str: &str,
+) -> Result<Box<dyn Revset + 'a>, JjError> {
+    let aliases_map = RevsetAliasesMap::new();
+    let fileset_aliases_map = FilesetAliasesMap::new();
+    let revset_extensions = jj_lib::revset::RevsetExtensions::default();
+    let now = loaded
+        .settings
+        .commit_timestamp()
+        .map(|timestamp| {
+            chrono::Local
+                .timestamp_millis_opt(timestamp.timestamp.0)
+                .single()
+                .unwrap_or_else(chrono::Local::now)
+        })
+        .unwrap_or_else(chrono::Local::now);
+    let context = RevsetParseContext {
+        aliases_map: &aliases_map,
+        local_variables: std::collections::HashMap::new(),
+        user_email: loaded.settings.user_email(),
+        date_pattern_context: now.into(),
+        default_ignored_remote: None,
+        fileset_aliases_map: &fileset_aliases_map,
+        use_glob_by_default: false,
+        extensions: &revset_extensions,
+        workspace: Some(RevsetWorkspaceContext {
+            path_converter: &loaded.path_converter,
+            workspace_name: loaded.workspace.workspace_name(),
+        }),
+    };
+    let mut diagnostics = RevsetDiagnostics::new();
+    let expression = revset::parse(&mut diagnostics, revset_str, &context)
+        .map_err(|e| JjError::IoError(format!("Failed to parse revset '{}': {}", revset_str, e)))?;
+    let extensions: Vec<Box<dyn jj_lib::revset::SymbolResolverExtension>> = Vec::new();
+    let symbol_resolver = SymbolResolver::new(loaded.repo.as_ref(), &extensions);
+    let resolved = expression
+        .resolve_user_expression(loaded.repo.as_ref(), &symbol_resolver)
+        .map_err(|e| {
+            JjError::IoError(format!("Failed to resolve revset '{}': {}", revset_str, e))
+        })?;
+    resolved
+        .evaluate(loaded.repo.as_ref())
+        .map_err(|e| JjError::IoError(format!("Failed to evaluate revset '{}': {}", revset_str, e)))
+}
+
+fn snapshot_working_copy_tree(
+    loaded: &mut LoadedWorkspaceRepo,
+    workspace_path: &str,
+) -> Result<Option<(jj_lib::backend::CommitId, MergedTree)>, JjError> {
+    let workspace_name = loaded.workspace.workspace_name().to_owned();
+    let Some(wc_commit_id) = loaded.repo.view().get_wc_commit_id(&workspace_name).cloned() else {
+        return Ok(None);
+    };
+
+    let ignore_root = derive_repo_path_from_workspace(workspace_path)
+        .unwrap_or_else(|| workspace_path.to_string());
+    let matcher = repo_root_matcher();
+    let opts = snapshot_options_for_all_paths(&ignore_root, &matcher);
+    let mut locked_ws = loaded
+        .workspace
+        .start_working_copy_mutation()
+        .map_err(|e| JjError::IoError(format!("Failed to lock working copy: {}", e)))?;
+    let (tree, _stats) = futures::executor::block_on(locked_ws.locked_wc().snapshot(&opts))
+        .map_err(|e| JjError::IoError(format!("Failed to snapshot working copy: {}", e)))?;
+    futures::executor::block_on(locked_ws.finish(loaded.repo.op_id().clone()))
+        .map_err(|e| JjError::IoError(format!("Failed to finish working copy snapshot: {}", e)))?;
+
+    Ok(Some((wc_commit_id, tree)))
+}
+
+fn tree_key(tree: &MergedTree) -> String {
+    tree.tree_ids()
+        .iter()
+        .map(|tree_id| tree_id.hex())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn count_lines(content: &[u8]) -> u32 {
+    if content.is_empty() {
+        0
+    } else {
+        content.split_inclusive(|byte| *byte == b'\n').count() as u32
+    }
+}
+
+fn bytes_to_text(bytes: Vec<u8>) -> Option<Vec<u8>> {
+    if bytes.contains(&0) {
+        return None;
+    }
+    String::from_utf8(bytes).ok().map(String::into_bytes)
+}
+
+async fn materialized_value_to_bytes(
+    path: &RepoPath,
+    value: MaterializedTreeValue,
+) -> Option<Vec<u8>> {
+    match value {
+        MaterializedTreeValue::Absent => None,
+        MaterializedTreeValue::File(mut file) => file.read_all(path).await.ok().and_then(bytes_to_text),
+        MaterializedTreeValue::Symlink { target, .. } => Some(target.into_bytes()),
+        MaterializedTreeValue::AccessDenied(_)
+        | MaterializedTreeValue::FileConflict(_)
+        | MaterializedTreeValue::OtherConflict { .. }
+        | MaterializedTreeValue::GitSubmodule(_)
+        | MaterializedTreeValue::Tree(_) => None,
+    }
+}
+
+fn diff_line_counts(before: &str, after: &str) -> (u32, u32) {
+    let input = InternedInput::new(before, after);
+    let counts = diff(Algorithm::Histogram, &input, Counter::default());
+    (counts.insertions, counts.removals)
+}
+
+fn build_text_hunks(before: &str, after: &str) -> Vec<JjDiffHunk> {
+    let input = InternedInput::new(before, after);
+    let patch = diff(Algorithm::Histogram, &input, UnifiedDiffBuilder::new(&input));
+    if patch.is_empty() {
+        Vec::new()
+    } else {
+        parse_git_diff_hunks(&patch).unwrap_or_default()
+    }
+}
+
+fn compute_commit_stats(
+    repo: &Arc<ReadonlyRepo>,
+    commit: &jj_lib::commit::Commit,
+    tree_override: Option<&MergedTree>,
+) -> (u32, u32) {
+    futures::executor::block_on(async {
+        let parent_tree = commit
+            .parent_tree(repo.as_ref())
+            .await
+            .unwrap_or_else(|_| repo.store().root_commit().tree());
+        let commit_tree = tree_override.cloned().unwrap_or_else(|| commit.tree());
+        let conflict_labels = ConflictLabels::unlabeled();
+        let copy_records = CopyRecords::default();
+        let matcher = repo_root_matcher();
+        let diff_stream = materialized_diff_stream(
+            repo.store(),
+            parent_tree.diff_stream_with_copies(&commit_tree, &matcher, &copy_records),
+            Diff::new(&conflict_labels, &conflict_labels),
+        );
+
+        let mut insertions = 0;
+        let mut deletions = 0;
+        futures::pin_mut!(diff_stream);
+        while let Some(entry) = diff_stream.next().await {
+            let values = match entry.values {
+                Ok(values) => values,
+                Err(_) => continue,
+            };
+            let before = materialized_value_to_bytes(entry.path.source(), values.before).await;
+            let after = materialized_value_to_bytes(entry.path.target(), values.after).await;
+
+            match (before, after) {
+                (None, Some(after)) => {
+                    insertions += count_lines(&after);
+                }
+                (Some(before), None) => {
+                    deletions += count_lines(&before);
+                }
+                (Some(before), Some(after)) => {
+                    let before = match String::from_utf8(before) {
+                        Ok(content) => content,
+                        Err(_) => continue,
+                    };
+                    let after = match String::from_utf8(after) {
+                        Ok(content) => content,
+                        Err(_) => continue,
+                    };
+                    let (added, removed) = diff_line_counts(&before, &after);
+                    insertions += added;
+                    deletions += removed;
+                }
+                (None, None) => {}
+            }
+        }
+
+        (insertions, deletions)
+    })
+}
+
+fn is_empty_commit(repo: &Arc<ReadonlyRepo>, commit: &jj_lib::commit::Commit) -> bool {
+    let parent_tree = futures::executor::block_on(commit.parent_tree(repo.as_ref()))
+        .unwrap_or_else(|_| repo.store().root_commit().tree());
+    parent_tree.tree_ids() == commit.tree().tree_ids()
+}
+
+fn commit_description_first_line(commit: &jj_lib::commit::Commit) -> String {
+    commit
+        .description()
+        .lines()
+        .next()
+        .filter(|line| !line.is_empty())
+        .unwrap_or("(no description)")
+        .to_string()
+}
+
+fn build_log_commit(
+    repo: &Arc<ReadonlyRepo>,
+    commit: jj_lib::commit::Commit,
+    wc_commit_ids: &HashSet<jj_lib::backend::CommitId>,
+    is_immutable: &impl Fn(
+        &jj_lib::backend::CommitId,
+    ) -> Result<bool, jj_lib::revset::RevsetEvaluationError>,
+) -> JjLogCommit {
+    let short_id = commit.id().hex()[..12].to_string();
+    let change_id = HexPrefix::from_id(commit.change_id()).reverse_hex()[..12].to_string();
+    let description = commit_description_first_line(&commit);
+    let author_name = commit.author().name.clone();
+    let timestamp = commit
+        .author()
+        .timestamp
+        .to_datetime()
+        .map(|timestamp| timestamp.to_rfc3339())
+        .unwrap_or_else(|_| commit.author().timestamp.timestamp.0.to_string());
+    let parent_ids = commit
+        .parent_ids()
+        .iter()
+        .map(|id| id.hex()[..12].to_string())
+        .collect();
+    let bookmarks = repo
+        .view()
+        .local_bookmarks_for_commit(commit.id())
+        .filter_map(|(name, target)| {
+            (target.as_normal() == Some(commit.id())).then(|| name.as_str().to_string())
+        })
+        .collect();
+    JjLogCommit {
+        commit_id: short_id.clone(),
+        short_id,
+        change_id,
+        description,
+        author_name,
+        timestamp,
+        parent_ids,
+        is_working_copy: wc_commit_ids.contains(commit.id()),
+        bookmarks,
+        is_immutable: is_immutable(commit.id()).unwrap_or(false),
+        insertions: 0,
+        deletions: 0,
+    }
+}
+
+fn build_log_commits(
+    cache_repo_path: &str,
+    repo: &Arc<ReadonlyRepo>,
+    commits: Vec<jj_lib::commit::Commit>,
+    wc_commit_ids: &HashSet<jj_lib::backend::CommitId>,
+    wc_tree_override: Option<(&jj_lib::backend::CommitId, &MergedTree)>,
+    is_immutable: &impl Fn(
+        &jj_lib::backend::CommitId,
+    ) -> Result<bool, jj_lib::revset::RevsetEvaluationError>,
+) -> Vec<JjLogCommit> {
+    commits
+        .into_iter()
+        .map(|commit| {
+            let mut log_commit = build_log_commit(repo, commit.clone(), wc_commit_ids, is_immutable);
+            let tree_override = wc_tree_override
+                .filter(|(wc_commit_id, _)| **wc_commit_id == *commit.id())
+                .map(|(_, tree)| tree);
+            let effective_tree = tree_override.cloned().unwrap_or_else(|| commit.tree());
+            let cache_key = tree_key(&effective_tree);
+            let full_commit_id = commit.id().hex();
+            let (insertions, deletions) =
+                match local_db::get_cached_commit_diff_stat(cache_repo_path, &full_commit_id, &cache_key) {
+                    Ok(Some(cached)) => (cached.insertions, cached.deletions),
+                    _ => {
+                        let (insertions, deletions) =
+                            compute_commit_stats(repo, &commit, tree_override);
+                        let _ = local_db::cache_commit_diff_stat(
+                            cache_repo_path,
+                            &full_commit_id,
+                            &cache_key,
+                            insertions,
+                            deletions,
+                        );
+                        (insertions, deletions)
+                    }
+                };
+            log_commit.insertions = insertions;
+            log_commit.deletions = deletions;
+            log_commit
+        })
+        .collect()
+}
+
+fn snapshot_options_for_all_paths<'a>(
+    ignore_root: &str,
+    start_tracking_matcher: &'a dyn jj_lib::matchers::Matcher,
+) -> SnapshotOptions<'a> {
+    SnapshotOptions {
+        base_ignores: build_snapshot_base_ignores(ignore_root),
+        progress: None,
+        start_tracking_matcher,
+        force_tracking_matcher: &NothingMatcher,
+        max_new_file_size: 1024 * 1024,
+    }
 }
 
 /// Convert git remote branch format to jj bookmark format
@@ -88,6 +533,14 @@ pub struct WorkspaceInfo {
     pub is_colocated: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DiscoveredWorkspace {
+    pub workspace_name: String,
+    pub workspace_path: String,
+    pub branch_name: String,
+    pub has_conflicts: bool,
+}
+
 /// A diff hunk from jj diff output
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct JjDiffHunk {
@@ -103,6 +556,8 @@ pub struct JjFileChange {
     pub path: String,
     pub status: String,
     pub previous_path: Option<String>,
+    pub changed_line_count: usize,
+    pub diff_deferred: bool,
 }
 
 /// File content lines for context expansion
@@ -194,7 +649,14 @@ pub struct JjFileDiff {
 pub struct JjRevisionDiff {
     pub files: Vec<JjFileChange>,
     pub hunks_by_file: Vec<JjFileDiff>,
+    pub too_large_to_render: bool,
+    pub render_block_reason: Option<String>,
 }
+
+const LARGE_COMMIT_FILE_DIFF_THRESHOLD: usize = 500;
+const TOO_LARGE_COMMIT_DIFF_THRESHOLD: usize = 10_000;
+const TOO_LARGE_COMMIT_DIFF_MESSAGE: &str =
+    "This commit changes more than 10,000 lines and is too large to render.";
 
 impl std::fmt::Display for JjError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -323,7 +785,7 @@ username = "{}"
 /// This is idempotent - entries won't be duplicated
 pub fn ensure_gitignore_entries(repo_path: &str) -> Result<(), JjError> {
     let gitignore_path = Path::new(repo_path).join(".gitignore");
-    let entries_to_add = [".jj/", ".treq/"];
+    let entries_to_add = [".jj/", ".jj*/", ".treq/"];
 
     // Read existing .gitignore content
     let existing_content = if gitignore_path.exists() {
@@ -742,225 +1204,347 @@ pub struct WorkspaceRecoveryResult {
     pub message: String,
 }
 
-/// List workspace names that jj knows about by parsing `jj workspace list` output.
-/// Returns a Vec of workspace name strings (e.g., ["default", "feat-test"]).
-pub fn list_jj_workspaces(repo_path: &str) -> Result<Vec<String>, JjError> {
-    let output = command_for("jj")
-        .current_dir(repo_path)
-        .args(["workspace", "list"])
-        .output()
-        .map_err(|e| JjError::IoError(format!("Failed to execute jj workspace list: {}", e)))?;
-
-    if !output.status.success() {
-        return Err(JjError::IoError(format!(
-            "jj workspace list failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let workspaces: Vec<String> = stdout
-        .lines()
-        .filter_map(|line| {
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                return None;
-            }
-            // Format: "workspace_name: commit_id description"
-            trimmed.split(':').next().map(|s| s.trim().to_string())
-        })
-        .collect();
-
-    Ok(workspaces)
+#[derive(Debug, Clone)]
+struct RegisteredWorkspace {
+    workspace_name: String,
+    workspace_path: String,
+    full_path: PathBuf,
+    branch_name: String,
+    has_conflicts: bool,
 }
 
-/// Recover a single orphaned workspace after .jj reinit.
-///
-/// Strategy: backup workspace dir → `jj workspace add` to re-register →
-/// restore backed-up files (preserving new .jj/.git) → re-set bookmark.
-fn recover_orphaned_workspace(
+fn load_home_workspace(repo_path: &str) -> Result<Workspace, JjError> {
+    let settings = create_user_settings(repo_path)?;
+    Workspace::load(
+        &settings,
+        Path::new(repo_path),
+        &StoreFactories::default(),
+        &default_working_copy_factories(),
+    )
+    .map_err(|e| JjError::IoError(format!("Failed to load workspace: {}", e)))
+}
+
+fn load_home_repo(
     repo_path: &str,
-    workspace_name: &str,
-    workspace_dir_name: &str,
-    branch_name: &str,
-) -> WorkspaceRecoveryResult {
-    let workspaces_dir = Path::new(repo_path).join(".treq").join("workspaces");
-    let workspace_dir = workspaces_dir.join(workspace_dir_name);
-    let backup_dir = workspaces_dir.join(format!("{}_treq_recovery", workspace_dir_name));
-
-    // Step 1: Backup workspace dir
-    if let Err(e) = fs::rename(&workspace_dir, &backup_dir) {
-        return WorkspaceRecoveryResult {
-            workspace_name: workspace_name.to_string(),
-            branch_name: branch_name.to_string(),
-            success: false,
-            message: format!("Failed to backup workspace dir: {}", e),
-        };
-    }
-
-    // Step 2: Re-register workspace with jj
-    let workspace_path_str = workspace_dir.to_string_lossy().to_string();
-    let add_result = command_for("jj")
-        .current_dir(repo_path)
-        .args([
-            "workspace",
-            "add",
-            &workspace_path_str,
-            "--name",
-            workspace_name,
-        ])
-        .output();
-
-    match add_result {
-        Err(e) => {
-            // Restore backup on failure
-            let _ = fs::rename(&backup_dir, &workspace_dir);
-            return WorkspaceRecoveryResult {
-                workspace_name: workspace_name.to_string(),
-                branch_name: branch_name.to_string(),
-                success: false,
-                message: format!("Failed to execute jj workspace add: {}", e),
-            };
-        }
-        Ok(output) if !output.status.success() => {
-            // Restore backup on failure
-            let _ = fs::rename(&backup_dir, &workspace_dir);
-            return WorkspaceRecoveryResult {
-                workspace_name: workspace_name.to_string(),
-                branch_name: branch_name.to_string(),
-                success: false,
-                message: format!(
-                    "jj workspace add failed: {}",
-                    String::from_utf8_lossy(&output.stderr)
-                ),
-            };
-        }
-        Ok(_) => {} // Success, continue
-    }
-
-    // Step 3: Restore backed-up files into workspace dir (skip .jj and .git created by jj workspace add)
-    if let Err(e) = restore_backup_files(&backup_dir, &workspace_dir) {
-        // Keep backup for manual recovery
-        return WorkspaceRecoveryResult {
-            workspace_name: workspace_name.to_string(),
-            branch_name: branch_name.to_string(),
-            success: false,
-            message: format!("Failed to restore files from backup: {}", e),
-        };
-    }
-
-    // Step 4: Clean up backup dir
-    let _ = fs::remove_dir_all(&backup_dir);
-
-    // Step 5: Re-set bookmark (non-fatal)
-    if let Err(e) = jj_set_bookmark(&workspace_path_str, branch_name, "@") {
-        eprintln!(
-            "Warning: Failed to set bookmark '{}' during recovery: {}",
-            branch_name, e
-        );
-    }
-
-    // Step 6: Track bookmark with origin (best-effort, non-fatal)
-    let _ = jj_bookmark_track(&workspace_path_str, branch_name, "origin");
-
-    // Step 7: Snapshot working copy by triggering jj status
-    let _ = jj_get_changed_files(&workspace_path_str);
-
-    WorkspaceRecoveryResult {
-        workspace_name: workspace_name.to_string(),
-        branch_name: branch_name.to_string(),
-        success: true,
-        message: "Workspace recovered successfully".to_string(),
-    }
+) -> Result<(Workspace, Arc<ReadonlyRepo>, SimpleWorkspaceStore), JjError> {
+    let workspace = load_home_workspace(repo_path)?;
+    let repo = futures::executor::block_on(workspace.repo_loader().load_at_head())
+        .map_err(|e| JjError::IoError(format!("Failed to load repo: {}", e)))?;
+    let workspace_store = SimpleWorkspaceStore::load(workspace.repo_path())
+        .map_err(|e| JjError::IoError(format!("Failed to load workspace store: {}", e)))?;
+    Ok((workspace, repo, workspace_store))
 }
 
-/// Restore files from backup directory into target directory.
-/// Copies everything from backup except .jj and .git directories
-/// (which were freshly created by `jj workspace add`).
-fn restore_backup_files(backup_dir: &Path, target_dir: &Path) -> Result<(), String> {
-    let entries =
-        fs::read_dir(backup_dir).map_err(|e| format!("Failed to read backup dir: {}", e))?;
+fn list_registered_workspaces(repo_path: &str) -> Result<Vec<RegisteredWorkspace>, JjError> {
+    let (_home_workspace, repo, workspace_store) = load_home_repo(repo_path)?;
 
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read dir entry: {}", e))?;
-        let name = entry.file_name();
-        let name_str = name.to_string_lossy();
-
-        // Skip .jj and .git - those were freshly created by jj workspace add
-        if name_str == ".jj" || name_str == ".git" {
+    let mut workspaces = Vec::new();
+    for (workspace_name, wc_commit_id) in repo.view().wc_commit_ids() {
+        if workspace_name.as_str() == "default" {
             continue;
         }
 
-        let src = entry.path();
-        let dst = target_dir.join(&name);
+        let stored_path = workspace_store
+            .get_workspace_path(workspace_name)
+            .map_err(|e| JjError::IoError(format!("Failed to read workspace path: {}", e)))?
+            .ok_or_else(|| {
+                JjError::IoError(format!(
+                    "Workspace has no recorded path: {}",
+                    workspace_name.as_str()
+                ))
+            })?;
+        let stored_full_path = if stored_path.is_absolute() {
+            stored_path
+        } else {
+            Path::new(repo_path).join(".jj").join("repo").join(stored_path)
+        };
+        let workspace_path = stored_full_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| {
+                JjError::IoError(format!(
+                    "Failed to derive workspace directory name for '{}'",
+                    workspace_name.as_str()
+                ))
+            })?
+            .to_string();
+        let full_path = Path::new(repo_path)
+            .join(".treq")
+            .join("workspaces")
+            .join(&workspace_path);
 
-        // Remove any fresh version first (from jj workspace add)
-        if dst.exists() {
-            if dst.is_dir() {
-                let _ = fs::remove_dir_all(&dst);
-            } else {
-                let _ = fs::remove_file(&dst);
-            }
-        }
+        let wc_commit = repo
+            .store()
+            .get_commit(wc_commit_id)
+            .map_err(|e| JjError::IoError(format!("Failed to load working-copy commit: {}", e)))?;
+        let branch_name =
+            branch_name_for_workspace_commit(repo.as_ref(), workspace_name.as_str(), &wc_commit);
 
-        // Move from backup to target
-        fs::rename(&src, &dst).map_err(|e| format!("Failed to restore '{}': {}", name_str, e))?;
+        workspaces.push(RegisteredWorkspace {
+            workspace_name: workspace_name.as_str().to_string(),
+            workspace_path,
+            full_path,
+            branch_name,
+            has_conflicts: !wc_commit.tree_ids().is_resolved(),
+        });
     }
+
+    workspaces.sort_by(|a, b| a.branch_name.cmp(&b.branch_name));
+    Ok(workspaces)
+}
+
+/// List workspace names registered in JJ without shelling out.
+pub fn list_jj_workspaces(repo_path: &str) -> Result<Vec<String>, JjError> {
+    Ok(list_registered_workspaces(repo_path)?
+        .into_iter()
+        .map(|workspace| workspace.workspace_name)
+        .collect())
+}
+
+fn branch_name_for_workspace_commit(
+    repo: &dyn jj_lib::repo::Repo,
+    workspace_name: &str,
+    wc_commit: &jj_lib::commit::Commit,
+) -> String {
+    let exact_bookmarks: Vec<String> = repo
+        .view()
+        .local_bookmarks_for_commit(wc_commit.id())
+        .filter_map(|(name, target)| {
+            (target.as_normal() == Some(wc_commit.id())).then(|| name.as_str().to_string())
+        })
+        .collect();
+    if let Some(name) = exact_bookmarks
+        .iter()
+        .find(|name| name.as_str() == workspace_name)
+        .or_else(|| exact_bookmarks.first())
+    {
+        return name.clone();
+    }
+
+    let parent_bookmarks: Vec<String> = wc_commit
+        .parent_ids()
+        .iter()
+        .flat_map(|parent_id| {
+            repo.view()
+                .local_bookmarks_for_commit(parent_id)
+                .filter_map(move |(name, target)| {
+                    (target.as_normal() == Some(parent_id)).then(|| name.as_str().to_string())
+                })
+        })
+        .collect();
+    if let Some(name) = parent_bookmarks
+        .iter()
+        .find(|name| name.as_str() == workspace_name)
+        .or_else(|| parent_bookmarks.first())
+    {
+        return name.clone();
+    }
+
+    workspace_name.to_string()
+}
+
+pub fn discover_workspaces_with_conflicts(
+    repo_path: &str,
+) -> Result<Vec<DiscoveredWorkspace>, JjError> {
+    Ok(list_registered_workspaces(repo_path)?
+        .into_iter()
+        .map(|workspace| DiscoveredWorkspace {
+            workspace_name: workspace.workspace_name,
+            workspace_path: workspace.workspace_path,
+            branch_name: workspace.branch_name,
+            has_conflicts: workspace.has_conflicts,
+        })
+        .collect())
+}
+
+fn ensure_workspace_jj_state(
+    registered: &RegisteredWorkspace,
+    repo_internal_path: &Path,
+    repo: &Arc<ReadonlyRepo>,
+    settings: &UserSettings,
+) -> Result<(), JjError> {
+    fs::create_dir_all(&registered.full_path)
+        .map_err(|e| JjError::IoError(format!("Failed to create workspace dir: {}", e)))?;
+
+    let jj_dir = registered.full_path.join(".jj");
+    fs::create_dir(&jj_dir)
+        .map_err(|e| JjError::IoError(format!("Failed to create workspace .jj dir: {}", e)))?;
+
+    let jj_dir_abs = fs::canonicalize(&jj_dir)
+        .map_err(|e| JjError::IoError(format!("Failed to canonicalize .jj dir: {}", e)))?;
+    let path_to_store = file_util::relative_path(&jj_dir_abs, repo_internal_path);
+    let path_to_store = if path_to_store.is_relative() {
+        file_util::slash_path(&path_to_store).into_owned()
+    } else {
+        path_to_store
+    };
+    let repo_file_path = jj_dir.join("repo");
+    let repo_bytes = file_util::path_to_bytes(&path_to_store)
+        .map_err(|e| JjError::IoError(format!("Failed to encode repo path: {}", e)))?;
+    fs::write(&repo_file_path, repo_bytes)
+        .map_err(|e| JjError::IoError(format!("Failed to write workspace repo file: {}", e)))?;
+
+    let working_copy_state_path = jj_dir.join("working_copy");
+    fs::create_dir(&working_copy_state_path).map_err(|e| {
+        JjError::IoError(format!("Failed to create workspace working_copy dir: {}", e))
+    })?;
+
+    let wc_factory = default_working_copy_factory();
+    let working_copy = wc_factory
+        .init_working_copy(
+            repo.store().clone(),
+            registered.full_path.clone(),
+            working_copy_state_path.clone(),
+            repo.op_id().clone(),
+            WorkspaceNameBuf::from(registered.workspace_name.clone()),
+            settings,
+        )
+        .map_err(|e| JjError::IoError(format!("Failed to init working copy: {}", e)))?;
+
+    let working_copy_type_path = working_copy_state_path.join("type");
+    fs::write(&working_copy_type_path, working_copy.name()).map_err(|e| {
+        JjError::IoError(format!("Failed to write working copy type file: {}", e))
+    })?;
+
+    let workspace_store = SimpleWorkspaceStore::load(repo_internal_path)
+        .map_err(|e| JjError::IoError(format!("Failed to load workspace store: {}", e)))?;
+    workspace_store
+        .add(
+            &WorkspaceNameBuf::from(registered.workspace_name.clone()),
+            &registered.full_path,
+        )
+        .map_err(|e| JjError::IoError(format!("Failed to record workspace path: {}", e)))?;
+
+    let mut workspace = Workspace::new(
+        &registered.full_path,
+        repo_internal_path.to_path_buf(),
+        working_copy,
+        repo.loader().clone(),
+    )
+    .map_err(|e| JjError::IoError(format!("Failed to build workspace object: {}", e)))?;
+
+    let wc_commit_id = repo
+        .view()
+        .get_wc_commit_id(&WorkspaceNameBuf::from(registered.workspace_name.clone()))
+        .cloned()
+        .ok_or_else(|| {
+            JjError::IoError(format!(
+                "Workspace '{}' has no working-copy commit",
+                registered.workspace_name
+            ))
+        })?;
+    let wc_commit = repo
+        .store()
+        .get_commit(&wc_commit_id)
+        .map_err(|e| JjError::IoError(format!("Failed to load workspace commit: {}", e)))?;
+
+    futures::executor::block_on(workspace.check_out(repo.op_id().clone(), None, &wc_commit))
+        .map_err(|e| JjError::IoError(format!("Failed to restore workspace checkout: {}", e)))?;
 
     Ok(())
 }
 
-/// Recover all orphaned workspaces in a repository.
-///
-/// An orphaned workspace is one that exists in the database and on disk
-/// but is not registered with jj (e.g., after .jj was deleted and reinitialized).
-pub fn recover_all_orphaned_workspaces(
-    repo_path: &str,
-) -> Result<Vec<WorkspaceRecoveryResult>, JjError> {
-    // Get workspaces from DB
+fn forget_workspace_registration(
+    repo_internal_path: &Path,
+    repo: &Arc<ReadonlyRepo>,
+    workspace_name: &str,
+) -> Result<(), JjError> {
+    let workspace_name_buf = WorkspaceNameBuf::from(workspace_name.to_string());
+    if repo.view().get_wc_commit_id(&workspace_name_buf).is_none() {
+        return Ok(());
+    }
+
+    let workspace_store = SimpleWorkspaceStore::load(repo_internal_path)
+        .map_err(|e| JjError::IoError(format!("Failed to load workspace store: {}", e)))?;
+    let mut tx = repo.start_transaction();
+    futures::executor::block_on(tx.repo_mut().remove_wc_commit(&workspace_name_buf))
+        .map_err(|e| JjError::IoError(format!("Failed to forget workspace commit: {}", e)))?;
+    workspace_store
+        .forget(&[workspace_name_buf.as_ref()])
+        .map_err(|e| JjError::IoError(format!("Failed to forget workspace path: {}", e)))?;
+    futures::executor::block_on(tx.commit(format!("forget workspace '{}'", workspace_name)))
+        .map_err(|e| JjError::IoError(format!("Failed to commit workspace forget: {}", e)))?;
+    Ok(())
+}
+
+pub fn reconcile_workspaces_with_jj(repo_path: &str) -> Result<Vec<WorkspaceRecoveryResult>, JjError> {
+    let (home_workspace, repo, _) = load_home_repo(repo_path)?;
+    let repo_internal_path = home_workspace.repo_path().to_path_buf();
+    let settings = create_user_settings(repo_path)?;
+    let registered_workspaces = list_registered_workspaces(repo_path)?;
     let db_workspaces = local_db::get_workspaces(repo_path)
         .map_err(|e| JjError::IoError(format!("Failed to get workspaces from DB: {}", e)))?;
 
-    if db_workspaces.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    // Get jj-known workspace names
-    let jj_workspaces = list_jj_workspaces(repo_path)?;
-
-    let workspaces_dir = Path::new(repo_path).join(".treq").join("workspaces");
     let mut results = Vec::new();
 
-    for ws in &db_workspaces {
-        // Skip if already registered with jj
-        if jj_workspaces.contains(&ws.workspace_name) {
+    for workspace in &registered_workspaces {
+        if workspace.full_path.exists() {
             continue;
         }
 
-        // Skip if workspace directory doesn't exist on disk
-        let workspace_dir = workspaces_dir.join(&ws.workspace_path);
-        if !workspace_dir.exists() {
+        ensure_workspace_jj_state(workspace, &repo_internal_path, &repo, &settings)?;
+        results.push(WorkspaceRecoveryResult {
+            workspace_name: workspace.workspace_name.clone(),
+            branch_name: workspace.branch_name.clone(),
+            success: true,
+            message: "Workspace recreated from JJ state".to_string(),
+        });
+    }
+
+    let refreshed_at = chrono::Utc::now().to_rfc3339();
+    let discovered: Vec<DiscoveredWorkspace> = registered_workspaces
+        .iter()
+        .map(|workspace| DiscoveredWorkspace {
+            workspace_name: workspace.workspace_name.clone(),
+            workspace_path: workspace.workspace_path.clone(),
+            branch_name: workspace.branch_name.clone(),
+            has_conflicts: workspace.has_conflicts,
+        })
+        .collect();
+    let _ = local_db::sync_discovered_workspaces(repo_path, &discovered, &refreshed_at)
+        .map_err(|e| JjError::IoError(format!("Failed to sync discovered workspaces: {}", e)))?;
+
+    let live_pairs: HashSet<(String, String)> = discovered
+        .iter()
+        .map(|workspace| {
+            (
+                workspace.workspace_name.clone(),
+                workspace.workspace_path.clone(),
+            )
+        })
+        .collect();
+
+    for workspace in db_workspaces {
+        if live_pairs.contains(&(workspace.workspace_name.clone(), workspace.workspace_path.clone())) {
             continue;
         }
 
-        let result = recover_orphaned_workspace(
-            repo_path,
-            &ws.workspace_name,
-            &ws.workspace_path,
-            &ws.branch_name,
-        );
-
-        if !result.success {
-            eprintln!(
-                "Warning: Failed to recover workspace '{}': {}",
-                ws.workspace_name, result.message
-            );
+        if repo
+            .view()
+            .get_wc_commit_id(&WorkspaceNameBuf::from(workspace.workspace_name.clone()))
+            .is_some()
+        {
+            forget_workspace_registration(&repo_internal_path, &repo, &workspace.workspace_name)?;
         }
 
-        results.push(result);
+        local_db::delete_workspace(repo_path, workspace.id)
+            .map_err(|e| JjError::IoError(format!("Failed to delete stale workspace row: {}", e)))?;
+        results.push(WorkspaceRecoveryResult {
+            workspace_name: workspace.workspace_name,
+            branch_name: workspace.branch_name,
+            success: true,
+            message: "Removed stale database workspace".to_string(),
+        });
     }
 
     Ok(results)
+}
+
+/// Recover or reconcile workspace metadata against JJ state.
+pub fn recover_all_orphaned_workspaces(
+    repo_path: &str,
+) -> Result<Vec<WorkspaceRecoveryResult>, JjError> {
+    reconcile_workspaces_with_jj(repo_path)
 }
 
 /// List all workspaces in a repository
@@ -1476,24 +2060,8 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
     };
 
     let ignore_root = repo_path_opt.as_deref().unwrap_or(workspace_path);
-    let base_ignores = GitIgnoreFile::empty()
-        .chain_with_file("", Path::new(ignore_root).join(".gitignore"))
-        .unwrap_or_else(|_| GitIgnoreFile::empty())
-        .chain_with_file(
-            "",
-            Path::new(ignore_root)
-                .join(".git")
-                .join("info")
-                .join("exclude"),
-        )
-        .unwrap_or_else(|_| GitIgnoreFile::empty());
-    let opts = SnapshotOptions {
-        base_ignores,
-        progress: None,
-        start_tracking_matcher: &EverythingMatcher,
-        force_tracking_matcher: &EverythingMatcher,
-        max_new_file_size: 1024 * 1024,
-    };
+    let matcher = repo_root_matcher();
+    let opts = snapshot_options_for_all_paths(ignore_root, &matcher);
 
     let workspace_name = workspace.workspace_name().to_owned();
 
@@ -1556,9 +2124,10 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
         }
     };
 
+    let diff_matcher = repo_root_matcher();
     let diff_entries = futures::executor::block_on(
         parent_tree
-            .diff_stream(&new_tree, &EverythingMatcher)
+            .diff_stream(&new_tree, &diff_matcher)
             .collect::<Vec<_>>(),
     );
 
@@ -1580,6 +2149,8 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
             path: file_path,
             status: status.to_string(),
             previous_path: None,
+            changed_line_count: 0,
+            diff_deferred: false,
         });
     }
 
@@ -1699,6 +2270,8 @@ fn parse_jj_status(status: &str) -> Result<Vec<JjFileChange>, JjError> {
                 path,
                 status: status.to_string(),
                 previous_path,
+                changed_line_count: 0,
+                diff_deferred: false,
             });
         }
     }
@@ -2090,26 +2663,8 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
 
     // Snapshot working copy and load main-repo ignore rules to avoid expensive noise.
     let ignore_repo_root = repo_path_opt.as_deref().unwrap_or(workspace_path);
-    let base_ignores = GitIgnoreFile::empty()
-        .chain_with_file("", Path::new(ignore_repo_root).join(".gitignore"))
-        .unwrap_or_else(|_| GitIgnoreFile::empty())
-        .chain_with_file(
-            "",
-            Path::new(ignore_repo_root)
-                .join(".git")
-                .join("info")
-                .join("exclude"),
-        )
-        .unwrap_or_else(|_| GitIgnoreFile::empty());
-
-    let opts = SnapshotOptions {
-        base_ignores,
-        progress: None,
-        start_tracking_matcher: &EverythingMatcher,
-        force_tracking_matcher: &EverythingMatcher,
-        // Match jj CLI default: refuse to auto-track files larger than 1 MiB.
-        max_new_file_size: 1024 * 1024,
-    };
+    let matcher = repo_root_matcher();
+    let opts = snapshot_options_for_all_paths(ignore_repo_root, &matcher);
     let workspace_name: WorkspaceNameBuf = workspace.workspace_name().to_owned();
     let mut locked_ws = workspace
         .start_working_copy_mutation()
@@ -3259,46 +3814,6 @@ pub fn jj_get_combined_counts(
     }
 }
 
-/// Get only commits ahead of target branch — lightweight alternative to jj_get_combined_counts.
-/// Uses the same revset as the not_on_remote path but without computing ahead/behind origin.
-pub fn jj_get_commits_ahead_count(workspace_path: &str, target_branch: &str) -> usize {
-    if target_branch.starts_with('-') || target_branch.contains('\0') || target_branch.is_empty() {
-        return 0;
-    }
-
-    let mut candidates = vec![target_branch.to_string()];
-    if !target_branch.contains('@') {
-        candidates.push(format!("{}@git", target_branch));
-    }
-
-    for candidate in candidates {
-        let revset = format!("({}..@-) ~ empty()", candidate);
-
-        let output = command_for("jj")
-            .current_dir(workspace_path)
-            .args([
-                "log",
-                "-r",
-                &revset,
-                "--no-graph",
-                "-T",
-                r#"commit_id ++ "\n""#,
-            ])
-            .output();
-
-        if let Ok(o) = output {
-            if o.status.success() {
-                return String::from_utf8_lossy(&o.stdout)
-                    .lines()
-                    .filter(|l| !l.trim().is_empty())
-                    .count();
-            }
-        }
-    }
-
-    0
-}
-
 /// Fetch remote branches using jj git fetch (without rebasing)
 /// This updates remote tracking refs and makes remote branches available
 pub fn jj_git_fetch(repo_path: &str) -> Result<String, JjError> {
@@ -3592,18 +4107,40 @@ fn parse_diff_stat(stat: &str) -> (u32, u32) {
 }
 
 /// Build the revset string for jj_get_log based on context
-fn build_jj_get_log_revset(
-    target_branch: &str,
-    is_home_repo: bool,
-    limit: Option<usize>,
-) -> String {
+fn build_jj_get_log_revset(target_ref: &str, is_home_repo: bool, limit: Option<usize>) -> String {
+    let target_ref = format_revset_symbol(target_ref);
     if is_home_repo {
         let n = limit.unwrap_or(15);
-        format!("latest(::{}, {})", target_branch, n)
+        format!("latest(::{}, {})", target_ref, n)
     } else {
         // For workspace: show commits ahead of target branch
-        format!("{}..@", target_branch)
+        format!("{}..@", target_ref)
     }
+}
+
+fn build_home_repo_fallback_revset(limit: Option<usize>) -> String {
+    let n = limit.unwrap_or(15);
+    format!("latest(::@, {})", n)
+}
+
+fn candidate_target_refs(target_branch: &str) -> Vec<String> {
+    let mut refs = vec![target_branch.to_string()];
+    if !target_branch.contains('@') {
+        refs.push(format!("{}@git", target_branch));
+    }
+    refs
+}
+
+fn format_revset_symbol(symbol: &str) -> String {
+    if symbol.starts_with('@') {
+        return symbol.to_string();
+    }
+    if let Some((name, remote)) = symbol.split_once('@') {
+        if !name.is_empty() && !remote.is_empty() {
+            return revset::format_remote_symbol(name, remote);
+        }
+    }
+    revset::format_symbol(symbol)
 }
 
 pub fn jj_get_log(
@@ -3612,40 +4149,74 @@ pub fn jj_get_log(
     is_home_repo: Option<bool>,
     limit: Option<usize>,
 ) -> Result<JjLogResult, JjError> {
-    // Get workspace branch name
-    let workspace_branch = get_workspace_branch(workspace_path)?;
-
-    // Build revset based on context (home repo vs workspace)
-    let revset = build_jj_get_log_revset(target_branch, is_home_repo.unwrap_or(false), limit);
-
-    // Use tab-separated fields and \x1E between commits because diff.stat() is multiline.
-    let template = concat!(
-        "commit_id.short(12) ++ \"\\t\" ++ ",
-        "change_id.short(12) ++ \"\\t\" ++ ",
-        "if(description, description.first_line(), \"(no description)\") ++ \"\\t\" ++ ",
-        "author.name() ++ \"\\t\" ++ ",
-        "author.timestamp() ++ \"\\t\" ++ ",
-        "parents.map(|p| p.commit_id().short(12)).join(\",\") ++ \"\\t\" ++ ",
-        "if(working_copies, \"true\", \"false\") ++ \"\\t\" ++ ",
-        "bookmarks.map(|b| b.name()).join(\",\") ++ \"\\t\" ++ ",
-        "if(immutable, \"true\", \"false\") ++ \"\\t\" ++ ",
-        "diff.stat() ++ \"\\x1E\""
-    );
-
-    let output = command_for("jj")
-        .current_dir(workspace_path)
-        .args(["log", "-r", &revset, "--no-graph", "-T", template])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
-
-    if !output.status.success() {
-        return Err(JjError::IoError(
-            String::from_utf8_lossy(&output.stderr).to_string(),
-        ));
+    if target_branch.starts_with('-') || target_branch.contains('\0') || target_branch.is_empty() {
+        return Err(JjError::IoError("Invalid target branch name".to_string()));
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let commits = parse_jj_log_output(&stdout);
+    let cache_repo_path = derive_repo_path_from_workspace(workspace_path)
+        .unwrap_or_else(|| workspace_path.to_string());
+    let workspace_branch = get_workspace_branch(workspace_path)?;
+    let mut loaded = load_workspace_repo(workspace_path)?;
+    if is_home_repo.unwrap_or(false) {
+        import_git_head_if_needed(&mut loaded, workspace_path)?;
+    }
+    let wc_tree_override = snapshot_working_copy_tree(&mut loaded, workspace_path).ok().flatten();
+    let mut last_error = None;
+    let mut selected_target_ref = None;
+    let mut revset = None;
+    for target_ref in candidate_target_refs(target_branch) {
+        let revset_expr =
+            build_jj_get_log_revset(&target_ref, is_home_repo.unwrap_or(false), limit);
+        match evaluate_revset(&loaded, &revset_expr) {
+            Ok(evaluated) => {
+                selected_target_ref = Some(target_ref);
+                revset = Some((revset_expr, evaluated));
+                break;
+            }
+            Err(err) => last_error = Some(err),
+        }
+    }
+    if revset.is_none() && is_home_repo.unwrap_or(false) {
+        let revset_expr = build_home_repo_fallback_revset(limit);
+        match evaluate_revset(&loaded, &revset_expr) {
+            Ok(evaluated) => {
+                selected_target_ref = Some("@-".to_string());
+                revset = Some((revset_expr, evaluated));
+            }
+            Err(err) => last_error = Some(err),
+        }
+    }
+    let selected_target_ref = selected_target_ref.ok_or_else(|| {
+        last_error.unwrap_or_else(|| JjError::IoError("Failed to evaluate log revset".to_string()))
+    })?;
+    let (revset_expr, revset) = revset.expect("selected target ref must include a revset");
+    let immutable_revset = evaluate_revset(
+        &loaded,
+        &format!("::{}", format_revset_symbol(&selected_target_ref)),
+    )?;
+    let is_immutable = immutable_revset.containing_fn();
+    let commits = revset
+        .iter()
+        .commits(loaded.repo.store())
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| {
+            JjError::IoError(format!("Failed to iterate revset '{}': {}", revset_expr, e))
+        })?;
+    let wc_commit_ids: HashSet<_> = loaded
+        .repo
+        .view()
+        .wc_commit_ids()
+        .values()
+        .cloned()
+        .collect();
+    let commits = build_log_commits(
+        &cache_repo_path,
+        &loaded.repo,
+        commits,
+        &wc_commit_ids,
+        wc_tree_override.as_ref().map(|(commit_id, tree)| (commit_id, tree)),
+        &is_immutable,
+    );
 
     Ok(JjLogResult {
         commits,
@@ -3653,86 +4224,6 @@ pub fn jj_get_log(
         workspace_branch,
         target_branch_commits: Vec::new(),
     })
-}
-
-/// Shared helper to parse jj log output (record-separator delimited) into commits.
-fn parse_jj_log_output(stdout: &str) -> Vec<JjLogCommit> {
-    let mut commits = Vec::new();
-
-    // Split by record separator — each record is one commit
-    for record in stdout.split('\x1E') {
-        let record = record.trim();
-        if record.is_empty() {
-            continue;
-        }
-
-        // The first line contains tab-separated fields; remaining lines are diff.stat() continuation
-        let mut lines = record.lines();
-        let first_line = match lines.next() {
-            Some(l) => l,
-            None => continue,
-        };
-
-        let parts: Vec<&str> = first_line.split('\t').collect();
-        if parts.len() < 9 {
-            continue; // Skip malformed records
-        }
-
-        let short_id = parts[0].to_string();
-        let change_id = parts[1].to_string();
-        let description = parts[2].to_string();
-        let author_name = parts[3].to_string();
-        let timestamp = parts[4].to_string();
-        let parent_ids_str = parts[5];
-        let is_working_copy = parts[6] == "true";
-        let bookmarks_str = parts[7];
-        let is_immutable = parts[8] == "true";
-
-        // diff.stat() spans parts[9..], with the summary on the final line.
-        let mut diff_stat_parts: Vec<&str> = Vec::new();
-        if parts.len() > 9 {
-            diff_stat_parts.push(parts[9]);
-        }
-        for line in lines {
-            diff_stat_parts.push(line);
-        }
-        // The summary is the last line of the diff stat output
-        let diff_stat = diff_stat_parts.last().copied().unwrap_or("");
-
-        // Parse parent IDs
-        let parent_ids: Vec<String> = if parent_ids_str.is_empty() {
-            Vec::new()
-        } else {
-            parent_ids_str.split(',').map(|s| s.to_string()).collect()
-        };
-
-        // Parse bookmarks
-        let bookmarks: Vec<String> = if bookmarks_str.is_empty() {
-            Vec::new()
-        } else {
-            bookmarks_str.split(',').map(|s| s.to_string()).collect()
-        };
-
-        // Parse diff stats: "X files changed, Y insertions(+), Z deletions(-)"
-        let (insertions, deletions) = parse_diff_stat(diff_stat);
-
-        commits.push(JjLogCommit {
-            commit_id: short_id.clone(),
-            short_id,
-            change_id,
-            description,
-            author_name,
-            timestamp,
-            parent_ids,
-            is_working_copy,
-            bookmarks,
-            is_immutable,
-            insertions,
-            deletions,
-        });
-    }
-
-    commits
 }
 
 /// Get the most recent commits on a target branch (for display below active workspace commits).
@@ -3744,52 +4235,81 @@ pub fn jj_get_target_branch_log(
     target_branch: &str,
     limit: usize,
 ) -> Result<Vec<JjLogCommit>, JjError> {
-    // Over-fetch to allow dropping WC placeholders without truncating visible target history.
-    let fetch_limit = limit.saturating_add(5);
-    let revset = build_target_branch_revset(target_branch, fetch_limit);
-
-    let template = concat!(
-        "commit_id.short(12) ++ \"\\t\" ++ ",
-        "change_id.short(12) ++ \"\\t\" ++ ",
-        "if(description, description.first_line(), \"(no description)\") ++ \"\\t\" ++ ",
-        "author.name() ++ \"\\t\" ++ ",
-        "author.timestamp() ++ \"\\t\" ++ ",
-        "parents.map(|p| p.commit_id().short(12)).join(\",\") ++ \"\\t\" ++ ",
-        "if(working_copies, \"true\", \"false\") ++ \"\\t\" ++ ",
-        "bookmarks.map(|b| b.name()).join(\",\") ++ \"\\t\" ++ ",
-        "if(immutable, \"true\", \"false\") ++ \"\\t\" ++ ",
-        "diff.stat() ++ \"\\x1E\""
-    );
-
-    let output = command_for("jj")
-        .current_dir(workspace_path)
-        .args(["log", "-r", &revset, "--no-graph", "-T", template])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
-
-    if !output.status.success() {
-        return Err(JjError::IoError(
-            String::from_utf8_lossy(&output.stderr).to_string(),
-        ));
+    if target_branch.starts_with('-') || target_branch.contains('\0') || target_branch.is_empty() {
+        return Err(JjError::IoError("Invalid target branch name".to_string()));
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut commits: Vec<JjLogCommit> = parse_jj_log_output(&stdout)
+    let cache_repo_path = derive_repo_path_from_workspace(workspace_path)
+        .unwrap_or_else(|| workspace_path.to_string());
+    // Over-fetch to allow dropping WC placeholders without truncating visible target history.
+    let fetch_limit = limit.saturating_add(5);
+    let loaded = load_workspace_repo(workspace_path)?;
+    let mut last_error = None;
+    let mut selected_target_ref = None;
+    let mut revset = None;
+    for target_ref in candidate_target_refs(target_branch) {
+        let revset_expr = build_target_branch_revset(&target_ref, fetch_limit);
+        match evaluate_revset(&loaded, &revset_expr) {
+            Ok(evaluated) => {
+                selected_target_ref = Some(target_ref);
+                revset = Some((revset_expr, evaluated));
+                break;
+            }
+            Err(err) => last_error = Some(err),
+        }
+    }
+    let selected_target_ref = selected_target_ref.ok_or_else(|| {
+        last_error.unwrap_or_else(|| {
+            JjError::IoError("Failed to evaluate target branch revset".to_string())
+        })
+    })?;
+    let (revset_expr, revset) = revset.expect("selected target ref must include a revset");
+    let immutable_revset = evaluate_revset(
+        &loaded,
+        &format!("::{}", format_revset_symbol(&selected_target_ref)),
+    )?;
+    let is_immutable = immutable_revset.containing_fn();
+    let wc_commit_ids: HashSet<_> = loaded
+        .repo
+        .view()
+        .wc_commit_ids()
+        .values()
+        .cloned()
+        .collect();
+    let commits = revset
+        .iter()
+        .commits(loaded.repo.store())
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| {
+            JjError::IoError(format!("Failed to iterate revset '{}': {}", revset_expr, e))
+        })?;
+    let mut commits: Vec<_> = commits
         .into_iter()
         .filter(|commit| {
-            !commit.is_working_copy
-                && !(commit.description == "(no description)"
-                    && commit.bookmarks.is_empty()
-                    && commit.insertions == 0
-                    && commit.deletions == 0)
+            !wc_commit_ids.contains(commit.id())
+                && !(commit_description_first_line(commit) == "(no description)"
+                    && loaded
+                        .repo
+                        .view()
+                        .local_bookmarks_for_commit(commit.id())
+                        .next()
+                        .is_none()
+                    && is_empty_commit(&loaded.repo, commit))
         })
         .collect();
     commits.truncate(limit);
-    Ok(commits)
+    Ok(build_log_commits(
+        &cache_repo_path,
+        &loaded.repo,
+        commits,
+        &wc_commit_ids,
+        None,
+        &is_immutable,
+    ))
 }
 
-fn build_target_branch_revset(target_branch: &str, limit: usize) -> String {
-    format!("latest(::{}, {})", target_branch, limit)
+fn build_target_branch_revset(target_ref: &str, limit: usize) -> String {
+    format!("latest(::{}, {})", format_revset_symbol(target_ref), limit)
 }
 
 /// Get commits that are in workspace but not in target branch
@@ -3982,6 +4502,8 @@ fn parse_diff_summary(summary: &str) -> Result<Vec<JjFileChange>, JjError> {
             path,
             status,
             previous_path,
+            changed_line_count: 0,
+            diff_deferred: false,
         });
     }
 
@@ -3996,6 +4518,107 @@ fn extract_conflicted_files_from_summary(files: Vec<JjFileChange>) -> Vec<String
         .filter(|f| f.status == "C")
         .map(|f| f.path)
         .collect()
+}
+
+fn too_large_revision_diff() -> JjRevisionDiff {
+    JjRevisionDiff {
+        files: Vec::new(),
+        hunks_by_file: Vec::new(),
+        too_large_to_render: true,
+        render_block_reason: Some(TOO_LARGE_COMMIT_DIFF_MESSAGE.to_string()),
+    }
+}
+
+fn resolve_commit_by_revision(
+    loaded: &LoadedWorkspaceRepo,
+    revision: &str,
+) -> Result<jj_lib::commit::Commit, JjError> {
+    let revset = evaluate_revset(loaded, revision)?;
+    let commits = revset
+        .iter()
+        .commits(loaded.repo.store())
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| JjError::IoError(format!("Failed to resolve revision '{}': {}", revision, e)))?;
+    match commits.len() {
+        1 => Ok(commits.into_iter().next().expect("single commit expected")),
+        0 => Err(JjError::IoError(format!(
+            "Revision '{}' did not resolve to a commit",
+            revision
+        ))),
+        _ => Err(JjError::IoError(format!(
+            "Revision '{}' resolved to multiple commits",
+            revision
+        ))),
+    }
+}
+
+fn get_commit_copy_records(
+    store: &jj_lib::store::Store,
+    commit: &jj_lib::commit::Commit,
+) -> Result<CopyRecords, JjError> {
+    let mut copy_records = CopyRecords::default();
+    for parent_id in commit.parent_ids() {
+        let records_stream = store
+            .get_copy_records(None, parent_id, commit.id())
+            .map_err(|e| JjError::IoError(format!("Failed to read copy records: {}", e)))?;
+        let records = futures::executor::block_on(records_stream.try_collect::<Vec<_>>())
+            .map_err(|e| JjError::IoError(format!("Failed to collect copy records: {}", e)))?;
+        copy_records.add_records(records);
+    }
+    Ok(copy_records)
+}
+
+fn build_file_change(
+    entry_path: &jj_lib::copies::CopiesTreeDiffEntryPath,
+    changed_line_count: usize,
+    diff_deferred: bool,
+    before_absent: bool,
+    after_absent: bool,
+) -> JjFileChange {
+    let path = entry_path.target().as_internal_file_string().to_string();
+    let previous_path = entry_path
+        .to_diff()
+        .map(|diff| diff.before.as_internal_file_string().to_string());
+    let status = match entry_path.copy_operation() {
+        Some(jj_lib::copies::CopyOperation::Rename) => "R",
+        Some(jj_lib::copies::CopyOperation::Copy) => "C",
+        None if before_absent => "A",
+        None if after_absent => "D",
+        None => "M",
+    };
+
+    JjFileChange {
+        path,
+        status: status.to_string(),
+        previous_path,
+        changed_line_count,
+        diff_deferred,
+    }
+}
+
+fn build_file_diff_from_bytes(
+    before_bytes: Option<Vec<u8>>,
+    after_bytes: Option<Vec<u8>>,
+) -> (usize, Vec<JjDiffHunk>) {
+    match (before_bytes, after_bytes) {
+        (None, Some(after)) => {
+            let after = String::from_utf8_lossy(&after).into_owned();
+            let hunks = build_text_hunks("", &after);
+            (count_changed_lines(&hunks), hunks)
+        }
+        (Some(before), None) => {
+            let before = String::from_utf8_lossy(&before).into_owned();
+            let hunks = build_text_hunks(&before, "");
+            (count_changed_lines(&hunks), hunks)
+        }
+        (Some(before), Some(after)) => {
+            let before = String::from_utf8_lossy(&before).into_owned();
+            let after = String::from_utf8_lossy(&after).into_owned();
+            let hunks = build_text_hunks(&before, &after);
+            (count_changed_lines(&hunks), hunks)
+        }
+        (None, None) => (0, Vec::new()),
+    }
 }
 
 /// Get combined diff of all changes between target branch and workspace HEAD
@@ -4062,71 +4685,151 @@ pub fn jj_get_merge_diff(
     Ok(JjRevisionDiff {
         files,
         hunks_by_file,
+        too_large_to_render: false,
+        render_block_reason: None,
     })
 }
 
-/// Get diff for a single commit by revision (commit_id or change_id)
-/// Uses: jj diff -r <revision> --summary and jj diff -r <revision> --git -- <file>
 pub fn jj_get_commit_diff(
     workspace_path: &str,
     revision: &str,
-    conflict_marker_style: &str,
+    _conflict_marker_style: &str,
 ) -> Result<JjRevisionDiff, JjError> {
-    // Validate revision to prevent injection
     if revision.starts_with('-') || revision.contains('\0') || revision.is_empty() {
         return Err(JjError::IoError("Invalid revision".to_string()));
     }
 
-    // Get list of changed files
-    let status_output = command_for("jj")
-        .current_dir(workspace_path)
-        .args(["diff", "--summary", "-r", revision])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
-
-    if !status_output.status.success() {
-        return Err(JjError::IoError(
-            String::from_utf8_lossy(&status_output.stderr).to_string(),
-        ));
-    }
-
-    let summary = String::from_utf8_lossy(&status_output.stdout);
-    let files = parse_diff_summary(&summary)?;
-
-    // For each file, get the hunks
+    let loaded = load_workspace_repo(workspace_path)?;
+    let commit = resolve_commit_by_revision(&loaded, revision)?;
+    let parent_tree = futures::executor::block_on(commit.parent_tree(loaded.repo.as_ref()))
+        .map_err(|e| JjError::IoError(format!("Failed to read parent tree: {}", e)))?;
+    let commit_tree = commit.tree();
+    let copy_records = get_commit_copy_records(loaded.repo.store(), &commit)?;
+    let conflict_labels = Diff::new(parent_tree.labels(), commit_tree.labels());
+    let matcher = repo_root_matcher();
+    let diff_stream = materialized_diff_stream(
+        loaded.repo.store(),
+        parent_tree.diff_stream_with_copies(&commit_tree, &matcher, &copy_records),
+        conflict_labels,
+    );
+    let mut files = Vec::new();
     let mut hunks_by_file = Vec::new();
-    for file in &files {
-        let diff_output = jj_command(conflict_marker_style)
-            .current_dir(workspace_path)
-            .args([
-                "diff",
-                "-r",
-                revision,
-                "--git",
-                "--no-pager",
-                "--",
-                &file.path,
-            ])
-            .output()
-            .map_err(|e| JjError::IoError(e.to_string()))?;
+    let too_large = futures::executor::block_on(async {
+        futures::pin_mut!(diff_stream);
+        let mut total_changed_lines = 0usize;
 
-        if !diff_output.status.success() {
-            continue;
+        while let Some(entry) = diff_stream.next().await {
+            let values = match entry.values {
+                Ok(values) => values,
+                Err(_) => continue,
+            };
+            let before_absent = matches!(&values.before, MaterializedTreeValue::Absent);
+            let after_absent = matches!(&values.after, MaterializedTreeValue::Absent);
+            let before_bytes = materialized_value_to_bytes(entry.path.source(), values.before).await;
+            let after_bytes = materialized_value_to_bytes(entry.path.target(), values.after).await;
+            let (changed_line_count, hunks) =
+                build_file_diff_from_bytes(before_bytes, after_bytes);
+
+            total_changed_lines += changed_line_count;
+            if total_changed_lines > TOO_LARGE_COMMIT_DIFF_THRESHOLD {
+                return true;
+            }
+
+            let diff_deferred = changed_line_count > LARGE_COMMIT_FILE_DIFF_THRESHOLD;
+            let file = build_file_change(
+                &entry.path,
+                changed_line_count,
+                diff_deferred,
+                before_absent,
+                after_absent,
+            );
+            if !diff_deferred {
+                hunks_by_file.push(JjFileDiff {
+                    path: file.path.clone(),
+                    hunks,
+                });
+            }
+            files.push(file);
         }
 
-        let diff_text = String::from_utf8_lossy(&diff_output.stdout);
-        let hunks = parse_git_diff_hunks(&diff_text)?;
+        false
+    });
 
-        hunks_by_file.push(JjFileDiff {
-            path: file.path.clone(),
-            hunks,
-        });
+    if too_large {
+        return Ok(too_large_revision_diff());
     }
 
     Ok(JjRevisionDiff {
         files,
         hunks_by_file,
+        too_large_to_render: false,
+        render_block_reason: None,
     })
+}
+
+pub fn jj_get_commit_file_diff(
+    workspace_path: &str,
+    revision: &str,
+    file_path: &str,
+    _conflict_marker_style: &str,
+) -> Result<JjFileDiff, JjError> {
+    if revision.starts_with('-') || revision.contains('\0') || revision.is_empty() {
+        return Err(JjError::IoError("Invalid revision".to_string()));
+    }
+    if file_path.contains('\0') || file_path.is_empty() {
+        return Err(JjError::IoError("Invalid file path".to_string()));
+    }
+
+    let loaded = load_workspace_repo(workspace_path)?;
+    let commit = resolve_commit_by_revision(&loaded, revision)?;
+    let parent_tree = futures::executor::block_on(commit.parent_tree(loaded.repo.as_ref()))
+        .map_err(|e| JjError::IoError(format!("Failed to read parent tree: {}", e)))?;
+    let commit_tree = commit.tree();
+    let copy_records = get_commit_copy_records(loaded.repo.store(), &commit)?;
+    let conflict_labels = Diff::new(parent_tree.labels(), commit_tree.labels());
+    let matcher = repo_root_matcher();
+    let diff_stream = materialized_diff_stream(
+        loaded.repo.store(),
+        parent_tree.diff_stream_with_copies(&commit_tree, &matcher, &copy_records),
+        conflict_labels,
+    );
+    futures::executor::block_on(async {
+        futures::pin_mut!(diff_stream);
+        while let Some(entry) = diff_stream.next().await {
+            let target_path = entry.path.target().as_internal_file_string().to_string();
+            if target_path != file_path {
+                continue;
+            }
+            let values = match entry.values {
+                Ok(values) => values,
+                Err(_) => continue,
+            };
+            let before_bytes = materialized_value_to_bytes(entry.path.source(), values.before).await;
+            let after_bytes = materialized_value_to_bytes(entry.path.target(), values.after).await;
+            let (_, hunks) = build_file_diff_from_bytes(before_bytes, after_bytes);
+            return Ok(JjFileDiff {
+                path: file_path.to_string(),
+                hunks,
+            });
+        }
+
+        Ok(JjFileDiff {
+            path: file_path.to_string(),
+            hunks: Vec::new(),
+        })
+    })
+}
+
+fn count_changed_lines(hunks: &[JjDiffHunk]) -> usize {
+    hunks
+        .iter()
+        .map(|hunk| {
+            hunk.lines
+                .iter()
+                .filter(|line| line.starts_with('+') || line.starts_with('-'))
+                .count()
+        })
+        .sum()
 }
 
 /// Create a merge commit using jj new

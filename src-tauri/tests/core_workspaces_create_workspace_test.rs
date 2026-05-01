@@ -99,6 +99,56 @@ fn test_can_create_workspace() {
     );
 }
 
+#[test]
+fn test_can_create_workspace_with_same_source_branch() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    assert!(
+        &repo.workspaces_dir().exists(),
+        "Workspaces directory should exist"
+    );
+
+    // Create workspace (new branch)
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/test1",
+        Some("new feature".to_string()),
+        None,         // moved_files
+        Some("main"), // source_branch (defaults to current)
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    // Create workspace (new branch)
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/test2",
+        Some("new feature2".to_string()),
+        None,         // moved_files
+        Some("main"), // source_branch (defaults to current)
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    // JJ VERIFICATION: Verify workspace via jj workspace list (should contain the *second* branch)
+    let jj_workspaces =
+        JjVerifier::list_workspaces(&repo.repo_path).expect("Failed to list jj workspaces");
+    assert!(
+        jj_workspaces.contains(&workspace.workspace_name),
+        "jj workspace list should contain '{}', got: {:?}",
+        workspace.branch_name,
+        jj_workspaces
+    );
+
+    // JJ VERIFICATION: Verify bookmark was created for the second workspace
+    let bookmarks = JjVerifier::list_bookmarks(&repo.repo_path).expect("Failed to list bookmarks");
+    assert!(
+        bookmarks.iter().any(|b| b == &workspace.branch_name),
+        "Bookmark '{}' should exist in workspace, got: {:?}",
+        workspace.branch_name,
+        bookmarks
+    );
+}
 // =============================================================================
 // Test: Can create a workspace from remote branch
 // =============================================================================
@@ -219,16 +269,16 @@ fn test_can_create_stacked_workspace() {
     let stacked_status = treq_lib::core::workspace_status(&repo.repo_path, Some(stacked.id))
         .expect("Failed to get stacked workspace status");
 
-    // Both should have the same DAG (shows full hierarchy)
+    // workspace_status no longer builds DAG data.
     assert_eq!(
         base_status.dag_nodes.len(),
         stacked_status.dag_nodes.len(),
-        "DAG should be the same for all workspaces in hierarchy"
+        "dag_nodes should be consistently empty"
     );
     assert_eq!(
         base_status.dag_nodes.len(),
-        2,
-        "DAG should contain 2 workspaces (base + stacked)"
+        0,
+        "workspace_status should not include DAG nodes"
     );
 
     // Base workspace should show stacked as a child
@@ -262,30 +312,115 @@ fn test_can_create_stacked_workspace() {
         "Stacked workspace should have no children"
     );
 
-    // Verify DAG structure
-    let base_node = base_status
-        .dag_nodes
-        .iter()
-        .find(|n| n.status.current.branch_name == "feat/base")
-        .expect("Base should be in DAG");
-    let stacked_node = base_status
-        .dag_nodes
-        .iter()
-        .find(|n| n.status.current.branch_name == "feat/stacked")
-        .expect("Stacked should be in DAG");
-
-    assert_eq!(base_node.depth, 0, "Base should be at depth 0");
-    assert_eq!(stacked_node.depth, 1, "Stacked should be at depth 1");
-    assert!(base_node.parent_id.is_none(), "Base has no parent");
-    assert_eq!(
-        stacked_node.parent_id,
-        Some(base.id),
-        "Stacked parent_id should point to base"
+    assert!(
+        base_status.conflicted_workspace_ids.is_empty(),
+        "workspace_status should not include DAG-derived conflict ids"
     );
+}
+
+#[test]
+fn test_list_workspaces_recreates_missing_workspace_directory_from_jj_state() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace: Workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/recover-me",
+        Some("recover me".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_string_lossy().to_string();
+
+    TestRepo::write_workspace_file(&workspace_path_str, "recovered.txt", "hello recovery")
+        .expect("Failed to write workspace file");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add recovery file")
+        .expect("Failed to commit recovery file");
+
+    TestRepo::remove_dir_all_path(&workspace_path)
+        .expect("Failed to remove workspace directory");
+    assert!(
+        !workspace_path.exists(),
+        "Workspace directory should be missing before reconciliation"
+    );
+
+    treq_lib::core::init(&repo.repo_path).expect("Failed to re-run repo init");
+
+    let workspaces =
+        treq_lib::core::list_workspaces(&repo.repo_path).expect("Failed to list workspaces");
+
     assert_eq!(
-        base_node.child_ids,
-        vec![stacked.id],
-        "Base child_ids should contain stacked"
+        workspaces.len(),
+        1,
+        "list_workspaces should return the reconciled workspace set"
+    );
+    assert!(
+        workspaces.iter().any(|ws| ws.id == workspace.id),
+        "Reconciled workspace should still exist in the database"
+    );
+    assert!(
+        workspace_path.exists(),
+        "Workspace directory should be recreated from JJ state"
+    );
+    assert!(
+        workspace_path.join("recovered.txt").exists(),
+        "Recreated workspace should materialize tracked files"
+    );
+}
+
+#[test]
+fn test_list_workspaces_removes_db_workspace_missing_from_jj_state() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace: Workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/stale-db-row",
+        Some("stale db row".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    TestRepo::run_git(
+        &repo.repo_path,
+        &["checkout", workspace.branch_name.as_str()],
+    )
+    .expect("Failed to checkout workspace branch in home repo");
+
+    let forget_output = Command::new("jj")
+        .current_dir(&repo.repo_path)
+        .args(["workspace", "forget", workspace.workspace_name.as_str()])
+        .output()
+        .expect("Failed to execute jj workspace forget");
+    assert!(
+        forget_output.status.success(),
+        "jj workspace forget should succeed: {}",
+        String::from_utf8_lossy(&forget_output.stderr)
+    );
+
+    treq_lib::core::init(&repo.repo_path).expect("Failed to re-run repo init");
+
+    let workspaces =
+        treq_lib::core::list_workspaces(&repo.repo_path).expect("Failed to list workspaces");
+
+    assert!(
+        workspaces.is_empty(),
+        "list_workspaces should omit workspaces that JJ no longer tracks"
+    );
+    assert!(
+        !workspaces.iter().any(|ws| ws.id == workspace.id),
+        "Workspace missing from JJ state should be removed from the database"
+    );
+
+    let db_workspace = treq_lib::local_db::get_workspace_by_id(&repo.repo_path, workspace.id)
+        .expect("Failed to query workspace by id");
+    assert!(
+        db_workspace.is_none(),
+        "Stale database row should be deleted after reconciliation"
     );
 }
 

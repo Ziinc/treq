@@ -45,7 +45,15 @@ describe("MergePreviewPage", () => {
 	};
 
 	const mockDiff: api.JjRevisionDiff = {
-		files: [{ path: "src/file.ts", status: "M", previous_path: null }],
+		files: [
+			{
+				path: "src/file.ts",
+				status: "M",
+				previous_path: null,
+				changed_line_count: 1,
+				diff_deferred: false,
+			},
+		],
 		hunks_by_file: [
 			{
 				path: "src/file.ts",
@@ -59,6 +67,8 @@ describe("MergePreviewPage", () => {
 				],
 			},
 		],
+		too_large_to_render: false,
+		render_block_reason: null,
 	};
 
 	beforeEach(() => {

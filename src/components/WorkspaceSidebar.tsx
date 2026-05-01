@@ -2,7 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { memo, useCallback, useMemo, useState } from "react";
 import { DragDropContext, type DropResult, Droppable } from "@hello-pangea/dnd";
 import { GitBranch, Home, Search, Settings, Trash2 } from "lucide-react";
-import { Workspace, listWorkspaceStatuses } from "../lib/api";
+import {
+	type Workspace,
+	getWorkspaces,
+	listWorkspaceStatuses,
+} from "../lib/api";
+import type { WorkspaceSidebarStatus } from "../lib/api-types";
 import {
 	buildWorkspaceTree,
 	flattenWorkspaceTree,
@@ -69,14 +74,28 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 		onMoveWorkspace,
 		onSelectStack,
 	}) => {
+		const { data: workspaces = [] } = useQuery({
+			queryKey: ["workspaces", repoPath],
+			queryFn: () => getWorkspaces(repoPath || ""),
+			enabled: !!repoPath,
+		});
+
 		const { data: workspaceStatuses = [] } = useQuery({
 			queryKey: ["workspace-statuses", repoPath],
 			queryFn: () => listWorkspaceStatuses(repoPath || ""),
 			enabled: !!repoPath,
 		});
 
-		const statuses = workspaceStatuses ?? [];
-		const workspaces = useMemo(
+		const statuses = useMemo<WorkspaceSidebarStatus[]>(() => {
+			const statusById = new Map(
+				(workspaceStatuses ?? []).map((status) => [status.current.id, status]),
+			);
+			return (workspaces ?? []).map((workspace) => {
+				const status = statusById.get(workspace.id);
+				return status ?? { current: workspace, has_conflicts: false };
+			});
+		}, [workspaceStatuses, workspaces]);
+		const workspacesForSelection = useMemo(
 			() => statuses.map((s) => s.current),
 			[statuses],
 		);
@@ -110,16 +129,22 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 				e.stopPropagation();
 
 				if (e.shiftKey) {
-					const descendants = getDescendants(workspaces, workspace.branch_name);
+					const descendants = getDescendants(
+						workspacesForSelection,
+						workspace.branch_name,
+					);
 					const ids = new Set([workspace.id, ...descendants.map((w) => w.id)]);
 					onSelectStack(ids);
 					return;
 				}
 
-				const stack = getEntireStack(workspaces, workspace.branch_name);
+				const stack = getEntireStack(
+					workspacesForSelection,
+					workspace.branch_name,
+				);
 				onSelectStack(new Set(stack.map((w) => w.id)));
 			},
-			[workspaces, onSelectStack],
+			[workspacesForSelection, onSelectStack],
 		);
 
 		const handleDragEnd = useCallback(
@@ -127,11 +152,13 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 				if (!onMoveWorkspace) return;
 
 				const draggedId = parseInt(result.draggableId, 10);
-				const draggedWorkspace = workspaces.find((w) => w.id === draggedId);
+				const draggedWorkspace = workspacesForSelection.find(
+					(w) => w.id === draggedId,
+				);
 				if (!draggedWorkspace) return;
 
 				if (result.combine) {
-					const targetWorkspace = workspaces.find(
+					const targetWorkspace = workspacesForSelection.find(
 						(w) => String(w.id) === result.combine!.draggableId,
 					);
 					if (targetWorkspace && targetWorkspace.id !== draggedWorkspace.id) {
@@ -144,7 +171,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 					onMoveWorkspace(draggedWorkspace, null);
 				}
 			},
-			[workspaces, onMoveWorkspace],
+			[workspacesForSelection, onMoveWorkspace],
 		);
 
 		const repoName = repoPath

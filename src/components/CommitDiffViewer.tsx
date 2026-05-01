@@ -11,10 +11,12 @@ import {
 } from "react";
 import {
 	type JjDiffHunk,
+	type JjFileDiff,
 	type JjLogCommit,
 	type JjRevisionDiff,
 	abandonCommit,
 	getCommitDiff,
+	getCommitFileDiff,
 	listCommits,
 } from "../lib/api";
 import {
@@ -175,7 +177,11 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 				for (const revision of revisions) {
 					try {
 						const diff = await getCommitDiff(repoPath, workspaceId, revision);
-						if (diff.files.length > 0 || diff.hunks_by_file.length > 0) {
+						if (
+							diff.too_large_to_render ||
+							diff.files.length > 0 ||
+							diff.hunks_by_file.length > 0
+						) {
 							return diff;
 						}
 					} catch (error) {
@@ -184,7 +190,41 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 				}
 
 				if (lastError) throw lastError;
-				return { files: [], hunks_by_file: [] };
+				return {
+					files: [],
+					hunks_by_file: [],
+					too_large_to_render: false,
+					render_block_reason: null,
+				};
+			},
+			[repoPath, workspaceId, commits],
+		);
+
+		const loadCommitFileDiff = useCallback(
+			async (commitId: string, filePath: string): Promise<JjFileDiff> => {
+				const commit = commits.find((candidate) => candidate.commit_id === commitId);
+				const revisions = [commitId, commit?.change_id].filter(
+					(value, index, values): value is string =>
+						typeof value === "string" &&
+						value.length > 0 &&
+						values.indexOf(value) === index,
+				);
+
+				let lastError: unknown;
+				for (const revision of revisions) {
+					try {
+						return await getCommitFileDiff(
+							repoPath,
+							workspaceId,
+							revision,
+							filePath,
+						);
+					} catch (error) {
+						lastError = error;
+					}
+				}
+
+				throw lastError ?? new Error("Failed to load commit file diff");
 			},
 			[repoPath, workspaceId, commits],
 		);
@@ -318,7 +358,12 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 					setCommitDiffs((prev) => {
 						const next = new Map(prev);
 						next.set(commitId, {
-							diff: { files: [], hunks_by_file: [] },
+							diff: {
+								files: [],
+								hunks_by_file: [],
+								too_large_to_render: false,
+								render_block_reason: null,
+							},
 							loading: true,
 						});
 						return next;
@@ -335,7 +380,12 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 							setCommitDiffs((prev) => {
 								const next = new Map(prev);
 								next.set(commitId, {
-									diff: { files: [], hunks_by_file: [] },
+									diff: {
+										files: [],
+										hunks_by_file: [],
+										too_large_to_render: false,
+										render_block_reason: null,
+									},
 									loading: false,
 									error: String(err),
 								});
@@ -360,7 +410,12 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 							setCommitDiffs((prev) => {
 								const next = new Map(prev);
 								next.set(commitId, {
-									diff: { files: [], hunks_by_file: [] },
+									diff: {
+										files: [],
+										hunks_by_file: [],
+										too_large_to_render: false,
+										render_block_reason: null,
+									},
 									loading: true,
 								});
 								return next;
@@ -377,7 +432,12 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 									setCommitDiffs((prev) => {
 										const next = new Map(prev);
 										next.set(commitId, {
-											diff: { files: [], hunks_by_file: [] },
+											diff: {
+												files: [],
+												hunks_by_file: [],
+												too_large_to_render: false,
+												render_block_reason: null,
+											},
 											loading: false,
 											error: String(err),
 										});
@@ -457,6 +517,31 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 													onMoveToExisting={handleMoveToExisting}
 													onAbandon={handleAbandon}
 													onCreateAgentWithComment={onCreateAgentWithComment}
+													onLoadDeferredFileDiff={(filePath) =>
+														loadCommitFileDiff(commit.commit_id, filePath).then(
+															(fileDiff) => {
+																setCommitDiffs((prev) => {
+																	const next = new Map(prev);
+																	const current = next.get(commit.commit_id);
+																	if (!current) return prev;
+																	next.set(commit.commit_id, {
+																		...current,
+																		diff: {
+																			...current.diff,
+																			hunks_by_file: [
+																				...current.diff.hunks_by_file.filter(
+																					(candidate) =>
+																						candidate.path !== fileDiff.path,
+																				),
+																				fileDiff,
+																			],
+																		},
+																	});
+																	return next;
+																});
+															},
+														)
+													}
 												/>
 											);
 										})}
@@ -517,6 +602,32 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 															onAbandon={() => {}}
 															onCreateAgentWithComment={
 																onCreateAgentWithComment
+															}
+															onLoadDeferredFileDiff={(filePath) =>
+																loadCommitFileDiff(commit.commit_id, filePath).then(
+																	(fileDiff) => {
+																		setCommitDiffs((prev) => {
+																			const next = new Map(prev);
+																			const current = next.get(commit.commit_id);
+																			if (!current) return prev;
+																			next.set(commit.commit_id, {
+																				...current,
+																				diff: {
+																					...current.diff,
+																					hunks_by_file: [
+																						...current.diff.hunks_by_file.filter(
+																							(candidate) =>
+																								candidate.path !==
+																								fileDiff.path,
+																						),
+																						fileDiff,
+																					],
+																				},
+																			});
+																			return next;
+																		});
+																	},
+																)
 															}
 														/>
 													);
@@ -581,6 +692,7 @@ interface CommitWithDiffProps {
 		commitShortId: string,
 		mode: "plan" | "acceptEdits",
 	) => void;
+	onLoadDeferredFileDiff: (filePath: string) => Promise<void>;
 }
 
 function CommitWithDiff({
@@ -594,6 +706,7 @@ function CommitWithDiff({
 	onMoveToExisting,
 	onAbandon,
 	onCreateAgentWithComment,
+	onLoadDeferredFileDiff,
 }: CommitWithDiffProps) {
 	const firstLine = commit.description.split("\n")[0] || "(no message)";
 	const hasStats = commit.insertions > 0 || commit.deletions > 0;
@@ -729,6 +842,7 @@ function CommitWithDiff({
 								onCreateAgentWithComment={
 									onCreateAgentWithComment ? handleAgentComment : undefined
 								}
+								onLoadDeferredFileDiff={onLoadDeferredFileDiff}
 							/>
 						) : null}
 					</div>
@@ -748,6 +862,7 @@ interface CommitDiffContentProps {
 		commentText: string,
 		mode: "plan" | "acceptEdits",
 	) => void;
+	onLoadDeferredFileDiff: (filePath: string) => Promise<void>;
 }
 
 interface DiffLineSelection {
@@ -767,10 +882,17 @@ interface PendingComment {
 function CommitDiffContent({
 	diff,
 	onCreateAgentWithComment,
+	onLoadDeferredFileDiff,
 }: CommitDiffContentProps) {
 	// Always show all files expanded
 	const [expandedFiles, setExpandedFiles] = useState<Set<string>>(
-		() => new Set(diff.hunks_by_file.map((f) => f.path)),
+		() => new Set(diff.files.map((file) => file.path)),
+	);
+	const [loadingDeferredFiles, setLoadingDeferredFiles] = useState<Set<string>>(
+		new Set(),
+	);
+	const [deferredFileErrors, setDeferredFileErrors] = useState<Map<string, string>>(
+		new Map(),
 	);
 
 	// Comment/selection state
@@ -797,6 +919,14 @@ function CommitDiffContent({
 		window.addEventListener("mouseup", handleMouseUp);
 		return () => window.removeEventListener("mouseup", handleMouseUp);
 	}, [isSelecting]);
+
+	if (diff.too_large_to_render) {
+		return (
+			<div className="p-3 text-sm text-muted-foreground">
+				{diff.render_block_reason ?? "This commit diff is too large to render."}
+			</div>
+		);
+	}
 
 	if (diff.files.length === 0) {
 		return <div className="p-3 text-sm text-muted-foreground">No changes</div>;
@@ -1049,6 +1179,9 @@ function CommitDiffContent({
 			{diff.files.map((file) => {
 				const fileDiff = diff.hunks_by_file.find((f) => f.path === file.path);
 				const isFileExpanded = expandedFiles.has(file.path);
+				const isDeferred = file.diff_deferred && !fileDiff;
+				const isLoadingDeferred = loadingDeferredFiles.has(file.path);
+				const deferredFileError = deferredFileErrors.get(file.path);
 
 				return (
 					<div key={file.path}>
@@ -1079,26 +1212,85 @@ function CommitDiffContent({
 							</span>
 						</button>
 
-						{isFileExpanded && fileDiff && (
+						{isFileExpanded && (
 							<div className="bg-muted/20">
-								{fileDiff.hunks.map((hunk, hunkIndex) => (
-									<HunkView
-										key={hunk.id}
-										hunk={hunk}
-										filePath={file.path}
-										hunkIndex={hunkIndex}
-										hasCommentSupport={!!onCreateAgentWithComment}
-										isLineSelected={isLineSelected}
-										showCommentInput={showCommentInput}
-										pendingComment={pendingComment}
-										onLineMouseDown={handleLineMouseDown}
-										onLineMouseEnter={handleLineMouseEnter}
-										onLineMouseUp={handleLineMouseUp}
-										onAddComment={handleAddComment}
-										onCommentSubmit={handleCommentSubmit}
-										onCommentCancel={handleCommentCancel}
-									/>
-								))}
+								{fileDiff ? (
+									fileDiff.hunks.map((hunk, hunkIndex) => (
+										<HunkView
+											key={hunk.id}
+											hunk={hunk}
+											filePath={file.path}
+											hunkIndex={hunkIndex}
+											hasCommentSupport={!!onCreateAgentWithComment}
+											isLineSelected={isLineSelected}
+											showCommentInput={showCommentInput}
+											pendingComment={pendingComment}
+											onLineMouseDown={handleLineMouseDown}
+											onLineMouseEnter={handleLineMouseEnter}
+											onLineMouseUp={handleLineMouseUp}
+											onAddComment={handleAddComment}
+											onCommentSubmit={handleCommentSubmit}
+											onCommentCancel={handleCommentCancel}
+										/>
+									))
+								) : isDeferred ? (
+									<div className="flex items-center justify-between gap-3 border-t border-border px-3 py-3">
+										<p className="text-sm text-muted-foreground">
+											This diff has {file.changed_line_count} changed lines.
+										</p>
+										<div className="flex items-center gap-3">
+											{deferredFileError && (
+												<span className="text-xs text-destructive">
+													{deferredFileError}
+												</span>
+											)}
+											<button
+												type="button"
+												className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
+												disabled={isLoadingDeferred}
+												onClick={() => {
+													setLoadingDeferredFiles((prev) => {
+														const next = new Set(prev);
+														next.add(file.path);
+														return next;
+													});
+													setDeferredFileErrors((prev) => {
+														const next = new Map(prev);
+														next.delete(file.path);
+														return next;
+													});
+													void onLoadDeferredFileDiff(file.path)
+														.catch((error) => {
+															setDeferredFileErrors((prev) => {
+																const next = new Map(prev);
+																next.set(
+																	file.path,
+																	error instanceof Error
+																		? error.message
+																		: String(error),
+																);
+																return next;
+															});
+														})
+														.finally(() => {
+															setLoadingDeferredFiles((prev) => {
+																const next = new Set(prev);
+																next.delete(file.path);
+																return next;
+															});
+														});
+												}}
+											>
+												{isLoadingDeferred ? "Loading..." : "Load diff"}
+											</button>
+										</div>
+									</div>
+								) : null}
+								{!fileDiff && !isDeferred && (
+									<div className="border-t border-border px-3 py-3 text-sm text-muted-foreground">
+										No diff content available.
+									</div>
+								)}
 							</div>
 						)}
 					</div>

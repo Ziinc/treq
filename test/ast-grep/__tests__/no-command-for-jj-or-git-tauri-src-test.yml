@@ -1,0 +1,23 @@
+id: no-command-for-jj-or-git-tauri-src
+valid:
+  - |
+    fn status() {
+      let mut cmd = command_for("ls");
+      cmd.arg("-la");
+    }
+  - |
+    fn status() {
+      let mut cmd = std::process::Command::new("jj");
+      cmd.arg("status");
+    }
+invalid:
+  - |
+    fn status() {
+      let mut cmd = command_for("jj");
+      cmd.arg("status");
+    }
+  - |
+    fn status() {
+      let mut cmd = command_for("git");
+      cmd.arg("status");
+    }

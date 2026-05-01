@@ -40,25 +40,21 @@ import {
 	Workspace,
 	createSession,
 	deleteWorkspace,
-	getRepoStatus,
+	getRepoBranch,
 	getRepoSetting,
 	getSessions,
 	getSetting,
 	getWorkspaces,
 	initRepo,
-	listRepoBranches,
 	selectFolder,
 	setSessionModel,
 	setSetting,
 	setWindowRepoPath,
-	startFileWatcher,
-	stopFileWatcher,
 	updateSessionAccess,
 } from "../lib/api";
 import { Loader2 } from "lucide-react";
 import { getFullWorkspacePath } from "../lib/utils";
 import { Onboarding } from "./Onboarding";
-import type { BranchListItem } from "./TargetBranchSelector";
 
 // Loading spinner component for Suspense fallback
 const LoadingSpinner = () => (
@@ -116,6 +112,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	const [lastSelectedWorkspaceIndex, setLastSelectedWorkspaceIndex] = useState<
 		number | null
 	>(null);
+	const [, setShowWorkspaceActiveTab] = useState("overview");
 
 	const terminalPaneRef = useRef<WorkspaceTerminalPaneHandle>(null);
 
@@ -227,58 +224,62 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		}
 	}, [repoPath]);
 
-	const { data: repoStatus } = useQuery({
-		queryKey: ["repo-status", repoPath],
-		queryFn: () => getRepoStatus(repoPath),
+	const { data: repoBranch } = useQuery({
+		queryKey: ["repo-branch", repoPath],
+		queryFn: () => getRepoBranch(repoPath),
 		enabled: !!repoPath,
 	});
 
 	useEffect(() => {
 		if (!repoPath) return;
-		if (!repoStatus?.current_branch) return;
-		setCurrentBranch(repoStatus.current_branch);
-	}, [repoPath, repoStatus?.current_branch]);
+		if (!repoBranch?.current_branch) return;
+		setCurrentBranch(repoBranch.current_branch);
+	}, [repoPath, repoBranch?.current_branch]);
 
-	const {
-		data: availableBranches = [],
-		isFetching: branchesLoading,
-		refetch: loadAvailableBranches,
-	} = useQuery<BranchListItem[]>({
-		queryKey: ["repo-branches", repoPath],
-		enabled: false,
-		staleTime: 5 * 60 * 1000,
-		queryFn: async () => {
-			const jjBranches = await listRepoBranches(repoPath);
-			return jjBranches.map((branch) => ({
-				name: branch.name,
-				fullName: branch.name,
-				isCurrent: branch.is_current,
-			}));
-		},
-	});
+	// const {
+	// 	data: availableBranches = [],
+	// 	isFetching: branchesLoading,
+	// 	refetch: loadAvailableBranches,
+	// } = useQuery<BranchListItem[]>({
+	// 	queryKey: ["repo-branches", repoPath],
+	// 	enabled: false,
+	// 	staleTime: 5 * 60 * 1000,
+	// 	queryFn: async () => {
+	// 		const jjBranches = await listRepoBranches(repoPath);
+	// 		return jjBranches.map((branch) => ({
+	// 			name: branch.name,
+	// 			fullName: branch.name,
+	// 			isCurrent: branch.is_current,
+	// 		}));
+	// 	},
+	// });
 
 	// Manage file watcher lifecycle for selected workspace
-	useEffect(() => {
-		if (!selectedWorkspace) return;
+	// useEffect(() => {
+	// 	if (viewMode !== "show-workspace") return;
+	// 	if (showWorkspaceActiveTab !== "changes") return;
+	// 	if (!selectedWorkspace) return;
 
-		const workspaceId = selectedWorkspace.id;
-		const workspacePath = getFullWorkspacePath(selectedWorkspace);
+	// 	const workspaceId = selectedWorkspace.id;
+	// 	const workspacePath = getFullWorkspacePath(selectedWorkspace);
 
-		startFileWatcher(workspaceId, workspacePath).catch((err) => {
-			console.error("Failed to start file watcher:", err);
-		});
+	// 	// startFileWatcher(workspaceId, workspacePath).catch((err) => {
+	// 	// 	console.error("Failed to start file watcher:", err);
+	// 	// });
 
-		// Stop watching when workspace changes or component unmounts
-		return () => {
-			stopFileWatcher(workspaceId, workspacePath).catch((err) => {
-				console.error("Failed to stop file watcher:", err);
-			});
-		};
-	}, [
-		selectedWorkspace?.id,
-		selectedWorkspace?.repo_path,
-		selectedWorkspace?.workspace_path,
-	]);
+	// 	// // Stop watching when workspace changes or component unmounts
+	// 	// return () => {
+	// 	// 	stopFileWatcher(workspaceId, workspacePath).catch((err) => {
+	// 	// 		console.error("Failed to stop file watcher:", err);
+	// 	// 	});
+	// 	// };
+	// }, [
+	// 	viewMode,
+	// 	showWorkspaceActiveTab,
+	// 	selectedWorkspace?.id,
+	// 	selectedWorkspace?.repo_path,
+	// 	selectedWorkspace?.workspace_path,
+	// ]);
 
 	const { data: sessions = [] } = useQuery({
 		queryKey: ["sessions", repoPath],
@@ -346,6 +347,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		queryClient.invalidateQueries({ queryKey: ["workspace-statuses"] });
 		queryClient.invalidateQueries({ queryKey: ["sessions"] });
 		queryClient.invalidateQueries({ queryKey: ["repo-status"] });
+		queryClient.invalidateQueries({ queryKey: ["repo-branch"] });
 
 		addToast({
 			title: "Repository Opened",
@@ -441,7 +443,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		repoPath,
 		addToast,
 		queryClient,
-		selectedWorkspace,
 		deleteWorkspaceMutation,
 		handleOpenRepository,
 	]);
@@ -511,8 +512,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	// Navigate to workspace without creating an agent session
 	const handleSelectWorkspace = useCallback((workspace: Workspace | null) => {
 		setSelectedWorkspace(workspace);
-		setSessionSelectedFile(null);
-		setViewMode(workspace ? "show-workspace" : "session");
+		setViewMode("show-workspace" );
 	}, []);
 
 	const { moveWorkspace } = useWorkspaceHierarchy({
@@ -675,6 +675,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
 			void queryClient.invalidateQueries({
 				queryKey: ["repo-status", repoPath],
 			});
+			void queryClient.invalidateQueries({
+				queryKey: ["repo-branch", repoPath],
+			});
 			// Refresh workspace data
 			queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
 			queryClient.invalidateQueries({
@@ -774,11 +777,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
 									<ShowWorkspace
 										repositoryPath={repoPath}
 										workspace={selectedWorkspace}
+										onActiveTabChange={setShowWorkspaceActiveTab}
 										mainRepoBranch={currentBranch}
 										initialSelectedFile={sessionSelectedFile}
-										availableBranches={availableBranches}
-										branchesLoading={branchesLoading}
-										onLoadAvailableBranches={loadAvailableBranches}
+										availableBranches={[]}
+										branchesLoading={false}
+										onLoadAvailableBranches={() => undefined}
 										onDeleteWorkspace={handleDelete}
 										onOpenFilePicker={() => setShowFilePicker(true)}
 										onOpenMergePreview={handleOpenMergePreview}
@@ -949,6 +953,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
 								handleReturnToDashboard();
 								void queryClient.invalidateQueries({
 									queryKey: ["repo-status", repoPath],
+								});
+								void queryClient.invalidateQueries({
+									queryKey: ["repo-branch", repoPath],
 								});
 								void queryClient.invalidateQueries({
 									queryKey: ["workspaces", repoPath],

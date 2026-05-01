@@ -45,15 +45,17 @@ describe("ShowWorkspace - Commits tab", () => {
 		console.log("repoPath", repoPath);
 		openRepo(repoPath);
 		user = userEvent.setup();
-		await Promise.all(
-			Array.from({ length: 13 }, (_, idx) =>
-				commitRepoFile(
-					repoPath,
-					`target-pagination-${idx}.txt`,
-					`target pagination content ${idx}`,
-					`Target pagination commit ${idx}`,
+		await Array.from({ length: 13 }, (_, index) => index).reduce(
+			(chain, idx) =>
+				chain.then(() =>
+					commitRepoFile(
+						repoPath,
+						`target-pagination-${idx}.txt`,
+						`target pagination content ${idx}`,
+						`Target pagination commit ${idx}`,
+					),
 				),
-			),
+			Promise.resolve(),
 		);
 
 		testWorkspace = await createWorkspaceRef(repoPath, "feat/commits-it");
@@ -73,23 +75,72 @@ describe("ShowWorkspace - Commits tab", () => {
 		);
 	});
 
-	it("renders commit contents, shows per-commit diff, and paginates with load more", async () => {
+	it("renders commit contents and shows per-commit diff", async () => {
 		await openWorkspaceCommitsTab(user, "feat/commits-it");
 
 		await screen.findByText("Commits diff two");
 		expect((await screen.findAllByText("Today")).length).toBeGreaterThan(0);
-		expect(
-			screen.queryByText("Target pagination commit 0"),
-		).not.toBeInTheDocument();
 		const commit = await screen.findByText("Commits diff two");
 		await user.click(commit);
 		await screen.findByText("commit-page.txt");
 		await screen.findByText("commits-tab-diff-line-two");
-		const loadMoreButton = await screen.findByRole("button", {
-			name: "Load more commits",
-		});
-		await user.click(loadMoreButton);
+	});
 
-		await screen.findByText("Target pagination commit 0");
+	it("defers rendering file diffs larger than 500 changed lines until requested", async () => {
+		const largeDiffContent = Array.from(
+			{ length: 501 },
+			(_, index) => `large diff line ${index + 1}`,
+		).join("\n");
+
+		await commitWorkspaceFile(
+			repoPath,
+			testWorkspace,
+			"huge-diff.txt",
+			largeDiffContent,
+			"Commits huge diff",
+		);
+
+		await openWorkspaceCommitsTab(user, "feat/commits-it");
+
+		const commit = await screen.findByText("Commits huge diff");
+		await user.click(commit);
+
+		await screen.findByText("huge-diff.txt");
+		expect(screen.queryByText("large diff line 501")).toBeNull();
+
+		const loadDiffButton = screen.getByRole("button", {
+			name: "Load diff",
+		});
+		await user.click(loadDiffButton);
+
+		await screen.findByText("large diff line 501");
+	});
+
+	it("shows a blocked message for commit diffs over 10k changed lines", async () => {
+		const hugeDiffContent = Array.from(
+			{ length: 10001 },
+			(_, index) => `huge diff line ${index + 1}`,
+		).join("\n");
+
+		await commitWorkspaceFile(
+			repoPath,
+			testWorkspace,
+			"huge-commit.txt",
+			hugeDiffContent,
+			"Commits huge cutoff",
+		);
+
+		await openWorkspaceCommitsTab(user, "feat/commits-it");
+
+		const commit = await screen.findByText("Commits huge cutoff");
+		await user.click(commit);
+
+		await screen.findByText(
+			"This commit changes more than 10,000 lines and is too large to render.",
+		);
+		expect(screen.queryByText("huge-commit.txt")).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", { name: "Load diff" }),
+		).not.toBeInTheDocument();
 	});
 });

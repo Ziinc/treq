@@ -6902,6 +6902,7 @@ dependencies = [
  "criterion",
  "futures",
  "ignore",
+ "imara-diff 0.1.8",
  "jj-lib",
  "log",
  "mockall",

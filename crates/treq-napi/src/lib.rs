@@ -4,9 +4,9 @@ mod dispatch;
 mod helpers;
 mod state;
 
+pub use helpers::*;
 use napi_derive::napi;
 use std::path::PathBuf;
-pub use helpers::*;
 
 /// Initialize the napi module state with an app-level SQLite database.
 /// Must be called once before any `invoke_sync` calls that require DB access.

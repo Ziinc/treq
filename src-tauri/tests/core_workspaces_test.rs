@@ -171,11 +171,17 @@ fn test_can_merge_workspace_into_home_repo() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().expect("workspace path should be utf-8");
+    let workspace_path_str = workspace_path
+        .to_str()
+        .expect("workspace path should be utf-8");
 
     // Add a file to the workspace and commit
-    TestRepo::write_workspace_file(workspace_path_str, "merge-feature.txt", "merge feature content")
-        .expect("Failed to write feature file");
+    TestRepo::write_workspace_file(
+        workspace_path_str,
+        "merge-feature.txt",
+        "merge feature content",
+    )
+    .expect("Failed to write feature file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add merge feature")
         .expect("Failed to commit");
 
@@ -313,7 +319,9 @@ fn test_can_squash_merge_workspace_into_home_repo() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().expect("workspace path should be utf-8");
+    let workspace_path_str = workspace_path
+        .to_str()
+        .expect("workspace path should be utf-8");
 
     TestRepo::write_workspace_file(
         workspace_path_str,
@@ -379,7 +387,9 @@ fn test_can_rebase_merge_workspace_into_home_repo() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().expect("workspace path should be utf-8");
+    let workspace_path_str = workspace_path
+        .to_str()
+        .expect("workspace path should be utf-8");
 
     TestRepo::write_workspace_file(
         workspace_path_str,
@@ -636,7 +646,9 @@ fn test_push_workspace_to_remote() {
 
     // Test 3: Add a file and commit to the workspace
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().expect("workspace path should be utf-8");
+    let workspace_path_str = workspace_path
+        .to_str()
+        .expect("workspace path should be utf-8");
     TestRepo::write_workspace_file(workspace_path_str, "test-push.txt", "test push content")
         .expect("Failed to write test file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add test push file")
@@ -1563,6 +1575,133 @@ fn test_recover_workspace_after_jj_reinit() {
     );
 }
 
+#[test]
+fn test_jj_get_changed_files_ignores_gitignored_noise_in_workspace() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let gitignore = repo.read_gitignore().expect("Failed to read .gitignore");
+    repo.create_file(".gitignore", &format!("{gitignore}node_modules/\n"))
+        .expect("Failed to update .gitignore");
+    TestRepo::run_git(&repo.repo_path, &["add", ".gitignore"]).expect("Failed to stage .gitignore");
+    TestRepo::run_git(&repo.repo_path, &["commit", "-m", "Ignore node_modules"])
+        .expect("Failed to commit .gitignore");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/ignored-jj-noise",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().expect("utf-8");
+
+    TestRepo::write_workspace_file(
+        workspace_path_str,
+        "node_modules/pkg/index.js",
+        "console.log('ignored');\n",
+    )
+    .expect("Failed to write node_modules file");
+    TestRepo::write_workspace_file(
+        workspace_path_str,
+        ".treq/cache/tmp.txt",
+        "ignored treq cache\n",
+    )
+    .expect("Failed to write .treq cache file");
+    TestRepo::write_workspace_file(
+        workspace_path_str,
+        ".jj-backup/state.txt",
+        "ignored jj backup\n",
+    )
+    .expect("Failed to write .jj-backup file");
+
+    let changed_files = treq_lib::jj::jj_get_changed_files(workspace_path_str)
+        .expect("Failed to get changed files");
+
+    assert!(
+        changed_files.is_empty(),
+        "Expected ignored noise to be excluded, got {:?}",
+        changed_files
+    );
+}
+
+#[test]
+fn test_jj_get_changed_files_honors_nested_gitignore() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/nested-gitignore",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().expect("utf-8");
+
+    TestRepo::write_workspace_file(workspace_path_str, "generated/.gitignore", "ignored.txt\n")
+        .expect("Failed to write nested .gitignore");
+    TestRepo::write_workspace_file(
+        workspace_path_str,
+        "generated/ignored.txt",
+        "nested ignored\n",
+    )
+    .expect("Failed to write ignored file");
+
+    let changed_files = treq_lib::jj::jj_get_changed_files(workspace_path_str)
+        .expect("Failed to get changed files");
+
+    assert!(
+        changed_files
+            .iter()
+            .all(|change| change.path != "generated/ignored.txt"),
+        "Expected nested .gitignore to suppress ignored file, got {:?}",
+        changed_files
+    );
+}
+
+#[test]
+fn test_jj_get_changed_files_keeps_tracked_files_visible_after_ignore_rule_added() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/tracked-after-ignore",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().expect("utf-8");
+
+    TestRepo::write_workspace_file(workspace_path_str, "tracked.txt", "version one\n")
+        .expect("Failed to write tracked file");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Track file")
+        .expect("Failed to commit tracked file");
+
+    TestRepo::write_workspace_file(workspace_path_str, ".gitignore", "tracked.txt\n")
+        .expect("Failed to write .gitignore");
+    TestRepo::write_workspace_file(workspace_path_str, "tracked.txt", "version two\n")
+        .expect("Failed to modify tracked file");
+
+    let changed_files = treq_lib::jj::jj_get_changed_files(workspace_path_str)
+        .expect("Failed to get changed files");
+
+    assert!(
+        changed_files
+            .iter()
+            .any(|change| change.path == "tracked.txt"),
+        "Tracked file should remain visible after ignore rule, got {:?}",
+        changed_files
+    );
+}
+
 // =============================================================================
 // Test: Recover multiple workspaces after .jj reinit
 // =============================================================================
@@ -2154,11 +2293,7 @@ fn test_workspace_status_behind_remote() {
     let clone_path_str = clone_dir.to_str().unwrap();
     let remote_dir = repo.temp_dir.path().join("remote.git");
     Command::new("git")
-        .args([
-            "clone",
-            remote_dir.to_str().unwrap(),
-            clone_path_str,
-        ])
+        .args(["clone", remote_dir.to_str().unwrap(), clone_path_str])
         .output()
         .expect("Failed to clone remote");
     Command::new("git")
@@ -2259,11 +2394,7 @@ fn test_workspace_status_diverged() {
     let clone_path_str = clone_dir.to_str().unwrap();
     let remote_dir = repo.temp_dir.path().join("remote.git");
     Command::new("git")
-        .args([
-            "clone",
-            remote_dir.to_str().unwrap(),
-            clone_path_str,
-        ])
+        .args(["clone", remote_dir.to_str().unwrap(), clone_path_str])
         .output()
         .expect("Failed to clone remote");
     Command::new("git")
@@ -2345,11 +2476,7 @@ fn test_pull_workspace_resolves_divergence() {
     let clone_path_str = clone_dir.to_str().unwrap();
     let remote_dir = repo.temp_dir.path().join("remote.git");
     Command::new("git")
-        .args([
-            "clone",
-            remote_dir.to_str().unwrap(),
-            clone_path_str,
-        ])
+        .args(["clone", remote_dir.to_str().unwrap(), clone_path_str])
         .output()
         .expect("Failed to clone remote");
     Command::new("git")
@@ -2450,11 +2577,7 @@ fn test_pull_workspace_no_divergence() {
     let clone_path_str = clone_dir.to_str().unwrap();
     let remote_dir = repo.temp_dir.path().join("remote.git");
     Command::new("git")
-        .args([
-            "clone",
-            remote_dir.to_str().unwrap(),
-            clone_path_str,
-        ])
+        .args(["clone", remote_dir.to_str().unwrap(), clone_path_str])
         .output()
         .expect("Failed to clone remote");
     Command::new("git")
@@ -2951,6 +3074,58 @@ fn test_workspace_status_home_repo() {
     assert!(status.target.is_none(), "Home repo should have no target");
 }
 
+#[test]
+fn test_workspace_status_ignores_gitignored_noise() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let gitignore = repo.read_gitignore().expect("Failed to read .gitignore");
+    repo.create_file(".gitignore", &format!("{gitignore}node_modules/\n"))
+        .expect("Failed to update .gitignore");
+    TestRepo::run_git(&repo.repo_path, &["add", ".gitignore"]).expect("Failed to stage .gitignore");
+    TestRepo::run_git(&repo.repo_path, &["commit", "-m", "Ignore node_modules"])
+        .expect("Failed to commit .gitignore");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/workspace-ignored-noise",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().expect("utf-8");
+
+    TestRepo::write_workspace_file(
+        workspace_path_str,
+        "node_modules/pkg/index.js",
+        "console.log('ignored');\n",
+    )
+    .expect("Failed to write node_modules file");
+    TestRepo::write_workspace_file(
+        workspace_path_str,
+        ".treq/cache/tmp.txt",
+        "ignored treq cache\n",
+    )
+    .expect("Failed to write .treq cache file");
+    TestRepo::write_workspace_file(
+        workspace_path_str,
+        ".jj-backup/state.txt",
+        "ignored jj backup\n",
+    )
+    .expect("Failed to write .jj-backup file");
+
+    let status = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+        .expect("workspace_status should succeed");
+
+    assert!(
+        !status.partial.has_changes,
+        "workspace_status should ignore gitignored noise, got {:?}",
+        status.partial
+    );
+}
+
 // =============================================================================
 // Test: workspace_status with Some(id) returns correct sync status
 // =============================================================================
@@ -3022,6 +3197,14 @@ fn test_workspace_status_with_workspace_id() {
         "Should be InSync after push+pull, got {:?}",
         status.remote_sync
     );
+    assert!(
+        status.dag_nodes.is_empty(),
+        "workspace_status should not build DAG nodes"
+    );
+    assert!(
+        status.conflicted_workspace_ids.is_empty(),
+        "workspace_status should not return DAG-derived conflict IDs"
+    );
 }
 
 // =============================================================================
@@ -3043,7 +3226,11 @@ fn merge_diff_commit(repo: &TestRepo, ws: &Workspace, msg: &str) {
 }
 
 fn merge_diff_paths(repo: &TestRepo, ws: &Workspace) -> Vec<String> {
-    treq_lib::core::workspace_diff(&repo.repo_path, ws.id, "git")
+    let db_path = Path::new(&repo.repo_path).join(".treq").join("treq.db");
+    let db = std::sync::Mutex::new(
+        treq_lib::db::Database::new(db_path).expect("test db should be openable"),
+    );
+    treq_lib::core::workspace_diff(&repo.repo_path, ws.id, &db)
         .unwrap()
         .files
         .iter()

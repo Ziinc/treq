@@ -53,8 +53,8 @@ pub fn init(repo_path: &str) -> Result<bool, String> {
 
     match jj::ensure_jj_initialized(&db, repo_path) {
         Ok(_already_initialized) => {
-            // Recover orphaned workspaces (e.g., after .jj was deleted and reinitialized)
-            let _ = jj::recover_all_orphaned_workspaces(repo_path);
+            // Reconcile persisted workspaces against JJ registration and on-disk state.
+            let _ = jj::reconcile_workspaces_with_jj(repo_path);
             Ok(true)
         }
         Err(_) => Ok(false),

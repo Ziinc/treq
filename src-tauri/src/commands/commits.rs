@@ -63,20 +63,24 @@ pub fn create_commit(
 }
 
 #[tauri::command]
-pub fn list_commits(
+pub async fn list_commits(
     repo_path: String,
     workspace_id: Option<i64>,
     include_target_branch_history: Option<bool>,
     target_branch_limit: Option<usize>,
     limit: Option<usize>,
 ) -> Result<crate::jj::JjLogResult, String> {
-    crate::core::list_commits(
-        &repo_path,
-        workspace_id,
-        include_target_branch_history.unwrap_or(false),
-        target_branch_limit,
-        limit,
-    )
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::core::list_commits(
+            &repo_path,
+            workspace_id,
+            include_target_branch_history.unwrap_or(false),
+            target_branch_limit,
+            limit,
+        )
+    })
+    .await
+    .map_err(|e| format!("Failed to join list_commits task: {}", e))?
 }
 
 #[tauri::command]
@@ -122,15 +126,7 @@ pub fn get_workspace_diff(
     repo_path: String,
     workspace_id: i64,
 ) -> Result<jj::JjRevisionDiff, String> {
-    let conflict_style = state
-        .db
-        .lock()
-        .unwrap()
-        .get_setting("conflict_marker_style")
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| "git".to_string());
-    crate::core::workspace_diff(&repo_path, workspace_id, &conflict_style)
+    crate::core::workspace_diff(&repo_path, workspace_id, &state.db)
 }
 
 /// Get diff for a single commit by revision (commit_id or change_id)
@@ -141,16 +137,18 @@ pub fn get_commit_diff(
     workspace_id: Option<i64>,
     revision: String,
 ) -> Result<jj::JjRevisionDiff, String> {
-    let conflict_style = state
-        .db
-        .lock()
-        .unwrap()
-        .get_setting("conflict_marker_style")
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| "git".to_string());
+    crate::core::get_commit_diff(&state.db, &repo_path, workspace_id, &revision)
+}
 
-    crate::core::get_commit_diff(&repo_path, workspace_id, &revision, &conflict_style)
+#[tauri::command]
+pub fn get_commit_file_diff(
+    state: State<AppState>,
+    repo_path: String,
+    workspace_id: Option<i64>,
+    revision: String,
+    file_path: String,
+) -> Result<jj::JjFileDiff, String> {
+    crate::core::get_commit_file_diff(&state.db, &repo_path, workspace_id, &revision, &file_path)
 }
 
 /// Check if a branch exists locally and/or remotely

@@ -132,6 +132,8 @@ describe("CommitDiffViewer - Target Branch History", () => {
 		vi.mocked(api.getCommitDiff).mockResolvedValue({
 			files: [],
 			hunks_by_file: [],
+			too_large_to_render: false,
+			render_block_reason: null,
 		});
 
 		render(

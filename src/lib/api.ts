@@ -6,17 +6,18 @@ import type {
 	JjCommitsAhead,
 	JjDiffHunk,
 	JjFileChange,
+	JjFileDiff,
 	JjFileLines,
 	JjLogResult,
 	JjRebaseResult,
 	JjRevisionDiff,
 	MergeStrategy,
 	PullWorkspaceResult,
-	RepoStatus,
+	RepoBranch,
 	RenameWorkspaceResult,
 	SingleRebaseResult,
 	Workspace,
-	WorkspacePartialStatus,
+	WorkspaceSidebarStatus,
 	WorkspaceStatus,
 } from "./api-types";
 
@@ -32,8 +33,8 @@ export const initRepo = (repoPath: string): Promise<void> =>
 export const getWorkspaces = (repoPath: string): Promise<Workspace[]> =>
 	invoke("get_workspaces", { repoPath });
 
-export const getRepoStatus = (repoPath: string): Promise<RepoStatus> =>
-	invoke("get_repo_status", { repoPath });
+export const getRepoBranch = (repoPath: string): Promise<RepoBranch> =>
+	invoke("get_repo_branch", { repoPath });
 
 export const createWorkspace = (
 	...args: [
@@ -257,6 +258,23 @@ export const getCommitDiff = (
 ): Promise<JjRevisionDiff> =>
 	invoke("get_commit_diff", { repoPath, workspaceId, revision });
 
+export const getCommitFileDiff = (
+	...args: [
+		repoPath: string,
+		workspaceId: number | null,
+		revision: string,
+		filePath: string,
+	]
+): Promise<JjFileDiff> => {
+	const [repoPath, workspaceId, revision, filePath] = args;
+	return invoke("get_commit_file_diff", {
+		repoPath,
+		workspaceId,
+		revision,
+		filePath,
+	});
+};
+
 export const jjGetCommitsAhead = (
 	workspacePath: string,
 	targetBranch: string,
@@ -348,7 +366,7 @@ export const pushWorkspaceToRemote = (
 
 export const listWorkspaceStatuses = (
 	repoPath: string,
-): Promise<WorkspacePartialStatus[]> =>
+): Promise<WorkspaceSidebarStatus[]> =>
 	invoke("list_workspace_statuses", {
 		repoPath,
 	});
