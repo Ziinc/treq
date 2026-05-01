@@ -1,12 +1,12 @@
 use chrono::TimeZone;
+use futures::StreamExt as _;
+use futures::TryStreamExt as _;
 use imara_diff::intern::InternedInput;
 use imara_diff::sink::Counter;
 use imara_diff::{diff, Algorithm, UnifiedDiffBuilder};
-use jj_lib::conflict_labels::ConflictLabels;
 use jj_lib::config::{ConfigLayer, ConfigSource, StackedConfig};
-use jj_lib::conflicts::{
-    materialized_diff_stream, MaterializedTreeValue,
-};
+use jj_lib::conflict_labels::ConflictLabels;
+use jj_lib::conflicts::{materialized_diff_stream, MaterializedTreeValue};
 use jj_lib::copies::CopyRecords;
 use jj_lib::file_util;
 use jj_lib::fileset::FilesetAliasesMap;
@@ -31,8 +31,6 @@ use jj_lib::workspace::{default_working_copy_factories, default_working_copy_fac
 use jj_lib::workspace_store::{SimpleWorkspaceStore, WorkspaceStore as _};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use futures::StreamExt as _;
-use futures::TryStreamExt as _;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -232,7 +230,12 @@ fn snapshot_working_copy_tree(
     workspace_path: &str,
 ) -> Result<Option<(jj_lib::backend::CommitId, MergedTree)>, JjError> {
     let workspace_name = loaded.workspace.workspace_name().to_owned();
-    let Some(wc_commit_id) = loaded.repo.view().get_wc_commit_id(&workspace_name).cloned() else {
+    let Some(wc_commit_id) = loaded
+        .repo
+        .view()
+        .get_wc_commit_id(&workspace_name)
+        .cloned()
+    else {
         return Ok(None);
     };
 
@@ -281,7 +284,9 @@ async fn materialized_value_to_bytes(
 ) -> Option<Vec<u8>> {
     match value {
         MaterializedTreeValue::Absent => None,
-        MaterializedTreeValue::File(mut file) => file.read_all(path).await.ok().and_then(bytes_to_text),
+        MaterializedTreeValue::File(mut file) => {
+            file.read_all(path).await.ok().and_then(bytes_to_text)
+        }
         MaterializedTreeValue::Symlink { target, .. } => Some(target.into_bytes()),
         MaterializedTreeValue::AccessDenied(_)
         | MaterializedTreeValue::FileConflict(_)
@@ -299,7 +304,11 @@ fn diff_line_counts(before: &str, after: &str) -> (u32, u32) {
 
 fn build_text_hunks(before: &str, after: &str) -> Vec<JjDiffHunk> {
     let input = InternedInput::new(before, after);
-    let patch = diff(Algorithm::Histogram, &input, UnifiedDiffBuilder::new(&input));
+    let patch = diff(
+        Algorithm::Histogram,
+        &input,
+        UnifiedDiffBuilder::new(&input),
+    );
     if patch.is_empty() {
         Vec::new()
     } else {
@@ -441,29 +450,33 @@ fn build_log_commits(
     commits
         .into_iter()
         .map(|commit| {
-            let mut log_commit = build_log_commit(repo, commit.clone(), wc_commit_ids, is_immutable);
+            let mut log_commit =
+                build_log_commit(repo, commit.clone(), wc_commit_ids, is_immutable);
             let tree_override = wc_tree_override
                 .filter(|(wc_commit_id, _)| **wc_commit_id == *commit.id())
                 .map(|(_, tree)| tree);
             let effective_tree = tree_override.cloned().unwrap_or_else(|| commit.tree());
             let cache_key = tree_key(&effective_tree);
             let full_commit_id = commit.id().hex();
-            let (insertions, deletions) =
-                match local_db::get_cached_commit_diff_stat(cache_repo_path, &full_commit_id, &cache_key) {
-                    Ok(Some(cached)) => (cached.insertions, cached.deletions),
-                    _ => {
-                        let (insertions, deletions) =
-                            compute_commit_stats(repo, &commit, tree_override);
-                        let _ = local_db::cache_commit_diff_stat(
-                            cache_repo_path,
-                            &full_commit_id,
-                            &cache_key,
-                            insertions,
-                            deletions,
-                        );
-                        (insertions, deletions)
-                    }
-                };
+            let (insertions, deletions) = match local_db::get_cached_commit_diff_stat(
+                cache_repo_path,
+                &full_commit_id,
+                &cache_key,
+            ) {
+                Ok(Some(cached)) => (cached.insertions, cached.deletions),
+                _ => {
+                    let (insertions, deletions) =
+                        compute_commit_stats(repo, &commit, tree_override);
+                    let _ = local_db::cache_commit_diff_stat(
+                        cache_repo_path,
+                        &full_commit_id,
+                        &cache_key,
+                        insertions,
+                        deletions,
+                    );
+                    (insertions, deletions)
+                }
+            };
             log_commit.insertions = insertions;
             log_commit.deletions = deletions;
             log_commit
@@ -1256,7 +1269,10 @@ fn list_registered_workspaces(repo_path: &str) -> Result<Vec<RegisteredWorkspace
         let stored_full_path = if stored_path.is_absolute() {
             stored_path
         } else {
-            Path::new(repo_path).join(".jj").join("repo").join(stored_path)
+            Path::new(repo_path)
+                .join(".jj")
+                .join("repo")
+                .join(stored_path)
         };
         let workspace_path = stored_full_path
             .file_name()
@@ -1386,7 +1402,10 @@ fn ensure_workspace_jj_state(
 
     let working_copy_state_path = jj_dir.join("working_copy");
     fs::create_dir(&working_copy_state_path).map_err(|e| {
-        JjError::IoError(format!("Failed to create workspace working_copy dir: {}", e))
+        JjError::IoError(format!(
+            "Failed to create workspace working_copy dir: {}",
+            e
+        ))
     })?;
 
     let wc_factory = default_working_copy_factory();
@@ -1402,9 +1421,8 @@ fn ensure_workspace_jj_state(
         .map_err(|e| JjError::IoError(format!("Failed to init working copy: {}", e)))?;
 
     let working_copy_type_path = working_copy_state_path.join("type");
-    fs::write(&working_copy_type_path, working_copy.name()).map_err(|e| {
-        JjError::IoError(format!("Failed to write working copy type file: {}", e))
-    })?;
+    fs::write(&working_copy_type_path, working_copy.name())
+        .map_err(|e| JjError::IoError(format!("Failed to write working copy type file: {}", e)))?;
 
     let workspace_store = SimpleWorkspaceStore::load(repo_internal_path)
         .map_err(|e| JjError::IoError(format!("Failed to load workspace store: {}", e)))?;
@@ -1467,7 +1485,9 @@ fn forget_workspace_registration(
     Ok(())
 }
 
-pub fn reconcile_workspaces_with_jj(repo_path: &str) -> Result<Vec<WorkspaceRecoveryResult>, JjError> {
+pub fn reconcile_workspaces_with_jj(
+    repo_path: &str,
+) -> Result<Vec<WorkspaceRecoveryResult>, JjError> {
     let (home_workspace, repo, _) = load_home_repo(repo_path)?;
     let repo_internal_path = home_workspace.repo_path().to_path_buf();
     let settings = create_user_settings(repo_path)?;
@@ -1515,7 +1535,10 @@ pub fn reconcile_workspaces_with_jj(repo_path: &str) -> Result<Vec<WorkspaceReco
         .collect();
 
     for workspace in db_workspaces {
-        if live_pairs.contains(&(workspace.workspace_name.clone(), workspace.workspace_path.clone())) {
+        if live_pairs.contains(&(
+            workspace.workspace_name.clone(),
+            workspace.workspace_path.clone(),
+        )) {
             continue;
         }
 
@@ -1527,8 +1550,9 @@ pub fn reconcile_workspaces_with_jj(repo_path: &str) -> Result<Vec<WorkspaceReco
             forget_workspace_registration(&repo_internal_path, &repo, &workspace.workspace_name)?;
         }
 
-        local_db::delete_workspace(repo_path, workspace.id)
-            .map_err(|e| JjError::IoError(format!("Failed to delete stale workspace row: {}", e)))?;
+        local_db::delete_workspace(repo_path, workspace.id).map_err(|e| {
+            JjError::IoError(format!("Failed to delete stale workspace row: {}", e))
+        })?;
         results.push(WorkspaceRecoveryResult {
             workspace_name: workspace.workspace_name,
             branch_name: workspace.branch_name,
@@ -4160,7 +4184,9 @@ pub fn jj_get_log(
     if is_home_repo.unwrap_or(false) {
         import_git_head_if_needed(&mut loaded, workspace_path)?;
     }
-    let wc_tree_override = snapshot_working_copy_tree(&mut loaded, workspace_path).ok().flatten();
+    let wc_tree_override = snapshot_working_copy_tree(&mut loaded, workspace_path)
+        .ok()
+        .flatten();
     let mut last_error = None;
     let mut selected_target_ref = None;
     let mut revset = None;
@@ -4214,7 +4240,9 @@ pub fn jj_get_log(
         &loaded.repo,
         commits,
         &wc_commit_ids,
-        wc_tree_override.as_ref().map(|(commit_id, tree)| (commit_id, tree)),
+        wc_tree_override
+            .as_ref()
+            .map(|(commit_id, tree)| (commit_id, tree)),
         &is_immutable,
     );
 
@@ -4538,7 +4566,9 @@ fn resolve_commit_by_revision(
         .iter()
         .commits(loaded.repo.store())
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| JjError::IoError(format!("Failed to resolve revision '{}': {}", revision, e)))?;
+        .map_err(|e| {
+            JjError::IoError(format!("Failed to resolve revision '{}': {}", revision, e))
+        })?;
     match commits.len() {
         1 => Ok(commits.into_iter().next().expect("single commit expected")),
         0 => Err(JjError::IoError(format!(
@@ -4725,10 +4755,10 @@ pub fn jj_get_commit_diff(
             };
             let before_absent = matches!(&values.before, MaterializedTreeValue::Absent);
             let after_absent = matches!(&values.after, MaterializedTreeValue::Absent);
-            let before_bytes = materialized_value_to_bytes(entry.path.source(), values.before).await;
+            let before_bytes =
+                materialized_value_to_bytes(entry.path.source(), values.before).await;
             let after_bytes = materialized_value_to_bytes(entry.path.target(), values.after).await;
-            let (changed_line_count, hunks) =
-                build_file_diff_from_bytes(before_bytes, after_bytes);
+            let (changed_line_count, hunks) = build_file_diff_from_bytes(before_bytes, after_bytes);
 
             total_changed_lines += changed_line_count;
             if total_changed_lines > TOO_LARGE_COMMIT_DIFF_THRESHOLD {
@@ -4804,7 +4834,8 @@ pub fn jj_get_commit_file_diff(
                 Ok(values) => values,
                 Err(_) => continue,
             };
-            let before_bytes = materialized_value_to_bytes(entry.path.source(), values.before).await;
+            let before_bytes =
+                materialized_value_to_bytes(entry.path.source(), values.before).await;
             let after_bytes = materialized_value_to_bytes(entry.path.target(), values.after).await;
             let (_, hunks) = build_file_diff_from_bytes(before_bytes, after_bytes);
             return Ok(JjFileDiff {

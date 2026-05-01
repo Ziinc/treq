@@ -202,7 +202,9 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 
 		const loadCommitFileDiff = useCallback(
 			async (commitId: string, filePath: string): Promise<JjFileDiff> => {
-				const commit = commits.find((candidate) => candidate.commit_id === commitId);
+				const commit = commits.find(
+					(candidate) => candidate.commit_id === commitId,
+				);
 				const revisions = [commitId, commit?.change_id].filter(
 					(value, index, values): value is string =>
 						typeof value === "string" &&
@@ -604,30 +606,30 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 																onCreateAgentWithComment
 															}
 															onLoadDeferredFileDiff={(filePath) =>
-																loadCommitFileDiff(commit.commit_id, filePath).then(
-																	(fileDiff) => {
-																		setCommitDiffs((prev) => {
-																			const next = new Map(prev);
-																			const current = next.get(commit.commit_id);
-																			if (!current) return prev;
-																			next.set(commit.commit_id, {
-																				...current,
-																				diff: {
-																					...current.diff,
-																					hunks_by_file: [
-																						...current.diff.hunks_by_file.filter(
-																							(candidate) =>
-																								candidate.path !==
-																								fileDiff.path,
-																						),
-																						fileDiff,
-																					],
-																				},
-																			});
-																			return next;
+																loadCommitFileDiff(
+																	commit.commit_id,
+																	filePath,
+																).then((fileDiff) => {
+																	setCommitDiffs((prev) => {
+																		const next = new Map(prev);
+																		const current = next.get(commit.commit_id);
+																		if (!current) return prev;
+																		next.set(commit.commit_id, {
+																			...current,
+																			diff: {
+																				...current.diff,
+																				hunks_by_file: [
+																					...current.diff.hunks_by_file.filter(
+																						(candidate) =>
+																							candidate.path !== fileDiff.path,
+																					),
+																					fileDiff,
+																				],
+																			},
 																		});
-																	},
-																)
+																		return next;
+																	});
+																})
 															}
 														/>
 													);
@@ -891,9 +893,9 @@ function CommitDiffContent({
 	const [loadingDeferredFiles, setLoadingDeferredFiles] = useState<Set<string>>(
 		new Set(),
 	);
-	const [deferredFileErrors, setDeferredFileErrors] = useState<Map<string, string>>(
-		new Map(),
-	);
+	const [deferredFileErrors, setDeferredFileErrors] = useState<
+		Map<string, string>
+	>(new Map());
 
 	// Comment/selection state
 	const [diffLineSelection, setDiffLineSelection] =

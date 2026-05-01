@@ -340,8 +340,7 @@ fn test_list_workspaces_recreates_missing_workspace_directory_from_jj_state() {
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add recovery file")
         .expect("Failed to commit recovery file");
 
-    TestRepo::remove_dir_all_path(&workspace_path)
-        .expect("Failed to remove workspace directory");
+    TestRepo::remove_dir_all_path(&workspace_path).expect("Failed to remove workspace directory");
     assert!(
         !workspace_path.exists(),
         "Workspace directory should be missing before reconciliation"
@@ -361,12 +360,17 @@ fn test_list_workspaces_recreates_missing_workspace_directory_from_jj_state() {
         workspaces.iter().any(|ws| ws.id == workspace.id),
         "Reconciled workspace should still exist in the database"
     );
+    let recreated_workspace_dir = repo
+        .repo_path
+        .join(".treq")
+        .join("workspaces")
+        .join(&workspace.workspace_path);
     assert!(
-        workspace_path.exists(),
-        "Workspace directory should be recreated from JJ state"
+        recreated_workspace_dir.exists(),
+        "Workspace directory under .treq/workspaces should be recreated from JJ state"
     );
     assert!(
-        workspace_path.join("recovered.txt").exists(),
+        recreated_workspace_dir.join("recovered.txt").exists(),
         "Recreated workspace should materialize tracked files"
     );
 }

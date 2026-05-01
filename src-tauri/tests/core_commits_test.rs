@@ -595,7 +595,9 @@ fn test_commit_diff_defers_large_file_diffs() {
     assert!(diff.files[0].diff_deferred);
     assert_eq!(diff.files[0].changed_line_count, 501);
     assert!(
-        diff.hunks_by_file.iter().all(|file_diff| file_diff.path != "large.txt"),
+        diff.hunks_by_file
+            .iter()
+            .all(|file_diff| file_diff.path != "large.txt"),
         "Large deferred file diff should not be returned in hunks_by_file"
     );
 }
@@ -736,8 +738,12 @@ fn test_commit_diff_invalid_change_id() {
     assert!(result.is_err(), "Should reject change_id starting with '-'");
 
     // Try with empty change_id
-    let result =
-        treq_lib::core::get_commit_diff_with_conflict_style(&repo.repo_path, Some(workspace.id), "", "git");
+    let result = treq_lib::core::get_commit_diff_with_conflict_style(
+        &repo.repo_path,
+        Some(workspace.id),
+        "",
+        "git",
+    );
     assert!(result.is_err(), "Should reject empty change_id");
 }
 
