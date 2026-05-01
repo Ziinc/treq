@@ -266,18 +266,14 @@ fn handle_workspace_list() {
                 println!("No workspaces found.");
                 return;
             }
-            println!(
-                "{:<30} {:<15} {:<10} {:<10}",
-                "BRANCH", "TARGET", "CHANGES", "CONFLICTS"
-            );
-            println!("{}", "-".repeat(65));
+            println!("{:<30} {:<15} {:<10}", "BRANCH", "TARGET", "CONFLICTS");
+            println!("{}", "-".repeat(58));
             for status in &statuses {
                 let target = status.current.target_branch.as_deref().unwrap_or("main");
-                let changes = if status.has_changes { "yes" } else { "no" };
                 let conflicts = if status.has_conflicts { "YES" } else { "no" };
                 println!(
-                    "{:<30} {:<15} {:<10} {:<10}",
-                    status.current.branch_name, target, changes, conflicts
+                    "{:<30} {:<15} {:<10}",
+                    status.current.branch_name, target, conflicts
                 );
             }
         }
@@ -287,12 +283,11 @@ fn handle_workspace_list() {
     }
 }
 
-fn print_workspace_partial_status(status: &core::WorkspacePartialStatus) {
-    let flags = match (status.has_changes, status.has_conflicts) {
-        (true, true) => " [changes] [CONFLICTS]",
-        (true, false) => " [changes]",
-        (false, true) => " [CONFLICTS]",
-        (false, false) => "",
+fn print_workspace_partial_status(status: &core::WorkspaceSidebarStatus) {
+    let flags = if status.has_conflicts {
+        " [CONFLICTS]"
+    } else {
+        ""
     };
     println!("  {} {}{}", "●", status.current.branch_name, flags);
     if let Some(ref intent) = status.current.intent {

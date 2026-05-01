@@ -1,10 +1,10 @@
-import type { Workspace, WorkspaceNode, WorkspacePartialStatus } from "./api";
+import type { Workspace, WorkspaceSidebarStatus } from "./api";
 
 /**
  * Represents a node in the workspace tree
  */
 export interface WorkspaceTreeNode {
-	status: WorkspacePartialStatus;
+	status: WorkspaceSidebarStatus;
 	branchName: string;
 	children: WorkspaceTreeNode[];
 	depth: number;
@@ -14,7 +14,7 @@ export interface WorkspaceTreeNode {
  * Flattened node for rendering
  */
 export interface FlattenedWorkspaceNode {
-	status: WorkspacePartialStatus;
+	status: WorkspaceSidebarStatus;
 	branchName: string;
 	depth: number;
 	hasChildren: boolean;
@@ -35,7 +35,7 @@ export interface FlattenedWorkspaceNode {
  * @returns Array of root nodes forming a forest
  */
 export function buildWorkspaceTree(
-	statuses: WorkspacePartialStatus[],
+	statuses: WorkspaceSidebarStatus[],
 ): WorkspaceTreeNode[] {
 	const workspaces = statuses.map((statusEntry) => statusEntry.current);
 	// Step 1: Create lookup map by branch_name

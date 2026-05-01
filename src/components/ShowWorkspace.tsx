@@ -103,6 +103,7 @@ interface ShowWorkspaceProps {
 		files: string[],
 		workspace: Workspace | null,
 	) => void;
+	onActiveTabChange?: (tab: string) => void;
 	availableBranches?: BranchListItem[];
 	branchesLoading?: boolean;
 	onLoadAvailableBranches?: () => void | Promise<void>;
@@ -124,6 +125,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 		onMoveCommitToNewWorkspace,
 		onMoveCommitToExistingWorkspace,
 		onMoveFilesToNewWorkspace,
+		onActiveTabChange,
 		availableBranches = [],
 		branchesLoading = false,
 		onLoadAvailableBranches,
@@ -203,6 +205,10 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			setConflictModalOpen(false);
 		}, [workspace?.id]);
 
+		useEffect(() => {
+			onActiveTabChange?.(activeTab);
+		}, [activeTab, onActiveTabChange]);
+
 		const { data: overviewData } = useQuery({
 			queryKey: [
 				"workspace-overview",
@@ -211,7 +217,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			],
 			enabled: Boolean(effectiveRepoPath),
 			queryFn: async () => {
-				try {
+					try {
 					const [entries, readme] = await Promise.all([
 						lsWorkspace(effectiveRepoPath, workspace?.id ?? null),
 						getWorkspaceReadme(effectiveRepoPath, workspace?.id ?? null),

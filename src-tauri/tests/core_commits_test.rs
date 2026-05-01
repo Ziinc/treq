@@ -373,9 +373,13 @@ fn test_commit_diff_added_files() {
     let change_id = &committed[0].change_id;
 
     // Call get_commit_diff
-    let diff =
-        treq_lib::core::get_commit_diff(&repo.repo_path, Some(workspace.id), change_id, "git")
-            .expect("Failed to get commit diff");
+    let diff = treq_lib::core::get_commit_diff_with_conflict_style(
+        &repo.repo_path,
+        Some(workspace.id),
+        change_id,
+        "git",
+    )
+    .expect("Failed to get commit diff");
 
     // Should have 2 files in the summary
     assert_eq!(
@@ -461,7 +465,7 @@ fn test_commit_diff_modified_files() {
         .find(|c| c.description == "Modify data file")
         .expect("Should find modification commit");
 
-    let diff = treq_lib::core::get_commit_diff(
+    let diff = treq_lib::core::get_commit_diff_with_conflict_style(
         &repo.repo_path,
         Some(workspace.id),
         &mod_commit.change_id,
@@ -521,7 +525,7 @@ fn test_commit_diff_deleted_files() {
         .find(|c| c.description == "Delete temp file")
         .expect("Should find deletion commit");
 
-    let diff = treq_lib::core::get_commit_diff(
+    let diff = treq_lib::core::get_commit_diff_with_conflict_style(
         &repo.repo_path,
         Some(workspace.id),
         &del_commit.change_id,
@@ -537,6 +541,171 @@ fn test_commit_diff_deleted_files() {
     // Should have hunks showing deletion
     assert_eq!(diff.hunks_by_file.len(), 1);
     assert!(!diff.hunks_by_file[0].hunks.is_empty());
+}
+
+// =============================================================================
+// Test: large commit file diffs are deferred from the initial diff payload
+// =============================================================================
+
+#[test]
+fn test_commit_diff_defers_large_file_diffs() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/commit-diff-large",
+        Some("commit diff large test".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().unwrap();
+
+    let large_diff = (1..=501)
+        .map(|idx| format!("large diff line {}", idx))
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    TestRepo::write_workspace_file(workspace_path_str, "large.txt", &large_diff)
+        .expect("Failed to write file");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add large diff")
+        .expect("Failed to commit");
+
+    let log = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+        .expect("Failed to list commits");
+    let large_commit = log
+        .commits
+        .iter()
+        .find(|commit| commit.description == "Add large diff")
+        .expect("Should find large diff commit");
+
+    let diff = treq_lib::core::get_commit_diff_with_conflict_style(
+        &repo.repo_path,
+        Some(workspace.id),
+        &large_commit.change_id,
+        "git",
+    )
+    .expect("Failed to get commit diff");
+
+    assert_eq!(diff.files.len(), 1);
+    assert_eq!(diff.files[0].path, "large.txt");
+    assert!(diff.files[0].diff_deferred);
+    assert_eq!(diff.files[0].changed_line_count, 501);
+    assert!(
+        diff.hunks_by_file.iter().all(|file_diff| file_diff.path != "large.txt"),
+        "Large deferred file diff should not be returned in hunks_by_file"
+    );
+}
+
+#[test]
+fn test_commit_diff_blocks_rendering_when_commit_is_too_large() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/commit-diff-too-large",
+        Some("commit diff too large test".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().unwrap();
+
+    let huge_diff = (1..=10_001)
+        .map(|idx| format!("huge diff line {}", idx))
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    TestRepo::write_workspace_file(workspace_path_str, "huge.txt", &huge_diff)
+        .expect("Failed to write file");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add huge diff")
+        .expect("Failed to commit");
+
+    let log = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+        .expect("Failed to list commits");
+    let huge_commit = log
+        .commits
+        .iter()
+        .find(|commit| commit.description == "Add huge diff")
+        .expect("Should find huge diff commit");
+
+    let diff = treq_lib::core::get_commit_diff_with_conflict_style(
+        &repo.repo_path,
+        Some(workspace.id),
+        &huge_commit.change_id,
+        "git",
+    )
+    .expect("Failed to get commit diff");
+
+    assert!(diff.too_large_to_render);
+    assert_eq!(diff.files.len(), 0);
+    assert_eq!(diff.hunks_by_file.len(), 0);
+    assert_eq!(
+        diff.render_block_reason.as_deref(),
+        Some("This commit changes more than 10,000 lines and is too large to render.")
+    );
+}
+
+#[test]
+fn test_commit_file_diff_fetches_deferred_file_on_demand() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/commit-file-diff",
+        Some("commit file diff test".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().unwrap();
+
+    let large_diff = (1..=501)
+        .map(|idx| format!("large diff line {}", idx))
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    TestRepo::write_workspace_file(workspace_path_str, "large.txt", &large_diff)
+        .expect("Failed to write file");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add deferred diff")
+        .expect("Failed to commit");
+
+    let log = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+        .expect("Failed to list commits");
+    let deferred_commit = log
+        .commits
+        .iter()
+        .find(|commit| commit.description == "Add deferred diff")
+        .expect("Should find deferred diff commit");
+
+    let file_diff = treq_lib::core::get_commit_file_diff_with_conflict_style(
+        &repo.repo_path,
+        Some(workspace.id),
+        &deferred_commit.change_id,
+        "large.txt",
+        "git",
+    )
+    .expect("Failed to fetch deferred file diff");
+
+    assert_eq!(file_diff.path, "large.txt");
+    assert!(!file_diff.hunks.is_empty());
+    assert!(
+        file_diff
+            .hunks
+            .iter()
+            .flat_map(|hunk| hunk.lines.iter())
+            .any(|line| line.contains("large diff line 501")),
+        "Deferred file diff should include the lazily fetched file contents"
+    );
 }
 
 // =============================================================================
@@ -558,12 +727,17 @@ fn test_commit_diff_invalid_change_id() {
     .expect("Failed to create workspace");
 
     // Try with a change_id starting with '-' (injection attempt)
-    let result =
-        treq_lib::core::get_commit_diff(&repo.repo_path, Some(workspace.id), "-r malicious", "git");
+    let result = treq_lib::core::get_commit_diff_with_conflict_style(
+        &repo.repo_path,
+        Some(workspace.id),
+        "-r malicious",
+        "git",
+    );
     assert!(result.is_err(), "Should reject change_id starting with '-'");
 
     // Try with empty change_id
-    let result = treq_lib::core::get_commit_diff(&repo.repo_path, Some(workspace.id), "", "git");
+    let result =
+        treq_lib::core::get_commit_diff_with_conflict_style(&repo.repo_path, Some(workspace.id), "", "git");
     assert!(result.is_err(), "Should reject empty change_id");
 }
 
@@ -586,7 +760,9 @@ fn test_list_commits() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().expect("workspace path should be utf-8");
+    let workspace_path_str = workspace_path
+        .to_str()
+        .expect("workspace path should be utf-8");
 
     // First commit
     TestRepo::write_workspace_file(workspace_path_str, "hello.txt", "hello\n")
@@ -664,7 +840,9 @@ fn test_list_commits_excludes_base_branch_commits() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().expect("workspace path should be utf-8");
+    let workspace_path_str = workspace_path
+        .to_str()
+        .expect("workspace path should be utf-8");
 
     // Make a commit on the workspace branch
     TestRepo::write_workspace_file(workspace_path_str, "branch_file.txt", "branch content\n")
@@ -734,7 +912,9 @@ fn test_list_commits_working_copy_diff_stats() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().expect("workspace path should be utf-8");
+    let workspace_path_str = workspace_path
+        .to_str()
+        .expect("workspace path should be utf-8");
 
     // Write a file but don't commit — it stays in the working copy
     TestRepo::write_workspace_file(
@@ -847,7 +1027,9 @@ fn test_list_commits_workspace_after_home_repo_jj_commits() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().expect("workspace path should be utf-8");
+    let workspace_path_str = workspace_path
+        .to_str()
+        .expect("workspace path should be utf-8");
     TestRepo::write_workspace_file(workspace_path_str, "workspace.txt", "workspace content\n")
         .expect("Failed to write workspace file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Workspace commit")
@@ -910,7 +1092,9 @@ fn test_list_commits_with_target_branch_history() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().expect("workspace path should be utf-8");
+    let workspace_path_str = workspace_path
+        .to_str()
+        .expect("workspace path should be utf-8");
 
     // Make a commit on the workspace branch
     TestRepo::write_workspace_file(workspace_path_str, "branch_file.txt", "branch content\n")

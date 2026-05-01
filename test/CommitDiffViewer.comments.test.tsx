@@ -36,7 +36,15 @@ const activeCommits = [
 ];
 
 const mockDiff: JjRevisionDiff = {
-	files: [{ path: "src/main.ts", status: "M", previous_path: null }],
+	files: [
+		{
+			path: "src/main.ts",
+			status: "M",
+			previous_path: null,
+			changed_line_count: 2,
+			diff_deferred: false,
+		},
+	],
 	hunks_by_file: [
 		{
 			path: "src/main.ts",
@@ -55,6 +63,8 @@ const mockDiff: JjRevisionDiff = {
 			],
 		},
 	],
+	too_large_to_render: false,
+	render_block_reason: null,
 };
 
 function setupMocks(diff: JjRevisionDiff = mockDiff) {

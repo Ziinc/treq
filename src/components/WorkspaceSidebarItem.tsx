@@ -142,9 +142,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 	const indentStyle = {
 		paddingLeft: `${16 + (node.depth - 1) * 6}px`,
 	};
-	const wsCommitsAhead = node.status.commits_ahead;
 	const isConflicted = node.status.has_conflicts;
-	const isChanged = node.status.has_changes;
 	const workspaceTitle = getWorkspaceTitleFromUtils(workspace);
 
 	return (
@@ -169,9 +167,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 													"hover:bg-muted/50": !isSelected,
 													"bg-primary/10": dragSnapshot.combineTargetFor,
 													"opacity-50": dragSnapshot.isDragging,
-													"font-bold": wsCommitsAhead > 0,
-													"text-destructive": isConflicted && !isChanged,
-													"text-slate-400": isChanged && !isConflicted,
+													"text-destructive": isConflicted,
 												},
 											)}
 											onClick={(e) =>
@@ -237,11 +233,6 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 														</TooltipContent>
 													</Tooltip>
 												</span>
-												{wsCommitsAhead > 0 && (
-													<span className="opacity-100 shrink-0 inline-flex items-center justify-center w-4 h-4 rounded text-xs font-medium leading-none bg-slate-400 text-primary-foreground mr-1">
-														{wsCommitsAhead}
-													</span>
-												)}
 											</div>
 										</div>
 									</TooltipTrigger>
@@ -252,18 +243,11 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 											<GitBranch className="w-3 h-3" />
 											<span>{workspaceTitle}</span>
 										</div>
-										<div className="font-sans mt-1">
-											{wsCommitsAhead > 1 && (
-												<span>
-													{wsCommitsAhead} commits ahead of target branch
-												</span>
-											)}
-											{wsCommitsAhead === 1 && (
-												<span>
-													{wsCommitsAhead} commit ahead of target branch
-												</span>
-											)}
-										</div>
+										{isConflicted && (
+											<div className="font-sans mt-1 text-destructive">
+												Conflicts detected
+											</div>
+										)}
 									</TooltipContent>
 								)}
 							</Tooltip>

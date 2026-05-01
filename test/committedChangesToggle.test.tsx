@@ -40,7 +40,12 @@ vi.mock("../src/lib/api", async () => {
 		jjGetBranches: vi.fn().mockResolvedValue([]),
 		setWorkspaceTargetBranch: vi.fn().mockResolvedValue(undefined),
 		jjGetChangedFiles: vi.fn().mockResolvedValue([]),
-		jjGetMergeDiff: vi.fn().mockResolvedValue({ files: [], hunks_by_file: [] }),
+		jjGetMergeDiff: vi.fn().mockResolvedValue({
+			files: [],
+			hunks_by_file: [],
+			too_large_to_render: false,
+			render_block_reason: null,
+		}),
 		createSession: vi.fn().mockResolvedValue(42),
 		ptyCreateSession: vi.fn().mockResolvedValue(undefined),
 		ptyWrite: vi.fn().mockResolvedValue(undefined),

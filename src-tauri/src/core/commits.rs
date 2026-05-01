@@ -216,11 +216,33 @@ pub fn abandon_commit(
 /// * `repo_path`              - Path to the repository root
 /// * `workspace_id`           - Optional workspace ID that owns the commit
 /// * `commit_change_id`       - The short change-id of the commit to diff
-/// * `conflict_marker_style`  - Conflict marker style (e.g. "git")
+/// Conflict marker style is resolved from app settings, defaulting to "git".
 ///
 /// # Returns
 /// The parsed revision diff on success, or an error string.
 pub fn get_commit_diff(
+    db: &std::sync::Mutex<crate::db::Database>,
+    repo_path: &str,
+    workspace_id: Option<i64>,
+    commit_change_id: &str,
+) -> Result<jj::JjRevisionDiff, String> {
+    let conflict_marker_style = db
+        .lock()
+        .unwrap()
+        .get_setting("conflict_marker_style")
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "git".to_string());
+
+    get_commit_diff_with_conflict_style(
+        repo_path,
+        workspace_id,
+        commit_change_id,
+        &conflict_marker_style,
+    )
+}
+
+pub fn get_commit_diff_with_conflict_style(
     repo_path: &str,
     workspace_id: Option<i64>,
     commit_change_id: &str,
@@ -244,4 +266,60 @@ pub fn get_commit_diff(
 
     jj::jj_get_commit_diff(workspace_dir_str, commit_change_id, conflict_marker_style)
         .map_err(|e| format!("Failed to get commit diff: {}", e))
+}
+
+pub fn get_commit_file_diff(
+    db: &std::sync::Mutex<crate::db::Database>,
+    repo_path: &str,
+    workspace_id: Option<i64>,
+    commit_change_id: &str,
+    file_path: &str,
+) -> Result<jj::JjFileDiff, String> {
+    let conflict_marker_style = db
+        .lock()
+        .unwrap()
+        .get_setting("conflict_marker_style")
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "git".to_string());
+
+    get_commit_file_diff_with_conflict_style(
+        repo_path,
+        workspace_id,
+        commit_change_id,
+        file_path,
+        &conflict_marker_style,
+    )
+}
+
+pub fn get_commit_file_diff_with_conflict_style(
+    repo_path: &str,
+    workspace_id: Option<i64>,
+    commit_change_id: &str,
+    file_path: &str,
+    conflict_marker_style: &str,
+) -> Result<jj::JjFileDiff, String> {
+    let workspace_dir = match workspace_id {
+        Some(workspace_id) => {
+            let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
+                .map_err(|e| format!("Failed to get workspace: {}", e))?
+                .ok_or_else(|| format!("Workspace not found: {}", workspace_id))?;
+            Path::new(repo_path)
+                .join(".treq")
+                .join("workspaces")
+                .join(&workspace.workspace_path)
+        }
+        None => Path::new(repo_path).to_path_buf(),
+    };
+    let workspace_dir_str = workspace_dir
+        .to_str()
+        .ok_or("Failed to convert workspace path to string")?;
+
+    jj::jj_get_commit_file_diff(
+        workspace_dir_str,
+        commit_change_id,
+        file_path,
+        conflict_marker_style,
+    )
+    .map_err(|e| format!("Failed to get commit file diff: {}", e))
 }

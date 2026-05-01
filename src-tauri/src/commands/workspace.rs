@@ -10,8 +10,8 @@ use tauri::State;
 static INDEXED_WORKSPACES: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
 #[tauri::command]
-pub fn get_repo_status(repo_path: String) -> Result<crate::core::RepoStatus, String> {
-    crate::core::repo_status(&repo_path)
+pub fn get_repo_branch(repo_path: String) -> Result<crate::core::RepoBranch, String> {
+    crate::core::get_repo_branch(&repo_path)
 }
 
 #[tauri::command]
@@ -137,7 +137,7 @@ pub fn get_workspace_status(
 #[tauri::command]
 pub fn list_workspace_statuses(
     repo_path: String,
-) -> Result<Vec<crate::core::WorkspacePartialStatus>, String> {
+) -> Result<Vec<crate::core::WorkspaceSidebarStatus>, String> {
     crate::core::list_workspace_statuses(&repo_path)
 }
 
@@ -201,10 +201,14 @@ pub fn set_workspace_target_branch(
         repo_path, workspace_path, id, target_branch
     );
 
+    if !std::path::Path::new(&workspace_path).exists() {
+        let _ = jj::reconcile_workspaces_with_jj(&repo_path);
+    }
+
     // Validate workspace path exists
     if !std::path::Path::new(&workspace_path).exists() {
         return Err(format!(
-            "Workspace path does not exist: {}. This likely means a short workspace name was passed instead of the full path.",
+            "Workspace directory is missing on disk and could not be recovered from JJ state: {}",
             workspace_path
         ));
     }

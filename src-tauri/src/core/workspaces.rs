@@ -1,9 +1,8 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use ignore::WalkBuilder;
-use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::auto_rebase::{self, WorkspaceBookmarkConflict};
@@ -84,6 +83,12 @@ pub struct WorkspacePartialStatus {
     pub has_conflicts: bool,
     pub has_changes: bool,
     pub commits_ahead: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WorkspaceSidebarStatus {
+    pub current: local_db::Workspace,
+    pub has_conflicts: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -371,6 +376,14 @@ pub fn create_workspace(
             )
             .map_err(|e| format!("Failed to squash files to workspace: {}", e))?;
 
+            let new_workspace_path = Path::new(repo_path)
+                .join(".treq")
+                .join("workspaces")
+                .join(&workspace.workspace_path)
+                .to_string_lossy()
+                .to_string();
+            let _ = jj::update_stale_workspace(&new_workspace_path);
+            let _ = jj::update_stale_workspace(&source_workspace_path);
         }
     }
 
@@ -462,116 +475,40 @@ pub fn push_workspace_to_remote(
     Ok(result)
 }
 
-/// Lists all workspaces in the repository.
-/// # Arguments
-/// * `repo_path` - Path to the repository root
-///
-/// # Returns
-/// Returns a vector of workspaces if successful, otherwise an error message.
-/// Snapshots all workspaces sequentially (must be sequential since snapshotting workspace A
-/// can make workspace B stale) and returns each workspace paired with its changed files.
-fn list_workspaces_with_changes(
-    repo_path: &str,
-) -> Result<Vec<(local_db::Workspace, Vec<jj::JjFileChange>)>, String> {
-    let workspaces = local_db::get_workspaces(repo_path)
-        .map_err(|e| format!("Failed to get workspaces from db: {}", e))?;
-
-    let result: Vec<(local_db::Workspace, Vec<jj::JjFileChange>)> = workspaces
-        .into_iter()
-        .map(|workspace| {
-            let workspace_path = Path::new(repo_path)
-                .join(".treq")
-                .join("workspaces")
-                .join(&workspace.workspace_path)
-                .to_str()
-                .expect("not a valid path")
-                .to_string();
-
-            // Snapshot working copy and check staleness from possible parent rewrites.
-            let changed_files = jj::jj_get_changed_files(&workspace_path).unwrap_or_default();
-
-            (workspace, changed_files)
-        })
-        .collect();
-
-    Ok(result)
-}
-
 pub fn list_workspaces(repo_path: &str) -> Result<Vec<local_db::Workspace>, String> {
     local_db::get_workspaces(repo_path).map_err(|e| format!("Failed to get workspaces: {}", e))
 }
 
-/// Lists all workspaces with their computed conflict and change status.
-/// Phase 1 (sequential): snapshot all workspaces and capture changed files.
-/// Phase 2 (parallel): read-only batched status queries using rayon for concurrent execution.
-///
-/// Optimizations:
-/// - Single global call for conflicted bookmarks (replaces N per-workspace calls)
-/// - Combined jj log with union revset for counts (replaces 3 separate calls per workspace)
-/// - Rayon parallelization for Phase 2 (independent read-only queries)
-pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspacePartialStatus>, String> {
-    // Phase 1: Sequential snapshotting — captures changed files to avoid duplicate jj calls
-    let workspaces_with_changes = list_workspaces_with_changes(repo_path)?;
-    let default_branch = jj::get_default_branch(repo_path).unwrap_or_else(|_| "main".to_string());
-
-    // Build branch_name->changed paths for overlap-based conflict detection.
-    let changes_by_branch: HashMap<String, HashSet<String>> = workspaces_with_changes
+/// Lists the minimal workspace status needed by the sidebar.
+/// This path is intentionally read-only and subprocess-free.
+pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspaceSidebarStatus>, String> {
+    let discovered = jj::discover_workspaces_with_conflicts(repo_path)
+        .map_err(|e| format!("Failed to discover workspaces from jj: {}", e))?;
+    let refreshed_at = chrono::Utc::now().to_rfc3339();
+    let conflict_by_path: HashMap<String, bool> = discovered
         .iter()
-        .map(|(ws, files)| {
-            let paths: HashSet<String> = files.iter().map(|f| f.path.clone()).collect();
-            (ws.branch_name.clone(), paths)
-        })
+        .map(|workspace| (workspace.workspace_path.clone(), workspace.has_conflicts))
         .collect();
+    let persisted = local_db::sync_discovered_workspaces(repo_path, &discovered, &refreshed_at)?;
 
-    // Phase 2: Parallel read-only status queries per workspace
-    let repo_path_owned = repo_path.to_string();
-    let default_branch_owned = default_branch;
-    let statuses: Vec<WorkspacePartialStatus> = workspaces_with_changes
+    persisted
         .into_iter()
-        .map(|(workspace, changed_files)| {
-            let workspace_path = Path::new(&repo_path_owned)
-                .join(".treq")
-                .join("workspaces")
-                .join(&workspace.workspace_path)
-                .to_str()
-                .expect("not a valid path")
-                .to_string();
-
-            let has_changes = !changed_files.is_empty();
-
-            // Detect logical conflicts when workspace and target modified overlapping files.
-            let my_paths: HashSet<String> = changed_files.iter().map(|f| f.path.clone()).collect();
-            let has_path_overlap = workspace
-                .target_branch
-                .as_ref()
-                .and_then(|target| changes_by_branch.get(target))
-                .map(|target_paths| !my_paths.is_empty() && !my_paths.is_disjoint(target_paths))
-                .unwrap_or(false);
-
-            let has_jj_conflict =
-                jj::get_conflicted_files(&workspace_path, workspace.target_branch.as_deref())
-                    .map(|files| !files.is_empty())
-                    .unwrap_or(false);
-
-            let has_conflicts = has_path_overlap || has_jj_conflict;
-
-            let target_branch = workspace
-                .target_branch
-                .as_deref()
-                .unwrap_or(default_branch_owned.as_str());
-
-            let commits_ahead = jj::jj_get_commits_ahead_count(&workspace_path, target_branch);
-
-            WorkspacePartialStatus {
-                current: workspace,
+        .map(|current| {
+            let has_conflicts = conflict_by_path
+                .get(&current.workspace_path)
+                .copied()
+                .ok_or_else(|| {
+                    format!(
+                        "Discovered workspace missing conflict state after sync: {}",
+                        current.workspace_path
+                    )
+                })?;
+            Ok(WorkspaceSidebarStatus {
+                current,
                 has_conflicts,
-                has_changes,
-                commits_ahead,
-            }
+            })
         })
-        .collect();
-
-    Ok(statuses)
+        .collect()
 }
 
 /// Gets the status of a workspace, including parent, children, and full DAG hierarchy.
@@ -642,6 +579,7 @@ pub fn workspace_status(
                 workspace_path: repo_path.to_string(),
                 branch_name: default_branch,
                 created_at: String::new(),
+                refreshed_at: None,
                 metadata: None,
                 target_branch: None,
                 intent: None,
@@ -690,37 +628,6 @@ pub fn workspace_status(
         .map(|w| (w.branch_name.clone(), w))
         .collect();
 
-    // Find root of hierarchy by tracing upward
-    let mut root_workspace = current_workspace.clone();
-    let mut visited = HashSet::new();
-    visited.insert(root_workspace.id);
-
-    while let Some(target_branch) = &root_workspace.target_branch {
-        if let Some(parent) = branch_map.get(target_branch) {
-            if visited.contains(&parent.id) {
-                // Circular dependency detected, stop tracing
-                break;
-            }
-            visited.insert(parent.id);
-            root_workspace = (*parent).clone();
-        } else {
-            // No parent found, this is a root
-            break;
-        }
-    }
-
-    // Build complete DAG recursively from root
-    let mut dag_nodes = Vec::new();
-    let mut visited = HashSet::new();
-    build_dag_recursive(
-        &root_workspace,
-        &repo_path,
-        None,
-        0,
-        &mut dag_nodes,
-        &mut visited,
-    )?;
-
     // Find direct parent (workspace whose branch_name matches current.target_branch)
     let target = current_workspace
         .target_branch
@@ -732,12 +639,8 @@ pub fn workspace_status(
         local_db::get_workspaces_by_target_branch(&repo_path, &current_workspace.branch_name)
             .unwrap_or_default();
 
-    // Collect conflicted workspace IDs from DAG nodes
-    let conflicted_workspace_ids: Vec<i64> = dag_nodes
-        .iter()
-        .filter(|node| node.status.has_conflicts)
-        .map(|node| node.status.current.id)
-        .collect();
+    let dag_nodes = Vec::new();
+    let conflicted_workspace_ids = Vec::new();
 
     // Calculate commits ahead of target
     let commits_ahead_of_target = if let Some(target_workspace) = &target {
@@ -769,12 +672,15 @@ pub fn workspace_status(
         }
     };
 
-    // Reuse status already computed by build_dag_recursive instead of spawning duplicate jj calls
-    let (has_changes, has_conflicts) = dag_nodes
-        .iter()
-        .find(|node| node.status.current.id == current_workspace.id)
-        .map(|node| (node.status.has_changes, node.status.has_conflicts))
-        .unwrap_or((false, false));
+    let has_changes = jj::jj_get_changed_files(workspace_path_str)
+        .map(|files| !files.is_empty())
+        .unwrap_or(false);
+    let has_conflicts = jj::get_conflicted_files(
+        workspace_path_str,
+        current_workspace.target_branch.as_deref(),
+    )
+    .map(|files| !files.is_empty())
+    .unwrap_or(false);
 
     let commits_ahead_count = commits_ahead_of_target.len();
 
@@ -817,105 +723,6 @@ pub fn workspace_status(
         conflicted_workspace_ids,
         commits_ahead_of_target,
     })
-}
-
-const MAX_DAG_DEPTH: usize = 10;
-
-fn build_dag_recursive(
-    workspace: &local_db::Workspace,
-    repo_path: &str,
-    parent_id: Option<i64>,
-    depth: usize,
-    dag_nodes: &mut Vec<WorkspaceNode>,
-    visited: &mut HashSet<i64>,
-) -> Result<(), String> {
-    if depth >= MAX_DAG_DEPTH {
-        eprintln!(
-            "Warning: DAG depth limit ({}) reached at workspace '{}', stopping recursion",
-            MAX_DAG_DEPTH, workspace.branch_name
-        );
-        return Ok(());
-    }
-
-    if visited.contains(&workspace.id) {
-        return Ok(());
-    }
-
-    visited.insert(workspace.id);
-
-    // Find children of this workspace
-    let children = local_db::get_workspaces_by_target_branch(repo_path, &workspace.branch_name)
-        .unwrap_or_default();
-    let child_ids: Vec<i64> = children.iter().map(|c| c.id).collect();
-
-    // Compute status for this node
-    let workspace_path = Path::new(repo_path)
-        .join(".treq")
-        .join("workspaces")
-        .join(&workspace.workspace_path)
-        .to_str()
-        .expect("not a valid path")
-        .to_string();
-
-    let changed_files = jj::jj_get_changed_files(&workspace_path).unwrap_or_default();
-    let has_changes = !changed_files.is_empty();
-
-    // Check for file-path overlap with the target branch (same logic as list_workspace_statuses).
-    let my_paths: HashSet<String> = changed_files.iter().map(|f| f.path.clone()).collect();
-    let has_path_overlap = workspace
-        .target_branch
-        .as_ref()
-        .map(|target_branch| {
-            let target_changed = local_db::get_workspace_by_branch(repo_path, target_branch)
-                .ok()
-                .flatten()
-                .map(|target_ws| {
-                    let target_ws_path = Path::new(repo_path)
-                        .join(".treq")
-                        .join("workspaces")
-                        .join(&target_ws.workspace_path)
-                        .to_string_lossy()
-                        .to_string();
-                    jj::jj_get_changed_files(&target_ws_path).unwrap_or_default()
-                })
-                .unwrap_or_default();
-            let target_paths: HashSet<String> =
-                target_changed.iter().map(|f| f.path.clone()).collect();
-            !my_paths.is_empty() && !my_paths.is_disjoint(&target_paths)
-        })
-        .unwrap_or(false);
-
-    let has_jj_conflict =
-        jj::get_conflicted_files(&workspace_path, workspace.target_branch.as_deref())
-            .map(|files| !files.is_empty())
-            .unwrap_or(false);
-    let has_conflicts = has_path_overlap || has_jj_conflict;
-
-    dag_nodes.push(WorkspaceNode {
-        status: WorkspacePartialStatus {
-            current: workspace.clone(),
-            has_conflicts,
-            has_changes,
-            commits_ahead: 0, // DAG nodes don't need commits_ahead
-        },
-        parent_id,
-        child_ids: child_ids.clone(),
-        depth,
-    });
-
-    // Recursively process children
-    for child in children {
-        build_dag_recursive(
-            &child,
-            repo_path,
-            Some(workspace.id),
-            depth + 1,
-            dag_nodes,
-            visited,
-        )?;
-    }
-
-    Ok(())
 }
 
 /// Merges a workspace's commits into the home repository and cleans up the workspace.
@@ -1549,11 +1356,27 @@ pub fn copy_included_files(
 /// # Arguments
 /// * `repo_path`              - Path to the repository root
 /// * `workspace_id`           - ID of the workspace
-/// * `conflict_marker_style`  - Conflict marker style (e.g. "git")
+/// * `db`                     - App database for reading settings
 ///
 /// # Returns
 /// The parsed revision diff on success, or an error string.
 pub fn workspace_diff(
+    repo_path: &str,
+    workspace_id: i64,
+    db: &std::sync::Mutex<crate::db::Database>,
+) -> Result<jj::JjRevisionDiff, String> {
+    let conflict_marker_style = db
+        .lock()
+        .unwrap()
+        .get_setting("conflict_marker_style")
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "git".to_string());
+
+    workspace_diff_with_conflict_style(repo_path, workspace_id, &conflict_marker_style)
+}
+
+pub fn workspace_diff_with_conflict_style(
     repo_path: &str,
     workspace_id: i64,
     conflict_marker_style: &str,
@@ -1681,8 +1504,11 @@ pub fn check_and_rebase_workspaces(
     }
 }
 
-
-pub fn commit_workspace<T>(repo_path: &str, workspace_id: T, message: &str) -> Result<String, String>
+pub fn commit_workspace<T>(
+    repo_path: &str,
+    workspace_id: T,
+    message: &str,
+) -> Result<String, String>
 where
     T: Into<Option<i64>>,
 {

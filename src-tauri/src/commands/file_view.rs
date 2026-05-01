@@ -23,4 +23,3 @@ pub fn unmark_file_viewed(
     db.unmark_file_viewed(&workspace_path, &file_path)
         .map_err(|e| e.to_string())
 }
-

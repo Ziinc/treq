@@ -75,8 +75,13 @@ pub fn write_repo_file(
     content: String,
     append: Option<bool>,
 ) -> napi::Result<String> {
-    write_repo_file_impl(&repo_path, &relative_path, &content, append.unwrap_or(false))
-        .map_err(napi::Error::from_reason)
+    write_repo_file_impl(
+        &repo_path,
+        &relative_path,
+        &content,
+        append.unwrap_or(false),
+    )
+    .map_err(napi::Error::from_reason)
 }
 
 #[napi]

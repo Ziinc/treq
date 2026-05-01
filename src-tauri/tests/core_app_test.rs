@@ -54,6 +54,11 @@ fn test_repo_initialization() {
         ".jj/ should appear exactly once"
     );
     assert_eq!(
+        gitignore_content.matches(".jj*/").count(),
+        1,
+        ".jj*/ should appear exactly once"
+    );
+    assert_eq!(
         gitignore_content.matches(".treq/").count(),
         1,
         ".treq/ should appear exactly once"

@@ -24,6 +24,11 @@ export interface WorkspacePartialStatus {
 	commits_ahead: number;
 }
 
+export interface WorkspaceSidebarStatus {
+	current: Workspace;
+	has_conflicts: boolean;
+}
+
 export interface WorkspaceNode {
 	status: WorkspacePartialStatus;
 	parent_id: number | null;
@@ -48,12 +53,15 @@ export interface WorkspaceStatus {
 }
 
 export interface RepoStatus {
-	current_branch: string;
-	default_branch: string;
 	has_changes: boolean;
 	has_conflicts: boolean;
 	remote_sync: RemoteSyncStatus;
 	fetch_error: string | null;
+}
+
+export interface RepoBranch {
+	current_branch: string;
+	default_branch: string;
 }
 
 export interface Session {
@@ -76,6 +84,8 @@ export interface JjFileChange {
 	path: string;
 	status: string;
 	previous_path?: string | null;
+	changed_line_count: number;
+	diff_deferred: boolean;
 }
 
 export interface JjFileLines {
@@ -153,6 +163,8 @@ export interface JjFileDiff {
 export interface JjRevisionDiff {
 	files: JjFileChange[];
 	hunks_by_file: JjFileDiff[];
+	too_large_to_render: boolean;
+	render_block_reason?: string | null;
 }
 
 export interface DirectoryEntry {

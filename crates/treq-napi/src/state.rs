@@ -33,9 +33,7 @@ pub fn init(db_path: PathBuf) -> Result<(), String> {
     treq_lib::binary_paths::init_binary_paths_cache(detected);
 
     GLOBAL_STATE
-        .set(NapiState {
-            db: Mutex::new(db),
-        })
+        .set(NapiState { db: Mutex::new(db) })
         .map_err(|_| "State already initialized".to_string())
 }
 

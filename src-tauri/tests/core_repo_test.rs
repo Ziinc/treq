@@ -1,7 +1,9 @@
 mod e2e_test_helpers;
 
 use e2e_test_helpers::TestRepo;
-use treq_lib::core::{list_repo_branches, repo_status, switch_repo_branch, RemoteSyncStatus};
+use treq_lib::core::{
+    get_repo_branch, list_repo_branches, repo_status, switch_repo_branch, RemoteSyncStatus,
+};
 
 // =============================================================================
 // Test: list_repo_branches
@@ -44,7 +46,17 @@ fn test_list_repo_branches_includes_created_branch() {
 // =============================================================================
 
 #[test]
-fn test_repo_status_returns_branch_and_clean_status() {
+fn test_get_repo_branch_returns_current_and_default_branch() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let branch = get_repo_branch(&repo.repo_path).expect("get_repo_branch should succeed");
+
+    assert_eq!(branch.current_branch, "main");
+    assert_eq!(branch.default_branch, "main");
+}
+
+#[test]
+fn test_repo_status_returns_clean_status() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
     // core::init() creates .gitignore but doesn't commit it.
@@ -54,8 +66,6 @@ fn test_repo_status_returns_branch_and_clean_status() {
 
     let status = repo_status(&repo.repo_path).expect("repo_status should succeed");
 
-    assert_eq!(status.current_branch, "main");
-    assert!(!status.has_changes, "clean repo should have no changes");
     assert!(!status.has_conflicts, "clean repo should have no conflicts");
 }
 
@@ -71,7 +81,6 @@ fn test_repo_status_fetch_error_does_not_block() {
         status.fetch_error.is_some(),
         "should report fetch_error when no remote is configured"
     );
-    assert_eq!(status.current_branch, "main");
 }
 
 #[test]
@@ -85,6 +94,32 @@ fn test_repo_status_detects_changes() {
     let status = repo_status(&repo.repo_path).expect("repo_status should succeed");
 
     assert!(status.has_changes, "repo with new file should have changes");
+}
+
+#[test]
+fn test_repo_status_ignores_gitignored_noise() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let gitignore = repo.read_gitignore().expect("Failed to read .gitignore");
+    repo.create_file(".gitignore", &format!("{gitignore}node_modules/\n"))
+        .expect("Failed to update .gitignore");
+    TestRepo::run_git(&repo.repo_path, &["add", ".gitignore"]).expect("Failed to stage .gitignore");
+    TestRepo::run_git(&repo.repo_path, &["commit", "-m", "Ignore node_modules"])
+        .expect("Failed to commit .gitignore");
+
+    repo.create_file("node_modules/pkg/index.js", "console.log('ignored');\n")
+        .expect("Failed to write node_modules file");
+    repo.create_file(".treq/cache/tmp.txt", "ignored treq cache\n")
+        .expect("Failed to write .treq cache file");
+    repo.create_file(".jj-backup/state.txt", "ignored jj backup\n")
+        .expect("Failed to write .jj-backup file");
+
+    let status = repo_status(&repo.repo_path).expect("repo_status should succeed");
+
+    assert!(
+        !status.has_changes,
+        "repo_status should ignore gitignored noise, got: {:?}",
+        status
+    );
 }
 
 // =============================================================================
