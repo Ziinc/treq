@@ -20,29 +20,33 @@ pub struct RepoBranch {
 
 /// Returns branch information for the home repo.
 ///
-/// Uses jj-lib branch discovery only (no subprocess calls) to derive:
-/// - current branch: the currently checked out bookmark
+/// Imports colocated git refs into jj (same as [`list_repo_branches`]), then derives:
+/// - current branch: prefers `.git/HEAD` via [`jj::resolve_home_repo_branch`] so git wins when several
+///   bookmarks share a tip; falls back to jj `is_current` / `main` / `master`
 /// - default branch: prefers `main`, then `master`, then current branch
 pub fn get_repo_branch(repo_path: &str) -> Result<RepoBranch, String> {
+    jj::jj_util_import_git_refs(repo_path).map_err(|e| e.to_string())?;
     let branches = jj::get_branches(repo_path).map_err(|e| e.to_string())?;
 
-    let current_branch = branches
-        .iter()
-        .find(|branch| branch.is_current)
-        .map(|branch| branch.name.clone())
-        .or_else(|| {
-            branches
-                .iter()
-                .find(|branch| branch.name == "main")
-                .map(|branch| branch.name.clone())
-        })
-        .or_else(|| {
-            branches
-                .iter()
-                .find(|branch| branch.name == "master")
-                .map(|branch| branch.name.clone())
-        })
-        .unwrap_or_else(|| "main".to_string());
+    let current_branch = jj::resolve_home_repo_branch(repo_path).unwrap_or_else(|_| {
+        branches
+            .iter()
+            .find(|branch| branch.is_current)
+            .map(|branch| branch.name.clone())
+            .or_else(|| {
+                branches
+                    .iter()
+                    .find(|branch| branch.name == "main" || branch.name == "master")
+                    .map(|branch| branch.name.clone())
+            })
+            .or_else(|| {
+                branches
+                    .iter()
+                    .find(|branch| branch.name == "master")
+                    .map(|branch| branch.name.clone())
+            })
+            .unwrap_or_else(|| "main".to_string())
+    });
 
     let default_branch = if branches.iter().any(|branch| branch.name == "main") {
         "main".to_string()
@@ -128,8 +132,9 @@ pub fn repo_status(repo_path: &str) -> Result<RepoStatus, String> {
     })
 }
 
-/// Returns the list of local bookmarks (branches) in the repository.
+/// Returns the list of local bookmarks (branches), after syncing colocated git into jj.
 pub fn list_repo_branches(repo_path: &str) -> Result<Vec<jj::JjBranch>, String> {
+    jj::jj_util_import_git_refs(repo_path).map_err(|e| e.to_string())?;
     jj::get_branches(repo_path).map_err(|e| e.to_string())
 }
 

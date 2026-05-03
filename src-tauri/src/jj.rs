@@ -30,7 +30,7 @@ use jj_lib::working_copy::{SnapshotOptions, WorkingCopyFreshness};
 use jj_lib::workspace::{default_working_copy_factories, default_working_copy_factory, Workspace};
 use jj_lib::workspace_store::{SimpleWorkspaceStore, WorkspaceStore as _};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -2784,24 +2784,7 @@ fn read_git_head_branch(repo_path: &str) -> Result<String, String> {
 pub fn resolve_home_repo_branch(repo_path: &str) -> Result<String, JjError> {
     let git_branch = read_git_head_branch(repo_path)
         .map_err(|e| JjError::IoError(format!("Failed to determine branch: {}", e)))?;
-    if !git_branch.is_empty() && git_branch != "HEAD" {
-        return Ok(git_branch);
-    }
-
-    let bookmark = get_bookmarks_on_revision(repo_path, "@-")
-        .unwrap_or_default()
-        .into_iter()
-        .find(|name| !name.contains('@'))
-        .unwrap_or_default();
-
-    if bookmark.is_empty() {
-        return Err(JjError::IoError(
-            "Git is not checked out to a branch. Please checkout a branch before committing."
-                .to_string(),
-        ));
-    }
-
-    Ok(bookmark)
+    return Ok(git_branch);
 }
 
 /// Split selected files from working copy into a new parent commit
@@ -5079,6 +5062,56 @@ pub fn jj_status(repo_path: &str) -> Result<(), JjError> {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(JjError::IoError(format!("jj st failed: {}", stderr)));
+    }
+
+    Ok(())
+}
+
+/// Imports colocated git state into jj (`import_git_head_if_needed`, `git::import_refs`) without
+/// snapshotting the working copy.
+///
+/// Aligns with the import portion of [jj `util snapshot`](https://github.com/jj-vcs/jj/blob/main/cli/src/commands/util/snapshot.rs).
+///
+/// Does not shell out to `jj util snapshot`.
+pub fn jj_util_import_git_refs(repo_path: &str) -> Result<(), JjError> {
+    let mut loaded = load_workspace_repo(repo_path)?;
+    import_colocated_git_state(&mut loaded, repo_path)?;
+    Ok(())
+}
+
+/// Snapshots the working copy if needed using jj-lib (no subprocess).
+///
+/// Runs [`jj_util_import_git_refs`] first, then snapshots the working copy (`snapshot_working_copy_tree`).
+/// Aligns with [jj `util snapshot`](https://github.com/jj-vcs/jj/blob/main/cli/src/commands/util/snapshot.rs)
+/// (`maybe_snapshot`).
+///
+/// Does not shell out to `jj util snapshot` so behavior is consistent when the CLI lacks that subcommand.
+pub fn jj_util_snapshot(repo_path: &str) -> Result<(), JjError> {
+    let mut loaded = load_workspace_repo(repo_path)?;
+    import_colocated_git_state(&mut loaded, repo_path)?;
+    let _ = snapshot_working_copy_tree(&mut loaded, repo_path)?;
+    Ok(())
+}
+
+fn import_colocated_git_state(
+    loaded: &mut LoadedWorkspaceRepo,
+    repo_path: &str,
+) -> Result<(), JjError> {
+    import_git_head_if_needed(loaded, repo_path)?;
+
+    let import_options = git::GitImportOptions {
+        auto_local_bookmark: false,
+        abandon_unreachable_commits: true,
+        remote_auto_track_bookmarks: HashMap::new(),
+    };
+    let mut tx = loaded.repo.start_transaction();
+    futures::executor::block_on(git::import_refs(tx.repo_mut(), &import_options)).map_err(
+        |e| JjError::GitWorkspaceError(format!("git import_refs: {}", e)),
+    )?;
+    if tx.repo().has_changes() {
+        loaded.repo = futures::executor::block_on(tx.commit("import git refs")).map_err(|e| {
+            JjError::GitWorkspaceError(format!("Failed to commit git import_refs: {}", e))
+        })?;
     }
 
     Ok(())

@@ -109,7 +109,7 @@ fn test_can_create_workspace_with_same_source_branch() {
     );
 
     // Create workspace (new branch)
-    let workspace = treq_lib::core::create_workspace(
+    let _workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
         "feat/test1",
         Some("new feature".to_string()),
@@ -361,9 +361,7 @@ fn test_list_workspaces_recreates_missing_workspace_directory_from_jj_state() {
         "Reconciled workspace should still exist in the database"
     );
     let recreated_workspace_dir = repo
-        .repo_path
-        .join(".treq")
-        .join("workspaces")
+        .workspaces_dir()
         .join(&workspace.workspace_path);
     assert!(
         recreated_workspace_dir.exists(),
