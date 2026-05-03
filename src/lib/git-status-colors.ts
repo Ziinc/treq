@@ -33,17 +33,6 @@ export function getStatusBgColor(status?: string): string {
 }
 
 /**
- * Get text color class for a status code
- */
-export function getStatusTextColor(status?: string): string {
-	if (!status) return "";
-	return (
-		STATUS_COLORS[status as keyof typeof STATUS_COLORS]?.text ||
-		"text-yellow-500"
-	);
-}
-
-/**
  * Get text color class for a file status
  * Simplified to work with any status code
  */

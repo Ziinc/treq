@@ -1,6 +1,18 @@
 mod e2e_test_helpers;
 
 use e2e_test_helpers::TestRepo;
+use rusqlite::params;
+use treq_lib::local_db::get_local_db_path;
+
+fn set_workspace_refreshed_at(repo_path: &str, id: i64, ts: &str) {
+    let db_path = get_local_db_path(repo_path);
+    let conn = rusqlite::Connection::open(db_path).expect("open local db");
+    conn.execute(
+        "UPDATE workspaces SET refreshed_at = ?1 WHERE id = ?2",
+        params![ts, id],
+    )
+    .expect("update refreshed_at");
+}
 
 #[test]
 fn test_workspace_list_statuses_show_conflict_state() {
@@ -48,7 +60,7 @@ fn test_workspace_list_statuses_show_conflict_state() {
         rebase_result.message
     );
 
-    let conflicted_files = treq_lib::core::list_conflicted_files(workspace_path_str)
+    let conflicted_files = treq_lib::jj::get_conflicted_files(workspace_path_str, None)
         .expect("Failed to list conflicted files");
     assert!(
         conflicted_files.contains(&"conflict.txt".to_string()),
@@ -82,8 +94,6 @@ fn test_workspace_list_statuses_ignore_untracked_noise() {
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
     let workspace_path_str = workspace_path.to_str().expect("utf-8");
 
-    std::fs::create_dir_all(workspace_path.join("node_modules/pkg"))
-        .expect("Failed to create node_modules tree");
     TestRepo::write_workspace_file(
         workspace_path_str,
         "node_modules/pkg/index.js",
@@ -148,12 +158,7 @@ fn test_workspace_list_statuses_excludes_default_workspace_and_ignores_stale_db_
         None,
     )
     .expect("Failed to insert stale workspace");
-    treq_lib::local_db::update_workspace_refresh_timestamp(
-        &repo.repo_path,
-        stale_id,
-        "2000-01-01T00:00:00Z",
-    )
-    .expect("Failed to mark stale workspace");
+    set_workspace_refreshed_at(&repo.repo_path, stale_id, "2000-01-01T00:00:00Z");
 
     let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
         .expect("Failed to list workspace statuses");
@@ -196,12 +201,7 @@ fn test_workspace_list_statuses_preserves_existing_workspace_metadata_on_upsert(
         .expect("Failed to set target branch");
     treq_lib::local_db::update_workspace_not_on_remote(&repo.repo_path, workspace.id, true)
         .expect("Failed to set not_on_remote");
-    treq_lib::local_db::update_workspace_refresh_timestamp(
-        &repo.repo_path,
-        workspace.id,
-        "2001-01-01T00:00:00Z",
-    )
-    .expect("Failed to seed refreshed_at");
+    set_workspace_refreshed_at(&repo.repo_path, workspace.id, "2001-01-01T00:00:00Z");
 
     let before = treq_lib::local_db::get_workspace_by_id(&repo.repo_path, workspace.id)
         .expect("db lookup should succeed")

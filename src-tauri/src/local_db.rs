@@ -621,20 +621,6 @@ pub fn update_workspace_not_on_remote(
     Ok(())
 }
 
-pub fn update_workspace_refresh_timestamp(
-    repo_path: &str,
-    id: i64,
-    refreshed_at: &str,
-) -> Result<(), String> {
-    let conn = get_connection(repo_path)?;
-    conn.execute(
-        "UPDATE workspaces SET refreshed_at = ?1 WHERE id = ?2",
-        params![refreshed_at, id],
-    )
-    .map_err(|e| format!("Failed to update workspace refreshed_at: {}", e))?;
-    Ok(())
-}
-
 pub fn upsert_workspace_discovery(
     repo_path: &str,
     workspace_name: &str,

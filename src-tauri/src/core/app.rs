@@ -1,36 +1,9 @@
-use std::collections::HashMap;
 use std::path::Path;
 
-use crate::binary_paths;
 use crate::core::workspaces;
 use crate::db::Database;
 use crate::jj;
 use crate::local_db;
-
-/// Detect binary paths for required binaries (git, jj, claude),
-/// cache them in the database and in-memory cache.
-/// Returns a HashMap of binary_name -> detected_path.
-pub fn detect_binaries(db: &Database) -> Result<HashMap<String, String>, String> {
-    let binaries = vec!["git", "jj", "claude"];
-    let mut detected_paths = HashMap::new();
-
-    for binary in &binaries {
-        if let Some(path) = binary_paths::detect_binary(binary) {
-            log::info!("Detected {} at: {}", binary, path);
-            detected_paths.insert(binary.to_string(), path.clone());
-
-            let key = format!("binary_path_{}", binary);
-            if let Err(e) = db.set_setting(&key, &path) {
-                log::warn!("Failed to cache {} path in database: {}", binary, e);
-            }
-        } else {
-            log::warn!("Could not detect {} binary", binary);
-        }
-    }
-
-    binary_paths::init_binary_paths_cache(detected_paths.clone());
-    Ok(detected_paths)
-}
 
 /// Initializes a repository for use with Treq.
 ///

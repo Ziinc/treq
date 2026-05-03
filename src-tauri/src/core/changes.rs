@@ -1,11 +1,6 @@
 use crate::{jj, local_db};
 use std::path::Path;
 
-/// List files that are in a conflicted state in the given workspace.
-pub fn list_conflicted_files(workspace_path: &str) -> Result<Vec<String>, String> {
-    jj::get_conflicted_files(workspace_path, None).map_err(|e| e.to_string())
-}
-
 fn resolve_workspace_dir(repo_path: &str, workspace_id: Option<i64>) -> Result<String, String> {
     match workspace_id {
         Some(id) => {

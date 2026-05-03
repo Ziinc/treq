@@ -86,55 +86,6 @@ fn test_repo_initialization() {
 }
 
 #[test]
-fn test_detect_binaries_finds_git_and_jj() {
-    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
-    let db_path = temp_dir.path().join("test.db");
-    let db = treq_lib::db::Database::new(db_path).expect("Failed to create database");
-    db.init().expect("Failed to init database");
-
-    let result = treq_lib::core::detect_binaries(&db);
-    assert!(result.is_ok(), "detect_binaries should succeed");
-
-    let detected = result.unwrap();
-    assert!(
-        detected.contains_key("git"),
-        "git should be detected: {:?}",
-        detected
-    );
-    assert!(
-        detected.contains_key("jj"),
-        "jj should be detected: {:?}",
-        detected
-    );
-}
-
-#[test]
-fn test_detect_binaries_caches_to_db() {
-    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
-    let db_path = temp_dir.path().join("test.db");
-    let db = treq_lib::db::Database::new(db_path).expect("Failed to create database");
-    db.init().expect("Failed to init database");
-
-    treq_lib::core::detect_binaries(&db).expect("detect_binaries should succeed");
-
-    let cached_git = db
-        .get_setting("binary_path_git")
-        .expect("get_setting should not error");
-    assert!(
-        cached_git.is_some(),
-        "binary_path_git should be cached in the database"
-    );
-
-    let cached_jj = db
-        .get_setting("binary_path_jj")
-        .expect("get_setting should not error");
-    assert!(
-        cached_jj.is_some(),
-        "binary_path_jj should be cached in the database"
-    );
-}
-
-#[test]
 fn test_init_triggers_workspaces_sync() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 

@@ -5,17 +5,6 @@ export function cn(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs));
 }
 
-// Format bytes into a human-readable string (GB, MB, KB, B).
-export function formatBytes(bytes: number): string {
-	if (bytes === 0) return "0 B";
-
-	const kilobyte = 1024;
-	const sizes = ["B", "KB", "MB", "GB", "TB"];
-	const exponent = Math.floor(Math.log(bytes) / Math.log(kilobyte));
-
-	return `${(bytes / Math.pow(kilobyte, exponent)).toFixed(2)} ${sizes[exponent]}`;
-}
-
 // Sanitize text for branch names.
 export function sanitizeForBranchName(text: string): string {
 	let sanitized = text
@@ -60,14 +49,6 @@ export function getFileName(path: string): string {
 	// Handle both Unix (/) and Windows (\) separators
 	const lastSeparator = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
 	return lastSeparator === -1 ? path : path.slice(lastSeparator + 1);
-}
-
-// Escape a string for bash $'...' syntax.
-export function escapeBashString(str: string): string {
-	return str
-		.replace(/\\/g, "\\\\") // escape backslashes first
-		.replace(/'/g, "\\'") // escape single quotes
-		.replace(/\n/g, "\\n"); // escape newlines
 }
 
 // Parse a jj timestamp into a Date; return null if invalid.

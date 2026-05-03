@@ -2,7 +2,7 @@ mod e2e_test_helpers;
 
 use e2e_test_helpers::{JjVerifier, TestRepo};
 use treq_lib::core::{
-    commit_repo, get_repo_branch, list_repo_branches, list_commits, repo_status,
+    commit_repo, get_repo_branch, list_commits, list_repo_branches, repo_status,
     switch_repo_branch, RemoteSyncStatus,
 };
 
@@ -249,22 +249,35 @@ fn test_commit_repo() {
     );
 
     let log = list_commits(&repo.repo_path, None, false, None, None).expect("list_commits");
-    assert!(log.commits.len() == 2, "should have 2 commits, 1 initial commit, 1 new commit");
+    assert!(
+        log.commits.len() == 2,
+        "should have 2 commits, 1 initial commit, 1 new commit"
+    );
     assert!(
         log.commits
             .iter()
             .any(|c| c.description.contains("core commit_repo message")),
         "expected commit message in home log, got: {:?}",
-        log.commits.iter().map(|c| &c.description).collect::<Vec<_>>()
+        log.commits
+            .iter()
+            .map(|c| &c.description)
+            .collect::<Vec<_>>()
     );
 }
-
 
 #[test]
 fn test_commit_repo_after_create_workspace() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
-    treq_lib::core::create_workspace(&repo.repo_path, "feature-x", Some("feature-x".to_string()), None, None, None).expect("Failed to create workspace");
+    treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feature-x",
+        Some("feature-x".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
     let before = JjVerifier::get_bookmark_commit_id(&repo.repo_path, "main")
         .expect("query bookmark")
         .expect("main bookmark should exist after init");
@@ -290,20 +303,28 @@ fn test_commit_repo_after_create_workspace() {
     );
 
     let log = list_commits(&repo.repo_path, None, false, None, None).expect("list_commits");
-    assert!(log.commits.len() == 2, "should have 2 commits, 1 initial commit, 1 new commit");
+    assert!(
+        log.commits.len() == 2,
+        "should have 2 commits, 1 initial commit, 1 new commit"
+    );
     assert!(
         log.commits
             .iter()
             .any(|c| c.description.contains("core commit_repo message")),
         "expected commit message in home log, got: {:?}",
-        log.commits.iter().map(|c| &c.description).collect::<Vec<_>>()
+        log.commits
+            .iter()
+            .map(|c| &c.description)
+            .collect::<Vec<_>>()
     );
     assert!(
         log.commits
             .iter()
             .any(|c| c.description.contains("Initial commit")),
         "expected initial commit in home log, got: {:?}",
-        log.commits.iter().map(|c| &c.description).collect::<Vec<_>>()
+        log.commits
+            .iter()
+            .map(|c| &c.description)
+            .collect::<Vec<_>>()
     );
 }
-
