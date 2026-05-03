@@ -883,9 +883,7 @@ pub fn set_session_model(repo_path: &str, id: i64, model: Option<String>) -> Res
     Ok(())
 }
 
-// ============================================================================
 // Workspace Files Cache Functions
-// ============================================================================
 
 /// Get cached directory listing for a specific parent path
 pub fn get_cached_directory_listing(
@@ -1055,9 +1053,7 @@ pub fn sync_workspace_files(
     Ok(())
 }
 
-// ============================================================================
 // Pending Review Functions
-// ============================================================================
 
 /// Get pending review for a workspace
 pub fn get_pending_review(

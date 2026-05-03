@@ -3,7 +3,8 @@ node_modules/
 /target
 target*
 .vite/*
-
+# profiling
+profile.json.gz
 # Tauri
 /src-tauri/target
 

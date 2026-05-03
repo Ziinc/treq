@@ -408,10 +408,6 @@ fn test_utf8_output() {
     let _ = manager.close_session("test-utf8");
 }
 
-// ======================================================================
-// Tests for auto_command echo suppression
-// ======================================================================
-
 #[test]
 fn test_strip_ansi_codes_plain() {
     assert_eq!(strip_ansi_codes("hello world"), "hello world");

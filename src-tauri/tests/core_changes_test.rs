@@ -28,10 +28,6 @@ fn get_change_id(cwd: &str, rev: &str) -> Result<String, String> {
     Ok(output.trim().to_string())
 }
 
-// =============================================================================
-// Test: list_conflicted_files returns empty on a clean workspace
-// =============================================================================
-
 #[test]
 fn test_list_conflicted_files_no_conflicts() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -64,10 +60,6 @@ fn test_list_conflicted_files_no_conflicts() {
         "Expected no conflicted files in a clean workspace"
     );
 }
-
-// =============================================================================
-// Test: list_conflicted_files returns conflicted files after a rebase conflict
-// =============================================================================
 
 #[test]
 fn test_list_conflicted_files_with_conflicts() {

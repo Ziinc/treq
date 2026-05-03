@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -398,6 +398,22 @@ pub fn create_workspace(
 /// # Returns
 /// Returns true if successful, false if workspace not found in database.
 pub fn delete_workspace(repo_path: &str, workspace_id: &i64) -> Result<bool, String> {
+    delete_workspace_impl(repo_path, workspace_id, RemoveWorkspaceDiskMode::JjForgetThenRemoveDir)
+}
+
+#[derive(Clone, Copy)]
+enum RemoveWorkspaceDiskMode {
+    /// `jj workspace forget` (subprocess) then delete `.treq/workspaces/…`.
+    JjForgetThenRemoveDir,
+    /// Delete `.treq/workspaces/…` only — use when jj already dropped the workspace (e.g. forgotten elsewhere).
+    DirectoryOnly,
+}
+
+fn delete_workspace_impl(
+    repo_path: &str,
+    workspace_id: &i64,
+    disk: RemoveWorkspaceDiskMode,
+) -> Result<bool, String> {
     let workspace = local_db::get_workspace_by_id(repo_path, *workspace_id)
         .map_err(|e| format!("Failed to get workspace from db: {}", e))?;
 
@@ -422,7 +438,15 @@ pub fn delete_workspace(repo_path: &str, workspace_id: &i64) -> Result<bool, Str
             }
 
             // Best effort only: DB cleanup must proceed even if jj/directory removal fails.
-            if let Err(e) = jj::remove_workspace(repo_path, &workspace_path.to_str().unwrap()) {
+            let disk_result = match disk {
+                RemoveWorkspaceDiskMode::JjForgetThenRemoveDir => {
+                    jj::remove_workspace(repo_path, &workspace_path.to_str().unwrap())
+                }
+                RemoveWorkspaceDiskMode::DirectoryOnly => {
+                    jj::remove_workspace_directory_only(&workspace_path.to_str().unwrap())
+                }
+            };
+            if let Err(e) = disk_result {
                 eprintln!("Warning: Failed to remove workspace directory: {}", e);
             }
             local_db::delete_workspace(repo_path, *workspace_id)
@@ -477,6 +501,36 @@ pub fn push_workspace_to_remote(
 
 pub fn list_workspaces(repo_path: &str) -> Result<Vec<local_db::Workspace>, String> {
     local_db::get_workspaces(repo_path).map_err(|e| format!("Failed to get workspaces: {}", e))
+}
+
+/// Prunes workspaces whose `.treq/workspaces/…` directories are missing (e.g. deleted outside treq),
+/// or whose jj registration was dropped while the directory still exists (e.g. `jj workspace forget`).
+pub fn sync_workspaces(repo_path: &str) -> Result<(), String> {
+    let workspaces = local_db::get_workspaces(repo_path)?;
+    let jj_registered: Option<HashSet<String>> =
+        jj::list_jj_workspaces(repo_path).ok().map(|names| names.into_iter().collect());
+
+    for ws in workspaces {
+        let full_path = Path::new(repo_path)
+            .join(".treq")
+            .join("workspaces")
+            .join(&ws.workspace_path);
+        if !full_path.exists() {
+            delete_workspace(repo_path, &ws.id)?;
+            continue;
+        }
+
+        if let Some(ref jj_names) = jj_registered {
+            if !jj_names.contains(&ws.workspace_name) {
+                delete_workspace_impl(
+                    repo_path,
+                    &ws.id,
+                    RemoveWorkspaceDiskMode::DirectoryOnly,
+                )?;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Lists the minimal workspace status needed by the sidebar.
@@ -1418,9 +1472,7 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
     Ok(())
 }
 
-// =============================================================================
 // Rebase
-// =============================================================================
 
 /// Serializable result returned to callers (including the Tauri frontend).
 #[derive(Debug, Clone, Serialize, Deserialize)]

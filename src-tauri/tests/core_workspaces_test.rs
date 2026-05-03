@@ -1,16 +1,13 @@
 mod e2e_test_helpers;
 
 use e2e_test_helpers::{JjVerifier, TestRepo};
+use std::fs;
 use std::path::Path;
 use std::process::Command;
 
 use treq_lib::core::{MaybeEmptyParam, MergeCommit, RemoteSyncStatus};
 use treq_lib::jj;
 use treq_lib::local_db::Workspace;
-
-// =============================================================================
-// Test: check_and_rebase_workspaces (core function)
-// =============================================================================
 
 /// Create a workspace and set its target branch. Helper shared across rebase tests.
 fn setup_workspace_with_target(
@@ -150,10 +147,6 @@ fn test_check_and_rebase_workspaces_all_skips_self_rebase() {
     );
     assert!(result.success);
 }
-
-// =============================================================================
-// Test: Can merge a workspace
-// =============================================================================
 
 #[test]
 fn test_can_merge_workspace_into_home_repo() {
@@ -444,10 +437,6 @@ fn test_can_rebase_merge_workspace_into_home_repo() {
 
 // TODO: merge individual workspace into another workspace
 
-// =============================================================================
-// Test: Can change a workspace target branch
-// =============================================================================
-
 #[test]
 fn test_can_update_workspace() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -552,10 +541,6 @@ fn test_update_workspace_target_branch_perform_rebase() {
     );
 }
 
-// =============================================================================
-// Test: Can list workspaces
-// =============================================================================
-
 #[test]
 fn test_can_list_workspaces() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -608,10 +593,6 @@ fn test_can_list_workspaces() {
         workspaces.len()
     );
 }
-
-// =============================================================================
-// Test: Push workspace to remote
-// =============================================================================
 
 #[test]
 fn test_push_workspace_to_remote() {
@@ -731,10 +712,6 @@ fn test_push_home_repo_to_remote() {
     );
 }
 
-// =============================================================================
-// Test: Split workspace — move files after
-// =============================================================================
-
 #[test]
 fn test_split_workspace_move_files_after() {
     use treq_lib::core::{SplitMode, SplitPosition};
@@ -824,10 +801,6 @@ fn test_split_workspace_move_files_after() {
         "Child should be the split workspace"
     );
 }
-
-// =============================================================================
-// Test: Split workspace — move files before
-// =============================================================================
 
 #[test]
 fn test_split_workspace_move_files_before() {
@@ -919,10 +892,6 @@ fn test_split_workspace_move_files_before() {
     );
 }
 
-// =============================================================================
-// Test: Split workspace — copy files after
-// =============================================================================
-
 #[test]
 fn test_split_workspace_copy_files_after() {
     use treq_lib::core::{SplitMode, SplitPosition};
@@ -985,10 +954,6 @@ fn test_split_workspace_copy_files_after() {
         "New workspace should be stacked on source"
     );
 }
-
-// =============================================================================
-// Test: Split workspace — copy files before
-// =============================================================================
 
 #[test]
 fn test_split_workspace_copy_files_before() {
@@ -1053,10 +1018,6 @@ fn test_split_workspace_copy_files_before() {
         "Source target should point to new workspace"
     );
 }
-
-// =============================================================================
-// Test: Split workspace — move commits after
-// =============================================================================
 
 #[test]
 fn test_split_workspace_move_commits_after() {
@@ -1140,10 +1101,6 @@ fn test_split_workspace_move_commits_after() {
         "New workspace should be stacked on source"
     );
 }
-
-// =============================================================================
-// Test: Split workspace — move commits before
-// =============================================================================
 
 #[test]
 fn test_split_workspace_move_commits_before() {
@@ -1232,10 +1189,6 @@ fn test_split_workspace_move_commits_before() {
     );
 }
 
-// =============================================================================
-// Test: Rename workspace — dry run with valid name
-// =============================================================================
-
 #[test]
 fn test_rename_workspace_dry_run_valid_name() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -1280,10 +1233,6 @@ fn test_rename_workspace_dry_run_valid_name() {
     );
 }
 
-// =============================================================================
-// Test: Rename workspace — dry run clashes with existing branch
-// =============================================================================
-
 #[test]
 fn test_rename_workspace_dry_run_clashes_with_existing_branch() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -1324,10 +1273,6 @@ fn test_rename_workspace_dry_run_clashes_with_existing_branch() {
     );
 }
 
-// =============================================================================
-// Test: Rename workspace — dry run same name
-// =============================================================================
-
 #[test]
 fn test_rename_workspace_dry_run_same_name() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -1352,10 +1297,6 @@ fn test_rename_workspace_dry_run_same_name() {
         "Dry run should fail when renaming to the same name"
     );
 }
-
-// =============================================================================
-// Test: Rename workspace — success (non-dry-run)
-// =============================================================================
 
 #[test]
 fn test_rename_workspace_success() {
@@ -1405,10 +1346,6 @@ fn test_rename_workspace_success() {
         bookmarks
     );
 }
-
-// =============================================================================
-// Test: Rename workspace — updates child target branches
-// =============================================================================
 
 #[test]
 fn test_rename_workspace_updates_child_target_branches() {
@@ -1466,10 +1403,6 @@ fn test_rename_workspace_updates_child_target_branches() {
     );
 }
 
-// =============================================================================
-// Test: Rename workspace — sets not_on_remote
-// =============================================================================
-
 #[test]
 fn test_rename_workspace_sets_not_on_remote() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -1501,12 +1434,8 @@ fn test_rename_workspace_sets_not_on_remote() {
     );
 }
 
-// =============================================================================
-// Test: Recover workspace after .jj reinit (recovery happens during core::init)
-// =============================================================================
-
 #[test]
-fn test_recover_workspace_after_jj_reinit() {
+fn test_sync_workspaces_forget_deleted_directories() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
     // Create workspace
@@ -1521,57 +1450,97 @@ fn test_recover_workspace_after_jj_reinit() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().unwrap();
 
-    // Add uncommitted file to workspace
-    TestRepo::write_workspace_file(workspace_path_str, "uncommitted.txt", "uncommitted content")
-        .expect("Failed to write file");
+    fs::remove_dir_all(&workspace_path).expect("Failed to delete workspace directory");
 
-    // Verify workspace is registered with jj
-    let jj_workspaces_before =
+    treq_lib::core::sync_workspaces(&repo.repo_path).expect("Failed to sync workspaces");
+
+    let workspaces =
+        treq_lib::core::list_workspaces(&repo.repo_path).expect("Failed to list workspaces");
+    assert!(workspaces.is_empty(), "Workspaces should be empty");
+
+    assert!(
+        !workspace_path.exists(),
+        "Workspace directory should stay deleted"
+    );
+
+    let jj_workspaces =
         JjVerifier::list_workspaces(&repo.repo_path).expect("Failed to list jj workspaces");
     assert!(
-        jj_workspaces_before.contains(&workspace.workspace_name),
-        "Workspace should be in jj before reinit"
+        !jj_workspaces.contains(&workspace.workspace_name),
+        "jj workspace list should not contain '{}', got: {:?}",
+        workspace.workspace_name,
+        jj_workspaces
     );
-
-    // Delete .jj and reinit — recovery should happen automatically during init
-    TestRepo::remove_dir_all_path(Path::new(&repo.repo_path).join(".jj"))
-        .expect("Failed to remove .jj");
-    treq_lib::core::init(&repo.repo_path).expect("Failed to reinit");
-
-    // After init: workspace should already be recovered in jj
-    let jj_workspaces_recovered =
-        JjVerifier::list_workspaces(&repo.repo_path).expect("Failed to list jj workspaces");
+    assert_eq!(
+        jj_workspaces.len(),
+        1,
+        "jj should only list the default workspace after sync forgets the deleted directory, got: {:?}",
+        jj_workspaces
+    );
     assert!(
-        jj_workspaces_recovered.contains(&workspace.workspace_name),
-        "Workspace should be in jj after init recovery, got: {:?}",
-        jj_workspaces_recovered
+        jj_workspaces.contains(&"default".to_string()),
+        "jj workspace list should still include default, got: {:?}",
+        jj_workspaces
     );
+}
 
-    // Uncommitted file should still exist
-    assert!(
-        workspace_path.join("uncommitted.txt").exists(),
-        "Uncommitted file should be preserved after recovery"
-    );
 
-    // jj status should succeed on workspace
-    let status = Command::new("jj")
-        .current_dir(&workspace_path)
-        .args(["status"])
+#[test]
+fn test_sync_workspaces_delete_forgotten_directories() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/test-forgotten",
+        Some("forgotten test".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+
+    let forget_output = Command::new("jj")
+        .current_dir(&repo.repo_path)
+        .args(["workspace", "forget", workspace.workspace_name.as_str()])
         .output()
-        .expect("Failed to run jj status");
+        .expect("Failed to execute jj workspace forget");
     assert!(
-        status.status.success(),
-        "jj status should succeed after recovery"
+        forget_output.status.success(),
+        "jj workspace forget should succeed: {}",
+        String::from_utf8_lossy(&forget_output.stderr)
     );
 
-    // jj should detect the uncommitted changes
-    let changed_files = treq_lib::jj::jj_get_changed_files(workspace_path_str)
-        .expect("Failed to get changed files");
+
+    treq_lib::core::sync_workspaces(&repo.repo_path).expect("Failed to sync workspaces");
+    let workspaces =
+        treq_lib::core::list_workspaces(&repo.repo_path).expect("Failed to list workspaces");
+    assert!(workspaces.is_empty(), "Workspaces should be empty");
+
     assert!(
-        !changed_files.is_empty(),
-        "Should detect uncommitted changes after recovery"
+        !workspace_path.exists(),
+        "Workspace directory should stay deleted"
+    );
+
+    let jj_workspaces =
+        JjVerifier::list_workspaces(&repo.repo_path).expect("Failed to list jj workspaces");
+    assert!(
+        !jj_workspaces.contains(&workspace.workspace_name),
+        "jj workspace list should not contain '{}', got: {:?}",
+        workspace.workspace_name,
+        jj_workspaces
+    );
+    assert_eq!(
+        jj_workspaces.len(),
+        1,
+        "jj should only list the default workspace, got: {:?}",
+        jj_workspaces
+    );
+    assert!(
+        jj_workspaces.contains(&"default".to_string()),
+        "jj workspace list should still include default, got: {:?}",
+        jj_workspaces
     );
 }
 
@@ -1702,115 +1671,6 @@ fn test_jj_get_changed_files_keeps_tracked_files_visible_after_ignore_rule_added
     );
 }
 
-// =============================================================================
-// Test: Recover multiple workspaces after .jj reinit
-// =============================================================================
-
-#[test]
-fn test_recover_multiple_workspaces_after_jj_reinit() {
-    let repo = TestRepo::new().expect("Failed to create test repo");
-
-    // Create 2 workspaces
-    let ws1 = treq_lib::core::create_workspace(
-        &repo.repo_path,
-        "feat/recover-a",
-        Some("feature a".to_string()),
-        None,
-        None,
-        None,
-    )
-    .expect("Failed to create workspace 1");
-
-    let ws2 = treq_lib::core::create_workspace(
-        &repo.repo_path,
-        "feat/recover-b",
-        Some("feature b".to_string()),
-        None,
-        None,
-        None,
-    )
-    .expect("Failed to create workspace 2");
-
-    let ws1_path = repo.workspaces_dir().join(&ws1.workspace_path);
-    let ws2_path = repo.workspaces_dir().join(&ws2.workspace_path);
-    let ws1_path_str = ws1_path.to_str().unwrap();
-    let ws2_path_str = ws2_path.to_str().unwrap();
-
-    // Add uncommitted files
-    TestRepo::write_workspace_file(ws1_path_str, "ws1-file.txt", "ws1 content")
-        .expect("Failed to write");
-    TestRepo::write_workspace_file(ws2_path_str, "ws2-file.txt", "ws2 content")
-        .expect("Failed to write");
-
-    // Delete .jj and reinit — recovery should happen automatically during init
-    TestRepo::remove_dir_all_path(Path::new(&repo.repo_path).join(".jj"))
-        .expect("Failed to remove .jj");
-    treq_lib::core::init(&repo.repo_path).expect("Failed to reinit");
-
-    // Both should be back in jj after init
-    let jj_workspaces =
-        JjVerifier::list_workspaces(&repo.repo_path).expect("Failed to list jj workspaces");
-    assert!(
-        jj_workspaces.contains(&ws1.workspace_name),
-        "Workspace 1 should be in jj after init recovery, got: {:?}",
-        jj_workspaces
-    );
-    assert!(
-        jj_workspaces.contains(&ws2.workspace_name),
-        "Workspace 2 should be in jj after init recovery, got: {:?}",
-        jj_workspaces
-    );
-
-    // Both should have their uncommitted changes
-    assert!(
-        ws1_path.join("ws1-file.txt").exists(),
-        "Workspace 1 uncommitted file should be preserved"
-    );
-    assert!(
-        ws2_path.join("ws2-file.txt").exists(),
-        "Workspace 2 uncommitted file should be preserved"
-    );
-}
-
-// =============================================================================
-// Test: Recover workspace preserves bookmark
-// =============================================================================
-
-#[test]
-fn test_recover_workspace_preserves_bookmark() {
-    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
-
-    // Create workspace on branch "feat/test-bookmark"
-    let workspace = treq_lib::core::create_workspace(
-        &repo.repo_path,
-        "feat/test-bookmark",
-        Some("bookmark test".to_string()),
-        None,
-        None,
-        None,
-    )
-    .expect("Failed to create workspace");
-
-    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-
-    // Delete .jj and reinit — recovery should happen automatically during init
-    TestRepo::remove_dir_all_path(Path::new(&repo.repo_path).join(".jj"))
-        .expect("Failed to remove .jj");
-    treq_lib::core::init(&repo.repo_path).expect("Failed to reinit");
-
-    // Bookmark should exist and point to workspace's @
-    let bookmarks = JjVerifier::list_bookmarks(workspace_path.to_str().unwrap())
-        .expect("Failed to list bookmarks");
-    assert!(
-        bookmarks.iter().any(|b| b == "feat/test-bookmark"),
-        "Bookmark 'feat/test-bookmark' should exist after init recovery, got: {:?}",
-        bookmarks
-    );
-}
-
-// =============================================================================
-// Test: ensure_jj_initialized reinits when .jj deleted
-// =============================================================================
 
 #[test]
 fn test_ensure_jj_initialized_reinits_when_jj_deleted() {
@@ -1842,81 +1702,6 @@ fn test_ensure_jj_initialized_reinits_when_jj_deleted() {
         ".jj should exist again after ensure_jj_initialized"
     );
 }
-
-// =============================================================================
-// Test: Recover skips already registered workspaces (init is idempotent)
-// =============================================================================
-
-#[test]
-fn test_recover_skips_already_registered_workspaces() {
-    let repo = TestRepo::new().expect("Failed to create test repo");
-
-    // Create workspace (registered with jj, .jj not deleted)
-    let workspace = treq_lib::core::create_workspace(
-        &repo.repo_path,
-        "feat/already-registered",
-        Some("already registered".to_string()),
-        None,
-        None,
-        None,
-    )
-    .expect("Failed to create workspace");
-
-    // Re-init without deleting .jj — workspace is already registered
-    treq_lib::core::init(&repo.repo_path).expect("Failed to reinit");
-
-    // Workspace should still work normally
-    let jj_workspaces =
-        JjVerifier::list_workspaces(&repo.repo_path).expect("Failed to list jj workspaces");
-    assert!(
-        jj_workspaces.contains(&workspace.workspace_name),
-        "Workspace should still be in jj, got: {:?}",
-        jj_workspaces
-    );
-}
-
-// =============================================================================
-// Test: Recover handles missing workspace directory
-// =============================================================================
-
-#[test]
-fn test_recover_handles_missing_workspace_dir() {
-    let repo = TestRepo::new().expect("Failed to create test repo");
-
-    // Create workspace
-    let workspace = treq_lib::core::create_workspace(
-        &repo.repo_path,
-        "feat/missing-dir",
-        Some("missing dir test".to_string()),
-        None,
-        None,
-        None,
-    )
-    .expect("Failed to create workspace");
-
-    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-
-    // Delete .jj AND the workspace directory, then reinit
-    TestRepo::remove_dir_all_path(Path::new(&repo.repo_path).join(".jj"))
-        .expect("Failed to remove .jj");
-    TestRepo::remove_dir_all_path(&workspace_path).expect("Failed to remove workspace dir");
-
-    // Init should not error even when workspace dir is missing
-    treq_lib::core::init(&repo.repo_path).expect("Failed to reinit");
-
-    // Workspace should NOT be in jj (dir was missing, so recovery skipped it)
-    let jj_workspaces =
-        JjVerifier::list_workspaces(&repo.repo_path).expect("Failed to list jj workspaces");
-    assert!(
-        !jj_workspaces.contains(&workspace.workspace_name),
-        "Workspace with missing dir should not be recovered, got: {:?}",
-        jj_workspaces
-    );
-}
-
-// =============================================================================
-// Test: Empty commits are excluded from commits ahead
-// =============================================================================
 
 #[test]
 fn test_empty_commits_excluded_from_commits_ahead() {
@@ -1972,10 +1757,6 @@ fn test_empty_commits_excluded_from_commits_ahead() {
     );
 }
 
-// =============================================================================
-// Test: Merge abandons empty commits
-// =============================================================================
-
 #[test]
 fn test_merge_abandons_empty_commits() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -2027,10 +1808,6 @@ fn test_merge_abandons_empty_commits() {
         "Workspace directory should be deleted after merge"
     );
 }
-
-// =============================================================================
-// Test: Squash merge with empty commits
-// =============================================================================
 
 #[test]
 fn test_squash_merge_with_empty_commits() {
@@ -2087,10 +1864,6 @@ fn test_squash_merge_with_empty_commits() {
     );
 }
 
-// =============================================================================
-// Test: Rebase merge with empty commits
-// =============================================================================
-
 #[test]
 fn test_rebase_merge_with_empty_commits() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -2141,10 +1914,6 @@ fn test_rebase_merge_with_empty_commits() {
     );
 }
 
-// =============================================================================
-// Test: workspace remote_sync status - NotOnRemote
-// =============================================================================
-
 #[test]
 fn test_workspace_status_not_on_remote() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
@@ -2173,10 +1942,6 @@ fn test_workspace_status_not_on_remote() {
         "Unpushed workspace should have NotOnRemote sync status"
     );
 }
-
-// =============================================================================
-// Test: workspace remote_sync status - InSync
-// =============================================================================
 
 #[test]
 fn test_workspace_status_in_sync() {
@@ -2213,10 +1978,6 @@ fn test_workspace_status_in_sync() {
         "Pushed workspace with no new changes should be InSync"
     );
 }
-
-// =============================================================================
-// Test: workspace remote_sync status - Ahead
-// =============================================================================
 
 #[test]
 fn test_workspace_status_ahead_of_remote() {
@@ -2258,10 +2019,6 @@ fn test_workspace_status_ahead_of_remote() {
         "Workspace with unpushed commit should be Ahead {{ count: 1 }}"
     );
 }
-
-// =============================================================================
-// Test: workspace remote_sync status - Behind
-// =============================================================================
 
 #[test]
 fn test_workspace_status_behind_remote() {
@@ -2354,10 +2111,6 @@ fn test_workspace_status_behind_remote() {
     );
 }
 
-// =============================================================================
-// Test: workspace remote_sync status - Diverged
-// =============================================================================
-
 #[test]
 fn test_workspace_status_diverged() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
@@ -2435,10 +2188,6 @@ fn test_workspace_status_diverged() {
         "Workspace should be Diverged {{ ahead: 1, behind: 1 }}"
     );
 }
-
-// =============================================================================
-// Test: pull_workspace_from_remote - resolves divergence
-// =============================================================================
 
 #[test]
 fn test_pull_workspace_resolves_divergence() {
@@ -2543,10 +2292,6 @@ fn test_pull_workspace_resolves_divergence() {
     );
 }
 
-// =============================================================================
-// Test: pull_workspace_from_remote - no divergence (fast-forward)
-// =============================================================================
-
 #[test]
 fn test_pull_workspace_no_divergence() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
@@ -2613,10 +2358,6 @@ fn test_pull_workspace_no_divergence() {
     assert_eq!(result.commits_rebased, 0, "Should rebase 0 commits");
 }
 
-// =============================================================================
-// Test: jj_get_sync_status baseline in sync after push+pull
-// =============================================================================
-
 #[test]
 fn test_jj_get_sync_status_baseline_in_sync() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
@@ -2678,10 +2419,6 @@ fn test_jj_get_sync_status_baseline_in_sync() {
     );
 }
 
-// =============================================================================
-// Test: jj_get_sync_status ahead after local commit
-// =============================================================================
-
 #[test]
 fn test_jj_get_sync_status_ahead_after_local_commit() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
@@ -2729,10 +2466,6 @@ fn test_jj_get_sync_status_ahead_after_local_commit() {
         behind
     );
 }
-
-// =============================================================================
-// Test: jj_get_sync_status returns to sync after push
-// =============================================================================
 
 #[test]
 fn test_jj_get_sync_status_returns_to_sync_after_push() {
@@ -2806,10 +2539,6 @@ fn test_jj_get_sync_status_returns_to_sync_after_push() {
     );
 }
 
-// =============================================================================
-// Test: jj_get_sync_status multiple commits ahead
-// =============================================================================
-
 #[test]
 fn test_jj_get_sync_status_multiple_commits_ahead() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
@@ -2861,10 +2590,6 @@ fn test_jj_get_sync_status_multiple_commits_ahead() {
         behind
     );
 }
-
-// =============================================================================
-// Test: workspace push/pull with sync status verified via WorkspacePartialStatus
-// =============================================================================
 
 #[test]
 fn test_workspace_push_pull_with_workspace_status() {
@@ -2980,10 +2705,6 @@ fn test_workspace_push_pull_with_workspace_status() {
     );
 }
 
-// =============================================================================
-// Test: pull_workspace_from_remote with None (home repo) pulls remote commits
-// =============================================================================
-
 #[test]
 fn test_pull_home_repo_fetches_remote_commits() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
@@ -3034,10 +2755,6 @@ fn test_pull_home_repo_fetches_remote_commits() {
         branch_before, branch_after
     );
 }
-
-// =============================================================================
-// Test: workspace_status with None returns home repo status
-// =============================================================================
 
 #[test]
 fn test_workspace_status_home_repo() {
@@ -3126,10 +2843,6 @@ fn test_workspace_status_ignores_gitignored_noise() {
     );
 }
 
-// =============================================================================
-// Test: workspace_status with Some(id) returns correct sync status
-// =============================================================================
-
 #[test]
 fn test_workspace_status_with_workspace_id() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
@@ -3206,10 +2919,6 @@ fn test_workspace_status_with_workspace_id() {
         "workspace_status should not return DAG-derived conflict IDs"
     );
 }
-
-// =============================================================================
-// Test: workspace_diff (merge diff) — only workspace changes, exclusions
-// =============================================================================
 
 fn merge_diff_new_workspace(repo: &TestRepo, branch: &str) -> Workspace {
     treq_lib::core::create_workspace(&repo.repo_path, branch, None, None, None, None).unwrap()

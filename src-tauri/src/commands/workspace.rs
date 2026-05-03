@@ -201,10 +201,6 @@ pub fn set_workspace_target_branch(
         repo_path, workspace_path, id, target_branch
     );
 
-    if !std::path::Path::new(&workspace_path).exists() {
-        let _ = jj::reconcile_workspaces_with_jj(&repo_path);
-    }
-
     // Validate workspace path exists
     if !std::path::Path::new(&workspace_path).exists() {
         return Err(format!(

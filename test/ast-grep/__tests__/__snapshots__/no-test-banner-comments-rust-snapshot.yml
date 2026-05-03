@@ -1,0 +1,54 @@
+id: no-test-banner-comments-rust
+snapshots:
+  ? |
+    // =============================================================================
+    // Test: Rebase merge with empty commits
+    // =============================================================================
+    #[test]
+    fn rebase_merge_with_empty_commits() {
+      assert!(true);
+    }
+  : labels:
+    - source: |
+        // =============================================================================
+        // Test: Rebase merge with empty commits
+        // =============================================================================
+        #[test]
+        fn rebase_merge_with_empty_commits() {
+          assert!(true);
+        }
+      style: primary
+      start: 0
+      end: 269
+  ? |
+    // ---
+    #[test]
+    fn rejects_dash_separator() {
+      assert!(true);
+    }
+  : labels:
+    - source: |
+        // ---
+        #[test]
+        fn rejects_dash_separator() {
+          assert!(true);
+        }
+      style: primary
+      start: 0
+      end: 64
+  ? |
+    // ###
+    #[test]
+    fn rejects_hash_separator() {
+      assert!(true);
+    }
+  : labels:
+    - source: |
+        // ###
+        #[test]
+        fn rejects_hash_separator() {
+          assert!(true);
+        }
+      style: primary
+      start: 0
+      end: 64

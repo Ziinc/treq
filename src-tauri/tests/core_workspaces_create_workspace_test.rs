@@ -7,10 +7,6 @@ use std::process::Command;
 
 use treq_lib::local_db::Workspace;
 
-// =============================================================================
-// Test: All treq_lib::core::create_workspace functionality
-// =============================================================================
-
 #[test]
 fn test_can_create_workspace() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -149,10 +145,6 @@ fn test_can_create_workspace_with_same_source_branch() {
         bookmarks
     );
 }
-// =============================================================================
-// Test: Can create a workspace from remote branch
-// =============================================================================
-
 #[test]
 fn test_can_create_workspace_from_remote_branch() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
@@ -203,10 +195,6 @@ fn test_can_create_workspace_from_remote_branch() {
 }
 
 // TODO: create a workspace from non-default home repo branch
-
-// =============================================================================
-// Test: Can create a stacked workspace
-// =============================================================================
 
 #[test]
 fn test_can_create_stacked_workspace() {
@@ -318,60 +306,6 @@ fn test_can_create_stacked_workspace() {
     );
 }
 
-#[test]
-fn test_list_workspaces_recreates_missing_workspace_directory_from_jj_state() {
-    let repo = TestRepo::new().expect("Failed to create test repo");
-
-    let workspace: Workspace = treq_lib::core::create_workspace(
-        &repo.repo_path,
-        "feat/recover-me",
-        Some("recover me".to_string()),
-        None,
-        None,
-        None,
-    )
-    .expect("Failed to create workspace");
-
-    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_string_lossy().to_string();
-
-    TestRepo::write_workspace_file(&workspace_path_str, "recovered.txt", "hello recovery")
-        .expect("Failed to write workspace file");
-    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add recovery file")
-        .expect("Failed to commit recovery file");
-
-    TestRepo::remove_dir_all_path(&workspace_path).expect("Failed to remove workspace directory");
-    assert!(
-        !workspace_path.exists(),
-        "Workspace directory should be missing before reconciliation"
-    );
-
-    treq_lib::core::init(&repo.repo_path).expect("Failed to re-run repo init");
-
-    let workspaces =
-        treq_lib::core::list_workspaces(&repo.repo_path).expect("Failed to list workspaces");
-
-    assert_eq!(
-        workspaces.len(),
-        1,
-        "list_workspaces should return the reconciled workspace set"
-    );
-    assert!(
-        workspaces.iter().any(|ws| ws.id == workspace.id),
-        "Reconciled workspace should still exist in the database"
-    );
-    let recreated_workspace_dir = repo
-        .workspaces_dir()
-        .join(&workspace.workspace_path);
-    assert!(
-        recreated_workspace_dir.exists(),
-        "Workspace directory under .treq/workspaces should be recreated from JJ state"
-    );
-    assert!(
-        recreated_workspace_dir.join("recovered.txt").exists(),
-        "Recreated workspace should materialize tracked files"
-    );
-}
 
 #[test]
 fn test_list_workspaces_removes_db_workspace_missing_from_jj_state() {
@@ -425,10 +359,6 @@ fn test_list_workspaces_removes_db_workspace_missing_from_jj_state() {
         "Stale database row should be deleted after reconciliation"
     );
 }
-
-// =============================================================================
-// Test: create_workspace moves files from main repo into workspace
-// =============================================================================
 
 #[test]
 fn test_moved_files_from_main_repo() {
@@ -502,10 +432,6 @@ fn test_moved_files_from_main_repo() {
         "feature2.rs should be removed from main repo after squash"
     );
 }
-
-// =============================================================================
-// Test: create_workspace moves files from one workspace into another
-// =============================================================================
 
 #[test]
 fn test_moved_files_from_workspace_to_workspace() {
@@ -583,10 +509,6 @@ fn test_moved_files_from_workspace_to_workspace() {
         "component2.ts should be removed from base workspace after create_workspace"
     );
 }
-
-// =============================================================================
-// Test: create_workspace copies included files and directories
-// =============================================================================
 
 #[test]
 fn test_create_workspace_copies_included_files() {

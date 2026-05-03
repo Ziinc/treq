@@ -49,6 +49,15 @@ Coding agents work in isolated copies of the codebase, ensuring changes are inde
 
 <!-- insert gif of stacking -->
 
+
+## Developer
+
+
+```bash
+# to profile benchmark code
+samply record cargo bench --bench sync_workspaces
+```
+
 ## License
 
 Licensed under the Apache License, Version 2.0
