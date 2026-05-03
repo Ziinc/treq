@@ -10,30 +10,22 @@ use treq_lib::core::{
 // =============================================================================
 
 #[test]
-fn test_list_repo_branches_includes_main() {
+fn test_list_repo_branches_imports_git_refs() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
     let branches = list_repo_branches(&repo.repo_path).expect("list_repo_branches should succeed");
-
     assert!(
         branches.iter().any(|b| b.name == "main"),
         "expected 'main' in branches, got: {:?}",
         branches
     );
-}
 
-#[test]
-fn test_list_repo_branches_includes_created_branch() {
-    let repo = TestRepo::new().expect("Failed to create test repo");
-
-    // Create a new git branch so jj picks it up as a bookmark
     TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "feature-x"])
         .expect("Failed to create branch");
     TestRepo::run_git(&repo.repo_path, &["checkout", "main"])
         .expect("Failed to switch back to main");
 
     let branches = list_repo_branches(&repo.repo_path).expect("list_repo_branches should succeed");
-
     assert!(
         branches.iter().any(|b| b.name == "feature-x"),
         "expected 'feature-x' in branches, got: {:?}",
@@ -53,6 +45,14 @@ fn test_get_repo_branch_returns_current_and_default_branch() {
 
     assert_eq!(branch.current_branch, "main");
     assert_eq!(branch.default_branch, "main");
+
+
+    TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "feature-x"])
+        .expect("Failed to create branch");
+    let branch = get_repo_branch(&repo.repo_path).expect("get_repo_branch should succeed");
+    assert_eq!(branch.current_branch, "feature-x");
+    assert_eq!(branch.default_branch, "main");
+
 }
 
 #[test]
