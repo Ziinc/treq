@@ -1,8 +1,9 @@
 mod e2e_test_helpers;
 
-use e2e_test_helpers::TestRepo;
+use e2e_test_helpers::{JjVerifier, TestRepo};
 use treq_lib::core::{
-    get_repo_branch, list_repo_branches, repo_status, switch_repo_branch, RemoteSyncStatus,
+    commit_repo, get_repo_branch, list_repo_branches, list_commits, repo_status,
+    switch_repo_branch, RemoteSyncStatus,
 };
 
 #[test]
@@ -38,13 +39,11 @@ fn test_get_repo_branch_returns_current_and_default_branch() {
     assert_eq!(branch.current_branch, "main");
     assert_eq!(branch.default_branch, "main");
 
-
     TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "feature-x"])
         .expect("Failed to create branch");
     let branch = get_repo_branch(&repo.repo_path).expect("get_repo_branch should succeed");
     assert_eq!(branch.current_branch, "feature-x");
     assert_eq!(branch.default_branch, "main");
-
 }
 
 #[test]
@@ -220,3 +219,91 @@ fn test_switch_repo_branch_invalid_branch_returns_error() {
     let result = switch_repo_branch(&repo.repo_path, "nonexistent-branch-xyz");
     assert!(result.is_err(), "Expected Err for nonexistent branch");
 }
+
+#[test]
+fn test_commit_repo() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let before = JjVerifier::get_bookmark_commit_id(&repo.repo_path, "main")
+        .expect("query bookmark")
+        .expect("main bookmark should exist after init");
+
+    repo.create_file("home_repo_commit.txt", "content\n")
+        .expect("Failed to write file");
+
+    let msg = commit_repo(&repo.repo_path, "core commit_repo message")
+        .expect("commit_repo should succeed");
+    assert!(
+        msg.contains("main") || msg.contains("Committed"),
+        "unexpected success message: {}",
+        msg
+    );
+
+    let after = JjVerifier::get_bookmark_commit_id(&repo.repo_path, "main")
+        .expect("query bookmark")
+        .expect("main bookmark should still exist");
+
+    assert_ne!(
+        before, after,
+        "main bookmark should advance after commit_repo"
+    );
+
+    let log = list_commits(&repo.repo_path, None, false, None, None).expect("list_commits");
+    assert!(log.commits.len() == 2, "should have 2 commits, 1 initial commit, 1 new commit");
+    assert!(
+        log.commits
+            .iter()
+            .any(|c| c.description.contains("core commit_repo message")),
+        "expected commit message in home log, got: {:?}",
+        log.commits.iter().map(|c| &c.description).collect::<Vec<_>>()
+    );
+}
+
+
+#[test]
+fn test_commit_repo_after_create_workspace() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    treq_lib::core::create_workspace(&repo.repo_path, "feature-x", Some("feature-x".to_string()), None, None, None).expect("Failed to create workspace");
+    let before = JjVerifier::get_bookmark_commit_id(&repo.repo_path, "main")
+        .expect("query bookmark")
+        .expect("main bookmark should exist after init");
+
+    repo.create_file("home_repo_commit.txt", "content\n")
+        .expect("Failed to write file");
+
+    let msg = commit_repo(&repo.repo_path, "core commit_repo message")
+        .expect("commit_repo should succeed");
+    assert!(
+        msg.contains("main") || msg.contains("Committed"),
+        "unexpected success message: {}",
+        msg
+    );
+
+    let after = JjVerifier::get_bookmark_commit_id(&repo.repo_path, "main")
+        .expect("query bookmark")
+        .expect("main bookmark should still exist");
+
+    assert_ne!(
+        before, after,
+        "main bookmark should advance after commit_repo"
+    );
+
+    let log = list_commits(&repo.repo_path, None, false, None, None).expect("list_commits");
+    assert!(log.commits.len() == 2, "should have 2 commits, 1 initial commit, 1 new commit");
+    assert!(
+        log.commits
+            .iter()
+            .any(|c| c.description.contains("core commit_repo message")),
+        "expected commit message in home log, got: {:?}",
+        log.commits.iter().map(|c| &c.description).collect::<Vec<_>>()
+    );
+    assert!(
+        log.commits
+            .iter()
+            .any(|c| c.description.contains("Initial commit")),
+        "expected initial commit in home log, got: {:?}",
+        log.commits.iter().map(|c| &c.description).collect::<Vec<_>>()
+    );
+}
+

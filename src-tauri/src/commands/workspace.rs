@@ -118,8 +118,8 @@ pub fn merge_workspace(
     // Convert string to enum
     let strategy = match merge_strategy.as_str() {
         "merge" => MergeCommit::Merge,
-        "squash" => MergeCommit::Squash,
-        "rebase" => MergeCommit::Rebase,
+        "squash" => MergeCommit::SquashAndMerge,
+        "rebase" => MergeCommit::RebaseAndMerge,
         _ => return Err(format!("Invalid merge strategy: {}", merge_strategy)),
     };
 

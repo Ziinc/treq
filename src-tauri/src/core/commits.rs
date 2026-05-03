@@ -7,8 +7,11 @@ use crate::local_db;
 /// when no workspace ID is provided.
 ///
 /// # Arguments
-/// * `repo_path`    - Path to the repository root
-/// * `workspace_id` - ID of the workspace to list commits for, or `None` for the home repo
+/// * `repo_path`                     - Path to the repository root
+/// * `workspace_id`                  - ID of the workspace to list commits for, or `None` for the home repo
+/// * `include_target_branch_history` - When listing a workspace: if true, also load commits from the workspace's target branch in the home repo (ignored for the home-repo listing)
+/// * `target_branch_limit`           - Max commits to load for that target-branch history; defaults to 10 when `include_target_branch_history` is true
+/// * `limit`                         - Max commits for the home-repo log only; ignored when `workspace_id` is set
 ///
 /// # Returns
 /// The parsed log result on success, or an error string.

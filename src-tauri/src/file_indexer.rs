@@ -1,38 +1,12 @@
-use crate::binary_paths;
+use crate::jj;
 use crate::local_db::{self, CachedWorkspaceFile};
 use chrono::Utc;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
-/// Helper function to create Command for a binary using cached path
-fn command_for(binary: &str) -> Command {
-    let path = binary_paths::get_binary_path(binary).unwrap_or_else(|| binary.to_string());
-    Command::new(path)
-}
-
-/// Get list of all tracked files in a workspace using jj file list
+/// Get list of all tracked files in a workspace using jj-lib
 pub fn get_jj_tracked_files(workspace_path: &str) -> Result<Vec<String>, String> {
-    let output = command_for("jj")
-        .args(["file", "list", "--quiet"])
-        .current_dir(workspace_path)
-        .output()
-        .map_err(|e| format!("Failed to run jj file list: {}", e))?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "jj file list failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    let files: Vec<String> = String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
-
-    Ok(files)
+    jj::jj_get_tracked_files(workspace_path).map_err(|e| e.to_string())
 }
 
 /// Get file modification time as unix timestamp

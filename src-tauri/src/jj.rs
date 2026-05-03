@@ -4,6 +4,7 @@ use futures::TryStreamExt as _;
 use imara_diff::intern::InternedInput;
 use imara_diff::sink::Counter;
 use imara_diff::{diff, Algorithm, UnifiedDiffBuilder};
+use jj_lib::commit::Commit;
 use jj_lib::config::{ConfigLayer, ConfigSource, StackedConfig};
 use jj_lib::conflict_labels::ConflictLabels;
 use jj_lib::conflicts::{materialized_diff_stream, MaterializedTreeValue};
@@ -17,13 +18,16 @@ use jj_lib::merged_tree::MergedTree;
 use jj_lib::object_id::{HexPrefix, ObjectId};
 use jj_lib::op_store::{RefTarget, RemoteRef};
 use jj_lib::ref_name::{RefName, RemoteName, RemoteRefSymbol, WorkspaceNameBuf};
-use jj_lib::repo::{ReadonlyRepo, Repo as _, StoreFactories};
+use jj_lib::repo::{MutableRepo, ReadonlyRepo, Repo as _, StoreFactories};
 use jj_lib::repo_path::{RepoPath, RepoPathUiConverter};
 use jj_lib::revset::{
     self, Revset, RevsetAliasesMap, RevsetDiagnostics, RevsetIteratorExt as _, RevsetParseContext,
     RevsetWorkspaceContext, SymbolResolver,
 };
-use jj_lib::rewrite::merge_commit_trees;
+use jj_lib::rewrite::{
+    self, merge_commit_trees, EmptyBehavior, MoveCommitsLocation, MoveCommitsTarget,
+    RebaseOptions, RewriteRefsOptions,
+};
 use jj_lib::settings::UserSettings;
 use jj_lib::working_copy::{SnapshotOptions, WorkingCopyFreshness};
 use jj_lib::workspace::{default_working_copy_factories, default_working_copy_factory, Workspace};
@@ -2067,19 +2071,17 @@ fn parse_jj_status(status: &str) -> Result<Vec<JjFileChange>, JjError> {
     for line in status.lines() {
         let line = line.trim();
 
-        // Skip empty lines and section headers
         if line.is_empty() || line.starts_with("Working copy") || line.starts_with("Parent commit")
         {
             continue;
         }
 
-        // Parse lines like "M file.txt" or "A new.txt" or "D removed.txt"
         if let Some((status_char, rest)) = line.split_once(' ') {
             let status = match status_char {
-                "M" => "M", // Modified
-                "A" => "A", // Added
-                "D" => "D", // Deleted
-                "R" => "R", // Renamed
+                "M" => "M",
+                "A" => "A",
+                "D" => "D",
+                "R" => "R",
                 _ => continue,
             };
 
@@ -2475,14 +2477,72 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     )
     .map_err(|e| JjError::IoError(format!("Failed to load workspace: {}", e)))?;
 
-    let repo = futures::executor::block_on(workspace.repo_loader().load_at_head())
+    let mut repo = futures::executor::block_on(workspace.repo_loader().load_at_head())
         .map_err(|e| JjError::IoError(format!("Failed to load repo: {}", e)))?;
+
+    let workspace_name: WorkspaceNameBuf = workspace.workspace_name().to_owned();
+
+    // `jj workspace add` initializes the new workspace with `check_out(.., root_commit())`. Later
+    // edits can leave the home workspace WC as a direct child of the jj root while the local bookmark
+    // for the current branch still points at the real git branch tip. Rewriting that WC then produces a
+    // commit whose only parent is root, so that branch's history looks truncated in the home log. Stack
+    // the home WC on the branch tip before snapshotting.
+    if repo_path_opt.is_none() {
+        let root_id = repo.store().root_commit_id();
+        if let Some(wc_id) = repo.view().get_wc_commit_id(&workspace_name).cloned() {
+            let wc_pre = repo
+                .store()
+                .get_commit(&wc_id)
+                .map_err(|e| JjError::IoError(format!("Failed to load wc commit: {}", e)))?;
+            let branch_bookmark_target = repo
+                .view()
+                .get_local_bookmark(RefName::new(&branch))
+                .as_normal()
+                .cloned();
+            let wc_only_parent_root = wc_pre.parent_ids().len() == 1
+                && wc_pre.parent_ids().first() == Some(&root_id);
+            if wc_only_parent_root {
+                if let Some(branch_tip_id) = branch_bookmark_target {
+                    if branch_tip_id != *wc_pre.id() {
+                        let branch_tip_commit = repo
+                            .store()
+                            .get_commit(&branch_tip_id)
+                            .map_err(|e| {
+                                JjError::IoError(format!("Failed to load branch tip commit: {}", e))
+                            })?;
+                        let mut rtx = repo.start_transaction();
+                        futures::executor::block_on(
+                            rtx.repo_mut().check_out(workspace_name.clone(), &branch_tip_commit),
+                        )
+                        .map_err(|e| {
+                            JjError::IoError(format!("Failed to repair home wc checkout: {}", e))
+                        })?;
+                        futures::executor::block_on(rtx.repo_mut().rebase_descendants()).map_err(
+                            |e| JjError::IoError(format!("Failed to rebase after wc repair: {}", e)),
+                        )?;
+                        let _ = git::export_refs(rtx.repo_mut());
+                        let _ = futures::executor::block_on(rtx.commit("repair home wc")).map_err(
+                            |e| JjError::IoError(format!("Failed to commit wc repair: {}", e)),
+                        )?;
+                        workspace = Workspace::load(
+                            &settings,
+                            Path::new(workspace_path),
+                            &StoreFactories::default(),
+                            &default_working_copy_factories(),
+                        )
+                        .map_err(|e| JjError::IoError(format!("Failed to reload workspace: {}", e)))?;
+                        repo = futures::executor::block_on(workspace.repo_loader().load_at_head())
+                            .map_err(|e| JjError::IoError(format!("Failed to reload repo: {}", e)))?;
+                    }
+                }
+            }
+        }
+    }
 
     // Snapshot working copy and load main-repo ignore rules to avoid expensive noise.
     let ignore_repo_root = repo_path_opt.as_deref().unwrap_or(workspace_path);
     let matcher = repo_root_matcher();
     let opts = snapshot_options_for_all_paths(ignore_repo_root, &matcher);
-    let workspace_name: WorkspaceNameBuf = workspace.workspace_name().to_owned();
     let mut locked_ws = workspace
         .start_working_copy_mutation()
         .map_err(|e| JjError::IoError(format!("Failed to lock working copy: {}", e)))?;
@@ -2503,7 +2563,12 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
         .store()
         .get_commit(&wc_commit_id)
         .map_err(|e| JjError::IoError(format!("Failed to load wc commit: {}", e)))?;
-    let workspace_names = tx.repo().view().workspaces_for_wc_commit_id(wc_commit.id());
+    let mut workspace_names: Vec<_> = tx
+        .repo()
+        .view()
+        .workspaces_for_wc_commit_id(wc_commit.id())
+        .into_iter()
+        .collect();
     let bookmark_names = tx
         .repo()
         .view()
@@ -2513,12 +2578,59 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
         })
         .collect::<Vec<_>>();
 
+    if repo_path_opt.is_none()
+        && tx
+            .repo()
+            .view()
+            .get_local_bookmark(RefName::new(&branch))
+            .as_normal()
+            == Some(wc_commit.id())
+    {
+        // Move secondary workspaces off this wc commit so we rewrite the home wc commit in place.
+        // Rewriting a commit shared with another workspace would strand that workspace or distort history.
+        let others: Vec<_> = workspace_names
+            .iter()
+            .filter(|name| name.as_str() != workspace_name.as_str())
+            .cloned()
+            .collect();
+        if !others.is_empty() {
+            let detached_wc = futures::executor::block_on(
+                tx.repo_mut()
+                    .new_commit(vec![wc_commit.id().clone()], wc_commit.tree())
+                    .write(),
+            )
+            .map_err(|e| {
+                JjError::IoError(format!(
+                    "Failed to detach secondary workspace working copies: {}",
+                    e
+                ))
+            })?;
+            for name in others {
+                futures::executor::block_on(tx.repo_mut().edit(name, &detached_wc))
+                    .map_err(|e| {
+                        JjError::IoError(format!("Failed to detach workspace wc pointer: {}", e))
+                    })?;
+            }
+        }
+        workspace_names = tx
+            .repo()
+            .view()
+            .workspaces_for_wc_commit_id(wc_commit.id())
+            .into_iter()
+            .collect();
+    }
+
     // Rewrite @ with new tree + description, using detached builder to avoid borrow conflict
     let mut builder = tx.repo_mut().rewrite_commit(&wc_commit).detach();
     builder.set_tree(new_tree);
     builder.set_description(message);
     let committed = futures::executor::block_on(builder.write(tx.repo_mut()))
         .map_err(|e| JjError::IoError(format!("Failed to write commit: {}", e)))?;
+    // Run before creating the fresh WC child / advancing bookmarks. Calling `rebase_descendants`
+    // after those steps can reparent the authored commit incorrectly when another jj workspace
+    // exists (sibling wc commits off the same bookmark parent).
+    futures::executor::block_on(tx.repo_mut().rebase_descendants())
+        .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
 
     let ref_name = RefName::new(&branch);
     tx.repo_mut()
@@ -2544,10 +2656,6 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
                 .map_err(|e| JjError::IoError(format!("Failed to update wc pointer: {}", e)))?;
         }
     }
-
-    // Rebase any descendants of the rewritten commit (required by jj-lib before commit)
-    futures::executor::block_on(tx.repo_mut().rebase_descendants())
-        .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
 
     // Keep colocated git refs aligned with jj refs to avoid stale/conflicted bookmark revsets.
     let _ = git::export_refs(tx.repo_mut());
@@ -3439,7 +3547,6 @@ pub fn jj_get_workspace_status_combined(workspace_path: &str) -> WorkspaceStatus
         Ok(output) if output.status.success() => {
             let status_output = String::from_utf8_lossy(&output.stdout);
             let changed_files = parse_jj_status(&status_output).unwrap_or_default();
-            // jj status reports "There are unresolved conflicts" when conflicts exist
             let has_conflict_markers = status_output.contains("unresolved conflicts");
             WorkspaceStatusCombined {
                 changed_files,
@@ -3897,14 +4004,15 @@ fn parse_diff_stat(stat: &str) -> (u32, u32) {
 }
 
 /// Build the revset string for jj_get_log based on context
-fn build_jj_get_log_revset(target_ref: &str, is_home_repo: bool, limit: Option<usize>) -> String {
+fn build_jj_get_log_revset(target_ref: &str, is_home_repo: bool, _limit: Option<usize>) -> String {
     let target_ref = format_revset_symbol(target_ref);
     if is_home_repo {
-        let n = limit.unwrap_or(15);
-        format!("latest(::{}, {})", target_ref, n)
+        // Walk full branch history in topological order. We cap in code after `iter()` instead
+        // of using `latest()` because `latest(S, n)` is timestamp-based and breaks merge order.
+        format!("::{}", target_ref)
     } else {
-        // For workspace: show commits ahead of target branch
-        format!("{}..@", target_ref)
+        // Match jj_get_commits_ahead: ancestors up to @- (exclude WC tip), drop empty commits.
+        format!("({}..@-) ~ empty()", target_ref)
     }
 }
 
@@ -3987,13 +4095,6 @@ pub fn jj_get_log(
         &format!("::{}", format_revset_symbol(&selected_target_ref)),
     )?;
     let is_immutable = immutable_revset.containing_fn();
-    let commits = revset
-        .iter()
-        .commits(loaded.repo.store())
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| {
-            JjError::IoError(format!("Failed to iterate revset '{}': {}", revset_expr, e))
-        })?;
     let wc_commit_ids: HashSet<_> = loaded
         .repo
         .view()
@@ -4001,6 +4102,39 @@ pub fn jj_get_log(
         .values()
         .cloned()
         .collect();
+    let log_limit = limit.unwrap_or(15);
+    let fetch_cap = log_limit.saturating_add(10);
+    let is_home = is_home_repo.unwrap_or(false);
+    let commits: Vec<Commit> = if is_home {
+        let mut commits: Vec<_> = revset
+            .iter()
+            .take(fetch_cap)
+            .commits(loaded.repo.store())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                JjError::IoError(format!("Failed to iterate revset '{}': {}", revset_expr, e))
+            })?;
+        commits.retain(|commit| {
+            !(commit_description_first_line(commit) == "(no description)"
+                && loaded
+                    .repo
+                    .view()
+                    .local_bookmarks_for_commit(commit.id())
+                    .next()
+                    .is_none()
+                && is_empty_commit(&loaded.repo, commit))
+        });
+        commits.truncate(log_limit);
+        commits
+    } else {
+        revset
+            .iter()
+            .commits(loaded.repo.store())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                JjError::IoError(format!("Failed to iterate revset '{}': {}", revset_expr, e))
+            })?
+    };
     let commits = build_log_commits(
         &cache_repo_path,
         &loaded.repo,
@@ -4326,7 +4460,7 @@ fn too_large_revision_diff() -> JjRevisionDiff {
 fn resolve_commit_by_revision(
     loaded: &LoadedWorkspaceRepo,
     revision: &str,
-) -> Result<jj_lib::commit::Commit, JjError> {
+) -> Result<Commit, JjError> {
     let revset = evaluate_revset(loaded, revision)?;
     let commits = revset
         .iter()
@@ -4348,9 +4482,126 @@ fn resolve_commit_by_revision(
     }
 }
 
+fn validate_branch_name(branch: &str, kind: &str) -> Result<(), JjError> {
+    if branch.starts_with('-') || branch.contains('\0') || branch.is_empty() {
+        return Err(JjError::IoError(format!("Invalid {kind} branch name")));
+    }
+    Ok(())
+}
+
+fn validate_commit_message(message: &str) -> Result<(), JjError> {
+    if message.contains('\0') {
+        return Err(JjError::IoError("Invalid commit message".to_string()));
+    }
+    if message.len() > 10000 {
+        return Err(JjError::IoError(
+            "Commit message too long (max 10000 characters)".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn workspace_repo_path(workspace_path: &str) -> String {
+    derive_repo_path_from_workspace(workspace_path).unwrap_or_else(|| workspace_path.to_string())
+}
+
+fn resolve_target_branch_symbol(workspace_path: &str, target_branch: &str) -> String {
+    convert_git_branch_to_jj_format(target_branch, &workspace_repo_path(workspace_path))
+}
+
+fn load_workspace_repo_for_history_edit(
+    workspace_path: &str,
+) -> Result<LoadedWorkspaceRepo, JjError> {
+    let mut loaded = load_workspace_repo(workspace_path)?;
+    import_colocated_git_state(&mut loaded, workspace_path)?;
+    Ok(loaded)
+}
+
+fn get_workspace_wc_commit(loaded: &LoadedWorkspaceRepo) -> Result<Option<Commit>, JjError> {
+    let workspace_name = loaded.workspace.workspace_name();
+    let Some(wc_commit_id) = loaded.repo.view().get_wc_commit_id(workspace_name).cloned() else {
+        return Ok(None);
+    };
+    loaded
+        .repo
+        .store()
+        .get_commit(&wc_commit_id)
+        .map(Some)
+        .map_err(|e| JjError::IoError(format!("Failed to load wc commit: {}", e)))
+}
+
+fn update_workspace_after_history_edit(
+    loaded: &mut LoadedWorkspaceRepo,
+    new_repo: &Arc<ReadonlyRepo>,
+    old_wc_commit: Option<&Commit>,
+) -> Result<(), JjError> {
+    let workspace_name = loaded.workspace.workspace_name().to_owned();
+    let Some(new_wc_commit_id) = new_repo.view().get_wc_commit_id(&workspace_name).cloned() else {
+        return Ok(());
+    };
+    let new_wc_commit = new_repo
+        .store()
+        .get_commit(&new_wc_commit_id)
+        .map_err(|e| JjError::IoError(format!("Failed to load updated wc commit: {}", e)))?;
+    let old_tree = old_wc_commit.map(|commit| commit.tree());
+    futures::executor::block_on(loaded.workspace.check_out(
+        new_repo.op_id().clone(),
+        old_tree.as_ref(),
+        &new_wc_commit,
+    ))
+    .map_err(|e| JjError::IoError(format!("Failed to update working copy: {}", e)))?;
+    loaded.repo = Arc::clone(new_repo);
+    Ok(())
+}
+
+fn set_local_bookmark_target(
+    repo_mut: &mut MutableRepo,
+    bookmark_name: &str,
+    commit_id: jj_lib::backend::CommitId,
+) {
+    repo_mut.set_local_bookmark_target(RefName::new(bookmark_name), RefTarget::normal(commit_id));
+}
+
+fn short_commit_id(commit: &Commit) -> String {
+    commit.id().hex().chars().take(12).collect()
+}
+
+fn summarize_rebase_stats(stats: &jj_lib::rewrite::MoveCommitsStats) -> String {
+    let mut parts = Vec::new();
+    if stats.num_rebased_targets > 0 {
+        parts.push(format!(
+            "Rebased {} commits to destination",
+            stats.num_rebased_targets
+        ));
+    }
+    if stats.num_rebased_descendants > 0 {
+        parts.push(format!(
+            "Rebased {} descendant commits",
+            stats.num_rebased_descendants
+        ));
+    }
+    if stats.num_skipped_rebases > 0 {
+        parts.push(format!(
+            "Skipped rebase of {} commits already in place",
+            stats.num_skipped_rebases
+        ));
+    }
+    if stats.num_abandoned_empty > 0 {
+        parts.push(format!(
+            "Abandoned {} newly emptied commits",
+            stats.num_abandoned_empty
+        ));
+    }
+    if parts.is_empty() {
+        "No revisions to rebase.".to_string()
+    } else {
+        parts.join("\n")
+    }
+}
+
 fn get_commit_copy_records(
     store: &jj_lib::store::Store,
-    commit: &jj_lib::commit::Commit,
+    commit: &Commit,
 ) -> Result<CopyRecords, JjError> {
     let mut copy_records = CopyRecords::default();
     for parent_id in commit.parent_ids() {
@@ -4617,6 +4868,40 @@ pub fn jj_get_commit_file_diff(
     })
 }
 
+/// Get all tracked files in the current workspace without shelling out to `jj file list`.
+pub fn jj_get_tracked_files(workspace_path: &str) -> Result<Vec<String>, JjError> {
+    let mut loaded = load_workspace_repo(workspace_path)?;
+    import_colocated_git_state(&mut loaded, workspace_path)?;
+
+    let workspace_name = loaded.workspace.workspace_name().to_owned();
+    let tree = if let Some((_, tree)) = snapshot_working_copy_tree(&mut loaded, workspace_path)? {
+        tree
+    } else {
+        let wc_commit_id = loaded
+            .repo
+            .view()
+            .get_wc_commit_id(&workspace_name)
+            .cloned()
+            .ok_or_else(|| JjError::IoError("No working-copy commit found".to_string()))?;
+        let wc_commit = loaded
+            .repo
+            .store()
+            .get_commit(&wc_commit_id)
+            .map_err(|e| JjError::IoError(format!("Failed to load wc commit: {}", e)))?;
+        wc_commit.tree()
+    };
+
+    let mut files = Vec::new();
+    for (path, value) in tree.entries() {
+        let value = value
+            .map_err(|e| JjError::IoError(format!("Failed to read tracked file entry: {}", e)))?;
+        if value.is_present() && !value.is_tree() {
+            files.push(path.as_internal_file_string().to_string());
+        }
+    }
+    Ok(files)
+}
+
 fn count_changed_lines(hunks: &[JjDiffHunk]) -> usize {
     hunks
         .iter()
@@ -4641,109 +4926,96 @@ pub fn jj_create_merge_commit(
     workspace_branch: &str,
     target_branch: &str,
     message: &str,
-    conflict_marker_style: &str,
+    _conflict_marker_style: &str,
 ) -> Result<JjMergeResult, JjError> {
-    if workspace_branch.starts_with('-')
-        || workspace_branch.contains('\0')
-        || workspace_branch.is_empty()
-    {
-        return Err(JjError::IoError(
-            "Invalid workspace branch name".to_string(),
-        ));
-    }
+    validate_branch_name(workspace_branch, "workspace")?;
+    validate_branch_name(target_branch, "target")?;
+    validate_commit_message(message)?;
 
-    if target_branch.starts_with('-') || target_branch.contains('\0') || target_branch.is_empty() {
-        return Err(JjError::IoError("Invalid target branch name".to_string()));
-    }
+    let mut loaded = load_workspace_repo_for_history_edit(workspace_path)?;
+    let old_wc_commit = get_workspace_wc_commit(&loaded)?;
+    let workspace_name = loaded.workspace.workspace_name().to_owned();
+    let workspace_parent = resolve_commit_by_revision(&loaded, workspace_branch)?;
+    let target_revset = format!(
+        "{}+",
+        format_revset_symbol(&resolve_target_branch_symbol(workspace_path, target_branch))
+    );
+    let target_parent = resolve_commit_by_revision(&loaded, &target_revset)?;
 
-    if message.contains('\0') {
-        return Err(JjError::IoError("Invalid commit message".to_string()));
-    }
+    let mut tx = loaded.repo.start_transaction();
+    let parent_commits = vec![workspace_parent, target_parent];
+    let merged_tree =
+        futures::executor::block_on(merge_commit_trees(tx.repo(), &parent_commits))
+            .map_err(|e| JjError::IoError(format!("Failed to build merge tree: {}", e)))?;
+    let merge_commit = futures::executor::block_on(async {
+        tx.repo_mut()
+            .new_commit(
+                parent_commits
+                    .iter()
+                    .map(|commit| commit.id().clone())
+                    .collect(),
+                merged_tree,
+            )
+            .set_description(message)
+            .write()
+            .await
+    })
+    .map_err(|e| JjError::IoError(format!("Failed to write merge commit: {}", e)))?;
 
-    if message.len() > 10000 {
-        return Err(JjError::IoError(
-            "Commit message too long (max 10000 characters)".to_string(),
-        ));
-    }
+    let new_wc_commit =
+        futures::executor::block_on(tx.repo_mut().check_out(workspace_name, &merge_commit))
+            .map_err(|e| {
+                JjError::IoError(format!("Failed to create working-copy commit: {}", e))
+            })?;
+    let _ = new_wc_commit;
+    futures::executor::block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
+        JjError::IoError(format!("Failed to rebase descendants after merge: {}", e))
+    })?;
 
-    // Step 1: Create merge commit with workspace_branch and target_branch+ as parents
-    let target_revset = format!("{}+", target_branch);
-    let output = jj_command(conflict_marker_style)
-        .current_dir(workspace_path)
-        .args(["new", workspace_branch, &target_revset, "-m", message])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
+    set_local_bookmark_target(tx.repo_mut(), target_branch, merge_commit.id().clone());
+    let _ = git::export_refs(tx.repo_mut());
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let combined = format!("{}{}", stdout, stderr);
+    let new_repo = futures::executor::block_on(tx.commit("create merge commit"))
+        .map_err(|e| JjError::IoError(format!("Failed to commit merge transaction: {}", e)))?;
+    update_workspace_after_history_edit(&mut loaded, &new_repo, old_wc_commit.as_ref())?;
 
-    let has_conflicts = combined.to_lowercase().contains("conflict");
-
+    let has_conflicts = !merge_commit.tree_ids().is_resolved();
     let conflicted_files = if has_conflicts {
         get_conflicted_files(workspace_path, None).unwrap_or_default()
     } else {
         Vec::new()
     };
-
-    let merge_commit_id = if output.status.success() {
-        // Step 2: Create new working copy on top of merge
-        let new_wc_output = command_for("jj")
-            .current_dir(workspace_path)
-            .args(["new", "@"])
-            .output()
-            .map_err(|e| JjError::IoError(e.to_string()))?;
-
-        if !new_wc_output.status.success() {
-            let new_wc_stderr = String::from_utf8_lossy(&new_wc_output.stderr);
-            eprintln!(
-                "Warning: Failed to create new working copy: {}",
-                new_wc_stderr
-            );
-        }
-
-        // Step 3: Move target_branch bookmark to merge commit (parent of new working copy)
-        if let Err(e) = jj_set_bookmark(workspace_path, target_branch, "@-") {
-            eprintln!(
-                "Warning: Failed to update target bookmark '{}': {}",
-                target_branch, e
-            );
-        }
-
-        // Get merge commit ID (now at @-)
-        command_for("jj")
-            .current_dir(workspace_path)
-            .args(["log", "-r", "@-", "--no-graph", "-T", "commit_id.short(12)"])
-            .output()
-            .ok()
-            .and_then(|out| {
-                if out.status.success() {
-                    String::from_utf8(out.stdout)
-                        .ok()
-                        .map(|s| s.trim().to_string())
-                } else {
-                    None
-                }
-            })
+    let merge_commit_id = Some(short_commit_id(&merge_commit));
+    let message = if has_conflicts {
+        format!(
+            "Created merge commit {} with conflicts",
+            merge_commit_id.as_deref().unwrap_or("")
+        )
     } else {
-        None
+        format!(
+            "Created merge commit {}",
+            merge_commit_id.as_deref().unwrap_or("")
+        )
     };
 
     Ok(JjMergeResult {
-        success: output.status.success(),
-        message: combined,
+        success: true,
+        message,
         has_conflicts,
         conflicted_files,
         merge_commit_id,
     })
 }
 
-/// Rebases a workspace branch onto the target branch and moves the target bookmark.
+/// Rebases a workspace branch onto the target branch, then records a two-parent merge commit
+/// on the target branch (first parent = target tip before merge, second = rebased workspace tip)
+/// with the given description—similar to `git merge --no-ff` after rebasing.
 ///
 /// # Arguments
 /// * `workspace_path` - Path to the workspace directory
 /// * `workspace_branch` - Name of the workspace branch to rebase
 /// * `target_branch` - Name of the target branch
+/// * `message` - Description for the merge commit
 ///
 /// # Returns
 /// Returns the rebase result or a JjError on failure.
@@ -4751,42 +5023,109 @@ pub fn jj_rebase_merge_commit(
     workspace_path: &str,
     workspace_branch: &str,
     target_branch: &str,
+    message: &str,
 ) -> Result<JjRebaseResult, JjError> {
-    if workspace_branch.starts_with('-')
-        || workspace_branch.contains('\0')
-        || workspace_branch.is_empty()
-    {
-        return Err(JjError::IoError(
-            "Invalid workspace branch name".to_string(),
-        ));
-    }
+    validate_branch_name(workspace_branch, "workspace")?;
+    validate_branch_name(target_branch, "target")?;
+    validate_commit_message(message)?;
 
-    if target_branch.starts_with('-') || target_branch.contains('\0') || target_branch.is_empty() {
-        return Err(JjError::IoError("Invalid target branch name".to_string()));
-    }
+    let mut loaded = load_workspace_repo_for_history_edit(workspace_path)?;
+    let old_wc_commit = get_workspace_wc_commit(&loaded)?;
+    let workspace_name = loaded.workspace.workspace_name().to_owned();
+    let workspace_commit = resolve_commit_by_revision(&loaded, workspace_branch)?;
+    let target_commit = resolve_commit_by_revision(
+        &loaded,
+        &resolve_target_branch_symbol(workspace_path, target_branch),
+    )?;
+    let target_tip_id = target_commit.id().clone();
 
-    let output = command_for("jj")
-        .current_dir(workspace_path)
-        .args(["rebase", "-s", workspace_branch, "-d", target_branch])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
+    let rebase_options = RebaseOptions {
+        empty: EmptyBehavior::Keep,
+        rewrite_refs: RewriteRefsOptions {
+            delete_abandoned_bookmarks: false,
+        },
+        simplify_ancestor_merge: false,
+    };
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let combined = format!("{}{}", stdout, stderr);
+    let mut tx = loaded.repo.start_transaction();
+    let loc = MoveCommitsLocation {
+        new_parent_ids: vec![target_commit.id().clone()],
+        new_child_ids: Vec::new(),
+        target: MoveCommitsTarget::Roots(vec![workspace_commit.id().clone()]),
+    };
+    let stats = futures::executor::block_on(async {
+        rewrite::compute_move_commits(tx.repo_mut(), &loc)
+            .await?
+            .apply(tx.repo_mut(), &rebase_options)
+            .await
+    })
+    .map_err(|e| JjError::IoError(format!("Failed to rebase workspace branch: {}", e)))?;
 
-    if output.status.success() {
-        if let Err(e) = jj_set_bookmark(workspace_path, target_branch, workspace_branch) {
-            eprintln!(
-                "Warning: Failed to update target bookmark '{}': {}",
-                target_branch, e
-            );
-        }
-    }
+    let rebased_workspace_id = tx
+        .repo()
+        .view()
+        .get_local_bookmark(RefName::new(workspace_branch))
+        .as_normal()
+        .cloned()
+        .ok_or_else(|| {
+            JjError::IoError(format!(
+                "Workspace branch '{}' no longer resolves after rebase",
+                workspace_branch
+            ))
+        })?;
+
+    let rebased_tip_commit = tx
+        .repo()
+        .store()
+        .get_commit(&rebased_workspace_id)
+        .map_err(|e| {
+            JjError::IoError(format!(
+                "Failed to load rebased workspace tip after rebase: {}",
+                e
+            ))
+        })?;
+    let target_tip_commit = tx.repo().store().get_commit(&target_tip_id).map_err(|e| {
+        JjError::IoError(format!(
+            "Failed to load target branch tip before merge: {}",
+            e
+        ))
+    })?;
+
+    let parent_commits = vec![target_tip_commit, rebased_tip_commit];
+    let merged_tree =
+        futures::executor::block_on(merge_commit_trees(tx.repo(), &parent_commits)).map_err(
+            |e| JjError::IoError(format!("Failed to build merge tree for rebase merge: {}", e)),
+        )?;
+    let merge_commit = futures::executor::block_on(async {
+        tx.repo_mut()
+            .new_commit(
+                parent_commits
+                    .iter()
+                    .map(|commit| commit.id().clone())
+                    .collect(),
+                merged_tree,
+            )
+            .set_description(message)
+            .write()
+            .await
+    })
+    .map_err(|e| JjError::IoError(format!("Failed to write rebase merge commit: {}", e)))?;
+
+    let _ = futures::executor::block_on(tx.repo_mut().check_out(workspace_name, &merge_commit))
+        .map_err(|e| JjError::IoError(format!("Failed to create working-copy commit: {}", e)))?;
+    futures::executor::block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
+        JjError::IoError(format!("Failed to rebase descendants after rebase merge: {}", e))
+    })?;
+    set_local_bookmark_target(tx.repo_mut(), target_branch, merge_commit.id().clone());
+    let _ = git::export_refs(tx.repo_mut());
+
+    let new_repo = futures::executor::block_on(tx.commit("rebase merge workspace"))
+        .map_err(|e| JjError::IoError(format!("Failed to commit rebase transaction: {}", e)))?;
+    update_workspace_after_history_edit(&mut loaded, &new_repo, old_wc_commit.as_ref())?;
 
     Ok(JjRebaseResult {
-        success: output.status.success(),
-        message: combined,
+        success: true,
+        message: summarize_rebase_stats(&stats),
     })
 }
 
@@ -4806,24 +5145,42 @@ pub fn jj_squash_merge_commit(
     target_branch: &str,
     message: &str,
 ) -> Result<(), JjError> {
-    let squash_output = command_for("jj")
-        .current_dir(workspace_path)
-        .args([
-            "squash",
-            "--from",
-            workspace_branch,
-            "--into",
-            target_branch,
-            "-m",
-            message,
-        ])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
+    validate_branch_name(workspace_branch, "workspace")?;
+    validate_branch_name(target_branch, "target")?;
+    validate_commit_message(message)?;
 
-    if !squash_output.status.success() {
-        let stderr = String::from_utf8_lossy(&squash_output.stderr);
-        return Err(JjError::IoError(format!("jj squash failed: {}", stderr)));
-    }
+    let mut loaded = load_workspace_repo_for_history_edit(workspace_path)?;
+    let old_wc_commit = get_workspace_wc_commit(&loaded)?;
+    let workspace_name = loaded.workspace.workspace_name().to_owned();
+    let target_symbol = resolve_target_branch_symbol(workspace_path, target_branch);
+    let destination_commit = resolve_commit_by_revision(&loaded, &target_symbol)?;
+    let workspace_tip_commit = resolve_commit_by_revision(&loaded, workspace_branch)?;
+
+    let mut tx = loaded.repo.start_transaction();
+    let parent_commits = vec![destination_commit.clone(), workspace_tip_commit];
+    let squashed_tree =
+        futures::executor::block_on(merge_commit_trees(tx.repo(), &parent_commits)).map_err(
+            |e| JjError::IoError(format!("Failed to build squash merge tree: {}", e)),
+        )?;
+    let squashed_commit = futures::executor::block_on(async {
+        tx.repo_mut()
+            .new_commit(vec![destination_commit.id().clone()], squashed_tree)
+            .set_description(message)
+            .write()
+            .await
+    })
+    .map_err(|e| JjError::IoError(format!("Failed to write squashed commit: {}", e)))?;
+    let _ = futures::executor::block_on(tx.repo_mut().check_out(workspace_name, &squashed_commit))
+        .map_err(|e| JjError::IoError(format!("Failed to create working-copy commit: {}", e)))?;
+    futures::executor::block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
+        JjError::IoError(format!("Failed to rebase descendants after squash: {}", e))
+    })?;
+    set_local_bookmark_target(tx.repo_mut(), target_branch, squashed_commit.id().clone());
+    let _ = git::export_refs(tx.repo_mut());
+
+    let new_repo = futures::executor::block_on(tx.commit("squash merge workspace"))
+        .map_err(|e| JjError::IoError(format!("Failed to commit squash transaction: {}", e)))?;
+    update_workspace_after_history_edit(&mut loaded, &new_repo, old_wc_commit.as_ref())?;
 
     Ok(())
 }
@@ -4888,9 +5245,8 @@ fn import_colocated_git_state(
         remote_auto_track_bookmarks: HashMap::new(),
     };
     let mut tx = loaded.repo.start_transaction();
-    futures::executor::block_on(git::import_refs(tx.repo_mut(), &import_options)).map_err(
-        |e| JjError::GitWorkspaceError(format!("git import_refs: {}", e)),
-    )?;
+    futures::executor::block_on(git::import_refs(tx.repo_mut(), &import_options))
+        .map_err(|e| JjError::GitWorkspaceError(format!("git import_refs: {}", e)))?;
     if tx.repo().has_changes() {
         loaded.repo = futures::executor::block_on(tx.commit("import git refs")).map_err(|e| {
             JjError::GitWorkspaceError(format!("Failed to commit git import_refs: {}", e))

@@ -34,16 +34,19 @@ impl TestRepo {
         Self::run_git(&repo_path, &["config", "user.email", "test@example.com"])?;
         Self::run_git(&repo_path, &["config", "user.name", "Test User"])?;
 
+        Self::run_git(&repo_path, &["branch", "-M", "main"])
+            .map_err(|e| format!("Failed to create main branch: {}", e))?;
+
+        Self::run_git(&repo_path, &["checkout","-b", "main"])?;
+
         // Create initial commit (git repos need at least one commit)
         let readme_path = temp_dir.path().join("README.md");
         fs::write(&readme_path, "# Test Repository\n")
             .map_err(|e| format!("Failed to write README: {}", e))?;
 
+            
         Self::run_git(&repo_path, &["add", "."])?;
         Self::run_git(&repo_path, &["commit", "-m", "Initial commit"])?;
-
-        // Create main branch if not already on it
-        let _ = Self::run_git(&repo_path, &["branch", "-M", "main"]);
 
         if init {
             treq_lib::core::init(&repo_path)?;

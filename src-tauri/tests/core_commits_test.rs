@@ -774,13 +774,13 @@ fn test_list_commits() {
         "Should contain 'Add world' commit"
     );
 
-    // Should have exactly 1 working copy commit
+    // Should exclude working copy commits
     let wc: Vec<_> = result
         .commits
         .iter()
         .filter(|c| c.is_working_copy)
         .collect();
-    assert_eq!(wc.len(), 1, "Should have 1 working copy commit");
+    assert_eq!(wc.len(), 0, "Should have no working copy commits");
 }
 
 #[test]
@@ -892,20 +892,8 @@ fn test_list_commits_working_copy_diff_stats() {
 
     let wc_commit = result.commits.iter().find(|c| c.is_working_copy);
     assert!(
-        wc_commit.is_some(),
-        "Should have a working copy commit in the results"
-    );
-
-    let wc = wc_commit.unwrap();
-    assert_eq!(
-        wc.insertions, 5,
-        "Working copy should have 5 insertions, got {}",
-        wc.insertions
-    );
-    assert_eq!(
-        wc.deletions, 0,
-        "Working copy should have 0 deletions, got {}",
-        wc.deletions
+        wc_commit.is_none(),
+        "Should exclude working copy commits in the results"
     );
 }
 

@@ -10,6 +10,13 @@ valid:
       let mut cmd = std::process::Command::new("jj");
       cmd.arg("status");
     }
+  - |
+    fn checkout(path: &str, branch: &str) {
+      let _ = command_for("git")
+        .current_dir(path)
+        .args(["checkout", branch])
+        .output();
+    }
 invalid:
   - |
     fn status() {

@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock};
+
 use serde::{Deserialize, Serialize};
 
 use crate::jj;
@@ -16,6 +19,25 @@ pub struct RepoStatus {
 pub struct RepoBranch {
     pub current_branch: String,
     pub default_branch: String,
+}
+
+static REPO_COMMIT_LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
+
+/// Mutex shared with `commit_repo` and `commit_workspace` so jj commits for one repo path never run concurrently.
+pub(crate) fn commit_lock_for_repo(repo_path: &str) -> Arc<Mutex<()>> {
+    let locks = REPO_COMMIT_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut guard = locks.lock().unwrap();
+    guard
+        .entry(repo_path.to_string())
+        .or_insert_with(|| Arc::new(Mutex::new(())))
+        .clone()
+}
+
+/// Create a new commit on the home repo from the current jj working copy (colocated layout).
+pub fn commit_repo(repo_path: &str, message: &str) -> Result<String, String> {
+    let lock = commit_lock_for_repo(repo_path);
+    let _guard = lock.lock().unwrap();
+    jj::jj_commit(repo_path, message).map_err(|e| format!("Failed to create commit: {}", e))
 }
 
 /// Returns branch information for the home repo.
