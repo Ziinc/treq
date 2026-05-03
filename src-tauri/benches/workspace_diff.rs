@@ -1,5 +1,7 @@
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use std::fs;
+use std::path::Path;
+use std::sync::Mutex;
 
 #[path = "../tests/e2e_test_helpers.rs"]
 mod e2e_test_helpers;
@@ -51,6 +53,39 @@ fn setup_workspace_diff() -> (TestRepo, i64) {
     (repo, workspace.id)
 }
 
+fn fifty_added_lines() -> String {
+    (1..=50)
+        .map(|line| format!("added line {line}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n"
+}
+
+fn setup_workspace_diff_ten_files_fifty_added_lines() -> (TestRepo, i64) {
+    let repo = TestRepo::new().expect("failed to init test repo");
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat-bench-diff-10-files",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("failed to create workspace");
+
+    let content = fifty_added_lines();
+    for index in 1..=10 {
+        write_workspace_file(
+            &repo,
+            &workspace,
+            &format!("added-{index}.txt"),
+            &content,
+        );
+    }
+
+    (repo, workspace.id)
+}
+
 fn bench_workspace_diff(c: &mut Criterion) {
     let mut group = c.benchmark_group("workspace_diff");
     group.sample_size(20);
@@ -59,10 +94,33 @@ fn bench_workspace_diff(c: &mut Criterion) {
         b.iter_batched(
             setup_workspace_diff,
             |(repo, workspace_id)| {
+                let db_path = Path::new(&repo.repo_path).join(".treq").join("treq.db");
+                let db = Mutex::new(
+                    treq_lib::db::Database::new(db_path).expect("failed to open benchmark db"),
+                );
                 treq_lib::core::workspace_diff(
                     std::hint::black_box(&repo.repo_path),
                     std::hint::black_box(workspace_id),
-                    std::hint::black_box("git"),
+                    std::hint::black_box(&db),
+                )
+                .expect("workspace_diff failed");
+            },
+            BatchSize::PerIteration,
+        );
+    });
+
+    group.bench_function("10_files_50_added_lines_each", |b| {
+        b.iter_batched(
+            setup_workspace_diff_ten_files_fifty_added_lines,
+            |(repo, workspace_id)| {
+                let db_path = Path::new(&repo.repo_path).join(".treq").join("treq.db");
+                let db = Mutex::new(
+                    treq_lib::db::Database::new(db_path).expect("failed to open benchmark db"),
+                );
+                treq_lib::core::workspace_diff(
+                    std::hint::black_box(&repo.repo_path),
+                    std::hint::black_box(workspace_id),
+                    std::hint::black_box(&db),
                 )
                 .expect("workspace_diff failed");
             },
