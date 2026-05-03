@@ -73,9 +73,10 @@ harness = false
 [[bench]]
 name = "workspace_diff"
 harness = false
-# =============================================================================
-# Profile Configuration
-# =============================================================================
+
+[[bench]]
+name = "sync_workspaces"
+harness = false
 
 # Development profile - faster compilation with minimal optimization
 [profile.dev]

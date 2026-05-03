@@ -5,10 +5,6 @@ use treq_lib::core::{
     get_repo_branch, list_repo_branches, repo_status, switch_repo_branch, RemoteSyncStatus,
 };
 
-// =============================================================================
-// Test: list_repo_branches
-// =============================================================================
-
 #[test]
 fn test_list_repo_branches_imports_git_refs() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -32,10 +28,6 @@ fn test_list_repo_branches_imports_git_refs() {
         branches
     );
 }
-
-// =============================================================================
-// Test: repo_status basics
-// =============================================================================
 
 #[test]
 fn test_get_repo_branch_returns_current_and_default_branch() {
@@ -122,10 +114,6 @@ fn test_repo_status_ignores_gitignored_noise() {
     );
 }
 
-// =============================================================================
-// Test: repo_status with remote
-// =============================================================================
-
 #[test]
 fn test_repo_status_with_remote_no_fetch_error() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
@@ -198,10 +186,6 @@ fn test_repo_status_with_remote_behind() {
         other => panic!("expected Behind, got {:?}", other),
     }
 }
-
-// =============================================================================
-// Test: switch_repo_branch
-// =============================================================================
 
 #[test]
 fn test_switch_repo_branch_switches_to_existing_branch() {

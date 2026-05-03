@@ -2,10 +2,6 @@ mod e2e_test_helpers;
 
 use e2e_test_helpers::{JjVerifier, TestRepo};
 
-// =============================================================================
-// Test: jj_get_log returns correct diff stats for multiline diff.stat() output
-// =============================================================================
-
 #[test]
 fn test_jj_get_log_diff_stats_with_multiline_output() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -146,10 +142,6 @@ fn test_jj_get_log_diff_stats_with_modifications() {
     );
 }
 
-// =============================================================================
-// Test: move_commit_to_new_workspace
-// =============================================================================
-
 #[test]
 fn test_move_commit_to_new_workspace() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -216,10 +208,6 @@ fn test_move_commit_to_new_workspace() {
         "moved.txt should exist in new workspace after commit was moved"
     );
 }
-
-// =============================================================================
-// Test: move_commit_to_existing_workspace
-// =============================================================================
 
 #[test]
 fn test_move_commit_to_existing_workspace() {
@@ -336,10 +324,6 @@ fn test_abandon_commit() {
     );
 }
 
-// =============================================================================
-// Test: jj_get_commit_diff returns diff for a single commit with added files
-// =============================================================================
-
 #[test]
 fn test_commit_diff_added_files() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -416,10 +400,6 @@ fn test_commit_diff_added_files() {
     }
 }
 
-// =============================================================================
-// Test: jj_get_commit_diff returns diff for a commit with modifications
-// =============================================================================
-
 #[test]
 fn test_commit_diff_modified_files() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -483,10 +463,6 @@ fn test_commit_diff_modified_files() {
     assert!(!diff.hunks_by_file[0].hunks.is_empty());
 }
 
-// =============================================================================
-// Test: jj_get_commit_diff returns diff for a commit with deletions
-// =============================================================================
-
 #[test]
 fn test_commit_diff_deleted_files() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -542,10 +518,6 @@ fn test_commit_diff_deleted_files() {
     assert_eq!(diff.hunks_by_file.len(), 1);
     assert!(!diff.hunks_by_file[0].hunks.is_empty());
 }
-
-// =============================================================================
-// Test: large commit file diffs are deferred from the initial diff payload
-// =============================================================================
 
 #[test]
 fn test_commit_diff_defers_large_file_diffs() {
@@ -710,10 +682,6 @@ fn test_commit_file_diff_fetches_deferred_file_on_demand() {
     );
 }
 
-// =============================================================================
-// Test: jj_get_commit_diff rejects invalid change_id
-// =============================================================================
-
 #[test]
 fn test_commit_diff_invalid_change_id() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -746,10 +714,6 @@ fn test_commit_diff_invalid_change_id() {
     );
     assert!(result.is_err(), "Should reject empty change_id");
 }
-
-// =============================================================================
-// Test: list_commits returns commits for a workspace
-// =============================================================================
 
 #[test]
 fn test_list_commits() {
@@ -818,10 +782,6 @@ fn test_list_commits() {
         .collect();
     assert_eq!(wc.len(), 1, "Should have 1 working copy commit");
 }
-
-// =============================================================================
-// Test: list_commits excludes base branch commits made before workspace creation
-// =============================================================================
 
 #[test]
 fn test_list_commits_excludes_base_branch_commits() {
@@ -899,10 +859,6 @@ fn test_list_commits_invalid_workspace() {
     );
 }
 
-// =============================================================================
-// Test: list_commits returns diff stats for working copy changes
-// =============================================================================
-
 #[test]
 fn test_list_commits_working_copy_diff_stats() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -952,10 +908,6 @@ fn test_list_commits_working_copy_diff_stats() {
         wc.deletions
     );
 }
-
-// =============================================================================
-// Test: list_commits with None workspace_id returns home repo commits
-// =============================================================================
 
 #[test]
 fn test_list_commits_home_repo() {
@@ -1071,10 +1023,6 @@ fn test_list_commits_workspace_after_home_repo_jj_commits() {
         target_descriptions,
     );
 }
-
-// =============================================================================
-// Test: list_commits with include_target_branch_history returns target branch commits
-// =============================================================================
 
 #[test]
 fn test_list_commits_with_target_branch_history() {

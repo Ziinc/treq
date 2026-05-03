@@ -5,6 +5,7 @@ use crate::binary_paths;
 use crate::db::Database;
 use crate::jj;
 use crate::local_db;
+use crate::core::workspaces;
 
 /// Detect binary paths for required binaries (git, jj, claude),
 /// cache them in the database and in-memory cache.
@@ -53,8 +54,7 @@ pub fn init(repo_path: &str) -> Result<bool, String> {
 
     match jj::ensure_jj_initialized(&db, repo_path) {
         Ok(_already_initialized) => {
-            // Reconcile persisted workspaces against JJ registration and on-disk state.
-            let _ = jj::reconcile_workspaces_with_jj(repo_path);
+            let _ = workspaces::sync_workspaces(repo_path);
             Ok(true)
         }
         Err(_) => Ok(false),

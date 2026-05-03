@@ -2,10 +2,7 @@ mod e2e_test_helpers;
 
 use e2e_test_helpers::{JjVerifier, TestRepo};
 use std::path::Path;
-
-// =============================================================================
-// Test: repo initialization
-// =============================================================================
+use std::fs;
 
 #[test]
 fn test_repo_initialization() {
@@ -88,9 +85,6 @@ fn test_repo_initialization() {
     );
 }
 
-// =============================================================================
-// Test: detect_binaries finds git and jj
-// =============================================================================
 
 #[test]
 fn test_detect_binaries_finds_git_and_jj() {
@@ -115,10 +109,6 @@ fn test_detect_binaries_finds_git_and_jj() {
     );
 }
 
-// =============================================================================
-// Test: detect_binaries caches paths to database
-// =============================================================================
-
 #[test]
 fn test_detect_binaries_caches_to_db() {
     let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
@@ -142,5 +132,36 @@ fn test_detect_binaries_caches_to_db() {
     assert!(
         cached_jj.is_some(),
         "binary_path_jj should be cached in the database"
+    );
+}
+
+#[test]
+fn test_init_triggers_workspaces_sync(){
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    // Create workspace
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/test-recover",
+        Some("recovery test".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+
+    fs::remove_dir_all(&workspace_path).expect("Failed to delete workspace directory");
+
+    treq_lib::core::init(&repo.repo_path).expect("Failed to init");
+
+    let workspaces =
+        treq_lib::core::list_workspaces(&repo.repo_path).expect("Failed to list workspaces");
+    assert!(workspaces.is_empty(), "Workspaces should be empty");
+
+    assert!(
+        !workspace_path.exists(),
+        "Workspace directory should stay deleted"
     );
 }

@@ -8,7 +8,6 @@ use jj_lib::config::{ConfigLayer, ConfigSource, StackedConfig};
 use jj_lib::conflict_labels::ConflictLabels;
 use jj_lib::conflicts::{materialized_diff_stream, MaterializedTreeValue};
 use jj_lib::copies::CopyRecords;
-use jj_lib::file_util;
 use jj_lib::fileset::FilesetAliasesMap;
 use jj_lib::git;
 use jj_lib::gitignore::GitIgnoreFile;
@@ -1221,7 +1220,6 @@ pub struct WorkspaceRecoveryResult {
 struct RegisteredWorkspace {
     workspace_name: String,
     workspace_path: String,
-    full_path: PathBuf,
     branch_name: String,
     has_conflicts: bool,
 }
@@ -1284,10 +1282,6 @@ fn list_registered_workspaces(repo_path: &str) -> Result<Vec<RegisteredWorkspace
                 ))
             })?
             .to_string();
-        let full_path = Path::new(repo_path)
-            .join(".treq")
-            .join("workspaces")
-            .join(&workspace_path);
 
         let wc_commit = repo
             .store()
@@ -1299,7 +1293,6 @@ fn list_registered_workspaces(repo_path: &str) -> Result<Vec<RegisteredWorkspace
         workspaces.push(RegisteredWorkspace {
             workspace_name: workspace_name.as_str().to_string(),
             workspace_path,
-            full_path,
             branch_name,
             has_conflicts: !wc_commit.tree_ids().is_resolved(),
         });
@@ -1371,204 +1364,6 @@ pub fn discover_workspaces_with_conflicts(
             has_conflicts: workspace.has_conflicts,
         })
         .collect())
-}
-
-fn ensure_workspace_jj_state(
-    registered: &RegisteredWorkspace,
-    repo_internal_path: &Path,
-    repo: &Arc<ReadonlyRepo>,
-    settings: &UserSettings,
-) -> Result<(), JjError> {
-    fs::create_dir_all(&registered.full_path)
-        .map_err(|e| JjError::IoError(format!("Failed to create workspace dir: {}", e)))?;
-
-    let jj_dir = registered.full_path.join(".jj");
-    fs::create_dir(&jj_dir)
-        .map_err(|e| JjError::IoError(format!("Failed to create workspace .jj dir: {}", e)))?;
-
-    let jj_dir_abs = fs::canonicalize(&jj_dir)
-        .map_err(|e| JjError::IoError(format!("Failed to canonicalize .jj dir: {}", e)))?;
-    let path_to_store = file_util::relative_path(&jj_dir_abs, repo_internal_path);
-    let path_to_store = if path_to_store.is_relative() {
-        file_util::slash_path(&path_to_store).into_owned()
-    } else {
-        path_to_store
-    };
-    let repo_file_path = jj_dir.join("repo");
-    let repo_bytes = file_util::path_to_bytes(&path_to_store)
-        .map_err(|e| JjError::IoError(format!("Failed to encode repo path: {}", e)))?;
-    fs::write(&repo_file_path, repo_bytes)
-        .map_err(|e| JjError::IoError(format!("Failed to write workspace repo file: {}", e)))?;
-
-    let working_copy_state_path = jj_dir.join("working_copy");
-    fs::create_dir(&working_copy_state_path).map_err(|e| {
-        JjError::IoError(format!(
-            "Failed to create workspace working_copy dir: {}",
-            e
-        ))
-    })?;
-
-    let wc_factory = default_working_copy_factory();
-    let working_copy = wc_factory
-        .init_working_copy(
-            repo.store().clone(),
-            registered.full_path.clone(),
-            working_copy_state_path.clone(),
-            repo.op_id().clone(),
-            WorkspaceNameBuf::from(registered.workspace_name.clone()),
-            settings,
-        )
-        .map_err(|e| JjError::IoError(format!("Failed to init working copy: {}", e)))?;
-
-    let working_copy_type_path = working_copy_state_path.join("type");
-    fs::write(&working_copy_type_path, working_copy.name())
-        .map_err(|e| JjError::IoError(format!("Failed to write working copy type file: {}", e)))?;
-
-    let workspace_store = SimpleWorkspaceStore::load(repo_internal_path)
-        .map_err(|e| JjError::IoError(format!("Failed to load workspace store: {}", e)))?;
-    workspace_store
-        .add(
-            &WorkspaceNameBuf::from(registered.workspace_name.clone()),
-            &registered.full_path,
-        )
-        .map_err(|e| JjError::IoError(format!("Failed to record workspace path: {}", e)))?;
-
-    let mut workspace = Workspace::new(
-        &registered.full_path,
-        repo_internal_path.to_path_buf(),
-        working_copy,
-        repo.loader().clone(),
-    )
-    .map_err(|e| JjError::IoError(format!("Failed to build workspace object: {}", e)))?;
-
-    let wc_commit_id = repo
-        .view()
-        .get_wc_commit_id(&WorkspaceNameBuf::from(registered.workspace_name.clone()))
-        .cloned()
-        .ok_or_else(|| {
-            JjError::IoError(format!(
-                "Workspace '{}' has no working-copy commit",
-                registered.workspace_name
-            ))
-        })?;
-    let wc_commit = repo
-        .store()
-        .get_commit(&wc_commit_id)
-        .map_err(|e| JjError::IoError(format!("Failed to load workspace commit: {}", e)))?;
-
-    futures::executor::block_on(workspace.check_out(repo.op_id().clone(), None, &wc_commit))
-        .map_err(|e| JjError::IoError(format!("Failed to restore workspace checkout: {}", e)))?;
-
-    Ok(())
-}
-
-fn forget_workspace_registration(
-    repo_internal_path: &Path,
-    repo: &Arc<ReadonlyRepo>,
-    workspace_name: &str,
-) -> Result<(), JjError> {
-    let workspace_name_buf = WorkspaceNameBuf::from(workspace_name.to_string());
-    if repo.view().get_wc_commit_id(&workspace_name_buf).is_none() {
-        return Ok(());
-    }
-
-    let workspace_store = SimpleWorkspaceStore::load(repo_internal_path)
-        .map_err(|e| JjError::IoError(format!("Failed to load workspace store: {}", e)))?;
-    let mut tx = repo.start_transaction();
-    futures::executor::block_on(tx.repo_mut().remove_wc_commit(&workspace_name_buf))
-        .map_err(|e| JjError::IoError(format!("Failed to forget workspace commit: {}", e)))?;
-    workspace_store
-        .forget(&[workspace_name_buf.as_ref()])
-        .map_err(|e| JjError::IoError(format!("Failed to forget workspace path: {}", e)))?;
-    futures::executor::block_on(tx.commit(format!("forget workspace '{}'", workspace_name)))
-        .map_err(|e| JjError::IoError(format!("Failed to commit workspace forget: {}", e)))?;
-    Ok(())
-}
-
-pub fn reconcile_workspaces_with_jj(
-    repo_path: &str,
-) -> Result<Vec<WorkspaceRecoveryResult>, JjError> {
-    let (home_workspace, repo, _) = load_home_repo(repo_path)?;
-    let repo_internal_path = home_workspace.repo_path().to_path_buf();
-    let settings = create_user_settings(repo_path)?;
-    let registered_workspaces = list_registered_workspaces(repo_path)?;
-    let db_workspaces = local_db::get_workspaces(repo_path)
-        .map_err(|e| JjError::IoError(format!("Failed to get workspaces from DB: {}", e)))?;
-
-    let mut results = Vec::new();
-
-    for workspace in &registered_workspaces {
-        if workspace.full_path.exists() {
-            continue;
-        }
-
-        ensure_workspace_jj_state(workspace, &repo_internal_path, &repo, &settings)?;
-        results.push(WorkspaceRecoveryResult {
-            workspace_name: workspace.workspace_name.clone(),
-            branch_name: workspace.branch_name.clone(),
-            success: true,
-            message: "Workspace recreated from JJ state".to_string(),
-        });
-    }
-
-    let refreshed_at = chrono::Utc::now().to_rfc3339();
-    let discovered: Vec<DiscoveredWorkspace> = registered_workspaces
-        .iter()
-        .map(|workspace| DiscoveredWorkspace {
-            workspace_name: workspace.workspace_name.clone(),
-            workspace_path: workspace.workspace_path.clone(),
-            branch_name: workspace.branch_name.clone(),
-            has_conflicts: workspace.has_conflicts,
-        })
-        .collect();
-    let _ = local_db::sync_discovered_workspaces(repo_path, &discovered, &refreshed_at)
-        .map_err(|e| JjError::IoError(format!("Failed to sync discovered workspaces: {}", e)))?;
-
-    let live_pairs: HashSet<(String, String)> = discovered
-        .iter()
-        .map(|workspace| {
-            (
-                workspace.workspace_name.clone(),
-                workspace.workspace_path.clone(),
-            )
-        })
-        .collect();
-
-    for workspace in db_workspaces {
-        if live_pairs.contains(&(
-            workspace.workspace_name.clone(),
-            workspace.workspace_path.clone(),
-        )) {
-            continue;
-        }
-
-        if repo
-            .view()
-            .get_wc_commit_id(&WorkspaceNameBuf::from(workspace.workspace_name.clone()))
-            .is_some()
-        {
-            forget_workspace_registration(&repo_internal_path, &repo, &workspace.workspace_name)?;
-        }
-
-        local_db::delete_workspace(repo_path, workspace.id).map_err(|e| {
-            JjError::IoError(format!("Failed to delete stale workspace row: {}", e))
-        })?;
-        results.push(WorkspaceRecoveryResult {
-            workspace_name: workspace.workspace_name,
-            branch_name: workspace.branch_name,
-            success: true,
-            message: "Removed stale database workspace".to_string(),
-        });
-    }
-
-    Ok(results)
-}
-
-/// Recover or reconcile workspace metadata against JJ state.
-pub fn recover_all_orphaned_workspaces(
-    repo_path: &str,
-) -> Result<Vec<WorkspaceRecoveryResult>, JjError> {
-    reconcile_workspaces_with_jj(repo_path)
 }
 
 /// List all workspaces in a repository
@@ -1650,6 +1445,15 @@ pub fn get_workspace_branch(workspace_path: &str) -> Result<String, JjError> {
     }
 }
 
+/// Remove the workspace directory from disk only (no jj subprocess).
+pub fn remove_workspace_directory_only(workspace_path: &str) -> Result<(), JjError> {
+    let workspace_dir = Path::new(workspace_path);
+    if workspace_dir.exists() {
+        fs::remove_dir_all(workspace_dir).map_err(|e| JjError::IoError(e.to_string()))?;
+    }
+    Ok(())
+}
+
 /// Remove a workspace (jj workspace + files)
 pub fn remove_workspace(repo_path: &str, workspace_path: &str) -> Result<(), JjError> {
     let workspace_dir = Path::new(workspace_path);
@@ -1683,12 +1487,7 @@ pub fn remove_workspace(repo_path: &str, workspace_path: &str) -> Result<(), JjE
         }
     }
 
-    // Remove directory if it exists
-    if workspace_dir.exists() {
-        fs::remove_dir_all(workspace_dir).map_err(|e| JjError::IoError(e.to_string()))?;
-    }
-
-    Ok(())
+    remove_workspace_directory_only(workspace_path)
 }
 
 /// Get workspace info for a specific workspace path
@@ -2001,9 +1800,7 @@ pub fn jj_edit_workspace_working_copy(
     Ok(())
 }
 
-// ============================================================================
 // Stale Working Copy Detection and Recovery
-// ============================================================================
 
 /// Check if a workspace has a stale working copy
 /// Returns true if the workspace is stale
@@ -2039,10 +1836,8 @@ pub fn jj_workspace_update_stale(workspace_path: &str) -> Result<String, JjError
     Ok(combined)
 }
 
-// ============================================================================
 // Diff Operations using hybrid CLI approach
 // Uses jj CLI for file listing (faster) and git CLI for diffs (reliable)
-// ============================================================================
 
 /// Get list of changed files in working copy using jj-lib (no subprocess)
 /// Snapshots the working copy and diffs against the parent commit tree.
@@ -2419,9 +2214,7 @@ pub fn jj_get_file_lines(
     })
 }
 
-// ============================================================================
 // Mutation Operations (CLI fallbacks)
-// ============================================================================
 
 /// Restore a file to parent state (discard changes)
 /// Uses CLI as jj-lib mutation APIs are complex
@@ -3043,18 +2836,10 @@ pub fn get_conflicted_files_from_diff(
     Ok(conflicts)
 }
 
-/// Parse jj st output to extract conflicted files
+/// Parse jj st output to extract conflicted files.
 ///
-/// jj st output format with conflicts:
-/// ```
-/// Working copy changes:
-/// M src/file.ts
-/// Working copy  (@) : wsxupqkr 5a3c905b (conflict) (no description set)
-/// Parent commit (@-): tqkoqust 9d3dff68 (empty) (no description set)
-/// Warning: There are unresolved conflicts at these paths:
-/// src/file1.rs    2-sided conflict including 1 deletion
-/// src/file2.ts    2-sided conflict
-/// ```
+/// Expects `jj st` output that includes a `Working copy` line with `(conflict)` and a
+/// `Warning: There are unresolved conflicts at these paths:` section listing paths.
 fn parse_conflicted_files_from_status(status: &str) -> Result<Vec<String>, JjError> {
     // Step 1: Check if "Working copy" line contains "(conflict)" marker
     let has_conflict_marker = status
@@ -3608,9 +3393,7 @@ pub fn jj_get_diverged_sync_counts(
     Ok((ahead_count, behind_count))
 }
 
-// ============================================================================
 // Batched queries for list_workspace_statuses — reduce subprocess calls
-// ============================================================================
 
 /// Get all conflicted bookmarks in the repo in a single global call.
 /// Returns a HashSet of conflicted bookmark names.
