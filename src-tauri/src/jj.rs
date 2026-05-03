@@ -25,8 +25,8 @@ use jj_lib::revset::{
     RevsetWorkspaceContext, SymbolResolver,
 };
 use jj_lib::rewrite::{
-    self, merge_commit_trees, EmptyBehavior, MoveCommitsLocation, MoveCommitsTarget,
-    RebaseOptions, RewriteRefsOptions,
+    self, merge_commit_trees, EmptyBehavior, MoveCommitsLocation, MoveCommitsTarget, RebaseOptions,
+    RewriteRefsOptions,
 };
 use jj_lib::settings::UserSettings;
 use jj_lib::working_copy::{SnapshotOptions, WorkingCopyFreshness};
@@ -1494,30 +1494,6 @@ pub fn remove_workspace(repo_path: &str, workspace_path: &str) -> Result<(), JjE
     remove_workspace_directory_only(workspace_path)
 }
 
-/// Get workspace info for a specific workspace path
-pub fn get_workspace_info(workspace_path: &str) -> Result<WorkspaceInfo, JjError> {
-    let workspace_dir = Path::new(workspace_path);
-
-    if !workspace_dir.exists() {
-        return Err(JjError::WorkspaceNotFound(workspace_path.to_string()));
-    }
-
-    let name = workspace_dir
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_default();
-
-    let is_colocated = workspace_dir.join(".jj").exists();
-    let branch = get_workspace_branch(workspace_path).unwrap_or_default();
-
-    Ok(WorkspaceInfo {
-        name,
-        path: workspace_path.to_string(),
-        branch,
-        is_colocated,
-    })
-}
-
 /// Move changes from one workspace to another using jj squash
 /// This moves changes from the current workspace (@) to the target workspace's working copy
 /// Uses: jj squash --from @ --into <target-workspace-name>@
@@ -1732,73 +1708,6 @@ pub fn update_stale_workspace(workspace_path: &str) -> Result<(), JjError> {
             futures::executor::block_on(locked_ws.finish(repo.op_id().clone()))
                 .map_err(|e| JjError::InitFailed(format!("Failed to finish wc: {}", e)))?;
         }
-    }
-
-    Ok(())
-}
-
-/// Edit the working copy of a workspace branch
-/// Tries to edit <branch>+ (child of bookmark), falls back to <branch> + new if no child exists
-/// This ensures we're editing the working copy, not the bookmark commit itself
-///
-/// Note: This function is kept for potential future use. After the fix for stale working copies,
-/// we no longer edit working copies from outside their workspace directories.
-pub fn jj_edit_workspace_working_copy(
-    workspace_path: &str,
-    branch_name: &str,
-) -> Result<(), JjError> {
-    // 1. Try: jj edit <branch>+
-    let branch_plus = format!("{}+", branch_name);
-    let result = command_for("jj")
-        .current_dir(workspace_path)
-        .args(["edit", &branch_plus])
-        .output();
-
-    if let Ok(output) = result {
-        if output.status.success() {
-            // Successfully edited the child of the bookmark
-            return Ok(());
-        }
-    }
-
-    // 2. If bookmark already points to @, no new working copy is needed.
-    let bookmark_commit = jj_get_commit_id(workspace_path, branch_name);
-    let working_copy_commit = jj_get_commit_id(workspace_path, "@");
-
-    if let (Ok(bookmark_id), Ok(wc_id)) = (bookmark_commit, working_copy_commit) {
-        if bookmark_id == wc_id {
-            // Bookmark points to working copy, we're already in the right place
-            return Ok(());
-        }
-    }
-
-    // 3. Fallback to `jj edit <branch>` then `jj new` when no child exists.
-    let edit_result = command_for("jj")
-        .current_dir(workspace_path)
-        .args(["edit", branch_name])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
-
-    if !edit_result.status.success() {
-        return Err(JjError::IoError(format!(
-            "Failed to edit branch '{}': {}",
-            branch_name,
-            String::from_utf8_lossy(&edit_result.stderr)
-        )));
-    }
-
-    // Create a new working copy on top of the bookmark
-    let new_result = command_for("jj")
-        .current_dir(workspace_path)
-        .args(["new"])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
-
-    if !new_result.status.success() {
-        return Err(JjError::IoError(format!(
-            "Failed to create new working copy: {}",
-            String::from_utf8_lossy(&new_result.stderr)
-        )));
     }
 
     Ok(())
@@ -2062,42 +1971,6 @@ fn parse_rename_path(path: &str) -> (String, Option<String>) {
         }
     }
     (path.to_string(), None)
-}
-
-/// Parse jj status output into file changes
-fn parse_jj_status(status: &str) -> Result<Vec<JjFileChange>, JjError> {
-    let mut changes = Vec::new();
-
-    for line in status.lines() {
-        let line = line.trim();
-
-        if line.is_empty() || line.starts_with("Working copy") || line.starts_with("Parent commit")
-        {
-            continue;
-        }
-
-        if let Some((status_char, rest)) = line.split_once(' ') {
-            let status = match status_char {
-                "M" => "M",
-                "A" => "A",
-                "D" => "D",
-                "R" => "R",
-                _ => continue,
-            };
-
-            let raw_path = rest.trim();
-            let (path, previous_path) = parse_rename_path(raw_path);
-            changes.push(JjFileChange {
-                path,
-                status: status.to_string(),
-                previous_path,
-                changed_line_count: 0,
-                diff_deferred: false,
-            });
-        }
-    }
-
-    Ok(changes)
 }
 
 /// Get diff hunks for a specific file
@@ -2450,6 +2323,11 @@ pub fn derive_repo_path_from_workspace(workspace_path: &str) -> Option<String> {
 }
 
 /// Commit with message and create new working copy using jj-lib (no subprocess)
+///
+/// Home-repo caveat: `jj workspace add` uses `check_out(.., root_commit())`. Later edits can leave
+/// the home workspace WC under the jj root while the branch bookmark still tracks the real tip;
+/// rewriting that WC can yield a root-only parent and truncate history in the log. We stack the
+/// home WC on the branch tip before snapshotting when needed.
 pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError> {
     let repo_path_opt = derive_repo_path_from_workspace(workspace_path);
 
@@ -2482,11 +2360,6 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
 
     let workspace_name: WorkspaceNameBuf = workspace.workspace_name().to_owned();
 
-    // `jj workspace add` initializes the new workspace with `check_out(.., root_commit())`. Later
-    // edits can leave the home workspace WC as a direct child of the jj root while the local bookmark
-    // for the current branch still points at the real git branch tip. Rewriting that WC then produces a
-    // commit whose only parent is root, so that branch's history looks truncated in the home log. Stack
-    // the home WC on the branch tip before snapshotting.
     if repo_path_opt.is_none() {
         let root_id = repo.store().root_commit_id();
         if let Some(wc_id) = repo.view().get_wc_commit_id(&workspace_name).cloned() {
@@ -2499,26 +2372,27 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
                 .get_local_bookmark(RefName::new(&branch))
                 .as_normal()
                 .cloned();
-            let wc_only_parent_root = wc_pre.parent_ids().len() == 1
-                && wc_pre.parent_ids().first() == Some(&root_id);
+            let wc_only_parent_root =
+                wc_pre.parent_ids().len() == 1 && wc_pre.parent_ids().first() == Some(&root_id);
             if wc_only_parent_root {
                 if let Some(branch_tip_id) = branch_bookmark_target {
                     if branch_tip_id != *wc_pre.id() {
-                        let branch_tip_commit = repo
-                            .store()
-                            .get_commit(&branch_tip_id)
-                            .map_err(|e| {
+                        let branch_tip_commit =
+                            repo.store().get_commit(&branch_tip_id).map_err(|e| {
                                 JjError::IoError(format!("Failed to load branch tip commit: {}", e))
                             })?;
                         let mut rtx = repo.start_transaction();
                         futures::executor::block_on(
-                            rtx.repo_mut().check_out(workspace_name.clone(), &branch_tip_commit),
+                            rtx.repo_mut()
+                                .check_out(workspace_name.clone(), &branch_tip_commit),
                         )
                         .map_err(|e| {
                             JjError::IoError(format!("Failed to repair home wc checkout: {}", e))
                         })?;
                         futures::executor::block_on(rtx.repo_mut().rebase_descendants()).map_err(
-                            |e| JjError::IoError(format!("Failed to rebase after wc repair: {}", e)),
+                            |e| {
+                                JjError::IoError(format!("Failed to rebase after wc repair: {}", e))
+                            },
                         )?;
                         let _ = git::export_refs(rtx.repo_mut());
                         let _ = futures::executor::block_on(rtx.commit("repair home wc")).map_err(
@@ -2530,9 +2404,13 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
                             &StoreFactories::default(),
                             &default_working_copy_factories(),
                         )
-                        .map_err(|e| JjError::IoError(format!("Failed to reload workspace: {}", e)))?;
+                        .map_err(|e| {
+                            JjError::IoError(format!("Failed to reload workspace: {}", e))
+                        })?;
                         repo = futures::executor::block_on(workspace.repo_loader().load_at_head())
-                            .map_err(|e| JjError::IoError(format!("Failed to reload repo: {}", e)))?;
+                            .map_err(|e| {
+                                JjError::IoError(format!("Failed to reload repo: {}", e))
+                            })?;
                     }
                 }
             }
@@ -2586,8 +2464,7 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
             .as_normal()
             == Some(wc_commit.id())
     {
-        // Move secondary workspaces off this wc commit so we rewrite the home wc commit in place.
-        // Rewriting a commit shared with another workspace would strand that workspace or distort history.
+        // Move secondary workspaces off this wc commit before rewriting in place; sharing the wc commit with another workspace would strand or distort history.
         let others: Vec<_> = workspace_names
             .iter()
             .filter(|name| name.as_str() != workspace_name.as_str())
@@ -2606,10 +2483,9 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
                 ))
             })?;
             for name in others {
-                futures::executor::block_on(tx.repo_mut().edit(name, &detached_wc))
-                    .map_err(|e| {
-                        JjError::IoError(format!("Failed to detach workspace wc pointer: {}", e))
-                    })?;
+                futures::executor::block_on(tx.repo_mut().edit(name, &detached_wc)).map_err(
+                    |e| JjError::IoError(format!("Failed to detach workspace wc pointer: {}", e)),
+                )?;
             }
         }
         workspace_names = tx
@@ -2626,9 +2502,7 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     builder.set_description(message);
     let committed = futures::executor::block_on(builder.write(tx.repo_mut()))
         .map_err(|e| JjError::IoError(format!("Failed to write commit: {}", e)))?;
-    // Run before creating the fresh WC child / advancing bookmarks. Calling `rebase_descendants`
-    // after those steps can reparent the authored commit incorrectly when another jj workspace
-    // exists (sibling wc commits off the same bookmark parent).
+    // Before fresh WC child / bookmark updates: `rebase_descendants` after those steps can reparent the authored commit incorrectly when another jj workspace exists (sibling wc commits off the same bookmark parent).
     futures::executor::block_on(tx.repo_mut().rebase_descendants())
         .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
 
@@ -3501,216 +3375,6 @@ pub fn jj_get_diverged_sync_counts(
     Ok((ahead_count, behind_count))
 }
 
-// Batched queries for list_workspace_statuses — reduce subprocess calls
-
-/// Get all conflicted bookmarks in the repo in a single global call.
-/// Returns a HashSet of conflicted bookmark names.
-pub fn jj_get_all_conflicted_bookmarks(repo_path: &str) -> HashSet<String> {
-    let output = command_for("jj")
-        .current_dir(repo_path)
-        .args(["bookmark", "list", "--conflicted", "-T", r#"name ++ "\n""#])
-        .output();
-
-    match output {
-        Ok(output) if output.status.success() => String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .filter(|line| !line.trim().is_empty())
-            .map(|line| line.trim().to_string())
-            .collect(),
-        _ => HashSet::new(),
-    }
-}
-
-/// Combined status for a workspace: changed files + conflict markers from a single jj status call.
-pub struct WorkspaceStatusCombined {
-    pub changed_files: Vec<JjFileChange>,
-    pub has_conflict_markers: bool,
-}
-
-/// Get changed files and conflict marker presence from a single jj status call.
-/// Reuses the status output that jj_get_changed_files would have produced.
-pub fn jj_get_workspace_status_combined(workspace_path: &str) -> WorkspaceStatusCombined {
-    let path = std::path::Path::new(workspace_path);
-    if !path.exists() || !path.is_dir() {
-        return WorkspaceStatusCombined {
-            changed_files: Vec::new(),
-            has_conflict_markers: false,
-        };
-    }
-
-    let output = command_for("jj")
-        .current_dir(workspace_path)
-        .args(["status", "--no-pager"])
-        .output();
-
-    match output {
-        Ok(output) if output.status.success() => {
-            let status_output = String::from_utf8_lossy(&output.stdout);
-            let changed_files = parse_jj_status(&status_output).unwrap_or_default();
-            let has_conflict_markers = status_output.contains("unresolved conflicts");
-            WorkspaceStatusCombined {
-                changed_files,
-                has_conflict_markers,
-            }
-        }
-        _ => WorkspaceStatusCombined {
-            changed_files: Vec::new(),
-            has_conflict_markers: false,
-        },
-    }
-}
-
-/// Combined ahead/behind counts for a workspace.
-pub struct CombinedCounts {
-    pub commits_ahead_of_target: usize,
-    pub ahead_of_origin: usize,
-    pub behind_origin: usize,
-}
-
-/// Get commits ahead of target + sync status in a single jj log call using a union revset.
-/// Falls back gracefully when branch@origin doesn't exist (returns 0 for sync counts).
-pub fn jj_get_combined_counts(
-    workspace_path: &str,
-    target_branch: &str,
-    branch_name: &str,
-    not_on_remote: bool,
-    is_diverged: bool,
-) -> CombinedCounts {
-    // Validate inputs
-    if target_branch.starts_with('-') || target_branch.contains('\0') || target_branch.is_empty() {
-        return CombinedCounts {
-            commits_ahead_of_target: 0,
-            ahead_of_origin: 0,
-            behind_origin: 0,
-        };
-    }
-
-    // Build union revset with tags to distinguish each category
-    let ahead_of_target_revset = format!("({}..@-) ~ empty()", target_branch);
-
-    if not_on_remote {
-        // Only query commits ahead of target — no sync needed
-        let output = command_for("jj")
-            .current_dir(workspace_path)
-            .args([
-                "log",
-                "-r",
-                &ahead_of_target_revset,
-                "--no-graph",
-                "-T",
-                r#"commit_id ++ "\n""#,
-            ])
-            .output();
-
-        let commits_ahead = match output {
-            Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .filter(|l| !l.trim().is_empty())
-                .count(),
-            _ => 0,
-        };
-
-        return CombinedCounts {
-            commits_ahead_of_target: commits_ahead,
-            ahead_of_origin: 0,
-            behind_origin: 0,
-        };
-    }
-
-    // For diverged bookmarks, use @- as proxy for local tip
-    let (local_ref, remote_ref) = if is_diverged {
-        ("@-".to_string(), format!("{}@origin", branch_name))
-    } else {
-        (branch_name.to_string(), format!("{}@origin", branch_name))
-    };
-
-    let ahead_of_origin_revset = format!("{}..{}", remote_ref, local_ref);
-    let behind_origin_revset = format!("{}..{}", local_ref, remote_ref);
-
-    // Use a union revset and tag template to classify each commit.
-    let union_revset = format!(
-        "({}) | ({}) | ({})",
-        ahead_of_target_revset, ahead_of_origin_revset, behind_origin_revset
-    );
-
-    // Template: output commit_id + which sets it belongs to using contained_in()
-    let template = format!(
-        r#"commit_id.short(12) ++ " " ++ if(self.contained_in("{}"), "T", "") ++ if(self.contained_in("{}"), "A", "") ++ if(self.contained_in("{}"), "B", "") ++ "\n""#,
-        ahead_of_target_revset.replace('"', r#"\""#),
-        ahead_of_origin_revset.replace('"', r#"\""#),
-        behind_origin_revset.replace('"', r#"\""#),
-    );
-
-    let output = command_for("jj")
-        .current_dir(workspace_path)
-        .args(["log", "-r", &union_revset, "--no-graph", "-T", &template])
-        .output();
-
-    match output {
-        Ok(o) if o.status.success() => {
-            let stdout = String::from_utf8_lossy(&o.stdout);
-            let mut target_count = 0usize;
-            let mut ahead_count = 0usize;
-            let mut behind_count = 0usize;
-
-            for line in stdout.lines() {
-                let line = line.trim();
-                if line.is_empty() {
-                    continue;
-                }
-                // Format: "commit_id TAB" where TAB contains T/A/B flags
-                if let Some(flags_start) = line.find(' ') {
-                    let flags = &line[flags_start + 1..];
-                    if flags.contains('T') {
-                        target_count += 1;
-                    }
-                    if flags.contains('A') {
-                        ahead_count += 1;
-                    }
-                    if flags.contains('B') {
-                        behind_count += 1;
-                    }
-                }
-            }
-
-            CombinedCounts {
-                commits_ahead_of_target: target_count,
-                ahead_of_origin: ahead_count,
-                behind_origin: behind_count,
-            }
-        }
-        Ok(o) => {
-            // Command failed — likely stale bookmark reference. Fall back to individual queries.
-            let stderr = String::from_utf8_lossy(&o.stderr);
-            if !not_on_remote {
-                eprintln!(
-                    "[combined_counts] Union revset failed, falling back: {}",
-                    stderr.lines().next().unwrap_or("")
-                );
-            }
-            // Fall back to individual counts
-            let commits_ahead = jj_get_commits_ahead(workspace_path, target_branch)
-                .map(|ca| ca.total_count)
-                .unwrap_or(0);
-            let (ahead, behind) = if is_diverged {
-                jj_get_diverged_sync_counts(workspace_path, branch_name).unwrap_or((0, 0))
-            } else {
-                jj_get_sync_status(workspace_path, branch_name, false).unwrap_or((0, 0))
-            };
-            CombinedCounts {
-                commits_ahead_of_target: commits_ahead,
-                ahead_of_origin: ahead,
-                behind_origin: behind,
-            }
-        }
-        Err(_) => CombinedCounts {
-            commits_ahead_of_target: 0,
-            ahead_of_origin: 0,
-            behind_origin: 0,
-        },
-    }
-}
-
 /// Fetch remote branches using jj git fetch (without rebasing)
 /// This updates remote tracking refs and makes remote branches available
 pub fn jj_git_fetch(repo_path: &str) -> Result<String, JjError> {
@@ -3729,58 +3393,6 @@ pub fn jj_git_fetch(repo_path: &str) -> Result<String, JjError> {
     }
 
     Ok(format!("{}{}", stdout, stderr))
-}
-
-/// Pull changes from remote using jj git fetch + rebase
-/// Fetches from origin and rebases current workspace onto tracking branch
-pub fn jj_pull(workspace_path: &str, conflict_marker_style: &str) -> Result<String, JjError> {
-    // First, fetch from remote
-    let fetch_output = command_for("jj")
-        .current_dir(workspace_path)
-        .args(["git", "fetch"])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
-
-    let fetch_stdout = String::from_utf8_lossy(&fetch_output.stdout);
-    let fetch_stderr = String::from_utf8_lossy(&fetch_output.stderr);
-
-    if !fetch_output.status.success() {
-        return Err(JjError::IoError(format!(
-            "{}{}",
-            fetch_stdout, fetch_stderr
-        )));
-    }
-
-    // Get the current branch name to determine tracking branch
-    let branch_name = get_workspace_branch(workspace_path)?;
-
-    if branch_name.is_empty() || branch_name == "HEAD" {
-        // No branch - just return fetch result
-        return Ok(format!("{}{}", fetch_stdout, fetch_stderr));
-    }
-
-    // Rebase onto the tracking branch (branch@origin)
-    let tracking_branch = format!("{}@origin", branch_name);
-    let rebase_output = jj_command(conflict_marker_style)
-        .current_dir(workspace_path)
-        .args(["rebase", "-d", &tracking_branch])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
-
-    let rebase_stdout = String::from_utf8_lossy(&rebase_output.stdout);
-    let rebase_stderr = String::from_utf8_lossy(&rebase_output.stderr);
-
-    // Combine fetch and rebase output
-    let combined = format!(
-        "Fetch:\n{}{}\nRebase:\n{}{}",
-        fetch_stdout, fetch_stderr, rebase_stdout, rebase_stderr
-    );
-
-    if !rebase_output.status.success() {
-        return Err(JjError::IoError(combined));
-    }
-
-    Ok(combined)
 }
 
 /// Branch status indicating whether a branch exists locally and/or remotely
@@ -4007,8 +3619,7 @@ fn parse_diff_stat(stat: &str) -> (u32, u32) {
 fn build_jj_get_log_revset(target_ref: &str, is_home_repo: bool, _limit: Option<usize>) -> String {
     let target_ref = format_revset_symbol(target_ref);
     if is_home_repo {
-        // Walk full branch history in topological order. We cap in code after `iter()` instead
-        // of using `latest()` because `latest(S, n)` is timestamp-based and breaks merge order.
+        // Walk full branch history in topological order; we cap after `iter()` because `latest(S, n)` is timestamp-based and breaks merge order.
         format!("::{}", target_ref)
     } else {
         // Match jj_get_commits_ahead: ancestors up to @- (exclude WC tip), drop empty commits.
@@ -5092,10 +4703,13 @@ pub fn jj_rebase_merge_commit(
     })?;
 
     let parent_commits = vec![target_tip_commit, rebased_tip_commit];
-    let merged_tree =
-        futures::executor::block_on(merge_commit_trees(tx.repo(), &parent_commits)).map_err(
-            |e| JjError::IoError(format!("Failed to build merge tree for rebase merge: {}", e)),
-        )?;
+    let merged_tree = futures::executor::block_on(merge_commit_trees(tx.repo(), &parent_commits))
+        .map_err(|e| {
+        JjError::IoError(format!(
+            "Failed to build merge tree for rebase merge: {}",
+            e
+        ))
+    })?;
     let merge_commit = futures::executor::block_on(async {
         tx.repo_mut()
             .new_commit(
@@ -5114,7 +4728,10 @@ pub fn jj_rebase_merge_commit(
     let _ = futures::executor::block_on(tx.repo_mut().check_out(workspace_name, &merge_commit))
         .map_err(|e| JjError::IoError(format!("Failed to create working-copy commit: {}", e)))?;
     futures::executor::block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
-        JjError::IoError(format!("Failed to rebase descendants after rebase merge: {}", e))
+        JjError::IoError(format!(
+            "Failed to rebase descendants after rebase merge: {}",
+            e
+        ))
     })?;
     set_local_bookmark_target(tx.repo_mut(), target_branch, merge_commit.id().clone());
     let _ = git::export_refs(tx.repo_mut());
@@ -5158,10 +4775,8 @@ pub fn jj_squash_merge_commit(
 
     let mut tx = loaded.repo.start_transaction();
     let parent_commits = vec![destination_commit.clone(), workspace_tip_commit];
-    let squashed_tree =
-        futures::executor::block_on(merge_commit_trees(tx.repo(), &parent_commits)).map_err(
-            |e| JjError::IoError(format!("Failed to build squash merge tree: {}", e)),
-        )?;
+    let squashed_tree = futures::executor::block_on(merge_commit_trees(tx.repo(), &parent_commits))
+        .map_err(|e| JjError::IoError(format!("Failed to build squash merge tree: {}", e)))?;
     let squashed_commit = futures::executor::block_on(async {
         tx.repo_mut()
             .new_commit(vec![destination_commit.id().clone()], squashed_tree)
@@ -5185,28 +4800,6 @@ pub fn jj_squash_merge_commit(
     Ok(())
 }
 
-/// Updates the home repo's state by running jj st
-///
-/// # Arguments
-/// * `repo_path` - Path to the home repository
-///
-/// # Returns
-/// Returns Ok(()) on success, or a JjError on failure.
-pub fn jj_status(repo_path: &str) -> Result<(), JjError> {
-    let output = command_for("jj")
-        .current_dir(repo_path)
-        .args(["st"])
-        .output()
-        .map_err(|e| JjError::IoError(format!("Failed to run jj st: {}", e)))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(JjError::IoError(format!("jj st failed: {}", stderr)));
-    }
-
-    Ok(())
-}
-
 /// Imports colocated git state into jj (`import_git_head_if_needed`, `git::import_refs`) without
 /// snapshotting the working copy.
 ///
@@ -5216,20 +4809,6 @@ pub fn jj_status(repo_path: &str) -> Result<(), JjError> {
 pub fn jj_util_import_git_refs(repo_path: &str) -> Result<(), JjError> {
     let mut loaded = load_workspace_repo(repo_path)?;
     import_colocated_git_state(&mut loaded, repo_path)?;
-    Ok(())
-}
-
-/// Snapshots the working copy if needed using jj-lib (no subprocess).
-///
-/// Runs [`jj_util_import_git_refs`] first, then snapshots the working copy (`snapshot_working_copy_tree`).
-/// Aligns with [jj `util snapshot`](https://github.com/jj-vcs/jj/blob/main/cli/src/commands/util/snapshot.rs)
-/// (`maybe_snapshot`).
-///
-/// Does not shell out to `jj util snapshot` so behavior is consistent when the CLI lacks that subcommand.
-pub fn jj_util_snapshot(repo_path: &str) -> Result<(), JjError> {
-    let mut loaded = load_workspace_repo(repo_path)?;
-    import_colocated_git_state(&mut loaded, repo_path)?;
-    let _ = snapshot_working_copy_tree(&mut loaded, repo_path)?;
     Ok(())
 }
 
@@ -5251,29 +4830,6 @@ fn import_colocated_git_state(
         loaded.repo = futures::executor::block_on(tx.commit("import git refs")).map_err(|e| {
             JjError::GitWorkspaceError(format!("Failed to commit git import_refs: {}", e))
         })?;
-    }
-
-    Ok(())
-}
-
-/// Checks out a branch in the repository using git
-///
-/// # Arguments
-/// * `repo_path` - Path to the repository
-/// * `branch_name` - Name of the branch to check out
-///
-/// # Returns
-/// Returns Ok(()) on success, or a JjError on failure.
-pub fn checkout_branch(repo_path: &str, branch_name: &str) -> Result<(), JjError> {
-    let output = command_for("git")
-        .current_dir(repo_path)
-        .args(["checkout", branch_name])
-        .output()
-        .map_err(|e| JjError::IoError(format!("Failed to checkout branch: {}", e)))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(JjError::IoError(format!("git checkout failed: {}", stderr)));
     }
 
     Ok(())

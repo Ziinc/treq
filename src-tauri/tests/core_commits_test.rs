@@ -1,6 +1,6 @@
 mod e2e_test_helpers;
 
-use e2e_test_helpers::{JjVerifier, TestRepo};
+use e2e_test_helpers::TestRepo;
 
 #[test]
 fn test_jj_get_log_diff_stats_with_multiline_output() {
@@ -139,73 +139,6 @@ fn test_jj_get_log_diff_stats_with_modifications() {
         total_deletions > 0,
         "Total deletions should be > 0 (modified lines + deleted file), got {}",
         total_deletions
-    );
-}
-
-#[test]
-fn test_move_commit_to_new_workspace() {
-    let repo = TestRepo::new().expect("Failed to create test repo");
-
-    // Create source workspace
-    let source = treq_lib::core::create_workspace(
-        &repo.repo_path,
-        "feat/source",
-        Some("source workspace".to_string()),
-        None,
-        None,
-        None,
-    )
-    .expect("Failed to create source workspace");
-
-    let source_path = repo.workspaces_dir().join(&source.workspace_path);
-    let source_path_str = source_path.to_str().unwrap();
-
-    // Add a file to the source workspace and commit it
-    TestRepo::write_workspace_file(source_path_str, "moved.txt", "moved content")
-        .expect("Failed to write file");
-    treq_lib::core::commit_workspace(&repo.repo_path, source.id, "Commit to move")
-        .expect("Failed to commit");
-
-    // Get the change_id of the committed change
-    let commits_ahead = treq_lib::jj::jj_get_commits_ahead(source_path_str, "main")
-        .expect("Failed to get commits ahead");
-    assert!(
-        !commits_ahead.commits.is_empty(),
-        "Should have at least 1 commit ahead of main"
-    );
-    let change_id = commits_ahead.commits.last().unwrap().change_id.clone();
-
-    // Move commit to new workspace
-    let new_workspace = treq_lib::core::move_commit_to_new_workspace(
-        &repo.repo_path,
-        source.id,
-        &change_id,
-        "feat/moved",
-        Some("moved intent".to_string()),
-    )
-    .expect("Failed to move commit to new workspace");
-
-    // Verify new workspace was created with correct branch name
-    assert_eq!(
-        new_workspace.branch_name, "feat/moved",
-        "New workspace should have correct branch name"
-    );
-
-    // Verify new workspace appears in jj workspace list
-    let jj_workspaces =
-        JjVerifier::list_workspaces(&repo.repo_path).expect("Failed to list jj workspaces");
-    assert!(
-        jj_workspaces.contains(&new_workspace.workspace_name),
-        "jj workspace list should contain '{}', got: {:?}",
-        new_workspace.workspace_name,
-        jj_workspaces
-    );
-
-    // Verify new workspace has the file from the moved commit
-    let new_path = repo.workspaces_dir().join(&new_workspace.workspace_path);
-    assert!(
-        new_path.join("moved.txt").exists(),
-        "moved.txt should exist in new workspace after commit was moved"
     );
 }
 

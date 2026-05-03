@@ -354,8 +354,7 @@ fn test_can_squash_and_merge_workspace_into_home_repo() {
     let main_feature_content =
         std::fs::read_to_string(&main_feature_file).expect("Failed to read squashed feature file");
     assert_eq!(
-        main_feature_content,
-        "squash feature content 2",
+        main_feature_content, "squash feature content 2",
         "Squash merge should preserve the final workspace file contents"
     );
 
@@ -418,10 +417,14 @@ fn test_can_rebase_and_merge_workspace() {
     repo.create_file("home_file.txt", "home content")
         .expect("Failed to write home file");
     commit_repo(&repo.repo_path, "Add home file").expect("Failed to commit home file on main");
-    let commits = treq_lib::core::list_commits(&repo.repo_path, None, false, None, None).expect("Failed to list commits");
+    let commits = treq_lib::core::list_commits(&repo.repo_path, None, false, None, None)
+        .expect("Failed to list commits");
 
-    assert_eq!(commits.commits.len(), 2, "should have 2 commits, the initial commit and the new commit");
-
+    assert_eq!(
+        commits.commits.len(),
+        2,
+        "should have 2 commits, the initial commit and the new commit"
+    );
 
     // write a commit to workspace
     TestRepo::write_workspace_file(
@@ -433,7 +436,7 @@ fn test_can_rebase_and_merge_workspace() {
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add rebase feature")
         .expect("Failed to commit");
 
-// merge the workspace into the home repo
+    // merge the workspace into the home repo
     treq_lib::core::merge_workspace(
         &repo.repo_path,
         workspace.id,
@@ -447,7 +450,6 @@ fn test_can_rebase_and_merge_workspace() {
         main_feature_file.exists(),
         "Feature file should exist in main repo after rebase merge"
     );
-
 
     // verify that workspace is in git log
     let git_log = Command::new("git")
@@ -500,23 +502,19 @@ fn test_can_rebase_and_merge_workspace() {
     );
 
     assert_eq!(
-        commits.commits[0].description,
-        "Rebase feature-rebase onto main",
+        commits.commits[0].description, "Rebase feature-rebase onto main",
         "Tip should be the rebase-merge commit"
     );
     assert_eq!(
-        commits.commits[1].description,
-        "Add rebase feature",
+        commits.commits[1].description, "Add rebase feature",
         "Then the rebased feature commit"
     );
     assert_eq!(
-        commits.commits[2].description,
-        "Add home file",
+        commits.commits[2].description, "Add home file",
         "Then the home-repo commit from before the feature work"
     );
     assert_eq!(
-        commits.commits[3].description,
-        "Initial commit",
+        commits.commits[3].description, "Initial commit",
         "Root should be the initial commit"
     );
 }
@@ -1878,8 +1876,7 @@ fn test_merge_abandons_empty_commits() {
         log.commits.len(),
         1,
         "list_commits should not include empty commits, got: {:?}",
-        log
-            .commits
+        log.commits
             .iter()
             .map(|c| c.description.as_str())
             .collect::<Vec<_>>()

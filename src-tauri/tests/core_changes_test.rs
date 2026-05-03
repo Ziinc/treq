@@ -51,8 +51,8 @@ fn test_list_conflicted_files_no_conflicts() {
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "clean commit")
         .expect("Failed to commit");
 
-    let result = treq_lib::core::list_conflicted_files(workspace_path_str)
-        .expect("list_conflicted_files should succeed on clean workspace");
+    let result = treq_lib::jj::get_conflicted_files(workspace_path_str, None)
+        .expect("get_conflicted_files should succeed on clean workspace");
 
     assert_eq!(
         result,
@@ -102,9 +102,9 @@ fn test_list_conflicted_files_with_conflicts() {
     run_jj(workspace_path_str, &["new", &ws_change_id, &main_change_id])
         .expect("Failed to create merge commit in workspace");
 
-    // list_conflicted_files should now return conflict.txt
-    let result = treq_lib::core::list_conflicted_files(workspace_path_str)
-        .expect("list_conflicted_files should not error on workspace with conflicts");
+    // get_conflicted_files should now return conflict.txt
+    let result = treq_lib::jj::get_conflicted_files(workspace_path_str, None)
+        .expect("get_conflicted_files should not error on workspace with conflicts");
 
     assert!(
         result.contains(&"conflict.txt".to_string()),

@@ -5,7 +5,7 @@ use ignore::WalkBuilder;
 use serde::{Deserialize, Serialize};
 
 use crate::auto_rebase::{self, WorkspaceBookmarkConflict};
-use crate::core::repo::commit_lock_for_repo;
+use crate::core::repo::{commit_lock_for_repo, repo_status};
 use crate::jj;
 use crate::local_db;
 
@@ -387,7 +387,11 @@ pub fn create_workspace(
 /// # Returns
 /// Returns true if successful, false if workspace not found in database.
 pub fn delete_workspace(repo_path: &str, workspace_id: &i64) -> Result<bool, String> {
-    delete_workspace_impl(repo_path, workspace_id, RemoveWorkspaceDiskMode::JjForgetThenRemoveDir)
+    delete_workspace_impl(
+        repo_path,
+        workspace_id,
+        RemoveWorkspaceDiskMode::JjForgetThenRemoveDir,
+    )
 }
 
 #[derive(Clone, Copy)]
@@ -496,8 +500,9 @@ pub fn list_workspaces(repo_path: &str) -> Result<Vec<local_db::Workspace>, Stri
 /// or whose jj registration was dropped while the directory still exists (e.g. `jj workspace forget`).
 pub fn sync_workspaces(repo_path: &str) -> Result<(), String> {
     let workspaces = local_db::get_workspaces(repo_path)?;
-    let jj_registered: Option<HashSet<String>> =
-        jj::list_jj_workspaces(repo_path).ok().map(|names| names.into_iter().collect());
+    let jj_registered: Option<HashSet<String>> = jj::list_jj_workspaces(repo_path)
+        .ok()
+        .map(|names| names.into_iter().collect());
 
     for ws in workspaces {
         let full_path = Path::new(repo_path)
@@ -511,11 +516,7 @@ pub fn sync_workspaces(repo_path: &str) -> Result<(), String> {
 
         if let Some(ref jj_names) = jj_registered {
             if !jj_names.contains(&ws.workspace_name) {
-                delete_workspace_impl(
-                    repo_path,
-                    &ws.id,
-                    RemoveWorkspaceDiskMode::DirectoryOnly,
-                )?;
+                delete_workspace_impl(repo_path, &ws.id, RemoveWorkspaceDiskMode::DirectoryOnly)?;
             }
         }
     }
@@ -569,50 +570,12 @@ pub fn workspace_status(
     let workspace_id = match workspace_id {
         Some(id) => id,
         None => {
+            let rs = repo_status(repo_path)?;
+            if let Some(err) = &rs.fetch_error {
+                log::warn!("Home repo fetch: {}", err);
+            }
             let default_branch =
                 jj::get_default_branch(repo_path).unwrap_or_else(|_| "main".to_string());
-
-            let has_changes = jj::jj_get_changed_files(repo_path)
-                .map(|files| !files.is_empty())
-                .unwrap_or(false);
-
-            let has_conflicts = jj::get_conflicted_files(repo_path, Some(&default_branch))
-                .map(|files| !files.is_empty())
-                .unwrap_or(false);
-
-            // Check sync status for all branches the home repo is on (not just default)
-            let branches = jj::get_bookmarks_on_revision(repo_path, "@-").unwrap_or_default();
-            // If no bookmarks on @-, fall back to the default branch
-            let branches_to_check: Vec<String> = if branches.is_empty() {
-                vec![default_branch.clone()]
-            } else {
-                branches
-            };
-
-            let mut total_ahead: usize = 0;
-            let mut total_behind: usize = 0;
-            let mut any_on_remote = false;
-            for branch in &branches_to_check {
-                if let Ok((ahead, behind)) = jj::jj_get_sync_status(repo_path, branch, false) {
-                    any_on_remote = true;
-                    total_ahead += ahead;
-                    total_behind += behind;
-                }
-            }
-
-            let remote_sync = if !any_on_remote {
-                RemoteSyncStatus::NotOnRemote
-            } else {
-                match (total_ahead, total_behind) {
-                    (0, 0) => RemoteSyncStatus::InSync,
-                    (a, 0) => RemoteSyncStatus::Ahead { count: a },
-                    (0, b) => RemoteSyncStatus::Behind { count: b },
-                    (a, b) => RemoteSyncStatus::Diverged {
-                        ahead: a,
-                        behind: b,
-                    },
-                }
-            };
 
             // Synthesize a Workspace-like entry for the home repo
             let home_workspace = local_db::Workspace {
@@ -633,11 +596,11 @@ pub fn workspace_status(
             return Ok(WorkspaceStatus {
                 partial: WorkspacePartialStatus {
                     current: home_workspace,
-                    has_conflicts,
-                    has_changes,
+                    has_conflicts: rs.has_conflicts,
+                    has_changes: rs.has_changes,
                     commits_ahead: 0,
                 },
-                remote_sync,
+                remote_sync: rs.remote_sync,
                 target: None,
                 children: Vec::new(),
                 dag_nodes: Vec::new(),

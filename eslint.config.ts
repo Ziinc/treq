@@ -3,6 +3,8 @@ import globals from "globals";
 import js from "@eslint/js";
 import noDocumentDispatchEventRule from "./eslint-rules/no-document-dispatch-event.js";
 import noInlineCommentsRule from "./eslint-rules/no-inline-comments.js";
+import noUnusedExportedTsFunctionsRule from "./eslint-rules/no-unused-exported-ts-functions.js";
+import noUnusedPubRustFunctionsRule from "./eslint-rules/no-unused-pub-rust-functions.js";
 import preferFindByTextRule from "./eslint-rules/prefer-find-by-text.js";
 import userEventSetupInSetupRule from "./eslint-rules/user-event-setup-in-setup.js";
 import preferClickByQueryRule from "./eslint-rules/prefer-click-by-query.js";
@@ -25,6 +27,8 @@ const ignoredGlobs = [
 const localRules = {
   "no-document-dispatch-event": noDocumentDispatchEventRule,
   "no-inline-comments": noInlineCommentsRule,
+  "no-unused-exported-ts-functions": noUnusedExportedTsFunctionsRule,
+  "no-unused-pub-rust-functions": noUnusedPubRustFunctionsRule,
   "prefer-click-by-query": preferClickByQueryRule,
   "prefer-find-by-text": preferFindByTextRule,
   "user-event-setup-in-setup": userEventSetupInSetupRule,
@@ -42,7 +46,18 @@ export default defineConfig([
     files: ["**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],
     ignores: ignoredGlobs,
     languageOptions: { globals: globals.browser },
-    plugins: { js },
+    plugins: {
+      js,
+      local: {
+        rules: localRules,
+      },
+    },
+  },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    rules: {
+      "local/no-unused-exported-ts-functions": "error",
+    },
   },
   {
     extends: [tseslint.configs.recommended],
@@ -118,23 +133,14 @@ export default defineConfig([
   },
   {
     files: ["src/lib/api.ts", "src/lib/api-extra.ts"],
-    plugins: {
-      local: {
-        rules: localRules,
-      },
-    },
     rules: {
       "local/require-tauri-api-exports-used": "error",
       "local/require-tauri-api-command-wrappers": "error",
+      "local/no-unused-pub-rust-functions": "error",
     },
   },
   {
     files: ["test/**/*.{ts,tsx}"],
-    plugins: {
-      local: {
-        rules: localRules,
-      },
-    },
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
       "max-nested-callbacks": "off",
