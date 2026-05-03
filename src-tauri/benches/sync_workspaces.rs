@@ -6,10 +6,7 @@ use std::process::Command;
 mod e2e_test_helpers;
 use e2e_test_helpers::TestRepo;
 
-fn create_bench_workspaces(
-    repo: &TestRepo,
-    count: usize,
-) -> Vec<(i64, String, String, PathBuf)> {
+fn create_bench_workspaces(repo: &TestRepo, count: usize) -> Vec<(i64, String, String, PathBuf)> {
     (1..=count)
         .map(|index| {
             let workspace = treq_lib::core::create_workspace(

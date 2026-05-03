@@ -75,12 +75,7 @@ fn setup_workspace_diff_ten_files_fifty_added_lines() -> (TestRepo, i64) {
 
     let content = fifty_added_lines();
     for index in 1..=10 {
-        write_workspace_file(
-            &repo,
-            &workspace,
-            &format!("added-{index}.txt"),
-            &content,
-        );
+        write_workspace_file(&repo, &workspace, &format!("added-{index}.txt"), &content);
     }
 
     (repo, workspace.id)

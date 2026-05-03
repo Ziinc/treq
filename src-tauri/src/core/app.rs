@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::binary_paths;
+use crate::core::workspaces;
 use crate::db::Database;
 use crate::jj;
 use crate::local_db;
-use crate::core::workspaces;
 
 /// Detect binary paths for required binaries (git, jj, claude),
 /// cache them in the database and in-memory cache.

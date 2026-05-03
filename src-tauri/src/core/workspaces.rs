@@ -1,11 +1,11 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use std::sync::{Arc, Mutex, OnceLock};
 
 use ignore::WalkBuilder;
 use serde::{Deserialize, Serialize};
 
 use crate::auto_rebase::{self, WorkspaceBookmarkConflict};
+use crate::core::repo::commit_lock_for_repo;
 use crate::jj;
 use crate::local_db;
 
@@ -27,8 +27,8 @@ pub struct WorkspaceEntry {
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 pub enum MergeCommit {
     Merge,
-    Squash,
-    Rebase,
+    SquashAndMerge,
+    RebaseAndMerge,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -118,17 +118,6 @@ pub struct WorkspaceMetadata {
     pub intent: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub moved_files: Option<Vec<String>>,
-}
-
-static REPO_COMMIT_LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
-
-fn get_repo_commit_lock(repo_path: &str) -> Arc<Mutex<()>> {
-    let locks = REPO_COMMIT_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut guard = locks.lock().unwrap();
-    guard
-        .entry(repo_path.to_string())
-        .or_insert_with(|| Arc::new(Mutex::new(())))
-        .clone()
 }
 
 fn resolve_workspace_root(repo_path: &str, workspace_id: Option<i64>) -> Result<String, String> {
@@ -833,7 +822,7 @@ pub fn merge_workspace(
             )
             .map_err(|e| format!("Failed to create merge commit: {}", e))?;
         }
-        MergeCommit::Squash => {
+        MergeCommit::SquashAndMerge => {
             jj::jj_squash_merge_commit(
                 workspace_path_str,
                 &workspace.branch_name,
@@ -842,11 +831,12 @@ pub fn merge_workspace(
             )
             .map_err(|e| format!("Failed to squash merge workspace: {}", e))?;
         }
-        MergeCommit::Rebase => {
+        MergeCommit::RebaseAndMerge => {
             let rebase_result = jj::jj_rebase_merge_commit(
                 workspace_path_str,
                 &workspace.branch_name,
                 target_branch,
+                message,
             )
             .map_err(|e| format!("Failed to rebase merge workspace: {}", e))?;
 
@@ -856,12 +846,8 @@ pub fn merge_workspace(
         }
     }
 
-    // Update the home repo state to pick up the merged commits
-    jj::jj_status(repo_path).map_err(|e| format!("Failed to update home repo status: {}", e))?;
-
-    // Checkout the target branch to ensure we're not in detached HEAD state
-    jj::checkout_branch(repo_path, target_branch)
-        .map_err(|e| format!("Failed to checkout target branch: {}", e))?;
+    jj::jj_edit_bookmark(repo_path, target_branch)
+        .map_err(|e| format!("Failed to update home repo to target branch: {}", e))?;
 
     // Remove the workspace from jj (also deletes the workspace directory)
     jj::remove_workspace(repo_path, workspace_path_str)
@@ -1565,7 +1551,7 @@ where
     T: Into<Option<i64>>,
 {
     let workspace_id = workspace_id.into();
-    let repo_commit_lock = get_repo_commit_lock(repo_path);
+    let repo_commit_lock = commit_lock_for_repo(repo_path);
     let _repo_commit_guard = repo_commit_lock.lock().unwrap();
     let workspace_root = resolve_workspace_root(repo_path, workspace_id)?;
 

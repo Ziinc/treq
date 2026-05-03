@@ -1,8 +1,8 @@
 mod e2e_test_helpers;
 
 use e2e_test_helpers::{JjVerifier, TestRepo};
-use std::path::Path;
 use std::fs;
+use std::path::Path;
 
 #[test]
 fn test_repo_initialization() {
@@ -85,7 +85,6 @@ fn test_repo_initialization() {
     );
 }
 
-
 #[test]
 fn test_detect_binaries_finds_git_and_jj() {
     let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
@@ -136,7 +135,7 @@ fn test_detect_binaries_caches_to_db() {
 }
 
 #[test]
-fn test_init_triggers_workspaces_sync(){
+fn test_init_triggers_workspaces_sync() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
     // Create workspace

@@ -277,8 +277,8 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             let merge_strategy = get_str(&args, "mergeStrategy")?;
             let strategy = match merge_strategy.as_str() {
                 "merge" => treq_lib::core::MergeCommit::Merge,
-                "squash" => treq_lib::core::MergeCommit::Squash,
-                "rebase" => treq_lib::core::MergeCommit::Rebase,
+                "squash" => treq_lib::core::MergeCommit::SquashAndMerge,
+                "rebase" => treq_lib::core::MergeCommit::RebaseAndMerge,
                 _ => return Err(format!("Invalid merge strategy: {}", merge_strategy)),
             };
             treq_lib::core::merge_workspace(&repo_path, workspace_id, &message, strategy)?;

@@ -5,7 +5,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use treq_lib::core::{MaybeEmptyParam, MergeCommit, RemoteSyncStatus};
+use treq_lib::core::{commit_repo, MaybeEmptyParam, MergeCommit, RemoteSyncStatus};
 use treq_lib::jj;
 use treq_lib::local_db::Workspace;
 
@@ -149,7 +149,7 @@ fn test_check_and_rebase_workspaces_all_skips_self_rebase() {
 }
 
 #[test]
-fn test_can_merge_workspace_into_home_repo() {
+fn test_can_merge_workspace_into_home_repo_with_merge_commit_strategy() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
     // Create workspace
@@ -298,7 +298,7 @@ fn test_can_merge_workspace_into_home_repo() {
 }
 
 #[test]
-fn test_can_squash_merge_workspace_into_home_repo() {
+fn test_can_squash_and_merge_workspace_into_home_repo() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
     let workspace: Workspace = treq_lib::core::create_workspace(
@@ -325,18 +325,38 @@ fn test_can_squash_merge_workspace_into_home_repo() {
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add squash feature")
         .expect("Failed to commit");
 
+    // edit the squash-feature.txt file
+
+    TestRepo::write_workspace_file(
+        workspace_path_str,
+        "squash-feature.txt",
+        "squash feature content 2",
+    )
+    .expect("Failed to write feature file");
+
+    // make another commit to the workspace
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add squash feature 2")
+        .expect("Failed to commit");
+
     treq_lib::core::merge_workspace(
         &repo.repo_path,
         workspace.id,
         "Squash feature-squash into main",
-        MergeCommit::Squash,
+        MergeCommit::SquashAndMerge,
     )
-    .expect("Failed to squash merge workspace");
+    .expect("Failed to squash and merge workspace");
 
     let main_feature_file = Path::new(&repo.repo_path).join("squash-feature.txt");
     assert!(
         main_feature_file.exists(),
         "Feature file should exist in main repo after squash merge"
+    );
+    let main_feature_content =
+        std::fs::read_to_string(&main_feature_file).expect("Failed to read squashed feature file");
+    assert_eq!(
+        main_feature_content,
+        "squash feature content 2",
+        "Squash merge should preserve the final workspace file contents"
     );
 
     let git_log = Command::new("git")
@@ -363,10 +383,19 @@ fn test_can_squash_merge_workspace_into_home_repo() {
         !workspaces.iter().any(|w| w.id == workspace.id),
         "Squashed workspace should not appear in list_workspaces"
     );
+
+    // GitHub-style squash merge adds one new commit on top of the existing main history.
+    let commits = treq_lib::core::list_commits(&repo.repo_path, None, false, None, None)
+        .expect("Failed to list commits");
+    assert_eq!(
+        commits.commits.len(),
+        2,
+        "Main repo should contain the initial commit plus one squashed merge commit"
+    );
 }
 
 #[test]
-fn test_can_rebase_merge_workspace_into_home_repo() {
+fn test_can_rebase_and_merge_workspace() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
     let workspace: Workspace = treq_lib::core::create_workspace(
@@ -384,6 +413,17 @@ fn test_can_rebase_merge_workspace_into_home_repo() {
         .to_str()
         .expect("workspace path should be utf-8");
 
+    // Record this change on `main` at the home repo (not `commit_workspace`), so the home
+    // log includes it as a main-branch commit before the workspace feature work.
+    repo.create_file("home_file.txt", "home content")
+        .expect("Failed to write home file");
+    commit_repo(&repo.repo_path, "Add home file").expect("Failed to commit home file on main");
+    let commits = treq_lib::core::list_commits(&repo.repo_path, None, false, None, None).expect("Failed to list commits");
+
+    assert_eq!(commits.commits.len(), 2, "should have 2 commits, the initial commit and the new commit");
+
+
+    // write a commit to workspace
     TestRepo::write_workspace_file(
         workspace_path_str,
         "rebase-feature.txt",
@@ -393,11 +433,12 @@ fn test_can_rebase_merge_workspace_into_home_repo() {
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add rebase feature")
         .expect("Failed to commit");
 
+// merge the workspace into the home repo
     treq_lib::core::merge_workspace(
         &repo.repo_path,
         workspace.id,
         "Rebase feature-rebase onto main",
-        MergeCommit::Rebase,
+        MergeCommit::RebaseAndMerge,
     )
     .expect("Failed to rebase merge workspace");
 
@@ -407,6 +448,8 @@ fn test_can_rebase_merge_workspace_into_home_repo() {
         "Feature file should exist in main repo after rebase merge"
     );
 
+
+    // verify that workspace is in git log
     let git_log = Command::new("git")
         .current_dir(&repo.repo_path)
         .args(["log", "-1", "--pretty=%s"])
@@ -415,21 +458,66 @@ fn test_can_rebase_merge_workspace_into_home_repo() {
     let git_log_str = String::from_utf8_lossy(&git_log.stdout);
     assert_eq!(
         git_log_str.trim(),
-        "Add rebase feature",
-        "Git log should contain the rebased commit message, got: {}",
+        "Rebase feature-rebase onto main",
+        "Git log head should be the rebase-merge commit message, got: {}",
         git_log_str
     );
 
+    // verify that workspace directory is deleted
     assert!(
         !workspace_path.exists(),
         "Workspace directory should be deleted after rebase merge"
     );
-
     let workspaces =
         treq_lib::core::list_workspaces(&repo.repo_path).expect("Failed to list workspaces");
     assert!(
         !workspaces.iter().any(|w| w.id == workspace.id),
         "Rebased workspace should not appear in list_workspaces"
+    );
+
+    // verify that commit list order is respected (newest first; no working-copy row).
+    let commits = treq_lib::core::list_commits(&repo.repo_path, None, false, None, None)
+        .expect("Failed to list commits");
+    let descriptions: Vec<&str> = commits
+        .commits
+        .iter()
+        .map(|c| c.description.as_str())
+        .collect();
+    assert_eq!(
+        descriptions.len(),
+        4,
+        "Commit list should contain four commits, got {:?}",
+        descriptions
+    );
+    assert!(
+        !commits.commits.iter().any(|c| c.is_working_copy),
+        "Home-repo commit list should not include a working-copy row, got: {:?}",
+        commits
+            .commits
+            .iter()
+            .map(|c| (c.description.as_str(), c.is_working_copy))
+            .collect::<Vec<_>>()
+    );
+
+    assert_eq!(
+        commits.commits[0].description,
+        "Rebase feature-rebase onto main",
+        "Tip should be the rebase-merge commit"
+    );
+    assert_eq!(
+        commits.commits[1].description,
+        "Add rebase feature",
+        "Then the rebased feature commit"
+    );
+    assert_eq!(
+        commits.commits[2].description,
+        "Add home file",
+        "Then the home-repo commit from before the feature work"
+    );
+    assert_eq!(
+        commits.commits[3].description,
+        "Initial commit",
+        "Root should be the initial commit"
     );
 }
 
@@ -1485,7 +1573,6 @@ fn test_sync_workspaces_forget_deleted_directories() {
     );
 }
 
-
 #[test]
 fn test_sync_workspaces_delete_forgotten_directories() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -1511,7 +1598,6 @@ fn test_sync_workspaces_delete_forgotten_directories() {
         "jj workspace forget should succeed: {}",
         String::from_utf8_lossy(&forget_output.stderr)
     );
-
 
     treq_lib::core::sync_workspaces(&repo.repo_path).expect("Failed to sync workspaces");
     let workspaces =
@@ -1671,7 +1757,6 @@ fn test_jj_get_changed_files_keeps_tracked_files_visible_after_ignore_rule_added
     );
 }
 
-
 #[test]
 fn test_ensure_jj_initialized_reinits_when_jj_deleted() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -1787,6 +1872,24 @@ fn test_merge_abandons_empty_commits() {
         .output()
         .expect("Failed to run jj new");
 
+    let log = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+        .expect("list_commits failed");
+    assert_eq!(
+        log.commits.len(),
+        1,
+        "list_commits should not include empty commits, got: {:?}",
+        log
+            .commits
+            .iter()
+            .map(|c| c.description.as_str())
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        log.commits[0].description.contains("Add feature"),
+        "Expected the real commit only, got: {:?}",
+        log.commits[0].description
+    );
+
     // Merge should succeed despite empty commits
     treq_lib::core::merge_workspace(
         &repo.repo_path,
@@ -1849,7 +1952,7 @@ fn test_squash_merge_with_empty_commits() {
         &repo.repo_path,
         workspace.id,
         "Squash feat/squash-empty",
-        MergeCommit::Squash,
+        MergeCommit::SquashAndMerge,
     )
     .expect("Failed to squash merge workspace with empty commits");
 
@@ -1899,7 +2002,7 @@ fn test_rebase_merge_with_empty_commits() {
         &repo.repo_path,
         workspace.id,
         "Rebase feat/rebase-empty",
-        MergeCommit::Rebase,
+        MergeCommit::RebaseAndMerge,
     )
     .expect("Failed to rebase merge workspace with empty commits");
 

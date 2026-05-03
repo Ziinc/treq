@@ -4,10 +4,16 @@ severity: error
 message: >
   Avoid shelling out via `command_for("jj")` or `command_for("git")` in
   `src-tauri/src`. Prefer direct `jj-lib` APIs, using the `jj-cli`
-  implementation as the behavioral reference.
+  implementation as the behavioral reference. `git checkout` via
+  `command_for("git")` is allowed for colocated git working trees.
 files:
   - "src-tauri/src/**/*.rs"
 rule:
   any:
     - pattern: 'command_for("jj")'
-    - pattern: 'command_for("git")'
+    - all:
+        - pattern: 'command_for("git")'
+        - not:
+            inside:
+              stopBy: end
+              pattern: 'command_for("git").current_dir($$$DIR).args(["checkout", $$$ARGS])'

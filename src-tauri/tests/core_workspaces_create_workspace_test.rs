@@ -306,7 +306,6 @@ fn test_can_create_stacked_workspace() {
     );
 }
 
-
 #[test]
 fn test_list_workspaces_removes_db_workspace_missing_from_jj_state() {
     let repo = TestRepo::new().expect("Failed to create test repo");
