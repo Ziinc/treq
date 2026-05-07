@@ -78,6 +78,10 @@ harness = false
 name = "sync_workspaces"
 harness = false
 
+[[bench]]
+name = "merge_workspace"
+harness = false
+
 # Development profile - faster compilation with minimal optimization
 [profile.dev]
 opt-level = 0                # No optimization (fastest compile)
