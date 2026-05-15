@@ -268,6 +268,22 @@ fn test_commit_repo() {
     let git_head_after = TestRepo::run_git(&repo.repo_path, &["rev-parse", "--abbrev-ref", "HEAD"])
         .expect("get git head after commit");
     assert_eq!(git_head_after.trim(), "main");
+
+    // No staged or unstaged changes should remain in the home repo after commit_repo.
+    let staged = TestRepo::run_git(&repo.repo_path, &["diff", "--name-only", "--cached"])
+        .expect("get staged diff");
+    assert!(
+        staged.trim().is_empty(),
+        "expected no staged changes after commit_repo, got:\n{}",
+        staged
+    );
+    let unstaged =
+        TestRepo::run_git(&repo.repo_path, &["diff", "--name-only"]).expect("get unstaged diff");
+    assert!(
+        unstaged.trim().is_empty(),
+        "expected no unstaged changes after commit_repo, got:\n{}",
+        unstaged
+    );
 }
 
 #[test]

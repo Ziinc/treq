@@ -2547,6 +2547,9 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
         if let Err(e) = set_git_head_branch_with_gix(workspace_path, &branch) {
             eprintln!("Warning: Failed to set git HEAD to branch '{}': {}", branch, e);
         }
+        if let Err(e) = reset_git_index_to_head_with_gix(workspace_path) {
+            eprintln!("Warning: Failed to reset git index to HEAD: {}", e);
+        }
     }
 
     Ok(format!("Committed successfully to branch '{}'", branch))
@@ -2584,6 +2587,22 @@ fn set_git_head_branch_with_gix(repo_path: &str, branch: &str) -> Result<(), Str
         deref: false,
     })
     .map_err(|e| format!("Failed to update HEAD ref: {e}"))?;
+    Ok(())
+}
+
+fn reset_git_index_to_head_with_gix(repo_path: &str) -> Result<(), String> {
+    let repo = gix::open(repo_path).map_err(|e| format!("Failed to open git repo with gix: {e}"))?;
+    let head_tree = repo
+        .head_commit()
+        .map_err(|e| format!("Failed to read HEAD commit: {e}"))?
+        .tree_id()
+        .map_err(|e| format!("Failed to read HEAD tree id: {e}"))?;
+    let mut index = repo
+        .index_from_tree(&head_tree)
+        .map_err(|e| format!("Failed to create index from HEAD tree: {e}"))?;
+    index
+        .write(Default::default())
+        .map_err(|e| format!("Failed to write index: {e}"))?;
     Ok(())
 }
 
