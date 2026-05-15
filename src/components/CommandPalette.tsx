@@ -16,6 +16,7 @@ import {
 	Maximize2,
 	Plus,
 	Settings,
+	Sparkles,
 	Terminal as TerminalIcon,
 	Trash2,
 } from "lucide-react";
@@ -45,7 +46,7 @@ interface CommandPaletteProps {
 	onCreateWorkspace: () => void;
 	onToggleTerminal?: () => void;
 	onMaximizeTerminal?: () => void;
-	onCreateAgentTerminal?: () => void;
+	onCreateAgentTerminal?: (agent?: "claude" | "codex") => void;
 	onCreateShellTerminal?: () => void;
 	hasSelectedWorkspace: boolean;
 
@@ -205,7 +206,15 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 					label: "New Agent Terminal",
 					description: "Create a new Claude agent session",
 					icon: <Bot className="w-4 h-4" />,
-					onSelect: onCreateAgentTerminal,
+					onSelect: () => onCreateAgentTerminal("claude"),
+				});
+				result.push({
+					id: "new-codex-terminal",
+					type: "action",
+					label: "New Codex Terminal",
+					description: "Create a new Codex agent session",
+					icon: <Sparkles className="w-4 h-4" />,
+					onSelect: () => onCreateAgentTerminal("codex"),
 				});
 			}
 
