@@ -1,4 +1,8 @@
-import type { Workspace, WorkspaceSidebarStatus } from "./api";
+import type {
+	Workspace,
+	WorkspaceNode,
+	WorkspaceSidebarStatus,
+} from "./api";
 
 /**
  * Represents a node in the workspace tree

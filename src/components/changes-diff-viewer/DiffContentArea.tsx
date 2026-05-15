@@ -8,11 +8,14 @@ import { SearchOverlay } from "../SearchOverlay";
 import { FileRowComponent } from "./FileRowComponent";
 import { HunkLines } from "./HunkLines";
 import type {
+	CommentLineQuery,
 	ConflictComment,
+	DiffLinePointer,
 	DiffLineSelection,
 	DiffSearchData,
 	FileHunksData,
 	LineComment,
+	LineMouseDownPayload,
 	PendingComment,
 } from "./types";
 import type { useToast } from "../ui/toast";
@@ -62,27 +65,11 @@ interface DiffContentAreaProps {
 		hunkIndex: number,
 		direction: "before" | "after",
 	) => void;
-	// eslint-disable-next-line max-params
-	handleLineMouseDown: (
-		e: React.MouseEvent,
-		filePath: string,
-		hunkIndex: number,
-		lineIndex: number,
-		lineContent: string,
-		isStaged: boolean,
-	) => void;
-	handleLineMouseEnter: (
-		filePath: string,
-		hunkIndex: number,
-		lineIndex: number,
-	) => void;
+	handleLineMouseDown: (payload: LineMouseDownPayload) => void;
+	handleLineMouseEnter: (line: DiffLinePointer) => void;
 	handleLineMouseUp: () => void;
 	handleAddCommentFromSelection: () => void;
-	isLineSelected: (
-		filePath: string,
-		hunkIndex: number,
-		lineIndex: number,
-	) => boolean;
+	isLineSelected: (line: DiffLinePointer) => boolean;
 	saveConflictComment: (args: {
 		conflictId: string;
 		filePath: string;
@@ -105,13 +92,7 @@ interface DiffContentAreaProps {
 		React.SetStateAction<PendingComment | null>
 	>;
 	setShowCommentInput: React.Dispatch<React.SetStateAction<boolean>>;
-	// eslint-disable-next-line max-params
-	getCommentsForLine: (
-		filePath: string,
-		hunkId: string,
-		lineNumber: number,
-		side: "old" | "new",
-	) => LineComment[];
+	getCommentsForLine: (query: CommentLineQuery) => LineComment[];
 	// file row props
 	collapsedFiles: Set<string>;
 	viewedFiles: Map<string, { viewedAt: string; contentHash: string }>;
