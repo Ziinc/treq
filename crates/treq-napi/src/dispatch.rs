@@ -146,6 +146,12 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             serde_json::to_value(status).map_err(|e| e.to_string())
         }
 
+        "get_repo_branch" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let branch = treq_lib::core::get_repo_branch(&repo_path)?;
+            serde_json::to_value(branch).map_err(|e| e.to_string())
+        }
+
         "list_repo_branches" => {
             let repo_path = get_str(&args, "repoPath")?;
             let branches = treq_lib::core::list_repo_branches(&repo_path)?;
