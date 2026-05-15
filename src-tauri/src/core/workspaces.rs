@@ -277,15 +277,29 @@ pub fn create_workspace(
         .ok_or("Failed to extract workspace name from path")?
         .to_string();
 
+    let ws_full = Path::new(repo_path)
+        .join(".treq")
+        .join("workspaces")
+        .join(&workspace_path);
+
     // Copy included files/directories from repo to new workspace
     if let Some(ref patterns) = included_copy_files {
         if !patterns.is_empty() {
-            let ws_full = Path::new(repo_path)
-                .join(".treq")
-                .join("workspaces")
-                .join(&workspace_path);
             copy_included_files(repo_path, ws_full.to_str().unwrap_or_default(), patterns)?;
         }
+    }
+
+    // Always copy .claude/settings.local.json (gitignored per-machine settings)
+    // so new workspaces inherit local permissions/hooks without re-granting.
+    let claude_src = Path::new(repo_path)
+        .join(".claude")
+        .join("settings.local.json");
+    if claude_src.exists() {
+        let claude_dst_dir = ws_full.join(".claude");
+        std::fs::create_dir_all(&claude_dst_dir)
+            .map_err(|e| format!("Failed to create .claude dir in workspace: {}", e))?;
+        std::fs::copy(&claude_src, claude_dst_dir.join("settings.local.json"))
+            .map_err(|e| format!("Failed to copy .claude/settings.local.json: {}", e))?;
     }
 
     let workspace_id = local_db::add_workspace(
