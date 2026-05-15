@@ -263,6 +263,11 @@ fn test_commit_repo() {
             .map(|c| &c.description)
             .collect::<Vec<_>>()
     );
+
+    // git head should be still on main branch
+    let git_head_after = TestRepo::run_git(&repo.repo_path, &["rev-parse", "--abbrev-ref", "HEAD"])
+        .expect("get git head after commit");
+    assert_eq!(git_head_after.trim(), "main");
 }
 
 #[test]
