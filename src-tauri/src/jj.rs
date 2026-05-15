@@ -39,6 +39,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
+use gix::refs::transaction::{Change, PreviousValue, RefEdit};
+use gix::refs::Target;
 
 use crate::binary_paths;
 use crate::local_db;
@@ -2540,6 +2542,13 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     futures::executor::block_on(locked_ws.finish(new_repo.op_id().clone()))
         .map_err(|e| JjError::IoError(format!("Failed to finish wc mutation: {}", e)))?;
 
+    // For home repos, keep Git HEAD symbolic to the active branch (avoid detached HEAD after jj commit).
+    if repo_path_opt.is_none() && branch != "HEAD" {
+        if let Err(e) = set_git_head_branch_with_gix(workspace_path, &branch) {
+            eprintln!("Warning: Failed to set git HEAD to branch '{}': {}", branch, e);
+        }
+    }
+
     Ok(format!("Committed successfully to branch '{}'", branch))
 }
 
@@ -2554,6 +2563,28 @@ fn read_git_head_branch(repo_path: &str) -> Result<String, String> {
     } else {
         Ok("HEAD".to_string())
     }
+}
+
+fn set_git_head_branch_with_gix(repo_path: &str, branch: &str) -> Result<(), String> {
+    let repo = gix::open(repo_path).map_err(|e| format!("Failed to open git repo with gix: {e}"))?;
+    let target: gix::refs::FullName = format!("refs/heads/{branch}")
+        .try_into()
+        .map_err(|e| format!("Invalid branch ref name: {e}"))?;
+    let head_name: gix::refs::FullName = "HEAD"
+        .try_into()
+        .map_err(|e| format!("Invalid HEAD ref name: {e}"))?;
+
+    repo.edit_reference(RefEdit {
+        change: Change::Update {
+            log: Default::default(),
+            expected: PreviousValue::Any,
+            new: Target::Symbolic(target),
+        },
+        name: head_name,
+        deref: false,
+    })
+    .map_err(|e| format!("Failed to update HEAD ref: {e}"))?;
+    Ok(())
 }
 
 pub fn resolve_home_repo_branch(repo_path: &str) -> Result<String, JjError> {
