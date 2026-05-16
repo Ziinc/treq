@@ -1156,7 +1156,8 @@ export const FileBrowser = memo(
 			(e: React.MouseEvent, lineNum: number, lineContent: string) => {
 				void lineContent;
 				if (e.button !== 0) return;
-				e.preventDefault();
+				// Let the browser handle native word/line text selection on double-click+.
+				if (e.detail >= 2) return;
 				setIsSelecting(true);
 				setSelectionAnchor(lineNum);
 				setLineSelection({ startLine: lineNum, endLine: lineNum });
