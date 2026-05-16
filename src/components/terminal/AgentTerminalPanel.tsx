@@ -29,8 +29,10 @@ import {
 	ChevronDown,
 	ChevronUp,
 	Loader2,
+	MousePointer2,
 	RotateCw,
 	Search,
+	Sparkles,
 	X,
 } from "lucide-react";
 import { ModelSelector } from "../ModelSelector";
@@ -38,7 +40,7 @@ import { Input } from "../ui/input";
 import { useToast } from "../ui/toast";
 import { type ClaudeSessionData } from "./types";
 
-export interface ClaudeTerminalPanelProps {
+export interface AgentTerminalPanelProps {
 	sessionData: ClaudeSessionData;
 	collapsed: boolean;
 	isActive?: boolean;
@@ -53,7 +55,7 @@ export interface ClaudeTerminalPanelProps {
 	width?: number | null;
 }
 
-export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
+export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 	({
 		sessionData,
 		collapsed,
@@ -172,7 +174,7 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
 					if (!options?.silent) {
 						addToast({
 							title: "Terminal Reset",
-							description: "Starting new Claude session",
+							description: `Starting new ${sessionData.agent === "codex" ? "Codex" : sessionData.agent === "cursor" ? "Cursor" : "Claude"} session`,
 							type: "info",
 						});
 					}
@@ -230,23 +232,7 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
 			performReset();
 		}, [pendingModelReset, handleReset, sessionModel, addToast]);
 
-		// Build Claude command with optional pending prompt
-		// Use refs to avoid losing values due to race condition with sessions refetch
-		const permissionModeArg =
-			permissionModeRef.current === "plan"
-				? " --permission-mode plan"
-				: " --permission-mode acceptEdits";
-
-		let autoCommand = "claude";
-
-		// Add permission mode and model flags first
-		autoCommand += permissionModeArg;
-		if (sessionModel) {
-			autoCommand += ` --model="${sessionModel}"`;
-		}
-
-		// Add treq CLI documentation as system prompt for the Claude agent
-		// const agentWorkingDir = sessionData.workspacePath || sessionData.repoPath;
+		// Shared treq CLI documentation injected as system prompt for any agent
 		const treqSystemPrompt = [
 			"You have access to the treq CLI for managing workspaces. Available commands:",
 			"- treq workspace ls — List all workspaces with their status",
@@ -259,23 +245,50 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
 			`IMPORTANT: You must read, write, edit, delete only files in the current working directory.`,
 		].join("\\n");
 
-		autoCommand += ` --append-system-prompt "${treqSystemPrompt}"`;
+		// Escape a string for use inside a double-quoted shell argument
+		const escapeShellDoubleQuoted = (str: string) =>
+			str
+				.replace(/\\/g, "\\\\")
+				.replace(/"/g, '\\"')
+				.replace(/`/g, "\\`")
+				.replace(/\$/g, "\\$")
+				.replace(/!/g, "\\!");
 
-		// Prepend PATH export so treq CLI is available inside Claude sessions
-		if (treqBinDir) {
-			autoCommand = `export PATH="${treqBinDir}:$PATH"; ${autoCommand}`;
+		let autoCommand: string;
+
+		if (sessionData.agent === "codex") {
+			// Codex CLI: pass system prompt via -c instructions override, then prompt as positional arg
+			autoCommand = `codex -c instructions="${escapeShellDoubleQuoted(treqSystemPrompt)}"`;
+			if (pendingPromptRef.current) {
+				autoCommand += ` "${escapeShellDoubleQuoted(pendingPromptRef.current)}"`;
+			}
+		} else if (sessionData.agent === "cursor") {
+			// cursor-agent: no system-prompt flag; prepend treq instructions into the prompt arg.
+			// --plan engages cursor's plan mode; omit when in edit mode.
+			const combined = pendingPromptRef.current
+				? `${treqSystemPrompt}\n\n${pendingPromptRef.current}`
+				: treqSystemPrompt;
+			const planFlag = permissionModeRef.current === "plan" ? " --plan" : "";
+			autoCommand = `cursor-agent${planFlag} "${escapeShellDoubleQuoted(combined)}"`;
+		} else {
+			// Claude Code: permission mode, model, system prompt, then prompt after --
+			const permissionModeArg =
+				permissionModeRef.current === "plan"
+					? " --permission-mode plan"
+					: " --permission-mode acceptEdits";
+			autoCommand = "claude" + permissionModeArg;
+			if (sessionModel) {
+				autoCommand += ` --model="${sessionModel}"`;
+			}
+			autoCommand += ` --append-system-prompt "${treqSystemPrompt}"`;
+			if (pendingPromptRef.current) {
+				autoCommand += ` -- "${escapeShellDoubleQuoted(pendingPromptRef.current)}"`;
+			}
 		}
 
-		// If there's a pending prompt, add it as a positional argument after --
-		if (pendingPromptRef.current) {
-			// Escape shell special characters (keep newlines as actual newlines)
-			const escapedPrompt = pendingPromptRef.current
-				.replace(/\\/g, "\\\\") // Escape backslashes first
-				.replace(/"/g, '\\"') // Escape double quotes
-				.replace(/`/g, "\\`") // Escape backticks (command substitution)
-				.replace(/\$/g, "\\$") // Escape dollar signs (variable expansion)
-				.replace(/!/g, "\\!"); // Escape ! (zsh history expansion)
-			autoCommand += ` -- "${escapedPrompt}"`;
+		// Prepend PATH export so treq CLI is available inside all agent sessions
+		if (treqBinDir) {
+			autoCommand = `export PATH="${treqBinDir}:$PATH"; ${autoCommand}`;
 		}
 
 		return (
@@ -298,16 +311,24 @@ export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
 					)}
 				>
 					<div className="flex items-center gap-1 text-sm font-medium text-gray-200">
-						<Bot className="w-4 h-4" />
+						{sessionData.agent === "codex" ? (
+							<Sparkles className="w-4 h-4" />
+						) : sessionData.agent === "cursor" ? (
+							<MousePointer2 className="w-4 h-4" />
+						) : (
+							<Bot className="w-4 h-4" />
+						)}
 						<span className="truncate">{sessionData.sessionName}</span>
 					</div>
 					<div className="flex items-center gap-1">
-						{/* Model selector */}
-						<ModelSelector
-							currentModel={sessionModel}
-							onModelChange={handleModelChange}
-							disabled={isChangingModel || isResetting}
-						/>
+						{/* Model selector — Claude only */}
+						{sessionData.agent !== "codex" && sessionData.agent !== "cursor" && (
+							<ModelSelector
+								currentModel={sessionModel}
+								onModelChange={handleModelChange}
+								disabled={isChangingModel || isResetting}
+							/>
+						)}
 						{/* Reset button */}
 						<TooltipProvider>
 							<Tooltip>

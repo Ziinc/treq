@@ -103,7 +103,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	const [pendingSessionData, setPendingSessionData] = useState<
 		Map<
 			number,
-			{ pendingPrompt?: string; permissionMode?: "plan" | "acceptEdits" }
+			{ pendingPrompt?: string; permissionMode?: "plan" | "acceptEdits"; agent?: "claude" | "codex" | "cursor" }
 		>
 	>(new Map());
 	const [sessionSelectedFile, setSessionSelectedFile] = useState<string | null>(
@@ -509,6 +509,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				workspaceBranchName?: string;
 				forceNew?: boolean;
 				name?: string;
+				agent?: "claude" | "codex" | "cursor";
 			},
 		): Promise<number> => {
 			const sessions = await getSessions(repoPath);
@@ -526,7 +527,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
 			const index = scopedSessions.length + 1;
 			let name = options?.name;
 			if (!name) {
-				name = `Claude ${index}`;
+				const agentLabel =
+					options?.agent === "codex"
+						? "Codex"
+						: options?.agent === "cursor"
+							? "Cursor"
+							: "Claude";
+				name = `${agentLabel} ${index}`;
 			}
 
 			const sessionId = await createSession(repoPath, workspaceId, name);
@@ -607,16 +614,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	}, []);
 
 	const handleCreateSessionFromSidebar = useCallback(
-		async (workspaceId: number | null) => {
+		async (workspaceId: number | null, agent?: "claude" | "codex" | "cursor") => {
 			const workspace = workspaceId
 				? (workspaces.find((w) => w.id === workspaceId) ?? null)
 				: null;
 			const sessionId = await getOrCreateSession(workspaceId, {
 				forceNew: true,
+				agent,
 			});
 			queryClient.invalidateQueries({ queryKey: ["sessions"] });
 			setActiveSessionId(sessionId);
 			setSelectedWorkspace(workspace);
+			if (agent) {
+				setPendingSessionData((prev) => {
+					const next = new Map(prev);
+					next.set(sessionId, { agent });
+					return next;
+				});
+			}
 		},
 		[getOrCreateSession, workspaces, repoPath, queryClient],
 	);
@@ -763,6 +778,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				...(pending && {
 					pendingPrompt: pending.pendingPrompt,
 					permissionMode: pending.permissionMode,
+					agent: pending.agent,
 				}),
 			};
 		});
@@ -877,13 +893,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
 											setActiveSessionId(sessionData.sessionId);
 											if (
 												sessionData.pendingPrompt ||
-												sessionData.permissionMode
+												sessionData.permissionMode ||
+												sessionData.agent
 											) {
 												setPendingSessionData((prev) => {
 													const next = new Map(prev);
 													next.set(sessionData.sessionId, {
 														pendingPrompt: sessionData.pendingPrompt,
 														permissionMode: sessionData.permissionMode,
+														agent: sessionData.agent,
 													});
 													return next;
 												});
@@ -931,14 +949,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
 								setActiveSessionId(null);
 							}
 						}}
-						onCreateNewSession={(activeWorkspacePath) => {
+						onCreateNewSession={(activeWorkspacePath, agent) => {
 							if (activeWorkspacePath) {
 								const ws = workspaces.find(
 									(w) => getFullWorkspacePath(w) === activeWorkspacePath,
 								);
-								handleCreateSessionFromSidebar(ws?.id ?? null);
+								handleCreateSessionFromSidebar(ws?.id ?? null, agent);
 							} else {
-								handleCreateSessionFromSidebar(selectedWorkspace?.id ?? null);
+								handleCreateSessionFromSidebar(selectedWorkspace?.id ?? null, agent);
 							}
 						}}
 						onNavigateToWorkspace={(workspaceKey, isMainRepo) => {
@@ -1068,8 +1086,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				onCreateWorkspace={() => setUnifiedDialogDefaults({})}
 				onToggleTerminal={() => terminalPaneRef.current?.toggleCollapse()}
 				onMaximizeTerminal={() => terminalPaneRef.current?.toggleMaximize()}
-				onCreateAgentTerminal={() =>
-					terminalPaneRef.current?.createAgentSession()
+				onCreateAgentTerminal={(agent) =>
+					terminalPaneRef.current?.createAgentSession(agent)
 				}
 				onCreateShellTerminal={() =>
 					terminalPaneRef.current?.createShellSession()
