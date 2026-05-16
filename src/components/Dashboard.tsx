@@ -750,6 +750,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				onAddAfter={handleAddAfter}
 				onMoveWorkspace={handleMoveWorkspace}
 				onSelectStack={handleSelectStack}
+				onStartAgent={(workspace) => handleCreateSessionFromSidebar(workspace.id)}
 				currentPage={
 					viewMode === "settings"
 						? "settings"

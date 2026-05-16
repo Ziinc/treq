@@ -1,6 +1,7 @@
 import { Draggable } from "@hello-pangea/dnd";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
+	Bot,
 	Copy,
 	CornerLeftUp,
 	FolderOpen,
@@ -117,6 +118,7 @@ interface WorkspaceSidebarItemProps {
 		event: React.MouseEvent,
 	) => void;
 	onAddAfter?: (workspace: Workspace) => void;
+	onStartAgent?: (workspace: Workspace) => void;
 	onDeleteWorkspace?: (workspace: Workspace) => void;
 	onRenameWorkspace: (workspace: Workspace) => void;
 	onDoubleClick?: (workspace: Workspace, event: React.MouseEvent) => void;
@@ -131,6 +133,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 	onWorkspaceClick,
 	onWorkspaceMultiSelect,
 	onAddAfter,
+	onStartAgent,
 	onDeleteWorkspace,
 	onRenameWorkspace,
 	onDoubleClick,
@@ -204,6 +207,35 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 												{workspaceTitle}
 											</span>
 											<div className="flex items-center gap-1 shrink-0 -mr-3">
+												<span
+													className={cn(
+														"group-hover/workspace:opacity-100 transition-opacity",
+														{
+															"opacity-100": isSelected,
+															"opacity-0": !isSelected,
+														},
+													)}
+												>
+													<Tooltip>
+														<TooltipTrigger asChild>
+															<Button
+																size="icon-xs"
+																variant="ghost"
+																className="text-foreground"
+																aria-label="Start agent"
+																onClick={(e) => {
+																	e.stopPropagation();
+																	onStartAgent?.(workspace);
+																}}
+															>
+																<Bot className="w-4 h-4" />
+															</Button>
+														</TooltipTrigger>
+														<TooltipContent side="bottom">
+															Start agent
+														</TooltipContent>
+													</Tooltip>
+												</span>
 												<span
 													className={cn(
 														"group-hover/workspace:opacity-100 transition-opacity",
