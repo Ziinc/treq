@@ -10,9 +10,8 @@ export interface ClaudeSessionData {
 	workspacePath: string | null;
 	repoPath: string;
 	workspaceName?: string | null; // Branch name or null for main repo
-	pendingPrompt?: string; // Optional prompt to send after agent initializes
+	pendingPrompt?: string; // Optional prompt to send after Claude initializes
 	permissionMode?: "plan" | "acceptEdits"; // Permission mode for Claude terminal
-	agent?: "claude" | "codex";
 }
 
 export interface ShellTerminalData {

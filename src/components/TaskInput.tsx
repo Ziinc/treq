@@ -11,8 +11,6 @@ import {
 import { FilePicker } from "./FilePicker";
 import {
 	createSession,
-	getSetting,
-	getRepoSetting,
 	searchWorkspaceFiles,
 	type FileSearchResult,
 } from "../lib/api";
@@ -40,8 +38,6 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 	const [filePickerOpen, setFilePickerOpen] = useState(false);
 	const [submitting, setSubmitting] = useState(false);
 	const [focused, setFocused] = useState(false);
-	const [selectedAgent, setSelectedAgent] = useState<"claude" | "codex">("claude");
-	const [agentInitialized, setAgentInitialized] = useState(false);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const mentionRef = useRef<HTMLDivElement>(null);
 	const { addToast } = useToast();
@@ -57,26 +53,6 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 	useEffect(() => {
 		textareaRef.current?.focus();
 	}, [workspaceId]);
-
-	// Load default agent from repo setting, falling back to global setting
-	useEffect(() => {
-		if (agentInitialized) return;
-		getRepoSetting(repoPath, "default_agent")
-			.then((repoAgent) => {
-				if (repoAgent === "claude" || repoAgent === "codex") {
-					setSelectedAgent(repoAgent);
-					setAgentInitialized(true);
-					return;
-				}
-				return getSetting("default_agent").then((globalAgent) => {
-					if (globalAgent === "claude" || globalAgent === "codex") {
-						setSelectedAgent(globalAgent);
-					}
-					setAgentInitialized(true);
-				});
-			})
-			.catch(() => setAgentInitialized(true));
-	}, [repoPath, agentInitialized]);
 
 	// Auto-resize textarea
 	useEffect(() => {
@@ -276,7 +252,6 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 					repoPath: sessionRepoPath,
 					pendingPrompt: trimmed,
 					permissionMode: mode,
-					agent: selectedAgent,
 				});
 
 				// Clear input on success
@@ -300,7 +275,6 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 			workingDirectory,
 			onSessionCreated,
 			addToast,
-			selectedAgent,
 		],
 	);
 
@@ -438,27 +412,15 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 						</div>
 
 						<div className="flex items-center gap-2">
-							{/* Agent picker */}
-							<select
-								aria-label="Agent"
-								value={selectedAgent}
-								onChange={(e) => setSelectedAgent(e.target.value as "claude" | "codex")}
-								className="h-7 text-xs px-2 rounded-md border border-border bg-background text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-400"
+							<Button
+								size="sm"
+								variant="secondary"
+								disabled={isEmpty || submitting}
+								onClick={() => handleSubmit("plan")}
+								className="h-7 text-xs px-3"
 							>
-								<option value="claude">Claude</option>
-								<option value="codex">Codex</option>
-							</select>
-							{selectedAgent === "claude" && (
-								<Button
-									size="sm"
-									variant="secondary"
-									disabled={isEmpty || submitting}
-									onClick={() => handleSubmit("plan")}
-									className="h-7 text-xs px-3"
-								>
-									Plan
-								</Button>
-							)}
+								Plan
+							</Button>
 							<TooltipProvider>
 								<Tooltip>
 									<TooltipTrigger asChild>
@@ -468,7 +430,7 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 											onClick={() => handleSubmit("acceptEdits")}
 											className="h-7 text-xs px-3"
 										>
-											{selectedAgent === "codex" ? "Run" : "Edit"}
+											Edit
 										</Button>
 									</TooltipTrigger>
 									<TooltipContent side="top">
