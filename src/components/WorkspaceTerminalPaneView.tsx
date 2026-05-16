@@ -18,7 +18,7 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "./ui/tooltip";
-import { ClaudeTerminalPanel } from "./terminal/ClaudeTerminalPanel";
+import { AgentTerminalPanel } from "./terminal/AgentTerminalPanel";
 import { ResizeDivider } from "./terminal/ResizeDivider";
 import { ShellTerminalPanel } from "./terminal/ShellTerminalPanel";
 import { type ClaudeSessionData } from "./terminal/types";
@@ -357,7 +357,7 @@ export const WorkspaceTerminalPaneView: React.FC<
 										const ptyId = terminal.data.ptySessionId;
 										return (
 											<React.Fragment key={terminalId}>
-												<ClaudeTerminalPanel
+												<AgentTerminalPanel
 													sessionData={terminal.data}
 													collapsed={collapsed}
 													isActive={activePtySessionId === ptyId}
