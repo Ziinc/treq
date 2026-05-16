@@ -33,6 +33,7 @@ use jj_lib::working_copy::{SnapshotOptions, WorkingCopyFreshness};
 use jj_lib::workspace::{default_working_copy_factories, default_working_copy_factory, Workspace};
 use jj_lib::workspace_store::{SimpleWorkspaceStore, WorkspaceStore as _};
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -260,14 +261,6 @@ fn snapshot_working_copy_tree(
     Ok(Some((wc_commit_id, tree)))
 }
 
-fn tree_key(tree: &MergedTree) -> String {
-    tree.tree_ids()
-        .iter()
-        .map(|tree_id| tree_id.hex())
-        .collect::<Vec<_>>()
-        .join(",")
-}
-
 fn count_lines(content: &[u8]) -> u32 {
     if content.is_empty() {
         0
@@ -396,51 +389,6 @@ fn commit_description_first_line(commit: &jj_lib::commit::Commit) -> String {
         .to_string()
 }
 
-fn build_log_commit(
-    repo: &Arc<ReadonlyRepo>,
-    commit: jj_lib::commit::Commit,
-    wc_commit_ids: &HashSet<jj_lib::backend::CommitId>,
-    is_immutable: &impl Fn(
-        &jj_lib::backend::CommitId,
-    ) -> Result<bool, jj_lib::revset::RevsetEvaluationError>,
-) -> JjLogCommit {
-    let short_id = commit.id().hex()[..12].to_string();
-    let change_id = HexPrefix::from_id(commit.change_id()).reverse_hex()[..12].to_string();
-    let description = commit_description_first_line(&commit);
-    let author_name = commit.author().name.clone();
-    let timestamp = commit
-        .author()
-        .timestamp
-        .to_datetime()
-        .map(|timestamp| timestamp.to_rfc3339())
-        .unwrap_or_else(|_| commit.author().timestamp.timestamp.0.to_string());
-    let parent_ids = commit
-        .parent_ids()
-        .iter()
-        .map(|id| id.hex()[..12].to_string())
-        .collect();
-    let bookmarks = repo
-        .view()
-        .local_bookmarks_for_commit(commit.id())
-        .filter_map(|(name, target)| {
-            (target.as_normal() == Some(commit.id())).then(|| name.as_str().to_string())
-        })
-        .collect();
-    JjLogCommit {
-        commit_id: short_id.clone(),
-        short_id,
-        change_id,
-        description,
-        author_name,
-        timestamp,
-        parent_ids,
-        is_working_copy: wc_commit_ids.contains(commit.id()),
-        bookmarks,
-        is_immutable: is_immutable(commit.id()).unwrap_or(false),
-        insertions: 0,
-        deletions: 0,
-    }
-}
 
 fn build_log_commits(
     cache_repo_path: &str,
@@ -452,39 +400,108 @@ fn build_log_commits(
         &jj_lib::backend::CommitId,
     ) -> Result<bool, jj_lib::revset::RevsetEvaluationError>,
 ) -> Vec<JjLogCommit> {
+    let full_commit_ids: Vec<String> =
+        commits.iter().map(|c| c.id().hex()).collect();
+    let cached_map = local_db::get_cached_commit_diff_stats_batch(
+        cache_repo_path,
+        &full_commit_ids,
+    )
+    .unwrap_or_default();
+
     commits
         .into_iter()
         .map(|commit| {
-            let mut log_commit =
-                build_log_commit(repo, commit.clone(), wc_commit_ids, is_immutable);
             let tree_override = wc_tree_override
                 .filter(|(wc_commit_id, _)| **wc_commit_id == *commit.id())
                 .map(|(_, tree)| tree);
-            let effective_tree = tree_override.cloned().unwrap_or_else(|| commit.tree());
-            let cache_key = tree_key(&effective_tree);
             let full_commit_id = commit.id().hex();
-            let (insertions, deletions) = match local_db::get_cached_commit_diff_stat(
-                cache_repo_path,
-                &full_commit_id,
-                &cache_key,
-            ) {
-                Ok(Some(cached)) => (cached.insertions, cached.deletions),
+
+            // Volatile fields always computed from live repo state.
+            let is_working_copy = wc_commit_ids.contains(commit.id());
+            let bookmarks: Vec<String> = repo
+                .view()
+                .local_bookmarks_for_commit(commit.id())
+                .filter_map(|(name, target)| {
+                    (target.as_normal() == Some(commit.id()))
+                        .then(|| name.as_str().to_string())
+                })
+                .collect();
+            let is_immutable_val = is_immutable(commit.id()).unwrap_or(false);
+            let parent_ids: Vec<String> = commit
+                .parent_ids()
+                .iter()
+                .map(|id| id.hex()[..12].to_string())
+                .collect();
+
+            let cached = cached_map.get(&full_commit_id);
+            match cached {
+                Some(cached)
+                    if cached.change_id.is_some()
+                        && cached.description.is_some()
+                        && cached.author_name.is_some()
+                        && cached.timestamp.is_some() =>
+                {
+                    JjLogCommit {
+                        commit_id: cached.commit_id[..12.min(cached.commit_id.len())]
+                            .to_string(),
+                        short_id: cached.commit_id[..12.min(cached.commit_id.len())]
+                            .to_string(),
+                        change_id: cached.change_id.clone().unwrap_or_default(),
+                        description: cached.description.clone().unwrap_or_default(),
+                        author_name: cached.author_name.clone().unwrap_or_default(),
+                        timestamp: cached.timestamp.clone().unwrap_or_default(),
+                        parent_ids,
+                        is_working_copy,
+                        bookmarks,
+                        is_immutable: is_immutable_val,
+                        insertions: cached.insertions,
+                        deletions: cached.deletions,
+                    }
+                }
                 _ => {
-                    let (insertions, deletions) =
-                        compute_commit_stats(repo, &commit, tree_override);
-                    let _ = local_db::cache_commit_diff_stat(
+                    let short_id = full_commit_id[..12].to_string();
+                    let change_id =
+                        HexPrefix::from_id(commit.change_id()).reverse_hex()[..12].to_string();
+                    let description = commit_description_first_line(&commit);
+                    let author_name = commit.author().name.clone();
+                    let timestamp = commit
+                        .author()
+                        .timestamp
+                        .to_datetime()
+                        .map(|ts| ts.to_rfc3339())
+                        .unwrap_or_else(|_| {
+                            commit.author().timestamp.timestamp.0.to_string()
+                        });
+
+                    let (insertions, deletions) = compute_commit_stats(repo, &commit, tree_override);
+
+                    let _ = local_db::cache_commit_row(
                         cache_repo_path,
                         &full_commit_id,
-                        &cache_key,
                         insertions,
                         deletions,
+                        &change_id,
+                        &description,
+                        &author_name,
+                        &timestamp,
                     );
-                    (insertions, deletions)
+
+                    JjLogCommit {
+                        commit_id: short_id.clone(),
+                        short_id,
+                        change_id,
+                        description,
+                        author_name,
+                        timestamp,
+                        parent_ids,
+                        is_working_copy,
+                        bookmarks,
+                        is_immutable: is_immutable_val,
+                        insertions,
+                        deletions,
+                    }
                 }
-            };
-            log_commit.insertions = insertions;
-            log_commit.deletions = deletions;
-            log_commit
+            }
         })
         .collect()
 }

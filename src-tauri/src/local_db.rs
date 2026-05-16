@@ -84,10 +84,13 @@ pub struct PendingReview {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CachedCommitDiffStat {
     pub commit_id: String,
-    pub tree_key: String,
     pub insertions: u32,
     pub deletions: u32,
     pub updated_at: String,
+    pub change_id: Option<String>,
+    pub description: Option<String>,
+    pub author_name: Option<String>,
+    pub timestamp: Option<String>,
 }
 
 pub fn get_local_db_path(repo_path: &str) -> PathBuf {
@@ -278,24 +281,33 @@ pub fn init_local_db(repo_path: &str) -> Result<PathBuf, String> {
     )
     .map_err(|e| format!("Failed to create pending_reviews table: {}", e))?;
 
+    // Drop any prior schema of commit_diff_stats — keyed cache, safe to recreate.
+    let needs_rebuild: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('commit_diff_stats') WHERE name IN ('tree_key', 'parent_ids')",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|n| n > 0)
+        .unwrap_or(false);
+    if needs_rebuild {
+        let _ = conn.execute("DROP TABLE IF EXISTS commit_diff_stats", []);
+    }
+
     conn.execute(
         "CREATE TABLE IF NOT EXISTS commit_diff_stats (
-            commit_id TEXT NOT NULL,
-            tree_key TEXT NOT NULL,
+            commit_id TEXT NOT NULL PRIMARY KEY,
             insertions INTEGER NOT NULL,
             deletions INTEGER NOT NULL,
             updated_at TEXT NOT NULL,
-            PRIMARY KEY (commit_id, tree_key)
+            change_id TEXT,
+            description TEXT,
+            author_name TEXT,
+            timestamp TEXT
         )",
         [],
     )
     .map_err(|e| format!("Failed to create commit_diff_stats table: {}", e))?;
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_commit_diff_stats_commit ON commit_diff_stats(commit_id)",
-        [],
-    )
-    .map_err(|e| format!("Failed to create commit_diff_stats commit index: {}", e))?;
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_pending_reviews_workspace ON pending_reviews(workspace_id)",
@@ -533,57 +545,89 @@ pub fn update_workspace_branch_name(
     Ok(())
 }
 
-pub fn get_cached_commit_diff_stat(
+pub fn get_cached_commit_diff_stats_batch(
     repo_path: &str,
-    commit_id: &str,
-    tree_key: &str,
-) -> Result<Option<CachedCommitDiffStat>, String> {
+    commit_ids: &[String],
+) -> Result<std::collections::HashMap<String, CachedCommitDiffStat>, String> {
+    use std::collections::HashMap;
+    if commit_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
     let conn = get_connection(repo_path)?;
+    let placeholders = std::iter::repeat("?")
+        .take(commit_ids.len())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sql = format!(
+        "SELECT commit_id, insertions, deletions, updated_at,
+                change_id, description, author_name, timestamp
+         FROM commit_diff_stats
+         WHERE commit_id IN ({})",
+        placeholders
+    );
     let mut stmt = conn
-        .prepare(
-            "SELECT commit_id, tree_key, insertions, deletions, updated_at
-             FROM commit_diff_stats
-             WHERE commit_id = ?1 AND tree_key = ?2",
-        )
-        .map_err(|e| format!("Failed to prepare commit diff stat query: {}", e))?;
-
-    stmt.query_row(params![commit_id, tree_key], |row| {
-        Ok(CachedCommitDiffStat {
-            commit_id: row.get(0)?,
-            tree_key: row.get(1)?,
-            insertions: row.get(2)?,
-            deletions: row.get(3)?,
-            updated_at: row.get(4)?,
+        .prepare(&sql)
+        .map_err(|e| format!("Failed to prepare commit diff stat batch query: {}", e))?;
+    let params_vec: Vec<&dyn rusqlite::ToSql> =
+        commit_ids.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+    let rows = stmt
+        .query_map(params_vec.as_slice(), |row| {
+            Ok(CachedCommitDiffStat {
+                commit_id: row.get(0)?,
+                insertions: row.get(1)?,
+                deletions: row.get(2)?,
+                updated_at: row.get(3)?,
+                change_id: row.get(4)?,
+                description: row.get(5)?,
+                author_name: row.get(6)?,
+                timestamp: row.get(7)?,
+            })
         })
-    })
-    .optional()
-    .map_err(|e| format!("Failed to query commit diff stat cache: {}", e))
+        .map_err(|e| format!("Failed to query commit diff stat cache: {}", e))?;
+    let mut out = HashMap::with_capacity(commit_ids.len());
+    for row in rows {
+        let row = row.map_err(|e| format!("Failed to read commit diff stat row: {}", e))?;
+        out.insert(row.commit_id.clone(), row);
+    }
+    Ok(out)
 }
 
-pub fn cache_commit_diff_stat(
+pub fn cache_commit_row(
     repo_path: &str,
     commit_id: &str,
-    tree_key: &str,
     insertions: u32,
     deletions: u32,
+    change_id: &str,
+    description: &str,
+    author_name: &str,
+    timestamp: &str,
 ) -> Result<(), String> {
     let conn = get_connection(repo_path)?;
     conn.execute(
-        "INSERT INTO commit_diff_stats (commit_id, tree_key, insertions, deletions, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5)
-         ON CONFLICT(commit_id, tree_key) DO UPDATE SET
+        "INSERT INTO commit_diff_stats
+             (commit_id, insertions, deletions, updated_at,
+              change_id, description, author_name, timestamp)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+         ON CONFLICT(commit_id) DO UPDATE SET
             insertions = excluded.insertions,
             deletions = excluded.deletions,
-            updated_at = excluded.updated_at",
+            updated_at = excluded.updated_at,
+            change_id = excluded.change_id,
+            description = excluded.description,
+            author_name = excluded.author_name,
+            timestamp = excluded.timestamp",
         params![
             commit_id,
-            tree_key,
             insertions,
             deletions,
-            Utc::now().to_rfc3339()
+            Utc::now().to_rfc3339(),
+            change_id,
+            description,
+            author_name,
+            timestamp,
         ],
     )
-    .map_err(|e| format!("Failed to cache commit diff stat: {}", e))?;
+    .map_err(|e| format!("Failed to cache commit row: {}", e))?;
     Ok(())
 }
 
@@ -2047,4 +2091,5 @@ mod tests {
             initialized.lock().unwrap().remove(repo_path);
         }
     }
+
 }
