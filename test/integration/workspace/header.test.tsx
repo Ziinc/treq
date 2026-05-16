@@ -79,6 +79,45 @@ describe("ShowWorkspace - header", () => {
 		).not.toBeInTheDocument();
 	});
 
+	it("lazily loads branch list into the target-branch dropdown on open", async () => {
+		await createWorkspace(repoPath, "feat/alpha");
+		await createWorkspace(repoPath, "feat/beta");
+		render(<Dashboard />);
+
+		const alphaElement = await findSidebarBranchElement("feat/alpha");
+		fireEvent.click(alphaElement);
+
+		let targetBtn: HTMLButtonElement;
+		await waitFor(() => {
+			targetBtn = screen.getByRole("button", {
+				name: "Workspace target",
+			}) as HTMLButtonElement;
+			expect(targetBtn).not.toBeDisabled();
+		});
+
+		// Before the dropdown opens, no branch items should be rendered
+		// (the popover content is not mounted, proving lazy behavior).
+		expect(document.querySelectorAll(".branch-list-item")).toHaveLength(0);
+
+		fireEvent.click(targetBtn!);
+
+		// After opening, the real backend (via napi) populates the list.
+		await waitFor(() => {
+			expect(
+				document.querySelectorAll(".branch-list-item").length,
+			).toBeGreaterThan(0);
+		});
+
+		expect(
+			await screen.findByText("main", { selector: ".branch-list-item *" }),
+		).toBeTruthy();
+		expect(
+			await screen.findByText("feat/beta", {
+				selector: ".branch-list-item *",
+			}),
+		).toBeTruthy();
+	});
+
 	it("shows workspace branch name in the header when workspace is selected", async () => {
 		await createWorkspace(repoPath, "feat/header-test");
 		render(<Dashboard />);

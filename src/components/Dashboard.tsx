@@ -46,6 +46,7 @@ import {
 	getSetting,
 	getWorkspaces,
 	initRepo,
+	listRepoBranches,
 	selectFolder,
 	setSessionModel,
 	setSetting,
@@ -55,6 +56,7 @@ import {
 import { Loader2 } from "lucide-react";
 import { getFullWorkspacePath } from "../lib/utils";
 import { Onboarding } from "./Onboarding";
+import type { BranchListItem } from "./TargetBranchSelector";
 
 // Loading spinner component for Suspense fallback
 const LoadingSpinner = () => (
@@ -236,23 +238,28 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		setCurrentBranch(repoBranch.current_branch);
 	}, [repoPath, repoBranch?.current_branch]);
 
-	// const {
-	// 	data: availableBranches = [],
-	// 	isFetching: branchesLoading,
-	// 	refetch: loadAvailableBranches,
-	// } = useQuery<BranchListItem[]>({
-	// 	queryKey: ["repo-branches", repoPath],
-	// 	enabled: false,
-	// 	staleTime: 5 * 60 * 1000,
-	// 	queryFn: async () => {
-	// 		const jjBranches = await listRepoBranches(repoPath);
-	// 		return jjBranches.map((branch) => ({
-	// 			name: branch.name,
-	// 			fullName: branch.name,
-	// 			isCurrent: branch.is_current,
-	// 		}));
-	// 	},
-	// });
+	const {
+		data: availableBranches = [],
+		isFetching: branchesLoading,
+		refetch: loadAvailableBranches,
+	} = useQuery<BranchListItem[]>({
+		queryKey: ["repo-branches", repoPath],
+		enabled: false,
+		staleTime: 5 * 60 * 1000,
+		queryFn: async () => {
+			const jjBranches = await listRepoBranches(repoPath);
+			return jjBranches.map((branch) => ({
+				name: branch.name,
+				fullName: branch.name,
+				isCurrent: branch.is_current,
+			}));
+		},
+	});
+
+	const handleLoadAvailableBranches = useCallback(() => {
+		if (!repoPath) return;
+		void loadAvailableBranches();
+	}, [repoPath, loadAvailableBranches]);
 
 	// Manage file watcher lifecycle for selected workspace
 	// useEffect(() => {
@@ -781,9 +788,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
 										onActiveTabChange={setShowWorkspaceActiveTab}
 										mainRepoBranch={currentBranch}
 										initialSelectedFile={sessionSelectedFile}
-										availableBranches={[]}
-										branchesLoading={false}
-										onLoadAvailableBranches={() => undefined}
+										availableBranches={availableBranches}
+										branchesLoading={branchesLoading}
+										onLoadAvailableBranches={handleLoadAvailableBranches}
 										onDeleteWorkspace={handleDelete}
 										onOpenFilePicker={() => setShowFilePicker(true)}
 										onOpenMergePreview={handleOpenMergePreview}
