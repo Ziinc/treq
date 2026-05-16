@@ -54,6 +54,7 @@ interface WorkspaceSidebarProps {
 	onAddAfter?: (workspace: Workspace) => void;
 	onMoveWorkspace?: (workspace: Workspace, targetBranch: string | null) => void;
 	onSelectStack?: (workspaceIds: Set<number>) => void;
+	onStartAgent?: (workspace: Workspace) => void;
 }
 
 export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
@@ -73,6 +74,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 		onAddAfter,
 		onMoveWorkspace,
 		onSelectStack,
+		onStartAgent,
 	}) => {
 		const { data: workspaces = [] } = useQuery({
 			queryKey: ["workspaces", repoPath],
@@ -321,6 +323,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 												onWorkspaceClick={onWorkspaceClick}
 												onWorkspaceMultiSelect={onWorkspaceMultiSelect}
 												onAddAfter={onAddAfter}
+												onStartAgent={onStartAgent}
 												onDeleteWorkspace={onDeleteWorkspace}
 												onRenameWorkspace={setRenameTarget}
 												onDoubleClick={handleDoubleClick}
