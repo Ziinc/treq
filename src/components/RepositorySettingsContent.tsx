@@ -17,7 +17,6 @@ export const RepositorySettingsContent: React.FC<
 	const [branchNamePattern, setBranchNamePattern] = useState("treq/{name}");
 	const [includedFiles, setIncludedFiles] = useState("");
 	const [defaultModel, setDefaultModel] = useState<string>("");
-	const [defaultAgent, setDefaultAgent] = useState<string>("");
 	const [loading, setLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -34,13 +33,11 @@ export const RepositorySettingsContent: React.FC<
 				getRepoSetting(repoPath, "branch_name_pattern"),
 				getRepoSetting(repoPath, "included_copy_files"),
 				getRepoSetting(repoPath, "default_model"),
-				getRepoSetting(repoPath, "default_agent"),
 			])
-				.then(([branchPattern, includedPatterns, model, agent]) => {
+				.then(([branchPattern, includedPatterns, model]) => {
 					setBranchNamePattern(branchPattern || "treq/{name}");
 					setIncludedFiles(includedPatterns || "");
 					setDefaultModel(model || "");
-					setDefaultAgent(agent || "");
 					// Note: gitignored files listing removed - was git-specific
 					setAvailableFiles([]);
 				})
@@ -49,7 +46,6 @@ export const RepositorySettingsContent: React.FC<
 					setBranchNamePattern("treq/{name}");
 					setIncludedFiles("");
 					setDefaultModel("");
-					setDefaultAgent("");
 					setAvailableFiles([]);
 				})
 				.finally(() => {
@@ -67,7 +63,6 @@ export const RepositorySettingsContent: React.FC<
 				setRepoSetting(repoPath, "branch_name_pattern", branchNamePattern),
 				setRepoSetting(repoPath, "included_copy_files", includedFiles),
 				setRepoSetting(repoPath, "default_model", defaultModel),
-				setRepoSetting(repoPath, "default_agent", defaultAgent),
 			]);
 			addToast({
 				title: "Settings saved",
@@ -174,24 +169,6 @@ export const RepositorySettingsContent: React.FC<
 				<p className="text-sm text-muted-foreground mt-1">
 					Default model for new Claude Code sessions in this repository
 					(overrides application default)
-				</p>
-			</div>
-
-			<div>
-				<Label htmlFor="repo-default-agent">Default Agent</Label>
-				<select
-					id="repo-default-agent"
-					value={defaultAgent}
-					onChange={(e) => setDefaultAgent(e.target.value)}
-					className="mt-2 w-full px-3 py-2 border rounded-md bg-background text-foreground"
-				>
-					<option value="">Use Application Default</option>
-					<option value="claude">Claude</option>
-					<option value="codex">Codex</option>
-				</select>
-				<p className="text-sm text-muted-foreground mt-1">
-					Default agent for new sessions in this repository (overrides
-					application default)
 				</p>
 			</div>
 

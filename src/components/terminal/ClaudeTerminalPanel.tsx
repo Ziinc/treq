@@ -31,7 +31,6 @@ import {
 	Loader2,
 	RotateCw,
 	Search,
-	Sparkles,
 	X,
 } from "lucide-react";
 import { ModelSelector } from "../ModelSelector";
@@ -39,7 +38,7 @@ import { Input } from "../ui/input";
 import { useToast } from "../ui/toast";
 import { type ClaudeSessionData } from "./types";
 
-export interface AgentTerminalPanelProps {
+export interface ClaudeTerminalPanelProps {
 	sessionData: ClaudeSessionData;
 	collapsed: boolean;
 	isActive?: boolean;
@@ -54,7 +53,7 @@ export interface AgentTerminalPanelProps {
 	width?: number | null;
 }
 
-export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
+export const ClaudeTerminalPanel = memo<ClaudeTerminalPanelProps>(
 	({
 		sessionData,
 		collapsed,
@@ -173,7 +172,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 					if (!options?.silent) {
 						addToast({
 							title: "Terminal Reset",
-							description: `Starting new ${sessionData.agent === "codex" ? "Codex" : "Claude"} session`,
+							description: "Starting new Claude session",
 							type: "info",
 						});
 					}
@@ -231,7 +230,23 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 			performReset();
 		}, [pendingModelReset, handleReset, sessionModel, addToast]);
 
-		// Shared treq CLI documentation injected as system prompt for any agent
+		// Build Claude command with optional pending prompt
+		// Use refs to avoid losing values due to race condition with sessions refetch
+		const permissionModeArg =
+			permissionModeRef.current === "plan"
+				? " --permission-mode plan"
+				: " --permission-mode acceptEdits";
+
+		let autoCommand = "claude";
+
+		// Add permission mode and model flags first
+		autoCommand += permissionModeArg;
+		if (sessionModel) {
+			autoCommand += ` --model="${sessionModel}"`;
+		}
+
+		// Add treq CLI documentation as system prompt for the Claude agent
+		// const agentWorkingDir = sessionData.workspacePath || sessionData.repoPath;
 		const treqSystemPrompt = [
 			"You have access to the treq CLI for managing workspaces. Available commands:",
 			"- treq workspace ls — List all workspaces with their status",
@@ -244,42 +259,23 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 			`IMPORTANT: You must read, write, edit, delete only files in the current working directory.`,
 		].join("\\n");
 
-		// Escape a string for use inside a double-quoted shell argument
-		const escapeShellDoubleQuoted = (str: string) =>
-			str
-				.replace(/\\/g, "\\\\")
-				.replace(/"/g, '\\"')
-				.replace(/`/g, "\\`")
-				.replace(/\$/g, "\\$")
-				.replace(/!/g, "\\!");
+		autoCommand += ` --append-system-prompt "${treqSystemPrompt}"`;
 
-		let autoCommand: string;
-
-		if (sessionData.agent === "codex") {
-			// Codex CLI: pass system prompt via -c instructions override, then prompt as positional arg
-			autoCommand = `codex -c instructions="${escapeShellDoubleQuoted(treqSystemPrompt)}"`;
-			if (pendingPromptRef.current) {
-				autoCommand += ` "${escapeShellDoubleQuoted(pendingPromptRef.current)}"`;
-			}
-		} else {
-			// Claude Code: permission mode, model, system prompt, then prompt after --
-			const permissionModeArg =
-				permissionModeRef.current === "plan"
-					? " --permission-mode plan"
-					: " --permission-mode acceptEdits";
-			autoCommand = "claude" + permissionModeArg;
-			if (sessionModel) {
-				autoCommand += ` --model="${sessionModel}"`;
-			}
-			autoCommand += ` --append-system-prompt "${treqSystemPrompt}"`;
-			if (pendingPromptRef.current) {
-				autoCommand += ` -- "${escapeShellDoubleQuoted(pendingPromptRef.current)}"`;
-			}
-		}
-
-		// Prepend PATH export so treq CLI is available inside all agent sessions
+		// Prepend PATH export so treq CLI is available inside Claude sessions
 		if (treqBinDir) {
 			autoCommand = `export PATH="${treqBinDir}:$PATH"; ${autoCommand}`;
+		}
+
+		// If there's a pending prompt, add it as a positional argument after --
+		if (pendingPromptRef.current) {
+			// Escape shell special characters (keep newlines as actual newlines)
+			const escapedPrompt = pendingPromptRef.current
+				.replace(/\\/g, "\\\\") // Escape backslashes first
+				.replace(/"/g, '\\"') // Escape double quotes
+				.replace(/`/g, "\\`") // Escape backticks (command substitution)
+				.replace(/\$/g, "\\$") // Escape dollar signs (variable expansion)
+				.replace(/!/g, "\\!"); // Escape ! (zsh history expansion)
+			autoCommand += ` -- "${escapedPrompt}"`;
 		}
 
 		return (
@@ -302,22 +298,16 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 					)}
 				>
 					<div className="flex items-center gap-1 text-sm font-medium text-gray-200">
-						{sessionData.agent === "codex" ? (
-							<Sparkles className="w-4 h-4" />
-						) : (
-							<Bot className="w-4 h-4" />
-						)}
+						<Bot className="w-4 h-4" />
 						<span className="truncate">{sessionData.sessionName}</span>
 					</div>
 					<div className="flex items-center gap-1">
-						{/* Model selector — Claude only */}
-						{sessionData.agent !== "codex" && (
-							<ModelSelector
-								currentModel={sessionModel}
-								onModelChange={handleModelChange}
-								disabled={isChangingModel || isResetting}
-							/>
-						)}
+						{/* Model selector */}
+						<ModelSelector
+							currentModel={sessionModel}
+							onModelChange={handleModelChange}
+							disabled={isChangingModel || isResetting}
+						/>
 						{/* Reset button */}
 						<TooltipProvider>
 							<Tooltip>

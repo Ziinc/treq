@@ -27,7 +27,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 }) => {
 	const [currentTab, setCurrentTab] = useState<TabValue>("repository");
 	const [defaultModel, setDefaultModel] = useState<string>("");
-	const [defaultAgent, setDefaultAgent] = useState<string>("");
 	const [conflictMarkerStyle, setConflictMarkerStyle] = useState<string>("git");
 	const [originalFontSize, setOriginalFontSize] = useState<number | null>(null);
 	const [localFontSize, setLocalFontSize] = useState<number>(12);
@@ -41,9 +40,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 		getSetting("default_model").then((model: string | null) => {
 			if (model) setDefaultModel(model);
 		});
-		getSetting("default_agent").then((agent: string | null) => {
-			if (agent) setDefaultAgent(agent);
-		});
 		getSetting("conflict_marker_style").then((style: string | null) => {
 			if (style) setConflictMarkerStyle(style);
 		});
@@ -55,7 +51,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 	const handleSaveApplicationSettings = async () => {
 		try {
 			await setSetting("default_model", defaultModel);
-			await setSetting("default_agent", defaultAgent);
 			await setSetting("conflict_marker_style", conflictMarkerStyle);
 			await setFontSize(localFontSize);
 
@@ -204,23 +199,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 											</select>
 											<p className="text-sm text-muted-foreground mt-1">
 												Default model for new Claude Code sessions
-											</p>
-										</div>
-
-										<div>
-											<Label htmlFor="default-agent">Default Agent</Label>
-											<select
-												id="default-agent"
-												value={defaultAgent}
-												onChange={(e) => setDefaultAgent(e.target.value)}
-												className="mt-2 w-full px-3 py-2 border rounded-md bg-background text-foreground"
-											>
-												<option value="">Default (Claude)</option>
-												<option value="claude">Claude</option>
-												<option value="codex">Codex</option>
-											</select>
-											<p className="text-sm text-muted-foreground mt-1">
-												Default agent for new sessions
 											</p>
 										</div>
 
