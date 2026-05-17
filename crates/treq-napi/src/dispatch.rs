@@ -408,12 +408,7 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
         "get_workspace_diff" => {
             let repo_path = get_str(&args, "repoPath")?;
             let workspace_id: i64 = get_i64(&args, "workspaceId")?;
-            let conflict_style = get_conflict_style()?;
-            let result = treq_lib::core::workspace_diff_with_conflict_style(
-                &repo_path,
-                workspace_id,
-                &conflict_style,
-            )?;
+            let result = treq_lib::core::workspace_diff(&repo_path, workspace_id)?;
             serde_json::to_value(result).map_err(|e| e.to_string())
         }
 
@@ -665,7 +660,10 @@ fn get_conflict_style() -> Result<String, String> {
     if let Ok(state) = state::get() {
         if let Ok(db) = state.db.lock() {
             if let Ok(Some(style)) = db.get_setting("conflict_marker_style") {
-                return Ok(style);
+                let trimmed = style.trim();
+                if !trimmed.is_empty() {
+                    return Ok(trimmed.to_string());
+                }
             }
         }
     }

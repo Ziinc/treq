@@ -83,6 +83,7 @@ pub fn run() {
                 .app_data_dir()
                 .expect("Failed to get app data dir");
             std::fs::create_dir_all(&app_dir).expect("Failed to create app data directory");
+            std::env::set_var("TREQ_APP_DATA_DIR", app_dir.to_string_lossy().to_string());
             let db_path = app_dir.join("treq.db");
 
             let db = Database::new(db_path).expect("Failed to open database");

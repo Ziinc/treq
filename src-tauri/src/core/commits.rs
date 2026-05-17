@@ -172,13 +172,7 @@ pub fn get_commit_diff(
     workspace_id: Option<i64>,
     commit_change_id: &str,
 ) -> Result<jj::JjRevisionDiff, String> {
-    let conflict_marker_style = db
-        .lock()
-        .unwrap()
-        .get_setting("conflict_marker_style")
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| "git".to_string());
+    let conflict_marker_style = crate::core::resolve_conflict_marker_style(db);
 
     get_commit_diff_with_conflict_style(
         repo_path,
@@ -221,13 +215,7 @@ pub fn get_commit_file_diff(
     commit_change_id: &str,
     file_path: &str,
 ) -> Result<jj::JjFileDiff, String> {
-    let conflict_marker_style = db
-        .lock()
-        .unwrap()
-        .get_setting("conflict_marker_style")
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| "git".to_string());
+    let conflict_marker_style = crate::core::resolve_conflict_marker_style(db);
 
     get_commit_file_diff_with_conflict_style(
         repo_path,

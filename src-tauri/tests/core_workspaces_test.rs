@@ -2813,11 +2813,8 @@ fn merge_diff_commit(repo: &TestRepo, ws: &Workspace, msg: &str) {
 }
 
 fn merge_diff_paths(repo: &TestRepo, ws: &Workspace) -> Vec<String> {
-    let db_path = Path::new(&repo.repo_path).join(".treq").join("treq.db");
-    let db = std::sync::Mutex::new(
-        treq_lib::db::Database::new(db_path).expect("test db should be openable"),
-    );
-    treq_lib::core::workspace_diff(&repo.repo_path, ws.id, &db)
+    init_test_app_db(repo, Some("git"));
+    treq_lib::core::workspace_diff(&repo.repo_path, ws.id)
         .unwrap()
         .files
         .iter()
@@ -2826,11 +2823,24 @@ fn merge_diff_paths(repo: &TestRepo, ws: &Workspace) -> Vec<String> {
 }
 
 fn merge_diff_result(repo: &TestRepo, ws: &Workspace) -> treq_lib::jj::JjRevisionDiff {
-    let db_path = Path::new(&repo.repo_path).join(".treq").join("treq.db");
-    let db = std::sync::Mutex::new(
-        treq_lib::db::Database::new(db_path).expect("test db should be openable"),
-    );
-    treq_lib::core::workspace_diff(&repo.repo_path, ws.id, &db).unwrap()
+    init_test_app_db(repo, Some("git"));
+    treq_lib::core::workspace_diff(&repo.repo_path, ws.id).unwrap()
+}
+
+fn test_app_data_dir(repo: &TestRepo) -> std::path::PathBuf {
+    Path::new(&repo.repo_path).join(".treq")
+}
+
+fn init_test_app_db(repo: &TestRepo, conflict_marker_style: Option<&str>) {
+    let app_dir = test_app_data_dir(repo);
+    fs::create_dir_all(&app_dir).expect("app data dir should be creatable");
+    let db_path = app_dir.join("treq.db");
+    let db = treq_lib::db::Database::new(db_path).expect("test app db should be openable");
+    db.init().expect("test app db should initialize");
+    if let Some(style) = conflict_marker_style {
+        db.set_setting("conflict_marker_style", style)
+            .expect("setting conflict marker style should succeed");
+    }
 }
 
 #[test]
@@ -2943,4 +2953,30 @@ fn test_workspace_diff_reports_copy_status() {
     if copied.status == "C" {
         assert_eq!(copied.previous_path.as_deref(), Some("source.txt"));
     }
+}
+
+#[test]
+fn test_workspace_diff_defaults_to_git_when_conflict_marker_style_missing() {
+    let repo = TestRepo::new().unwrap();
+    init_test_app_db(&repo, None);
+    let ws = merge_diff_new_workspace(&repo, "feat/no-style");
+
+    treq_lib::core::workspace_diff(&repo.repo_path, ws.id)
+        .expect("workspace_diff should default to git style when setting is missing");
+}
+
+#[test]
+fn test_workspace_diff_errors_when_app_db_cannot_be_opened() {
+    let repo = TestRepo::new().unwrap();
+    let app_dir = test_app_data_dir(&repo);
+    fs::create_dir_all(&app_dir).expect("app data dir should be creatable");
+    fs::write(app_dir.join("treq.db"), "not a sqlite db").expect("should write invalid db file");
+    let ws = merge_diff_new_workspace(&repo, "feat/bad-db");
+
+    let err = treq_lib::core::workspace_diff(&repo.repo_path, ws.id).unwrap_err();
+    assert!(
+        err.contains("Failed to open app database") || err.contains("Failed to read"),
+        "expected app db open/read failure, got: {}",
+        err
+    );
 }

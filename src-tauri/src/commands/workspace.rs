@@ -209,14 +209,7 @@ pub fn set_workspace_target_branch(
         ));
     }
 
-    let conflict_style = state
-        .db
-        .lock()
-        .unwrap()
-        .get_setting("conflict_marker_style")
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| "git".to_string());
+    let conflict_style = crate::core::resolve_conflict_marker_style(&state.db);
 
     // Convert Git remote branch format (origin/main) to jj format (main@origin)
     let jj_target_branch =
@@ -265,14 +258,7 @@ pub fn check_and_rebase_workspaces(
     default_branch: Option<String>,
     force: Option<bool>,
 ) -> Result<crate::core::SingleRebaseResult, String> {
-    let conflict_style = state
-        .db
-        .lock()
-        .unwrap()
-        .get_setting("conflict_marker_style")
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| "git".to_string());
+    let conflict_style = crate::core::resolve_conflict_marker_style(&state.db);
 
     crate::core::check_and_rebase_workspaces(
         &repo_path,
@@ -290,14 +276,7 @@ pub fn pull_workspace_from_remote(
     repo_path: String,
     workspace_id: Option<i64>,
 ) -> Result<crate::core::PullWorkspaceResult, String> {
-    let conflict_style = state
-        .db
-        .lock()
-        .unwrap()
-        .get_setting("conflict_marker_style")
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| "git".to_string());
+    let conflict_style = crate::core::resolve_conflict_marker_style(&state.db);
 
     crate::core::pull_workspace_from_remote(&repo_path, workspace_id, &conflict_style)
 }
