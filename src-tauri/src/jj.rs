@@ -12,7 +12,7 @@ use jj_lib::copies::CopyRecords;
 use jj_lib::fileset::FilesetAliasesMap;
 use jj_lib::git;
 use jj_lib::gitignore::GitIgnoreFile;
-use jj_lib::matchers::{NothingMatcher, PrefixMatcher};
+use jj_lib::matchers::{Matcher, NothingMatcher, PrefixMatcher};
 use jj_lib::merge::Diff;
 use jj_lib::merged_tree::MergedTree;
 use jj_lib::object_id::{HexPrefix, ObjectId};
@@ -4279,6 +4279,28 @@ fn resolve_target_branch_symbol(workspace_path: &str, target_branch: &str) -> St
     convert_git_branch_to_jj_format(target_branch, &workspace_repo_path(workspace_path))
 }
 
+fn resolve_merge_target_parent(
+    loaded: &LoadedWorkspaceRepo,
+    workspace_path: &str,
+    target_branch: &str,
+) -> Result<Commit, JjError> {
+    let target_symbol = resolve_target_branch_symbol(workspace_path, target_branch);
+    if let Ok(commit) = resolve_commit_by_revision(loaded, &target_symbol) {
+        return Ok(commit);
+    }
+
+    // Keep compatibility with historical `<target>+` behavior, but do not require it.
+    let target_plus_symbol = format!("{}+", format_revset_symbol(&target_symbol));
+    if let Ok(commit) = resolve_commit_by_revision(loaded, &target_plus_symbol) {
+        return Ok(commit);
+    }
+
+    Err(JjError::IoError(format!(
+        "Target branch '{}' could not be resolved (tried '{}' and '{}')",
+        target_branch, target_symbol, target_plus_symbol
+    )))
+}
+
 fn load_workspace_repo_for_history_edit(
     workspace_path: &str,
 ) -> Result<LoadedWorkspaceRepo, JjError> {
@@ -4397,6 +4419,26 @@ fn get_commit_copy_records(
     Ok(copy_records)
 }
 
+fn get_copy_records_between(
+    store: &jj_lib::store::Store,
+    root: &jj_lib::backend::CommitId,
+    head: &jj_lib::backend::CommitId,
+    matcher: &PrefixMatcher,
+) -> Result<CopyRecords, JjError> {
+    let stream = store
+        .get_copy_records(None, root, head)
+        .map_err(|e| JjError::IoError(format!("Failed to read copy records: {}", e)))?;
+    let records = futures::executor::block_on(
+        stream
+            .try_filter(|record| futures::future::ready(matcher.matches(&record.target)))
+            .try_collect::<Vec<_>>(),
+    )
+    .map_err(|e| JjError::IoError(format!("Failed to collect copy records: {}", e)))?;
+    let mut copy_records = CopyRecords::default();
+    copy_records.add_records(records);
+    Ok(copy_records)
+}
+
 fn build_file_change(
     entry_path: &jj_lib::copies::CopiesTreeDiffEntryPath,
     changed_line_count: usize,
@@ -4455,61 +4497,49 @@ fn build_file_diff_from_bytes(
 pub fn jj_get_merge_diff(
     workspace_path: &str,
     target_branch: &str,
-    conflict_marker_style: &str,
+    _conflict_marker_style: &str,
 ) -> Result<JjRevisionDiff, JjError> {
-    // Validate target_branch to prevent injection
-    if target_branch.starts_with('-') || target_branch.contains('\0') || target_branch.is_empty() {
-        return Err(JjError::IoError("Invalid target branch name".to_string()));
-    }
+    validate_branch_name(target_branch, "target")?;
+    let loaded = load_workspace_repo(workspace_path)?;
+    let target_symbol = resolve_target_branch_symbol(workspace_path, target_branch);
+    let from_commit = resolve_commit_by_revision(&loaded, &target_symbol)?;
+    let to_commit = resolve_commit_by_revision(&loaded, "@-")?;
+    let from_tree = from_commit.tree();
+    let to_tree = to_commit.tree();
 
-    // First get list of changed files
-    let status_output = command_for("jj")
-        .current_dir(workspace_path)
-        .args(["diff", "--from", target_branch, "--to", "@-", "--summary"])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
+    let matcher = repo_root_matcher();
+    let copy_records =
+        get_copy_records_between(loaded.repo.store(), from_commit.id(), to_commit.id(), &matcher)?;
+    let conflict_labels = Diff::new(from_tree.labels(), to_tree.labels());
+    let diff_stream = materialized_diff_stream(
+        loaded.repo.store(),
+        from_tree.diff_stream_with_copies(&to_tree, &matcher, &copy_records),
+        conflict_labels,
+    );
 
-    if !status_output.status.success() {
-        return Err(JjError::IoError(
-            String::from_utf8_lossy(&status_output.stderr).to_string(),
-        ));
-    }
-
-    let summary = String::from_utf8_lossy(&status_output.stdout);
-    let files = parse_diff_summary(&summary)?;
-
-    // For each file, get the hunks
+    let mut files = Vec::new();
     let mut hunks_by_file = Vec::new();
-    for file in &files {
-        let diff_output = jj_command(conflict_marker_style)
-            .current_dir(workspace_path)
-            .args([
-                "diff",
-                "--from",
-                target_branch,
-                "--to",
-                "@-",
-                "--git",
-                "--no-pager",
-                "--",
-                &file.path,
-            ])
-            .output()
-            .map_err(|e| JjError::IoError(e.to_string()))?;
-
-        if !diff_output.status.success() {
-            // If diff fails for a file, skip it but continue with others
-            continue;
+    futures::executor::block_on(async {
+        futures::pin_mut!(diff_stream);
+        while let Some(entry) = diff_stream.next().await {
+            let values = match entry.values {
+                Ok(values) => values,
+                Err(_) => continue,
+            };
+            let before_absent = matches!(&values.before, MaterializedTreeValue::Absent);
+            let after_absent = matches!(&values.after, MaterializedTreeValue::Absent);
+            let before_bytes =
+                materialized_value_to_bytes(entry.path.source(), values.before).await;
+            let after_bytes = materialized_value_to_bytes(entry.path.target(), values.after).await;
+            let (changed_line_count, hunks) = build_file_diff_from_bytes(before_bytes, after_bytes);
+            let file = build_file_change(&entry.path, changed_line_count, false, before_absent, after_absent);
+            hunks_by_file.push(JjFileDiff {
+                path: file.path.clone(),
+                hunks,
+            });
+            files.push(file);
         }
-
-        let diff_text = String::from_utf8_lossy(&diff_output.stdout);
-        let hunks = parse_git_diff_hunks(&diff_text)?;
-
-        hunks_by_file.push(JjFileDiff {
-            path: file.path.clone(),
-            hunks,
-        });
-    }
+    });
 
     Ok(JjRevisionDiff {
         files,
@@ -4696,11 +4726,11 @@ fn count_changed_lines(hunks: &[JjDiffHunk]) -> usize {
         .sum()
 }
 
-/// Create a merge commit using jj new
+/// Create a merge commit using jj-lib commit writes.
 ///
 /// Flow:
-/// 1. jj new workspace_branch target_branch+ -m "message" - create merge
-/// 2. jj new @ - create new working copy on top
+/// 1. Resolve workspace and target branch tips and create a two-parent merge commit
+/// 2. Check out a fresh working-copy commit on top
 /// 3. jj bookmark set target_branch -r @- - move target_branch to merge commit
 /// This is executed in the context of the workspace directory, @ refers to workspace HEAD
 pub fn jj_create_merge_commit(
@@ -4718,11 +4748,7 @@ pub fn jj_create_merge_commit(
     let old_wc_commit = get_workspace_wc_commit(&loaded)?;
     let workspace_name = loaded.workspace.workspace_name().to_owned();
     let workspace_parent = resolve_commit_by_revision(&loaded, workspace_branch)?;
-    let target_revset = format!(
-        "{}+",
-        format_revset_symbol(&resolve_target_branch_symbol(workspace_path, target_branch))
-    );
-    let target_parent = resolve_commit_by_revision(&loaded, &target_revset)?;
+    let target_parent = resolve_merge_target_parent(&loaded, workspace_path, target_branch)?;
 
     let mut tx = loaded.repo.start_transaction();
     let parent_commits = vec![workspace_parent, target_parent];
