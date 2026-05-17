@@ -870,7 +870,11 @@ pub fn update_workspace(
             let _ = jj::jj_git_fetch(repo_path);
 
             // Rebase workspace onto the target commit
-            let rebase_result = jj::jj_rebase_onto(workspace_path_str, &branch, "diff")
+            let rebase_result = jj::jj_rebase_workspace_bookmark_onto(
+                workspace_path_str,
+                &workspace.branch_name,
+                &branch,
+            )
                 .map_err(|e| format!("Failed to rebase workspace: {}", e))?;
 
             if !rebase_result.success {
@@ -1461,13 +1465,22 @@ pub fn check_and_rebase_workspaces(
     if let Some(id) = workspace_id {
         let default_branch = default_branch.unwrap_or_else(|| "main".to_string());
         let force = force.unwrap_or(false);
-        let result = auto_rebase::rebase_single_workspace(
-            repo_path,
-            id,
-            &default_branch,
-            force,
-            conflict_style,
-        )?;
+        let result = if force {
+            auto_rebase::rebase_root_subtree_from_workspace_force(
+                repo_path,
+                id,
+                &default_branch,
+                conflict_style,
+            )?
+        } else {
+            auto_rebase::rebase_single_workspace(
+                repo_path,
+                id,
+                &default_branch,
+                force,
+                conflict_style,
+            )?
+        };
 
         match result {
             Some(auto_result) => Ok(SingleRebaseResult {

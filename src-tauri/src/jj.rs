@@ -2716,6 +2716,98 @@ pub fn jj_rebase_onto(
     })
 }
 
+/// Rebase a workspace bookmark's commit lineage onto `target_branch` using jj-lib.
+///
+/// Unlike `jj rebase -d <target>`, this anchors the move at the workspace bookmark tip,
+/// so success is not satisfied by rebasing only a detached/empty working-copy commit chain.
+pub fn jj_rebase_workspace_bookmark_onto(
+    workspace_path: &str,
+    workspace_branch: &str,
+    target_branch: &str,
+) -> Result<JjRebaseResult, JjError> {
+    jj_rebase_workspace_bookmark_onto_with_checkout_mode(
+        workspace_path,
+        workspace_branch,
+        target_branch,
+        CheckoutMode::Immediate,
+    )
+}
+
+pub fn jj_rebase_workspace_bookmark_onto_deferred_checkout(
+    workspace_path: &str,
+    workspace_branch: &str,
+    target_branch: &str,
+) -> Result<JjRebaseResult, JjError> {
+    jj_rebase_workspace_bookmark_onto_with_checkout_mode(
+        workspace_path,
+        workspace_branch,
+        target_branch,
+        CheckoutMode::Deferred,
+    )
+}
+
+fn jj_rebase_workspace_bookmark_onto_with_checkout_mode(
+    workspace_path: &str,
+    workspace_branch: &str,
+    target_branch: &str,
+    checkout_mode: CheckoutMode,
+) -> Result<JjRebaseResult, JjError> {
+    validate_branch_name(workspace_branch, "workspace")?;
+    validate_branch_name(target_branch, "target")?;
+
+    let mut loaded = load_workspace_repo_for_history_edit(workspace_path)?;
+    let old_wc_commit = get_workspace_wc_commit(&loaded)?;
+    let workspace_tip_commit = resolve_commit_by_revision(&loaded, workspace_branch)?;
+    let target_commit = resolve_commit_by_revision(
+        &loaded,
+        &resolve_target_branch_symbol(workspace_path, target_branch),
+    )?;
+
+    let rebase_options = RebaseOptions {
+        empty: EmptyBehavior::Keep,
+        rewrite_refs: RewriteRefsOptions {
+            delete_abandoned_bookmarks: false,
+        },
+        simplify_ancestor_merge: false,
+    };
+
+    let mut tx = loaded.repo.start_transaction();
+    let location = MoveCommitsLocation {
+        new_parent_ids: vec![target_commit.id().clone()],
+        new_child_ids: Vec::new(),
+        target: MoveCommitsTarget::Roots(vec![workspace_tip_commit.id().clone()]),
+    };
+    let stats = futures::executor::block_on(async {
+        rewrite::compute_move_commits(tx.repo_mut(), &location)
+            .await?
+            .apply(tx.repo_mut(), &rebase_options)
+            .await
+    })
+    .map_err(|e| JjError::IoError(format!("Failed to rebase workspace bookmark lineage: {}", e)))?;
+
+    futures::executor::block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
+        JjError::IoError(format!(
+            "Failed to rebase descendants after bookmark lineage rebase: {}",
+            e
+        ))
+    })?;
+    let _ = git::export_refs(tx.repo_mut());
+
+    let new_repo = futures::executor::block_on(tx.commit("rebase workspace bookmark lineage"))
+        .map_err(|e| JjError::IoError(format!("Failed to commit rebase transaction: {}", e)))?;
+    update_workspace_after_history_edit(
+        &mut loaded,
+        &new_repo,
+        old_wc_commit.as_ref(),
+        checkout_mode,
+    )?;
+
+    Ok(JjRebaseResult {
+        success: true,
+        message: summarize_rebase_stats(&stats),
+    })
+}
+
 /// Get list of conflicted files in the workspace
 ///
 /// If target_branch is provided, uses: jj diff --from <target_branch> --to @ --summary
@@ -4208,11 +4300,23 @@ fn get_workspace_wc_commit(loaded: &LoadedWorkspaceRepo) -> Result<Option<Commit
         .map_err(|e| JjError::IoError(format!("Failed to load wc commit: {}", e)))
 }
 
+#[derive(Clone, Copy)]
+enum CheckoutMode {
+    Immediate,
+    Deferred,
+}
+
 fn update_workspace_after_history_edit(
     loaded: &mut LoadedWorkspaceRepo,
     new_repo: &Arc<ReadonlyRepo>,
     old_wc_commit: Option<&Commit>,
+    checkout_mode: CheckoutMode,
 ) -> Result<(), JjError> {
+    if matches!(checkout_mode, CheckoutMode::Deferred) {
+        loaded.repo = Arc::clone(new_repo);
+        return Ok(());
+    }
+
     let workspace_name = loaded.workspace.workspace_name().to_owned();
     let Some(new_wc_commit_id) = new_repo.view().get_wc_commit_id(&workspace_name).cloned() else {
         return Ok(());
@@ -4655,7 +4759,12 @@ pub fn jj_create_merge_commit(
 
     let new_repo = futures::executor::block_on(tx.commit("create merge commit"))
         .map_err(|e| JjError::IoError(format!("Failed to commit merge transaction: {}", e)))?;
-    update_workspace_after_history_edit(&mut loaded, &new_repo, old_wc_commit.as_ref())?;
+    update_workspace_after_history_edit(
+        &mut loaded,
+        &new_repo,
+        old_wc_commit.as_ref(),
+        CheckoutMode::Immediate,
+    )?;
 
     let has_conflicts = !merge_commit.tree_ids().is_resolved();
     let conflicted_files = if has_conflicts {
@@ -4805,7 +4914,12 @@ pub fn jj_rebase_merge_commit(
 
     let new_repo = futures::executor::block_on(tx.commit("rebase merge workspace"))
         .map_err(|e| JjError::IoError(format!("Failed to commit rebase transaction: {}", e)))?;
-    update_workspace_after_history_edit(&mut loaded, &new_repo, old_wc_commit.as_ref())?;
+    update_workspace_after_history_edit(
+        &mut loaded,
+        &new_repo,
+        old_wc_commit.as_ref(),
+        CheckoutMode::Immediate,
+    )?;
 
     Ok(JjRebaseResult {
         success: true,
@@ -4862,7 +4976,12 @@ pub fn jj_squash_merge_commit(
 
     let new_repo = futures::executor::block_on(tx.commit("squash merge workspace"))
         .map_err(|e| JjError::IoError(format!("Failed to commit squash transaction: {}", e)))?;
-    update_workspace_after_history_edit(&mut loaded, &new_repo, old_wc_commit.as_ref())?;
+    update_workspace_after_history_edit(
+        &mut loaded,
+        &new_repo,
+        old_wc_commit.as_ref(),
+        CheckoutMode::Immediate,
+    )?;
 
     Ok(())
 }

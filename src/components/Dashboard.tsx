@@ -38,6 +38,7 @@ import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { useWorkspaceHierarchy } from "../hooks/useWorkspaceHierarchy";
 import {
 	Workspace,
+	checkAndRebaseWorkspaces,
 	createSession,
 	deleteWorkspace,
 	getRepoBranch,
@@ -411,8 +412,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
 					type: "success",
 				});
 			}),
-			// Menu open in new window
-			listen("menu-open-in-new-window", async () => {
+				// Menu open in new window
+				listen("menu-open-in-new-window", async () => {
 				const selected = await selectFolder();
 				if (!selected) return;
 
@@ -432,14 +433,56 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				const newRepoName =
 					selected.split("/").pop() || selected.split("\\").pop() || selected;
 
-				new WebviewWindow(windowLabel, {
-					url: `index.html?repo=${encodeURIComponent(selected)}`,
-					title: `Treq - ${newRepoName}`,
-					width: 1400,
-					height: 900,
-				});
-			}),
-		];
+					new WebviewWindow(windowLabel, {
+						url: `index.html?repo=${encodeURIComponent(selected)}`,
+						title: `Treq - ${newRepoName}`,
+						width: 1400,
+						height: 900,
+					});
+				}),
+				// Developer menu force rebase for current workspace
+				listen("menu-force-rebase-workspace", async () => {
+					if (!repoPath || !selectedWorkspace) {
+						addToast({
+							title: "No workspace selected",
+							description: "Select a workspace first, then force rebase.",
+							type: "warning",
+						});
+						return;
+					}
+
+					const defaultBranch =
+						selectedWorkspace.target_branch || currentBranch || "main";
+					try {
+						const result = await checkAndRebaseWorkspaces(
+							repoPath,
+							selectedWorkspace.id,
+							defaultBranch,
+							true,
+						);
+
+						queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+						queryClient.invalidateQueries({
+							queryKey: ["workspace-statuses", repoPath],
+						});
+
+						addToast({
+							title: result.success
+								? "Force rebase complete"
+								: "Force rebase completed with errors",
+							description:
+								result.message || "Workspace subtree force rebase finished.",
+							type: result.success ? "success" : "warning",
+						});
+					} catch (error) {
+						addToast({
+							title: "Force rebase failed",
+							description: error instanceof Error ? error.message : String(error),
+							type: "error",
+						});
+					}
+				}),
+			];
 
 		return () => {
 			Promise.all(listeners).then((unlistenFns) => {
@@ -447,10 +490,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
 			});
 		};
 	}, [
-		repoPath,
-		addToast,
-		queryClient,
-		deleteWorkspaceMutation,
+			repoPath,
+			selectedWorkspace,
+			currentBranch,
+			addToast,
+			queryClient,
+			deleteWorkspaceMutation,
 		handleOpenRepository,
 	]);
 
