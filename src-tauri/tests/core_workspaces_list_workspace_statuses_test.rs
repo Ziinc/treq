@@ -228,3 +228,60 @@ fn test_workspace_list_statuses_preserves_existing_workspace_metadata_on_upsert(
     );
     assert_eq!(status.current.created_at, before_created_at);
 }
+
+#[test]
+fn test_workspace_list_statuses_conflict_bit_matches_workspace_status_for_divergent_non_conflicting_edits(
+) {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let base_workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feature-base",
+        Some("base".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create base workspace");
+    let base_path = repo.workspaces_dir().join(&base_workspace.workspace_path);
+    let base_path_str = base_path.to_str().expect("utf-8");
+
+    let stacked_workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/divergent-parity",
+        Some("stacked".to_string()),
+        None,
+        Some("feature-base"),
+        None,
+    )
+    .expect("Failed to create stacked workspace");
+    let stacked_path = repo.workspaces_dir().join(&stacked_workspace.workspace_path);
+    let stacked_path_str = stacked_path.to_str().expect("utf-8");
+
+    TestRepo::write_workspace_file(base_path_str, "base-only.txt", "base change\n")
+        .expect("Failed to write base-only.txt");
+    treq_lib::core::commit_workspace(&repo.repo_path, base_workspace.id, "base commit")
+        .expect("Failed to commit base workspace");
+
+    TestRepo::write_workspace_file(stacked_path_str, "stacked-only.txt", "stacked change\n")
+        .expect("Failed to write stacked-only.txt");
+    treq_lib::core::commit_workspace(&repo.repo_path, stacked_workspace.id, "stacked commit")
+        .expect("Failed to commit stacked workspace");
+
+    let sidebar_statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
+        .expect("Failed to list workspace statuses");
+    let sidebar_conflict = sidebar_statuses
+        .iter()
+        .find(|s| s.current.id == stacked_workspace.id)
+        .map(|s| s.has_conflicts)
+        .expect("stacked workspace should be present in sidebar statuses");
+
+    let detailed_status = treq_lib::core::workspace_status(&repo.repo_path, Some(stacked_workspace.id))
+        .expect("workspace_status should succeed");
+    let review_conflict = detailed_status.partial.has_conflicts;
+
+    assert_eq!(
+        sidebar_conflict, review_conflict,
+        "sidebar conflict bit should match workspace_status conflict bit"
+    );
+}

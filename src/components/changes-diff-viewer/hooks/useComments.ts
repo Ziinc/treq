@@ -199,10 +199,8 @@ export function useComments({
 
 	const toggleConflictComment = useCallback((conflictId: string) => {
 		setOpenConflictComments((prev) => {
-			const next = new Set(prev);
-			if (next.has(conflictId)) next.delete(conflictId);
-			else next.add(conflictId);
-			return next;
+			if (prev.has(conflictId)) return new Set();
+			return new Set([conflictId]);
 		});
 	}, []);
 

@@ -74,7 +74,23 @@ describe("ShowWorkspace - Merge Button", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
-		vi.mocked(api.listConflictedFiles).mockResolvedValue([]);
+		vi.mocked(api.getWorkspaceStatus).mockResolvedValue({
+			workspace: {
+				has_changes: false,
+				has_conflicts: false,
+				has_untracked_files: false,
+				has_staged_changes: false,
+			},
+			partial: {
+				has_changes: false,
+				has_conflicts: false,
+				has_untracked_files: false,
+				has_staged_changes: false,
+			},
+			remote_sync: { type: "InSync", data: null },
+			conflicted_files: [],
+			bookmark_conflicts: [],
+		});
 		vi.mocked(api.jjGetBranches).mockResolvedValue([
 			{ name: "main", is_current: false },
 			{ name: "feature-one", is_current: true },
@@ -144,7 +160,23 @@ describe("ShowWorkspace - Merge Button", () => {
 	});
 
 	it("disables Merge button when there are conflicts", async () => {
-		vi.mocked(api.listConflictedFiles).mockResolvedValue(["src/file.ts"]);
+		vi.mocked(api.getWorkspaceStatus).mockResolvedValue({
+			workspace: {
+				has_changes: false,
+				has_conflicts: true,
+				has_untracked_files: false,
+				has_staged_changes: false,
+			},
+			partial: {
+				has_changes: false,
+				has_conflicts: true,
+				has_untracked_files: false,
+				has_staged_changes: false,
+			},
+			remote_sync: { type: "InSync", data: null },
+			conflicted_files: ["src/file.ts"],
+			bookmark_conflicts: [],
+		});
 
 		const onOpenMergePreview = vi.fn();
 
@@ -207,10 +239,23 @@ describe("ShowWorkspace - Merge Button", () => {
 	});
 
 	it("should show tooltip when merge button is disabled due to conflicts", async () => {
-		vi.mocked(api.listConflictedFiles).mockResolvedValue([
-			"file1.ts",
-			"file2.ts",
-		]);
+		vi.mocked(api.getWorkspaceStatus).mockResolvedValue({
+			workspace: {
+				has_changes: false,
+				has_conflicts: true,
+				has_untracked_files: false,
+				has_staged_changes: false,
+			},
+			partial: {
+				has_changes: false,
+				has_conflicts: true,
+				has_untracked_files: false,
+				has_staged_changes: false,
+			},
+			remote_sync: { type: "InSync", data: null },
+			conflicted_files: ["file1.ts", "file1.ts ", "   ", "file2.ts"],
+			bookmark_conflicts: [],
+		});
 
 		render(
 			<ShowWorkspace
@@ -265,10 +310,23 @@ describe("ShowWorkspace - Merge Button", () => {
 		};
 
 		// Workspace 1 has conflicts
-		vi.mocked(api.listConflictedFiles).mockResolvedValue([
-			"file1.ts",
-			"file2.ts",
-		]);
+		vi.mocked(api.getWorkspaceStatus).mockResolvedValue({
+			workspace: {
+				has_changes: false,
+				has_conflicts: true,
+				has_untracked_files: false,
+				has_staged_changes: false,
+			},
+			partial: {
+				has_changes: false,
+				has_conflicts: true,
+				has_untracked_files: false,
+				has_staged_changes: false,
+			},
+			remote_sync: { type: "InSync", data: null },
+			conflicted_files: ["file1.ts", "file2.ts"],
+			bookmark_conflicts: [],
+		});
 
 		const { rerender } = render(
 			<ShowWorkspace
@@ -292,7 +350,23 @@ describe("ShowWorkspace - Merge Button", () => {
 		);
 
 		// Now switch to workspace 2 which has NO conflicts
-		vi.mocked(api.listConflictedFiles).mockResolvedValue([]);
+		vi.mocked(api.getWorkspaceStatus).mockResolvedValue({
+			workspace: {
+				has_changes: false,
+				has_conflicts: false,
+				has_untracked_files: false,
+				has_staged_changes: false,
+			},
+			partial: {
+				has_changes: false,
+				has_conflicts: false,
+				has_untracked_files: false,
+				has_staged_changes: false,
+			},
+			remote_sync: { type: "InSync", data: null },
+			conflicted_files: [],
+			bookmark_conflicts: [],
+		});
 
 		rerender(
 			<ShowWorkspace
@@ -313,5 +387,36 @@ describe("ShowWorkspace - Merge Button", () => {
 			},
 			{ timeout: 2000 },
 		);
+	});
+
+	it("shows normalized conflict count in Code tab alert", async () => {
+		vi.mocked(api.getWorkspaceStatus).mockResolvedValue({
+			workspace: {
+				has_changes: false,
+				has_conflicts: true,
+				has_untracked_files: false,
+				has_staged_changes: false,
+			},
+			partial: {
+				has_changes: false,
+				has_conflicts: true,
+				has_untracked_files: false,
+				has_staged_changes: false,
+			},
+			remote_sync: { type: "InSync", data: null },
+			conflicted_files: ["README.md", " README.md ", "", "docs/guide.md"],
+			bookmark_conflicts: [],
+		});
+
+		render(
+			<ShowWorkspace
+				repositoryPath={workspaceWithTarget.repo_path}
+				workspace={workspaceWithTarget}
+				mainRepoBranch="main"
+				initialSelectedFile={null}
+			/>,
+		);
+
+		await screen.findByText("2 conflicts detected");
 	});
 });

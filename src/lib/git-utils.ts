@@ -6,6 +6,7 @@ export interface ParsedFileChange {
 	workspaceStatus?: string;
 	oldPath?: string;
 	isUntracked?: boolean;
+	isConflicted?: boolean;
 }
 
 /**
@@ -52,6 +53,7 @@ export function parseJjChangedFiles(
 		| Array<{ path: string; status: string; previous_path?: string | null }>,
 ): ParsedFileChange[] {
 	return files.map((file) => ({
+		isConflicted: file.status === "C",
 		oldPath: file.previous_path ?? undefined,
 		path: file.path,
 		workspaceStatus: file.status,

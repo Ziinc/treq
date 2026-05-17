@@ -6,7 +6,6 @@ use std::process::Command;
 use treq_lib::core::{commit_repo, MergeCommit};
 use treq_lib::local_db::Workspace;
 
-
 // TODO: rolling merge for stacked workspaces
 
 // TODO: merge individual workspace into another workspace
@@ -401,12 +400,8 @@ fn merge_into_main_succeeds_when_main_plus_empty() {
         .to_str()
         .expect("workspace path should be utf-8");
 
-    TestRepo::write_workspace_file(
-        workspace_path_str,
-        "main-plus-empty.txt",
-        "feature content",
-    )
-    .expect("Failed to write feature file");
+    TestRepo::write_workspace_file(workspace_path_str, "main-plus-empty.txt", "feature content")
+        .expect("Failed to write feature file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add feature for main+ empty")
         .expect("Failed to commit workspace change");
     let main_before = treq_lib::jj::jj_get_commit_id(&repo.repo_path, "main")

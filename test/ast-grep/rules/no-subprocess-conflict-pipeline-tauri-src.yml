@@ -1,0 +1,14 @@
+id: no-subprocess-conflict-pipeline-tauri-src
+language: rust
+severity: error
+message: >
+  Conflict parsing and conflict-bearing diff code paths must not shell out.
+  Avoid subprocess usage (`Command::new`, `command_for`, or `jj_command`) in
+  conflict pipeline modules.
+files:
+  - "src-tauri/src/conflict_markers.rs"
+rule:
+  any:
+    - pattern: Command::new($$$ARGS)
+    - pattern: command_for($$$ARGS)
+    - pattern: jj_command($$$ARGS)

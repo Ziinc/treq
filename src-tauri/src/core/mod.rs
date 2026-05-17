@@ -26,8 +26,6 @@ pub fn resolve_conflict_marker_style_from_db(db: &crate::db::Database) -> String
         .unwrap_or_else(|| DEFAULT_CONFLICT_MARKER_STYLE.to_string())
 }
 
-pub fn resolve_conflict_marker_style(
-    db: &std::sync::Mutex<crate::db::Database>,
-) -> String {
+pub fn resolve_conflict_marker_style(db: &std::sync::Mutex<crate::db::Database>) -> String {
     resolve_conflict_marker_style_from_db(&db.lock().unwrap())
 }

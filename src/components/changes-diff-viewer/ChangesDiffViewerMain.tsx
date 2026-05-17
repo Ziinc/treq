@@ -17,7 +17,7 @@ import { useComments } from "./hooks/useComments";
 import { useFileStaging } from "./hooks/useFileStaging";
 import { useFileLoading } from "./hooks/useFileLoading";
 import { useReview } from "./hooks/useReview";
-import { useConflicts } from "./hooks/useConflicts";
+import { useConflicts } from "./hooks/useConflicts.ts";
 import { useFileActions } from "./hooks/useFileActions";
 import { useToast } from "../ui/toast";
 import { ContextMenu } from "./ContextMenu";
@@ -114,6 +114,7 @@ export const ChangesDiffViewer = memo(
 				allFileHunks,
 				showCommittedChanges: showCommittedChanges ?? false,
 				committedFiles,
+				conflictedFilesHint: conflictedFiles,
 			});
 
 			const {
@@ -498,7 +499,6 @@ export const ChangesDiffViewer = memo(
 							largeChangesetExpanded={largeChangesetExpanded}
 							setLargeChangesetExpanded={setLargeChangesetExpanded}
 							actualConflictedFiles={actualConflictedFiles}
-							conflictRegionsByFile={conflictRegionsByFile}
 							conflictLineLookups={conflictLineLookups}
 							firstConflictRegionIdByFile={firstConflictRegionIdByFile}
 							expandedContext={expandedContext}

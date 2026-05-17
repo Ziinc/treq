@@ -1,9 +1,8 @@
-import React, { Fragment, useCallback, useMemo } from "react";
+import React, { useCallback, useMemo } from "react";
 import { CheckCircle2, FileText, Loader2 } from "lucide-react";
 import type { ConflictRegion, JjDiffHunk, JjFileChange } from "../../lib/api";
 import type { ParsedFileChange } from "../../lib/git-utils";
 import { Button } from "../ui/button";
-import { InlineConflictCard } from "../InlineConflictCard";
 import { SearchOverlay } from "../SearchOverlay";
 import { FileRowComponent } from "./FileRowComponent";
 import { HunkLines } from "./HunkLines";
@@ -45,7 +44,6 @@ interface DiffContentAreaProps {
 	setLargeChangesetExpanded: React.Dispatch<React.SetStateAction<boolean>>;
 	// conflicts
 	actualConflictedFiles: string[];
-	conflictRegionsByFile: Map<string, ConflictRegion[]>;
 	conflictLineLookups: Map<string, Map<number, ConflictRegion>>;
 	firstConflictRegionIdByFile: Map<string, string>;
 	// comment / selection props forwarded to HunkLines
@@ -133,7 +131,6 @@ export function DiffContentArea({
 	largeChangesetExpanded,
 	setLargeChangesetExpanded,
 	actualConflictedFiles,
-	conflictRegionsByFile,
 	conflictLineLookups,
 	firstConflictRegionIdByFile,
 	expandedContext,
@@ -188,6 +185,7 @@ export function DiffContentArea({
 }: DiffContentAreaProps) {
 	const hunkLinesProps = useMemo(
 		() => ({
+			conflictedFilePaths: new Set(actualConflictedFiles),
 			conflictLineLookups,
 			firstConflictRegionIdByFile,
 			expandedContext,
@@ -228,6 +226,7 @@ export function DiffContentArea({
 			getCommentsForLine,
 		}),
 		[
+			actualConflictedFiles,
 			conflictLineLookups,
 			firstConflictRegionIdByFile,
 			expandedContext,
@@ -342,73 +341,20 @@ export function DiffContentArea({
 					return (
 						<div ref={diffContainerRef} className="h-full overflow-y-auto">
 							<div className="p-4 space-y-4">
-								{actualConflictedFiles.length > 0 && (
-									<>
-										{actualConflictedFiles.map((conflictFile) => {
-											const regions = conflictRegionsByFile.get(conflictFile);
-											if (!regions || regions.length === 0) return null;
-											return (
-												<div
-													key={`conflict-${conflictFile}`}
-													className="border border-destructive/30 rounded-md overflow-hidden"
-												>
-													<div className="bg-destructive/10 px-3 py-2 flex items-center gap-2">
-														<span className="font-mono text-sm">
-															{conflictFile}
-														</span>
-													</div>
-													{regions.map((region, index) => (
-														<Fragment key={region.id}>
-															{index > 0 && (
-																<div className="border-t border-border" />
-															)}
-															<InlineConflictCard
-																region={region}
-																conflictComments={conflictComments}
-																openConflictComments={openConflictComments}
-																editingConflictCommentId={
-																	editingConflictCommentId
-																}
-																saveConflictComment={saveConflictComment}
-																clearConflictComment={clearConflictComment}
-																toggleConflictComment={toggleConflictComment}
-																setOpenConflictComments={
-																	setOpenConflictComments
-																}
-																startEditConflictComment={
-																	startEditConflictComment
-																}
-																cancelEditConflictComment={
-																	cancelEditConflictComment
-																}
-																saveEditConflictComment={
-																	saveEditConflictComment
-																}
-																searchData={searchData}
-																debouncedSearchQuery={debouncedSearchQuery}
-																currentMatchIndex={currentMatchIndex}
-																className="p-0"
-															/>
-														</Fragment>
-													))}
-												</div>
-											);
-										})}
-									</>
-								)}
 								{files.map((file) => (
-									<FileRowComponent
-										key={file.path}
-										file={file}
+								<FileRowComponent
+									key={file.path}
+									file={file}
 										allFileHunks={allFileHunks}
 										collapsedFiles={collapsedFiles}
 										viewedFiles={viewedFiles}
 										expandedLargeDiffs={expandedLargeDiffs}
 										diffFontSize={diffFontSize}
-										readOnly={readOnly}
-										fileActionTarget={fileActionTarget}
-										selectedUnstagedFiles={selectedUnstagedFiles}
-										workspacePath={workspacePath}
+									readOnly={readOnly}
+									fileActionTarget={fileActionTarget}
+									selectedUnstagedFiles={selectedUnstagedFiles}
+									actualConflictedFiles={actualConflictedFiles}
+									workspacePath={workspacePath}
 										toggleFileCollapse={toggleFileCollapse}
 										toggleLargeDiff={toggleLargeDiff}
 										handleMarkFileViewed={handleMarkFileViewed}
@@ -422,7 +368,11 @@ export function DiffContentArea({
 									/>
 								))}
 								{showCommittedChanges &&
-									committedFiles.map((file) => (
+									committedFiles
+										.filter(
+											(file) => !files.some((pending) => pending.path === file.path),
+										)
+										.map((file) => (
 										<FileRowComponent
 											key={`committed-${file.path}`}
 											file={
@@ -441,6 +391,7 @@ export function DiffContentArea({
 											readOnly={true}
 											fileActionTarget={null}
 											selectedUnstagedFiles={new Set()}
+											actualConflictedFiles={actualConflictedFiles}
 											workspacePath={workspacePath}
 											toggleFileCollapse={toggleFileCollapse}
 											toggleLargeDiff={toggleLargeDiff}

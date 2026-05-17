@@ -1,13 +1,18 @@
 use chrono::TimeZone;
 use futures::StreamExt as _;
 use futures::TryStreamExt as _;
+use gix::refs::transaction::{Change, PreviousValue, RefEdit};
+use gix::refs::Target;
 use imara_diff::intern::InternedInput;
 use imara_diff::sink::Counter;
 use imara_diff::{diff, Algorithm, UnifiedDiffBuilder};
 use jj_lib::commit::Commit;
 use jj_lib::config::{ConfigLayer, ConfigSource, StackedConfig};
 use jj_lib::conflict_labels::ConflictLabels;
-use jj_lib::conflicts::{materialized_diff_stream, MaterializedTreeValue};
+use jj_lib::conflicts::{
+    materialize_merge_result_to_bytes, materialized_diff_stream, ConflictMarkerStyle,
+    ConflictMaterializeOptions, MaterializedTreeValue,
+};
 use jj_lib::copies::CopyRecords;
 use jj_lib::fileset::FilesetAliasesMap;
 use jj_lib::git;
@@ -19,7 +24,7 @@ use jj_lib::object_id::{HexPrefix, ObjectId};
 use jj_lib::op_store::{RefTarget, RemoteRef};
 use jj_lib::ref_name::{RefName, RemoteName, RemoteRefSymbol, WorkspaceNameBuf};
 use jj_lib::repo::{MutableRepo, ReadonlyRepo, Repo as _, StoreFactories};
-use jj_lib::repo_path::{RepoPath, RepoPathUiConverter};
+use jj_lib::repo_path::{RepoPath, RepoPathBuf, RepoPathUiConverter};
 use jj_lib::revset::{
     self, Revset, RevsetAliasesMap, RevsetDiagnostics, RevsetIteratorExt as _, RevsetParseContext,
     RevsetWorkspaceContext, SymbolResolver,
@@ -29,21 +34,20 @@ use jj_lib::rewrite::{
     RewriteRefsOptions,
 };
 use jj_lib::settings::UserSettings;
+use jj_lib::tree_merge::MergeOptions;
 use jj_lib::working_copy::{SnapshotOptions, WorkingCopyFreshness};
 use jj_lib::workspace::{default_working_copy_factories, default_working_copy_factory, Workspace};
 use jj_lib::workspace_store::{SimpleWorkspaceStore, WorkspaceStore as _};
 use serde::{Deserialize, Serialize};
-use serde_json;
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
-use gix::refs::transaction::{Change, PreviousValue, RefEdit};
-use gix::refs::Target;
 
 use crate::binary_paths;
+use crate::conflict_markers::{self, ConflictRegionView, ConflictStyle};
 use crate::local_db;
 
 /// Helper function to create Command for a binary using cached path
@@ -279,15 +283,27 @@ fn bytes_to_text(bytes: Vec<u8>) -> Option<Vec<u8>> {
 async fn materialized_value_to_bytes(
     path: &RepoPath,
     value: MaterializedTreeValue,
+    conflict_marker_style: ConflictMarkerStyle,
+    merge_options: Option<&MergeOptions>,
 ) -> Option<Vec<u8>> {
     match value {
         MaterializedTreeValue::Absent => None,
         MaterializedTreeValue::File(mut file) => {
             file.read_all(path).await.ok().and_then(bytes_to_text)
         }
+        MaterializedTreeValue::FileConflict(file) => {
+            let merge_options = merge_options?;
+            let options = ConflictMaterializeOptions {
+                marker_style: conflict_marker_style,
+                marker_len: None,
+                merge: merge_options.clone(),
+            };
+            let bytes =
+                materialize_merge_result_to_bytes(&file.contents, &file.labels, &options).to_vec();
+            bytes_to_text(bytes)
+        }
         MaterializedTreeValue::Symlink { target, .. } => Some(target.into_bytes()),
         MaterializedTreeValue::AccessDenied(_)
-        | MaterializedTreeValue::FileConflict(_)
         | MaterializedTreeValue::OtherConflict { .. }
         | MaterializedTreeValue::GitSubmodule(_)
         | MaterializedTreeValue::Tree(_) => None,
@@ -342,8 +358,20 @@ fn compute_commit_stats(
                 Ok(values) => values,
                 Err(_) => continue,
             };
-            let before = materialized_value_to_bytes(entry.path.source(), values.before).await;
-            let after = materialized_value_to_bytes(entry.path.target(), values.after).await;
+            let before = materialized_value_to_bytes(
+                entry.path.source(),
+                values.before,
+                ConflictMarkerStyle::Git,
+                None,
+            )
+            .await;
+            let after = materialized_value_to_bytes(
+                entry.path.target(),
+                values.after,
+                ConflictMarkerStyle::Git,
+                None,
+            )
+            .await;
 
             match (before, after) {
                 (None, Some(after)) => {
@@ -389,7 +417,6 @@ fn commit_description_first_line(commit: &jj_lib::commit::Commit) -> String {
         .to_string()
 }
 
-
 fn build_log_commits(
     cache_repo_path: &str,
     repo: &Arc<ReadonlyRepo>,
@@ -400,13 +427,10 @@ fn build_log_commits(
         &jj_lib::backend::CommitId,
     ) -> Result<bool, jj_lib::revset::RevsetEvaluationError>,
 ) -> Vec<JjLogCommit> {
-    let full_commit_ids: Vec<String> =
-        commits.iter().map(|c| c.id().hex()).collect();
-    let cached_map = local_db::get_cached_commit_diff_stats_batch(
-        cache_repo_path,
-        &full_commit_ids,
-    )
-    .unwrap_or_default();
+    let full_commit_ids: Vec<String> = commits.iter().map(|c| c.id().hex()).collect();
+    let cached_map =
+        local_db::get_cached_commit_diff_stats_batch(cache_repo_path, &full_commit_ids)
+            .unwrap_or_default();
 
     commits
         .into_iter()
@@ -422,8 +446,7 @@ fn build_log_commits(
                 .view()
                 .local_bookmarks_for_commit(commit.id())
                 .filter_map(|(name, target)| {
-                    (target.as_normal() == Some(commit.id()))
-                        .then(|| name.as_str().to_string())
+                    (target.as_normal() == Some(commit.id())).then(|| name.as_str().to_string())
                 })
                 .collect();
             let is_immutable_val = is_immutable(commit.id()).unwrap_or(false);
@@ -442,10 +465,8 @@ fn build_log_commits(
                         && cached.timestamp.is_some() =>
                 {
                     JjLogCommit {
-                        commit_id: cached.commit_id[..12.min(cached.commit_id.len())]
-                            .to_string(),
-                        short_id: cached.commit_id[..12.min(cached.commit_id.len())]
-                            .to_string(),
+                        commit_id: cached.commit_id[..12.min(cached.commit_id.len())].to_string(),
+                        short_id: cached.commit_id[..12.min(cached.commit_id.len())].to_string(),
                         change_id: cached.change_id.clone().unwrap_or_default(),
                         description: cached.description.clone().unwrap_or_default(),
                         author_name: cached.author_name.clone().unwrap_or_default(),
@@ -469,11 +490,10 @@ fn build_log_commits(
                         .timestamp
                         .to_datetime()
                         .map(|ts| ts.to_rfc3339())
-                        .unwrap_or_else(|_| {
-                            commit.author().timestamp.timestamp.0.to_string()
-                        });
+                        .unwrap_or_else(|_| commit.author().timestamp.timestamp.0.to_string());
 
-                    let (insertions, deletions) = compute_commit_stats(repo, &commit, tree_override);
+                    let (insertions, deletions) =
+                        compute_commit_stats(repo, &commit, tree_override);
 
                     let _ = local_db::cache_commit_row(
                         cache_repo_path,
@@ -583,6 +603,10 @@ pub struct JjDiffHunk {
     pub header: String,
     pub lines: Vec<String>,
     pub patch: String,
+    #[serde(default)]
+    pub conflict_style: ConflictStyle,
+    #[serde(default)]
+    pub conflict_regions: Vec<ConflictRegionView>,
 }
 
 /// File change status in JJ working copy
@@ -677,6 +701,10 @@ pub struct JjMergeResult {
 pub struct JjFileDiff {
     pub path: String,
     pub hunks: Vec<JjDiffHunk>,
+    #[serde(default)]
+    pub conflict_style: ConflictStyle,
+    #[serde(default)]
+    pub conflict_regions: Vec<ConflictRegionView>,
 }
 
 /// Combined diff between two revisions
@@ -1889,7 +1917,9 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
             Ok(v) => v,
             Err(_) => continue,
         };
-        let status = if values.before.is_absent() {
+        let status = if !values.before.is_resolved() || !values.after.is_resolved() {
+            "C"
+        } else if values.before.is_absent() {
             "A"
         } else if values.after.is_absent() {
             "D"
@@ -1992,28 +2022,92 @@ fn parse_rename_path(path: &str) -> (String, Option<String>) {
     (path.to_string(), None)
 }
 
-/// Get diff hunks for a specific file
-/// Uses jj diff CLI with git-format output
+/// Get diff hunks for a specific file using jj-lib materialized tree values.
 pub fn jj_get_file_hunks(
     workspace_path: &str,
     file_path: &str,
     conflict_marker_style: &str,
 ) -> Result<Vec<JjDiffHunk>, JjError> {
-    // Use jj diff --git to get hunks in git-compatible format
-    let output = jj_command(conflict_marker_style)
-        .current_dir(workspace_path)
-        .args(["diff", "--git", "--no-pager", "--", file_path])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
-
-    if !output.status.success() {
-        return Err(JjError::IoError(
-            String::from_utf8_lossy(&output.stderr).to_string(),
-        ));
+    if file_path.contains('\0') || file_path.is_empty() {
+        return Err(JjError::IoError("Invalid file path".to_string()));
     }
 
-    let diff_output = String::from_utf8_lossy(&output.stdout);
-    parse_git_diff_hunks(&diff_output)
+    let mut loaded = load_workspace_repo(workspace_path)?;
+    import_colocated_git_state(&mut loaded, workspace_path)?;
+    let workspace_name = loaded.workspace.workspace_name().to_owned();
+    let wc_commit_id = loaded
+        .repo
+        .view()
+        .get_wc_commit_id(&workspace_name)
+        .cloned()
+        .ok_or_else(|| JjError::IoError("No working-copy commit found".to_string()))?;
+    let wc_commit = loaded
+        .repo
+        .store()
+        .get_commit(&wc_commit_id)
+        .map_err(|e| JjError::IoError(format!("Failed to load wc commit: {}", e)))?;
+    let parent_tree = futures::executor::block_on(wc_commit.parent_tree(loaded.repo.as_ref()))
+        .map_err(|e| JjError::IoError(format!("Failed to read parent tree: {}", e)))?;
+    let mut tree = wc_commit.tree();
+    if let Some((_, snapshotted_tree)) = snapshot_working_copy_tree(&mut loaded, workspace_path)? {
+        tree = snapshotted_tree;
+    }
+
+    let target_repo_path = RepoPathBuf::from_internal_string(file_path)
+        .map_err(|_| JjError::IoError("Invalid file path".to_string()))?;
+    let before = futures::executor::block_on(parent_tree.path_value(target_repo_path.as_ref()))
+        .map_err(|e| JjError::IoError(format!("Failed to read parent path value: {}", e)))?;
+    let after = futures::executor::block_on(tree.path_value(target_repo_path.as_ref()))
+        .map_err(|e| JjError::IoError(format!("Failed to read working path value: {}", e)))?;
+    let merge_options = MergeOptions::from_settings(&loaded.settings)
+        .map_err(|e| JjError::IoError(format!("Failed to load merge options: {}", e)))?;
+    let labels = ConflictLabels::unlabeled();
+    let before_materialized =
+        futures::executor::block_on(jj_lib::conflicts::materialize_tree_value(
+            loaded.repo.store(),
+            target_repo_path.as_ref(),
+            before,
+            &labels,
+        ))
+        .map_err(|e| JjError::IoError(format!("Failed to materialize parent value: {}", e)))?;
+    let after_materialized =
+        futures::executor::block_on(jj_lib::conflicts::materialize_tree_value(
+            loaded.repo.store(),
+            target_repo_path.as_ref(),
+            after,
+            &labels,
+        ))
+        .map_err(|e| JjError::IoError(format!("Failed to materialize working value: {}", e)))?;
+
+    let style = parse_conflict_marker_style(conflict_marker_style);
+    let before_bytes = futures::executor::block_on(materialized_value_to_bytes(
+        target_repo_path.as_ref(),
+        before_materialized,
+        style,
+        Some(&merge_options),
+    ));
+    let after_bytes = futures::executor::block_on(materialized_value_to_bytes(
+        target_repo_path.as_ref(),
+        after_materialized,
+        style,
+        Some(&merge_options),
+    ));
+    let (_, mut hunks, conflict_style, conflict_regions_raw) =
+        build_file_diff_from_bytes(before_bytes, after_bytes);
+    let conflict_regions = annotate_conflict_regions(file_path, conflict_regions_raw);
+    for hunk in &mut hunks {
+        hunk.conflict_style = conflict_style;
+        hunk.conflict_regions = conflict_regions.clone();
+    }
+    Ok(hunks)
+}
+
+fn parse_conflict_marker_style(conflict_marker_style: &str) -> ConflictMarkerStyle {
+    match conflict_marker_style {
+        "snapshot" => ConflictMarkerStyle::Snapshot,
+        "diff" => ConflictMarkerStyle::Diff,
+        _ => ConflictMarkerStyle::Git,
+    }
 }
 
 /// Parse git diff output into hunks
@@ -2031,6 +2125,8 @@ fn parse_git_diff_hunks(diff: &str) -> Result<Vec<JjDiffHunk>, JjError> {
                     header: header.clone(),
                     lines: lines.clone(),
                     patch: format!("{}\n{}", header, lines.join("\n")),
+                    conflict_style: ConflictStyle::Unknown,
+                    conflict_regions: Vec::new(),
                 });
                 hunk_index += 1;
             }
@@ -2056,6 +2152,8 @@ fn parse_git_diff_hunks(diff: &str) -> Result<Vec<JjDiffHunk>, JjError> {
             header: header.clone(),
             lines: lines.clone(),
             patch: format!("{}\n{}", header, lines.join("\n")),
+            conflict_style: ConflictStyle::Unknown,
+            conflict_regions: Vec::new(),
         });
     }
 
@@ -2562,7 +2660,10 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     // For home repos, keep Git HEAD symbolic to the active branch (avoid detached HEAD after jj commit).
     if repo_path_opt.is_none() && branch != "HEAD" {
         if let Err(e) = set_git_head_branch_with_gix(workspace_path, &branch) {
-            eprintln!("Warning: Failed to set git HEAD to branch '{}': {}", branch, e);
+            eprintln!(
+                "Warning: Failed to set git HEAD to branch '{}': {}",
+                branch, e
+            );
         }
         if let Err(e) = reset_git_index_to_head_with_gix(workspace_path) {
             eprintln!("Warning: Failed to reset git index to HEAD: {}", e);
@@ -2586,7 +2687,8 @@ fn read_git_head_branch(repo_path: &str) -> Result<String, String> {
 }
 
 fn set_git_head_branch_with_gix(repo_path: &str, branch: &str) -> Result<(), String> {
-    let repo = gix::open(repo_path).map_err(|e| format!("Failed to open git repo with gix: {e}"))?;
+    let repo =
+        gix::open(repo_path).map_err(|e| format!("Failed to open git repo with gix: {e}"))?;
     let target: gix::refs::FullName = format!("refs/heads/{branch}")
         .try_into()
         .map_err(|e| format!("Invalid branch ref name: {e}"))?;
@@ -2608,7 +2710,8 @@ fn set_git_head_branch_with_gix(repo_path: &str, branch: &str) -> Result<(), Str
 }
 
 fn reset_git_index_to_head_with_gix(repo_path: &str) -> Result<(), String> {
-    let repo = gix::open(repo_path).map_err(|e| format!("Failed to open git repo with gix: {e}"))?;
+    let repo =
+        gix::open(repo_path).map_err(|e| format!("Failed to open git repo with gix: {e}"))?;
     let head_tree = repo
         .head_commit()
         .map_err(|e| format!("Failed to read HEAD commit: {e}"))?
@@ -2783,7 +2886,12 @@ fn jj_rebase_workspace_bookmark_onto_with_checkout_mode(
             .apply(tx.repo_mut(), &rebase_options)
             .await
     })
-    .map_err(|e| JjError::IoError(format!("Failed to rebase workspace bookmark lineage: {}", e)))?;
+    .map_err(|e| {
+        JjError::IoError(format!(
+            "Failed to rebase workspace bookmark lineage: {}",
+            e
+        ))
+    })?;
 
     futures::executor::block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
         JjError::IoError(format!(
@@ -2809,12 +2917,6 @@ fn jj_rebase_workspace_bookmark_onto_with_checkout_mode(
 }
 
 /// Get list of conflicted files in the workspace
-///
-/// If target_branch is provided, uses: jj diff --from <target_branch> --to @ --summary
-/// This checks for conflicts in changes between target branch and working copy (@)
-///
-/// If target_branch is None, falls back to: jj status --no-pager
-/// This checks for conflicts in the current working copy only
 pub fn get_conflicted_files(
     workspace_path: &str,
     target_branch: Option<&str>,
@@ -2849,177 +2951,101 @@ pub fn get_conflicted_files(
         }
     }
 
-    // 2. Try jj diff approach with retry on stale errors
-    if let Some(branch) = target_branch {
-        // Validate branch name to prevent injection
-        if !branch.starts_with('-') && !branch.contains('\0') && !branch.is_empty() {
-            // Convert git branch format to jj format using derived repo path for remote detection.
-            let repo_path = derive_repo_path_from_workspace(workspace_path)
-                .unwrap_or_else(|| workspace_path.to_string());
-            let jj_branch = convert_git_branch_to_jj_format(branch, &repo_path);
-
-            // Try jj diff approach with retry
-            match get_conflicted_files_from_diff_with_retry(workspace_path, &jj_branch) {
-                Ok(conflicts) => {
-                    // If diff succeeded but returned empty, still check status as fallback
-                    if !conflicts.is_empty() {
-                        return Ok(conflicts);
-                    }
-                    // Fall through to status-based approach
-                }
-                Err(_e) => {
-                    // Fall through to status-based approach
-                }
-            }
-        }
-    }
-
-    // 3. Fallback to jj status with retry on stale errors
-    get_conflicted_files_from_status_with_retry(workspace_path)
+    let effective_target = match target_branch {
+        Some(branch) => branch.to_string(),
+        None => get_default_branch(&workspace_repo_path(workspace_path))?,
+    };
+    get_conflicted_files_from_branch_diff(workspace_path, &effective_target)
 }
 
-/// Get conflicted files using jj diff approach with retry on stale errors
-/// Wraps get_conflicted_files_from_diff() with stale error detection and retry
-fn get_conflicted_files_from_diff_with_retry(
+fn get_conflicted_files_from_branch_diff(
     workspace_path: &str,
-    jj_branch: &str,
+    target_branch: &str,
 ) -> Result<Vec<String>, JjError> {
-    match get_conflicted_files_from_diff(workspace_path, jj_branch) {
-        Ok(conflicts) => Ok(conflicts),
-        Err(e) => {
-            let err_str = e.to_string();
-            if err_str.contains("stale") || err_str.contains("not updated since operation") {
-                if let Err(update_err) = jj_workspace_update_stale(workspace_path) {
-                    eprintln!(
-                        "Failed to update stale workspace in diff retry: {}",
-                        update_err
-                    );
-                    return Err(e);
-                }
-                // Retry once
-                get_conflicted_files_from_diff(workspace_path, jj_branch)
-            } else {
-                Err(e)
-            }
-        }
-    }
-}
+    let mut loaded = load_workspace_repo(workspace_path)?;
+    import_colocated_git_state(&mut loaded, workspace_path)?;
 
-/// Get conflicted files using jj status approach with retry on stale errors
-/// Extracts the status-based conflict detection logic and adds stale error detection and retry
-fn get_conflicted_files_from_status_with_retry(
-    workspace_path: &str,
-) -> Result<Vec<String>, JjError> {
-    let output = command_for("jj")
-        .current_dir(workspace_path)
-        .args(["status"])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
+    let (_wc_commit_id, working_copy_tree) =
+        if let Some((wc_commit_id, tree)) = snapshot_working_copy_tree(&mut loaded, workspace_path)?
+        {
+            (wc_commit_id, tree)
+        } else {
+            let wc_commit_id = loaded
+                .repo
+                .view()
+                .get_wc_commit_id(loaded.workspace.workspace_name())
+                .cloned()
+                .ok_or_else(|| JjError::IoError("No working-copy commit found".to_string()))?;
+            let wc_commit = loaded
+                .repo
+                .store()
+                .get_commit(&wc_commit_id)
+                .map_err(|e| JjError::IoError(format!("Failed to load wc commit: {}", e)))?;
+            (wc_commit_id, wc_commit.tree())
+        };
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let err_str = stderr.to_string();
+    let target_commit =
+        resolve_target_commit_for_conflict_diff(&loaded, workspace_path, target_branch)?;
+    let target_tree = target_commit.tree();
 
-        if err_str.contains("stale") || err_str.contains("not updated since operation") {
-            if let Err(update_err) = jj_workspace_update_stale(workspace_path) {
-                eprintln!(
-                    "Failed to update stale workspace in status retry: {}",
-                    update_err
-                );
-                return Ok(Vec::new());
-            }
-            // Retry once
-            let retry_output = command_for("jj")
-                .current_dir(workspace_path)
-                .args(["status"])
-                .output()
-                .map_err(|e| JjError::IoError(e.to_string()))?;
-
-            if !retry_output.status.success() {
-                return Ok(Vec::new());
-            }
-
-            let status = String::from_utf8_lossy(&retry_output.stdout);
-            return parse_conflicted_files_from_status(&status);
-        }
-
-        return Ok(Vec::new());
-    }
-
-    let status = String::from_utf8_lossy(&output.stdout);
-    let conflicts = parse_conflicted_files_from_status(&status)?;
-
-    Ok(conflicts)
-}
-
-/// Get conflicted files using jj diff approach
-/// Uses: jj diff --from <target_branch> --to @ --summary
-pub fn get_conflicted_files_from_diff(
-    workspace_path: &str,
-    jj_branch: &str,
-) -> Result<Vec<String>, JjError> {
-    let output = command_for("jj")
-        .current_dir(workspace_path)
-        .args(["diff", "--from", jj_branch, "--to", "@", "--summary"])
-        .output()
-        .map_err(|e| JjError::IoError(e.to_string()))?;
-
-    if !output.status.success() {
-        return Err(JjError::IoError(
-            String::from_utf8_lossy(&output.stderr).to_string(),
-        ));
-    }
-
-    let summary = String::from_utf8_lossy(&output.stdout);
-    let files = parse_diff_summary(&summary)?;
-    let conflicts = extract_conflicted_files_from_summary(files);
-
-    Ok(conflicts)
-}
-
-/// Parse jj st output to extract conflicted files.
-///
-/// Expects `jj st` output that includes a `Working copy` line with `(conflict)` and a
-/// `Warning: There are unresolved conflicts at these paths:` section listing paths.
-fn parse_conflicted_files_from_status(status: &str) -> Result<Vec<String>, JjError> {
-    // Step 1: Check if "Working copy" line contains "(conflict)" marker
-    let has_conflict_marker = status
-        .lines()
-        .any(|line| line.trim().starts_with("Working copy") && line.contains("(conflict)"));
-
-    if !has_conflict_marker {
-        return Ok(Vec::new());
-    }
-
-    // Step 2: Parse "Warning:" section to extract file paths
     let mut conflicts = Vec::new();
-    let mut in_warning_section = false;
+    let diff_matcher = repo_root_matcher();
+    let diff_entries = futures::executor::block_on(
+        target_tree
+            .diff_stream(&working_copy_tree, &diff_matcher)
+            .collect::<Vec<_>>(),
+    );
+    for entry in diff_entries {
+        let values = entry
+            .values
+            .map_err(|e| JjError::IoError(format!("Failed to read conflict entry: {}", e)))?;
+        if !values.before.is_resolved() || !values.after.is_resolved() {
+            conflicts.push(entry.path.as_internal_file_string().to_string());
+        }
+    }
 
-    for line in status.lines() {
-        let trimmed = line.trim();
+    conflicts.sort();
+    conflicts.dedup();
+    Ok(conflicts)
+}
 
-        // Detect start of warning section
-        if trimmed.starts_with("Warning: There are unresolved conflicts at these paths:") {
-            in_warning_section = true;
+fn resolve_target_commit_for_conflict_diff(
+    loaded: &LoadedWorkspaceRepo,
+    workspace_path: &str,
+    target_branch: &str,
+) -> Result<Commit, JjError> {
+    if let Ok(commit) = resolve_merge_target_parent(loaded, workspace_path, target_branch) {
+        return Ok(commit);
+    }
+
+    let repo_path = workspace_repo_path(workspace_path);
+    for git_ref in [
+        format!("refs/heads/{}", target_branch),
+        format!("refs/remotes/origin/{}", target_branch),
+    ] {
+        let output = command_for("git")
+            .current_dir(&repo_path)
+            .args(["rev-parse", "--verify", &git_ref])
+            .output()
+            .map_err(|e| JjError::IoError(e.to_string()))?;
+        if !output.status.success() {
             continue;
         }
 
-        // Parse conflict lines in warning section
-        if in_warning_section {
-            if trimmed.is_empty() {
-                break; // End of warning section
-            }
+        let sha = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if sha.is_empty() {
+            continue;
+        }
 
-            // Format: "<file_path>    <conflict_description>"
-            if let Some(file_path) = trimmed.split_whitespace().next() {
-                if !file_path.is_empty() && !file_path.starts_with("Warning") {
-                    conflicts.push(file_path.to_string());
-                }
-            }
+        if let Ok(commit) = resolve_commit_by_revision(loaded, &sha) {
+            return Ok(commit);
         }
     }
 
-    Ok(conflicts)
+    Err(JjError::IoError(format!(
+        "Target branch '{}' could not be resolved",
+        target_branch
+    )))
 }
 
 /// Collect detailed information about all revisions for a conflicted bookmark
@@ -3229,8 +3255,9 @@ pub fn jj_rebase_with_revset(
     })
 }
 
-/// Get the default branch of the repository (main/master)
-/// Checks git symbolic-ref for origin/HEAD, falls back to checking for main/master
+/// Get the default branch of the repository.
+/// Checks git symbolic-ref for origin/HEAD, then checks for main/master,
+/// and finally falls back to the currently checked-out branch.
 pub fn get_default_branch(repo_path: &str) -> Result<String, JjError> {
     // Try origin/HEAD first
     let output = command_for("git")
@@ -3260,8 +3287,8 @@ pub fn get_default_branch(repo_path: &str) -> Result<String, JjError> {
         }
     }
 
-    // Default fallback
-    Ok("main".to_string())
+    // Final fallback: current checked-out branch
+    resolve_home_repo_branch(repo_path)
 }
 
 /// Push changes to remote using jj git push
@@ -4175,49 +4202,6 @@ pub fn jj_abandon_empty_commits(
     Ok(change_ids)
 }
 
-/// Parse diff summary output from jj diff --summary
-/// Format: "M file.txt", "A new.txt", "D removed.txt"
-fn parse_diff_summary(summary: &str) -> Result<Vec<JjFileChange>, JjError> {
-    let mut files = Vec::new();
-
-    for line in summary.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-
-        // Parse format: "M path/to/file.txt"
-        let parts: Vec<&str> = line.splitn(2, ' ').collect();
-        if parts.len() < 2 {
-            continue;
-        }
-
-        let status = parts[0].to_string();
-        let raw_path = parts[1];
-        let (path, previous_path) = parse_rename_path(raw_path);
-
-        files.push(JjFileChange {
-            path,
-            status,
-            previous_path,
-            changed_line_count: 0,
-            diff_deferred: false,
-        });
-    }
-
-    Ok(files)
-}
-
-/// Extract only conflicted files from diff summary
-/// Filters files with status 'C' (conflict)
-fn extract_conflicted_files_from_summary(files: Vec<JjFileChange>) -> Vec<String> {
-    files
-        .into_iter()
-        .filter(|f| f.status == "C")
-        .map(|f| f.path)
-        .collect()
-}
-
 fn too_large_revision_diff() -> JjRevisionDiff {
     JjRevisionDiff {
         files: Vec::new(),
@@ -4470,26 +4454,60 @@ fn build_file_change(
 fn build_file_diff_from_bytes(
     before_bytes: Option<Vec<u8>>,
     after_bytes: Option<Vec<u8>>,
-) -> (usize, Vec<JjDiffHunk>) {
+) -> (
+    usize,
+    Vec<JjDiffHunk>,
+    ConflictStyle,
+    Vec<ConflictRegionView>,
+) {
     match (before_bytes, after_bytes) {
         (None, Some(after)) => {
             let after = String::from_utf8_lossy(&after).into_owned();
             let hunks = build_text_hunks("", &after);
-            (count_changed_lines(&hunks), hunks)
+            let regions = conflict_markers::parse_conflict_markers(&after, "");
+            let style = regions
+                .first()
+                .map(|r| r.marker_style)
+                .unwrap_or(ConflictStyle::Unknown);
+            (count_changed_lines(&hunks), hunks, style, regions)
         }
         (Some(before), None) => {
             let before = String::from_utf8_lossy(&before).into_owned();
             let hunks = build_text_hunks(&before, "");
-            (count_changed_lines(&hunks), hunks)
+            (
+                count_changed_lines(&hunks),
+                hunks,
+                ConflictStyle::Unknown,
+                Vec::new(),
+            )
         }
         (Some(before), Some(after)) => {
             let before = String::from_utf8_lossy(&before).into_owned();
             let after = String::from_utf8_lossy(&after).into_owned();
             let hunks = build_text_hunks(&before, &after);
-            (count_changed_lines(&hunks), hunks)
+            let regions = conflict_markers::parse_conflict_markers(&after, "");
+            let style = regions
+                .first()
+                .map(|r| r.marker_style)
+                .unwrap_or(ConflictStyle::Unknown);
+            (count_changed_lines(&hunks), hunks, style, regions)
         }
-        (None, None) => (0, Vec::new()),
+        (None, None) => (0, Vec::new(), ConflictStyle::Unknown, Vec::new()),
     }
+}
+
+fn annotate_conflict_regions(
+    file_path: &str,
+    regions: Vec<ConflictRegionView>,
+) -> Vec<ConflictRegionView> {
+    regions
+        .into_iter()
+        .map(|mut region| {
+            region.file_path = file_path.to_string();
+            region.id = format!("{}-conflict-{}", file_path, region.conflict_number);
+            region
+        })
+        .collect()
 }
 
 /// Get combined diff of all changes between target branch and workspace HEAD
@@ -4508,8 +4526,12 @@ pub fn jj_get_merge_diff(
     let to_tree = to_commit.tree();
 
     let matcher = repo_root_matcher();
-    let copy_records =
-        get_copy_records_between(loaded.repo.store(), from_commit.id(), to_commit.id(), &matcher)?;
+    let copy_records = get_copy_records_between(
+        loaded.repo.store(),
+        from_commit.id(),
+        to_commit.id(),
+        &matcher,
+    )?;
     let conflict_labels = Diff::new(from_tree.labels(), to_tree.labels());
     let diff_stream = materialized_diff_stream(
         loaded.repo.store(),
@@ -4528,14 +4550,44 @@ pub fn jj_get_merge_diff(
             };
             let before_absent = matches!(&values.before, MaterializedTreeValue::Absent);
             let after_absent = matches!(&values.after, MaterializedTreeValue::Absent);
-            let before_bytes =
-                materialized_value_to_bytes(entry.path.source(), values.before).await;
-            let after_bytes = materialized_value_to_bytes(entry.path.target(), values.after).await;
-            let (changed_line_count, hunks) = build_file_diff_from_bytes(before_bytes, after_bytes);
-            let file = build_file_change(&entry.path, changed_line_count, false, before_absent, after_absent);
+            let style = parse_conflict_marker_style(_conflict_marker_style);
+            let merge_options = match MergeOptions::from_settings(&loaded.settings) {
+                Ok(options) => options,
+                Err(_) => continue,
+            };
+            let before_bytes = materialized_value_to_bytes(
+                entry.path.source(),
+                values.before,
+                style,
+                Some(&merge_options),
+            )
+            .await;
+            let after_bytes = materialized_value_to_bytes(
+                entry.path.target(),
+                values.after,
+                style,
+                Some(&merge_options),
+            )
+            .await;
+            let (changed_line_count, mut hunks, conflict_style, conflict_regions_raw) =
+                build_file_diff_from_bytes(before_bytes, after_bytes);
+            let file = build_file_change(
+                &entry.path,
+                changed_line_count,
+                false,
+                before_absent,
+                after_absent,
+            );
+            let conflict_regions = annotate_conflict_regions(&file.path, conflict_regions_raw);
+            for hunk in &mut hunks {
+                hunk.conflict_style = conflict_style;
+                hunk.conflict_regions = conflict_regions.clone();
+            }
             hunks_by_file.push(JjFileDiff {
                 path: file.path.clone(),
                 hunks,
+                conflict_style,
+                conflict_regions,
             });
             files.push(file);
         }
@@ -4584,10 +4636,27 @@ pub fn jj_get_commit_diff(
             };
             let before_absent = matches!(&values.before, MaterializedTreeValue::Absent);
             let after_absent = matches!(&values.after, MaterializedTreeValue::Absent);
-            let before_bytes =
-                materialized_value_to_bytes(entry.path.source(), values.before).await;
-            let after_bytes = materialized_value_to_bytes(entry.path.target(), values.after).await;
-            let (changed_line_count, hunks) = build_file_diff_from_bytes(before_bytes, after_bytes);
+            let style = parse_conflict_marker_style(_conflict_marker_style);
+            let merge_options = match MergeOptions::from_settings(&loaded.settings) {
+                Ok(options) => options,
+                Err(_) => continue,
+            };
+            let before_bytes = materialized_value_to_bytes(
+                entry.path.source(),
+                values.before,
+                style,
+                Some(&merge_options),
+            )
+            .await;
+            let after_bytes = materialized_value_to_bytes(
+                entry.path.target(),
+                values.after,
+                style,
+                Some(&merge_options),
+            )
+            .await;
+            let (changed_line_count, mut hunks, conflict_style, conflict_regions_raw) =
+                build_file_diff_from_bytes(before_bytes, after_bytes);
 
             total_changed_lines += changed_line_count;
             if total_changed_lines > TOO_LARGE_COMMIT_DIFF_THRESHOLD {
@@ -4603,9 +4672,16 @@ pub fn jj_get_commit_diff(
                 after_absent,
             );
             if !diff_deferred {
+                let conflict_regions = annotate_conflict_regions(&file.path, conflict_regions_raw);
+                for hunk in &mut hunks {
+                    hunk.conflict_style = conflict_style;
+                    hunk.conflict_regions = conflict_regions.clone();
+                }
                 hunks_by_file.push(JjFileDiff {
                     path: file.path.clone(),
                     hunks,
+                    conflict_style,
+                    conflict_regions,
                 });
             }
             files.push(file);
@@ -4663,19 +4739,45 @@ pub fn jj_get_commit_file_diff(
                 Ok(values) => values,
                 Err(_) => continue,
             };
-            let before_bytes =
-                materialized_value_to_bytes(entry.path.source(), values.before).await;
-            let after_bytes = materialized_value_to_bytes(entry.path.target(), values.after).await;
-            let (_, hunks) = build_file_diff_from_bytes(before_bytes, after_bytes);
+            let style = parse_conflict_marker_style(_conflict_marker_style);
+            let merge_options = match MergeOptions::from_settings(&loaded.settings) {
+                Ok(options) => options,
+                Err(_) => continue,
+            };
+            let before_bytes = materialized_value_to_bytes(
+                entry.path.source(),
+                values.before,
+                style,
+                Some(&merge_options),
+            )
+            .await;
+            let after_bytes = materialized_value_to_bytes(
+                entry.path.target(),
+                values.after,
+                style,
+                Some(&merge_options),
+            )
+            .await;
+            let (_, mut hunks, conflict_style, conflict_regions_raw) =
+                build_file_diff_from_bytes(before_bytes, after_bytes);
+            let conflict_regions = annotate_conflict_regions(file_path, conflict_regions_raw);
+            for hunk in &mut hunks {
+                hunk.conflict_style = conflict_style;
+                hunk.conflict_regions = conflict_regions.clone();
+            }
             return Ok(JjFileDiff {
                 path: file_path.to_string(),
                 hunks,
+                conflict_style,
+                conflict_regions,
             });
         }
 
         Ok(JjFileDiff {
             path: file_path.to_string(),
             hunks: Vec::new(),
+            conflict_style: ConflictStyle::Unknown,
+            conflict_regions: Vec::new(),
         })
     })
 }

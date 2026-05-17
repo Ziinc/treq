@@ -144,3 +144,41 @@ describe("ShowWorkspace - Commits tab", () => {
 		).not.toBeInTheDocument();
 	});
 });
+
+describe("ShowWorkspace - Commits tab single-commit regression", () => {
+	let repoPath: string;
+	let testWorkspace: WorkspaceRef;
+	let user: ReturnType<typeof userEvent.setup>;
+
+	beforeEach(async () => {
+		({ repoPath } = createTestRepo(false));
+		openRepo(repoPath);
+		user = userEvent.setup();
+
+		await commitRepoFile(
+			repoPath,
+			"target-baseline.txt",
+			"target baseline content",
+			"Target baseline commit",
+		);
+
+		testWorkspace = await createWorkspaceRef(
+			repoPath,
+			"feat/one-commit-visible",
+		);
+		await commitWorkspaceFile(
+			repoPath,
+			testWorkspace,
+			"README.md",
+			"single-workspace-commit-content",
+			"Single workspace commit should render",
+		);
+	});
+
+	it("shows a single workspace commit instead of the empty state", async () => {
+		await openWorkspaceCommitsTab(user, "feat/one-commit-visible");
+
+		await screen.findByText("Single workspace commit should render");
+		expect(screen.queryByText("No commits yet.")).not.toBeInTheDocument();
+	});
+});

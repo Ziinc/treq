@@ -1,6 +1,5 @@
 import type {
 	CachedDirectoryEntry,
-	ConflictRegion,
 	DiffCacheEntry,
 	DirectoryEntry,
 	FileSearchResult,
@@ -198,12 +197,6 @@ export const stopFileWatcher = (
 	workspaceId: number,
 	workspacePath: string,
 ): Promise<void> => invoke("stop_file_watcher", { workspaceId, workspacePath });
-
-export const parseConflictMarkers = (
-	content: string,
-	filePath: string,
-): Promise<ConflictRegion[]> =>
-	invoke("parse_conflict_markers", { content, filePath });
 
 export const moveCommitToExistingWorkspace = (
 	...args: [

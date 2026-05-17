@@ -57,6 +57,7 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
 		readOnly,
 		fileActionTarget,
 		selectedUnstagedFiles,
+		actualConflictedFiles,
 		workspacePath,
 		toggleFileCollapse,
 		toggleLargeDiff,
@@ -81,6 +82,7 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
 		isBinaryFile(filePath) || isRename ? true : collapsedFiles.has(filePath);
 	const isViewed = viewedFiles.has(filePath);
 	const fileId = `file-section-${filePath.replace(/[^a-zA-Z0-9]/g, "-")}`;
+	const isConflictedFile = actualConflictedFiles.includes(filePath);
 
 	let additions = 0;
 	let deletions = 0;
@@ -325,7 +327,9 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
 							</div>
 						) : fileData.hunks.length === 0 ? (
 							<div className="text-sm text-muted-foreground px-[12px] py-[24px] text-center">
-								No diff hunks available
+								{isConflictedFile
+									? "No diff available for this conflicted file (possibly deleted)"
+									: "No diff hunks available"}
 							</div>
 						) : additions + deletions > 250 &&
 							!expandedLargeDiffs.has(filePath) ? (

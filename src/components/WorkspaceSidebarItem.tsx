@@ -6,6 +6,7 @@ import {
 	CornerLeftUp,
 	FolderOpen,
 	GitBranch,
+	AlertTriangle,
 	Layers2,
 	Pencil,
 	Trash2,
@@ -206,6 +207,13 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 											>
 												{workspaceTitle}
 											</span>
+											{isConflicted && (
+												<AlertTriangle
+													data-testid={`workspace-conflict-indicator-${workspace.id}`}
+													className="w-3.5 h-3.5 text-destructive shrink-0 mr-1"
+													aria-label="Conflicted workspace"
+												/>
+											)}
 											<div className="flex items-center gap-1 shrink-0 -mr-3">
 												<span
 													className={cn(

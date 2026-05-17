@@ -568,8 +568,10 @@ pub fn get_cached_commit_diff_stats_batch(
     let mut stmt = conn
         .prepare(&sql)
         .map_err(|e| format!("Failed to prepare commit diff stat batch query: {}", e))?;
-    let params_vec: Vec<&dyn rusqlite::ToSql> =
-        commit_ids.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+    let params_vec: Vec<&dyn rusqlite::ToSql> = commit_ids
+        .iter()
+        .map(|s| s as &dyn rusqlite::ToSql)
+        .collect();
     let rows = stmt
         .query_map(params_vec.as_slice(), |row| {
             Ok(CachedCommitDiffStat {
@@ -2091,5 +2093,4 @@ mod tests {
             initialized.lock().unwrap().remove(repo_path);
         }
     }
-
 }

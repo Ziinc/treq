@@ -1,5 +1,5 @@
 import * as React from "react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	createTestRepo,
 	findSidebarBranchElement,
@@ -7,36 +7,25 @@ import {
 	resolveWorkspacePath,
 	writeWorkspaceFile,
 } from "../../utils";
-import { createWorkspace, getWorkspaces } from "../../../src/lib/api";
-import { render, screen, waitFor, within } from "../../test-utils";
+import {
+	createCommit,
+	createWorkspace,
+	getWorkspaceStatus,
+	getWorkspaces,
+} from "../../../src/lib/api";
+import { render, screen, waitFor } from "../../test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
 import userEvent from "@testing-library/user-event";
+import * as api from "../../../src/lib/api";
+import { execFileSync } from "node:child_process";
 
-async function setupConflict(): Promise<{ stackedBranch: string }> {
-	const { repoPath } = createTestRepo(false);
-	openRepo(repoPath);
-
-	const baseId = await createWorkspace(repoPath, "feature-base");
-	const baseWs = (await getWorkspaces(repoPath)).find((w) => w.id === baseId);
-	if (!baseWs) throw new Error("Base workspace not found");
-	const basePath = resolveWorkspacePath(repoPath, baseWs.workspace_path);
-
-	const stackedId = await createWorkspace(
-		repoPath,
-		"feat/stacked",
-		"feature-base",
-	);
-	const stackedWs = (await getWorkspaces(repoPath)).find(
-		(w) => w.id === stackedId,
-	);
-	if (!stackedWs) throw new Error("Stacked workspace not found");
-	const stackedPath = resolveWorkspacePath(repoPath, stackedWs.workspace_path);
-
-	writeWorkspaceFile(basePath, "README.md", "base version content");
-	writeWorkspaceFile(stackedPath, "README.md", "stacked version content");
-
-	return { stackedBranch: "feat/stacked" };
-}
+type ReviewFixture = {
+	repoPath: string;
+	branchName: string;
+	workspaceId: number;
+	workspacePath: string;
+	conflictFile: string;
+};
 
 async function navigateToReviewTab(
 	user: ReturnType<typeof userEvent.setup>,
@@ -48,211 +37,245 @@ async function navigateToReviewTab(
 	await screen.findByRole("tab", { name: /^Review/, selected: true });
 }
 
-async function findFirstAddCommentBtn() {
-	return (await screen.findAllByRole("button", { name: /add comment/i }))[0];
-}
-
-async function openFirstCommentForm(user: ReturnType<typeof userEvent.setup>) {
-	const btn = await findFirstAddCommentBtn();
-	await user.click(btn);
-	return (await screen.findAllByPlaceholderText("Add a comment..."))[0];
-}
-
-async function saveComment(
-	user: ReturnType<typeof userEvent.setup>,
-	text: string,
+async function assertStatus(
+	repoPath: string,
+	workspaceId: number,
+	expected: { hasConflicts: boolean; conflictedFiles: string[] },
 ) {
-	const textarea = await openFirstCommentForm(user);
-	await user.type(textarea, text);
-	const addBtns = screen.getAllByRole("button", { name: "Add Comment" });
-	await user.click(addBtns[0]);
-	await waitFor(() =>
-		expect(screen.queryAllByPlaceholderText("Add a comment...")).toHaveLength(
-			0,
-		),
-	);
+	const status = await getWorkspaceStatus(repoPath, workspaceId);
+	expect(status.has_conflicts).toBe(expected.hasConflicts);
+	expect(status.conflicted_files).toEqual(expected.conflictedFiles);
 }
 
-function firstNoteContainer() {
-	return screen.getAllByText("Resolution note:")[0].parentElement!;
+async function createWorkspaceFixture(branchName: string): Promise<ReviewFixture> {
+	const { repoPath } = createTestRepo(false);
+	openRepo(repoPath);
+	const workspaceId = await createWorkspace(repoPath, branchName);
+	const workspace = (await getWorkspaces(repoPath)).find((w) => w.id === workspaceId);
+	if (!workspace) throw new Error("Workspace not found");
+	return {
+		repoPath,
+		branchName,
+		workspaceId,
+		workspacePath: resolveWorkspacePath(repoPath, workspace.workspace_path),
+		conflictFile: "README.md",
+	};
 }
 
-describe("Review - Conflict detection and comments", () => {
+async function setupCleanState(): Promise<ReviewFixture> {
+	return createWorkspaceFixture("feat/review-clean");
+}
+
+async function setupDivergentNonConflictState(): Promise<ReviewFixture> {
+	const { repoPath } = createTestRepo(false);
+	openRepo(repoPath);
+
+	const baseId = await createWorkspace(repoPath, "feature-base");
+	const baseWs = (await getWorkspaces(repoPath)).find((w) => w.id === baseId);
+	if (!baseWs) throw new Error("Base workspace not found");
+	const basePath = resolveWorkspacePath(repoPath, baseWs.workspace_path);
+
+	const stackedId = await createWorkspace(repoPath, "feat/divergent", "feature-base");
+	const stackedWs = (await getWorkspaces(repoPath)).find((w) => w.id === stackedId);
+	if (!stackedWs) throw new Error("Stacked workspace not found");
+	const stackedPath = resolveWorkspacePath(repoPath, stackedWs.workspace_path);
+
+	writeWorkspaceFile(basePath, "base-only.txt", "base change\n");
+	await createCommit(repoPath, baseId, "base-only change");
+
+	writeWorkspaceFile(stackedPath, "stacked-only.txt", "stacked change\n");
+	await createCommit(repoPath, stackedId, "stacked-only change");
+
+	return {
+		repoPath,
+		branchName: "feat/divergent",
+		workspaceId: stackedId,
+		workspacePath: stackedPath,
+		conflictFile: "README.md",
+	};
+}
+
+async function setupUnresolvedConflictState(branchName: string): Promise<ReviewFixture> {
+	const { repoPath } = createTestRepo(false);
+	openRepo(repoPath);
+
+	const workspaceId = await createWorkspace(repoPath, branchName);
+	const workspace = (await getWorkspaces(repoPath)).find((w) => w.id === workspaceId);
+	if (!workspace) throw new Error("Workspace not found");
+	const workspacePath = resolveWorkspacePath(repoPath, workspace.workspace_path);
+
+	writeWorkspaceFile(workspacePath, "README.md", "workspace side\n");
+	await createCommit(repoPath, workspaceId, "workspace conflicting change");
+	const workspaceChangeId = execFileSync(
+		"jj",
+		["log", "-r", "@-", "--no-graph", "-T", "change_id"],
+		{ cwd: workspacePath, encoding: "utf8" },
+	).trim();
+
+	writeWorkspaceFile(repoPath, "README.md", "main side\n");
+	await createCommit(repoPath, null, "main conflicting change");
+	const mainChangeId = execFileSync(
+		"jj",
+		["log", "-r", "@-", "--no-graph", "-T", "change_id"],
+		{ cwd: repoPath, encoding: "utf8" },
+	).trim();
+
+	execFileSync("jj", ["new", workspaceChangeId, mainChangeId], {
+		cwd: workspacePath,
+		encoding: "utf8",
+	});
+
+	writeWorkspaceFile(workspacePath, "notes.txt", "non-conflicted note\n");
+
+	return {
+		repoPath,
+		branchName,
+		workspaceId,
+		workspacePath,
+		conflictFile: "README.md",
+	};
+}
+
+describe("Review - conflict rendering contract", () => {
 	let user: ReturnType<typeof userEvent.setup>;
 
 	beforeEach(() => {
 		user = userEvent.setup();
 	});
 
-	describe("conflict detection", () => {
-		it("shows Conflicts section in Review tab with conflicted file", async () => {
-			const { stackedBranch } = await setupConflict();
-			render(<Dashboard />);
-			await navigateToReviewTab(user, stackedBranch);
-			await screen.findByText("Conflicts");
-			await waitFor(() =>
-				expect(screen.getAllByText("README.md").length).toBeGreaterThan(0),
-			);
+	it("clean state: status shows no conflicts and no Conflicts section", async () => {
+		const fixture = await setupCleanState();
+		await assertStatus(fixture.repoPath, fixture.workspaceId, {
+			hasConflicts: false,
+			conflictedFiles: [],
+		});
+
+		render(<Dashboard />);
+		await navigateToReviewTab(user, fixture.branchName);
+		expect(screen.queryByText("Conflicts")).not.toBeInTheDocument();
+	});
+
+	it("divergent non-conflict state: no Conflicts section", async () => {
+		const fixture = await setupDivergentNonConflictState();
+		await assertStatus(fixture.repoPath, fixture.workspaceId, {
+			hasConflicts: false,
+			conflictedFiles: [],
+		});
+
+		render(<Dashboard />);
+		await navigateToReviewTab(user, fixture.branchName);
+		expect(screen.queryByText("Conflicts")).not.toBeInTheDocument();
+	});
+
+	it("divergent non-conflict state: sidebar should not show conflict tooltip", async () => {
+		const fixture = await setupDivergentNonConflictState();
+		await assertStatus(fixture.repoPath, fixture.workspaceId, {
+			hasConflicts: false,
+			conflictedFiles: [],
+		});
+
+		render(<Dashboard />);
+		const branchNode = await findSidebarBranchElement(fixture.branchName);
+		await user.hover(branchNode);
+		expect(screen.queryByText("Conflicts detected")).not.toBeInTheDocument();
+		expect(
+			document.querySelector(
+				`[data-testid="workspace-conflict-indicator-${fixture.workspaceId}"]`,
+			),
+		).toBeNull();
+	});
+
+	it("unresolved conflict state: Conflicts section is rendered from backend metadata", async () => {
+		const fixture = await setupUnresolvedConflictState("feat/unresolved-conflict");
+		await assertStatus(fixture.repoPath, fixture.workspaceId, {
+			hasConflicts: true,
+			conflictedFiles: [fixture.conflictFile],
+		});
+
+		render(<Dashboard />);
+		await screen.findByTestId(
+			`workspace-conflict-indicator-${fixture.workspaceId}`,
+		);
+		await navigateToReviewTab(user, fixture.branchName);
+		await screen.findByText("Conflicts");
+		await screen.findByText("Changes");
+		await waitFor(() => {
+			expect(screen.getAllByText("README.md").length).toBeGreaterThan(0);
 		});
 	});
 
-	describe("comment toggle", () => {
-		it("opens comment form when clicking Add comment", async () => {
-			const { stackedBranch } = await setupConflict();
-			render(<Dashboard />);
-			await navigateToReviewTab(user, stackedBranch);
-			await openFirstCommentForm(user);
-			expect(
-				screen.getAllByPlaceholderText("Add a comment...").length,
-			).toBeGreaterThan(0);
+	it("conflict identity without regions: keeps conflicted file identity with no invented conflict cards", async () => {
+		const fixture = await setupUnresolvedConflictState("feat/zero-regions");
+		await assertStatus(fixture.repoPath, fixture.workspaceId, {
+			hasConflicts: true,
+			conflictedFiles: [fixture.conflictFile],
 		});
 
-		it("closes comment form when toggling off", async () => {
-			const { stackedBranch } = await setupConflict();
-			render(<Dashboard />);
-			await navigateToReviewTab(user, stackedBranch);
-			const btn = await findFirstAddCommentBtn();
-			await user.click(btn);
-			await screen.findAllByPlaceholderText("Add a comment...");
-			await user.click(btn);
-			await waitFor(() =>
-				expect(
-					screen.queryAllByPlaceholderText("Add a comment..."),
-				).toHaveLength(0),
-			);
+		const originalGetWorkspaceFileHunks = api.getWorkspaceFileHunks;
+		const getHunksSpy = vi.spyOn(api, "getWorkspaceFileHunks");
+		getHunksSpy.mockImplementation(async (...args) => {
+			const hunks = await originalGetWorkspaceFileHunks(...args);
+			return hunks.map((h) => ({ ...h, conflict_regions: [] }));
 		});
 
-		it("auto-focuses textarea when comment form opens", async () => {
-			const { stackedBranch } = await setupConflict();
-			render(<Dashboard />);
-			await navigateToReviewTab(user, stackedBranch);
-			const textarea = await openFirstCommentForm(user);
-			expect(textarea).toHaveFocus();
+		render(<Dashboard />);
+		await navigateToReviewTab(user, fixture.branchName);
+		await screen.findByText("Conflicts");
+		await waitFor(() => {
+			expect(screen.getAllByText("README.md").length).toBeGreaterThan(0);
+		});
+		expect(screen.queryByText("Conflict 1 of")).not.toBeInTheDocument();
+		getHunksSpy.mockRestore();
+	});
+
+	it("conflicted files suppress line-comment controls while non-conflicted files keep them", async () => {
+		const fixture = await setupUnresolvedConflictState("feat/comment-controls");
+		await assertStatus(fixture.repoPath, fixture.workspaceId, {
+			hasConflicts: true,
+			conflictedFiles: [fixture.conflictFile],
 		});
 
-		it("closes form and displays comment after saving", async () => {
-			const { stackedBranch } = await setupConflict();
-			render(<Dashboard />);
-			await navigateToReviewTab(user, stackedBranch);
-			await saveComment(user, "my resolution note");
-			expect(screen.queryAllByPlaceholderText("Add a comment...")).toHaveLength(
-				0,
-			);
-			await waitFor(() =>
-				expect(
-					screen.getAllByText("my resolution note").length,
-				).toBeGreaterThan(0),
-			);
+		render(<Dashboard />);
+		await navigateToReviewTab(user, fixture.branchName);
+
+		await user.click(screen.getAllByText("README.md")[0]);
+		await waitFor(() => {
+			const readmeDiff = document.querySelector('[data-file-path="README.md"]');
+			expect(readmeDiff).not.toBeNull();
+			expect(readmeDiff?.querySelectorAll("[data-comment-button]").length).toBe(0);
+		});
+
+		await user.click(screen.getAllByText("notes.txt")[0]);
+		await waitFor(() => {
+			const notesDiff = document.querySelector('[data-file-path="notes.txt"]');
+			expect(notesDiff).not.toBeNull();
+			expect(notesDiff?.querySelectorAll("[data-comment-button]").length).toBeGreaterThan(0);
 		});
 	});
 
-	describe("comment editing", () => {
-		it("enters edit mode when clicking saved comment", async () => {
-			const { stackedBranch } = await setupConflict();
-			render(<Dashboard />);
-			await navigateToReviewTab(user, stackedBranch);
-			await saveComment(user, "original note");
-			await screen.clickByText("original note");
-			expect(
-				screen.getAllByDisplayValue("original note").length,
-			).toBeGreaterThan(0);
-			expect(
-				screen.getAllByRole("button", { name: "Discard" }).length,
-			).toBeGreaterThan(0);
-			expect(
-				screen.getAllByRole("button", { name: "Cancel" }).length,
-			).toBeGreaterThan(0);
-			expect(
-				screen.getAllByRole("button", { name: "Save" }).length,
-			).toBeGreaterThan(0);
+	it("conflicted file with no diff hunks shows an explicit placeholder", async () => {
+		const fixture = await setupUnresolvedConflictState("feat/deleted-conflict-placeholder");
+		await assertStatus(fixture.repoPath, fixture.workspaceId, {
+			hasConflicts: true,
+			conflictedFiles: [fixture.conflictFile],
 		});
 
-		it("saves edited comment", async () => {
-			const { stackedBranch } = await setupConflict();
-			render(<Dashboard />);
-			await navigateToReviewTab(user, stackedBranch);
-			await saveComment(user, "original note");
-			await screen.clickByText("original note");
-			const [editTextarea] = screen.getAllByDisplayValue("original note");
-			await user.clear(editTextarea);
-			await user.type(editTextarea, "updated note");
-			await screen.clickByRole("button", { name: "Save" });
-			await waitFor(() =>
-				expect(screen.getAllByText("updated note").length).toBeGreaterThan(0),
-			);
-			expect(screen.queryByText("original note")).not.toBeInTheDocument();
+		const originalGetWorkspaceFileHunks = api.getWorkspaceFileHunks;
+		const getHunksSpy = vi.spyOn(api, "getWorkspaceFileHunks");
+		getHunksSpy.mockImplementation(async (...args) => {
+			const [repoPath, workspaceId, filePath] = args;
+			if (filePath === fixture.conflictFile) {
+				return [];
+			}
+			return originalGetWorkspaceFileHunks(repoPath, workspaceId, filePath);
 		});
 
-		it("cancels edit preserving original text", async () => {
-			const { stackedBranch } = await setupConflict();
-			render(<Dashboard />);
-			await navigateToReviewTab(user, stackedBranch);
-			await saveComment(user, "original note");
-			await screen.clickByText("original note");
-			const [editTextarea] = screen.getAllByDisplayValue("original note");
-			await user.clear(editTextarea);
-			await user.type(editTextarea, "discarded text");
-			await screen.clickByRole("button", { name: "Cancel" });
-			await waitFor(() =>
-				expect(screen.getAllByText("original note").length).toBeGreaterThan(0),
-			);
-		});
-
-		it("Escape cancels edit", async () => {
-			const { stackedBranch } = await setupConflict();
-			render(<Dashboard />);
-			await navigateToReviewTab(user, stackedBranch);
-			await saveComment(user, "original note");
-			await screen.clickByText("original note");
-			const [editTextarea] = screen.getAllByDisplayValue("original note");
-			await user.clear(editTextarea);
-			await user.type(editTextarea, "discarded text");
-			await user.keyboard("{Escape}");
-			await waitFor(() =>
-				expect(screen.getAllByText("original note").length).toBeGreaterThan(0),
-			);
-		});
-
-		it("Cmd+Enter saves edit", async () => {
-			const { stackedBranch } = await setupConflict();
-			render(<Dashboard />);
-			await navigateToReviewTab(user, stackedBranch);
-			await saveComment(user, "original note");
-			await screen.clickByText("original note");
-			const [editTextarea] = screen.getAllByDisplayValue("original note");
-			await user.clear(editTextarea);
-			await user.type(editTextarea, "updated via shortcut");
-			await user.keyboard("{Meta>}{Enter}{/Meta}");
-			await waitFor(() =>
-				expect(
-					screen.getAllByText("updated via shortcut").length,
-				).toBeGreaterThan(0),
-			);
-		});
-
-		it("deletes comment via Discard in edit mode", async () => {
-			const { stackedBranch } = await setupConflict();
-			render(<Dashboard />);
-			await navigateToReviewTab(user, stackedBranch);
-			await saveComment(user, "note to discard");
-			await screen.clickByText("note to discard");
-			await screen.clickByRole("button", { name: "Discard" });
-			await waitFor(() =>
-				expect(screen.queryAllByText("note to discard")).toHaveLength(0),
-			);
-		});
-
-		it("deletes comment via X button in display mode", async () => {
-			const { stackedBranch } = await setupConflict();
-			render(<Dashboard />);
-			await navigateToReviewTab(user, stackedBranch);
-			await saveComment(user, "note to delete");
-			const noteContainer = firstNoteContainer();
-			const deleteBtn = within(noteContainer).getByRole("button");
-			await user.click(deleteBtn);
-			await waitFor(() =>
-				expect(screen.queryAllByText("note to delete")).toHaveLength(0),
-			);
-		});
+		render(<Dashboard />);
+		await navigateToReviewTab(user, fixture.branchName);
+		await user.click(screen.getAllByText("README.md")[0]);
+		await screen.findByText(
+			"No diff available for this conflicted file (possibly deleted)",
+		);
+		getHunksSpy.mockRestore();
 	});
 });

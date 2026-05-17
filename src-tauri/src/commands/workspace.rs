@@ -23,6 +23,14 @@ pub fn get_workspace_changed_files(
 }
 
 #[tauri::command]
+pub fn get_workspace_conflicted_files(
+    repo_path: String,
+    workspace_id: Option<i64>,
+) -> Result<Vec<String>, String> {
+    crate::core::list_conflicted_files(&repo_path, workspace_id)
+}
+
+#[tauri::command]
 pub fn get_workspaces(repo_path: String) -> Result<Vec<Workspace>, String> {
     crate::core::list_workspaces(&repo_path)
 }

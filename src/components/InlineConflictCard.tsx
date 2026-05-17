@@ -44,13 +44,12 @@ interface InlineConflictCardProps {
 	registerFileRef?: (el: HTMLDivElement | null) => void;
 }
 
-const isConflictMarker = (line: string): boolean =>
-	/^(<{7}|>{7}|%{7}|\+{7}|-{7}|\|{7}|={7})/.test(line);
-
-const getConflictLineBackground = (line: string): string => {
-	if (isConflictMarker(line)) return "";
-	if (line.startsWith("-")) return "bg-red-500/20";
-	if (line.startsWith("+")) return "bg-emerald-500/20";
+const getConflictLineBackground = (
+	role: ConflictRegion["lines"][number]["role"],
+): string => {
+	if (role === "left") return "bg-red-500/20";
+	if (role === "right") return "bg-emerald-500/20";
+	if (role === "base") return "bg-amber-500/20";
 	return "";
 };
 
@@ -73,7 +72,18 @@ export const InlineConflictCard = ({
 	registerFileRef,
 }: InlineConflictCardProps) => {
 	const cardRef = useRef<HTMLDivElement>(null);
-	const lines = useMemo(() => region.content.split("\n"), [region.content]);
+	const lines = useMemo(
+		() =>
+			region.lines?.length
+				? region.lines
+				: region.content.split("\n").map((raw, idx) => ({
+						raw,
+						kind: "content" as const,
+						role: "unknown" as const,
+						file_line: region.start_line + idx,
+					})),
+		[region],
+	);
 	const hasComment = conflictComments.has(region.id);
 
 	useEffect(() => {
@@ -100,8 +110,8 @@ export const InlineConflictCard = ({
 			<div className="p-0 relative">
 				<pre className="text-sm font-mono overflow-x-auto bg-muted/30 p-3 rounded whitespace-pre-wrap break-all">
 					{lines.map((line, idx) => {
-						const isMarker = isConflictMarker(line);
-						const bgClass = getConflictLineBackground(line);
+						const isMarker = line.kind === "marker";
+						const bgClass = getConflictLineBackground(line.role);
 						const conflictSearchKey = `conflict:${region.id}:${idx}`;
 						const conflictLineData =
 							searchData.matchesByKey.get(conflictSearchKey);
@@ -120,7 +130,7 @@ export const InlineConflictCard = ({
 						);
 						const lineHtml = hasSearchHighlight
 							? highlightInHtml(
-									line,
+									line.raw,
 									debouncedSearchQuery,
 									conflictHighlightOffset,
 								).html
@@ -135,7 +145,7 @@ export const InlineConflictCard = ({
 								{lineHtml ? (
 									<span dangerouslySetInnerHTML={{ __html: lineHtml }} />
 								) : (
-									line
+									line.raw
 								)}
 							</div>
 						);

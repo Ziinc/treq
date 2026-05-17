@@ -95,6 +95,7 @@ pub struct WorkspaceSidebarStatus {
 pub struct WorkspaceStatus {
     #[serde(flatten)]
     pub partial: WorkspacePartialStatus,
+    pub conflicted_files: Vec<String>,
     pub remote_sync: RemoteSyncStatus,
     pub target: Option<local_db::Workspace>,
     pub children: Vec<local_db::Workspace>,
@@ -118,6 +119,16 @@ pub struct WorkspaceMetadata {
     pub intent: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub moved_files: Option<Vec<String>>,
+}
+
+fn resolve_workspace_has_conflicts(
+    unresolved_workspace_hint: Option<bool>,
+    conflicted_files: Option<&[String]>,
+) -> bool {
+    if let Some(files) = conflicted_files {
+        return !files.is_empty();
+    }
+    unresolved_workspace_hint.unwrap_or(false)
 }
 
 fn resolve_workspace_root(repo_path: &str, workspace_id: Option<i64>) -> Result<String, String> {
@@ -552,7 +563,7 @@ pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspaceSidebarSt
     persisted
         .into_iter()
         .map(|current| {
-            let has_conflicts = conflict_by_path
+            let unresolved_workspace_hint = conflict_by_path
                 .get(&current.workspace_path)
                 .copied()
                 .ok_or_else(|| {
@@ -561,6 +572,7 @@ pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspaceSidebarSt
                         current.workspace_path
                     )
                 })?;
+            let has_conflicts = resolve_workspace_has_conflicts(Some(unresolved_workspace_hint), None);
             Ok(WorkspaceSidebarStatus {
                 current,
                 has_conflicts,
@@ -614,6 +626,7 @@ pub fn workspace_status(
                     has_changes: rs.has_changes,
                     commits_ahead: 0,
                 },
+                conflicted_files: Vec::new(),
                 remote_sync: rs.remote_sync,
                 target: None,
                 children: Vec::new(),
@@ -695,12 +708,10 @@ pub fn workspace_status(
     let has_changes = jj::jj_get_changed_files(workspace_path_str)
         .map(|files| !files.is_empty())
         .unwrap_or(false);
-    let has_conflicts = jj::get_conflicted_files(
-        workspace_path_str,
-        current_workspace.target_branch.as_deref(),
-    )
-    .map(|files| !files.is_empty())
-    .unwrap_or(false);
+    let conflict_target = current_workspace.target_branch.as_deref().unwrap_or("main");
+    let conflicted_files =
+        jj::get_conflicted_files(workspace_path_str, Some(conflict_target)).unwrap_or_default();
+    let has_conflicts = resolve_workspace_has_conflicts(None, Some(&conflicted_files));
 
     let commits_ahead_count = commits_ahead_of_target.len();
 
@@ -736,6 +747,7 @@ pub fn workspace_status(
             has_changes,
             commits_ahead: commits_ahead_count,
         },
+        conflicted_files,
         remote_sync,
         target,
         children,
@@ -743,6 +755,28 @@ pub fn workspace_status(
         conflicted_workspace_ids,
         commits_ahead_of_target,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_workspace_has_conflicts;
+
+    #[test]
+    fn resolve_workspace_has_conflicts_prefers_conflicted_files_signal() {
+        let files: Vec<String> = vec![];
+        assert!(!resolve_workspace_has_conflicts(Some(true), Some(&files)));
+        assert!(resolve_workspace_has_conflicts(
+            Some(false),
+            Some(&["README.md".to_string()])
+        ));
+    }
+
+    #[test]
+    fn resolve_workspace_has_conflicts_falls_back_to_unresolved_hint() {
+        assert!(resolve_workspace_has_conflicts(Some(true), None));
+        assert!(!resolve_workspace_has_conflicts(Some(false), None));
+        assert!(!resolve_workspace_has_conflicts(None, None));
+    }
 }
 
 /// Merges a workspace's commits into the home repository and cleans up the workspace.
@@ -875,7 +909,7 @@ pub fn update_workspace(
                 &workspace.branch_name,
                 &branch,
             )
-                .map_err(|e| format!("Failed to rebase workspace: {}", e))?;
+            .map_err(|e| format!("Failed to rebase workspace: {}", e))?;
 
             if !rebase_result.success {
                 return Err(format!("Rebase failed: {}", rebase_result.message));
@@ -1381,10 +1415,7 @@ pub fn copy_included_files(
 ///
 /// # Returns
 /// The parsed revision diff on success, or an error string.
-pub fn workspace_diff(
-    repo_path: &str,
-    workspace_id: i64,
-) -> Result<jj::JjRevisionDiff, String> {
+pub fn workspace_diff(repo_path: &str, workspace_id: i64) -> Result<jj::JjRevisionDiff, String> {
     let app_db_path = app_db_path(repo_path);
     let db = crate::db::Database::new(app_db_path)
         .map_err(|e| format!("Failed to open app database: {}", e))?;
