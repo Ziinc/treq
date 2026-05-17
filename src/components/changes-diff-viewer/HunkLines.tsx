@@ -32,6 +32,7 @@ const HunkLines: React.FC<HunkLinesProps> = memo(
 		hunk,
 		hunkIndex,
 		filePath,
+		conflictedFilePaths,
 		conflictLineLookups,
 		firstConflictRegionIdByFile,
 		expandedContext,
@@ -71,6 +72,7 @@ const HunkLines: React.FC<HunkLinesProps> = memo(
 	}) => {
 		const lineNumbers = computeHunkLineNumbers(hunk);
 		const language = getLanguageFromPath(filePath);
+		const isConflictedFile = conflictedFilePaths.has(filePath);
 		const conflictLineMap = conflictLineLookups.get(filePath);
 		const renderedConflictIds = new Set<string>();
 		const firstConflictRegionId = firstConflictRegionIdByFile.get(filePath);
@@ -247,13 +249,16 @@ const HunkLines: React.FC<HunkLinesProps> = memo(
 									selected && "!bg-blue-500/10",
 								)}
 								onMouseEnter={() =>
+									!isConflictedFile &&
 									handleLineMouseEnter({
 										filePath,
 										hunkIndex,
 										lineIndex,
 									})
 								}
-								onMouseUp={handleLineMouseUp}
+								onMouseUp={() => {
+									if (!isConflictedFile) handleLineMouseUp();
+								}}
 								onClick={(event) => {
 									event.preventDefault();
 								}}
@@ -262,6 +267,7 @@ const HunkLines: React.FC<HunkLinesProps> = memo(
 									data-testid="line-gutter"
 									className="w-24 flex-shrink-0 text-muted-foreground select-none border-r border-border/40 flex items-center gap-[4px] cursor-pointer hover:bg-muted/50"
 									onMouseDown={(event) =>
+										!isConflictedFile &&
 										handleLineMouseDown({
 											event,
 											filePath,
@@ -283,46 +289,49 @@ const HunkLines: React.FC<HunkLinesProps> = memo(
 									</span>
 								</div>
 								<div className="w-6 flex-shrink-0 flex items-center justify-center select-none">
-									<button
-										data-comment-button
-										className={cn(
-											"p-[2px] rounded bg-primary text-primary-foreground hover:bg-primary/90",
-											"invisible group-hover:visible",
-										)}
-										onMouseDown={(event) => event.stopPropagation()}
-										onClick={(event) => {
-											event.stopPropagation();
-											if (
+									{!isConflictedFile && (
+										<button
+											data-comment-button
+											className={cn(
+												"p-[2px] rounded bg-primary text-primary-foreground hover:bg-primary/90",
+												"invisible group-hover:visible",
+											)}
+											onMouseDown={(event) => event.stopPropagation()}
+											onClick={(event) => {
+												event.stopPropagation();
+												if (
+													diffLineSelection &&
+													diffLineSelection.lines.length > 0
+												) {
+													handleAddCommentFromSelection();
+												} else {
+													const lineSide: "old" | "new" =
+														lineNum?.old !== undefined &&
+														lineNum?.new === undefined
+															? "old"
+															: "new";
+													setPendingComment({
+														filePath,
+														hunkId: hunk.id,
+														displayAtLineIndex: lineIndex,
+														startLine: actualLineNum,
+														endLine: actualLineNum,
+														lineContent: [line],
+														lineSide,
+													});
+													setShowCommentInput(true);
+												}
+											}}
+											title={
 												diffLineSelection &&
-												diffLineSelection.lines.length > 0
-											) {
-												handleAddCommentFromSelection();
-											} else {
-												const lineSide: "old" | "new" =
-													lineNum?.old !== undefined &&
-													lineNum?.new === undefined
-														? "old"
-														: "new";
-												setPendingComment({
-													filePath,
-													hunkId: hunk.id,
-													displayAtLineIndex: lineIndex,
-													startLine: actualLineNum,
-													endLine: actualLineNum,
-													lineContent: [line],
-													lineSide,
-												});
-												setShowCommentInput(true);
+												diffLineSelection.lines.length > 1
+													? "Add comment to selected lines"
+													: "Add comment"
 											}
-										}}
-										title={
-											diffLineSelection && diffLineSelection.lines.length > 1
-												? "Add comment to selected lines"
-												: "Add comment"
-										}
-									>
-										<Plus className="w-3 h-3" />
-									</button>
+										>
+											<Plus className="w-3 h-3" />
+										</button>
+									)}
 								</div>
 								<div className="w-5 flex-shrink-0 text-center select-none">
 									{getLinePrefix(line)}

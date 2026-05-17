@@ -578,14 +578,6 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             Ok(Value::Array(result))
         }
 
-        // ── Conflict markers ──────────────────────────────────────────────
-        "parse_conflict_markers" => {
-            let content = get_str(&args, "content")?;
-            let file_path = get_str(&args, "filePath")?;
-            let regions = treq_lib::conflict_markers::parse_conflict_markers(&content, &file_path);
-            serde_json::to_value(regions).map_err(|e| e.to_string())
-        }
-
         // ── ensure_workspace_indexed ──────────────────────────────────────
         "ensure_workspace_indexed" => {
             let repo_path = get_str(&args, "repoPath")?;

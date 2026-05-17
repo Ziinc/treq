@@ -137,6 +137,7 @@ export interface FileRowComponentProps {
 	readOnly: boolean;
 	fileActionTarget: string | null;
 	selectedUnstagedFiles: Set<string>;
+	actualConflictedFiles: string[];
 	workspacePath: string;
 	toggleFileCollapse: (filePath: string) => void;
 	toggleLargeDiff: (filePath: string) => void;
@@ -160,6 +161,7 @@ export interface HunkLinesProps {
 	hunk: JjDiffHunk;
 	hunkIndex: number;
 	filePath: string;
+	conflictedFilePaths: Set<string>;
 	conflictLineLookups: Map<string, Map<number, ConflictRegion>>;
 	firstConflictRegionIdByFile: Map<string, string>;
 	expandedContext: Map<string, string[]>;

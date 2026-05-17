@@ -342,7 +342,9 @@ fn test_update_workspace_target_branch_rebases_workspace_bookmark_lineage() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().expect("workspace path should be utf-8");
+    let workspace_path_str = workspace_path
+        .to_str()
+        .expect("workspace path should be utf-8");
 
     TestRepo::write_workspace_file(workspace_path_str, "feature.txt", "feature work\n")
         .expect("Failed to write workspace file");
@@ -2911,11 +2913,15 @@ fn test_excludes_uncommitted_changes() {
 #[test]
 fn test_workspace_diff_reports_rename_with_previous_path() {
     let repo = TestRepo::new().unwrap();
-    repo.commit_file("old.txt", "hello", "add old on main").unwrap();
+    repo.commit_file("old.txt", "hello", "add old on main")
+        .unwrap();
     let ws = merge_diff_new_workspace(&repo, "feat/rename");
     let workspace_dir = repo.workspaces_dir().join(&ws.workspace_path);
-    fs::rename(workspace_dir.join("old.txt"), workspace_dir.join("renamed.txt"))
-        .expect("rename should succeed");
+    fs::rename(
+        workspace_dir.join("old.txt"),
+        workspace_dir.join("renamed.txt"),
+    )
+    .expect("rename should succeed");
     merge_diff_commit(&repo, &ws, "rename old");
 
     let diff = merge_diff_result(&repo, &ws);
@@ -2935,8 +2941,11 @@ fn test_workspace_diff_reports_copy_status() {
         .unwrap();
     let ws = merge_diff_new_workspace(&repo, "feat/copy");
     let workspace_dir = repo.workspaces_dir().join(&ws.workspace_path);
-    fs::copy(workspace_dir.join("source.txt"), workspace_dir.join("copied.txt"))
-        .expect("copy should succeed");
+    fs::copy(
+        workspace_dir.join("source.txt"),
+        workspace_dir.join("copied.txt"),
+    )
+    .expect("copy should succeed");
     merge_diff_commit(&repo, &ws, "copy source");
 
     let diff = merge_diff_result(&repo, &ws);

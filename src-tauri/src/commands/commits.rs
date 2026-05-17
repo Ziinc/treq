@@ -1,4 +1,3 @@
-use crate::conflict_markers;
 use crate::core;
 use crate::jj;
 use crate::AppState;
@@ -161,20 +160,4 @@ pub fn list_repo_branches(repo_path: String) -> Result<Vec<jj::JjBranch>, String
 #[tauri::command]
 pub fn switch_repo_branch(repo_path: String, bookmark_name: String) -> Result<String, String> {
     core::switch_repo_branch(&repo_path, &bookmark_name)
-}
-
-/// Parse conflict markers from file content.
-///
-/// # Arguments
-/// * `content` - The full text content of a file
-/// * `file_path` - Path to the file (used for generating region IDs)
-///
-/// # Returns
-/// A vector of conflict regions found in the content.
-#[tauri::command]
-pub fn parse_conflict_markers(
-    content: String,
-    file_path: String,
-) -> Vec<conflict_markers::ConflictRegion> {
-    conflict_markers::parse_conflict_markers(&content, &file_path)
 }

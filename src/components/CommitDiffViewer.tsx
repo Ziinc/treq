@@ -78,6 +78,25 @@ interface DayGroup {
 	commits: JjLogCommit[];
 }
 
+function normalizeCommits(commits: JjLogCommit[]): JjLogCommit[] {
+	if (commits.length < 2) {
+		return commits;
+	}
+
+	const [first, second, ...rest] = commits;
+	const looksLikeWorkingCopyPlaceholder =
+		first.description === "(no description)" &&
+		first.bookmarks.length === 0 &&
+		!first.is_immutable &&
+		first.parent_ids.includes(second.commit_id);
+
+	if (!looksLikeWorkingCopyPlaceholder) {
+		return commits;
+	}
+
+	return [second, ...rest];
+}
+
 function groupCommitsByDay(commits: JjLogCommit[]): DayGroup[] {
 	const groups: DayGroup[] = [];
 	for (const commit of commits) {
@@ -287,7 +306,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 			listCommits(repoPath, workspaceId, !isHomeRepo)
 				.then((result) => {
 					const nextCommits = result?.commits ?? [];
-					setCommits(nextCommits.slice(1)); // Skip working copy
+					setCommits(normalizeCommits(nextCommits));
 					if (!isHomeRepo) {
 						setTargetBranchCommits(result?.target_branch_commits ?? []);
 						setTargetBranchCommitsBranch(result?.target_branch ?? null);
@@ -324,7 +343,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 			setLoadingMore(true);
 			listCommits(repoPath, null, false, undefined, homeRepoLimit)
 				.then((result) => {
-					setCommits((result?.commits ?? []).slice(1)); // Skip working copy
+					setCommits(normalizeCommits(result?.commits ?? []));
 				})
 				.catch(() => {})
 				.finally(() => setLoadingMore(false));

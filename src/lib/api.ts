@@ -109,6 +109,12 @@ export const getWorkspaceChangedFiles = (
 ): Promise<JjFileChange[]> =>
 	invoke("get_workspace_changed_files", { repoPath, workspaceId });
 
+export const getWorkspaceConflictedFiles = (
+	repoPath: string,
+	workspaceId: number | null,
+): Promise<string[]> =>
+	invoke("get_workspace_conflicted_files", { repoPath, workspaceId });
+
 export const lsWorkspace = (
 	repoPath: string,
 	workspaceId: number | null,

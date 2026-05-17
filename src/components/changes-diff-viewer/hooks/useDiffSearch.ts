@@ -54,7 +54,10 @@ export function useDiffSearch({
 			return count;
 		};
 		const processConflictRegion = (region: ConflictRegion) => {
-			const lines = region.content.split("\n");
+			const lines =
+				region.lines?.length > 0
+					? region.lines.map((line) => line.raw)
+					: region.content.split("\n");
 			for (let idx = 0; idx < lines.length; idx++) {
 				const matchCount = countLineMatches(lines[idx]);
 				if (matchCount > 0) {

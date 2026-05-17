@@ -1140,5 +1140,4 @@ fn test_list_commits_caches_commit_info_in_local_db() {
         row_count, 1,
         "list_commits should cache exactly one row for the committed change"
     );
-
 }

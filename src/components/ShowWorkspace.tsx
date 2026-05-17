@@ -1,6 +1,6 @@
 /* eslint-disable max-lines, max-params */
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -168,7 +168,19 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 		const [targetBranch, setTargetBranch] = useState<string | null>(null);
 		const defaultBranch = "main";
 		const defaultTargetBranch = mainRepoBranch || defaultBranch;
-		const [conflictedFiles] = useState<string[]>([]);
+		const [conflictedFiles, setConflictedFiles] = useState<string[]>([]);
+		const normalizedConflictedFiles = useMemo(() => {
+			const seen = new Set<string>();
+			const normalized: string[] = [];
+			for (const path of conflictedFiles) {
+				const trimmed = path.trim();
+				if (!trimmed || seen.has(trimmed)) continue;
+				seen.add(trimmed);
+				normalized.push(trimmed);
+			}
+			return normalized;
+		}, [conflictedFiles]);
+		const conflictCount = normalizedConflictedFiles.length;
 
 		// Committed changes toggle state
 		const [showCommittedChanges, setShowCommittedChanges] = useState(true);
@@ -285,6 +297,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 					effectiveRepoPath,
 					workspace?.id ?? null,
 				);
+				setConflictedFiles(status.conflicted_files ?? []);
 				const sync = status.remote_sync;
 				if (sync.type === "Ahead") {
 					setSyncStatus({ ahead: sync.data.count, behind: 0 });
@@ -299,11 +312,16 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			} catch (error) {
 				console.error("Failed to fetch sync status:", error);
 				setSyncStatus(null);
+				setConflictedFiles([]);
 			}
 		}, [workspace, effectiveRepoPath]);
 
 		// Invalidate sidebar query when conflicts change
 		const queryClient = useQueryClient();
+
+		useEffect(() => {
+			void fetchSyncStatus();
+		}, [fetchSyncStatus]);
 
 		// Handle file selection from Cmd+P (or other external sources)
 		useEffect(() => {
@@ -708,7 +726,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 									<span
 										className={cn(
 											"rounded-full px-2 py-0.5 text-xs font-medium transition-colors",
-											conflictedFiles.length > 0
+											conflictCount > 0
 												? "bg-destructive text-destructive-foreground"
 												: "bg-muted text-muted-foreground",
 										)}
@@ -819,7 +837,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 								<div className="flex-1 overflow-auto border-r border-border">
 									<div className="p-4 space-y-4">
 										{/* Conflicts Alert */}
-										{conflictedFiles.length > 0 && (
+										{conflictCount > 0 && (
 											<div
 												role="alert"
 												className="border border-destructive/30 rounded-md bg-destructive/5 p-4"
@@ -828,8 +846,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 													<AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
 													<div className="flex-1">
 														<h3 className="font-medium text-destructive">
-															{conflictedFiles.length}{" "}
-															{conflictedFiles.length === 1
+															{conflictCount}{" "}
+															{conflictCount === 1
 																? "conflict"
 																: "conflicts"}{" "}
 															detected
@@ -969,7 +987,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 							onChangedFilesChange={handleChangedFilesUpdate}
 							onRefreshingChange={setRefreshingFiles}
 							initialSelectedFile={initialSelectedFile}
-							conflictedFiles={conflictedFiles}
+							conflictedFiles={normalizedConflictedFiles}
 							onCreateAgentWithReview={handleCreateAgentWithReview}
 							showCommittedChanges={workspace ? showCommittedChanges : false}
 							onMoveFilesToNewWorkspace={
@@ -1084,7 +1102,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 															variant="default"
 															size="sm"
 															onClick={onCreateStackedWorkspace}
-															disabled={rebasing || conflictedFiles.length > 0}
+															disabled={rebasing || conflictCount > 0}
 														>
 															<Layers2 className="w-4 h-4" />
 															Stack
@@ -1093,8 +1111,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 													<TooltipContent>
 														{rebasing
 															? "Rebasing in progress..."
-															: conflictedFiles.length > 0
-																? `Cannot stack: ${conflictedFiles.length} conflict${conflictedFiles.length === 1 ? "" : "s"} detected`
+															: conflictCount > 0
+																? `Cannot stack: ${conflictCount} conflict${conflictCount === 1 ? "" : "s"} detected`
 																: `Create stacked workspace from ${branchTitle}`}
 													</TooltipContent>
 												</Tooltip>
@@ -1179,7 +1197,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 														variant="default"
 														size="sm"
 														onClick={onOpenMergePreview}
-														disabled={rebasing || conflictedFiles.length > 0}
+														disabled={rebasing || conflictCount > 0}
 														className="gap-1 bg-green-600 hover:bg-green-700"
 													>
 														<GitCompareArrows className="w-4 h-4" />
@@ -1187,11 +1205,11 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 													</Button>
 												</div>
 											</TooltipTrigger>
-											{(rebasing || conflictedFiles.length > 0) && (
+											{(rebasing || conflictCount > 0) && (
 												<TooltipContent>
 													{rebasing
 														? "Rebasing in progress..."
-														: `Cannot merge: ${conflictedFiles.length} conflict${conflictedFiles.length === 1 ? "" : "s"} detected`}
+														: `Cannot merge: ${conflictCount} conflict${conflictCount === 1 ? "" : "s"} detected`}
 												</TooltipContent>
 											)}
 										</Tooltip>

@@ -40,6 +40,7 @@ export interface WorkspaceStatus {
 	current: Workspace;
 	has_conflicts: boolean;
 	has_changes: boolean;
+	conflicted_files: string[];
 	remote_sync: RemoteSyncStatus;
 	target: Workspace | null;
 	children: Workspace[];
@@ -78,6 +79,8 @@ export interface JjDiffHunk {
 	header: string;
 	lines: string[];
 	patch: string;
+	conflict_style?: ConflictStyle;
+	conflict_regions?: ConflictRegion[];
 }
 
 export interface JjFileChange {
@@ -158,6 +161,8 @@ export type MergeStrategy = "merge" | "squash" | "rebase";
 export interface JjFileDiff {
 	path: string;
 	hunks: JjDiffHunk[];
+	conflict_style?: ConflictStyle;
+	conflict_regions?: ConflictRegion[];
 }
 
 export interface JjRevisionDiff {
@@ -291,6 +296,37 @@ export interface PendingReview {
 	updated_at: string;
 }
 
+export type ConflictStyle =
+	| "jj_diff"
+	| "jj_snapshot"
+	| "jj_git_diff3"
+	| "git_merge"
+	| "git_diff3"
+	| "unknown";
+
+export type ConflictLineKind = "marker" | "content";
+export type ConflictLineRole =
+	| "start"
+	| "base"
+	| "separator"
+	| "end"
+	| "left"
+	| "right"
+	| "unknown";
+
+export interface ConflictLineView {
+	raw: string;
+	kind: ConflictLineKind;
+	role: ConflictLineRole;
+	file_line: number;
+}
+
+export interface ConflictComparisonView {
+	left_line_indexes: number[];
+	base_line_indexes: number[];
+	right_line_indexes: number[];
+}
+
 export interface ConflictRegion {
 	id: string;
 	file_path: string;
@@ -299,5 +335,8 @@ export interface ConflictRegion {
 	start_line: number;
 	end_line: number;
 	content: string;
-	marker_style: "jj" | "git";
+	marker_style: ConflictStyle;
+	lines: ConflictLineView[];
+	line_map: number[];
+	comparison: ConflictComparisonView;
 }
