@@ -167,6 +167,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 		// Target branch and conflicts state
 		const [targetBranch, setTargetBranch] = useState<string | null>(null);
 		const defaultBranch = "main";
+		const defaultTargetBranch = mainRepoBranch || defaultBranch;
 		const [conflictedFiles] = useState<string[]>([]);
 
 		// Committed changes toggle state
@@ -204,6 +205,14 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			setBookmarkConflict(null);
 			setConflictModalOpen(false);
 		}, [workspace?.id]);
+
+		useEffect(() => {
+			if (!workspace) {
+				setTargetBranch(null);
+				return;
+			}
+			setTargetBranch(workspace.target_branch ?? defaultTargetBranch);
+		}, [workspace?.id, workspace?.target_branch, defaultTargetBranch]);
 
 		useEffect(() => {
 			onActiveTabChange?.(activeTab);
@@ -438,6 +447,59 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 				_setActionPending(null);
 			}
 		}, [workspace, effectiveRepoPath, addToast, fetchSyncStatus, queryClient]);
+
+		const handleForceRebaseWorkspace = useCallback(async () => {
+			if (!workspace || !effectiveRepoPath) return;
+
+			setRebasing(true);
+			try {
+				const result = await checkAndRebaseWorkspaces(
+					effectiveRepoPath,
+					workspace.id,
+					targetBranch ?? defaultTargetBranch,
+					true,
+				);
+
+				handleBookmarkConflictsFromResult(result);
+
+				if (result.success) {
+					addToast({
+						title: "Force rebase complete",
+						description: "Rebased workspace subtree from current workspace scope.",
+						type: "success",
+					});
+				} else {
+					addToast({
+						title: "Force rebase completed with errors",
+						description: result.message || "Some workspaces failed to rebase.",
+						type: "warning",
+					});
+				}
+
+				queryClient.invalidateQueries({
+					queryKey: ["workspaces", effectiveRepoPath],
+				});
+				queryClient.invalidateQueries({
+					queryKey: ["workspace-statuses", effectiveRepoPath],
+				});
+			} catch (error) {
+				addToast({
+					title: "Force rebase failed",
+					description: error instanceof Error ? error.message : String(error),
+					type: "error",
+				});
+			} finally {
+				setRebasing(false);
+			}
+		}, [
+			workspace,
+			effectiveRepoPath,
+			targetBranch,
+			defaultTargetBranch,
+			handleBookmarkConflictsFromResult,
+			addToast,
+			queryClient,
+		]);
 
 		const handleResolveBookmarkConflict = useCallback(
 			async (revisionId: string) => {
@@ -1146,18 +1208,29 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 											<MoreVertical className="w-4 h-4" />
 										</Button>
 									</DropdownMenuTrigger>
-									<DropdownMenuContent align="end" sideOffset={4}>
-										<DropdownMenuItem
-											onSelect={(e) => {
-												e.preventDefault();
-												handlePushToRemote();
-											}}
+										<DropdownMenuContent align="end" sideOffset={4}>
+											<DropdownMenuItem
+												onSelect={(e) => {
+													e.preventDefault();
+													handlePushToRemote();
+												}}
 										>
 											<Upload className="w-4 h-4 mr-2" />
 											Push to remote
-										</DropdownMenuItem>
-										{workspace && onDeleteWorkspace && (
-											<>
+											</DropdownMenuItem>
+											{workspace && (
+												<DropdownMenuItem
+													onSelect={(e) => {
+														e.preventDefault();
+														handleForceRebaseWorkspace();
+													}}
+												>
+													<RefreshCw className="w-4 h-4 mr-2" />
+													Force Rebase Workspace
+												</DropdownMenuItem>
+											)}
+											{workspace && onDeleteWorkspace && (
+												<>
 												<DropdownMenuSeparator />
 												<DropdownMenuItem
 													onSelect={() => onDeleteWorkspace(workspace)}

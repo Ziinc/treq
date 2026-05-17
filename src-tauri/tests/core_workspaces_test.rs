@@ -33,6 +33,22 @@ fn setup_workspace_with_target(
         .expect("workspace should exist after creation")
 }
 
+fn setup_workspace_with_source(
+    repo: &TestRepo,
+    branch: &str,
+    source_branch: &str,
+) -> treq_lib::local_db::Workspace {
+    treq_lib::core::create_workspace(
+        &repo.repo_path,
+        branch,
+        Some(format!("test workspace for {}", branch)),
+        None,
+        Some(source_branch),
+        None,
+    )
+    .unwrap_or_else(|e| panic!("Failed to create workspace '{}': {}", branch, e))
+}
+
 #[test]
 fn test_check_and_rebase_workspaces_all_succeeds() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -104,6 +120,65 @@ fn test_check_and_rebase_workspaces_force_bypasses_up_to_date() {
         "force=true should trigger rebase even when already up-to-date"
     );
     assert!(result.success, "forced rebase should succeed");
+}
+
+#[test]
+fn test_force_rebase_workspace_uses_rooted_subtree_scope_excluding_root() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let ws_a = setup_workspace_with_target(&repo, "feat/root-a", "main");
+    let ws_b = setup_workspace_with_source(&repo, "feat/child-b", "feat/root-a");
+    let ws_c = setup_workspace_with_source(&repo, "feat/grandchild-c", "feat/child-b");
+    let ws_d = setup_workspace_with_source(&repo, "feat/sibling-d", "feat/root-a");
+
+    let result = treq_lib::core::check_and_rebase_workspaces(
+        &repo.repo_path,
+        Some(ws_b.id),
+        Some("main".to_string()),
+        Some(true),
+        "git",
+    )
+    .expect("forced rooted-subtree rebase should not error");
+
+    assert!(result.success, "forced rooted-subtree should succeed");
+    assert!(
+        result.message.contains("Skipped root workspace"),
+        "root workspace should be skipped: {}",
+        result.message
+    );
+    assert!(
+        result.message.contains("feat-child-b")
+            && result.message.contains("feat-grandchild-c")
+            && result.message.contains("feat-sibling-d"),
+        "descendants/siblings should be included: {}",
+        result.message
+    );
+    assert!(
+        result.message.contains("wc refresh deferred"),
+        "force rooted-subtree should report deferred working-copy refresh: {}",
+        result.message
+    );
+
+    let a_last = treq_lib::local_db::get_workspace_last_rebased_commit(&repo.repo_path, ws_a.id)
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    let b_last = treq_lib::local_db::get_workspace_last_rebased_commit(&repo.repo_path, ws_b.id)
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    let c_last = treq_lib::local_db::get_workspace_last_rebased_commit(&repo.repo_path, ws_c.id)
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    let d_last = treq_lib::local_db::get_workspace_last_rebased_commit(&repo.repo_path, ws_d.id)
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+
+    assert!(a_last.is_empty(), "root should not be rebased");
+    assert!(!b_last.is_empty(), "child should be rebased");
+    assert!(!c_last.is_empty(), "grandchild should be rebased");
+    assert!(!d_last.is_empty(), "sibling should be rebased");
 }
 
 #[test]
@@ -249,6 +324,84 @@ fn test_update_workspace_target_branch_perform_rebase() {
         log.contains("Develop commit"),
         "JJ log should contain develop commit, got: {}",
         log
+    );
+}
+
+#[test]
+fn test_update_workspace_target_branch_rebases_workspace_bookmark_lineage() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace: Workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/bookmark-rebase",
+        Some("bookmark rebase test".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().expect("workspace path should be utf-8");
+
+    TestRepo::write_workspace_file(workspace_path_str, "feature.txt", "feature work\n")
+        .expect("Failed to write workspace file");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Workspace feature commit")
+        .expect("Failed to create workspace commit");
+    let new_wc_output = Command::new("jj")
+        .current_dir(workspace_path_str)
+        .args(["new"])
+        .output()
+        .expect("Failed to run jj new");
+    assert!(
+        new_wc_output.status.success(),
+        "jj new should create an empty workspace commit: {}",
+        String::from_utf8_lossy(&new_wc_output.stderr)
+    );
+
+    TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "develop"])
+        .expect("Failed to create develop branch");
+    repo.commit_file("develop.txt", "develop content", "Develop base commit")
+        .expect("Failed to commit develop branch");
+    let develop_tip = TestRepo::run_git(&repo.repo_path, &["rev-parse", "develop"])
+        .expect("Failed to read develop tip")
+        .trim()
+        .to_string();
+    TestRepo::run_git(&repo.repo_path, &["checkout", "main"]).expect("Failed to checkout main");
+
+    let updated = treq_lib::core::update_workspace(
+        &repo.repo_path,
+        workspace.id,
+        MaybeEmptyParam::Some("develop".to_string()),
+        MaybeEmptyParam::Omitted,
+    )
+    .expect("Failed to update workspace target branch");
+    assert_eq!(updated.target_branch.as_deref(), Some("develop"));
+
+    let output = Command::new("jj")
+        .current_dir(&repo.repo_path)
+        .args([
+            "log",
+            "-r",
+            &format!("ancestors({}) & {}", workspace.branch_name, develop_tip),
+            "-n",
+            "1",
+            "--no-graph",
+            "-T",
+            "commit_id",
+        ])
+        .output()
+        .expect("Failed to run jj log");
+    assert!(
+        output.status.success(),
+        "jj log should succeed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let overlap = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    assert!(
+        !overlap.is_empty(),
+        "workspace bookmark lineage should include develop tip after rebase; stdout={}",
+        String::from_utf8_lossy(&output.stdout)
     );
 }
 

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "../test-utils";
 import userEvent from "@testing-library/user-event";
 import { createTestRepo, findSidebarBranchElement, openRepo } from "../utils";
-import { createWorkspace, getWorkspaces } from "../../src/lib/api";
+import { createWorkspace, getWorkspaces, updateWorkspace } from "../../src/lib/api";
 import { Dashboard } from "../../src/components/Dashboard";
 
 const findWorkspaceByBranchName = (
@@ -31,6 +31,20 @@ describe("Dashboard - workspace list", () => {
     await screen.findByText("feat/alpha");
     await screen.findByText("feat/beta");
     expect(screen.queryByText("unknown")).toBeFalsy();
+  });
+
+  it("keeps sidebar populated when a workspace self-targets", async () => {
+    const workspaces = await getWorkspaces(repoPath);
+    const alphaWorkspace = findWorkspaceByBranchName(workspaces, "feat/alpha");
+    expect(alphaWorkspace).toBeTruthy();
+
+    await updateWorkspace(repoPath, alphaWorkspace!.id, "feat/alpha");
+
+    render(<Dashboard />);
+
+    await screen.findByText("main");
+    await screen.findByText("feat/alpha");
+    await screen.findByText("feat/beta");
   });
 
   describe("context menu and tooltip", () => {

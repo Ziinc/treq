@@ -63,6 +63,7 @@ export function buildWorkspaceTree(
 	for (const ws of workspaces) {
 		const target = ws.target_branch;
 		if (!target) continue; // No target = root node
+		if (target === ws.branch_name) continue; // Ignore self-target links
 
 		const parentNode = nodeByBranch.get(target);
 		const childNode = nodeByBranch.get(ws.branch_name);
@@ -79,9 +80,19 @@ export function buildWorkspaceTree(
 	for (const node of nodeByBranch.values()) {
 		const targetBranch = node.status.current.target_branch;
 		const hasTarget = targetBranch !== null && targetBranch !== undefined;
+		const isSelfTarget = hasTarget && targetBranch === node.branchName;
 		const targetExists = hasTarget && workspaceByBranch.has(targetBranch);
 
-		if (!hasTarget || !targetExists) {
+		if (!hasTarget || !targetExists || isSelfTarget) {
+			roots.push(node);
+		}
+	}
+
+	// Malformed graphs can form cycles with zero roots; degrade safely by
+	// flattening to top-level roots so sidebar content never disappears.
+	if (roots.length === 0) {
+		for (const node of nodeByBranch.values()) {
+			node.children = [];
 			roots.push(node);
 		}
 	}
