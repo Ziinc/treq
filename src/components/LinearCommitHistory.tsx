@@ -143,8 +143,11 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 							aria-hidden="true"
 						/>
 
-						{dayGroups.map((group) => (
-							<div key={group.dayKey} className="mt-5 first:mt-0">
+						{dayGroups.map((group, groupIndex) => (
+							<div
+								key={`${group.dayKey}-${groupIndex}`}
+								className="mt-5 first:mt-0"
+							>
 								<p className="text-xs font-semibold text-muted-foreground mb-1 pl-7">
 									{group.label}
 								</p>
