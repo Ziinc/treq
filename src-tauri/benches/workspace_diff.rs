@@ -1,7 +1,6 @@
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use std::fs;
-use std::path::Path;
-use std::sync::Mutex;
+use std::path::PathBuf;
 
 #[path = "../tests/e2e_test_helpers.rs"]
 mod e2e_test_helpers;
@@ -50,6 +49,7 @@ fn setup_workspace_diff() -> (TestRepo, i64) {
 
     write_workspace_file(&repo, &workspace, "uncommitted.txt", "working copy only\n");
 
+    init_bench_app_db(&repo);
     (repo, workspace.id)
 }
 
@@ -78,7 +78,20 @@ fn setup_workspace_diff_ten_files_fifty_added_lines() -> (TestRepo, i64) {
         write_workspace_file(&repo, &workspace, &format!("added-{index}.txt"), &content);
     }
 
+    init_bench_app_db(&repo);
     (repo, workspace.id)
+}
+
+fn init_bench_app_db(repo: &TestRepo) {
+    let app_dir: PathBuf = repo.temp_dir.path().join("app-data");
+    fs::create_dir_all(&app_dir).expect("failed to create benchmark app dir");
+    std::env::set_var("TREQ_APP_DATA_DIR", app_dir.to_string_lossy().to_string());
+
+    let db = treq_lib::db::Database::new(app_dir.join("treq.db"))
+        .expect("failed to open benchmark app db");
+    db.init().expect("failed to initialize benchmark app db");
+    db.set_setting("conflict_marker_style", "git")
+        .expect("failed to set benchmark conflict style");
 }
 
 fn bench_workspace_diff(c: &mut Criterion) {
@@ -89,14 +102,9 @@ fn bench_workspace_diff(c: &mut Criterion) {
         b.iter_batched(
             setup_workspace_diff,
             |(repo, workspace_id)| {
-                let db_path = Path::new(&repo.repo_path).join(".treq").join("treq.db");
-                let db = Mutex::new(
-                    treq_lib::db::Database::new(db_path).expect("failed to open benchmark db"),
-                );
                 treq_lib::core::workspace_diff(
                     std::hint::black_box(&repo.repo_path),
                     std::hint::black_box(workspace_id),
-                    std::hint::black_box(&db),
                 )
                 .expect("workspace_diff failed");
             },
@@ -108,14 +116,9 @@ fn bench_workspace_diff(c: &mut Criterion) {
         b.iter_batched(
             setup_workspace_diff_ten_files_fifty_added_lines,
             |(repo, workspace_id)| {
-                let db_path = Path::new(&repo.repo_path).join(".treq").join("treq.db");
-                let db = Mutex::new(
-                    treq_lib::db::Database::new(db_path).expect("failed to open benchmark db"),
-                );
                 treq_lib::core::workspace_diff(
                     std::hint::black_box(&repo.repo_path),
                     std::hint::black_box(workspace_id),
-                    std::hint::black_box(&db),
                 )
                 .expect("workspace_diff failed");
             },

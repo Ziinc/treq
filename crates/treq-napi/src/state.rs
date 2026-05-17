@@ -19,6 +19,9 @@ static GLOBAL_STATE: OnceLock<NapiState> = OnceLock::new();
 /// Also detects and caches binary paths (jj, git, claude).
 /// Call this in test beforeAll.
 pub fn init(db_path: PathBuf) -> Result<(), String> {
+    if let Some(parent) = db_path.parent() {
+        std::env::set_var("TREQ_APP_DATA_DIR", parent.to_string_lossy().to_string());
+    }
     let db = Database::new(db_path).map_err(|e| format!("Failed to open database: {}", e))?;
     db.init()
         .map_err(|e| format!("Failed to initialize database: {}", e))?;

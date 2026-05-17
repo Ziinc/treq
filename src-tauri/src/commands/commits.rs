@@ -13,14 +13,7 @@ pub fn get_workspace_file_hunks(
     workspace_id: Option<i64>,
     file_path: String,
 ) -> Result<Vec<jj::JjDiffHunk>, String> {
-    let conflict_style = state
-        .db
-        .lock()
-        .unwrap()
-        .get_setting("conflict_marker_style")
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| "git".to_string());
+    let conflict_style = core::resolve_conflict_marker_style(&state.db);
     crate::core::list_file_hunks(&repo_path, workspace_id, &file_path, &conflict_style)
 }
 
@@ -122,11 +115,10 @@ pub fn jj_get_commits_ahead(
 /// Get combined diff between workspace and target branch
 #[tauri::command]
 pub fn get_workspace_diff(
-    state: State<AppState>,
     repo_path: String,
     workspace_id: i64,
 ) -> Result<jj::JjRevisionDiff, String> {
-    crate::core::workspace_diff(&repo_path, workspace_id, &state.db)
+    crate::core::workspace_diff(&repo_path, workspace_id)
 }
 
 /// Get diff for a single commit by revision (commit_id or change_id)

@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use ignore::WalkBuilder;
 use serde::{Deserialize, Serialize};
@@ -1384,20 +1384,23 @@ pub fn copy_included_files(
 pub fn workspace_diff(
     repo_path: &str,
     workspace_id: i64,
-    db: &std::sync::Mutex<crate::db::Database>,
 ) -> Result<jj::JjRevisionDiff, String> {
-    let conflict_marker_style = db
-        .lock()
-        .unwrap()
-        .get_setting("conflict_marker_style")
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| "git".to_string());
+    let app_db_path = app_db_path(repo_path);
+    let db = crate::db::Database::new(app_db_path)
+        .map_err(|e| format!("Failed to open app database: {}", e))?;
+    let conflict_marker_style = crate::core::resolve_conflict_marker_style_from_db(&db);
 
     workspace_diff_with_conflict_style(repo_path, workspace_id, &conflict_marker_style)
 }
 
-pub fn workspace_diff_with_conflict_style(
+fn app_db_path(repo_path: &str) -> PathBuf {
+    if let Ok(app_data_dir) = std::env::var("TREQ_APP_DATA_DIR") {
+        return Path::new(&app_data_dir).join("treq.db");
+    }
+    Path::new(repo_path).join(".treq").join("treq.db")
+}
+
+fn workspace_diff_with_conflict_style(
     repo_path: &str,
     workspace_id: i64,
     conflict_marker_style: &str,
