@@ -381,3 +381,94 @@ fn test_can_squash_and_merge_workspace_into_home_repo() {
         "Main repo should contain the initial commit plus one squashed merge commit"
     );
 }
+
+#[test]
+fn merge_into_main_succeeds_when_main_plus_empty() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace: Workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feature-main-plus-empty",
+        Some("merge when main+ is empty".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path
+        .to_str()
+        .expect("workspace path should be utf-8");
+
+    TestRepo::write_workspace_file(
+        workspace_path_str,
+        "main-plus-empty.txt",
+        "feature content",
+    )
+    .expect("Failed to write feature file");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add feature for main+ empty")
+        .expect("Failed to commit workspace change");
+    let main_before = treq_lib::jj::jj_get_commit_id(&repo.repo_path, "main")
+        .expect("main should resolve before merge");
+
+    treq_lib::jj::jj_create_merge_commit(
+        workspace_path_str,
+        &workspace.branch_name,
+        "main",
+        "Merge workspace when main+ is empty",
+        "git",
+    )
+    .expect("Merge should succeed");
+
+    let main_after =
+        treq_lib::jj::jj_get_commit_id(&repo.repo_path, "main").expect("main should resolve");
+    assert!(
+        main_before != main_after,
+        "main should move to the new merge commit"
+    );
+}
+
+#[test]
+fn merge_returns_clear_error_when_target_branch_missing() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace: Workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feature-missing-target",
+        Some("missing target branch".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path
+        .to_str()
+        .expect("workspace path should be utf-8");
+    TestRepo::write_workspace_file(workspace_path_str, "missing-target.txt", "content")
+        .expect("Failed to write feature file");
+    treq_lib::core::commit_workspace(
+        &repo.repo_path,
+        workspace.id,
+        "Add feature for missing target test",
+    )
+    .expect("Failed to commit workspace change");
+
+    let err = treq_lib::jj::jj_create_merge_commit(
+        workspace_path_str,
+        &workspace.branch_name,
+        "definitely-missing-target-branch",
+        "Merge with missing target branch",
+        "git",
+    )
+    .expect_err("Merge should fail when target branch is missing");
+
+    assert!(
+        err.to_string()
+            .contains("Target branch 'definitely-missing-target-branch' could not be resolved"),
+        "Error should clearly mention unresolved target branch, got: {}",
+        err
+    );
+}

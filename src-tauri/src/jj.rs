@@ -4279,6 +4279,28 @@ fn resolve_target_branch_symbol(workspace_path: &str, target_branch: &str) -> St
     convert_git_branch_to_jj_format(target_branch, &workspace_repo_path(workspace_path))
 }
 
+fn resolve_merge_target_parent(
+    loaded: &LoadedWorkspaceRepo,
+    workspace_path: &str,
+    target_branch: &str,
+) -> Result<Commit, JjError> {
+    let target_symbol = resolve_target_branch_symbol(workspace_path, target_branch);
+    if let Ok(commit) = resolve_commit_by_revision(loaded, &target_symbol) {
+        return Ok(commit);
+    }
+
+    // Keep compatibility with historical `<target>+` behavior, but do not require it.
+    let target_plus_symbol = format!("{}+", format_revset_symbol(&target_symbol));
+    if let Ok(commit) = resolve_commit_by_revision(loaded, &target_plus_symbol) {
+        return Ok(commit);
+    }
+
+    Err(JjError::IoError(format!(
+        "Target branch '{}' could not be resolved (tried '{}' and '{}')",
+        target_branch, target_symbol, target_plus_symbol
+    )))
+}
+
 fn load_workspace_repo_for_history_edit(
     workspace_path: &str,
 ) -> Result<LoadedWorkspaceRepo, JjError> {
@@ -4704,11 +4726,11 @@ fn count_changed_lines(hunks: &[JjDiffHunk]) -> usize {
         .sum()
 }
 
-/// Create a merge commit using jj new
+/// Create a merge commit using jj-lib commit writes.
 ///
 /// Flow:
-/// 1. jj new workspace_branch target_branch+ -m "message" - create merge
-/// 2. jj new @ - create new working copy on top
+/// 1. Resolve workspace and target branch tips and create a two-parent merge commit
+/// 2. Check out a fresh working-copy commit on top
 /// 3. jj bookmark set target_branch -r @- - move target_branch to merge commit
 /// This is executed in the context of the workspace directory, @ refers to workspace HEAD
 pub fn jj_create_merge_commit(
@@ -4726,11 +4748,7 @@ pub fn jj_create_merge_commit(
     let old_wc_commit = get_workspace_wc_commit(&loaded)?;
     let workspace_name = loaded.workspace.workspace_name().to_owned();
     let workspace_parent = resolve_commit_by_revision(&loaded, workspace_branch)?;
-    let target_revset = format!(
-        "{}+",
-        format_revset_symbol(&resolve_target_branch_symbol(workspace_path, target_branch))
-    );
-    let target_parent = resolve_commit_by_revision(&loaded, &target_revset)?;
+    let target_parent = resolve_merge_target_parent(&loaded, workspace_path, target_branch)?;
 
     let mut tx = loaded.repo.start_transaction();
     let parent_commits = vec![workspace_parent, target_parent];
