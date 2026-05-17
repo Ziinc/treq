@@ -6,7 +6,7 @@
 
 # treq
 
-Treq is your AI Code Review Manager, accelerating AI-assisted software development while maintaining high quality code. Treq is an open-source Graphite alternative with a focus on paralleized development using AI agents.
+Treq is an open-source AI code review manager focused on parallel, agent-assisted development.
 
 _Treq was used to build Treq._
 
@@ -14,10 +14,10 @@ _Treq was used to build Treq._
 
 ## Getting Started
 
-Pre-requisites:
+Prerequisites:
 
 - Git
-- [Jujitsu](https://docs.jj-vcs.dev/latest/install-and-setup/) _You don't need to know how to use it_
+- [Jujitsu](https://docs.jj-vcs.dev/latest/install-and-setup/) (no prior knowledge required)
 
 Download the latest release [here](https://github.com/Ziinc/treq/releases).
 
@@ -25,33 +25,25 @@ Download the latest release [here](https://github.com/Ziinc/treq/releases).
 
 ### Code Reviews
 
-Inspect and iterate on each change for a human-in-the-loop agentic workflow.
+Review diffs, leave comments, and send targeted change requests to agents.
 
 ![Code Review](./assets/screenshots/review.png)
 
-- Review the code diffs just like a familiar Github PR, annotate and comment on code, and then send it to an agent for changes.
-- Spotted an issue when browsing files? Send it to an agent for adjustments in the background.
-- Got a specific commit that you want the agent to work on, review it and send your comments directly to the agent. Did I mention that we have commit management tooling as well?
+- PR-style diff review with inline annotations and comments.
+- Send file-level or commit-level feedback directly to agents.
+- Built-in commit management for iterative review loops.
 
 ![Commit History](./assets/screenshots/commits.png)
 
 ### Workspaces
 
-Coding agents work in isolated copies of the codebase, ensuring changes are independent from each other while keeping your current repository clean for planning.
-
-<!-- insert gif of worktree creation -->
-
-- Workspaces are isolated but and **automatically rebased**, meaning code never goes stale.
-
-- Got a code conflict? Agents can **automatically resolve your conflicts**.
-
-- Stack workspaces and build features incrementally over smaller bite-sized branches. All stacked workspaces automatically rebases on top of each other, **even on top of your uncommitted changes**.
-
-<!-- insert gif of stacking -->
+Agents work in isolated workspaces that stay synchronized:
+- Automatic rebasing to keep branches fresh.
+- Automatic conflict resolution by agents.
+- Stackable workspaces for incremental, dependency-aware feature work.
 
 
 ## Developer
-
 
 ```bash
 # to profile benchmark code
