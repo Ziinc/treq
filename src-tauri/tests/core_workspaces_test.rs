@@ -2825,6 +2825,14 @@ fn merge_diff_paths(repo: &TestRepo, ws: &Workspace) -> Vec<String> {
         .collect()
 }
 
+fn merge_diff_result(repo: &TestRepo, ws: &Workspace) -> treq_lib::jj::JjRevisionDiff {
+    let db_path = Path::new(&repo.repo_path).join(".treq").join("treq.db");
+    let db = std::sync::Mutex::new(
+        treq_lib::db::Database::new(db_path).expect("test db should be openable"),
+    );
+    treq_lib::core::workspace_diff(&repo.repo_path, ws.id, &db).unwrap()
+}
+
 #[test]
 fn test_only_shows_workspace_changes() {
     let repo = TestRepo::new().unwrap();
@@ -2888,4 +2896,51 @@ fn test_excludes_uncommitted_changes() {
     let paths = merge_diff_paths(&repo, &ws);
     assert!(paths.contains(&"committed.txt".into()));
     assert!(!paths.contains(&"uncommitted.txt".into()));
+}
+
+#[test]
+fn test_workspace_diff_reports_rename_with_previous_path() {
+    let repo = TestRepo::new().unwrap();
+    repo.commit_file("old.txt", "hello", "add old on main").unwrap();
+    let ws = merge_diff_new_workspace(&repo, "feat/rename");
+    let workspace_dir = repo.workspaces_dir().join(&ws.workspace_path);
+    fs::rename(workspace_dir.join("old.txt"), workspace_dir.join("renamed.txt"))
+        .expect("rename should succeed");
+    merge_diff_commit(&repo, &ws, "rename old");
+
+    let diff = merge_diff_result(&repo, &ws);
+    let renamed = diff
+        .files
+        .iter()
+        .find(|f| f.path == "renamed.txt")
+        .expect("renamed entry should exist");
+    assert_eq!(renamed.status, "R");
+    assert_eq!(renamed.previous_path.as_deref(), Some("old.txt"));
+}
+
+#[test]
+fn test_workspace_diff_reports_copy_status() {
+    let repo = TestRepo::new().unwrap();
+    repo.commit_file("source.txt", "hello", "add source on main")
+        .unwrap();
+    let ws = merge_diff_new_workspace(&repo, "feat/copy");
+    let workspace_dir = repo.workspaces_dir().join(&ws.workspace_path);
+    fs::copy(workspace_dir.join("source.txt"), workspace_dir.join("copied.txt"))
+        .expect("copy should succeed");
+    merge_diff_commit(&repo, &ws, "copy source");
+
+    let diff = merge_diff_result(&repo, &ws);
+    let copied = diff
+        .files
+        .iter()
+        .find(|f| f.path == "copied.txt")
+        .expect("copied entry should exist");
+    assert!(
+        copied.status == "C" || copied.status == "A",
+        "expected C or A status for copied file, got {}",
+        copied.status
+    );
+    if copied.status == "C" {
+        assert_eq!(copied.previous_path.as_deref(), Some("source.txt"));
+    }
 }
