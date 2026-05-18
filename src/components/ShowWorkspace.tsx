@@ -230,13 +230,22 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			onActiveTabChange?.(activeTab);
 		}, [activeTab, onActiveTabChange]);
 
-		const { data: overviewData } = useQuery({
+		const { data: workspaceStatusData, refetch: refetchWorkspaceStatus } = useQuery({
+			queryKey: ["workspace-status", effectiveRepoPath, workspace?.id ?? null],
+			enabled: Boolean(effectiveRepoPath),
+			placeholderData: (previousData) => previousData,
+			queryFn: () =>
+				getWorkspaceStatus(effectiveRepoPath, workspace?.id ?? null),
+		});
+
+		const { data: overviewData, isPending: overviewPending } = useQuery({
 			queryKey: [
 				"workspace-overview",
 				effectiveRepoPath,
 				workspace?.id ?? null,
 			],
-			enabled: Boolean(effectiveRepoPath),
+			enabled: Boolean(effectiveRepoPath) && activeTab === "overview",
+			placeholderData: (previousData) => previousData,
 			queryFn: async () => {
 				try {
 					const [entries, readme] = await Promise.all([
@@ -288,40 +297,23 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 		// 	}
 		// }, [workspace?.target_branch, defaultBranch]);
 
-		// Fetch sync status via core::workspace_status
-		const fetchSyncStatus = useCallback(async () => {
-			if (!effectiveRepoPath) return;
-
-			try {
-				const status = await getWorkspaceStatus(
-					effectiveRepoPath,
-					workspace?.id ?? null,
-				);
-				setConflictedFiles(status.conflicted_files ?? []);
-				const sync = status.remote_sync;
-				if (sync.type === "Ahead") {
-					setSyncStatus({ ahead: sync.data.count, behind: 0 });
-				} else if (sync.type === "Behind") {
-					setSyncStatus({ ahead: 0, behind: sync.data.count });
-				} else if (sync.type === "Diverged") {
-					setSyncStatus({ ahead: sync.data.ahead, behind: sync.data.behind });
-				} else {
-					// InSync or NotOnRemote
-					setSyncStatus({ ahead: 0, behind: 0 });
-				}
-			} catch (error) {
-				console.error("Failed to fetch sync status:", error);
-				setSyncStatus(null);
-				setConflictedFiles([]);
-			}
-		}, [workspace, effectiveRepoPath]);
-
 		// Invalidate sidebar query when conflicts change
 		const queryClient = useQueryClient();
 
 		useEffect(() => {
-			void fetchSyncStatus();
-		}, [fetchSyncStatus]);
+			if (!workspaceStatusData) return;
+			setConflictedFiles(workspaceStatusData.conflicted_files ?? []);
+			const sync = workspaceStatusData.remote_sync;
+			if (sync.type === "Ahead") {
+				setSyncStatus({ ahead: sync.data.count, behind: 0 });
+			} else if (sync.type === "Behind") {
+				setSyncStatus({ ahead: 0, behind: sync.data.count });
+			} else if (sync.type === "Diverged") {
+				setSyncStatus({ ahead: sync.data.ahead, behind: sync.data.behind });
+			} else {
+				setSyncStatus({ ahead: 0, behind: 0 });
+			}
+		}, [workspaceStatusData]);
 
 		// Handle file selection from Cmd+P (or other external sources)
 		useEffect(() => {
@@ -424,7 +416,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 					type: "success",
 				});
 				// Refresh sync status after push
-				await fetchSyncStatus();
+				await refetchWorkspaceStatus();
 				queryClient?.invalidateQueries();
 			} catch (error) {
 				console.error("Push failed:", error);
@@ -436,7 +428,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			} finally {
 				_setActionPending(null);
 			}
-		}, [workspace, effectiveRepoPath, addToast, fetchSyncStatus, queryClient]);
+		}, [workspace, effectiveRepoPath, addToast, refetchWorkspaceStatus, queryClient]);
 
 		const handleSync = useCallback(async () => {
 			if (!effectiveRepoPath) return;
@@ -452,7 +444,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 					type: "success",
 				});
 
-				await fetchSyncStatus();
+				await refetchWorkspaceStatus();
 				queryClient?.invalidateQueries();
 			} catch (error) {
 				console.error("Sync failed:", error);
@@ -464,7 +456,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			} finally {
 				_setActionPending(null);
 			}
-		}, [workspace, effectiveRepoPath, addToast, fetchSyncStatus, queryClient]);
+		}, [workspace, effectiveRepoPath, addToast, refetchWorkspaceStatus, queryClient]);
 
 		const handleForceRebaseWorkspace = useCallback(async () => {
 			if (!workspace || !effectiveRepoPath) return;
@@ -836,6 +828,18 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 								{/* LEFT: Files + README */}
 								<div className="flex-1 overflow-auto border-r border-border">
 									<div className="p-4 space-y-4">
+										{overviewPending && !overviewData && (
+											<div className="space-y-4" data-testid="workspace-overview-skeleton">
+												<div className="h-10 rounded-lg bg-muted/50 animate-pulse" />
+												<div className="h-10 rounded-lg bg-muted/50 animate-pulse" />
+												<div className="border rounded-lg p-4 space-y-2">
+													<div className="h-4 w-32 rounded bg-muted/50 animate-pulse" />
+													<div className="h-3 rounded bg-muted/40 animate-pulse" />
+													<div className="h-3 w-11/12 rounded bg-muted/40 animate-pulse" />
+													<div className="h-3 w-10/12 rounded bg-muted/40 animate-pulse" />
+												</div>
+											</div>
+										)}
 										{/* Conflicts Alert */}
 										{conflictCount > 0 && (
 											<div
@@ -915,7 +919,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 													<StatusPip status={getEntryStatus(entry)} />
 												</button>
 											))}
-											{rootEntries.length === 0 && (
+											{!overviewPending && rootEntries.length === 0 && (
 												<div className="px-4 py-8 text-center text-sm text-muted-foreground">
 													No files found
 												</div>

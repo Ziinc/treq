@@ -4,6 +4,7 @@ use crate::AppState;
 use serde_json;
 use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
+use std::time::Instant;
 use tauri::State;
 
 // Track which workspaces have been indexed this session
@@ -38,13 +39,14 @@ pub fn get_workspaces(repo_path: String) -> Result<Vec<Workspace>, String> {
 /// Combined command: creates jj workspace + adds to database atomically
 /// Delegates to core::create_workspace() for all workspace creation logic
 #[tauri::command]
-pub fn create_workspace(
-    state: State<AppState>,
+pub async fn create_workspace(
+    state: State<'_, AppState>,
     repo_path: String,
     branch_name: String,
     source_branch: Option<String>,
     metadata: Option<String>,
 ) -> Result<i64, String> {
+    let started_at = Instant::now();
     // Parse metadata JSON to extract intent and moved_files fields directly
     let (intent, moved_files) = metadata
         .and_then(|m| {
@@ -68,7 +70,7 @@ pub fn create_workspace(
         .unwrap_or((None, None));
 
     // Read included_copy_files setting from DB
-    let included_copy_files = {
+    let included_copy_files: Option<Vec<String>> = {
         let db = state.db.lock().unwrap();
         db.get_repo_setting(&repo_path, "included_copy_files")
             .ok()
@@ -81,41 +83,79 @@ pub fn create_workspace(
             })
     };
 
-    // Delegate to core layer for all workspace creation
-    let workspace = crate::core::create_workspace(
-        &repo_path,
-        &branch_name,
-        intent,
-        moved_files,
-        source_branch.as_deref(),
-        included_copy_files,
-    )?;
+    let repo_path_for_task = repo_path.clone();
+    let branch_name_for_task = branch_name.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let workspace = crate::core::create_workspace(
+            &repo_path_for_task,
+            &branch_name_for_task,
+            intent,
+            moved_files,
+            source_branch.as_deref(),
+            included_copy_files,
+        )?;
 
-    // Initialize rebase flag to trigger rebase on first view
-    local_db::update_workspace_last_rebased_commit(&repo_path, workspace.id, "")?;
+        // Initialize rebase flag to trigger rebase on first view
+        local_db::update_workspace_last_rebased_commit(&repo_path_for_task, workspace.id, "")?;
 
-    Ok(workspace.id)
+        Ok(workspace.id)
+    })
+    .await
+    .map_err(|e| format!("Failed to join create_workspace task: {}", e))?;
+    log::debug!(
+        "create_workspace(repo_path={}, branch_name={}) completed in {:?}",
+        repo_path,
+        branch_name,
+        started_at.elapsed()
+    );
+    result
 }
 
 /// Unified delete workspace command that handles both filesystem and DB cleanup
 /// Delegates to core::delete_workspace which correctly constructs the full workspace path
 #[tauri::command]
-pub fn delete_workspace(repo_path: String, id: i64) -> Result<(), String> {
-    crate::core::delete_workspace(&repo_path, &id).map(|_| ())
+pub async fn delete_workspace(repo_path: String, id: i64) -> Result<(), String> {
+    let started_at = Instant::now();
+    let repo_path_for_task = repo_path.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        crate::core::delete_workspace(&repo_path_for_task, &id).map(|_| ())
+    })
+    .await
+    .map_err(|e| format!("Failed to join delete_workspace task: {}", e))?;
+    log::debug!(
+        "delete_workspace(repo_path={}, id={}) completed in {:?}",
+        repo_path,
+        id,
+        started_at.elapsed()
+    );
+    result
 }
 
 /// Push workspace to remote and update not_on_remote flag
 #[tauri::command]
-pub fn push_workspace_to_remote(
+pub async fn push_workspace_to_remote(
     repo_path: String,
     workspace_id: Option<i64>,
 ) -> Result<String, String> {
-    crate::core::push_workspace_to_remote(&repo_path, workspace_id)
+    let started_at = Instant::now();
+    let repo_path_for_task = repo_path.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        crate::core::push_workspace_to_remote(&repo_path_for_task, workspace_id)
+    })
+    .await
+    .map_err(|e| format!("Failed to join push_workspace_to_remote task: {}", e))?;
+    log::debug!(
+        "push_workspace_to_remote(repo_path={}, workspace_id={:?}) completed in {:?}",
+        repo_path,
+        workspace_id,
+        started_at.elapsed()
+    );
+    result
 }
 
 /// Merge a workspace into its target branch with a specified merge strategy
 #[tauri::command]
-pub fn merge_workspace(
+pub async fn merge_workspace(
     repo_path: String,
     workspace_id: i64,
     message: String,
@@ -131,22 +171,60 @@ pub fn merge_workspace(
         _ => return Err(format!("Invalid merge strategy: {}", merge_strategy)),
     };
 
-    crate::core::merge_workspace(&repo_path, workspace_id, &message, strategy)
+    let started_at = Instant::now();
+    let repo_path_for_task = repo_path.clone();
+    let message_for_task = message.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        crate::core::merge_workspace(&repo_path_for_task, workspace_id, &message_for_task, strategy)
+    })
+    .await
+    .map_err(|e| format!("Failed to join merge_workspace task: {}", e))?;
+    log::debug!(
+        "merge_workspace(repo_path={}, workspace_id={}) completed in {:?}",
+        repo_path,
+        workspace_id,
+        started_at.elapsed()
+    );
+    result
 }
 
 #[tauri::command]
-pub fn get_workspace_status(
+pub async fn get_workspace_status(
     repo_path: String,
     workspace_id: Option<i64>,
 ) -> Result<crate::core::WorkspaceStatus, String> {
-    crate::core::workspace_status(&repo_path, workspace_id)
+    let started_at = Instant::now();
+    let repo_path_for_task = repo_path.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        crate::core::workspace_status(&repo_path_for_task, workspace_id)
+    })
+    .await
+    .map_err(|e| format!("Failed to join get_workspace_status task: {}", e))?;
+    log::debug!(
+        "get_workspace_status(repo_path={}, workspace_id={:?}) completed in {:?}",
+        repo_path,
+        workspace_id,
+        started_at.elapsed()
+    );
+    result
 }
 
 #[tauri::command]
-pub fn list_workspace_statuses(
+pub async fn list_workspace_statuses(
     repo_path: String,
 ) -> Result<Vec<crate::core::WorkspaceSidebarStatus>, String> {
-    crate::core::list_workspace_statuses(&repo_path)
+    let started_at = Instant::now();
+    let repo_path_for_task = repo_path.clone();
+    let result =
+        tauri::async_runtime::spawn_blocking(move || crate::core::list_workspace_statuses(&repo_path_for_task))
+            .await
+            .map_err(|e| format!("Failed to join list_workspace_statuses task: {}", e))?;
+    log::debug!(
+        "list_workspace_statuses(repo_path={}) completed in {:?}",
+        repo_path,
+        started_at.elapsed()
+    );
+    result
 }
 
 #[tauri::command]
@@ -175,7 +253,7 @@ pub fn ensure_workspace_indexed(
 }
 
 #[tauri::command]
-pub fn update_workspace(
+pub async fn update_workspace(
     repo_path: String,
     workspace_id: i64,
     target_branch: Option<String>,
@@ -193,7 +271,20 @@ pub fn update_workspace(
         Some(s) => MaybeEmptyParam::Some(s),
         None => MaybeEmptyParam::Omitted,
     };
-    crate::core::update_workspace(&repo_path, workspace_id, tb, int)
+    let started_at = Instant::now();
+    let repo_path_for_task = repo_path.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        crate::core::update_workspace(&repo_path_for_task, workspace_id, tb, int)
+    })
+    .await
+    .map_err(|e| format!("Failed to join update_workspace task: {}", e))?;
+    log::debug!(
+        "update_workspace(repo_path={}, workspace_id={}) completed in {:?}",
+        repo_path,
+        workspace_id,
+        started_at.elapsed()
+    );
+    result
 }
 
 #[tauri::command]
@@ -279,14 +370,26 @@ pub fn check_and_rebase_workspaces(
 
 /// Pull workspace from remote, automatically resolving divergence
 #[tauri::command]
-pub fn pull_workspace_from_remote(
-    state: State<AppState>,
+pub async fn pull_workspace_from_remote(
+    state: State<'_, AppState>,
     repo_path: String,
     workspace_id: Option<i64>,
 ) -> Result<crate::core::PullWorkspaceResult, String> {
+    let started_at = Instant::now();
     let conflict_style = crate::core::resolve_conflict_marker_style(&state.db);
-
-    crate::core::pull_workspace_from_remote(&repo_path, workspace_id, &conflict_style)
+    let repo_path_for_task = repo_path.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        crate::core::pull_workspace_from_remote(&repo_path_for_task, workspace_id, &conflict_style)
+    })
+    .await
+    .map_err(|e| format!("Failed to join pull_workspace_from_remote task: {}", e))?;
+    log::debug!(
+        "pull_workspace_from_remote(repo_path={}, workspace_id={:?}) completed in {:?}",
+        repo_path,
+        workspace_id,
+        started_at.elapsed()
+    );
+    result
 }
 
 /// Resolve a conflicted bookmark by setting it to a user-selected revision
@@ -395,12 +498,27 @@ pub fn move_commit_to_existing_workspace(
 }
 
 #[tauri::command]
-pub fn abandon_commit(
+pub async fn abandon_commit(
     repo_path: String,
     workspace_id: i64,
     commit_change_id: String,
 ) -> Result<(), String> {
-    crate::core::abandon_commit(&repo_path, workspace_id, &commit_change_id)
+    let started_at = Instant::now();
+    let repo_path_for_task = repo_path.clone();
+    let commit_change_id_for_task = commit_change_id.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        crate::core::abandon_commit(&repo_path_for_task, workspace_id, &commit_change_id_for_task)
+    })
+    .await
+    .map_err(|e| format!("Failed to join abandon_commit task: {}", e))?;
+    log::debug!(
+        "abandon_commit(repo_path={}, workspace_id={}, commit_change_id={}) completed in {:?}",
+        repo_path,
+        workspace_id,
+        commit_change_id,
+        started_at.elapsed()
+    );
+    result
 }
 
 #[cfg(test)]
@@ -439,7 +557,7 @@ mod tests {
         let workspace_id = workspaces[0].id;
 
         // Act: delete workspace; jj forget is expected best-effort without a real jj repo.
-        let result = delete_workspace(repo_path.to_string(), workspace_id);
+        let result = tauri::async_runtime::block_on(delete_workspace(repo_path.to_string(), workspace_id));
 
         // Assert: Should succeed (jj errors are non-fatal)
         assert!(
@@ -485,7 +603,7 @@ mod tests {
         let workspace_id = workspaces[0].id;
 
         // Act: Delete the workspace (directory doesn't exist)
-        let result = delete_workspace(repo_path.to_string(), workspace_id);
+        let result = tauri::async_runtime::block_on(delete_workspace(repo_path.to_string(), workspace_id));
 
         // Assert: Should still succeed (core::delete_workspace handles missing directories)
         assert!(

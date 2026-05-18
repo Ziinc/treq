@@ -1451,9 +1451,29 @@ pub fn copy_included_files(
 /// The parsed revision diff on success, or an error string.
 pub fn workspace_diff(repo_path: &str, workspace_id: i64) -> Result<jj::JjRevisionDiff, String> {
     let app_db_path = app_db_path(repo_path);
+    let app_db_metadata = std::fs::metadata(&app_db_path)
+        .map_err(|e| format!("Failed to access app database {:?}: {}", app_db_path, e))?;
+    if !app_db_metadata.is_file() {
+        return Err(format!(
+            "App database path is not a file: {:?}",
+            app_db_path
+        ));
+    }
+
     let db = crate::db::Database::new(app_db_path)
         .map_err(|e| format!("Failed to open app database: {}", e))?;
-    let conflict_marker_style = crate::core::resolve_conflict_marker_style_from_db(&db);
+    let conflict_marker_style = db
+        .get_setting("conflict_marker_style")
+        .map_err(|e| format!("Failed to read app database setting conflict_marker_style: {}", e))?
+        .and_then(|value| {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
+        .unwrap_or_else(|| crate::core::DEFAULT_CONFLICT_MARKER_STYLE.to_string());
 
     workspace_diff_with_conflict_style(repo_path, workspace_id, &conflict_marker_style)
 }

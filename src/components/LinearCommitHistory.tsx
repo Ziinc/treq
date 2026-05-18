@@ -68,7 +68,7 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 	({ repoPath, workspaceId, onCommitClick }) => {
 		const [commits, setCommits] = useState<JjLogCommit[]>([]);
 		const [loading, setLoading] = useState(true);
-		const [limit, setLimit] = useState(15);
+		const [limit, setLimit] = useState(14);
 		const [loadingMore, setLoadingMore] = useState(false);
 		const isHomeRepo = workspaceId == null;
 
@@ -78,8 +78,8 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 				return;
 			}
 			setLoading(true);
-			setLimit(15);
-			listCommits(repoPath, workspaceId)
+			setLimit(14);
+			listCommits(repoPath, workspaceId, false, undefined, 14)
 				.then((result) => {
 					const nextCommits = result?.commits ?? [];
 					setCommits(normalizeCommits(nextCommits));
@@ -95,7 +95,7 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 
 		// Re-fetch when limit increases (beyond initial load)
 		useEffect(() => {
-			if (limit <= 15) return;
+			if (limit <= 14) return;
 			if (!isHomeRepo) return;
 			setLoadingMore(true);
 			listCommits(repoPath, workspaceId, false, undefined, limit)
@@ -174,7 +174,7 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 									type="button"
 									className="text-xs text-muted-foreground hover:text-foreground transition-colors"
 									disabled={loadingMore}
-									onClick={() => setLimit((prev) => prev + 15)}
+									onClick={() => setLimit((prev) => prev + 14)}
 								>
 									{loadingMore ? (
 										<span className="flex items-center gap-1.5">
