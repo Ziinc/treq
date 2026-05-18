@@ -255,7 +255,9 @@ fn test_workspace_list_statuses_conflict_bit_matches_workspace_status_for_diverg
         None,
     )
     .expect("Failed to create stacked workspace");
-    let stacked_path = repo.workspaces_dir().join(&stacked_workspace.workspace_path);
+    let stacked_path = repo
+        .workspaces_dir()
+        .join(&stacked_workspace.workspace_path);
     let stacked_path_str = stacked_path.to_str().expect("utf-8");
 
     TestRepo::write_workspace_file(base_path_str, "base-only.txt", "base change\n")
@@ -276,8 +278,9 @@ fn test_workspace_list_statuses_conflict_bit_matches_workspace_status_for_diverg
         .map(|s| s.has_conflicts)
         .expect("stacked workspace should be present in sidebar statuses");
 
-    let detailed_status = treq_lib::core::workspace_status(&repo.repo_path, Some(stacked_workspace.id))
-        .expect("workspace_status should succeed");
+    let detailed_status =
+        treq_lib::core::workspace_status(&repo.repo_path, Some(stacked_workspace.id))
+            .expect("workspace_status should succeed");
     let review_conflict = detailed_status.partial.has_conflicts;
 
     assert_eq!(

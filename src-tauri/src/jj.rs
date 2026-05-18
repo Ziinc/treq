@@ -2863,7 +2863,7 @@ fn jj_rebase_workspace_bookmark_onto_with_checkout_mode(
     let workspace_tip_commit = resolve_commit_by_revision(&loaded, workspace_branch)?;
     let target_commit = resolve_commit_by_revision(
         &loaded,
-        &resolve_target_branch_symbol(workspace_path, target_branch),
+        &resolve_target_branch_symbol(&loaded, workspace_path, target_branch)?,
     )?;
 
     let rebase_options = RebaseOptions {
@@ -2965,24 +2965,24 @@ fn get_conflicted_files_from_branch_diff(
     let mut loaded = load_workspace_repo(workspace_path)?;
     import_colocated_git_state(&mut loaded, workspace_path)?;
 
-    let (_wc_commit_id, working_copy_tree) =
-        if let Some((wc_commit_id, tree)) = snapshot_working_copy_tree(&mut loaded, workspace_path)?
-        {
-            (wc_commit_id, tree)
-        } else {
-            let wc_commit_id = loaded
-                .repo
-                .view()
-                .get_wc_commit_id(loaded.workspace.workspace_name())
-                .cloned()
-                .ok_or_else(|| JjError::IoError("No working-copy commit found".to_string()))?;
-            let wc_commit = loaded
-                .repo
-                .store()
-                .get_commit(&wc_commit_id)
-                .map_err(|e| JjError::IoError(format!("Failed to load wc commit: {}", e)))?;
-            (wc_commit_id, wc_commit.tree())
-        };
+    let (_wc_commit_id, working_copy_tree) = if let Some((wc_commit_id, tree)) =
+        snapshot_working_copy_tree(&mut loaded, workspace_path)?
+    {
+        (wc_commit_id, tree)
+    } else {
+        let wc_commit_id = loaded
+            .repo
+            .view()
+            .get_wc_commit_id(loaded.workspace.workspace_name())
+            .cloned()
+            .ok_or_else(|| JjError::IoError("No working-copy commit found".to_string()))?;
+        let wc_commit = loaded
+            .repo
+            .store()
+            .get_commit(&wc_commit_id)
+            .map_err(|e| JjError::IoError(format!("Failed to load wc commit: {}", e)))?;
+        (wc_commit_id, wc_commit.tree())
+    };
 
     let target_commit =
         resolve_target_commit_for_conflict_diff(&loaded, workspace_path, target_branch)?;
@@ -3818,14 +3818,6 @@ fn build_home_repo_fallback_revset(limit: Option<usize>) -> String {
     format!("latest(::@, {})", n)
 }
 
-fn candidate_target_refs(target_branch: &str) -> Vec<String> {
-    let mut refs = vec![target_branch.to_string()];
-    if !target_branch.contains('@') {
-        refs.push(format!("{}@git", target_branch));
-    }
-    refs
-}
-
 fn format_revset_symbol(symbol: &str) -> String {
     if symbol.starts_with('@') {
         return symbol.to_string();
@@ -3836,6 +3828,80 @@ fn format_revset_symbol(symbol: &str) -> String {
         }
     }
     revset::format_symbol(symbol)
+}
+
+fn resolve_local_target_branch_revision(
+    loaded: &LoadedWorkspaceRepo,
+    workspace_path: &str,
+    target_branch: &str,
+) -> Result<String, JjError> {
+    let target = loaded
+        .repo
+        .view()
+        .get_local_bookmark(RefName::new(target_branch));
+    let ids: Vec<_> = target.added_ids().cloned().collect();
+    if ids.is_empty() {
+        return Err(JjError::IoError(format!(
+            "Local target branch '{}' was not found",
+            target_branch
+        )));
+    }
+    if ids.len() == 1 {
+        return Ok(format_revset_symbol(target_branch));
+    }
+
+    // If the underlying git local branch exists and matches one conflict term,
+    // prefer that commit as the "local bookmark" meaning.
+    let repo_path = workspace_repo_path(workspace_path);
+    if let Ok(output) = command_for("git")
+        .current_dir(&repo_path)
+        .args(["rev-parse", &format!("refs/heads/{}", target_branch)])
+        .output()
+    {
+        if output.status.success() {
+            let git_local = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if let Some(matched) = ids.iter().find(|id| id.hex() == git_local) {
+                return Ok(matched.hex());
+            }
+        }
+    }
+
+    let immutable_revset = evaluate_revset(loaded, "immutable()").ok();
+    let is_immutable = immutable_revset.as_ref().map(|r| r.containing_fn());
+    let mut preferred_ids: Vec<_> = ids
+        .iter()
+        .filter(|id| match is_immutable.as_ref() {
+            Some(check) => matches!(check(id), Ok(false)),
+            None => true,
+        })
+        .cloned()
+        .collect();
+    if preferred_ids.is_empty() {
+        preferred_ids = ids.clone();
+    }
+
+    // Deterministically pick one tip: newest author timestamp,
+    // then lexical commit-id as a stable tie-breaker.
+    preferred_ids.sort_by(|a, b| {
+        let a_ts = loaded
+            .repo
+            .store()
+            .get_commit(a)
+            .map(|c| c.author().timestamp.timestamp.0)
+            .unwrap_or(i64::MIN);
+        let b_ts = loaded
+            .repo
+            .store()
+            .get_commit(b)
+            .map(|c| c.author().timestamp.timestamp.0)
+            .unwrap_or(i64::MIN);
+        b_ts.cmp(&a_ts).then_with(|| a.hex().cmp(&b.hex()))
+    });
+
+    let selected = preferred_ids.first().map(|id| id.hex()).ok_or_else(|| {
+        JjError::IoError("Failed to select conflicted local bookmark tip".to_string())
+    })?;
+    Ok(selected)
 }
 
 pub fn jj_get_log(
@@ -3858,34 +3924,34 @@ pub fn jj_get_log(
     let wc_tree_override = snapshot_working_copy_tree(&mut loaded, workspace_path)
         .ok()
         .flatten();
+    let selected_target_ref =
+        resolve_local_target_branch_revision(&loaded, workspace_path, target_branch)?;
+    let revset_expr =
+        build_jj_get_log_revset(&selected_target_ref, is_home_repo.unwrap_or(false), limit);
     let mut last_error = None;
-    let mut selected_target_ref = None;
-    let mut revset = None;
-    for target_ref in candidate_target_refs(target_branch) {
-        let revset_expr =
-            build_jj_get_log_revset(&target_ref, is_home_repo.unwrap_or(false), limit);
-        match evaluate_revset(&loaded, &revset_expr) {
-            Ok(evaluated) => {
-                selected_target_ref = Some(target_ref);
-                revset = Some((revset_expr, evaluated));
-                break;
-            }
-            Err(err) => last_error = Some(err),
+    let mut revset = match evaluate_revset(&loaded, &revset_expr) {
+        Ok(evaluated) => Some((revset_expr, evaluated)),
+        Err(err) => {
+            last_error = Some(err);
+            None
         }
-    }
+    };
     if revset.is_none() && is_home_repo.unwrap_or(false) {
         let revset_expr = build_home_repo_fallback_revset(limit);
         match evaluate_revset(&loaded, &revset_expr) {
             Ok(evaluated) => {
-                selected_target_ref = Some("@-".to_string());
+                let _ = &selected_target_ref;
                 revset = Some((revset_expr, evaluated));
             }
             Err(err) => last_error = Some(err),
         }
     }
-    let selected_target_ref = selected_target_ref.ok_or_else(|| {
-        last_error.unwrap_or_else(|| JjError::IoError("Failed to evaluate log revset".to_string()))
-    })?;
+    let selected_target_ref = if revset.is_some() {
+        selected_target_ref
+    } else {
+        return Err(last_error
+            .unwrap_or_else(|| JjError::IoError("Failed to evaluate log revset".to_string())));
+    };
     let (revset_expr, revset) = revset.expect("selected target ref must include a revset");
     let immutable_revset = evaluate_revset(
         &loaded,
@@ -3969,26 +4035,15 @@ pub fn jj_get_target_branch_log(
     // Over-fetch to allow dropping WC placeholders without truncating visible target history.
     let fetch_limit = limit.saturating_add(5);
     let loaded = load_workspace_repo(workspace_path)?;
-    let mut last_error = None;
-    let mut selected_target_ref = None;
-    let mut revset = None;
-    for target_ref in candidate_target_refs(target_branch) {
-        let revset_expr = build_target_branch_revset(&target_ref, fetch_limit);
-        match evaluate_revset(&loaded, &revset_expr) {
-            Ok(evaluated) => {
-                selected_target_ref = Some(target_ref);
-                revset = Some((revset_expr, evaluated));
-                break;
-            }
-            Err(err) => last_error = Some(err),
-        }
-    }
-    let selected_target_ref = selected_target_ref.ok_or_else(|| {
-        last_error.unwrap_or_else(|| {
-            JjError::IoError("Failed to evaluate target branch revset".to_string())
-        })
+    let selected_target_ref =
+        resolve_local_target_branch_revision(&loaded, workspace_path, target_branch)?;
+    let revset_expr = build_target_branch_revset(&selected_target_ref, fetch_limit);
+    let revset = evaluate_revset(&loaded, &revset_expr).map_err(|e| {
+        JjError::IoError(format!(
+            "Failed to evaluate target branch revset '{}': {}",
+            revset_expr, e
+        ))
     })?;
-    let (revset_expr, revset) = revset.expect("selected target ref must include a revset");
     let immutable_revset = evaluate_revset(
         &loaded,
         &format!("::{}", format_revset_symbol(&selected_target_ref)),
@@ -4063,36 +4118,22 @@ pub fn jj_get_commits_ahead(
         "diff.stat() ++ \"\\n\""
     );
 
-    let mut candidates = vec![target_branch.to_string()];
-    if !target_branch.contains('@') {
-        candidates.push(format!("{}@git", target_branch));
-    }
+    let loaded = load_workspace_repo(workspace_path)?;
+    let candidate = resolve_local_target_branch_revision(&loaded, workspace_path, target_branch)?;
+    // Revset excludes working-copy and empty commits while selecting @-reachable non-target commits.
+    let revset = format!("({}..@-) ~ empty()", candidate);
 
-    let mut stdout = None;
-    let mut last_error = None;
-    for candidate in candidates {
-        // Revset excludes working-copy and empty commits while selecting @-reachable non-target commits.
-        let revset = format!("({}..@-) ~ empty()", candidate);
-
-        let output = command_for("jj")
-            .current_dir(workspace_path)
-            .args(["log", "-r", &revset, "--no-graph", "-T", template])
-            .output()
-            .map_err(|e| JjError::IoError(e.to_string()))?;
-
-        if output.status.success() {
-            stdout = Some(String::from_utf8_lossy(&output.stdout).into_owned());
-            break;
-        }
-
-        last_error = Some(JjError::IoError(
+    let output = command_for("jj")
+        .current_dir(workspace_path)
+        .args(["log", "-r", &revset, "--no-graph", "-T", template])
+        .output()
+        .map_err(|e| JjError::IoError(e.to_string()))?;
+    if !output.status.success() {
+        return Err(JjError::IoError(
             String::from_utf8_lossy(&output.stderr).to_string(),
         ));
     }
-
-    let stdout = stdout.ok_or_else(|| {
-        last_error.unwrap_or_else(|| JjError::IoError("Failed to get commits ahead".to_string()))
-    })?;
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let mut commits = Vec::new();
 
     // Parse each line of tab-separated output (same logic as jj_get_log)
@@ -4259,8 +4300,17 @@ fn workspace_repo_path(workspace_path: &str) -> String {
     derive_repo_path_from_workspace(workspace_path).unwrap_or_else(|| workspace_path.to_string())
 }
 
-fn resolve_target_branch_symbol(workspace_path: &str, target_branch: &str) -> String {
-    convert_git_branch_to_jj_format(target_branch, &workspace_repo_path(workspace_path))
+fn resolve_target_branch_symbol(
+    loaded: &LoadedWorkspaceRepo,
+    workspace_path: &str,
+    target_branch: &str,
+) -> Result<String, JjError> {
+    resolve_local_target_branch_revision(loaded, workspace_path, target_branch).map_err(|_| {
+        JjError::IoError(format!(
+            "local target branch '{}' is conflicted and cannot be uniquely resolved",
+            target_branch
+        ))
+    })
 }
 
 fn resolve_merge_target_parent(
@@ -4268,7 +4318,7 @@ fn resolve_merge_target_parent(
     workspace_path: &str,
     target_branch: &str,
 ) -> Result<Commit, JjError> {
-    let target_symbol = resolve_target_branch_symbol(workspace_path, target_branch);
+    let target_symbol = resolve_target_branch_symbol(loaded, workspace_path, target_branch)?;
     if let Ok(commit) = resolve_commit_by_revision(loaded, &target_symbol) {
         return Ok(commit);
     }
@@ -4519,7 +4569,7 @@ pub fn jj_get_merge_diff(
 ) -> Result<JjRevisionDiff, JjError> {
     validate_branch_name(target_branch, "target")?;
     let loaded = load_workspace_repo(workspace_path)?;
-    let target_symbol = resolve_target_branch_symbol(workspace_path, target_branch);
+    let target_symbol = resolve_target_branch_symbol(&loaded, workspace_path, target_branch)?;
     let from_commit = resolve_commit_by_revision(&loaded, &target_symbol)?;
     let to_commit = resolve_commit_by_revision(&loaded, "@-")?;
     let from_tree = from_commit.tree();
@@ -4950,7 +5000,7 @@ pub fn jj_rebase_merge_commit(
     let workspace_commit = resolve_commit_by_revision(&loaded, workspace_branch)?;
     let target_commit = resolve_commit_by_revision(
         &loaded,
-        &resolve_target_branch_symbol(workspace_path, target_branch),
+        &resolve_target_branch_symbol(&loaded, workspace_path, target_branch)?,
     )?;
     let target_tip_id = target_commit.id().clone();
 
@@ -5078,7 +5128,7 @@ pub fn jj_squash_merge_commit(
     let mut loaded = load_workspace_repo_for_history_edit(workspace_path)?;
     let old_wc_commit = get_workspace_wc_commit(&loaded)?;
     let workspace_name = loaded.workspace.workspace_name().to_owned();
-    let target_symbol = resolve_target_branch_symbol(workspace_path, target_branch);
+    let target_symbol = resolve_target_branch_symbol(&loaded, workspace_path, target_branch)?;
     let destination_commit = resolve_commit_by_revision(&loaded, &target_symbol)?;
     let workspace_tip_commit = resolve_commit_by_revision(&loaded, workspace_branch)?;
 

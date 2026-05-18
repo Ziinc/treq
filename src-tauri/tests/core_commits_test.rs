@@ -1141,3 +1141,69 @@ fn test_list_commits_caches_commit_info_in_local_db() {
         "list_commits should cache exactly one row for the committed change"
     );
 }
+
+#[test]
+fn test_list_commits_target_branch_history_uses_local_bookmark_only() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+
+    // Create local-only advancement on main.
+    repo.commit_file(
+        "local_main_only.txt",
+        "local-only main content\n",
+        "Local main only commit",
+    )
+    .expect("Failed to create local main commit");
+
+    // Create remote-only advancement on main so local `main` becomes conflicted after fetch.
+    repo.remote_commit_file(
+        "remote_main_only.txt",
+        "remote-only main content\n",
+        "Remote main only commit",
+    )
+    .expect("Failed to create remote main commit");
+    treq_lib::jj::jj_git_fetch(&repo.repo_path).expect("Failed to fetch");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/local-target-main",
+        Some("local target history".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path
+        .to_str()
+        .expect("workspace path should be utf-8");
+    TestRepo::write_workspace_file(
+        workspace_path_str,
+        "workspace_only.txt",
+        "workspace-only content\n",
+    )
+    .expect("Failed to write workspace file");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Workspace local commit")
+        .expect("Failed to commit workspace change");
+
+    let result =
+        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), true, Some(30), None)
+            .expect("list_commits should succeed");
+
+    let target_descriptions: Vec<&str> = result
+        .target_branch_commits
+        .iter()
+        .map(|c| c.description.as_str())
+        .collect();
+
+    assert!(
+        target_descriptions.contains(&"Local main only commit"),
+        "target branch history should include local main commit, got: {:?}",
+        target_descriptions
+    );
+    assert!(
+        !target_descriptions.contains(&"Remote main only commit"),
+        "target branch history should not fall back to remote main@git, got: {:?}",
+        target_descriptions
+    );
+}

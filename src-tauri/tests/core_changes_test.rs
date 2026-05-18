@@ -138,7 +138,9 @@ fn test_workspace_status_invariant_no_conflicts_for_divergent_non_conflicting_ed
         None,
     )
     .expect("Failed to create stacked workspace");
-    let stacked_path = repo.workspaces_dir().join(&stacked_workspace.workspace_path);
+    let stacked_path = repo
+        .workspaces_dir()
+        .join(&stacked_workspace.workspace_path);
     let stacked_path_str = stacked_path.to_str().unwrap();
 
     TestRepo::write_workspace_file(base_path_str, "base-only.txt", "base change\n")
