@@ -76,16 +76,22 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 		onSelectStack,
 		onStartAgent,
 	}) => {
-		const { data: workspaces = [] } = useQuery({
+		const {
+			data: workspaces = [],
+			isPending: workspacesPending,
+			isSuccess: workspacesLoaded,
+		} = useQuery({
 			queryKey: ["workspaces", repoPath],
 			queryFn: () => getWorkspaces(repoPath || ""),
 			enabled: !!repoPath,
+			placeholderData: (previousData) => previousData,
 		});
 
 		const { data: workspaceStatuses = [] } = useQuery({
 			queryKey: ["workspace-statuses", repoPath],
 			queryFn: () => listWorkspaceStatuses(repoPath || ""),
-			enabled: !!repoPath,
+			enabled: !!repoPath && workspacesLoaded,
+			placeholderData: (previousData) => previousData,
 		});
 
 		const statuses = useMemo<WorkspaceSidebarStatus[]>(() => {
@@ -312,6 +318,14 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 										<h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest px-2 py-1">
 											Workspaces
 										</h4>
+										{workspacesPending &&
+											flattenedNodes.length === 0 &&
+											Array.from({ length: 6 }, (_, index) => (
+												<div
+													key={`workspace-skeleton-${index}`}
+													className="h-7 mx-2 rounded bg-muted/50 animate-pulse"
+												/>
+											))}
 										{flattenedNodes.map((node, index) => (
 											<WorkspaceSidebarItem
 												key={node.status.current.id}

@@ -423,6 +423,7 @@ pub fn run() {
             commands::unmark_file_viewed,
             commands::start_file_watcher,
             commands::stop_file_watcher,
+            commands::load_pending_review,
             commands::save_pending_review,
             commands::clear_pending_review,
             commands::set_window_repo_path,

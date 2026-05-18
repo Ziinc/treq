@@ -41,7 +41,6 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 	const [submitting, setSubmitting] = useState(false);
 	const [focused, setFocused] = useState(false);
 	const [selectedAgent, setSelectedAgent] = useState<"claude" | "codex" | "cursor">("claude");
-	const [agentInitialized, setAgentInitialized] = useState(false);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const mentionRef = useRef<HTMLDivElement>(null);
 	const { addToast } = useToast();
@@ -60,23 +59,28 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 
 	// Load default agent from repo setting, falling back to global setting
 	useEffect(() => {
-		if (agentInitialized) return;
+		let cancelled = false;
 		getRepoSetting(repoPath, "default_agent")
 			.then((repoAgent) => {
+				if (cancelled) return;
 				if (repoAgent === "claude" || repoAgent === "codex" || repoAgent === "cursor") {
 					setSelectedAgent(repoAgent);
-					setAgentInitialized(true);
 					return;
 				}
 				return getSetting("default_agent").then((globalAgent) => {
+					if (cancelled) return;
 					if (globalAgent === "claude" || globalAgent === "codex" || globalAgent === "cursor") {
 						setSelectedAgent(globalAgent);
 					}
-					setAgentInitialized(true);
 				});
 			})
-			.catch(() => setAgentInitialized(true));
-	}, [repoPath, agentInitialized]);
+			.catch(() => {
+				// Keep current selection on read failure.
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [repoPath, workspaceId]);
 
 	// Auto-resize textarea
 	useEffect(() => {

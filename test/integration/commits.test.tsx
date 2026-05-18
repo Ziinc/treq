@@ -54,16 +54,14 @@ describe("LinearCommitHistory integration", () => {
 		const { repoPath } = createTestRepo(false);
 		openRepo(repoPath);
 
-		await Promise.all(
-			Array.from({ length: 13 }, (_, i) =>
-				commitRepoFile(
-					repoPath,
-					`lch-paginate-${i}.txt`,
-					`paginate content ${i}`,
-					`LCH paginate commit ${i}`,
-				),
-			),
-		);
+		for (let i = 0; i < 13; i++) {
+			await commitRepoFile(
+				repoPath,
+				`lch-paginate-${i}.txt`,
+				`paginate content ${i}`,
+				`LCH paginate commit ${i}`,
+			);
+		}
 
 		render(<Dashboard />);
 

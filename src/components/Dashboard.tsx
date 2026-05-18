@@ -1,8 +1,6 @@
 /* eslint-disable max-lines */
 
 import {
-	Suspense,
-	lazy,
 	useCallback,
 	useEffect,
 	useMemo,
@@ -21,16 +19,13 @@ import { CommandPalette } from "./CommandPalette";
 import { WorkspacePicker } from "./WorkspacePicker";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { ShowWorkspace } from "./ShowWorkspace";
 import {
 	WorkspaceTerminalPane,
 	type WorkspaceTerminalPaneHandle,
 } from "./WorkspaceTerminalPane";
 import type { ClaudeSessionData } from "./terminal/types";
 
-// Lazy imports
-const ShowWorkspace = lazy(() =>
-	import("./ShowWorkspace").then((m) => ({ default: m.ShowWorkspace })),
-);
 import { SettingsPage } from "./SettingsPage";
 import { MergePreviewPage } from "./MergePreviewPage";
 import { useToast } from "./ui/toast";
@@ -54,17 +49,9 @@ import {
 	setWindowRepoPath,
 	updateSessionAccess,
 } from "../lib/api";
-import { Loader2 } from "lucide-react";
 import { getFullWorkspacePath } from "../lib/utils";
 import { Onboarding } from "./Onboarding";
 import type { BranchListItem } from "./TargetBranchSelector";
-
-// Loading spinner component for Suspense fallback
-const LoadingSpinner = () => (
-	<div className="flex items-center justify-center h-full w-full">
-		<Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-	</div>
-);
 
 type ViewMode = "session" | "show-workspace" | "settings" | "merge-preview";
 
@@ -842,73 +829,71 @@ export const Dashboard: React.FC<DashboardProps> = ({
 								resetKeys={[selectedWorkspace?.id]}
 								onReset={handleReturnToDashboard}
 							>
-								<Suspense fallback={<LoadingSpinner />}>
-									<ShowWorkspace
-										repositoryPath={repoPath}
-										workspace={selectedWorkspace}
-										onActiveTabChange={setShowWorkspaceActiveTab}
-										mainRepoBranch={currentBranch}
-										initialSelectedFile={sessionSelectedFile}
-										availableBranches={availableBranches}
-										branchesLoading={branchesLoading}
-										onLoadAvailableBranches={handleLoadAvailableBranches}
-										onDeleteWorkspace={handleDelete}
-										onOpenFilePicker={() => setShowFilePicker(true)}
-										onOpenMergePreview={handleOpenMergePreview}
-										onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
-										onCreateStackedWorkspace={handleCreateStackedWorkspace}
-										onMoveCommitToNewWorkspace={(commit, workspace) => {
-											const firstLine =
-												commit.description.split("\n")[0] || undefined;
-											setUnifiedDialogDefaults({
-												targetBranch: workspace?.branch_name,
-												sourceWorkspace: workspace ?? null,
-												preSelectedCommits: [commit.change_id],
-												intent: firstLine,
-												activeTab: "commits",
-											});
-										}}
-										onMoveCommitToExistingWorkspace={(commit, workspace) => {
-											setUnifiedDialogDefaults({
-												targetBranch: workspace?.branch_name,
-												sourceWorkspace: workspace ?? null,
-												preSelectedCommits: [commit.change_id],
-												activeTab: "commits",
-											});
-											// Note: dialog will open in "move to existing" mode via defaults
-										}}
-										onMoveFilesToNewWorkspace={(files, workspace) => {
-											setUnifiedDialogDefaults({
-												targetBranch: workspace?.branch_name,
-												sourceWorkspace: workspace ?? null,
-												preSelectedFiles: files,
-												activeTab: "changes",
-											});
-										}}
-										queryClient={queryClient}
-										onSessionCreated={(sessionData) => {
-											queryClient.invalidateQueries({
-												queryKey: ["sessions"],
-											});
-											setActiveSessionId(sessionData.sessionId);
-											if (
-												sessionData.pendingPrompt ||
-												sessionData.permissionMode ||
-												sessionData.agent
-											) {
-												setPendingSessionData((prev) => {
-													const next = new Map(prev);
-													next.set(sessionData.sessionId, {
-														pendingPrompt: sessionData.pendingPrompt,
-														permissionMode: sessionData.permissionMode,
-														agent: sessionData.agent,
-													});
-													return next;
+								<ShowWorkspace
+									repositoryPath={repoPath}
+									workspace={selectedWorkspace}
+									onActiveTabChange={setShowWorkspaceActiveTab}
+									mainRepoBranch={currentBranch}
+									initialSelectedFile={sessionSelectedFile}
+									availableBranches={availableBranches}
+									branchesLoading={branchesLoading}
+									onLoadAvailableBranches={handleLoadAvailableBranches}
+									onDeleteWorkspace={handleDelete}
+									onOpenFilePicker={() => setShowFilePicker(true)}
+									onOpenMergePreview={handleOpenMergePreview}
+									onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
+									onCreateStackedWorkspace={handleCreateStackedWorkspace}
+									onMoveCommitToNewWorkspace={(commit, workspace) => {
+										const firstLine =
+											commit.description.split("\n")[0] || undefined;
+										setUnifiedDialogDefaults({
+											targetBranch: workspace?.branch_name,
+											sourceWorkspace: workspace ?? null,
+											preSelectedCommits: [commit.change_id],
+											intent: firstLine,
+											activeTab: "commits",
+										});
+									}}
+									onMoveCommitToExistingWorkspace={(commit, workspace) => {
+										setUnifiedDialogDefaults({
+											targetBranch: workspace?.branch_name,
+											sourceWorkspace: workspace ?? null,
+											preSelectedCommits: [commit.change_id],
+											activeTab: "commits",
+										});
+										// Note: dialog will open in "move to existing" mode via defaults
+									}}
+									onMoveFilesToNewWorkspace={(files, workspace) => {
+										setUnifiedDialogDefaults({
+											targetBranch: workspace?.branch_name,
+											sourceWorkspace: workspace ?? null,
+											preSelectedFiles: files,
+											activeTab: "changes",
+										});
+									}}
+									queryClient={queryClient}
+									onSessionCreated={(sessionData) => {
+										queryClient.invalidateQueries({
+											queryKey: ["sessions"],
+										});
+										setActiveSessionId(sessionData.sessionId);
+										if (
+											sessionData.pendingPrompt ||
+											sessionData.permissionMode ||
+											sessionData.agent
+										) {
+											setPendingSessionData((prev) => {
+												const next = new Map(prev);
+												next.set(sessionData.sessionId, {
+													pendingPrompt: sessionData.pendingPrompt,
+													permissionMode: sessionData.permissionMode,
+													agent: sessionData.agent,
 												});
-											}
-										}}
-									/>
-								</Suspense>
+												return next;
+											});
+										}
+									}}
+								/>
 							</ErrorBoundary>
 						</div>
 					)}

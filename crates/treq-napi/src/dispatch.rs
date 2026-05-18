@@ -139,13 +139,6 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             serde_json::to_value(workspace).map_err(|e| e.to_string())
         }
 
-        // ── Repo status ───────────────────────────────────────────────────
-        "get_repo_status" => {
-            let repo_path = get_str(&args, "repoPath")?;
-            let status = treq_lib::core::repo_status(&repo_path)?;
-            serde_json::to_value(status).map_err(|e| e.to_string())
-        }
-
         "get_repo_branch" => {
             let repo_path = get_str(&args, "repoPath")?;
             let branch = treq_lib::core::get_repo_branch(&repo_path)?;
@@ -169,6 +162,14 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             let repo_path = get_str(&args, "repoPath")?;
             let workspace_id: Option<i64> = opt_i64(&args, "workspaceId");
             let files = treq_lib::core::list_changed_files(&repo_path, workspace_id)
+                .map_err(|e| e.to_string())?;
+            serde_json::to_value(files).map_err(|e| e.to_string())
+        }
+
+        "get_workspace_conflicted_files" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let workspace_id: Option<i64> = opt_i64(&args, "workspaceId");
+            let files = treq_lib::core::list_conflicted_files(&repo_path, workspace_id)
                 .map_err(|e| e.to_string())?;
             serde_json::to_value(files).map_err(|e| e.to_string())
         }
@@ -501,6 +502,13 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
         }
 
         // ── Pending review ────────────────────────────────────────────────
+        "load_pending_review" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let workspace_id: i64 = get_i64(&args, "workspaceId")?;
+            let review = treq_lib::local_db::get_pending_review(&repo_path, workspace_id)?;
+            serde_json::to_value(review).map_err(|e| e.to_string())
+        }
+
         "save_pending_review" => {
             let repo_path = get_str(&args, "repoPath")?;
             let workspace_id: i64 = get_i64(&args, "workspaceId")?;

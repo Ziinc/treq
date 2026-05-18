@@ -156,11 +156,21 @@ export const getDiffCache = async (
 export const loadPendingReview = (
 	repoPath: string,
 	workspaceId: number,
-): Promise<PendingReview | null> => {
-	void repoPath;
-	void workspaceId;
-	return Promise.resolve(null);
-};
+): Promise<PendingReview | null> =>
+	invoke("load_pending_review", { repoPath, workspaceId }).then((review) => {
+		if (!review) return null;
+		const normalized = { ...review } as PendingReview & {
+			comments: unknown;
+			viewed_files: unknown;
+		};
+		if (typeof normalized.comments === "string") {
+			normalized.comments = JSON.parse(normalized.comments);
+		}
+		if (typeof normalized.viewed_files === "string") {
+			normalized.viewed_files = JSON.parse(normalized.viewed_files);
+		}
+		return normalized as PendingReview;
+	});
 
 export const savePendingReview = (
 	...args: [

@@ -2984,8 +2984,21 @@ fn test_workspace_diff_errors_when_app_db_cannot_be_opened() {
 
     let err = treq_lib::core::workspace_diff(&repo.repo_path, ws.id).unwrap_err();
     assert!(
-        err.contains("Failed to open app database") || err.contains("Failed to read"),
-        "expected app db open/read failure, got: {}",
+        err.contains("Failed to read app database setting conflict_marker_style"),
+        "expected strict app db read failure, got: {}",
+        err
+    );
+}
+
+#[test]
+fn test_workspace_diff_errors_when_app_db_is_missing() {
+    let repo = TestRepo::new().unwrap();
+    let ws = merge_diff_new_workspace(&repo, "feat/missing-db");
+
+    let err = treq_lib::core::workspace_diff(&repo.repo_path, ws.id).unwrap_err();
+    assert!(
+        err.contains("Failed to access app database"),
+        "expected missing app db failure, got: {}",
         err
     );
 }

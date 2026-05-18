@@ -1,11 +1,24 @@
 use crate::core;
 use crate::AppState;
 use std::collections::HashMap;
+use std::time::Instant;
 use tauri::{State, Window};
 
 #[tauri::command]
-pub fn init_repo(_state: State<AppState>, repo_path: String) -> Result<bool, String> {
-    core::init(&repo_path).map_err(|e| e.to_string())
+pub async fn init_repo(repo_path: String) -> Result<bool, String> {
+    let started_at = Instant::now();
+    let repo_path_for_task = repo_path.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        core::init(&repo_path_for_task).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("Failed to join init_repo task: {}", e))?;
+    log::debug!(
+        "init_repo(repo_path={}) completed in {:?}",
+        repo_path,
+        started_at.elapsed()
+    );
+    result
 }
 
 #[tauri::command]

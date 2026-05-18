@@ -4307,7 +4307,7 @@ fn resolve_target_branch_symbol(
 ) -> Result<String, JjError> {
     resolve_local_target_branch_revision(loaded, workspace_path, target_branch).map_err(|_| {
         JjError::IoError(format!(
-            "local target branch '{}' is conflicted and cannot be uniquely resolved",
+            "Target branch '{}' could not be resolved",
             target_branch
         ))
     })
