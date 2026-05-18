@@ -233,3 +233,81 @@ fn test_auto_rebase_no_conflict_still_works() {
 
     let _ = result;
 }
+
+#[test]
+fn test_force_rebase_rooted_subtree_handles_conflicted_local_main_target() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+
+    // Create a local workspace on `main` so rooted-subtree force rebase can include descendants
+    // that target `main` (the local bookmark we intentionally make conflicted).
+    let root_main = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "main",
+        Some("root main workspace".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create main workspace");
+
+    let child = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/force-main-child",
+        Some("force main child".to_string()),
+        None,
+        Some("main"),
+        None,
+    )
+    .expect("Failed to create child workspace");
+
+    let child_path = workspace_full_path(&repo, &child);
+    TestRepo::write_workspace_file(&child_path, "child.txt", "child content\n")
+        .expect("Failed to write child file");
+    treq_lib::core::commit_workspace(&repo.repo_path, child.id, "Child commit")
+        .expect("Failed to commit child change");
+
+    // Diverge local/remote main so local `main` becomes conflicted after fetch.
+    repo.commit_file(
+        "local_main_conflict.txt",
+        "local main conflict\n",
+        "Local main conflict commit",
+    )
+    .expect("Failed to create local main commit");
+    repo.remote_commit_file(
+        "remote_main_conflict.txt",
+        "remote main conflict\n",
+        "Remote main conflict commit",
+    )
+    .expect("Failed to create remote main commit");
+    jj::jj_git_fetch(&repo.repo_path).expect("Failed to fetch");
+
+    let main_workspace_path = workspace_full_path(&repo, &root_main);
+    assert!(
+        jj::jj_is_bookmark_conflicted(&main_workspace_path, "main"),
+        "main bookmark should be conflicted before force rebase"
+    );
+
+    let result = treq_lib::auto_rebase::rebase_root_subtree_from_workspace_force(
+        &repo.repo_path,
+        root_main.id,
+        "main",
+        "diff",
+    )
+    .expect("force rooted-subtree rebase should not fail when local main is conflicted");
+
+    assert!(result.is_some(), "force rooted-subtree should run");
+    let result = result.expect("result should be present");
+    assert!(
+        result.rebase_result.success,
+        "force rooted-subtree rebase should succeed: {}",
+        result.rebase_result.message
+    );
+    assert!(
+        !result
+            .rebase_result
+            .message
+            .contains("Name 'main' is conflicted"),
+        "force rebase should not fail on conflicted local main resolution: {}",
+        result.rebase_result.message
+    );
+}
