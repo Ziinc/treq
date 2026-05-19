@@ -1,10 +1,6 @@
 import * as React from "react";
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-	createTestRepo,
-	findSidebarBranchElement,
-	openRepo,
-} from "../utils";
+import { createTestRepo, findSidebarBranchElement, openRepo } from "../utils";
 import {
 	createWorkspace,
 	getSetting,
@@ -98,9 +94,7 @@ describe("default agent configuration", () => {
 
 		render(<Dashboard />);
 
-		await user.click(
-			await findSidebarBranchElement("feat/agent-switch-test"),
-		);
+		await user.click(await findSidebarBranchElement("feat/agent-switch-test"));
 
 		// Wait for TaskInput to initialize; it should pick up the codex default
 		const agentPicker = await screen.findByLabelText("Agent");
@@ -145,9 +139,7 @@ describe("default agent configuration", () => {
 
 		render(<Dashboard />);
 
-		await user.click(
-			await findSidebarBranchElement("feat/agent-cursor-test"),
-		);
+		await user.click(await findSidebarBranchElement("feat/agent-cursor-test"));
 
 		const agentPicker = await screen.findByLabelText("Agent");
 		await waitFor(() => expect(agentPicker).toHaveValue("cursor"));

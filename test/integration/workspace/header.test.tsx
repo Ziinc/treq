@@ -209,12 +209,14 @@ describe("ShowWorkspace - header", () => {
 		await screen.findByText("Rebased successfully");
 		await screen.findByText("feat/beta", { selector: "button *" });
 
-		const betaWorkspacePath = resolveWorkspacePath(repoPath, beta!.workspace_path);
-		const betaTip = execFileSync(
-			"git",
-			["rev-parse", "feat/beta"],
-			{ cwd: betaWorkspacePath, encoding: "utf8" },
-		).trim();
+		const betaWorkspacePath = resolveWorkspacePath(
+			repoPath,
+			beta!.workspace_path,
+		);
+		const betaTip = execFileSync("git", ["rev-parse", "feat/beta"], {
+			cwd: betaWorkspacePath,
+			encoding: "utf8",
+		}).trim();
 
 		const overlap = execFileSync(
 			"jj",

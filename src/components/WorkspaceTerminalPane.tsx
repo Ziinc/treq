@@ -29,7 +29,10 @@ interface WorkspaceTerminalPaneProps {
 	activeClaudeSessionId?: number | null;
 	onActiveSessionChange?: (sessionId: number | null) => void;
 	// Callbacks for session management
-	onCreateNewSession?: (activeWorkspacePath?: string | null, agent?: "claude" | "codex" | "cursor") => void;
+	onCreateNewSession?: (
+		activeWorkspacePath?: string | null,
+		agent?: "claude" | "codex" | "cursor",
+	) => void;
 	onCloseSession?: (sessionId: number) => void;
 	onNavigateToWorkspace?: (workspaceKey: string, isMainRepo: boolean) => void;
 	className?: string;
@@ -240,9 +243,12 @@ const WorkspaceTerminalPaneInner = forwardRef<
 		}, [activeWorkspaceDir, workingDirectory, collapsed, scrollToTerminal]);
 
 		// Create Agent session in the active terminal's workspace, or sidebar-selected workspace
-		const handleCreateAgentSession = useCallback((agent?: "claude" | "codex" | "cursor") => {
-			onCreateNewSession?.(activeWorkspaceDir, agent);
-		}, [onCreateNewSession, activeWorkspaceDir]);
+		const handleCreateAgentSession = useCallback(
+			(agent?: "claude" | "codex" | "cursor") => {
+				onCreateNewSession?.(activeWorkspaceDir, agent);
+			},
+			[onCreateNewSession, activeWorkspaceDir],
+		);
 
 		// Close shell terminal
 		const handleCloseShell = useCallback(

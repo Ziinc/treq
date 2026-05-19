@@ -40,7 +40,9 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 	const [filePickerOpen, setFilePickerOpen] = useState(false);
 	const [submitting, setSubmitting] = useState(false);
 	const [focused, setFocused] = useState(false);
-	const [selectedAgent, setSelectedAgent] = useState<"claude" | "codex" | "cursor">("claude");
+	const [selectedAgent, setSelectedAgent] = useState<
+		"claude" | "codex" | "cursor"
+	>("claude");
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const mentionRef = useRef<HTMLDivElement>(null);
 	const { addToast } = useToast();
@@ -63,13 +65,21 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 		getRepoSetting(repoPath, "default_agent")
 			.then((repoAgent) => {
 				if (cancelled) return;
-				if (repoAgent === "claude" || repoAgent === "codex" || repoAgent === "cursor") {
+				if (
+					repoAgent === "claude" ||
+					repoAgent === "codex" ||
+					repoAgent === "cursor"
+				) {
 					setSelectedAgent(repoAgent);
 					return;
 				}
 				return getSetting("default_agent").then((globalAgent) => {
 					if (cancelled) return;
-					if (globalAgent === "claude" || globalAgent === "codex" || globalAgent === "cursor") {
+					if (
+						globalAgent === "claude" ||
+						globalAgent === "codex" ||
+						globalAgent === "cursor"
+					) {
 						setSelectedAgent(globalAgent);
 					}
 				});
@@ -446,7 +456,11 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 							<select
 								aria-label="Agent"
 								value={selectedAgent}
-								onChange={(e) => setSelectedAgent(e.target.value as "claude" | "codex" | "cursor")}
+								onChange={(e) =>
+									setSelectedAgent(
+										e.target.value as "claude" | "codex" | "cursor",
+									)
+								}
 								className="h-7 text-xs px-2 rounded-md border border-border bg-background text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-400"
 							>
 								<option value="claude">Claude</option>

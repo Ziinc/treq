@@ -323,8 +323,7 @@ const HunkLines: React.FC<HunkLinesProps> = memo(
 												}
 											}}
 											title={
-												diffLineSelection &&
-												diffLineSelection.lines.length > 1
+												diffLineSelection && diffLineSelection.lines.length > 1
 													? "Add comment to selected lines"
 													: "Add comment"
 											}

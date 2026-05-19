@@ -175,7 +175,12 @@ pub async fn merge_workspace(
     let repo_path_for_task = repo_path.clone();
     let message_for_task = message.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        crate::core::merge_workspace(&repo_path_for_task, workspace_id, &message_for_task, strategy)
+        crate::core::merge_workspace(
+            &repo_path_for_task,
+            workspace_id,
+            &message_for_task,
+            strategy,
+        )
     })
     .await
     .map_err(|e| format!("Failed to join merge_workspace task: {}", e))?;
@@ -215,10 +220,11 @@ pub async fn list_workspace_statuses(
 ) -> Result<Vec<crate::core::WorkspaceSidebarStatus>, String> {
     let started_at = Instant::now();
     let repo_path_for_task = repo_path.clone();
-    let result =
-        tauri::async_runtime::spawn_blocking(move || crate::core::list_workspace_statuses(&repo_path_for_task))
-            .await
-            .map_err(|e| format!("Failed to join list_workspace_statuses task: {}", e))?;
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        crate::core::list_workspace_statuses(&repo_path_for_task)
+    })
+    .await
+    .map_err(|e| format!("Failed to join list_workspace_statuses task: {}", e))?;
     log::debug!(
         "list_workspace_statuses(repo_path={}) completed in {:?}",
         repo_path,
@@ -507,7 +513,11 @@ pub async fn abandon_commit(
     let repo_path_for_task = repo_path.clone();
     let commit_change_id_for_task = commit_change_id.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        crate::core::abandon_commit(&repo_path_for_task, workspace_id, &commit_change_id_for_task)
+        crate::core::abandon_commit(
+            &repo_path_for_task,
+            workspace_id,
+            &commit_change_id_for_task,
+        )
     })
     .await
     .map_err(|e| format!("Failed to join abandon_commit task: {}", e))?;
@@ -557,7 +567,8 @@ mod tests {
         let workspace_id = workspaces[0].id;
 
         // Act: delete workspace; jj forget is expected best-effort without a real jj repo.
-        let result = tauri::async_runtime::block_on(delete_workspace(repo_path.to_string(), workspace_id));
+        let result =
+            tauri::async_runtime::block_on(delete_workspace(repo_path.to_string(), workspace_id));
 
         // Assert: Should succeed (jj errors are non-fatal)
         assert!(
@@ -603,7 +614,8 @@ mod tests {
         let workspace_id = workspaces[0].id;
 
         // Act: Delete the workspace (directory doesn't exist)
-        let result = tauri::async_runtime::block_on(delete_workspace(repo_path.to_string(), workspace_id));
+        let result =
+            tauri::async_runtime::block_on(delete_workspace(repo_path.to_string(), workspace_id));
 
         // Assert: Should still succeed (core::delete_workspace handles missing directories)
         assert!(

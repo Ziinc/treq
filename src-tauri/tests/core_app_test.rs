@@ -115,3 +115,141 @@ fn test_init_triggers_workspaces_sync() {
         "Workspace directory should stay deleted"
     );
 }
+
+#[test]
+fn returns_false_when_workspace_is_descendant_of_target() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let ws = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/descendant",
+        Some("descendant".to_string()),
+        None,
+        Some("main"),
+        None,
+    )
+    .expect("Failed to create workspace");
+    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, ws.id, "feat/descendant")
+        .expect("set self target");
+
+    let rebased = treq_lib::core::ensure_workspace_rebased(&repo.repo_path, ws.id, "diff")
+        .expect("ensure should succeed");
+    assert!(!rebased, "descendant workspace should not be rebased");
+}
+
+#[test]
+fn returns_true_and_rebases_when_workspace_diverged_from_target() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let ws = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/diverged",
+        Some("diverged".to_string()),
+        None,
+        Some("main"),
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    repo.commit_file("main-after.txt", "main advanced\n", "Advance main")
+        .expect("advance main");
+
+    let rebased = treq_lib::core::ensure_workspace_rebased(&repo.repo_path, ws.id, "diff")
+        .expect("ensure should succeed");
+    assert!(rebased, "diverged workspace should be rebased");
+}
+
+#[test]
+fn returns_false_when_target_branch_missing() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let ws = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/missing-target",
+        Some("missing target".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, ws.id, "no-such-branch")
+        .expect("set target branch");
+
+    let rebased = treq_lib::core::ensure_workspace_rebased(&repo.repo_path, ws.id, "diff")
+        .expect("ensure should succeed");
+    assert!(!rebased, "missing target should be treated as up-to-date");
+}
+
+#[test]
+fn returns_false_for_self_target_workspace() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let ws = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/self-target",
+        Some("self target".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, ws.id, "feat/self-target")
+        .expect("set self target");
+
+    let rebased = treq_lib::core::ensure_workspace_rebased(&repo.repo_path, ws.id, "diff")
+        .expect("ensure should succeed");
+    assert!(!rebased, "self-target workspace should be skipped");
+}
+
+#[test]
+fn init_checks_all_workspaces_and_rebases_only_diverged_ones() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let _ws_diverged = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/init-diverged",
+        Some("init diverged".to_string()),
+        None,
+        Some("main"),
+        None,
+    )
+    .expect("Failed to create diverged workspace");
+    let ws_descendant = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/init-descendant",
+        Some("init descendant".to_string()),
+        None,
+        Some("main"),
+        None,
+    )
+    .expect("Failed to create descendant workspace");
+    treq_lib::local_db::update_workspace_target_branch(
+        &repo.repo_path,
+        ws_descendant.id,
+        "feat/init-descendant",
+    )
+    .expect("set descendant self target");
+    let ws_missing_target = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/init-missing-target",
+        Some("init missing target".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create missing-target workspace");
+    treq_lib::local_db::update_workspace_target_branch(
+        &repo.repo_path,
+        ws_missing_target.id,
+        "no-such-target",
+    )
+    .expect("set missing target");
+
+    repo.commit_file("main-advance.txt", "main moved\n", "Advance main")
+        .expect("advance main");
+    treq_lib::core::init(&repo.repo_path).expect("init should succeed");
+    let workspaces =
+        treq_lib::core::list_workspaces(&repo.repo_path).expect("list workspaces after init");
+    assert_eq!(
+        workspaces.len(),
+        3,
+        "init should be best-effort across workspaces"
+    );
+}

@@ -1464,7 +1464,12 @@ pub fn workspace_diff(repo_path: &str, workspace_id: i64) -> Result<jj::JjRevisi
         .map_err(|e| format!("Failed to open app database: {}", e))?;
     let conflict_marker_style = db
         .get_setting("conflict_marker_style")
-        .map_err(|e| format!("Failed to read app database setting conflict_marker_style: {}", e))?
+        .map_err(|e| {
+            format!(
+                "Failed to read app database setting conflict_marker_style: {}",
+                e
+            )
+        })?
         .and_then(|value| {
             let trimmed = value.trim();
             if trimmed.is_empty() {

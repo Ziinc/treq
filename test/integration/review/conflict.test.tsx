@@ -47,11 +47,15 @@ async function assertStatus(
 	expect(status.conflicted_files).toEqual(expected.conflictedFiles);
 }
 
-async function createWorkspaceFixture(branchName: string): Promise<ReviewFixture> {
+async function createWorkspaceFixture(
+	branchName: string,
+): Promise<ReviewFixture> {
 	const { repoPath } = createTestRepo(false);
 	openRepo(repoPath);
 	const workspaceId = await createWorkspace(repoPath, branchName);
-	const workspace = (await getWorkspaces(repoPath)).find((w) => w.id === workspaceId);
+	const workspace = (await getWorkspaces(repoPath)).find(
+		(w) => w.id === workspaceId,
+	);
 	if (!workspace) throw new Error("Workspace not found");
 	return {
 		repoPath,
@@ -75,8 +79,14 @@ async function setupDivergentNonConflictState(): Promise<ReviewFixture> {
 	if (!baseWs) throw new Error("Base workspace not found");
 	const basePath = resolveWorkspacePath(repoPath, baseWs.workspace_path);
 
-	const stackedId = await createWorkspace(repoPath, "feat/divergent", "feature-base");
-	const stackedWs = (await getWorkspaces(repoPath)).find((w) => w.id === stackedId);
+	const stackedId = await createWorkspace(
+		repoPath,
+		"feat/divergent",
+		"feature-base",
+	);
+	const stackedWs = (await getWorkspaces(repoPath)).find(
+		(w) => w.id === stackedId,
+	);
 	if (!stackedWs) throw new Error("Stacked workspace not found");
 	const stackedPath = resolveWorkspacePath(repoPath, stackedWs.workspace_path);
 
@@ -95,14 +105,21 @@ async function setupDivergentNonConflictState(): Promise<ReviewFixture> {
 	};
 }
 
-async function setupUnresolvedConflictState(branchName: string): Promise<ReviewFixture> {
+async function setupUnresolvedConflictState(
+	branchName: string,
+): Promise<ReviewFixture> {
 	const { repoPath } = createTestRepo(false);
 	openRepo(repoPath);
 
 	const workspaceId = await createWorkspace(repoPath, branchName);
-	const workspace = (await getWorkspaces(repoPath)).find((w) => w.id === workspaceId);
+	const workspace = (await getWorkspaces(repoPath)).find(
+		(w) => w.id === workspaceId,
+	);
 	if (!workspace) throw new Error("Workspace not found");
-	const workspacePath = resolveWorkspacePath(repoPath, workspace.workspace_path);
+	const workspacePath = resolveWorkspacePath(
+		repoPath,
+		workspace.workspace_path,
+	);
 
 	writeWorkspaceFile(workspacePath, "README.md", "workspace side\n");
 	await createCommit(repoPath, workspaceId, "workspace conflicting change");
@@ -186,7 +203,9 @@ describe("Review - conflict rendering contract", () => {
 	});
 
 	it("unresolved conflict state: Conflicts section is rendered from backend metadata", async () => {
-		const fixture = await setupUnresolvedConflictState("feat/unresolved-conflict");
+		const fixture = await setupUnresolvedConflictState(
+			"feat/unresolved-conflict",
+		);
 		await assertStatus(fixture.repoPath, fixture.workspaceId, {
 			hasConflicts: true,
 			conflictedFiles: [fixture.conflictFile],
@@ -242,19 +261,25 @@ describe("Review - conflict rendering contract", () => {
 		await waitFor(() => {
 			const readmeDiff = document.querySelector('[data-file-path="README.md"]');
 			expect(readmeDiff).not.toBeNull();
-			expect(readmeDiff?.querySelectorAll("[data-comment-button]").length).toBe(0);
+			expect(readmeDiff?.querySelectorAll("[data-comment-button]").length).toBe(
+				0,
+			);
 		});
 
 		await user.click(screen.getAllByText("notes.txt")[0]);
 		await waitFor(() => {
 			const notesDiff = document.querySelector('[data-file-path="notes.txt"]');
 			expect(notesDiff).not.toBeNull();
-			expect(notesDiff?.querySelectorAll("[data-comment-button]").length).toBeGreaterThan(0);
+			expect(
+				notesDiff?.querySelectorAll("[data-comment-button]").length,
+			).toBeGreaterThan(0);
 		});
 	});
 
 	it("conflicted file with no diff hunks shows an explicit placeholder", async () => {
-		const fixture = await setupUnresolvedConflictState("feat/deleted-conflict-placeholder");
+		const fixture = await setupUnresolvedConflictState(
+			"feat/deleted-conflict-placeholder",
+		);
 		await assertStatus(fixture.repoPath, fixture.workspaceId, {
 			hasConflicts: true,
 			conflictedFiles: [fixture.conflictFile],
