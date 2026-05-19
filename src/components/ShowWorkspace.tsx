@@ -230,13 +230,18 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			onActiveTabChange?.(activeTab);
 		}, [activeTab, onActiveTabChange]);
 
-		const { data: workspaceStatusData, refetch: refetchWorkspaceStatus } = useQuery({
-			queryKey: ["workspace-status", effectiveRepoPath, workspace?.id ?? null],
-			enabled: Boolean(effectiveRepoPath),
-			placeholderData: (previousData) => previousData,
-			queryFn: () =>
-				getWorkspaceStatus(effectiveRepoPath, workspace?.id ?? null),
-		});
+		const { data: workspaceStatusData, refetch: refetchWorkspaceStatus } =
+			useQuery({
+				queryKey: [
+					"workspace-status",
+					effectiveRepoPath,
+					workspace?.id ?? null,
+				],
+				enabled: Boolean(effectiveRepoPath),
+				placeholderData: (previousData) => previousData,
+				queryFn: () =>
+					getWorkspaceStatus(effectiveRepoPath, workspace?.id ?? null),
+			});
 
 		const { data: overviewData, isPending: overviewPending } = useQuery({
 			queryKey: [
@@ -428,7 +433,13 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			} finally {
 				_setActionPending(null);
 			}
-		}, [workspace, effectiveRepoPath, addToast, refetchWorkspaceStatus, queryClient]);
+		}, [
+			workspace,
+			effectiveRepoPath,
+			addToast,
+			refetchWorkspaceStatus,
+			queryClient,
+		]);
 
 		const handleSync = useCallback(async () => {
 			if (!effectiveRepoPath) return;
@@ -456,7 +467,13 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			} finally {
 				_setActionPending(null);
 			}
-		}, [workspace, effectiveRepoPath, addToast, refetchWorkspaceStatus, queryClient]);
+		}, [
+			workspace,
+			effectiveRepoPath,
+			addToast,
+			refetchWorkspaceStatus,
+			queryClient,
+		]);
 
 		const handleForceRebaseWorkspace = useCallback(async () => {
 			if (!workspace || !effectiveRepoPath) return;
@@ -475,7 +492,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 				if (result.success) {
 					addToast({
 						title: "Force rebase complete",
-						description: "Rebased workspace subtree from current workspace scope.",
+						description:
+							"Rebased workspace subtree from current workspace scope.",
 						type: "success",
 					});
 				} else {
@@ -829,7 +847,10 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 								<div className="flex-1 overflow-auto border-r border-border">
 									<div className="p-4 space-y-4">
 										{overviewPending && !overviewData && (
-											<div className="space-y-4" data-testid="workspace-overview-skeleton">
+											<div
+												className="space-y-4"
+												data-testid="workspace-overview-skeleton"
+											>
 												<div className="h-10 rounded-lg bg-muted/50 animate-pulse" />
 												<div className="h-10 rounded-lg bg-muted/50 animate-pulse" />
 												<div className="border rounded-lg p-4 space-y-2">
@@ -851,9 +872,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 													<div className="flex-1">
 														<h3 className="font-medium text-destructive">
 															{conflictCount}{" "}
-															{conflictCount === 1
-																? "conflict"
-																: "conflicts"}{" "}
+															{conflictCount === 1 ? "conflict" : "conflicts"}{" "}
 															detected
 														</h3>
 														<p className="text-sm text-muted-foreground mt-1">
@@ -1230,29 +1249,29 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 											<MoreVertical className="w-4 h-4" />
 										</Button>
 									</DropdownMenuTrigger>
-										<DropdownMenuContent align="end" sideOffset={4}>
-											<DropdownMenuItem
-												onSelect={(e) => {
-													e.preventDefault();
-													handlePushToRemote();
-												}}
+									<DropdownMenuContent align="end" sideOffset={4}>
+										<DropdownMenuItem
+											onSelect={(e) => {
+												e.preventDefault();
+												handlePushToRemote();
+											}}
 										>
 											<Upload className="w-4 h-4 mr-2" />
 											Push to remote
+										</DropdownMenuItem>
+										{workspace && (
+											<DropdownMenuItem
+												onSelect={(e) => {
+													e.preventDefault();
+													handleForceRebaseWorkspace();
+												}}
+											>
+												<RefreshCw className="w-4 h-4 mr-2" />
+												Force Rebase Workspace
 											</DropdownMenuItem>
-											{workspace && (
-												<DropdownMenuItem
-													onSelect={(e) => {
-														e.preventDefault();
-														handleForceRebaseWorkspace();
-													}}
-												>
-													<RefreshCw className="w-4 h-4 mr-2" />
-													Force Rebase Workspace
-												</DropdownMenuItem>
-											)}
-											{workspace && onDeleteWorkspace && (
-												<>
+										)}
+										{workspace && onDeleteWorkspace && (
+											<>
 												<DropdownMenuSeparator />
 												<DropdownMenuItem
 													onSelect={() => onDeleteWorkspace(workspace)}

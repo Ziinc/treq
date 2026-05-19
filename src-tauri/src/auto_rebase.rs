@@ -481,27 +481,33 @@ pub fn rebase_single_workspace(
         return Ok(None);
     }
 
-    // Convert target branch to jj format
-    let jj_target_branch = convert_to_jj_branch_format(&target_branch, repo_path);
-
-    // Get current target commit
-    let current_target_commit = jj::jj_get_commit_id(repo_path, &jj_target_branch)
-        .map_err(|e| format!("Failed to get target commit: {}", e))?;
-
+    let full_path = get_full_workspace_path(&workspace);
     // Skip the needs-rebase check only when force=true.
     if !force {
-        let last_rebased = local_db::get_workspace_last_rebased_commit(repo_path, workspace.id)
-            .ok()
-            .flatten();
-
-        let needs_rebase = last_rebased.as_ref() != Some(&current_target_commit);
-
-        if !needs_rebase {
+        let is_descendant = match jj::jj_workspace_parent_descends_from_target(
+            &full_path,
+            &workspace.branch_name,
+            &target_branch,
+        ) {
+            Ok(value) => value,
+            Err(jj::JjError::IoError(message))
+                if message.contains("could not be resolved")
+                    || message.contains("did not resolve to a commit") =>
+            {
+                return Ok(None);
+            }
+            Err(e) => return Err(format!("Failed to check workspace ancestry: {}", e)),
+        };
+        if is_descendant {
             return Ok(None);
         }
     }
 
-    let full_path = get_full_workspace_path(&workspace);
+    // Convert target branch to jj format
+    let jj_target_branch = convert_to_jj_branch_format(&target_branch, repo_path);
+    // Still update last_rebased_commit for bookkeeping after successful rebase.
+    let current_target_commit = jj::jj_get_commit_id(repo_path, &jj_target_branch)
+        .map_err(|e| format!("Failed to get target commit: {}", e))?;
 
     // Resolve bookmark conflicts before building revsets like roots(target..branch_name).
     resolve_bookmark_conflict_if_needed(&full_path, &workspace.branch_name, conflict_marker_style)

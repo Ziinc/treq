@@ -1,12 +1,6 @@
 /* eslint-disable max-lines */
 
-import {
-	useCallback,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -90,7 +84,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	const [pendingSessionData, setPendingSessionData] = useState<
 		Map<
 			number,
-			{ pendingPrompt?: string; permissionMode?: "plan" | "acceptEdits"; agent?: "claude" | "codex" | "cursor" }
+			{
+				pendingPrompt?: string;
+				permissionMode?: "plan" | "acceptEdits";
+				agent?: "claude" | "codex" | "cursor";
+			}
 		>
 	>(new Map());
 	const [sessionSelectedFile, setSessionSelectedFile] = useState<string | null>(
@@ -399,8 +397,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
 					type: "success",
 				});
 			}),
-				// Menu open in new window
-				listen("menu-open-in-new-window", async () => {
+			// Menu open in new window
+			listen("menu-open-in-new-window", async () => {
 				const selected = await selectFolder();
 				if (!selected) return;
 
@@ -420,56 +418,56 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				const newRepoName =
 					selected.split("/").pop() || selected.split("\\").pop() || selected;
 
-					new WebviewWindow(windowLabel, {
-						url: `index.html?repo=${encodeURIComponent(selected)}`,
-						title: `Treq - ${newRepoName}`,
-						width: 1400,
-						height: 900,
+				new WebviewWindow(windowLabel, {
+					url: `index.html?repo=${encodeURIComponent(selected)}`,
+					title: `Treq - ${newRepoName}`,
+					width: 1400,
+					height: 900,
+				});
+			}),
+			// Developer menu force rebase for current workspace
+			listen("menu-force-rebase-workspace", async () => {
+				if (!repoPath || !selectedWorkspace) {
+					addToast({
+						title: "No workspace selected",
+						description: "Select a workspace first, then force rebase.",
+						type: "warning",
 					});
-				}),
-				// Developer menu force rebase for current workspace
-				listen("menu-force-rebase-workspace", async () => {
-					if (!repoPath || !selectedWorkspace) {
-						addToast({
-							title: "No workspace selected",
-							description: "Select a workspace first, then force rebase.",
-							type: "warning",
-						});
-						return;
-					}
+					return;
+				}
 
-					const defaultBranch =
-						selectedWorkspace.target_branch || currentBranch || "main";
-					try {
-						const result = await checkAndRebaseWorkspaces(
-							repoPath,
-							selectedWorkspace.id,
-							defaultBranch,
-							true,
-						);
+				const defaultBranch =
+					selectedWorkspace.target_branch || currentBranch || "main";
+				try {
+					const result = await checkAndRebaseWorkspaces(
+						repoPath,
+						selectedWorkspace.id,
+						defaultBranch,
+						true,
+					);
 
-						queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
-						queryClient.invalidateQueries({
-							queryKey: ["workspace-statuses", repoPath],
-						});
+					queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+					queryClient.invalidateQueries({
+						queryKey: ["workspace-statuses", repoPath],
+					});
 
-						addToast({
-							title: result.success
-								? "Force rebase complete"
-								: "Force rebase completed with errors",
-							description:
-								result.message || "Workspace subtree force rebase finished.",
-							type: result.success ? "success" : "warning",
-						});
-					} catch (error) {
-						addToast({
-							title: "Force rebase failed",
-							description: error instanceof Error ? error.message : String(error),
-							type: "error",
-						});
-					}
-				}),
-			];
+					addToast({
+						title: result.success
+							? "Force rebase complete"
+							: "Force rebase completed with errors",
+						description:
+							result.message || "Workspace subtree force rebase finished.",
+						type: result.success ? "success" : "warning",
+					});
+				} catch (error) {
+					addToast({
+						title: "Force rebase failed",
+						description: error instanceof Error ? error.message : String(error),
+						type: "error",
+					});
+				}
+			}),
+		];
 
 		return () => {
 			Promise.all(listeners).then((unlistenFns) => {
@@ -477,12 +475,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
 			});
 		};
 	}, [
-			repoPath,
-			selectedWorkspace,
-			currentBranch,
-			addToast,
-			queryClient,
-			deleteWorkspaceMutation,
+		repoPath,
+		selectedWorkspace,
+		currentBranch,
+		addToast,
+		queryClient,
+		deleteWorkspaceMutation,
 		handleOpenRepository,
 	]);
 
@@ -601,7 +599,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	}, []);
 
 	const handleCreateSessionFromSidebar = useCallback(
-		async (workspaceId: number | null, agent?: "claude" | "codex" | "cursor") => {
+		async (
+			workspaceId: number | null,
+			agent?: "claude" | "codex" | "cursor",
+		) => {
 			const workspace = workspaceId
 				? (workspaces.find((w) => w.id === workspaceId) ?? null)
 				: null;
@@ -805,7 +806,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				onAddAfter={handleAddAfter}
 				onMoveWorkspace={handleMoveWorkspace}
 				onSelectStack={handleSelectStack}
-				onStartAgent={(workspace) => handleCreateSessionFromSidebar(workspace.id)}
+				onStartAgent={(workspace) =>
+					handleCreateSessionFromSidebar(workspace.id)
+				}
 				currentPage={
 					viewMode === "settings"
 						? "settings"
@@ -941,7 +944,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
 								);
 								handleCreateSessionFromSidebar(ws?.id ?? null, agent);
 							} else {
-								handleCreateSessionFromSidebar(selectedWorkspace?.id ?? null, agent);
+								handleCreateSessionFromSidebar(
+									selectedWorkspace?.id ?? null,
+									agent,
+								);
 							}
 						}}
 						onNavigateToWorkspace={(workspaceKey, isMainRepo) => {

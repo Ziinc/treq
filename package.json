@@ -17,7 +17,7 @@
     "test:ui": "vitest --ui",
     "build:napi": "cd crates/treq-napi && npm run build:debug",
     "test": "DEBUG_PRINT_LIMIT=50 vitest run",
-    "format": "biome format  --write ./src ./test",
+    "format": "biome format  --write ./src ./test && cargo fmt",
     "check:format": "biome format ./src ./test",
     "check": "tsc && ast-grep test",
     "lint": "oxlint ./src ./test/integration && eslint ./src ./test/integration && ast-grep scan --warning",

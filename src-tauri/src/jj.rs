@@ -4313,6 +4313,26 @@ fn resolve_target_branch_symbol(
     })
 }
 
+/// Returns whether workspace parent commit (`@-`) descends from the target branch tip.
+/// If target branch cannot be resolved to a commit, returns an error.
+pub fn jj_workspace_parent_descends_from_target(
+    workspace_path: &str,
+    workspace_branch: &str,
+    target_branch: &str,
+) -> Result<bool, JjError> {
+    validate_branch_name(workspace_branch, "workspace")?;
+    validate_branch_name(target_branch, "target")?;
+    let loaded = load_workspace_repo(workspace_path)?;
+    let target_symbol = resolve_target_branch_symbol(&loaded, workspace_path, target_branch)?;
+    let workspace_parent = resolve_commit_by_revision(&loaded, workspace_branch)?;
+    let target_commit = resolve_commit_by_revision(&loaded, &target_symbol)?;
+    loaded
+        .repo
+        .index()
+        .is_ancestor(target_commit.id(), workspace_parent.id())
+        .map_err(|e| JjError::IoError(format!("Failed ancestry check: {}", e)))
+}
+
 fn resolve_merge_target_parent(
     loaded: &LoadedWorkspaceRepo,
     workspace_path: &str,

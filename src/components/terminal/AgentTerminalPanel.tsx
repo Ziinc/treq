@@ -322,13 +322,14 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 					</div>
 					<div className="flex items-center gap-1">
 						{/* Model selector — Claude only */}
-						{sessionData.agent !== "codex" && sessionData.agent !== "cursor" && (
-							<ModelSelector
-								currentModel={sessionModel}
-								onModelChange={handleModelChange}
-								disabled={isChangingModel || isResetting}
-							/>
-						)}
+						{sessionData.agent !== "codex" &&
+							sessionData.agent !== "cursor" && (
+								<ModelSelector
+									currentModel={sessionModel}
+									onModelChange={handleModelChange}
+									disabled={isChangingModel || isResetting}
+								/>
+							)}
 						{/* Reset button */}
 						<TooltipProvider>
 							<Tooltip>

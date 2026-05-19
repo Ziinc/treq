@@ -45,9 +45,7 @@ export function useConflicts({
 			}
 		}
 		return fileOrder;
-	}, [
-		conflictedFilesHint,
-	]);
+	}, [conflictedFilesHint]);
 
 	const conflictRegionsByFile = useMemo(() => {
 		const regionsByFile = new Map<string, ConflictRegion[]>();
