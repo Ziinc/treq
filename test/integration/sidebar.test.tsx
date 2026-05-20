@@ -1,6 +1,6 @@
 import * as React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within } from "../test-utils";
+import { fireEvent, render, screen } from "../test-utils";
 import userEvent from "@testing-library/user-event";
 import { createTestRepo, findSidebarBranchElement, openRepo } from "../utils";
 import {
@@ -17,11 +17,9 @@ const findWorkspaceByBranchName = (
 
 describe("Dashboard - workspace list", () => {
 	let repoPath: string;
-	let repoName: string;
 
 	beforeEach(async () => {
 		({ repoPath } = createTestRepo(false));
-		repoName = repoPath.split("/").filter(Boolean).pop()!;
 
 		openRepo(repoPath);
 

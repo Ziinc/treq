@@ -22,6 +22,7 @@ pub fn init(db_path: PathBuf) -> Result<(), String> {
     if let Some(parent) = db_path.parent() {
         std::env::set_var("TREQ_APP_DATA_DIR", parent.to_string_lossy().to_string());
     }
+    std::env::set_var("TREQ_APP_DB_PATH", db_path.to_string_lossy().to_string());
     let db = Database::new(db_path).map_err(|e| format!("Failed to open database: {}", e))?;
     db.init()
         .map_err(|e| format!("Failed to initialize database: {}", e))?;

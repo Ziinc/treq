@@ -424,9 +424,6 @@ const WorkspaceTerminalPaneInner = forwardRef<
 			return isActiveSession || mountedClaudeSessions.has(s.sessionId);
 		});
 
-		// Show all shell terminals (no workspace filtering)
-		const allShellTerminals = shellTerminals;
-
 		// Cmd+J: Toggle bottom terminal pane
 		useKeyboardShortcut(
 			"j",
@@ -476,7 +473,7 @@ const WorkspaceTerminalPaneInner = forwardRef<
 		);
 
 		// Build ordered list of all terminals for rendering based on terminalOrder
-		const shellTerminalMap = new Map(allShellTerminals.map((t) => [t.id, t]));
+		const shellTerminalMap = new Map(shellTerminals.map((t) => [t.id, t]));
 		const claudeSessionMap = new Map(
 			claudeSessionsToRender.map((s) => [`claude-${s.sessionId}`, s]),
 		);

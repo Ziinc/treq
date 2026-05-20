@@ -10,5 +10,6 @@ files:
 rule:
   any:
     - pattern: Command::new($$$ARGS)
+    - pattern: std::process::Command::new($$$ARGS)
     - pattern: command_for($$$ARGS)
     - pattern: jj_command($$$ARGS)

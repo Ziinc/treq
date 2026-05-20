@@ -47,6 +47,34 @@ fn test_get_repo_branch_returns_current_and_default_branch() {
 }
 
 #[test]
+fn test_check_branch_exists_local_and_remote_flags() {
+    let local_only = TestRepo::new().expect("Failed to create local-only repo");
+    let local_main = treq_lib::jj::check_branch_exists(&local_only.repo_path, "main")
+        .expect("check_branch_exists should succeed");
+    assert!(local_main.local_exists, "main should exist locally");
+    assert!(
+        !local_main.remote_exists,
+        "main should not exist on remote in local-only repo"
+    );
+
+    let with_remote = TestRepo::with_remote().expect("Failed to create repo with remote");
+    let remote_main = treq_lib::jj::check_branch_exists(&with_remote.repo_path, "main")
+        .expect("check_branch_exists should succeed");
+    assert!(remote_main.local_exists, "main should exist locally");
+    assert!(remote_main.remote_exists, "main should exist on origin");
+    assert_eq!(remote_main.remote_name.as_deref(), Some("origin"));
+    assert_eq!(remote_main.remote_ref.as_deref(), Some("origin/main"));
+}
+
+#[test]
+fn test_get_default_branch_prefers_origin_head() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+    let default_branch =
+        treq_lib::jj::get_default_branch(&repo.repo_path).expect("default branch should resolve");
+    assert_eq!(default_branch, "main");
+}
+
+#[test]
 fn test_repo_status_returns_clean_status() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
@@ -71,6 +99,16 @@ fn test_repo_status_fetch_error_does_not_block() {
     assert!(
         status.fetch_error.is_some(),
         "should report fetch_error when no remote is configured"
+    );
+}
+
+#[test]
+fn test_jj_git_fetch_returns_missing_origin_error() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let err = treq_lib::jj::jj_git_fetch(&repo.repo_path).expect_err("fetch should fail");
+    assert_eq!(
+        err.to_string(),
+        "IO error: No remote named 'origin' is configured"
     );
 }
 
@@ -105,7 +143,6 @@ fn test_repo_status_ignores_gitignored_noise() {
         .expect("Failed to write .jj-backup file");
 
     let status = repo_status(&repo.repo_path).expect("repo_status should succeed");
-
     assert!(
         !status.has_changes,
         "repo_status should ignore gitignored noise, got: {:?}",

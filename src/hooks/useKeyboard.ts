@@ -9,20 +9,16 @@ function isWithinTerminal(element: HTMLElement | null): boolean {
 }
 
 export function useKeyboardShortcut(
-	...args: [
-		key: string,
-		ctrlOrCmd: boolean,
-		handler: () => void,
-		deps?: unknown[],
-		options?: {
-			shift?: boolean;
-			option?: boolean;
-			requireBothCmdAndCtrl?: boolean;
-		},
-	]
+	key: string,
+	ctrlOrCmd: boolean,
+	handler: () => void,
+	deps: unknown[] = [],
+	options?: {
+		shift?: boolean;
+		option?: boolean;
+		requireBothCmdAndCtrl?: boolean;
+	},
 ) {
-	const [key, ctrlOrCmd, handler, deps = [], options] = args;
-
 	useEffect(() => {
 		const handleKeyPress: KeyboardHandler = (event) => {
 			const target = event.target as HTMLElement | null;

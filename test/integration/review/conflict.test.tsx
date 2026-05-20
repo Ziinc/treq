@@ -13,7 +13,7 @@ import {
 	getWorkspaceStatus,
 	getWorkspaces,
 } from "../../../src/lib/api";
-import { render, screen, waitFor } from "../../test-utils";
+import { render, screen, waitFor, within } from "../../test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
 import userEvent from "@testing-library/user-event";
 import * as api from "../../../src/lib/api";
@@ -35,6 +35,21 @@ async function navigateToReviewTab(
 	const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
 	await user.click(reviewTab);
 	await screen.findByRole("tab", { name: /^Review/, selected: true });
+}
+
+async function clickFileInSection(
+	user: ReturnType<typeof userEvent.setup>,
+	sectionName: "Conflicts" | "Changes",
+	fileName: string,
+) {
+	const sectionToggle = await screen.findByRole("button", { name: sectionName });
+	const sectionHeader = sectionToggle.closest("div");
+	if (!sectionHeader?.parentElement) {
+		throw new Error(`Could not locate ${sectionName} section container`);
+	}
+	const section = sectionHeader.parentElement;
+	const fileRow = await within(section).findByTitle(fileName);
+	await user.click(fileRow);
 }
 
 async function assertStatus(
@@ -257,7 +272,7 @@ describe("Review - conflict rendering contract", () => {
 		render(<Dashboard />);
 		await navigateToReviewTab(user, fixture.branchName);
 
-		await user.click(screen.getAllByText("README.md")[0]);
+		await clickFileInSection(user, "Conflicts", "README.md");
 		await waitFor(() => {
 			const readmeDiff = document.querySelector('[data-file-path="README.md"]');
 			expect(readmeDiff).not.toBeNull();
@@ -266,7 +281,7 @@ describe("Review - conflict rendering contract", () => {
 			);
 		});
 
-		await user.click(screen.getAllByText("notes.txt")[0]);
+		await clickFileInSection(user, "Changes", "notes.txt");
 		await waitFor(() => {
 			const notesDiff = document.querySelector('[data-file-path="notes.txt"]');
 			expect(notesDiff).not.toBeNull();
@@ -297,7 +312,7 @@ describe("Review - conflict rendering contract", () => {
 
 		render(<Dashboard />);
 		await navigateToReviewTab(user, fixture.branchName);
-		await user.click(screen.getAllByText("README.md")[0]);
+		await clickFileInSection(user, "Conflicts", "README.md");
 		await screen.findByText(
 			"No diff available for this conflicted file (possibly deleted)",
 		);

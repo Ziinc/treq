@@ -181,6 +181,32 @@ impl TestRepo {
         fs::remove_file(path.as_ref()).map_err(|e| e.to_string())
     }
 
+    /// Create a directory and any missing parents (avoids `fs::create_dir_all` in `*_test.rs`).
+    pub fn ensure_dir(path: impl AsRef<Path>) -> Result<(), String> {
+        fs::create_dir_all(path.as_ref()).map_err(|e| e.to_string())
+    }
+
+    /// Write bytes to a path, creating parent directories as needed.
+    pub fn write_path(path: impl AsRef<Path>, content: impl AsRef<[u8]>) -> Result<(), String> {
+        let path = path.as_ref();
+        if let Some(parent) = path.parent() {
+            Self::ensure_dir(parent)?;
+        }
+        fs::write(path, content.as_ref()).map_err(|e| e.to_string())
+    }
+
+    /// Rename a file or directory (avoids `fs::rename` in `*_test.rs`).
+    pub fn rename_path(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<(), String> {
+        fs::rename(from.as_ref(), to.as_ref()).map_err(|e| e.to_string())
+    }
+
+    /// Copy a file (avoids `fs::copy` in `*_test.rs`).
+    pub fn copy_path(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<(), String> {
+        fs::copy(from.as_ref(), to.as_ref())
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
     /// Append to a file inside a workspace path.
     pub fn append_workspace_file(
         workspace_path: &str,

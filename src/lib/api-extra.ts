@@ -13,23 +13,19 @@ import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 
 export const ptyCreateSession = (
-	...args: [
-		sessionId: string,
-		workingDir?: string,
-		shell?: string,
-		initialCommand?: string,
-		suppressEchoFor?: string,
-	]
-): Promise<void> => {
-	const [sessionId, workingDir, shell, initialCommand, suppressEchoFor] = args;
-	return invoke("pty_create_session", {
+	sessionId: string,
+	workingDir?: string,
+	shell?: string,
+	initialCommand?: string,
+	suppressEchoFor?: string,
+): Promise<void> =>
+	invoke("pty_create_session", {
 		sessionId,
 		workingDir,
 		shell,
 		initialCommand,
 		suppressEchoFor,
 	});
-};
 
 export const ptyWrite = (sessionId: string, data: string): Promise<void> =>
 	invoke("pty_write", { sessionId, data });
@@ -76,31 +72,25 @@ export const listDirectoryCached = (
 	});
 
 export const searchWorkspaceFiles = (
-	...args: [
-		repoPath: string,
-		workspaceId: number | null,
-		query: string,
-		limit?: number,
-	]
-): Promise<FileSearchResult[]> => {
-	const [repoPath, workspaceId, query, limit] = args;
-	return invoke("search_workspace_files", {
+	repoPath: string,
+	workspaceId: number | null,
+	query: string,
+	limit?: number,
+): Promise<FileSearchResult[]> =>
+	invoke("search_workspace_files", {
 		repoPath,
 		workspaceId,
 		query,
 		limit: limit ?? 50,
 	});
-};
 
 // Folder picker
-export const selectFolder = async (): Promise<string | null> => {
-	const selected = await open({
+export const selectFolder = async (): Promise<string | null> =>
+	open({
 		directory: true,
 		multiple: false,
 		title: "Select Folder",
 	});
-	return selected;
-};
 
 // Session management API
 export const createSession = (
@@ -144,9 +134,10 @@ export const unmarkFileViewed = (
 const diffCache = new Map<string, { data: string; timestamp: number }>();
 
 export const getDiffCache = async (
-	...args: [workspacePath: string, cacheType: string, filePath?: string]
+	workspacePath: string,
+	cacheType: string,
+	filePath?: string,
 ): Promise<DiffCacheEntry | null> => {
-	const [workspacePath, cacheType, filePath] = args;
 	const key = filePath
 		? `${workspacePath}:${cacheType}:${filePath}`
 		: `${workspacePath}:${cacheType}`;
@@ -173,23 +164,19 @@ export const loadPendingReview = (
 	});
 
 export const savePendingReview = (
-	...args: [
-		repoPath: string,
-		workspaceId: number,
-		comments: LineComment[],
-		viewedFiles?: string[],
-		summaryText?: string,
-	]
-): Promise<number> => {
-	const [repoPath, workspaceId, comments, viewedFiles, summaryText] = args;
-	return invoke("save_pending_review", {
+	repoPath: string,
+	workspaceId: number,
+	comments: LineComment[],
+	viewedFiles?: string[],
+	summaryText?: string,
+): Promise<number> =>
+	invoke("save_pending_review", {
 		repoPath,
 		workspaceId,
 		comments: JSON.stringify(comments),
 		viewedFiles: viewedFiles ? JSON.stringify(viewedFiles) : null,
 		summaryText: summaryText ?? null,
 	});
-};
 
 export const clearPendingReview = (
 	repoPath: string,
@@ -209,21 +196,17 @@ export const stopFileWatcher = (
 ): Promise<void> => invoke("stop_file_watcher", { workspaceId, workspacePath });
 
 export const moveCommitToExistingWorkspace = (
-	...args: [
-		repoPath: string,
-		sourceWorkspaceId: number,
-		commitChangeId: string,
-		targetWorkspaceId: number,
-	]
-): Promise<void> => {
-	const [repoPath, sourceWorkspaceId, commitChangeId, targetWorkspaceId] = args;
-	return invoke("move_commit_to_existing_workspace", {
+	repoPath: string,
+	sourceWorkspaceId: number,
+	commitChangeId: string,
+	targetWorkspaceId: number,
+): Promise<void> =>
+	invoke("move_commit_to_existing_workspace", {
 		repoPath,
 		sourceWorkspaceId,
 		commitChangeId,
 		targetWorkspaceId,
 	});
-};
 
 export const abandonCommit = (
 	repoPath: string,

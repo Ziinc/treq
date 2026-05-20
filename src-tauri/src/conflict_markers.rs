@@ -71,16 +71,6 @@ pub struct ConflictRegionView {
 
 pub type ConflictRegion = ConflictRegionView;
 
-pub fn is_conflict_marker(line: &str) -> bool {
-    let trimmed = line.trim_start();
-    if trimmed.len() < 7 {
-        return false;
-    }
-    let first = trimmed.as_bytes()[0];
-    matches!(first, b'<' | b'>' | b'%' | b'+' | b'-' | b'|' | b'=')
-        && trimmed.as_bytes()[..7].iter().all(|&b| b == first)
-}
-
 fn extract_conflict_info(line: &str) -> Option<(usize, usize)> {
     let conflict_pos = line.find("Conflict ")?;
     let rest = &line[conflict_pos + 9..];

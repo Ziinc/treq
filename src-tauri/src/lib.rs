@@ -85,6 +85,7 @@ pub fn run() {
             std::fs::create_dir_all(&app_dir).expect("Failed to create app data directory");
             std::env::set_var("TREQ_APP_DATA_DIR", app_dir.to_string_lossy().to_string());
             let db_path = app_dir.join("treq.db");
+            std::env::set_var("TREQ_APP_DB_PATH", db_path.to_string_lossy().to_string());
 
             let db = Database::new(db_path).expect("Failed to open database");
             db.init().expect("Failed to initialize database");
@@ -392,7 +393,6 @@ pub fn run() {
             commands::jj_split,
             commands::get_repo_branch,
             commands::get_workspace_changed_files,
-            commands::get_workspace_conflicted_files,
             commands::init_repo,
             commands::jj_git_fetch_background,
             commands::jj_get_commits_ahead,

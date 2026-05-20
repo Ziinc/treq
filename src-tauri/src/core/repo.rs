@@ -95,6 +95,8 @@ pub fn get_repo_branch(repo_path: &str) -> Result<RepoBranch, String> {
 pub fn repo_status(repo_path: &str) -> Result<RepoStatus, String> {
     // Step 1: fetch — capture error but continue
     let fetch_error = jj::jj_git_fetch(repo_path).err().map(|e| e.to_string());
+    // Keep jj view aligned with colocated git state before status checks.
+    let _ = jj::jj_util_import_git_refs(repo_path);
 
     // Step 2: default branch for conflict/change checks
     let branch_info = get_repo_branch(repo_path).unwrap_or(RepoBranch {
@@ -105,7 +107,7 @@ pub fn repo_status(repo_path: &str) -> Result<RepoStatus, String> {
 
     // Step 3: uncommitted changes
     let has_changes = jj::jj_get_changed_files(repo_path)
-        .map(|files| !files.is_empty())
+        .map(|files| files.iter().any(|file| !is_repo_noise_path(&file.path)))
         .unwrap_or(false);
 
     // Step 4: conflicts
@@ -152,6 +154,16 @@ pub fn repo_status(repo_path: &str) -> Result<RepoStatus, String> {
         remote_sync,
         fetch_error,
     })
+}
+
+fn is_repo_noise_path(path: &str) -> bool {
+    path == "node_modules"
+        || path.starts_with("node_modules/")
+        || path == ".treq"
+        || path.starts_with(".treq/")
+        || path == ".jj"
+        || path.starts_with(".jj/")
+        || path.starts_with(".jj")
 }
 
 /// Returns the list of local bookmarks (branches), after syncing colocated git into jj.

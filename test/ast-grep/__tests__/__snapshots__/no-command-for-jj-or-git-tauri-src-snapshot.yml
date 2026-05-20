@@ -2,16 +2,6 @@ id: no-command-for-jj-or-git-tauri-src
 snapshots:
   ? |
     fn status() {
-      let mut cmd = command_for("jj");
-      cmd.arg("status");
-    }
-  : labels:
-    - source: command_for("jj")
-      style: primary
-      start: 30
-      end: 47
-  ? |
-    fn status() {
       let mut cmd = command_for("git");
       cmd.arg("status");
     }
@@ -20,3 +10,13 @@ snapshots:
       style: primary
       start: 30
       end: 48
+  ? |
+    fn status() {
+      let mut cmd = command_for("jj");
+      cmd.arg("status");
+    }
+  : labels:
+    - source: command_for("jj")
+      style: primary
+      start: 30
+      end: 47
