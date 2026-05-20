@@ -1474,16 +1474,40 @@ pub fn copy_included_files(
 /// # Returns
 /// The parsed revision diff on success, or an error string.
 pub fn workspace_diff(repo_path: &str, workspace_id: i64) -> Result<jj::JjRevisionDiff, String> {
-    let conflict_marker_style = resolve_workspace_diff_conflict_marker_style(repo_path);
+    let conflict_marker_style = resolve_workspace_diff_conflict_marker_style(repo_path)?;
 
     workspace_diff_with_conflict_style(repo_path, workspace_id, &conflict_marker_style)
 }
 
-fn resolve_workspace_diff_conflict_marker_style(repo_path: &str) -> String {
+fn resolve_workspace_diff_conflict_marker_style(repo_path: &str) -> Result<String, String> {
     let app_db_path = crate::core::resolve_app_db_path(repo_path);
-    match crate::db::Database::new(app_db_path) {
-        Ok(db) => crate::core::resolve_conflict_marker_style_from_db(&db),
-        Err(_) => crate::core::DEFAULT_CONFLICT_MARKER_STYLE.to_string(),
+    if !app_db_path.exists() {
+        return Err(format!(
+            "Failed to access app database at {}: file does not exist",
+            app_db_path.display()
+        ));
+    }
+    let db = crate::db::Database::new(app_db_path.clone()).map_err(|e| {
+        format!(
+            "Failed to access app database at {}: {}",
+            app_db_path.display(),
+            e
+        )
+    })?;
+    match db.get_setting("conflict_marker_style") {
+        Ok(Some(value)) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                Ok(crate::core::DEFAULT_CONFLICT_MARKER_STYLE.to_string())
+            } else {
+                Ok(trimmed.to_string())
+            }
+        }
+        Ok(None) => Ok(crate::core::DEFAULT_CONFLICT_MARKER_STYLE.to_string()),
+        Err(e) => Err(format!(
+            "Failed to read app database setting conflict_marker_style: {}",
+            e
+        )),
     }
 }
 

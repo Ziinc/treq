@@ -6,6 +6,7 @@ import { ThemeProvider } from "../src/hooks/useTheme";
 import { DiffSettingsProvider } from "../src/hooks/useDiffSettings";
 import {
 	RenderOptions,
+	act,
 	render,
 	screen as rtlScreen,
 	fireEvent,
@@ -41,6 +42,13 @@ const AllTheProviders = ({ children }: { children: ReactNode }) => {
 const customRender = (ui: React.ReactElement, options?: RenderOptions) =>
 	render(ui, { wrapper: AllTheProviders, ...options });
 
+const settleReactUpdates = async () => {
+	await act(async () => {
+		await Promise.resolve();
+		await new Promise<void>((resolve) => setTimeout(resolve, 0));
+	});
+};
+
 const screen = {
 	...rtlScreen,
 	clickByText: async (text: string | RegExp) => {
@@ -59,4 +67,4 @@ const screen = {
 export * from "@testing-library/react";
 
 // override render method and screen
-export { customRender as render, screen };
+export { customRender as render, screen, settleReactUpdates };

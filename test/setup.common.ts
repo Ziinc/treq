@@ -10,6 +10,7 @@
 
 import { afterEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
+import { act } from "react";
 import { configure, prettyDOM } from "@testing-library/dom";
 import "@testing-library/jest-dom/vitest";
 
@@ -65,7 +66,11 @@ configure({
 	},
 });
 
-afterEach(() => {
+afterEach(async () => {
+	await act(async () => {
+		await Promise.resolve();
+		await new Promise<void>((resolve) => setTimeout(resolve, 0));
+	});
 	cleanup();
 });
 
