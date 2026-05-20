@@ -9,6 +9,7 @@ pub mod file_indexer;
 pub mod jj;
 pub mod local_db;
 pub mod pty;
+pub mod telemetry;
 
 use commands::file_watcher::WatcherManager;
 use db::Database;
@@ -23,6 +24,8 @@ pub(crate) struct AppState {
     pty_manager: Mutex<PtyManager>,
     watcher_manager: WatcherManager,
     window_repo_paths: Mutex<HashMap<String, String>>,
+    // Held for its Drop guards (file writer + provider shutdown).
+    _telemetry: telemetry::TelemetryGuards,
 }
 
 /// Emits an event only to the focused webview window.
@@ -44,17 +47,13 @@ pub fn run() {
         .plugin(
             tauri_plugin_log::Builder::new()
                 .target(tauri_plugin_log::Target::new(
-                    tauri_plugin_log::TargetKind::Stdout,
+                    tauri_plugin_log::TargetKind::Webview,
                 ))
-                .target(tauri_plugin_log::Target::new(
-                    tauri_plugin_log::TargetKind::LogDir {
-                        file_name: Some("treq".to_string()),
-                    },
-                ))
-                .level(log::LevelFilter::Warn)
-                .level_for("treq", log::LevelFilter::Info)
-                // tauri-plugin-log target for JS console forwarding (src/lib/logger.ts)
-                .level_for("webview", log::LevelFilter::Debug)
+                .level(log::LevelFilter::Info)
+                .format(|out, message, record| {
+                    crate::telemetry::forward_log_record(record);
+                    out.finish(format_args!("{}", message));
+                })
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
@@ -77,7 +76,14 @@ pub fn run() {
                 }
             }
 
-            // --- GUI mode: initialize DB first so we can pass saved repo path in the window URL ---
+            // --- GUI mode: initialize telemetry before anything that may log ---
+            let log_dir = app
+                .path()
+                .app_log_dir()
+                .expect("Failed to get app log dir");
+            let telemetry =
+                telemetry::init(&log_dir).expect("Failed to initialize telemetry");
+
             let app_dir = app
                 .path()
                 .app_data_dir()
@@ -127,6 +133,7 @@ pub fn run() {
                 pty_manager: Mutex::new(pty_manager),
                 watcher_manager,
                 window_repo_paths: Mutex::new(HashMap::new()),
+                _telemetry: telemetry,
             };
 
             app.manage(app_state);
@@ -238,10 +245,15 @@ pub fn run() {
                     .build()?;
 
                 // Help menu
+                let view_logs_item =
+                    MenuItemBuilder::with_id("view_logs", "View Logs").build(app)?;
+
                 let learn_more_item =
                     MenuItemBuilder::with_id("learn_more", "Learn More").build(app)?;
 
                 let help_menu = SubmenuBuilder::new(app, "Help")
+                    .item(&view_logs_item)
+                    .separator()
                     .item(&learn_more_item)
                     .build()?;
 
@@ -319,6 +331,17 @@ pub fn run() {
                         .build()?
                 };
 
+                // Help menu
+                let view_logs_item =
+                    MenuItemBuilder::with_id("view_logs", "View Logs").build(app)?;
+                let learn_more_item =
+                    MenuItemBuilder::with_id("learn_more", "Learn More").build(app)?;
+                let help_menu = SubmenuBuilder::new(app, "Help")
+                    .item(&view_logs_item)
+                    .separator()
+                    .item(&learn_more_item)
+                    .build()?;
+
                 let mut menu_builder = MenuBuilder::new(app).item(&file_menu).item(&go_menu);
 
                 // Add Developer menu in debug mode
@@ -327,7 +350,7 @@ pub fn run() {
                     menu_builder = menu_builder.item(&developer_menu);
                 }
 
-                let menu = menu_builder.build()?;
+                let menu = menu_builder.item(&help_menu).build()?;
 
                 app.set_menu(menu)?;
             }
@@ -347,6 +370,14 @@ pub fn run() {
                 }
                 "force_rebase_workspace" => emit_to_focused(app, "menu-force-rebase-workspace", ()),
                 "factory_reset" => emit_to_focused(app, "menu-factory-reset", ()),
+                "view_logs" => {
+                    use tauri_plugin_opener::OpenerExt;
+                    if let Ok(dir) = app.path().app_log_dir() {
+                        let _ = app
+                            .opener()
+                            .open_path(dir.to_string_lossy(), None::<&str>);
+                    }
+                }
                 "learn_more" => {
                     #[cfg(target_os = "macos")]
                     {
