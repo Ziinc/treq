@@ -2,7 +2,7 @@ import * as React from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { commitRepoFile, createTestRepo, openRepo } from "../utils";
 import { ensureWorkspaceIndexed } from "../../src/lib/api";
-import { render, screen } from "../test-utils";
+import { render, screen, settleReactUpdates } from "../test-utils";
 import { Dashboard } from "../../src/components/Dashboard";
 import userEvent from "@testing-library/user-event";
 
@@ -24,7 +24,7 @@ describe("FilePicker integration", () => {
 
 	it("opens via Ctrl+P, shows initial state, searches files, and selects a result", async () => {
 		render(<Dashboard />);
-		await new Promise((resolve) => setTimeout(resolve, 500));
+		await settleReactUpdates();
 
 		await user.keyboard("{Control>}p{/Control}");
 
@@ -44,7 +44,7 @@ describe("FilePicker integration", () => {
 
 	it("shows 'No files found' for a nonexistent query", async () => {
 		render(<Dashboard />);
-		await new Promise((resolve) => setTimeout(resolve, 500));
+		await settleReactUpdates();
 
 		await user.keyboard("{Control>}p{/Control}");
 		const input = await screen.findByPlaceholderText("Search files...");

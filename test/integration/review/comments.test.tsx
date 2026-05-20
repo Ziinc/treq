@@ -12,7 +12,14 @@ import {
 	createWorkspace,
 	getWorkspaces,
 } from "../../../src/lib/api";
-import { fireEvent, render, screen, waitFor, within } from "../../test-utils";
+import {
+	fireEvent,
+	render,
+	screen,
+	settleReactUpdates,
+	waitFor,
+	within,
+} from "../../test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
 import userEvent from "@testing-library/user-event";
 
@@ -128,7 +135,7 @@ describe("Multi-line selection in diff viewer", () => {
 			expect(line4.className).toContain("bg-blue-500/10");
 		});
 
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await settleReactUpdates();
 
 		expect(line2.className).toContain("bg-blue-500/10");
 		expect(line3.className).toContain("bg-blue-500/10");
