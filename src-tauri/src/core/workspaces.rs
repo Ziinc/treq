@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use ignore::WalkBuilder;
 use serde::{Deserialize, Serialize};
@@ -300,8 +300,7 @@ pub fn create_workspace(
         }
     }
 
-    // Always copy .claude/settings.local.json (gitignored per-machine settings)
-    // so new workspaces inherit local permissions/hooks without re-granting.
+    // Copy .claude/settings.local.json so workspaces inherit local permissions/hooks.
     let claude_src = Path::new(repo_path)
         .join(".claude")
         .join("settings.local.json");
@@ -793,7 +792,15 @@ pub fn workspace_status(
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_workspace_has_conflicts;
+    use super::{resolve_workspace_has_conflicts, resolve_workspace_diff_conflict_marker_style};
+    use rusqlite::Connection;
+    use std::sync::{Mutex, OnceLock};
+    use tempfile::TempDir;
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
 
     #[test]
     fn resolve_workspace_has_conflicts_prefers_conflicted_files_signal() {
@@ -810,6 +817,23 @@ mod tests {
         assert!(resolve_workspace_has_conflicts(Some(true), None));
         assert!(!resolve_workspace_has_conflicts(Some(false), None));
         assert!(!resolve_workspace_has_conflicts(None, None));
+    }
+
+    #[test]
+    fn resolve_workspace_diff_conflict_marker_style_defaults_when_settings_table_missing() {
+        let _guard = env_lock().lock().unwrap();
+        let temp_dir = TempDir::new().expect("temp dir should be created");
+        let db_path = temp_dir.path().join("treq.db");
+        Connection::open(&db_path)
+            .expect("db should be openable")
+            .execute("CREATE TABLE unrelated (id INTEGER PRIMARY KEY)", [])
+            .expect("setup table should succeed");
+
+        std::env::set_var("TREQ_APP_DB_PATH", db_path.to_string_lossy().to_string());
+        let style = resolve_workspace_diff_conflict_marker_style("/unused/repo/path");
+        std::env::remove_var("TREQ_APP_DB_PATH");
+
+        assert_eq!(style, crate::core::DEFAULT_CONFLICT_MARKER_STYLE);
     }
 }
 
@@ -1450,44 +1474,17 @@ pub fn copy_included_files(
 /// # Returns
 /// The parsed revision diff on success, or an error string.
 pub fn workspace_diff(repo_path: &str, workspace_id: i64) -> Result<jj::JjRevisionDiff, String> {
-    let app_db_path = app_db_path(repo_path);
-    let app_db_metadata = std::fs::metadata(&app_db_path)
-        .map_err(|e| format!("Failed to access app database {:?}: {}", app_db_path, e))?;
-    if !app_db_metadata.is_file() {
-        return Err(format!(
-            "App database path is not a file: {:?}",
-            app_db_path
-        ));
-    }
-
-    let db = crate::db::Database::new(app_db_path)
-        .map_err(|e| format!("Failed to open app database: {}", e))?;
-    let conflict_marker_style = db
-        .get_setting("conflict_marker_style")
-        .map_err(|e| {
-            format!(
-                "Failed to read app database setting conflict_marker_style: {}",
-                e
-            )
-        })?
-        .and_then(|value| {
-            let trimmed = value.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        })
-        .unwrap_or_else(|| crate::core::DEFAULT_CONFLICT_MARKER_STYLE.to_string());
+    let conflict_marker_style = resolve_workspace_diff_conflict_marker_style(repo_path);
 
     workspace_diff_with_conflict_style(repo_path, workspace_id, &conflict_marker_style)
 }
 
-fn app_db_path(repo_path: &str) -> PathBuf {
-    if let Ok(app_data_dir) = std::env::var("TREQ_APP_DATA_DIR") {
-        return Path::new(&app_data_dir).join("treq.db");
+fn resolve_workspace_diff_conflict_marker_style(repo_path: &str) -> String {
+    let app_db_path = crate::core::resolve_app_db_path(repo_path);
+    match crate::db::Database::new(app_db_path) {
+        Ok(db) => crate::core::resolve_conflict_marker_style_from_db(&db),
+        Err(_) => crate::core::DEFAULT_CONFLICT_MARKER_STYLE.to_string(),
     }
-    Path::new(repo_path).join(".treq").join("treq.db")
 }
 
 fn workspace_diff_with_conflict_style(

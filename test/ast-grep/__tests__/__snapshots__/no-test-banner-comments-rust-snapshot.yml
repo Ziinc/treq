@@ -1,6 +1,38 @@
 id: no-test-banner-comments-rust
 snapshots:
   ? |
+    // ###
+    #[test]
+    fn rejects_hash_separator() {
+      assert!(true);
+    }
+  : labels:
+    - source: |
+        // ###
+        #[test]
+        fn rejects_hash_separator() {
+          assert!(true);
+        }
+      style: primary
+      start: 0
+      end: 64
+  ? |
+    // ---
+    #[test]
+    fn rejects_dash_separator() {
+      assert!(true);
+    }
+  : labels:
+    - source: |
+        // ---
+        #[test]
+        fn rejects_dash_separator() {
+          assert!(true);
+        }
+      style: primary
+      start: 0
+      end: 64
+  ? |
     // =============================================================================
     // Test: Rebase merge with empty commits
     // =============================================================================
@@ -20,35 +52,3 @@ snapshots:
       style: primary
       start: 0
       end: 269
-  ? |
-    // ---
-    #[test]
-    fn rejects_dash_separator() {
-      assert!(true);
-    }
-  : labels:
-    - source: |
-        // ---
-        #[test]
-        fn rejects_dash_separator() {
-          assert!(true);
-        }
-      style: primary
-      start: 0
-      end: 64
-  ? |
-    // ###
-    #[test]
-    fn rejects_hash_separator() {
-      assert!(true);
-    }
-  : labels:
-    - source: |
-        // ###
-        #[test]
-        fn rejects_hash_separator() {
-          assert!(true);
-        }
-      style: primary
-      start: 0
-      end: 64

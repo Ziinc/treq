@@ -1,13 +1,9 @@
 import { useMemo } from "react";
 import { type ConflictRegion } from "../../../lib/api";
-import type { ParsedFileChange } from "../../../lib/git-utils";
 import type { FileHunksData } from "../types";
 
 interface UseConflictsParams {
-	files: ParsedFileChange[];
 	allFileHunks: Map<string, FileHunksData>;
-	showCommittedChanges: boolean;
-	committedFiles: import("../../../lib/api").JjFileChange[];
 	conflictedFilesHint?: string[];
 }
 
@@ -29,10 +25,7 @@ const normalizeRegion = (
 };
 
 export function useConflicts({
-	files,
 	allFileHunks,
-	showCommittedChanges,
-	committedFiles,
 	conflictedFilesHint = [],
 }: UseConflictsParams) {
 	const actualConflictedFiles = useMemo(() => {

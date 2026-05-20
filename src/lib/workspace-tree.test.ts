@@ -24,9 +24,15 @@ function makeStatus(
 
 function expectTree(
 	statuses: WorkspaceSidebarStatus[],
-	expectedRootCount: number,
-	expectedBranches: string[],
-	expectedDepths: number[],
+	{
+		expectedRootCount,
+		expectedBranches,
+		expectedDepths,
+	}: {
+		expectedRootCount: number;
+		expectedBranches: string[];
+		expectedDepths: number[];
+	},
 ): void {
 	const roots = buildWorkspaceTree(statuses);
 	const flattened = flattenWorkspaceTree(roots);
@@ -38,20 +44,27 @@ function expectTree(
 
 describe("workspace tree root detection", () => {
 	it("self-target workspace is rendered as root", () => {
-		expectTree([makeStatus(1, "main", "main")], 1, ["main"], [0]);
+		expectTree([makeStatus(1, "main", "main")], {
+			expectedRootCount: 1,
+			expectedBranches: ["main"],
+			expectedDepths: [0],
+		});
 	});
 
 	it("external target remains root", () => {
-		expectTree([makeStatus(1, "feature/a", "main")], 1, ["feature/a"], [0]);
+		expectTree([makeStatus(1, "feature/a", "main")], {
+			expectedRootCount: 1,
+			expectedBranches: ["feature/a"],
+			expectedDepths: [0],
+		});
 	});
 
 	it("cycle with no natural roots falls back to all roots", () => {
-		expectTree(
-			[makeStatus(1, "a", "b"), makeStatus(2, "b", "a")],
-			2,
-			["a", "b"],
-			[0, 0],
-		);
+		expectTree([makeStatus(1, "a", "b"), makeStatus(2, "b", "a")], {
+			expectedRootCount: 2,
+			expectedBranches: ["a", "b"],
+			expectedDepths: [0, 0],
+		});
 	});
 
 	it("normal acyclic hierarchy remains unchanged", () => {
@@ -61,9 +74,11 @@ describe("workspace tree root detection", () => {
 				makeStatus(2, "beta", "alpha"),
 				makeStatus(3, "gamma", "beta"),
 			],
-			1,
-			["alpha", "beta", "gamma"],
-			[0, 1, 2],
+			{
+				expectedRootCount: 1,
+				expectedBranches: ["alpha", "beta", "gamma"],
+				expectedDepths: [0, 1, 2],
+			},
 		);
 	});
 });

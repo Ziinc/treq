@@ -1,7 +1,6 @@
 mod e2e_test_helpers;
 
 use e2e_test_helpers::{JjVerifier, TestRepo};
-use std::fs;
 use std::path::Path;
 use std::process::Command;
 
@@ -1317,7 +1316,7 @@ fn test_sync_workspaces_forget_deleted_directories() {
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
 
-    fs::remove_dir_all(&workspace_path).expect("Failed to delete workspace directory");
+    TestRepo::remove_dir_all_path(&workspace_path).expect("Failed to delete workspace directory");
 
     treq_lib::core::sync_workspaces(&repo.repo_path).expect("Failed to sync workspaces");
 
@@ -2835,7 +2834,7 @@ fn test_app_data_dir(repo: &TestRepo) -> std::path::PathBuf {
 
 fn init_test_app_db(repo: &TestRepo, conflict_marker_style: Option<&str>) {
     let app_dir = test_app_data_dir(repo);
-    fs::create_dir_all(&app_dir).expect("app data dir should be creatable");
+    TestRepo::ensure_dir(&app_dir).expect("app data dir should be creatable");
     let db_path = app_dir.join("treq.db");
     let db = treq_lib::db::Database::new(db_path).expect("test app db should be openable");
     db.init().expect("test app db should initialize");
@@ -2917,7 +2916,7 @@ fn test_workspace_diff_reports_rename_with_previous_path() {
         .unwrap();
     let ws = merge_diff_new_workspace(&repo, "feat/rename");
     let workspace_dir = repo.workspaces_dir().join(&ws.workspace_path);
-    fs::rename(
+    TestRepo::rename_path(
         workspace_dir.join("old.txt"),
         workspace_dir.join("renamed.txt"),
     )
@@ -2941,7 +2940,7 @@ fn test_workspace_diff_reports_copy_status() {
         .unwrap();
     let ws = merge_diff_new_workspace(&repo, "feat/copy");
     let workspace_dir = repo.workspaces_dir().join(&ws.workspace_path);
-    fs::copy(
+    TestRepo::copy_path(
         workspace_dir.join("source.txt"),
         workspace_dir.join("copied.txt"),
     )
@@ -2978,8 +2977,9 @@ fn test_workspace_diff_defaults_to_git_when_conflict_marker_style_missing() {
 fn test_workspace_diff_errors_when_app_db_cannot_be_opened() {
     let repo = TestRepo::new().unwrap();
     let app_dir = test_app_data_dir(&repo);
-    fs::create_dir_all(&app_dir).expect("app data dir should be creatable");
-    fs::write(app_dir.join("treq.db"), "not a sqlite db").expect("should write invalid db file");
+    TestRepo::ensure_dir(&app_dir).expect("app data dir should be creatable");
+    TestRepo::write_path(app_dir.join("treq.db"), "not a sqlite db")
+        .expect("should write invalid db file");
     let ws = merge_diff_new_workspace(&repo, "feat/bad-db");
 
     let err = treq_lib::core::workspace_diff(&repo.repo_path, ws.id).unwrap_err();

@@ -276,7 +276,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 				permissionModeRef.current === "plan"
 					? " --permission-mode plan"
 					: " --permission-mode acceptEdits";
-			autoCommand = "claude" + permissionModeArg;
+			autoCommand = `claude${permissionModeArg}`;
 			if (sessionModel) {
 				autoCommand += ` --model="${sessionModel}"`;
 			}

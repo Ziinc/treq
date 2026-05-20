@@ -250,6 +250,7 @@ const CodeLine = memo(
 				</span>
 				{/* Code content */}
 				<span
+					data-testid="code-line-content"
 					className="flex-1 whitespace-pre-wrap break-words font-mono text-sm"
 					dangerouslySetInnerHTML={{ __html: htmlContent }}
 				/>

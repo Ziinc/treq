@@ -28,16 +28,6 @@ pub fn list_changed_files(
     jj::jj_get_changed_files(&path).map_err(|e| format!("Failed to list changed files: {}", e))
 }
 
-/// List conflicted files for a workspace (or home repo when workspace_id is None).
-pub fn list_conflicted_files(
-    repo_path: &str,
-    workspace_id: Option<i64>,
-) -> Result<Vec<String>, String> {
-    let path = resolve_workspace_dir(repo_path, workspace_id)?;
-    jj::get_conflicted_files(&path, None)
-        .map_err(|e| format!("Failed to list conflicted files: {}", e))
-}
-
 /// Get diff hunks for a single file in a workspace.
 pub fn list_file_hunks(
     repo_path: &str,

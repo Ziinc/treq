@@ -21,6 +21,7 @@ const ignoredGlobs = [
   "target/**",
   "src-tauri/target/**",
   "dist/**",
+  "src/dist/**",
   "node_modules/**",
 ];
 
@@ -134,9 +135,16 @@ export default defineConfig([
   {
     files: ["src/lib/api.ts", "src/lib/api-extra.ts"],
     rules: {
+      "max-params": "off",
       "local/require-tauri-api-exports-used": "error",
       "local/require-tauri-api-command-wrappers": "error",
       "local/no-unused-pub-rust-functions": "error",
+    },
+  },
+  {
+    files: ["src/hooks/useKeyboard.ts"],
+    rules: {
+      "max-params": "off",
     },
   },
   {

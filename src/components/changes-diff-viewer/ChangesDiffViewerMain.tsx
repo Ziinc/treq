@@ -110,10 +110,7 @@ export const ChangesDiffViewer = memo(
 				conflictLineLookups,
 				firstConflictRegionIdByFile,
 			} = useConflicts({
-				files,
 				allFileHunks,
-				showCommittedChanges: showCommittedChanges ?? false,
-				committedFiles,
 				conflictedFilesHint: conflictedFiles,
 			});
 

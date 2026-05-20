@@ -17,10 +17,6 @@ fn set_workspace_refreshed_at(repo_path: &str, id: i64, ts: &str) {
 #[test]
 fn test_workspace_list_statuses_show_conflict_state() {
     let repo = TestRepo::new().expect("Failed to create test repo");
-    repo.create_file("conflict.txt", "base version\n")
-        .expect("Failed to write conflict.txt in main repo");
-    treq_lib::jj::jj_commit(&repo.repo_path, "base commit")
-        .expect("Failed to create base commit in main repo");
 
     let workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -43,6 +39,8 @@ fn test_workspace_list_statuses_show_conflict_state() {
         .expect("workspace status should exist");
     assert!(!clean_status.has_conflicts);
 
+    // Add/add conflict setup: workspace and main both add conflict.txt from a common base
+    // where the file doesn't exist. Rebasing workspace onto main should leave unresolved conflict.
     TestRepo::write_workspace_file(workspace_path_str, "conflict.txt", "workspace version\n")
         .expect("Failed to write conflict.txt in workspace");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "workspace commit")
@@ -66,6 +64,13 @@ fn test_workspace_list_statuses_show_conflict_state() {
         conflicted_files.contains(&"conflict.txt".to_string()),
         "Expected conflict.txt in conflicted files, got: {:?}",
         conflicted_files
+    );
+    let conflicted_files_explicit_target =
+        treq_lib::jj::get_conflicted_files(workspace_path_str, Some("main"))
+            .expect("Failed to list conflicted files with explicit target");
+    assert_eq!(
+        conflicted_files_explicit_target, conflicted_files,
+        "Expected target-default and explicit-target conflict views to match"
     );
 
     let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
