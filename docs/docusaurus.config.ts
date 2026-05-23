@@ -53,7 +53,6 @@ const config: Config = {
           editUrl:
             'https://github.com/Ziinc/treq/tree/main/docs/',
         },
-        blog: false,
         theme: {
           customCss: './src/css/custom.css',
         },
