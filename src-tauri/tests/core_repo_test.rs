@@ -36,14 +36,41 @@ fn test_get_repo_branch_returns_current_and_default_branch() {
 
     let branch = get_repo_branch(&repo.repo_path).expect("get_repo_branch should succeed");
 
-    assert_eq!(branch.current_branch, "main");
+    assert_eq!(branch.current_branch, Some("main".to_string()));
+    assert_eq!(branch.display_ref, "main");
+    assert!(!branch.is_detached);
     assert_eq!(branch.default_branch, "main");
 
     TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "feature-x"])
         .expect("Failed to create branch");
     let branch = get_repo_branch(&repo.repo_path).expect("get_repo_branch should succeed");
-    assert_eq!(branch.current_branch, "feature-x");
+    assert_eq!(branch.current_branch, Some("feature-x".to_string()));
+    assert_eq!(branch.display_ref, "feature-x");
+    assert!(!branch.is_detached);
     assert_eq!(branch.default_branch, "main");
+}
+
+#[test]
+fn test_get_repo_branch_reports_detached_head_with_short_hash_display_ref() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    repo.commit_file("detached.txt", "detached", "detached commit")
+        .expect("Failed to create second commit");
+    let first_commit =
+        TestRepo::run_git(&repo.repo_path, &["rev-parse", "HEAD~1"]).expect("resolve HEAD~1");
+    let first_commit = first_commit.trim().to_string();
+    TestRepo::run_git(&repo.repo_path, &["checkout", &first_commit])
+        .expect("checkout detached commit");
+
+    let branch = get_repo_branch(&repo.repo_path).expect("get_repo_branch should succeed");
+    assert!(branch.is_detached);
+    assert_eq!(branch.current_branch, None);
+    assert_eq!(branch.display_ref.len(), 12);
+    assert!(
+        branch.display_ref.chars().all(|c| c.is_ascii_hexdigit()),
+        "display_ref should be a short hex hash, got {}",
+        branch.display_ref
+    );
+    assert!(!branch.display_ref.is_empty());
 }
 
 #[test]
@@ -89,26 +116,27 @@ fn test_repo_status_returns_clean_status() {
 }
 
 #[test]
-fn test_repo_status_fetch_error_does_not_block() {
-    // Repo without remote — fetch should fail but status still returns
+fn test_repo_status_no_remote_has_no_fetch_error() {
+    // Repo without remote — fetch is a no-op, status should have no fetch_error
     let repo = TestRepo::new().expect("Failed to create test repo");
 
     let status = repo_status(&repo.repo_path)
         .expect("repo_status should succeed even when there is no remote");
 
     assert!(
-        status.fetch_error.is_some(),
-        "should report fetch_error when no remote is configured"
+        status.fetch_error.is_none(),
+        "no remote configured should not produce a fetch_error"
     );
 }
 
 #[test]
-fn test_jj_git_fetch_returns_missing_origin_error() {
+fn test_jj_git_fetch_no_remote_is_noop() {
     let repo = TestRepo::new().expect("Failed to create test repo");
-    let err = treq_lib::jj::jj_git_fetch(&repo.repo_path).expect_err("fetch should fail");
-    assert_eq!(
-        err.to_string(),
-        "IO error: No remote named 'origin' is configured"
+    let result = treq_lib::jj::jj_git_fetch(&repo.repo_path);
+    assert!(
+        result.is_ok(),
+        "fetch with no remote should be a no-op, got: {:?}",
+        result
     );
 }
 

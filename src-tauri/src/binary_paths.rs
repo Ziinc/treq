@@ -120,6 +120,11 @@ pub fn init_editor_apps_cache(apps: HashMap<String, bool>) {
     let _ = EDITOR_APPS_CACHE.set(apps);
 }
 
+/// Get a cached editor-apps snapshot if initialized.
+pub fn get_editor_apps_cache() -> Option<HashMap<String, bool>> {
+    EDITOR_APPS_CACHE.get().cloned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

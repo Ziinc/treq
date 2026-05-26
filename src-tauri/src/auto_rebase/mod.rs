@@ -121,12 +121,6 @@ pub fn rebase_workspaces_for_target(
     // Get all workspaces targeting this branch
     let workspaces = local_db::get_workspaces_by_target_branch(repo_path, target_branch)?;
 
-    // Filter out workspaces where branch_name == target_branch (self-rebase)
-    let workspaces: Vec<Workspace> = workspaces
-        .into_iter()
-        .filter(|w| w.branch_name != target_branch)
-        .collect();
-
     if workspaces.is_empty() {
         return Ok(None);
     }
@@ -161,6 +155,52 @@ pub fn rebase_workspaces_for_target(
 
     for workspace in &workspaces_needing_rebase {
         let full_path = get_full_workspace_path(workspace);
+
+        if workspace.branch_name == target_branch {
+            match jj::jj_sync_working_copy_if_safe(&full_path, &workspace.branch_name) {
+                Ok(true) => {
+                    log::info!(
+                        "Auto-synced working copy for workspace '{}'",
+                        workspace.workspace_name
+                    );
+                }
+                Ok(false) => {
+                    // Skipped (already synced or has uncommitted changes) - this is fine
+                }
+                Err(jj::JjError::BookmarkConflict(info)) => {
+                    bookmark_conflicts.push(WorkspaceBookmarkConflict {
+                        workspace_id: workspace.id,
+                        workspace_name: workspace.workspace_name.clone(),
+                        workspace_path: full_path.clone(),
+                        branch_name: workspace.branch_name.clone(),
+                        bookmark: info.bookmark.clone(),
+                        commits: info.commits.clone(),
+                    });
+                    eprintln!(
+                        "Warning: Working copy for workspace '{}' has conflicted bookmark '{}'",
+                        workspace.workspace_name, info.bookmark
+                    );
+                }
+                Err(e) => {
+                    eprintln!(
+                        "Warning: Failed to auto-sync working copy for workspace '{}': {}",
+                        workspace.workspace_name, e
+                    );
+                }
+            }
+
+            local_db::update_workspace_last_rebased_commit(
+                repo_path,
+                workspace.id,
+                &current_target_commit,
+            )?;
+            workspace_branches.push(workspace.branch_name.clone());
+            combined_messages.push(format!(
+                "Workspace '{}': synced with '{}'",
+                workspace.workspace_name, target_branch
+            ));
+            continue;
+        }
 
         // Resolve bookmark conflicts before building revsets like roots(target..branch_name).
         if let Err(e) = resolve_bookmark_conflict_if_needed(

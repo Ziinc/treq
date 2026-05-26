@@ -833,7 +833,10 @@ mod tests {
         let style = resolve_workspace_diff_conflict_marker_style("/unused/repo/path");
         std::env::remove_var("TREQ_APP_DB_PATH");
 
-        assert_eq!(style, crate::core::DEFAULT_CONFLICT_MARKER_STYLE);
+        assert_eq!(
+            style.expect("should resolve style"),
+            crate::core::DEFAULT_CONFLICT_MARKER_STYLE
+        );
     }
 }
 
@@ -1504,6 +1507,11 @@ fn resolve_workspace_diff_conflict_marker_style(repo_path: &str) -> Result<Strin
             }
         }
         Ok(None) => Ok(crate::core::DEFAULT_CONFLICT_MARKER_STYLE.to_string()),
+        // Settings table not yet initialized → fall back to default.
+        // Other db errors (corrupt file, schema mismatch) propagate.
+        Err(e) if e.to_string().contains("no such table") => {
+            Ok(crate::core::DEFAULT_CONFLICT_MARKER_STYLE.to_string())
+        }
         Err(e) => Err(format!(
             "Failed to read app database setting conflict_marker_style: {}",
             e
@@ -1662,11 +1670,17 @@ where
     let result = jj::jj_commit(&workspace_root, message)
         .map_err(|e| format!("Failed to create commit: {}", e))?;
 
-    if let Some(id) = workspace_id {
+    let committed_branch = if let Some(id) = workspace_id {
         let workspace = local_db::get_workspace_by_id(repo_path, id)
             .map_err(|e| format!("Failed to get workspace: {}", e))?
             .ok_or_else(|| format!("Workspace not found: {}", id))?;
-        let _ = auto_rebase::rebase_after_commit(repo_path, &workspace.branch_name);
+        workspace.branch_name
+    } else {
+        jj::resolve_home_repo_branch(repo_path)
+            .map_err(|e| format!("Failed to resolve home repo branch: {}", e))?
+    };
+    if !committed_branch.is_empty() {
+        let _ = auto_rebase::rebase_after_commit(repo_path, &committed_branch);
     }
 
     Ok(result)

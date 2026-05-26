@@ -172,6 +172,7 @@ fn load_workspace_repo(workspace_path: &str) -> Result<LoadedWorkspaceRepo, JjEr
     })
 }
 
+
 fn import_git_head_if_needed(
     loaded: &mut LoadedWorkspaceRepo,
     repo_path: &str,
@@ -506,6 +507,7 @@ fn build_log_commits(
                         is_immutable: is_immutable_val,
                         insertions: cached.insertions,
                         deletions: cached.deletions,
+                        on_target_only: false,
                     }
                 }
                 _ => {
@@ -548,6 +550,7 @@ fn build_log_commits(
                         is_immutable: is_immutable_val,
                         insertions,
                         deletions,
+                        on_target_only: false,
                     }
                 }
             }
@@ -678,6 +681,10 @@ pub struct JjLogCommit {
     pub is_immutable: bool,
     pub insertions: u32,
     pub deletions: u32,
+    /// True when this commit belongs to the target branch but not the current branch
+    /// (i.e. the target is ahead of the current branch by this commit).
+    #[serde(default)]
+    pub on_target_only: bool,
 }
 
 /// The full log response including metadata
@@ -688,6 +695,17 @@ pub struct JjLogResult {
     pub workspace_branch: String,
     #[serde(default)]
     pub target_branch_commits: Vec<JjLogCommit>,
+    /// Commit ID of the common ancestor (merge base) between the current branch and target.
+    /// Only populated for home-repo non-default-branch views.
+    #[serde(default)]
+    pub merge_base_id: Option<String>,
+}
+
+/// Result of a home-repo rebase dry run
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct HomeRebaseDryRunResult {
+    pub would_conflict: bool,
+    pub conflicted_files: Vec<String>,
 }
 
 /// Commits ahead of target branch
@@ -2353,19 +2371,10 @@ pub fn jj_get_file_lines(
 /// Restore a file to parent state (discard changes)
 /// Uses CLI as jj-lib mutation APIs are complex
 pub fn jj_restore_file(workspace_path: &str, file_path: &str) -> Result<String, JjError> {
-    let loaded = load_workspace_repo(workspace_path)?;
+    let mut loaded = load_workspace_repo_for_history_edit(workspace_path)?;
     let ws_name = loaded.workspace.workspace_name().to_owned();
-    let wc_commit_id = loaded
-        .repo
-        .view()
-        .get_wc_commit_id(&ws_name)
-        .cloned()
+    let wc_commit = get_workspace_wc_commit(&loaded)?
         .ok_or_else(|| JjError::IoError("No working-copy commit".to_string()))?;
-    let wc_commit = loaded
-        .repo
-        .store()
-        .get_commit(&wc_commit_id)
-        .map_err(|e| JjError::IoError(format!("Failed to load working-copy commit: {}", e)))?;
     let parents = futures::executor::block_on(wc_commit.parents())
         .map_err(|e| JjError::IoError(format!("Failed to load working-copy parents: {}", e)))?;
     let parent = parents
@@ -2401,26 +2410,25 @@ pub fn jj_restore_file(workspace_path: &str, file_path: &str) -> Result<String, 
             e
         ))
     })?;
-    futures::executor::block_on(tx.commit("restore file"))
+    futures::executor::block_on(tx.repo_mut().rebase_descendants())
+        .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
+    let new_repo = futures::executor::block_on(tx.commit("restore file"))
         .map_err(|e| JjError::IoError(format!("Failed to commit restore: {}", e)))?;
+    update_workspace_after_history_edit(
+        &mut loaded,
+        &new_repo,
+        Some(&wc_commit),
+        CheckoutMode::Immediate,
+    )?;
     Ok(String::new())
 }
 
 /// Restore all changes
 pub fn jj_restore_all(workspace_path: &str) -> Result<String, JjError> {
-    let loaded = load_workspace_repo(workspace_path)?;
+    let mut loaded = load_workspace_repo_for_history_edit(workspace_path)?;
     let ws_name = loaded.workspace.workspace_name().to_owned();
-    let wc_commit_id = loaded
-        .repo
-        .view()
-        .get_wc_commit_id(&ws_name)
-        .cloned()
+    let wc_commit = get_workspace_wc_commit(&loaded)?
         .ok_or_else(|| JjError::IoError("No working-copy commit".to_string()))?;
-    let wc_commit = loaded
-        .repo
-        .store()
-        .get_commit(&wc_commit_id)
-        .map_err(|e| JjError::IoError(format!("Failed to load working-copy commit: {}", e)))?;
     let parents = futures::executor::block_on(wc_commit.parents())
         .map_err(|e| JjError::IoError(format!("Failed to load working-copy parents: {}", e)))?;
     let parent = parents
@@ -2445,8 +2453,16 @@ pub fn jj_restore_all(workspace_path: &str) -> Result<String, JjError> {
             e
         ))
     })?;
-    futures::executor::block_on(tx.commit("restore all"))
+    futures::executor::block_on(tx.repo_mut().rebase_descendants())
+        .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
+    let new_repo = futures::executor::block_on(tx.commit("restore all"))
         .map_err(|e| JjError::IoError(format!("Failed to commit restore: {}", e)))?;
+    update_workspace_after_history_edit(
+        &mut loaded,
+        &new_repo,
+        Some(&wc_commit),
+        CheckoutMode::Immediate,
+    )?;
     Ok(String::new())
 }
 
@@ -3755,9 +3771,7 @@ pub fn jj_get_diverged_sync_counts(
 /// This updates remote tracking refs and makes remote branches available
 pub fn jj_git_fetch(repo_path: &str) -> Result<String, JjError> {
     if !get_git_remotes(repo_path).contains("origin") {
-        return Err(JjError::IoError(
-            "No remote named 'origin' is configured".to_string(),
-        ));
+        return Ok(String::new());
     }
     let output = binary_command("git")
         .current_dir(repo_path)
@@ -4118,6 +4132,7 @@ pub fn jj_get_log(
         target_branch: target_branch.to_string(),
         workspace_branch,
         target_branch_commits: Vec::new(),
+        merge_base_id: None,
     })
 }
 
@@ -4257,6 +4272,230 @@ pub fn jj_get_commits_ahead(
     Ok(JjCommitsAhead {
         commits,
         total_count,
+    })
+}
+
+/// Returns the diverged commit view for a home-repo non-default branch.
+///
+/// - `commits` = commits unique to `current_branch` (not on `target_branch`)
+/// - `target_branch_commits` = commits that `target_branch` is ahead by (not on `current_branch`)
+/// - `merge_base_id` = the commit ID of the latest common ancestor
+///
+/// All `target_branch_commits` have `on_target_only = true`.
+pub fn jj_get_home_repo_diverged_log(
+    repo_path: &str,
+    current_branch: &str,
+    target_branch: &str,
+    limit: Option<usize>,
+) -> Result<JjLogResult, JjError> {
+    validate_branch_name(current_branch, "current")?;
+    validate_branch_name(target_branch, "target")?;
+
+    let cache_repo_path = repo_path.to_string();
+    let mut loaded = load_workspace_repo(repo_path)?;
+    import_colocated_git_state(&mut loaded, repo_path)?;
+
+    let current_sym = format_revset_symbol(current_branch);
+    let target_sym = format_revset_symbol(target_branch);
+
+    // Commits unique to current branch
+    let branch_revset = format!("({target_sym}..{current_sym}) ~ empty()");
+    // Commits target is ahead by
+    let target_ahead_revset = format!("({current_sym}..{target_sym}) ~ empty()");
+    // Latest common ancestor (merge base)
+    let merge_base_revset = format!("latest(::{current_sym} & ::{target_sym})");
+
+    let wc_commit_ids: HashSet<_> = loaded
+        .repo
+        .view()
+        .wc_commit_ids()
+        .values()
+        .cloned()
+        .collect();
+
+    let immutable_revset_expr = format!("::{}", &target_sym);
+    let immutable_revset = evaluate_revset(&loaded, &immutable_revset_expr)?;
+    let is_immutable = immutable_revset.containing_fn();
+
+    // Branch-unique commits
+    let branch_commits = match evaluate_revset(&loaded, &branch_revset) {
+        Ok(revset) => {
+            let cap = limit.unwrap_or(20).saturating_add(5);
+            let mut commits: Vec<_> = revset
+                .iter()
+                .take(cap)
+                .commits(loaded.repo.store())
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| JjError::IoError(format!("Failed to iterate branch revset: {}", e)))?;
+            commits.truncate(limit.unwrap_or(20));
+            build_log_commits(
+                &cache_repo_path,
+                &loaded.repo,
+                commits,
+                &wc_commit_ids,
+                None,
+                &is_immutable,
+            )
+        }
+        Err(_) => Vec::new(),
+    };
+
+    // Target-ahead commits (mark with on_target_only)
+    let target_only_commits = match evaluate_revset(&loaded, &target_ahead_revset) {
+        Ok(revset) => {
+            let cap = limit.unwrap_or(20).saturating_add(5);
+            let commits: Vec<_> = revset
+                .iter()
+                .take(cap)
+                .commits(loaded.repo.store())
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| {
+                    JjError::IoError(format!("Failed to iterate target-ahead revset: {}", e))
+                })?;
+            let mut built = build_log_commits(
+                &cache_repo_path,
+                &loaded.repo,
+                commits,
+                &wc_commit_ids,
+                None,
+                &is_immutable,
+            );
+            for c in &mut built {
+                c.on_target_only = true;
+            }
+            built
+        }
+        Err(_) => Vec::new(),
+    };
+
+    // Merge base
+    let merge_base_id = evaluate_revset(&loaded, &merge_base_revset)
+        .ok()
+        .and_then(|revset| {
+            revset
+                .iter()
+                .commits(loaded.repo.store())
+                .next()
+                .and_then(|r| r.ok())
+                .map(|c| c.id().hex()[..12].to_string())
+        });
+
+    let workspace_branch = get_workspace_branch(repo_path).unwrap_or_else(|_| current_branch.to_string());
+
+    Ok(JjLogResult {
+        commits: branch_commits,
+        target_branch: target_branch.to_string(),
+        workspace_branch,
+        target_branch_commits: target_only_commits,
+        merge_base_id,
+    })
+}
+
+/// Rebase the home-repo branch `current_branch` onto `target_branch`.
+///
+/// This is the manual rebase affordance for home-repo branches (workspaces auto-rebase;
+/// home-repo branches do not). Does not touch any workspace DB records.
+pub fn jj_rebase_home_repo_branch(
+    repo_path: &str,
+    current_branch: &str,
+    target_branch: &str,
+) -> Result<JjRebaseResult, JjError> {
+    validate_branch_name(current_branch, "current")?;
+    validate_branch_name(target_branch, "target")?;
+
+    {
+        let mut loaded = load_workspace_repo(repo_path)?;
+        import_colocated_git_state(&mut loaded, repo_path)?;
+    }
+
+    let current_sym = format_revset_symbol(current_branch);
+    let target_sym = format_revset_symbol(target_branch);
+    // Rebase all commits unique to current branch onto target
+    let revset = format!("({target_sym}..{current_sym}) ~ empty()");
+
+    jj_rebase_with_revset(repo_path, &revset, target_branch, current_branch, "git")
+}
+
+/// Dry-run a home-repo rebase: check whether rebasing `current_branch` onto `target_branch`
+/// would produce conflicts, without mutating the repository.
+///
+/// Uses a file-overlap heuristic: if both branches changed the same file since their
+/// common ancestor, a conflict is likely.
+pub fn jj_dry_run_home_repo_rebase(
+    repo_path: &str,
+    current_branch: &str,
+    target_branch: &str,
+) -> Result<HomeRebaseDryRunResult, JjError> {
+    validate_branch_name(current_branch, "current")?;
+    validate_branch_name(target_branch, "target")?;
+
+    let mut loaded = load_workspace_repo(repo_path)?;
+    import_colocated_git_state(&mut loaded, repo_path)?;
+
+    let current_sym = format_revset_symbol(current_branch);
+    let target_sym = format_revset_symbol(target_branch);
+    let merge_base_revset = format!("latest(::{current_sym} & ::{target_sym})");
+
+    let merge_base_commit = {
+        let revset = evaluate_revset(&loaded, &merge_base_revset).map_err(|e| {
+            JjError::IoError(format!("Failed to find merge base: {}", e))
+        })?;
+        revset
+            .iter()
+            .commits(loaded.repo.store())
+            .next()
+            .ok_or_else(|| JjError::IoError("No common ancestor found".to_string()))?
+            .map_err(|e| JjError::IoError(format!("Failed to load merge base commit: {}", e)))?
+    };
+
+    let current_commit = resolve_commit_by_revision(&loaded, &current_sym)?;
+    let target_commit = resolve_commit_by_revision(&loaded, &target_sym)?;
+
+    let merge_base_tree = merge_base_commit.tree();
+    let current_tree = current_commit.tree();
+    let target_tree = target_commit.tree();
+
+    let diff_matcher = repo_root_matcher();
+
+    // Files changed on current branch since merge base
+    let current_changed: HashSet<String> = futures::executor::block_on(
+        merge_base_tree
+            .diff_stream(&current_tree, &diff_matcher)
+            .collect::<Vec<_>>(),
+    )
+    .into_iter()
+    .filter_map(|entry| {
+        entry
+            .values
+            .ok()
+            .map(|_| entry.path.as_internal_file_string().to_string())
+    })
+    .collect();
+
+    // Files changed on target branch since merge base
+    let target_changed: HashSet<String> = futures::executor::block_on(
+        merge_base_tree
+            .diff_stream(&target_tree, &diff_matcher)
+            .collect::<Vec<_>>(),
+    )
+    .into_iter()
+    .filter_map(|entry| {
+        entry
+            .values
+            .ok()
+            .map(|_| entry.path.as_internal_file_string().to_string())
+    })
+    .collect();
+
+    let mut conflicted_files: Vec<String> = current_changed
+        .intersection(&target_changed)
+        .cloned()
+        .collect();
+    conflicted_files.sort();
+
+    Ok(HomeRebaseDryRunResult {
+        would_conflict: !conflicted_files.is_empty(),
+        conflicted_files,
     })
 }
 
@@ -5267,6 +5506,12 @@ fn import_colocated_git_state(
     futures::executor::block_on(git::import_refs(tx.repo_mut(), &import_options))
         .map_err(|e| JjError::GitWorkspaceError(format!("git import_refs: {}", e)))?;
     if tx.repo().has_changes() {
+        futures::executor::block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
+            JjError::GitWorkspaceError(format!(
+                "Failed to rebase descendants after git import_refs: {}",
+                e
+            ))
+        })?;
         loaded.repo = futures::executor::block_on(tx.commit("import git refs")).map_err(|e| {
             JjError::GitWorkspaceError(format!("Failed to commit git import_refs: {}", e))
         })?;

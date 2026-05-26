@@ -2,6 +2,7 @@ import type {
 	BranchStatus,
 	DirectoryEntry,
 	EditorAppsResponse,
+	HomeRebaseDryRunResult,
 	JjBranch,
 	JjCommitsAhead,
 	JjDiffHunk,
@@ -391,6 +392,28 @@ export const resolveBookmarkConflict = (
 		workspacePath,
 		branchName,
 		revisionId,
+	});
+
+export const rebaseHomeRepoBranch = (
+	repoPath: string,
+	currentBranch: string,
+	targetBranch: string,
+): Promise<JjRebaseResult> =>
+	invoke("rebase_home_repo_branch", {
+		repoPath,
+		currentBranch,
+		targetBranch,
+	});
+
+export const dryRunHomeRepoRebase = (
+	repoPath: string,
+	currentBranch: string,
+	targetBranch: string,
+): Promise<HomeRebaseDryRunResult> =>
+	invoke("dry_run_home_repo_rebase", {
+		repoPath,
+		currentBranch,
+		targetBranch,
 	});
 
 // PTY API

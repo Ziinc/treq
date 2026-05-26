@@ -61,7 +61,9 @@ export interface RepoStatus {
 }
 
 export interface RepoBranch {
-	current_branch: string;
+	current_branch: string | null;
+	display_ref: string;
+	is_detached: boolean;
 	default_branch: string;
 }
 
@@ -134,6 +136,8 @@ export interface JjLogCommit {
 	is_immutable: boolean;
 	insertions: number;
 	deletions: number;
+	/** True when this commit belongs to the target branch but not the current branch */
+	on_target_only?: boolean;
 }
 
 export interface JjLogResult {
@@ -141,6 +145,13 @@ export interface JjLogResult {
 	target_branch: string;
 	workspace_branch: string;
 	target_branch_commits?: JjLogCommit[];
+	/** Commit ID of the common ancestor (merge base) for non-default home-repo branch views */
+	merge_base_id?: string | null;
+}
+
+export interface HomeRebaseDryRunResult {
+	would_conflict: boolean;
+	conflicted_files: string[];
 }
 
 export interface JjCommitsAhead {

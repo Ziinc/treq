@@ -11,21 +11,27 @@ use tauri::State;
 static INDEXED_WORKSPACES: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
 #[tauri::command]
-pub fn get_repo_branch(repo_path: String) -> Result<crate::core::RepoBranch, String> {
-    crate::core::get_repo_branch(&repo_path)
+pub async fn get_repo_branch(repo_path: String) -> Result<crate::core::RepoBranch, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::core::get_repo_branch(&repo_path))
+        .await
+        .map_err(|e| format!("Failed to join get_repo_branch task: {}", e))?
 }
 
 #[tauri::command]
-pub fn get_workspace_changed_files(
+pub async fn get_workspace_changed_files(
     repo_path: String,
     workspace_id: Option<i64>,
 ) -> Result<Vec<crate::jj::JjFileChange>, String> {
-    crate::core::list_changed_files(&repo_path, workspace_id)
+    tauri::async_runtime::spawn_blocking(move || crate::core::list_changed_files(&repo_path, workspace_id))
+        .await
+        .map_err(|e| format!("Failed to join get_workspace_changed_files task: {}", e))?
 }
 
 #[tauri::command]
-pub fn get_workspaces(repo_path: String) -> Result<Vec<Workspace>, String> {
-    crate::core::list_workspaces(&repo_path)
+pub async fn get_workspaces(repo_path: String) -> Result<Vec<Workspace>, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::core::list_workspaces(&repo_path))
+        .await
+        .map_err(|e| format!("Failed to join get_workspaces task: {}", e))?
 }
 
 /// Combined command: creates jj workspace + adds to database atomically
@@ -286,8 +292,8 @@ pub async fn update_workspace(
 }
 
 #[tauri::command]
-pub fn set_workspace_target_branch(
-    state: State<AppState>,
+pub async fn set_workspace_target_branch(
+    state: State<'_, AppState>,
     repo_path: String,
     workspace_path: String,
     id: i64,
@@ -307,63 +313,96 @@ pub fn set_workspace_target_branch(
     }
 
     let conflict_style = crate::core::resolve_conflict_marker_style(&state.db);
+    tauri::async_runtime::spawn_blocking(move || {
+        // Convert Git remote branch format (origin/main) to jj format (main@origin)
+        let jj_target_branch =
+            crate::jj::convert_git_branch_to_jj_format_public(&target_branch, &repo_path);
 
-    // Convert Git remote branch format (origin/main) to jj format (main@origin)
-    let jj_target_branch =
-        crate::jj::convert_git_branch_to_jj_format_public(&target_branch, &repo_path);
+        // Use workspace branch name to build a precise revset that avoids immutable history.
+        let workspace = local_db::get_workspace_by_id(&repo_path, id).map_err(|e| e.to_string())?;
 
-    // Use workspace branch name to build a precise revset that avoids immutable history.
-    let workspace = local_db::get_workspace_by_id(&repo_path, id).map_err(|e| e.to_string())?;
-
-    let rebase_result = if let Some(ws) = workspace {
-        // Convert workspace branch name to jj format as well
-        let jj_workspace_branch =
-            crate::jj::convert_git_branch_to_jj_format_public(&ws.branch_name, &repo_path);
-
-        // Rebase only mutable commits and exclude @ so working copy stays anchored to branch history.
-        let revset = format!(
-            "roots(mutable() & ({}..{}) ~ @)",
-            jj_target_branch, jj_workspace_branch
+        log::debug!(
+            "set_workspace_target_branch rebase start: repo_path={}, workspace_id={}, workspace_path={}, target_branch={}",
+            repo_path,
+            id,
+            workspace_path,
+            target_branch
         );
-        jj::jj_rebase_with_revset(
-            &workspace_path,
-            &revset,
-            &jj_target_branch,
-            &jj_workspace_branch,
-            &conflict_style,
-        )
-        .map_err(|e| e.to_string())?
-    } else {
-        // Fallback if workspace not found in DB
-        jj::jj_rebase_onto(&workspace_path, &jj_target_branch, &conflict_style)
+        let rebase_result = if let Some(ws) = workspace {
+            // Convert workspace branch name to jj format as well
+            let jj_workspace_branch =
+                crate::jj::convert_git_branch_to_jj_format_public(&ws.branch_name, &repo_path);
+
+            // Rebase only mutable commits and exclude @ so working copy stays anchored to branch history.
+            let revset = format!(
+                "roots(mutable() & ({}..{}) ~ @)",
+                jj_target_branch, jj_workspace_branch
+            );
+            jj::jj_rebase_with_revset(
+                &workspace_path,
+                &revset,
+                &jj_target_branch,
+                &jj_workspace_branch,
+                &conflict_style,
+            )
             .map_err(|e| e.to_string())?
-    };
+        } else {
+            // Fallback if workspace not found in DB
+            jj::jj_rebase_onto(&workspace_path, &jj_target_branch, &conflict_style)
+                .map_err(|e| e.to_string())?
+        };
+        log::debug!(
+            "set_workspace_target_branch rebase end: repo_path={}, workspace_id={}, success={}",
+            repo_path,
+            id,
+            rebase_result.success
+        );
 
-    // If rebase succeeded, save the target branch (in Git format for UI)
-    if rebase_result.success {
-        local_db::update_workspace_target_branch(&repo_path, id, &target_branch)?;
-    }
+        // If rebase succeeded, save the target branch (in Git format for UI)
+        if rebase_result.success {
+            local_db::update_workspace_target_branch(&repo_path, id, &target_branch)?;
+        }
 
-    Ok(rebase_result)
+        Ok(rebase_result)
+    })
+    .await
+    .map_err(|e| format!("Failed to join set_workspace_target_branch task: {}", e))?
 }
 
 #[tauri::command]
-pub fn check_and_rebase_workspaces(
-    state: State<AppState>,
+pub async fn check_and_rebase_workspaces(
+    state: State<'_, AppState>,
     repo_path: String,
     workspace_id: Option<i64>,
     default_branch: Option<String>,
     force: Option<bool>,
 ) -> Result<crate::core::SingleRebaseResult, String> {
     let conflict_style = crate::core::resolve_conflict_marker_style(&state.db);
-
-    crate::core::check_and_rebase_workspaces(
-        &repo_path,
-        workspace_id,
-        default_branch,
-        force,
-        &conflict_style,
-    )
+    tauri::async_runtime::spawn_blocking(move || {
+        log::debug!(
+            "check_and_rebase_workspaces start: repo_path={}, workspace_id={:?}, default_branch={:?}, force={:?}",
+            repo_path,
+            workspace_id,
+            default_branch,
+            force
+        );
+        let result = crate::core::check_and_rebase_workspaces(
+            &repo_path,
+            workspace_id,
+            default_branch,
+            force,
+            &conflict_style,
+        );
+        log::debug!(
+            "check_and_rebase_workspaces end: repo_path={}, workspace_id={:?}, success={}",
+            repo_path,
+            workspace_id,
+            result.is_ok()
+        );
+        result
+    })
+    .await
+    .map_err(|e| format!("Failed to join check_and_rebase_workspaces task: {}", e))?
 }
 
 /// Pull workspace from remote, automatically resolving divergence
@@ -392,42 +431,46 @@ pub async fn pull_workspace_from_remote(
 
 /// Resolve a conflicted bookmark by setting it to a user-selected revision
 #[tauri::command]
-pub fn resolve_workspace_bookmark_conflict(
+pub async fn resolve_workspace_bookmark_conflict(
     repo_path: String,
     workspace_id: i64,
     workspace_path: String,
     branch_name: String,
     revision_id: String,
 ) -> Result<JjRebaseResult, String> {
-    if workspace_path.is_empty() {
-        return Err("Workspace path does not exist".to_string());
-    }
+    tauri::async_runtime::spawn_blocking(move || {
+        if workspace_path.is_empty() {
+            return Err("Workspace path does not exist".to_string());
+        }
 
-    jj::jj_set_bookmark(&workspace_path, &branch_name, &revision_id).map_err(|e| e.to_string())?;
+        jj::jj_set_bookmark(&workspace_path, &branch_name, &revision_id).map_err(|e| e.to_string())?;
 
-    if let Err(e) =
-        local_db::update_workspace_last_rebased_commit(&repo_path, workspace_id, &revision_id)
-    {
-        eprintln!(
-            "Warning: Failed to update last rebased commit for workspace {}: {}",
-            workspace_id, e
-        );
-    }
+        if let Err(e) =
+            local_db::update_workspace_last_rebased_commit(&repo_path, workspace_id, &revision_id)
+        {
+            eprintln!(
+                "Warning: Failed to update last rebased commit for workspace {}: {}",
+                workspace_id, e
+            );
+        }
 
-    if let Err(e) = jj::jj_workspace_update_stale(&workspace_path) {
-        eprintln!(
-            "Warning: Failed to refresh working copy after resolving bookmark conflict: {}",
-            e
-        );
-    }
+        if let Err(e) = jj::jj_workspace_update_stale(&workspace_path) {
+            eprintln!(
+                "Warning: Failed to refresh working copy after resolving bookmark conflict: {}",
+                e
+            );
+        }
 
-    Ok(JjRebaseResult {
-        success: true,
-        message: format!(
-            "Bookmark '{}' now points to revision {}",
-            branch_name, revision_id
-        ),
+        Ok(JjRebaseResult {
+            success: true,
+            message: format!(
+                "Bookmark '{}' now points to revision {}",
+                branch_name, revision_id
+            ),
+        })
     })
+    .await
+    .map_err(|e| format!("Failed to join resolve_workspace_bookmark_conflict task: {}", e))?
 }
 
 /// Rename a workspace's branch/bookmark.
@@ -521,6 +564,34 @@ pub async fn abandon_commit(
         started_at.elapsed()
     );
     result
+}
+
+#[tauri::command]
+pub async fn rebase_home_repo_branch(
+    repo_path: String,
+    current_branch: String,
+    target_branch: String,
+) -> Result<crate::jj::JjRebaseResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::jj::jj_rebase_home_repo_branch(&repo_path, &current_branch, &target_branch)
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("Failed to join rebase_home_repo_branch task: {}", e))?
+}
+
+#[tauri::command]
+pub async fn dry_run_home_repo_rebase(
+    repo_path: String,
+    current_branch: String,
+    target_branch: String,
+) -> Result<crate::jj::HomeRebaseDryRunResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::jj::jj_dry_run_home_repo_rebase(&repo_path, &current_branch, &target_branch)
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("Failed to join dry_run_home_repo_rebase task: {}", e))?
 }
 
 #[cfg(test)]

@@ -68,6 +68,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		return urlParams.get("repo") || "";
 	});
 	const [currentBranch, setCurrentBranch] = useState<string | null>(null);
+	const [homeRepoDisplayRef, setHomeRepoDisplayRef] = useState<string | null>(
+		null,
+	);
 	const [unifiedDialogDefaults, setUnifiedDialogDefaults] =
 		useState<WorkspaceDialogDefaults | null>(null);
 	const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
@@ -124,6 +127,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		}
 	}, [selectedWorkspace]);
 
+	const { data: repoBranch } = useQuery({
+		queryKey: ["repo-branch", repoPath],
+		queryFn: () => getRepoBranch(repoPath),
+		enabled: !!repoPath,
+	});
+
+	useEffect(() => {
+		if (!repoPath) return;
+		if (!repoBranch) return;
+		setCurrentBranch(repoBranch.current_branch);
+		setHomeRepoDisplayRef(repoBranch.display_ref);
+	}, [repoPath, repoBranch]);
+
+	const effectiveDefaultBranch =
+		currentBranch || repoBranch?.default_branch || "main";
+
 	const handleCreateStackedWorkspace = useCallback(() => {
 		if (!repoPath) return;
 
@@ -132,9 +151,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				targetBranch: selectedWorkspace.branch_name,
 				sourceWorkspace: selectedWorkspace,
 			});
-		} else if (currentBranch) {
+		} else if (effectiveDefaultBranch) {
 			setUnifiedDialogDefaults({
-				targetBranch: currentBranch,
+				targetBranch: effectiveDefaultBranch,
 				sourceWorkspace: null,
 			});
 		} else {
@@ -144,7 +163,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				type: "error",
 			});
 		}
-	}, [repoPath, selectedWorkspace, currentBranch, addToast]);
+	}, [repoPath, selectedWorkspace, effectiveDefaultBranch, addToast]);
 
 	// Keyboard shortcuts
 	useKeyboardShortcut("n", true, () => {
@@ -157,7 +176,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		() => {
 			handleCreateStackedWorkspace();
 		},
-		[selectedWorkspace, currentBranch],
+		[selectedWorkspace, effectiveDefaultBranch],
 		{ shift: true },
 	);
 
@@ -209,20 +228,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	useEffect(() => {
 		if (!repoPath) {
 			setCurrentBranch(null);
+			setHomeRepoDisplayRef(null);
 		}
 	}, [repoPath]);
-
-	const { data: repoBranch } = useQuery({
-		queryKey: ["repo-branch", repoPath],
-		queryFn: () => getRepoBranch(repoPath),
-		enabled: !!repoPath,
-	});
-
-	useEffect(() => {
-		if (!repoPath) return;
-		if (!repoBranch?.current_branch) return;
-		setCurrentBranch(repoBranch.current_branch);
-	}, [repoPath, repoBranch?.current_branch]);
 
 	const {
 		data: availableBranches = [],
@@ -437,7 +445,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				}
 
 				const defaultBranch =
-					selectedWorkspace.target_branch || currentBranch || "main";
+					selectedWorkspace.target_branch || effectiveDefaultBranch;
 				try {
 					const result = await checkAndRebaseWorkspaces(
 						repoPath,
@@ -477,7 +485,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	}, [
 		repoPath,
 		selectedWorkspace,
-		currentBranch,
+		effectiveDefaultBranch,
 		addToast,
 		queryClient,
 		deleteWorkspaceMutation,
@@ -562,7 +570,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	const { moveWorkspace } = useWorkspaceHierarchy({
 		repoPath,
 		workspaces,
-		defaultBranch: currentBranch || "main",
+		defaultBranch: effectiveDefaultBranch,
 	});
 
 	const handleAddAfter = useCallback((workspace: Workspace) => {
@@ -726,6 +734,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		(branchName?: string) => {
 			if (branchName) {
 				setCurrentBranch(branchName);
+				setHomeRepoDisplayRef(branchName);
 			}
 			void queryClient.invalidateQueries({
 				queryKey: ["repo-status", repoPath],
@@ -791,7 +800,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		<div className="flex h-screen bg-background">
 			<WorkspaceSidebar
 				repoPath={repoPath}
-				currentBranch={currentBranch}
+				homeRepoDisplayRef={homeRepoDisplayRef}
 				selectedWorkspaceId={selectedWorkspace?.id ?? null}
 				selectedWorkspaceIds={selectedWorkspaceIds}
 				onWorkspaceClick={(workspace) => handleSelectWorkspace(workspace)}
@@ -836,7 +845,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 									repositoryPath={repoPath}
 									workspace={selectedWorkspace}
 									onActiveTabChange={setShowWorkspaceActiveTab}
-									mainRepoBranch={currentBranch}
+									mainRepoBranch={effectiveDefaultBranch}
 									initialSelectedFile={sessionSelectedFile}
 									availableBranches={availableBranches}
 									branchesLoading={branchesLoading}
@@ -909,7 +918,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 								? getFullWorkspacePath(selectedWorkspace)
 								: repoPath
 						}
-						currentBranch={currentBranch}
+						currentBranch={effectiveDefaultBranch}
 						claudeSessions={claudeSessionsForPane}
 						activeClaudeSessionId={isSessionView ? activeSessionId : null}
 						onActiveSessionChange={(sessionId) => {
@@ -979,7 +988,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 						<SettingsPage
 							repoPath={repoPath}
 							onClose={handleReturnToDashboard}
-							currentBranch={currentBranch}
+							currentBranch={effectiveDefaultBranch}
 						/>
 					)}
 
