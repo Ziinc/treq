@@ -36,22 +36,46 @@ pub fn get_workspace_file_lines(
 }
 
 #[tauri::command]
-pub fn jj_restore_file(workspace_path: String, file_path: String) -> Result<String, String> {
-    jj::jj_restore_file(&workspace_path, &file_path).map_err(|e| e.to_string())
+pub async fn jj_restore_file(workspace_path: String, file_path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        jj::jj_restore_file(&workspace_path, &file_path).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("Failed to join jj_restore_file task: {}", e))?
 }
 
 #[tauri::command]
-pub fn jj_restore_all(workspace_path: String) -> Result<String, String> {
-    jj::jj_restore_all(&workspace_path).map_err(|e| e.to_string())
+pub async fn jj_restore_all(workspace_path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        jj::jj_restore_all(&workspace_path).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("Failed to join jj_restore_all task: {}", e))?
 }
 
 #[tauri::command]
-pub fn create_commit(
+pub async fn create_commit(
     repo_path: String,
     workspace_id: Option<i64>,
     message: String,
 ) -> Result<String, String> {
-    crate::core::commit_workspace(&repo_path, workspace_id, &message)
+    tauri::async_runtime::spawn_blocking(move || {
+        log::debug!(
+            "create_commit start: repo_path={}, workspace_id={:?}",
+            repo_path,
+            workspace_id
+        );
+        let result = crate::core::commit_workspace(&repo_path, workspace_id, &message);
+        log::debug!(
+            "create_commit end: repo_path={}, workspace_id={:?}, success={}",
+            repo_path,
+            workspace_id,
+            result.is_ok()
+        );
+        result
+    })
+    .await
+    .map_err(|e| format!("Failed to join create_commit task: {}", e))?
 }
 
 #[tauri::command]
@@ -76,21 +100,38 @@ pub async fn list_commits(
 }
 
 #[tauri::command]
-pub fn jj_split(
+pub async fn jj_split(
     workspace_path: String,
     message: String,
     file_paths: Vec<String>,
 ) -> Result<String, String> {
-    let result = jj::jj_split(&workspace_path, &message, file_paths).map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        log::debug!("jj_split start: workspace_path={}", workspace_path);
+        let result =
+            jj::jj_split(&workspace_path, &message, file_paths).map_err(|e| e.to_string())?;
 
-    // Run auto-rebase synchronously so jj state is settled before returning
-    if let Some(repo_path) = jj::derive_repo_path_from_workspace(&workspace_path) {
-        if let Ok(branch) = jj::get_workspace_branch(&workspace_path) {
-            let _ = crate::auto_rebase::rebase_after_commit(&repo_path, &branch);
+        // Run auto-rebase synchronously so jj state is settled before returning
+        if let Some(repo_path) = jj::derive_repo_path_from_workspace(&workspace_path) {
+            if let Ok(branch) = jj::get_workspace_branch(&workspace_path) {
+                log::debug!(
+                    "jj_split auto_rebase start: repo_path={}, branch={}",
+                    repo_path,
+                    branch
+                );
+                let _ = crate::auto_rebase::rebase_after_commit(&repo_path, &branch);
+                log::debug!(
+                    "jj_split auto_rebase end: repo_path={}, branch={}",
+                    repo_path,
+                    branch
+                );
+            }
         }
-    }
 
-    Ok(result)
+        log::debug!("jj_split end: workspace_path={}", workspace_path);
+        Ok(result)
+    })
+    .await
+    .map_err(|e| format!("Failed to join jj_split task: {}", e))?
 }
 
 /// Fetch remote branches in background (fire-and-forget)
@@ -104,60 +145,97 @@ pub fn jj_git_fetch_background(repo_path: String) -> Result<(), String> {
 
 /// Get commits ahead of target branch (commits to be merged)
 #[tauri::command]
-pub fn jj_get_commits_ahead(
+pub async fn jj_get_commits_ahead(
     workspace_path: String,
     target_branch: String,
 ) -> Result<jj::JjCommitsAhead, String> {
-    jj::jj_get_commits_ahead(&workspace_path, &target_branch).map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || {
+        jj::jj_get_commits_ahead(&workspace_path, &target_branch).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("Failed to join jj_get_commits_ahead task: {}", e))?
 }
 
 /// Get combined diff between workspace and target branch
 #[tauri::command]
-pub fn get_workspace_diff(
+pub async fn get_workspace_diff(
     repo_path: String,
     workspace_id: i64,
 ) -> Result<jj::JjRevisionDiff, String> {
-    crate::core::workspace_diff(&repo_path, workspace_id)
+    tauri::async_runtime::spawn_blocking(move || crate::core::workspace_diff(&repo_path, workspace_id))
+        .await
+        .map_err(|e| format!("Failed to join get_workspace_diff task: {}", e))?
 }
 
 /// Get diff for a single commit by revision (commit_id or change_id)
 #[tauri::command]
-pub fn get_commit_diff(
-    state: State<AppState>,
+pub async fn get_commit_diff(
+    state: State<'_, AppState>,
     repo_path: String,
     workspace_id: Option<i64>,
     revision: String,
 ) -> Result<jj::JjRevisionDiff, String> {
-    crate::core::get_commit_diff(&state.db, &repo_path, workspace_id, &revision)
+    let conflict_style = core::resolve_conflict_marker_style(&state.db);
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::core::get_commit_diff_with_conflict_style(
+            &repo_path,
+            workspace_id,
+            &revision,
+            &conflict_style,
+        )
+    })
+    .await
+    .map_err(|e| format!("Failed to join get_commit_diff task: {}", e))?
 }
 
 #[tauri::command]
-pub fn get_commit_file_diff(
-    state: State<AppState>,
+pub async fn get_commit_file_diff(
+    state: State<'_, AppState>,
     repo_path: String,
     workspace_id: Option<i64>,
     revision: String,
     file_path: String,
 ) -> Result<jj::JjFileDiff, String> {
-    crate::core::get_commit_file_diff(&state.db, &repo_path, workspace_id, &revision, &file_path)
+    let conflict_style = core::resolve_conflict_marker_style(&state.db);
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::core::get_commit_file_diff_with_conflict_style(
+            &repo_path,
+            workspace_id,
+            &revision,
+            &file_path,
+            &conflict_style,
+        )
+    })
+    .await
+    .map_err(|e| format!("Failed to join get_commit_file_diff task: {}", e))?
 }
 
 /// Check if a branch exists locally and/or remotely
 #[tauri::command]
-pub fn jj_check_branch_exists(
+pub async fn jj_check_branch_exists(
     repo_path: String,
     branch_name: String,
 ) -> Result<jj::BranchStatus, String> {
-    jj::check_branch_exists(&repo_path, &branch_name).map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || {
+        jj::check_branch_exists(&repo_path, &branch_name).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("Failed to join jj_check_branch_exists task: {}", e))?
 }
 
 #[tauri::command]
-pub fn list_repo_branches(repo_path: String) -> Result<Vec<jj::JjBranch>, String> {
-    core::list_repo_branches(&repo_path)
+pub async fn list_repo_branches(repo_path: String) -> Result<Vec<jj::JjBranch>, String> {
+    tauri::async_runtime::spawn_blocking(move || core::list_repo_branches(&repo_path))
+        .await
+        .map_err(|e| format!("Failed to join list_repo_branches task: {}", e))?
 }
 
 /// Switch the repository working copy to the given bookmark (branch).
 #[tauri::command]
-pub fn switch_repo_branch(repo_path: String, bookmark_name: String) -> Result<String, String> {
-    core::switch_repo_branch(&repo_path, &bookmark_name)
+pub async fn switch_repo_branch(repo_path: String, bookmark_name: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        core::switch_repo_branch(&repo_path, &bookmark_name)
+    })
+    .await
+    .map_err(|e| format!("Failed to join switch_repo_branch task: {}", e))?
 }

@@ -35,7 +35,7 @@ import {
 
 interface WorkspaceSidebarProps {
 	repoPath?: string;
-	currentBranch?: string | null;
+	homeRepoDisplayRef?: string | null;
 	selectedWorkspaceId?: number | null;
 	selectedWorkspaceIds?: Set<number>;
 	onWorkspaceClick?: (workspace: Workspace) => void;
@@ -60,7 +60,7 @@ interface WorkspaceSidebarProps {
 export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 	({
 		repoPath,
-		currentBranch,
+		homeRepoDisplayRef,
 		selectedWorkspaceId,
 		selectedWorkspaceIds,
 		onWorkspaceClick,
@@ -272,9 +272,9 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 														? "text-primary font-medium"
 														: "text-muted-foreground"
 												}`}
-												title={currentBranch || "Unknown"}
+												title={homeRepoDisplayRef || "…"}
 											>
-												{currentBranch || "unknown"}
+												{homeRepoDisplayRef || "…"}
 											</span>
 										</div>
 									</TooltipTrigger>
@@ -282,7 +282,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 								<TooltipContent side="right" className="font-mono">
 									<div className="flex items-center gap-1.5">
 										<GitBranch className="w-3 h-3" />
-										<span>{currentBranch || "Unknown"}</span>
+										<span>{homeRepoDisplayRef || "…"}</span>
 									</div>
 								</TooltipContent>
 							</Tooltip>

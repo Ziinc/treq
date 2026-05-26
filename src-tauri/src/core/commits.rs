@@ -59,8 +59,15 @@ pub fn list_commits(
         None => {
             let branch = jj::resolve_home_repo_branch(repo_path)
                 .map_err(|e| format!("Failed to get active branch: {}", e))?;
-            jj::jj_get_log(repo_path, &branch, Some(true), limit)
-                .map_err(|e| format!("Failed to list commits: {}", e))
+            let default_branch = jj::get_default_branch(repo_path)
+                .unwrap_or_else(|_| "main".to_string());
+            if branch != default_branch {
+                jj::jj_get_home_repo_diverged_log(repo_path, &branch, &default_branch, limit)
+                    .map_err(|e| format!("Failed to list commits: {}", e))
+            } else {
+                jj::jj_get_log(repo_path, &branch, Some(true), limit)
+                    .map_err(|e| format!("Failed to list commits: {}", e))
+            }
         }
     }
 }

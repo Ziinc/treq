@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
@@ -17,7 +19,9 @@ pub struct RepoStatus {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RepoBranch {
-    pub current_branch: String,
+    pub current_branch: Option<String>,
+    pub display_ref: String,
+    pub is_detached: bool,
     pub default_branch: String,
 }
 
@@ -50,7 +54,7 @@ pub fn get_repo_branch(repo_path: &str) -> Result<RepoBranch, String> {
     jj::jj_util_import_git_refs(repo_path).map_err(|e| e.to_string())?;
     let branches = jj::get_branches(repo_path).map_err(|e| e.to_string())?;
 
-    let current_branch = jj::resolve_home_repo_branch(repo_path).unwrap_or_else(|_| {
+    let resolved_branch = jj::resolve_home_repo_branch(repo_path).unwrap_or_else(|_| {
         branches
             .iter()
             .find(|branch| branch.is_current)
@@ -69,19 +73,56 @@ pub fn get_repo_branch(repo_path: &str) -> Result<RepoBranch, String> {
             })
             .unwrap_or_else(|| "main".to_string())
     });
+    let detached_head = read_detached_head_commit(repo_path)?;
+    let is_detached = detached_head.is_some() || resolved_branch == "HEAD";
+
+    let current_branch = if is_detached {
+        None
+    } else {
+        Some(resolved_branch.clone())
+    };
+
+    let display_ref = if let Some(head) = detached_head {
+        head
+    } else if resolved_branch == "HEAD" {
+        jj::jj_get_commit_id(repo_path, "@")
+            .map_err(|e| e.to_string())?
+            .chars()
+            .take(12)
+            .collect()
+    } else {
+        resolved_branch.clone()
+    };
 
     let default_branch = if branches.iter().any(|branch| branch.name == "main") {
         "main".to_string()
     } else if branches.iter().any(|branch| branch.name == "master") {
         "master".to_string()
     } else {
-        current_branch.clone()
+        resolved_branch.clone()
     };
 
     Ok(RepoBranch {
         current_branch,
+        display_ref,
+        is_detached,
         default_branch,
     })
+}
+
+fn read_detached_head_commit(repo_path: &str) -> Result<Option<String>, String> {
+    let head_path = Path::new(repo_path).join(".git").join("HEAD");
+    let content =
+        fs::read_to_string(&head_path).map_err(|e| format!("Failed to read .git/HEAD: {e}"))?;
+    let trimmed = content.trim();
+    if trimmed.starts_with("ref: ") {
+        return Ok(None);
+    }
+    let short: String = trimmed.chars().take(12).collect();
+    if short.is_empty() {
+        return Err("Failed to resolve detached HEAD commit".to_string());
+    }
+    Ok(Some(short))
 }
 
 /// Returns the current status of the repository, including a git fetch.
@@ -100,7 +141,9 @@ pub fn repo_status(repo_path: &str) -> Result<RepoStatus, String> {
 
     // Step 2: default branch for conflict/change checks
     let branch_info = get_repo_branch(repo_path).unwrap_or(RepoBranch {
-        current_branch: "main".to_string(),
+        current_branch: Some("main".to_string()),
+        display_ref: "main".to_string(),
+        is_detached: false,
         default_branch: "main".to_string(),
     });
     let default_branch = branch_info.default_branch;

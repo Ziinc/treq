@@ -30,6 +30,12 @@ import {
 import { FileBrowser } from "./FileBrowser";
 import { LinearCommitHistory } from "./LinearCommitHistory";
 import { CommitDiffViewer } from "./CommitDiffViewer";
+import {
+	dryRunHomeRepoRebase,
+	rebaseHomeRepoBranch,
+	type HomeRebaseDryRunResult,
+	type JjLogResult,
+} from "../lib/api";
 import { WorkspaceBookmarkConflictModal } from "./WorkspaceBookmarkConflictModal";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import { Button } from "./ui/button";
@@ -185,6 +191,12 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 		// Committed changes toggle state
 		const [showCommittedChanges, setShowCommittedChanges] = useState(true);
 
+		// Home-repo branch divergence: counts of target-ahead commits and conflict dry-run result
+		const [homeRepoTargetAheadCount, setHomeRepoTargetAheadCount] = useState(0);
+		const [homeRebaseDryRun, setHomeRebaseDryRun] =
+			useState<HomeRebaseDryRunResult | null>(null);
+		const [homeRebasing, setHomeRebasing] = useState(false);
+
 		const [rebasing, setRebasing] = useState(false);
 		const [bookmarkConflict, setBookmarkConflict] =
 			useState<WorkspaceBookmarkConflict | null>(null);
@@ -218,6 +230,17 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			setConflictModalOpen(false);
 		}, [workspace?.id]);
 
+		// When commits are loaded from LinearCommitHistory, capture divergence counts
+		const handleCommitsLoaded = useCallback(
+			(result: JjLogResult) => {
+				const targetAheadCount = result.target_branch_commits?.length ?? 0;
+				setHomeRepoTargetAheadCount(targetAheadCount);
+				// Reset dry-run when commit data changes
+				setHomeRebaseDryRun(null);
+			},
+			[],
+		);
+
 		useEffect(() => {
 			if (!workspace) {
 				setTargetBranch(null);
@@ -225,6 +248,29 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			}
 			setTargetBranch(workspace.target_branch ?? defaultTargetBranch);
 		}, [workspace?.id, workspace?.target_branch, defaultTargetBranch]);
+
+		// Run conflict dry-run when on a home-repo non-default branch with target-ahead commits
+		useEffect(() => {
+			const isHomeRepo = !workspace;
+			if (!isHomeRepo) return;
+			if (!effectiveRepoPath) return;
+			if (homeRepoTargetAheadCount === 0) {
+				setHomeRebaseDryRun(null);
+				return;
+			}
+			const currentBranch = mainRepoBranch;
+			if (!currentBranch) return;
+			const targetBranchName = defaultBranch;
+			dryRunHomeRepoRebase(effectiveRepoPath, currentBranch, targetBranchName)
+				.then(setHomeRebaseDryRun)
+				.catch(() => setHomeRebaseDryRun(null));
+		}, [
+			workspace,
+			effectiveRepoPath,
+			homeRepoTargetAheadCount,
+			mainRepoBranch,
+			defaultBranch,
+		]);
 
 		useEffect(() => {
 			onActiveTabChange?.(activeTab);
@@ -472,6 +518,49 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			effectiveRepoPath,
 			addToast,
 			refetchWorkspaceStatus,
+			queryClient,
+		]);
+
+		const handleHomeRebase = useCallback(async () => {
+			if (!effectiveRepoPath || !mainRepoBranch) return;
+			setHomeRebasing(true);
+			try {
+				const result = await rebaseHomeRepoBranch(
+					effectiveRepoPath,
+					mainRepoBranch,
+					defaultBranch,
+				);
+				if (result.success) {
+					addToast({
+						title: "Rebase complete",
+						description: result.message || "Branch rebased onto target",
+						type: "success",
+					});
+					queryClient?.invalidateQueries();
+					// Reset divergence state — LinearCommitHistory will refetch
+					setHomeRepoTargetAheadCount(0);
+					setHomeRebaseDryRun(null);
+				} else {
+					addToast({
+						title: "Rebase failed",
+						description: result.message,
+						type: "error",
+					});
+				}
+			} catch (error) {
+				addToast({
+					title: "Rebase failed",
+					description: String(error),
+					type: "error",
+				});
+			} finally {
+				setHomeRebasing(false);
+			}
+		}, [
+			effectiveRepoPath,
+			mainRepoBranch,
+			defaultBranch,
+			addToast,
 			queryClient,
 		]);
 
@@ -976,6 +1065,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 											setScrollToCommitId(changeId);
 											setActiveTab("commits");
 										}}
+										onCommitsLoaded={handleCommitsLoaded}
 									/>
 								</div>
 							</div>
@@ -1074,6 +1164,71 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 										>
 											{branchTitle}
 										</button>
+										{/* Target branch label + rebase button for non-default home repo branches */}
+										{isHomeRepo && branchTitle !== defaultBranch && (
+											<>
+												<ArrowRight className="w-4 h-4 text-muted-foreground" />
+												<span className="text-sm font-mono text-muted-foreground">
+													{defaultBranch}
+												</span>
+												{homeRepoTargetAheadCount > 0 && (
+													<>
+														{homeRebaseDryRun?.would_conflict && (
+															<TooltipProvider delayDuration={200}>
+																<Tooltip>
+																	<TooltipTrigger asChild>
+																		<span className="flex items-center text-yellow-600 dark:text-yellow-400">
+																			<AlertTriangle className="w-4 h-4" />
+																		</span>
+																	</TooltipTrigger>
+																	<TooltipContent>
+																		<p className="font-medium mb-1">
+																			Potential conflicts detected
+																		</p>
+																		{homeRebaseDryRun.conflicted_files.length > 0 && (
+																			<ul className="text-xs space-y-0.5">
+																				{homeRebaseDryRun.conflicted_files.map(
+																					(f) => (
+																						<li key={f} className="font-mono">
+																							{f}
+																						</li>
+																					),
+																				)}
+																			</ul>
+																		)}
+																	</TooltipContent>
+																</Tooltip>
+															</TooltipProvider>
+														)}
+														<TooltipProvider delayDuration={200}>
+															<Tooltip>
+																<TooltipTrigger asChild>
+																	<Button
+																		variant="outline"
+																		size="sm"
+																		onClick={handleHomeRebase}
+																		disabled={homeRebasing}
+																		className="gap-1 px-2 py-1"
+																	>
+																		{homeRebasing ? (
+																			<Loader2 className="w-4 h-4 animate-spin" />
+																		) : (
+																			<GitCompareArrows className="w-4 h-4" />
+																		)}
+																		Rebase
+																	</Button>
+																</TooltipTrigger>
+																<TooltipContent>
+																	{homeRebasing
+																		? "Rebasing..."
+																		: `Rebase ${branchTitle} onto ${defaultBranch} (${homeRepoTargetAheadCount} new commit${homeRepoTargetAheadCount === 1 ? "" : "s"})`}
+																</TooltipContent>
+															</Tooltip>
+														</TooltipProvider>
+													</>
+												)}
+											</>
+										)}
 										{/* Stack button for home repo */}
 										{onCreateStackedWorkspace && (
 											<TooltipProvider delayDuration={200}>

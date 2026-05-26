@@ -42,6 +42,14 @@ pub fn load_cached_binary_paths(db: &Database) -> HashMap<String, String> {
 /// Detect and cache editor applications (Cursor, VSCode, Zed)
 #[tauri::command]
 pub fn detect_editor_apps(state: State<'_, AppState>) -> Result<EditorAppsResponse, String> {
+    if let Some(cached_apps) = binary_paths::get_editor_apps_cache() {
+        return Ok(EditorAppsResponse {
+            cursor: *cached_apps.get("cursor").unwrap_or(&false),
+            vscode: *cached_apps.get("vscode").unwrap_or(&false),
+            zed: *cached_apps.get("zed").unwrap_or(&false),
+        });
+    }
+
     let db = state.db.lock().map_err(|e| e.to_string())?;
 
     let editors = vec![
@@ -54,7 +62,7 @@ pub fn detect_editor_apps(state: State<'_, AppState>) -> Result<EditorAppsRespon
 
     for (app_name, key) in &editors {
         let is_installed = binary_paths::detect_editor_app(app_name);
-        log::info!(
+        log::debug!(
             "Editor app {}: {}",
             app_name,
             if is_installed { "found" } else { "not found" }

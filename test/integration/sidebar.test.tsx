@@ -1,4 +1,5 @@
 import * as React from "react";
+import { execSync } from "node:child_process";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "../test-utils";
 import userEvent from "@testing-library/user-event";
@@ -9,6 +10,7 @@ import {
 	updateWorkspace,
 } from "../../src/lib/api";
 import { Dashboard } from "../../src/components/Dashboard";
+import { waitFor } from "@testing-library/react";
 
 const findWorkspaceByBranchName = (
 	workspaces: Awaited<ReturnType<typeof getWorkspaces>>,
@@ -33,6 +35,32 @@ describe("Dashboard - workspace list", () => {
 		await screen.findByText("feat/alpha");
 		await screen.findByText("feat/beta");
 		expect(screen.queryByText("unknown")).toBeFalsy();
+	});
+
+	it("shows detached HEAD short hash in home repo row instead of unknown", async () => {
+		execSync("git commit --allow-empty -m \"temp commit for detached test\"", {
+			cwd: repoPath,
+		});
+		const detachedCommit = execSync("git rev-parse HEAD~1", {
+			cwd: repoPath,
+			encoding: "utf8",
+		}).trim();
+		execSync(`git checkout ${detachedCommit}`, { cwd: repoPath });
+
+		render(<Dashboard />);
+
+		const sidebarRoot = document.querySelector(
+			`.${CSS.escape("group/sidebar")}`,
+		) as HTMLElement;
+		const homeRepoElement = sidebarRoot.querySelector(
+			'[data-testid="home-repo-row"]',
+		) as HTMLElement;
+		expect(homeRepoElement).toBeTruthy();
+		await waitFor(() => {
+			const homeText = homeRepoElement.textContent || "";
+			expect(homeText).toMatch(/\b[0-9a-f]{12}\b/i);
+			expect(homeText.toLowerCase()).not.toContain("unknown");
+		});
 	});
 
 	it("keeps sidebar populated when a workspace self-targets", async () => {
