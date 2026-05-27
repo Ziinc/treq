@@ -1067,6 +1067,7 @@ pub fn create_workspace(
     branch_name: &str,
     new_branch: bool,
     source_branch: Option<&str>,
+    target_branch: Option<&str>,
 ) -> Result<String, JjError> {
     let repo_path_buf = Path::new(repo_path);
 
@@ -1089,7 +1090,11 @@ pub fn create_workspace(
 
     let settings = create_user_settings(repo_path)?;
 
-    // Load parent workspace and repo
+    // Import all colocated git refs (HEAD + all branches/remotes) so that external commits
+    // made outside treq are visible to the parent resolution below.
+    let _ = jj_util_import_git_refs(repo_path);
+
+    // Load parent workspace and repo (re-loaded after the git import so it sees fresh refs).
     let parent_workspace = Workspace::load(
         &settings,
         repo_path_buf,
@@ -1104,10 +1109,9 @@ pub fn create_workspace(
         .ok()
         .filter(|branch| !branch.is_empty() && branch != "HEAD");
 
-    // Import git HEAD and mirror fetch-style bookmark tracking to avoid untracked remote push failures.
+    // Mirror fetch-style bookmark tracking to avoid untracked remote push failures.
     let parent_repo = {
         let mut import_tx = parent_repo.start_transaction();
-        let _ = block_on(git::import_head(import_tx.repo_mut()));
 
         let git_head_id = import_tx
             .repo()
@@ -1160,8 +1164,8 @@ pub fn create_workspace(
         }
 
         if import_tx.repo().has_changes() {
-            block_on(import_tx.commit("import git head")).map_err(|e| {
-                JjError::GitWorkspaceError(format!("Failed to import git head: {}", e))
+            block_on(import_tx.commit("mirror bookmark tracking")).map_err(|e| {
+                JjError::GitWorkspaceError(format!("Failed to mirror bookmark tracking: {}", e))
             })?
         } else {
             parent_repo
@@ -1247,14 +1251,35 @@ pub fn create_workspace(
             wc_override.unwrap_or(bookmark_id)
         }
     } else {
-        // Default: use git HEAD (imported above) so git history is included
-        parent_repo
+        // Default: resolve the target branch's local bookmark tip so the new workspace
+        // is always parented on the correct branch, even after external git commits that
+        // jj hasn't imported yet (import_colocated_git_state above handles that).
+        // Fall back to git HEAD only if the target branch bookmark is absent.
+        let resolved_target = target_branch
+            .map(|b| b.to_string())
+            .or_else(|| get_default_branch(repo_path).ok())
+            .unwrap_or_else(|| "main".to_string());
+        let bookmark_id = parent_repo
             .view()
-            .git_head()
+            .get_local_bookmark(RefName::new(&resolved_target))
             .added_ids()
             .next()
-            .cloned()
-            .ok_or_else(|| JjError::GitWorkspaceError("No git HEAD commit found".to_string()))?
+            .cloned();
+        match bookmark_id {
+            Some(id) => id,
+            None => parent_repo
+                .view()
+                .git_head()
+                .added_ids()
+                .next()
+                .cloned()
+                .ok_or_else(|| {
+                    JjError::GitWorkspaceError(format!(
+                        "Bookmark '{}' not found and no git HEAD",
+                        resolved_target
+                    ))
+                })?,
+        }
     };
 
     let new_ws_name: WorkspaceNameBuf = sanitized_name.clone().into();

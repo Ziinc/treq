@@ -3,6 +3,32 @@ use std::path::Path;
 use crate::jj;
 use crate::local_db;
 
+fn merge_workspace_and_target_commits(
+    workspace_commits: Vec<jj::JjLogCommit>,
+    target_commits: Vec<jj::JjLogCommit>,
+) -> Vec<jj::JjLogCommit> {
+    let mut merged = workspace_commits;
+    merged.extend(target_commits);
+
+    let mut seen = std::collections::HashSet::new();
+    merged.retain(|commit| {
+        let key = if commit.change_id.is_empty() {
+            format!("commit:{}", commit.commit_id)
+        } else {
+            format!("change:{}", commit.change_id)
+        };
+        seen.insert(key)
+    });
+
+    merged.sort_by(|a, b| {
+        b.timestamp
+            .cmp(&a.timestamp)
+            .then_with(|| b.commit_id.cmp(&a.commit_id))
+    });
+
+    merged
+}
+
 /// Lists commits for a workspace by its database ID, or for the home repo
 /// when no workspace ID is provided.
 ///
@@ -27,6 +53,8 @@ pub fn list_commits(
             let workspace = local_db::get_workspace_by_id(repo_path, id)
                 .map_err(|e| format!("Failed to get workspace: {}", e))?
                 .ok_or_else(|| format!("Workspace not found: {}", id))?;
+            let default_branch = jj::get_default_branch(repo_path)
+                .map_err(|e| format!("Failed to resolve default branch: {}", e))?;
 
             let workspace_dir = Path::new(repo_path)
                 .join(".treq")
@@ -36,21 +64,37 @@ pub fn list_commits(
                 .to_str()
                 .ok_or("Failed to convert workspace path to string")?;
 
-            let target_branch = workspace.target_branch.as_deref().unwrap_or("main");
+            let target_branch = workspace
+                .target_branch
+                .as_deref()
+                .unwrap_or(&default_branch);
+            let is_default_branch_workspace = workspace.branch_name == default_branch;
 
-            let mut result = jj::jj_get_log(workspace_dir_str, target_branch, Some(false), None)
-                .map_err(|e| format!("Failed to list commits: {}", e))?;
+            let mut result = jj::jj_get_log(
+                workspace_dir_str,
+                target_branch,
+                Some(is_default_branch_workspace),
+                None,
+            )
+            .map_err(|e| format!("Failed to list commits: {}", e))?;
+
+            if !is_default_branch_workspace {
+                let target_limit = target_branch_limit.unwrap_or(10);
+                let target_commits = jj::jj_get_target_branch_log(repo_path, target_branch, target_limit)
+                    .map_err(|e| format!("Failed to list target branch history: {}", e))?;
+                result.commits =
+                    merge_workspace_and_target_commits(result.commits, target_commits.clone());
+
+                if include_target_branch_history {
+                    result.target_branch_commits = target_commits;
+                }
+            }
 
             if include_target_branch_history {
-                let limit = target_branch_limit.unwrap_or(10);
-                match jj::jj_get_target_branch_log(repo_path, target_branch, limit) {
-                    Ok(target_commits) => {
-                        result.target_branch_commits = target_commits;
-                    }
-                    Err(e) => {
-                        eprintln!("[list_commits] Failed to get target branch history: {}", e);
-                        // Non-fatal: leave target_branch_commits empty
-                    }
+                if is_default_branch_workspace {
+                    let limit = target_branch_limit.unwrap_or(10);
+                    result.target_branch_commits = jj::jj_get_target_branch_log(repo_path, target_branch, limit)
+                        .map_err(|e| format!("Failed to list target branch history: {}", e))?;
                 }
             }
 
@@ -60,7 +104,7 @@ pub fn list_commits(
             let branch = jj::resolve_home_repo_branch(repo_path)
                 .map_err(|e| format!("Failed to get active branch: {}", e))?;
             let default_branch = jj::get_default_branch(repo_path)
-                .unwrap_or_else(|_| "main".to_string());
+                .map_err(|e| format!("Failed to resolve default branch: {}", e))?;
             if branch != default_branch {
                 jj::jj_get_home_repo_diverged_log(repo_path, &branch, &default_branch, limit)
                     .map_err(|e| format!("Failed to list commits: {}", e))
