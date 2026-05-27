@@ -293,3 +293,43 @@ fn test_workspace_list_statuses_conflict_bit_matches_workspace_status_for_diverg
         "sidebar conflict bit should match workspace_status conflict bit"
     );
 }
+
+#[test]
+fn test_workspace_list_statuses_does_not_cross_assign_sibling_branch_name_when_exact_bookmark_missing()
+{
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let checks = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "treq/feat-checks",
+        Some("checks".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create checks workspace");
+
+    let logging = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "treq/feat-logging",
+        Some("logging".to_string()),
+        None,
+        Some("treq/feat-checks"),
+        None,
+    )
+    .expect("Failed to create logging workspace");
+
+    TestRepo::run_jj(&repo.repo_path, &["bookmark", "delete", "treq/feat-logging"])
+        .expect("Failed to delete logging bookmark");
+
+    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
+        .expect("Failed to list workspace statuses");
+    let logging_status = statuses
+        .iter()
+        .find(|s| s.current.workspace_name == logging.workspace_name)
+        .expect("logging workspace should be returned");
+
+    assert_eq!(checks.workspace_name, "treq-feat-checks");
+    assert_eq!(logging.workspace_name, "treq-feat-logging");
+    assert_ne!(logging_status.current.branch_name, "treq/feat-checks");
+}

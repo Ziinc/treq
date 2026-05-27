@@ -1442,6 +1442,10 @@ fn branch_name_for_workspace_commit(
     workspace_name: &str,
     wc_commit: &jj_lib::commit::Commit,
 ) -> String {
+    let bookmark_matches_workspace = |bookmark_name: &str| {
+        bookmark_name == workspace_name || sanitize_workspace_name(bookmark_name) == workspace_name
+    };
+
     let exact_bookmarks: Vec<String> = repo
         .view()
         .local_bookmarks_for_commit(wc_commit.id())
@@ -1451,8 +1455,7 @@ fn branch_name_for_workspace_commit(
         .collect();
     if let Some(name) = exact_bookmarks
         .iter()
-        .find(|name| name.as_str() == workspace_name)
-        .or_else(|| exact_bookmarks.first())
+        .find(|name| bookmark_matches_workspace(name.as_str()))
     {
         return name.clone();
     }
@@ -1470,8 +1473,7 @@ fn branch_name_for_workspace_commit(
         .collect();
     if let Some(name) = parent_bookmarks
         .iter()
-        .find(|name| name.as_str() == workspace_name)
-        .or_else(|| parent_bookmarks.first())
+        .find(|name| bookmark_matches_workspace(name.as_str()))
     {
         return name.clone();
     }

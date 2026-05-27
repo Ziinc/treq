@@ -128,6 +128,26 @@ impl TestRepo {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
 
+    /// Run a jj command in the specified directory.
+    pub fn run_jj(cwd: &str, args: &[&str]) -> Result<String, String> {
+        let jj_binary = treq_lib::binary_paths::detect_binary("jj").unwrap_or_else(|| "jj".to_string());
+        let output = Command::new(jj_binary)
+            .current_dir(cwd)
+            .args(args)
+            .output()
+            .map_err(|e| format!("Failed to execute jj {:?}: {}", args, e))?;
+
+        if !output.status.success() {
+            return Err(format!(
+                "jj {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
+
     /// Create a file in the repository.
     pub fn create_file(&self, relative_path: &str, content: &str) -> Result<PathBuf, String> {
         let file_path = Path::new(&self.repo_path).join(relative_path);
