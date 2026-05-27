@@ -3736,30 +3736,49 @@ pub fn jj_get_sync_status(
         return jj_get_diverged_sync_counts(workspace_path, branch_name);
     }
 
-    let ahead_count = match jj_log_revset_commit_ids(
-        workspace_path,
-        &format!("{}..{}", remote_branch, branch_name),
-    ) {
-        Ok(ids) => ids.len(),
+    let (local_tip, remote_tip) = get_sync_revset_tips(workspace_path, branch_name)?;
+    let ahead_revset = format!("({}..{}) ~ empty()", remote_tip, local_tip);
+    let behind_revset = format!("({}..{}) ~ empty()", local_tip, remote_tip);
+
+    let ahead_ids = match jj_log_revset_commit_ids(workspace_path, &ahead_revset) {
+        Ok(ids) => ids,
         Err(e) => {
             if !not_on_remote {
                 eprintln!("[sync_status] Failed to get ahead count: {}", e);
             }
-            0
+            Vec::new()
         }
     };
-    let behind_count = match jj_log_revset_commit_ids(
-        workspace_path,
-        &format!("{}..{}", branch_name, remote_branch),
-    ) {
-        Ok(ids) => ids.len(),
+    let behind_ids = match jj_log_revset_commit_ids(workspace_path, &behind_revset) {
+        Ok(ids) => ids,
         Err(e) => {
             if !not_on_remote {
                 eprintln!("[sync_status] Failed to get behind count: {}", e);
             }
-            0
+            Vec::new()
         }
     };
+
+    let ahead_count = ahead_ids.len();
+    let mut behind_count = behind_ids.len();
+
+    if ahead_count > 0 && behind_count > 0 {
+        if let Ok(loaded) = load_workspace_repo(workspace_path) {
+            let ahead_change_ids: HashSet<String> = ahead_ids
+                .iter()
+                .filter_map(|id| resolve_commit_by_revision(&loaded, id).ok())
+                .map(|commit| HexPrefix::from_id(commit.change_id()).reverse_hex())
+                .collect();
+            if !ahead_change_ids.is_empty() {
+                behind_count = behind_ids
+                    .iter()
+                    .filter_map(|id| resolve_commit_by_revision(&loaded, id).ok())
+                    .map(|commit| HexPrefix::from_id(commit.change_id()).reverse_hex())
+                    .filter(|change_id| !ahead_change_ids.contains(change_id))
+                    .count();
+            }
+        }
+    }
     Ok((ahead_count, behind_count))
 }
 
@@ -3785,16 +3804,47 @@ pub fn jj_get_diverged_sync_counts(
     workspace_path: &str,
     branch_name: &str,
 ) -> Result<(usize, usize), JjError> {
-    let remote_ref = format!("{}@origin", branch_name);
+    let (local_tip, remote_tip) = get_sync_revset_tips(workspace_path, branch_name)?;
+    let ahead_revset = format!("({}..{}) ~ empty()", remote_tip, local_tip);
+    let behind_revset = format!("({}..{}) ~ empty()", local_tip, remote_tip);
 
-    let ahead_count = jj_log_revset_commit_ids(workspace_path, &format!("{}..@-", remote_ref))
+    let ahead_count = jj_log_revset_commit_ids(workspace_path, &ahead_revset)
         .map(|ids| ids.len())
         .unwrap_or(0);
-    let behind_count = jj_log_revset_commit_ids(workspace_path, &format!("@-..{}", remote_ref))
+    let behind_count = jj_log_revset_commit_ids(workspace_path, &behind_revset)
         .map(|ids| ids.len())
         .unwrap_or(0);
 
     Ok((ahead_count, behind_count))
+}
+
+fn get_sync_revset_tips(workspace_path: &str, branch_name: &str) -> Result<(String, String), JjError> {
+    let loaded = load_workspace_repo(workspace_path)?;
+    let view = loaded.repo.view();
+    let repo_path = derive_repo_path_from_workspace(workspace_path)
+        .unwrap_or_else(|| workspace_path.to_string());
+    let remote_target = view.get_remote_bookmark(RemoteRefSymbol {
+        name: RefName::new(branch_name),
+        remote: RemoteName::new("origin"),
+    });
+
+    let local_tip = if workspace_path == repo_path {
+        format_revset_symbol(branch_name)
+    } else {
+        "@".to_string()
+    };
+    let remote_tip = remote_target
+        .target
+        .as_normal()
+        .map(|id| id.hex())
+        .ok_or_else(|| {
+            JjError::IoError(format!(
+                "Remote bookmark '{}' does not have a normal target",
+                branch_name
+            ))
+        })?;
+
+    Ok((local_tip, remote_tip))
 }
 
 /// Fetch remote branches using jj git fetch (without rebasing)
@@ -5575,6 +5625,7 @@ mod tests {
         assert!(status.success(), "jj git init should succeed");
     }
 
+
     #[test]
     fn bookmark_set_get_delete_round_trip() {
         let temp = TempDir::new().expect("tempdir");
@@ -5755,4 +5806,5 @@ mod tests {
         assert_eq!(lines.start_line, 2);
         assert_eq!(lines.end_line, 3);
     }
+
 }
