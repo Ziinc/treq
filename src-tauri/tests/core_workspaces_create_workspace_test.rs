@@ -606,3 +606,101 @@ fn test_create_workspace_skips_missing_included_files() {
         "nonexistent should not be in workspace"
     );
 }
+
+/// Regression: workspace creation must parent on the target branch's bookmark tip, not on
+/// git HEAD (which can lag behind if main advanced while the user was on a different branch).
+///
+/// Scenario: init the repo (jj imports HEAD = initial commit on main), then make a new git
+/// commit on main while git HEAD is detached (so git HEAD no longer equals main's tip).
+/// create_workspace should parent on the new main tip, not on the stale git HEAD.
+#[test]
+fn test_create_workspace_parents_on_target_branch_tip_after_external_commit() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    // Record the commit hash of main's current tip (the initial commit).
+    let initial_sha = TestRepo::run_git(&repo.repo_path, &["rev-parse", "HEAD"])
+        .expect("Failed to get initial HEAD")
+        .trim()
+        .to_string();
+
+    // Detach HEAD so that subsequent commits on main won't move git HEAD.
+    TestRepo::run_git(&repo.repo_path, &["checkout", "--detach", &initial_sha])
+        .expect("Failed to detach HEAD");
+
+    // Advance main bookmark via a raw git commit on the main branch without touching git HEAD
+    // (simulate another tool or fetch updating main while we are on a detached HEAD / other branch).
+    TestRepo::run_git(&repo.repo_path, &["branch", "-f", "main", &initial_sha])
+        .expect("Failed to reset main");
+    // Create a temp branch to land the new commit, then move main there.
+    TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "tmp-advance"])
+        .expect("Failed to create tmp branch");
+    repo.commit_file("external.txt", "external change", "external commit on main")
+        .expect("Failed to make external commit");
+    let new_main_sha = TestRepo::run_git(&repo.repo_path, &["rev-parse", "HEAD"])
+        .expect("Failed to get new HEAD")
+        .trim()
+        .to_string();
+    // Move main to this new commit, but keep git HEAD on tmp-advance (detached from main).
+    TestRepo::run_git(&repo.repo_path, &["branch", "-f", "main", &new_main_sha])
+        .expect("Failed to move main to new commit");
+    // Detach HEAD so it stays at the NEW commit but is NOT on main.
+    TestRepo::run_git(&repo.repo_path, &["checkout", "--detach", &new_main_sha])
+        .expect("Failed to detach at new commit");
+    // Go back to initial so git HEAD != main tip (simulating stale HEAD scenario).
+    TestRepo::run_git(&repo.repo_path, &["checkout", "--detach", &initial_sha])
+        .expect("Failed to set git HEAD to initial");
+
+    // At this point: git HEAD = initial commit, main bookmark = new_main_sha with external.txt.
+    // create_workspace should import git refs and parent on main's tip, not on git HEAD.
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/after-external",
+        Some("after external commit".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+
+    assert!(
+        workspace_path.join("external.txt").exists(),
+        "Workspace parent should be main's tip (with external.txt), but git HEAD was at the old commit"
+    );
+
+    let parent_log = JjVerifier::get_log_previous_commit(workspace_path.to_str().unwrap())
+        .expect("Failed to get parent log");
+    assert!(
+        parent_log.contains("external commit on main"),
+        "Workspace @- should be the external commit (main tip), got: {}",
+        parent_log
+    );
+}
+
+/// New workspace target_branch should be persisted in DB even for non-stacked workspaces,
+/// so auto-rebase knows which branch to track.
+#[test]
+fn test_create_workspace_sets_target_branch_in_db() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/target-branch-check",
+        Some("target branch test".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    assert!(
+        workspace.target_branch.is_some(),
+        "target_branch should be set for non-stacked workspaces"
+    );
+    assert_eq!(
+        workspace.target_branch.as_deref(),
+        Some("main"),
+        "target_branch should default to 'main'"
+    );
+}

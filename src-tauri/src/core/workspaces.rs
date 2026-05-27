@@ -277,6 +277,16 @@ pub fn create_workspace(
         source_branch.map(|s| s.to_string())
     };
 
+    // Determine the effective target branch for parent resolution and DB persistence.
+    // Stacked workspaces target the source workspace's branch; plain workspaces target the
+    // repo's default branch (usually "main").
+    let effective_target_branch: String = if let Some(source_ws) = &stacked_source_workspace {
+        source_ws.branch_name.clone()
+    } else {
+        jj::get_default_branch(repo_path)
+            .unwrap_or_else(|_| "main".to_string())
+    };
+
     let new_branch: bool = !branch_exists;
     let workspace_full_path = jj::create_workspace(
         repo_path,
@@ -284,6 +294,7 @@ pub fn create_workspace(
         branch_name,
         new_branch,
         resolved_source_branch.as_deref(),
+        Some(&effective_target_branch),
     )
     .map_err(|e| format!("Failed to create workspace: {}", e))?;
 
@@ -333,14 +344,8 @@ pub fn create_workspace(
         local_db::update_workspace_not_on_remote(repo_path, workspace_id, true)?;
     }
 
-    if let Some(source_workspace) = &stacked_source_workspace {
-        local_db::update_workspace_target_branch(
-            repo_path,
-            workspace_id,
-            &source_workspace.branch_name,
-        )
+    local_db::update_workspace_target_branch(repo_path, workspace_id, &effective_target_branch)
         .map_err(|e| format!("Failed to set target branch: {}", e))?;
-    }
 
     let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
         .map_err(|e| format!("Failed to get workspace from db: {}", e))?;

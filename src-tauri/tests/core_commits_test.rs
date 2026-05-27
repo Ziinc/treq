@@ -40,20 +40,11 @@ fn test_jj_get_log_diff_stats_with_multiline_output() {
             .expect("Failed to list commits");
 
     // Filter out working copy commit to get only the committed change
-    let committed: Vec<_> = result
+    let commit = result
         .commits
         .iter()
-        .filter(|c| !c.is_working_copy)
-        .collect();
-
-    assert_eq!(
-        committed.len(),
-        1,
-        "Should have exactly 1 non-working-copy commit, got {}",
-        committed.len()
-    );
-
-    let commit = &committed[0];
+        .find(|c| !c.is_working_copy && c.description == "Add two files")
+        .expect("Should include 'Add two files' commit");
     assert_eq!(commit.description, "Add two files");
 
     // file_a has 3 lines, file_b has 5 lines => 8 total insertions
@@ -116,15 +107,11 @@ fn test_jj_get_log_diff_stats_with_modifications() {
     let committed: Vec<_> = result
         .commits
         .iter()
-        .filter(|c| !c.is_working_copy)
+        .filter(|c| {
+            !c.is_working_copy
+                && (c.description == "Initial files" || c.description == "Modify and delete")
+        })
         .collect();
-
-    assert_eq!(
-        committed.len(),
-        2,
-        "Should have 2 non-working-copy commits, got {}",
-        committed.len()
-    );
 
     // Sum up total insertions and deletions across all commits
     let total_insertions: u32 = committed.iter().map(|c| c.insertions).sum();
@@ -285,9 +272,12 @@ fn test_commit_diff_added_files() {
     // Get the commit's change_id from the log
     let log = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
         .expect("Failed to list commits");
-    let committed: Vec<_> = log.commits.iter().filter(|c| !c.is_working_copy).collect();
-    assert_eq!(committed.len(), 1);
-    let change_id = &committed[0].change_id;
+    let committed = log
+        .commits
+        .iter()
+        .find(|c| !c.is_working_copy && c.description == "Add two files")
+        .expect("Should include commit 'Add two files'");
+    let change_id = &committed.change_id;
 
     // Call get_commit_diff
     let diff = treq_lib::core::get_commit_diff_with_conflict_style(
@@ -369,11 +359,9 @@ fn test_commit_diff_modified_files() {
     // Get commits
     let log = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
         .expect("Failed to list commits");
-    let committed: Vec<_> = log.commits.iter().filter(|c| !c.is_working_copy).collect();
-    assert_eq!(committed.len(), 2);
-
-    // Find the modification commit (most recent non-WC commit)
-    let mod_commit = committed
+    // Find the modification commit
+    let mod_commit = log
+        .commits
         .iter()
         .find(|c| c.description == "Modify data file")
         .expect("Should find modification commit");
@@ -683,11 +671,11 @@ fn test_list_commits() {
         treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
             .expect("Failed to list commits");
 
-    // Should have both committed changes
+    // Should have both committed workspace changes
     let committed: Vec<_> = result
         .commits
         .iter()
-        .filter(|c| !c.is_working_copy)
+        .filter(|c| !c.is_working_copy && (c.description == "Add hello" || c.description == "Add world"))
         .collect();
     assert_eq!(
         committed.len(),
@@ -717,7 +705,7 @@ fn test_list_commits() {
 }
 
 #[test]
-fn test_list_commits_excludes_base_branch_commits() {
+fn test_list_commits_includes_base_branch_commits_for_non_default_workspace() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
     // Add commits to main (the base branch) BEFORE creating the workspace.
@@ -759,25 +747,21 @@ fn test_list_commits_excludes_base_branch_commits() {
         .filter(|c| !c.is_working_copy)
         .collect();
 
-    // Should only include the commit made AFTER the branch was created
-    assert_eq!(
-        committed.len(),
-        1,
-        "Should have only 1 commit (branch commit), not base branch commits. Got {}: {:?}",
-        committed.len(),
+    assert!(
+        committed.iter().any(|c| c.description == "Branch commit"),
+        "Should include branch commit, got {:?}",
         committed.iter().map(|c| &c.description).collect::<Vec<_>>()
     );
-    assert_eq!(committed[0].description, "Branch commit");
 
-    // Verify base branch commits are NOT included
+    // Verify base branch commits are included
     let descriptions: Vec<&str> = committed.iter().map(|c| c.description.as_str()).collect();
     assert!(
-        !descriptions.contains(&"Base commit 1"),
-        "Should not contain base branch commit 1"
+        descriptions.contains(&"Base commit 1"),
+        "Should contain base branch commit 1"
     );
     assert!(
-        !descriptions.contains(&"Base commit 2"),
-        "Should not contain base branch commit 2"
+        descriptions.contains(&"Base commit 2"),
+        "Should contain base branch commit 2"
     );
 }
 
@@ -982,19 +966,16 @@ fn test_list_commits_with_target_branch_history() {
         treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), true, None, None)
             .expect("Failed to list commits");
 
-    // Active commits should only include the branch commit
+    // Active commits should include both branch commit and target history
     let committed: Vec<_> = result
         .commits
         .iter()
         .filter(|c| !c.is_working_copy)
         .collect();
-    assert_eq!(
-        committed.len(),
-        1,
-        "Should have only 1 active commit, got {}",
-        committed.len()
-    );
-    assert_eq!(committed[0].description, "Branch commit");
+    let descriptions: Vec<&str> = committed.iter().map(|c| c.description.as_str()).collect();
+    assert!(descriptions.contains(&"Branch commit"));
+    assert!(descriptions.contains(&"Base commit 1"));
+    assert!(descriptions.contains(&"Base commit 2"));
 
     // Target branch commits should include the base commits
     assert!(
@@ -1115,13 +1096,11 @@ fn test_list_commits_caches_commit_info_in_local_db() {
         treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
             .expect("Failed to list commits");
 
-    let committed: Vec<_> = first
+    let original = first
         .commits
         .iter()
-        .filter(|c| !c.is_working_copy)
-        .collect();
-    assert_eq!(committed.len(), 1);
-    let original = committed[0];
+        .find(|c| !c.is_working_copy && c.description == "Cacheable commit")
+        .expect("Should include 'Cacheable commit'");
     assert_eq!(original.description, "Cacheable commit");
     assert_eq!(original.insertions, 3);
     assert_eq!(original.deletions, 0);
@@ -1205,5 +1184,348 @@ fn test_list_commits_target_branch_history_uses_local_bookmark_only() {
         !target_descriptions.contains(&"Remote main only commit"),
         "target branch history should not fall back to remote main@git, got: {:?}",
         target_descriptions
+    );
+}
+
+#[test]
+fn test_default_branch_workspace_returns_full_history() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    repo.commit_file("base_1.txt", "base 1\n", "Base commit 1")
+        .expect("Failed to create base commit 1");
+    repo.commit_file("base_2.txt", "base 2\n", "Base commit 2")
+        .expect("Failed to create base commit 2");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "main",
+        Some("root main workspace".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create main workspace");
+
+    let result =
+        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+            .expect("Failed to list commits");
+
+    let committed_descriptions: Vec<&str> = result
+        .commits
+        .iter()
+        .filter(|c| !c.is_working_copy)
+        .map(|c| c.description.as_str())
+        .collect();
+
+    assert!(
+        committed_descriptions.contains(&"Base commit 1"),
+        "default-branch workspace should include base history, got: {:?}",
+        committed_descriptions
+    );
+    assert!(
+        committed_descriptions.contains(&"Base commit 2"),
+        "default-branch workspace should include base history, got: {:?}",
+        committed_descriptions
+    );
+}
+
+#[test]
+fn test_non_default_workspace_includes_target_history() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    repo.commit_file("base_1.txt", "base 1\n", "Base commit 1")
+        .expect("Failed to create base commit 1");
+    repo.commit_file("base_2.txt", "base 2\n", "Base commit 2")
+        .expect("Failed to create base commit 2");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/ahead-only",
+        Some("ahead only workspace".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path
+        .to_str()
+        .expect("workspace path should be utf-8");
+    TestRepo::write_workspace_file(workspace_path_str, "workspace_only.txt", "workspace\n")
+        .expect("Failed to write workspace file");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Workspace commit")
+        .expect("Failed to commit workspace change");
+
+    let result =
+        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+            .expect("Failed to list commits");
+
+    let committed_descriptions: Vec<&str> = result
+        .commits
+        .iter()
+        .filter(|c| !c.is_working_copy)
+        .map(|c| c.description.as_str())
+        .collect();
+
+    assert!(
+        committed_descriptions.contains(&"Workspace commit"),
+        "workspace history should include its own commit, got: {:?}",
+        committed_descriptions
+    );
+    assert!(
+        committed_descriptions.contains(&"Base commit 1"),
+        "non-default workspace should include target branch history, got: {:?}",
+        committed_descriptions
+    );
+    assert!(
+        committed_descriptions.contains(&"Base commit 2"),
+        "non-default workspace should include target branch history, got: {:?}",
+        committed_descriptions
+    );
+}
+
+#[test]
+fn test_non_default_workspace_empty_ahead_includes_target_history() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    repo.commit_file("base_1.txt", "base 1\n", "Base commit 1")
+        .expect("Failed to create base commit 1");
+    repo.commit_file("base_2.txt", "base 2\n", "Base commit 2")
+        .expect("Failed to create base commit 2");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/no-ahead",
+        Some("no ahead workspace".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let result =
+        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+            .expect("Failed to list commits");
+
+    let committed_descriptions: Vec<&str> = result
+        .commits
+        .iter()
+        .filter(|c| !c.is_working_copy)
+        .map(|c| c.description.as_str())
+        .collect();
+
+    assert!(
+        !committed_descriptions.is_empty(),
+        "non-default workspace should include target history even with no ahead commits"
+    );
+    assert!(
+        committed_descriptions.contains(&"Base commit 1"),
+        "non-default workspace should include target branch history, got: {:?}",
+        committed_descriptions
+    );
+    assert!(
+        committed_descriptions.contains(&"Base commit 2"),
+        "non-default workspace should include target branch history, got: {:?}",
+        committed_descriptions
+    );
+}
+
+#[test]
+fn test_non_default_workspace_combined_history_has_no_duplicate_change_ids() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    repo.commit_file("base_1.txt", "base 1\n", "Base commit 1")
+        .expect("Failed to create base commit 1");
+    repo.commit_file("base_2.txt", "base 2\n", "Base commit 2")
+        .expect("Failed to create base commit 2");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/dedupe",
+        Some("dedupe workspace".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path
+        .to_str()
+        .expect("workspace path should be utf-8");
+    TestRepo::write_workspace_file(workspace_path_str, "workspace_only.txt", "workspace\n")
+        .expect("Failed to write workspace file");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Workspace commit")
+        .expect("Failed to commit workspace change");
+
+    let result =
+        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+            .expect("Failed to list commits");
+
+    let committed_change_ids: Vec<&str> = result
+        .commits
+        .iter()
+        .filter(|c| !c.is_working_copy)
+        .map(|c| c.change_id.as_str())
+        .collect();
+    let unique_change_ids: std::collections::HashSet<&str> =
+        committed_change_ids.iter().copied().collect();
+
+    assert_eq!(
+        unique_change_ids.len(),
+        committed_change_ids.len(),
+        "combined history should not contain duplicate change IDs: {:?}",
+        committed_change_ids
+    );
+}
+
+#[test]
+fn test_no_main_assumption_for_non_main_default() {
+    let repo = TestRepo::new_without_init().expect("Failed to create test repo");
+
+    TestRepo::run_git(&repo.repo_path, &["branch", "-m", "trunk"])
+        .expect("Failed to rename default branch to trunk");
+    TestRepo::run_git(&repo.repo_path, &["checkout", "trunk"])
+        .expect("Failed to checkout trunk branch");
+
+    let remote_path = repo.temp_dir.path().join("remote.git");
+    TestRepo::ensure_dir(&remote_path).expect("Failed to create remote directory");
+    TestRepo::run_git(&remote_path.to_string_lossy(), &["init", "--bare"])
+        .expect("Failed to initialize bare remote");
+    TestRepo::run_git(
+        &repo.repo_path,
+        &[
+            "remote",
+            "add",
+            "origin",
+            remote_path.to_str().expect("remote path should be utf-8"),
+        ],
+    )
+    .expect("Failed to add origin remote");
+    TestRepo::run_git(&repo.repo_path, &["push", "-u", "origin", "trunk"])
+        .expect("Failed to push trunk to remote");
+    TestRepo::run_git(&repo.repo_path, &["remote", "set-head", "origin", "trunk"])
+        .expect("Failed to set origin HEAD to trunk");
+
+    treq_lib::core::init(&repo.repo_path).expect("Failed to initialize treq");
+
+    repo.commit_file("trunk_1.txt", "trunk 1\n", "Trunk commit 1")
+        .expect("Failed to create trunk commit 1");
+    repo.commit_file("trunk_2.txt", "trunk 2\n", "Trunk commit 2")
+        .expect("Failed to create trunk commit 2");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "trunk",
+        Some("root trunk workspace".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create trunk workspace");
+
+    let result =
+        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+            .expect("Failed to list commits");
+
+    let committed_descriptions: Vec<&str> = result
+        .commits
+        .iter()
+        .filter(|c| !c.is_working_copy)
+        .map(|c| c.description.as_str())
+        .collect();
+
+    assert!(
+        committed_descriptions.contains(&"Trunk commit 1"),
+        "trunk default-branch workspace should include trunk history, got: {:?}",
+        committed_descriptions
+    );
+    assert!(
+        committed_descriptions.contains(&"Trunk commit 2"),
+        "trunk default-branch workspace should include trunk history, got: {:?}",
+        committed_descriptions
+    );
+}
+
+#[test]
+fn test_non_default_workspace_uses_non_main_default_target_history() {
+    let repo = TestRepo::new_without_init().expect("Failed to create test repo");
+
+    TestRepo::run_git(&repo.repo_path, &["branch", "-m", "trunk"])
+        .expect("Failed to rename default branch to trunk");
+    TestRepo::run_git(&repo.repo_path, &["checkout", "trunk"])
+        .expect("Failed to checkout trunk branch");
+
+    let remote_path = repo.temp_dir.path().join("remote.git");
+    TestRepo::ensure_dir(&remote_path).expect("Failed to create remote directory");
+    TestRepo::run_git(&remote_path.to_string_lossy(), &["init", "--bare"])
+        .expect("Failed to initialize bare remote");
+    TestRepo::run_git(
+        &repo.repo_path,
+        &[
+            "remote",
+            "add",
+            "origin",
+            remote_path.to_str().expect("remote path should be utf-8"),
+        ],
+    )
+    .expect("Failed to add origin remote");
+    TestRepo::run_git(&repo.repo_path, &["push", "-u", "origin", "trunk"])
+        .expect("Failed to push trunk to remote");
+    TestRepo::run_git(&repo.repo_path, &["remote", "set-head", "origin", "trunk"])
+        .expect("Failed to set origin HEAD to trunk");
+
+    treq_lib::core::init(&repo.repo_path).expect("Failed to initialize treq");
+
+    repo.commit_file("trunk_1.txt", "trunk 1\n", "Trunk commit 1")
+        .expect("Failed to create trunk commit 1");
+    repo.commit_file("trunk_2.txt", "trunk 2\n", "Trunk commit 2")
+        .expect("Failed to create trunk commit 2");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/trunk-target",
+        Some("feature on trunk default".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path
+        .to_str()
+        .expect("workspace path should be utf-8");
+    TestRepo::write_workspace_file(workspace_path_str, "workspace_only.txt", "workspace\n")
+        .expect("Failed to write workspace file");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Workspace trunk commit")
+        .expect("Failed to commit workspace change");
+
+    let result =
+        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+            .expect("Failed to list commits");
+
+    let committed_descriptions: Vec<&str> = result
+        .commits
+        .iter()
+        .filter(|c| !c.is_working_copy)
+        .map(|c| c.description.as_str())
+        .collect();
+
+    assert!(
+        committed_descriptions.contains(&"Workspace trunk commit"),
+        "workspace history should include its own commit, got: {:?}",
+        committed_descriptions
+    );
+    assert!(
+        committed_descriptions.contains(&"Trunk commit 1"),
+        "non-default workspace should include trunk history, got: {:?}",
+        committed_descriptions
+    );
+    assert!(
+        committed_descriptions.contains(&"Trunk commit 2"),
+        "non-default workspace should include trunk history, got: {:?}",
+        committed_descriptions
     );
 }
