@@ -45,6 +45,12 @@ pub enum MaybeEmptyParam<T> {
     Some(T),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SyncSource {
+    HomeToWorkspace,
+    WorkspaceToHome,
+}
+
 /// Defines whether files/commits are moved or copied during a split.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 pub enum SplitMode {
@@ -920,6 +926,9 @@ pub fn merge_workspace(
 
     jj::jj_edit_bookmark(repo_path, target_branch)
         .map_err(|e| format!("Failed to update home repo to target branch: {}", e))?;
+    if workspace.branch_name == target_branch {
+        sync_home_and_workspace_for_branch(repo_path, target_branch, SyncSource::WorkspaceToHome)?;
+    }
 
     // Remove the workspace from jj (also deletes the workspace directory)
     jj::remove_workspace(repo_path, workspace_path_str)
@@ -929,6 +938,71 @@ pub fn merge_workspace(
     local_db::delete_workspace(repo_path, workspace_id)
         .map_err(|e| format!("Failed to delete workspace from db: {}", e))?;
 
+    Ok(())
+}
+
+fn sync_home_and_workspace_for_branch(
+    repo_path: &str,
+    branch: &str,
+    source: SyncSource,
+) -> Result<(), String> {
+    if branch.is_empty() || branch == "HEAD" {
+        return Ok(());
+    }
+
+    let home_branch = jj::resolve_home_repo_branch(repo_path)
+        .map_err(|e| format!("Failed to resolve home repo branch: {}", e))?;
+    if home_branch.is_empty() || home_branch == "HEAD" || home_branch != branch {
+        return Ok(());
+    }
+
+    let workspace = match local_db::get_workspace_by_branch(repo_path, branch)
+        .map_err(|e| format!("Failed to get workspace by branch: {}", e))?
+    {
+        Some(workspace) => workspace,
+        None => return Ok(()),
+    };
+    let workspace_path = Path::new(repo_path)
+        .join(".treq")
+        .join("workspaces")
+        .join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path
+        .to_str()
+        .ok_or("Failed to convert workspace path to string")?;
+
+    let source_path = match source {
+        SyncSource::HomeToWorkspace => repo_path,
+        SyncSource::WorkspaceToHome => workspace_path_str,
+    };
+    let _ = jj::jj_workspace_update_stale(source_path);
+    let source_tip =
+        jj::jj_get_commit_id(source_path, "@").map_err(|e| format!("Failed to resolve source tip: {}", e))?;
+
+    let destination_path = match source {
+        SyncSource::HomeToWorkspace => workspace_path_str,
+        SyncSource::WorkspaceToHome => repo_path,
+    };
+    let _ = jj::jj_workspace_update_stale(destination_path);
+    jj::jj_set_bookmark(destination_path, branch, &source_tip).map_err(|e| {
+        format!(
+            "Failed to force-sync destination bookmark '{}' to source tip: {}",
+            branch, e
+        )
+    })?;
+    match source {
+        SyncSource::WorkspaceToHome => {
+            jj::jj_edit_bookmark(destination_path, branch).map_err(|e| {
+                format!(
+                    "Failed to sync destination working copy to branch '{}': {}",
+                    branch, e
+                )
+            })?;
+            let _ = jj::jj_workspace_update_stale(destination_path);
+        }
+        SyncSource::HomeToWorkspace => {
+            let _ = jj::jj_workspace_update_stale(destination_path);
+        }
+    }
     Ok(())
 }
 
@@ -1349,6 +1423,9 @@ pub fn pull_workspace_from_remote(
         None => {
             // For home repo, just fetch — do not rebase, which would detach HEAD
             jj::jj_git_fetch(repo_path).map_err(|e| format!("Fetch failed: {}", e))?;
+            let home_branch = jj::resolve_home_repo_branch(repo_path)
+                .map_err(|e| format!("Failed to resolve home repo branch: {}", e))?;
+            sync_home_and_workspace_for_branch(repo_path, &home_branch, SyncSource::HomeToWorkspace)?;
             return Ok(PullWorkspaceResult {
                 success: true,
                 message: "Fetched home repo".to_string(),
@@ -1421,6 +1498,7 @@ pub fn pull_workspace_from_remote(
 
     // Step 6: refresh stale working copy only; do not sync bookmark tip here.
     let _ = jj::jj_workspace_update_stale(full_path_str);
+    sync_home_and_workspace_for_branch(repo_path, branch_name, SyncSource::WorkspaceToHome)?;
 
     Ok(PullWorkspaceResult {
         success: true,
@@ -1682,6 +1760,18 @@ where
     if !committed_branch.is_empty() {
         let _ = auto_rebase::rebase_after_commit(repo_path, &committed_branch);
     }
+    match workspace_id {
+        Some(_) => sync_home_and_workspace_for_branch(
+            repo_path,
+            &committed_branch,
+            SyncSource::WorkspaceToHome,
+        )?,
+        None => sync_home_and_workspace_for_branch(
+            repo_path,
+            &committed_branch,
+            SyncSource::HomeToWorkspace,
+        )?,
+    };
 
     Ok(result)
 }
