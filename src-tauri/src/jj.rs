@@ -2171,14 +2171,13 @@ pub fn jj_sync_working_copy_if_safe(
     let old_wc_commit = get_workspace_wc_commit(&loaded)?;
 
     let mut tx = loaded.repo.start_transaction();
-    let new_wc = block_on(
-        tx.repo_mut()
-            .new_commit(vec![destination.id().clone()], destination.tree())
-            .write(),
-    )
-    .map_err(|e| JjError::IoError(format!("Failed to create new working copy: {}", e)))?;
-    block_on(tx.repo_mut().edit(workspace_name, &new_wc))
-        .map_err(|e| JjError::IoError(format!("Failed to sync working copy: {}", e)))?;
+    // Edit the bookmark commit directly so @ == bookmark after sync.
+    // Previously this created a new empty child commit, which left @ ≠ bookmark
+    // and caused jj_working_copy_needs_sync to return true on every subsequent
+    // call, producing an infinite sync loop.
+    block_on(tx.repo_mut().edit(workspace_name, &destination))
+        .map_err(|e| JjError::IoError(format!("Failed to sync working copy to bookmark: {}", e)))?;
+    // jj requires rebase_descendants() after any rewrite before committing the transaction.
     block_on(tx.repo_mut().rebase_descendants())
         .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
     let new_repo = block_on(tx.commit("sync working copy to bookmark"))
