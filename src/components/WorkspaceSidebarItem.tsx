@@ -165,7 +165,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 										<div
 											style={indentStyle}
 											className={cn(
-												"group/workspace relative flex items-center text-sm tracking-wide pr-4 rounded-sm transition-colors cursor-pointer py-1",
+												"group/workspace relative flex items-center text-sm tracking-wide pr-4 rounded-sm transition-colors cursor-pointer p-0.5",
 												{
 													"bg-primary/20": isSelected,
 													"hover:bg-muted/50": !isSelected,
@@ -181,23 +181,13 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 											}
 											onDoubleClick={(e) => onDoubleClick?.(workspace, e)}
 										>
-											{node.depth === 0 ? (
-												<GitBranch
-													className={`w-3 h-3 mr-1 shrink-0 ${
+											<GitBranch
+													className={`w-3 h-3 mr-1 shrink-0 -scale-y-100 ${
 														isSelected
 															? "text-primary"
 															: "text-muted-foreground"
 													}`}
 												/>
-											) : (
-												<CornerLeftUp
-													className={`w-3 h-3 mr-1 shrink-0 ${
-														isSelected
-															? "text-primary"
-															: "text-muted-foreground"
-													}`}
-												/>
-											)}
 											<span
 												className={`flex-1 min-w-0 truncate font-mono ${
 													isSelected
