@@ -267,56 +267,13 @@ Or simply **remove entirely** if the advice is obvious.
 
 ---
 
-## Reference Example
-
-Here's a complete well-formatted file:
-
-```markdown
----
-sidebar_position: 2
----
-
-# Creating Worktrees
-
-_How to create and manage Git worktrees in Treq._
-
-Worktrees let you work on multiple branches simultaneously, each in its own directory. Click **New Worktree** in the dashboard (or `Cmd+N`) to open the creation dialog.
-
-## Creating a Worktree
-
-Choose **Create new branch** and enter a name like `add-user-profile`. Treq applies your branch naming pattern (default: `treq/{name}`). Alternatively, select **From existing branch** to check out an existing local or remote branch.
-
-Select a **base branch** (usually `main`) and optionally add a **plan title** to remember what you're working on. Click **Create Worktree**—Treq creates the directory and checks out the branch.
-
-## Working in Your Worktree
-
-Click **Open** on the worktree card to open a terminal session. The working directory is set to your worktree path. Make changes, run commands, and use Git normally. Treq detects changes and updates the dashboard automatically.
-
-## Configuration
-
-Configure branch naming patterns in Settings → Repository → Branch Pattern. Examples: `treq/{name}`, `feature/{name}`, or `{user}/{name}`.
-
-## Troubleshooting
-
-**"Branch already exists"**: Choose a different name or select the existing branch. **Worktree not appearing**: Use Settings → Rebuild Worktrees Database.
-
-## Next Steps
-
-- [Interface Overview](interface-overview) — Understand the UI
-- [Staging and Committing](../core-workflows/staging-and-committing) — Commit changes
-```
-
----
 
 ## Checklist Before Finishing
 
-- [ ] File is under 80 lines (ideally 40-60)
-- [ ] No bullet lists longer than 3 items
-- [ ] No H3 or H4 headers
-- [ ] No TypeScript/JSON/SQL code blocks
+- [ ] No H4 or H5 headers
+- [ ] No em dash usage
 - [ ] No "What's happening?" explanatory sections
-- [ ] No step-by-step numbered lists (convert to prose)
+- [ ] No step-by-step numbered lists or headers (convert to prose)
 - [ ] No redundant "Best Practices" sections
 - [ ] Bold terms are inline, not standalone
-- [ ] Opening has italic one-liner description
 - [ ] Ends with "Next Steps" linking 2-3 related pages
