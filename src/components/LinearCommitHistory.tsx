@@ -101,7 +101,7 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 				.finally(() => {
 					setLoading(false);
 				});
-		}, [repoPath, workspaceId]); // eslint-disable-line react-hooks/exhaustive-deps
+		}, [repoPath, workspaceId]);
 
 		// Re-fetch when limit increases (beyond initial load)
 		useEffect(() => {
@@ -119,7 +119,7 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 				})
 				.catch(() => {})
 				.finally(() => setLoadingMore(false));
-		}, [limit, repoPath, workspaceId, isHomeRepo]); // eslint-disable-line react-hooks/exhaustive-deps
+		}, [limit, repoPath, workspaceId, isHomeRepo]);
 
 		const dayGroups = useMemo(() => groupCommitsByDay(commits), [commits]);
 		const targetDayGroups = useMemo(

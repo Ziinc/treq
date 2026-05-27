@@ -2192,23 +2192,6 @@ pub fn jj_sync_working_copy_if_safe(
     Ok(true) // Sync performed successfully
 }
 
-/// Parse jj rename path format: "{old => new}" → (new_path, Some(old_path))
-/// For non-rename paths, returns (path, None)
-fn parse_rename_path(path: &str) -> (String, Option<String>) {
-    if let Some(open) = path.find('{') {
-        if let Some(close) = path.find('}') {
-            if let Some((old_part, new_part)) = path[open + 1..close].split_once(" => ") {
-                let prefix = &path[..open];
-                let suffix = &path[close + 1..];
-                let new_path = format!("{}{}{}", prefix, new_part.trim(), suffix);
-                let old_path = format!("{}{}{}", prefix, old_part.trim(), suffix);
-                return (new_path, Some(old_path));
-            }
-        }
-    }
-    (path.to_string(), None)
-}
-
 /// Get diff hunks for a specific file using jj-lib materialized tree values.
 pub fn jj_get_file_hunks(
     workspace_path: &str,
