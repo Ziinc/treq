@@ -119,7 +119,7 @@ pub fn check_and_rebase_all(
                     match jj::jj_sync_working_copy_if_safe(&full_path, &workspace.branch_name) {
                         Ok(true) => {
                             log::info!(
-                                "Auto-synced working copy for workspace '{}'",
+                                "Auto-synced working copy for workspace '{}' [check_and_rebase_all::after_rebase]",
                                 workspace.workspace_name
                             );
                         }
