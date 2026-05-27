@@ -8,6 +8,7 @@ export default defineConfig(async () => ({
   root: "src",
   plugins: [react()],
   build: {
+    outDir: "dist",
     rollupOptions: {
       output: {
         manualChunks: {
