@@ -1,6 +1,37 @@
 use chrono::TimeZone;
 use futures::StreamExt as _;
 use futures::TryStreamExt as _;
+
+/// Drive a future to completion on the calling thread using thread park/unpark.
+///
+/// Unlike `futures::executor::block_on`, this implementation does **not** set any
+/// thread-local "executor entered" flag, so it is safe to call nested — including
+/// from within jj-lib callbacks that internally also call `block_on`.  This avoids
+/// the `LocalPool EnterError` panic that occurs when `futures::executor::block_on`
+/// is re-entered on the same thread.
+fn block_on<F: std::future::Future>(future: F) -> F::Output {
+    use std::pin::pin;
+    use std::sync::Arc;
+    use std::task::{Context, Poll, Wake};
+    use std::thread;
+
+    struct ThreadWaker(thread::Thread);
+    impl Wake for ThreadWaker {
+        fn wake(self: Arc<Self>) {
+            self.0.unpark();
+        }
+    }
+
+    let waker = Arc::new(ThreadWaker(thread::current())).into();
+    let mut cx = Context::from_waker(&waker);
+    let mut future = pin!(future);
+    loop {
+        match future.as_mut().poll(&mut cx) {
+            Poll::Ready(val) => return val,
+            Poll::Pending => thread::park(),
+        }
+    }
+}
 use gix::refs::transaction::{Change, PreviousValue, RefEdit};
 use gix::refs::Target;
 use imara_diff::intern::InternedInput;
@@ -157,7 +188,7 @@ fn load_workspace_repo(workspace_path: &str) -> Result<LoadedWorkspaceRepo, JjEr
         &default_working_copy_factories(),
     )
     .map_err(|e| JjError::IoError(format!("Failed to load workspace: {}", e)))?;
-    let repo = futures::executor::block_on(workspace.repo_loader().load_at_head())
+    let repo = block_on(workspace.repo_loader().load_at_head())
         .map_err(|e| JjError::IoError(format!("Failed to load repo: {}", e)))?;
     let path_converter = RepoPathUiConverter::Fs {
         cwd: workspace_root.to_path_buf(),
@@ -181,7 +212,7 @@ fn import_git_head_if_needed(
         .ok()
         .filter(|branch| !branch.is_empty() && branch != "HEAD");
     let mut import_tx = loaded.repo.start_transaction();
-    let _ = futures::executor::block_on(git::import_head(import_tx.repo_mut()));
+    let _ = block_on(git::import_head(import_tx.repo_mut()));
 
     let git_head_id = import_tx
         .repo()
@@ -203,7 +234,7 @@ fn import_git_head_if_needed(
     }
 
     if import_tx.repo().has_changes() {
-        loaded.repo = futures::executor::block_on(import_tx.commit("import git head"))
+        loaded.repo = block_on(import_tx.commit("import git head"))
             .map_err(|e| JjError::GitWorkspaceError(format!("Failed to import git head: {}", e)))?;
     }
 
@@ -287,9 +318,9 @@ fn snapshot_working_copy_tree(
         .workspace
         .start_working_copy_mutation()
         .map_err(|e| JjError::IoError(format!("Failed to lock working copy: {}", e)))?;
-    let (tree, _stats) = futures::executor::block_on(locked_ws.locked_wc().snapshot(&opts))
+    let (tree, _stats) = block_on(locked_ws.locked_wc().snapshot(&opts))
         .map_err(|e| JjError::IoError(format!("Failed to snapshot working copy: {}", e)))?;
-    futures::executor::block_on(locked_ws.finish(loaded.repo.op_id().clone()))
+    block_on(locked_ws.finish(loaded.repo.op_id().clone()))
         .map_err(|e| JjError::IoError(format!("Failed to finish working copy snapshot: {}", e)))?;
 
     Ok(Some((wc_commit_id, tree)))
@@ -365,7 +396,7 @@ fn compute_commit_stats(
     commit: &jj_lib::commit::Commit,
     tree_override: Option<&MergedTree>,
 ) -> (u32, u32) {
-    futures::executor::block_on(async {
+    block_on(async {
         let parent_tree = commit
             .parent_tree(repo.as_ref())
             .await
@@ -432,7 +463,7 @@ fn compute_commit_stats(
 }
 
 fn is_empty_commit(repo: &Arc<ReadonlyRepo>, commit: &jj_lib::commit::Commit) -> bool {
-    let parent_tree = futures::executor::block_on(commit.parent_tree(repo.as_ref()))
+    let parent_tree = block_on(commit.parent_tree(repo.as_ref()))
         .unwrap_or_else(|_| repo.store().root_commit().tree());
     parent_tree.tree_ids() == commit.tree().tree_ids()
 }
@@ -958,7 +989,7 @@ fn init_jj_for_git_repo(repo_path: &str) -> Result<(), JjError> {
     // Use init_external_git to link jj to the existing .git repository.
     let git_repo_path = path.join(".git");
 
-    futures::executor::block_on(Workspace::init_external_git(
+    block_on(Workspace::init_external_git(
         &settings,
         path,
         &git_repo_path,
@@ -1067,7 +1098,7 @@ pub fn create_workspace(
     )
     .map_err(|e| JjError::GitWorkspaceError(format!("Failed to load parent workspace: {}", e)))?;
 
-    let parent_repo = futures::executor::block_on(parent_workspace.repo_loader().load_at_head())
+    let parent_repo = block_on(parent_workspace.repo_loader().load_at_head())
         .map_err(|e| JjError::GitWorkspaceError(format!("Failed to load repo: {}", e)))?;
     let git_head_branch = read_git_head_branch(repo_path)
         .ok()
@@ -1076,7 +1107,7 @@ pub fn create_workspace(
     // Import git HEAD and mirror fetch-style bookmark tracking to avoid untracked remote push failures.
     let parent_repo = {
         let mut import_tx = parent_repo.start_transaction();
-        let _ = futures::executor::block_on(git::import_head(import_tx.repo_mut()));
+        let _ = block_on(git::import_head(import_tx.repo_mut()));
 
         let git_head_id = import_tx
             .repo()
@@ -1129,7 +1160,7 @@ pub fn create_workspace(
         }
 
         if import_tx.repo().has_changes() {
-            futures::executor::block_on(import_tx.commit("import git head")).map_err(|e| {
+            block_on(import_tx.commit("import git head")).map_err(|e| {
                 JjError::GitWorkspaceError(format!("Failed to import git head: {}", e))
             })?
         } else {
@@ -1231,7 +1262,7 @@ pub fn create_workspace(
     // Initialize the new workspace (creates .jj, registers workspace, checks out root commit)
     let wc_factory = default_working_copy_factory();
     let (mut new_workspace, new_repo) =
-        futures::executor::block_on(Workspace::init_workspace_with_existing_repo(
+        block_on(Workspace::init_workspace_with_existing_repo(
             &workspace_dir,
             parent_workspace.repo_path(),
             &parent_repo,
@@ -1249,11 +1280,11 @@ pub fn create_workspace(
     let mut tx = new_repo.start_transaction();
 
     let parent_tree =
-        futures::executor::block_on(merge_commit_trees(tx.repo(), &[source_commit.clone()]))
+        block_on(merge_commit_trees(tx.repo(), &[source_commit.clone()]))
             .map_err(|e| JjError::GitWorkspaceError(format!("Failed to merge trees: {}", e)))?;
 
     // Create new wc commit on top of source_commit (empty, inherits source tree)
-    let new_wc = futures::executor::block_on(
+    let new_wc = block_on(
         tx.repo_mut()
             .new_commit(vec![source_commit_id.clone()], parent_tree)
             .write(),
@@ -1261,7 +1292,7 @@ pub fn create_workspace(
     .map_err(|e| JjError::GitWorkspaceError(format!("Failed to create wc commit: {}", e)))?;
 
     // Point the new workspace's @ to the new wc commit
-    futures::executor::block_on(tx.repo_mut().edit(new_ws_name.clone(), &new_wc))
+    block_on(tx.repo_mut().edit(new_ws_name.clone(), &new_wc))
         .map_err(|e| JjError::GitWorkspaceError(format!("Failed to set wc: {}", e)))?;
 
     // Set the local bookmark to the new wc commit
@@ -1287,17 +1318,17 @@ pub fn create_workspace(
     }
 
     // Rebase any descendants of rewritten commits (required before tx.commit)
-    futures::executor::block_on(tx.repo_mut().rebase_descendants())
+    block_on(tx.repo_mut().rebase_descendants())
         .map_err(|e| JjError::GitWorkspaceError(format!("Failed to rebase descendants: {}", e)))?;
 
     // Export to git refs (colocated repo)
     let _ = git::export_refs(tx.repo_mut());
 
-    let final_repo = futures::executor::block_on(tx.commit("create_workspace"))
+    let final_repo = block_on(tx.commit("create_workspace"))
         .map_err(|e| JjError::GitWorkspaceError(format!("Failed to commit transaction: {}", e)))?;
 
     // Update the physical working copy to match the new wc commit
-    futures::executor::block_on(new_workspace.check_out(final_repo.op_id().clone(), None, &new_wc))
+    block_on(new_workspace.check_out(final_repo.op_id().clone(), None, &new_wc))
         .map_err(|e| JjError::GitWorkspaceError(format!("Failed to checkout workspace: {}", e)))?;
 
     Ok(sanitized_name)
@@ -1335,7 +1366,7 @@ fn load_home_repo(
     repo_path: &str,
 ) -> Result<(Workspace, Arc<ReadonlyRepo>, SimpleWorkspaceStore), JjError> {
     let workspace = load_home_workspace(repo_path)?;
-    let repo = futures::executor::block_on(workspace.repo_loader().load_at_head())
+    let repo = block_on(workspace.repo_loader().load_at_head())
         .map_err(|e| JjError::IoError(format!("Failed to load repo: {}", e)))?;
     let workspace_store = SimpleWorkspaceStore::load(workspace.repo_path())
         .map_err(|e| JjError::IoError(format!("Failed to load workspace store: {}", e)))?;
@@ -1560,15 +1591,15 @@ pub fn remove_workspace(repo_path: &str, workspace_path: &str) -> Result<(), JjE
             .find(|(name, _)| name.as_str() == workspace_name)
             .map(|(name, _)| (*name).clone());
         if let Some(ws_name) = ws_name {
-            futures::executor::block_on(tx.repo_mut().remove_wc_commit(&ws_name))
+            block_on(tx.repo_mut().remove_wc_commit(&ws_name))
                 .map_err(|e| JjError::IoError(format!("Failed to forget workspace: {}", e)))?;
-            futures::executor::block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
+            block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
                 JjError::IoError(format!(
                     "Failed to rebase descendants while forgetting workspace: {}",
                     e
                 ))
             })?;
-            futures::executor::block_on(tx.commit("forget workspace"))
+            block_on(tx.commit("forget workspace"))
                 .map_err(|e| JjError::IoError(format!("Failed to forget workspace: {}", e)))?;
         }
     }
@@ -1758,9 +1789,9 @@ pub fn jj_abandon(workspace_path: &str, change_id: &str) -> Result<String, JjErr
     let commit = resolve_commit_by_revision(&loaded, change_id)?;
     let mut tx = loaded.repo.start_transaction();
     tx.repo_mut().record_abandoned_commit(&commit);
-    futures::executor::block_on(tx.repo_mut().rebase_descendants())
+    block_on(tx.repo_mut().rebase_descendants())
         .map_err(|e| JjError::InitFailed(format!("Failed to rebase descendants: {}", e)))?;
-    futures::executor::block_on(tx.commit("abandon commit"))
+    block_on(tx.commit("abandon commit"))
         .map_err(|e| JjError::InitFailed(format!("Failed to abandon commit: {}", e)))?;
     Ok(String::new())
 }
@@ -1771,7 +1802,7 @@ pub fn jj_abandon(workspace_path: &str, change_id: &str) -> Result<String, JjErr
 pub fn jj_diff_summary(workspace_path: &str, change_id: &str) -> Result<Vec<String>, JjError> {
     let loaded = load_workspace_repo(workspace_path)?;
     let commit = resolve_commit_by_revision(&loaded, change_id)?;
-    let parents = futures::executor::block_on(commit.parents())
+    let parents = block_on(commit.parents())
         .map_err(|e| JjError::InitFailed(format!("Failed to load commit parents: {}", e)))?;
     let parent_tree = if let Some(p) = parents.first() {
         p.tree()
@@ -1782,7 +1813,7 @@ pub fn jj_diff_summary(workspace_path: &str, change_id: &str) -> Result<Vec<Stri
     let matcher = repo_root_matcher();
     let mut diff_stream = parent_tree.diff_stream(&tree, &matcher);
     let mut files = Vec::new();
-    while let Some(entry) = futures::executor::block_on(diff_stream.next()) {
+    while let Some(entry) = block_on(diff_stream.next()) {
         files.push(entry.path.as_internal_file_string().to_string());
     }
     Ok(files)
@@ -1808,7 +1839,7 @@ pub fn update_stale_workspace(workspace_path: &str) -> Result<(), JjError> {
     )
     .map_err(|e| JjError::InitFailed(format!("Failed to load workspace: {}", e)))?;
 
-    let repo = futures::executor::block_on(workspace.repo_loader().load_at_head())
+    let repo = block_on(workspace.repo_loader().load_at_head())
         .map_err(|e| JjError::InitFailed(format!("Failed to load repo: {}", e)))?;
 
     let workspace_name = workspace.workspace_name().to_owned();
@@ -1826,7 +1857,7 @@ pub fn update_stale_workspace(workspace_path: &str) -> Result<(), JjError> {
         .start_working_copy_mutation()
         .map_err(|e| JjError::InitFailed(format!("Failed to lock working copy: {}", e)))?;
 
-    let freshness = futures::executor::block_on(WorkingCopyFreshness::check_stale(
+    let freshness = block_on(WorkingCopyFreshness::check_stale(
         locked_ws.locked_wc(),
         &wc_commit,
         &repo,
@@ -1835,13 +1866,13 @@ pub fn update_stale_workspace(workspace_path: &str) -> Result<(), JjError> {
 
     match freshness {
         WorkingCopyFreshness::Fresh => {
-            futures::executor::block_on(locked_ws.finish(repo.op_id().clone()))
+            block_on(locked_ws.finish(repo.op_id().clone()))
                 .map_err(|e| JjError::InitFailed(format!("Failed to finish wc: {}", e)))?;
         }
         _ => {
-            futures::executor::block_on(locked_ws.locked_wc().check_out(&wc_commit))
+            block_on(locked_ws.locked_wc().check_out(&wc_commit))
                 .map_err(|e| JjError::InitFailed(format!("Failed to check out: {}", e)))?;
-            futures::executor::block_on(locked_ws.finish(repo.op_id().clone()))
+            block_on(locked_ws.finish(repo.op_id().clone()))
                 .map_err(|e| JjError::InitFailed(format!("Failed to finish wc: {}", e)))?;
         }
     }
@@ -1868,7 +1899,7 @@ pub fn is_workspace_stale(workspace_path: &str) -> Result<bool, JjError> {
         &default_working_copy_factories(),
     )
     .map_err(|e| JjError::InitFailed(format!("Failed to load workspace: {}", e)))?;
-    let repo = futures::executor::block_on(workspace.repo_loader().load_at_head())
+    let repo = block_on(workspace.repo_loader().load_at_head())
         .map_err(|e| JjError::InitFailed(format!("Failed to load repo: {}", e)))?;
     let workspace_name = workspace.workspace_name().to_owned();
     let wc_commit_id = match repo.view().get_wc_commit_id(&workspace_name) {
@@ -1882,13 +1913,13 @@ pub fn is_workspace_stale(workspace_path: &str) -> Result<bool, JjError> {
     let mut locked_ws = workspace
         .start_working_copy_mutation()
         .map_err(|e| JjError::InitFailed(format!("Failed to lock working copy: {}", e)))?;
-    let freshness = futures::executor::block_on(WorkingCopyFreshness::check_stale(
+    let freshness = block_on(WorkingCopyFreshness::check_stale(
         locked_ws.locked_wc(),
         &wc_commit,
         &repo,
     ))
     .map_err(|e| JjError::InitFailed(format!("Failed to check staleness: {}", e)))?;
-    futures::executor::block_on(locked_ws.finish(repo.op_id().clone()))
+    block_on(locked_ws.finish(repo.op_id().clone()))
         .map_err(|e| JjError::InitFailed(format!("Failed to finish wc: {}", e)))?;
     Ok(!matches!(freshness, WorkingCopyFreshness::Fresh))
 }
@@ -1936,7 +1967,7 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
         Ok(ws) => ws,
         Err(_) => return Ok(Vec::new()),
     };
-    let mut repo = match futures::executor::block_on(workspace.repo_loader().load_at_head()) {
+    let mut repo = match block_on(workspace.repo_loader().load_at_head()) {
         Ok(r) => r,
         Err(_) => return Ok(Vec::new()),
     };
@@ -1962,14 +1993,14 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
                                     repo.store().get_commit(&branch_tip_id)
                                 {
                                     let mut tx = repo.start_transaction();
-                                    let _ = futures::executor::block_on(
+                                    let _ = block_on(
                                         tx.repo_mut().check_out(workspace_name, &branch_tip_commit),
                                     );
-                                    let _ = futures::executor::block_on(
+                                    let _ = block_on(
                                         tx.repo_mut().rebase_descendants(),
                                     );
                                     let _ = git::export_refs(tx.repo_mut());
-                                    if futures::executor::block_on(tx.commit("repair home wc"))
+                                    if block_on(tx.commit("repair home wc"))
                                         .is_ok()
                                     {
                                         repaired_home_wc = true;
@@ -1992,7 +2023,7 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
             Ok(ws) => ws,
             Err(_) => return Ok(Vec::new()),
         };
-        repo = match futures::executor::block_on(workspace.repo_loader().load_at_head()) {
+        repo = match block_on(workspace.repo_loader().load_at_head()) {
             Ok(r) => r,
             Err(_) => return Ok(Vec::new()),
         };
@@ -2018,7 +2049,7 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
         Ok(lws) => lws,
         Err(_) => return Ok(Vec::new()),
     };
-    let new_tree = match futures::executor::block_on(locked_ws.locked_wc().snapshot(&opts)) {
+    let new_tree = match block_on(locked_ws.locked_wc().snapshot(&opts)) {
         Ok((tree, _)) => tree,
         Err(_) => return Ok(Vec::new()), // locked_ws dropped here, lock released
     };
@@ -2028,29 +2059,29 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
         let mut tx = repo.start_transaction();
         let mut builder = tx.repo_mut().rewrite_commit(&wc_commit).detach();
         builder.set_tree(new_tree.clone());
-        match futures::executor::block_on(builder.write(tx.repo_mut())) {
+        match block_on(builder.write(tx.repo_mut())) {
             Ok(rewritten_wc) => {
-                let _ = futures::executor::block_on(
+                let _ = block_on(
                     tx.repo_mut().edit(workspace_name.clone(), &rewritten_wc),
                 );
-                let _ = futures::executor::block_on(tx.repo_mut().rebase_descendants());
-                match futures::executor::block_on(tx.commit("snapshot working copy")) {
+                let _ = block_on(tx.repo_mut().rebase_descendants());
+                match block_on(tx.commit("snapshot working copy")) {
                     Ok(final_repo) => {
-                        let _ = futures::executor::block_on(
+                        let _ = block_on(
                             locked_ws.finish(final_repo.op_id().clone()),
                         );
                     }
                     Err(_) => {
-                        let _ = futures::executor::block_on(locked_ws.finish(repo.op_id().clone()));
+                        let _ = block_on(locked_ws.finish(repo.op_id().clone()));
                     }
                 }
             }
             Err(_) => {
-                let _ = futures::executor::block_on(locked_ws.finish(repo.op_id().clone()));
+                let _ = block_on(locked_ws.finish(repo.op_id().clone()));
             }
         }
     } else {
-        let _ = futures::executor::block_on(locked_ws.finish(repo.op_id().clone()));
+        let _ = block_on(locked_ws.finish(repo.op_id().clone()));
     }
 
     // Get the wc commit's parent tree to diff against
@@ -2064,7 +2095,7 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
     };
 
     let diff_matcher = repo_root_matcher();
-    let diff_entries = futures::executor::block_on(
+    let diff_entries = block_on(
         parent_tree
             .diff_stream(&new_tree, &diff_matcher)
             .collect::<Vec<_>>(),
@@ -2140,17 +2171,17 @@ pub fn jj_sync_working_copy_if_safe(
     let old_wc_commit = get_workspace_wc_commit(&loaded)?;
 
     let mut tx = loaded.repo.start_transaction();
-    let new_wc = futures::executor::block_on(
+    let new_wc = block_on(
         tx.repo_mut()
             .new_commit(vec![destination.id().clone()], destination.tree())
             .write(),
     )
     .map_err(|e| JjError::IoError(format!("Failed to create new working copy: {}", e)))?;
-    futures::executor::block_on(tx.repo_mut().edit(workspace_name, &new_wc))
+    block_on(tx.repo_mut().edit(workspace_name, &new_wc))
         .map_err(|e| JjError::IoError(format!("Failed to sync working copy: {}", e)))?;
-    futures::executor::block_on(tx.repo_mut().rebase_descendants())
+    block_on(tx.repo_mut().rebase_descendants())
         .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
-    let new_repo = futures::executor::block_on(tx.commit("sync working copy to bookmark"))
+    let new_repo = block_on(tx.commit("sync working copy to bookmark"))
         .map_err(|e| JjError::IoError(format!("Failed to commit working copy sync: {}", e)))?;
     update_workspace_after_history_edit(
         &mut loaded,
@@ -2203,7 +2234,7 @@ pub fn jj_get_file_hunks(
         .store()
         .get_commit(&wc_commit_id)
         .map_err(|e| JjError::IoError(format!("Failed to load wc commit: {}", e)))?;
-    let parent_tree = futures::executor::block_on(wc_commit.parent_tree(loaded.repo.as_ref()))
+    let parent_tree = block_on(wc_commit.parent_tree(loaded.repo.as_ref()))
         .map_err(|e| JjError::IoError(format!("Failed to read parent tree: {}", e)))?;
     let mut tree = wc_commit.tree();
     if let Some((_, snapshotted_tree)) = snapshot_working_copy_tree(&mut loaded, workspace_path)? {
@@ -2212,15 +2243,15 @@ pub fn jj_get_file_hunks(
 
     let target_repo_path = RepoPathBuf::from_internal_string(file_path)
         .map_err(|_| JjError::IoError("Invalid file path".to_string()))?;
-    let before = futures::executor::block_on(parent_tree.path_value(target_repo_path.as_ref()))
+    let before = block_on(parent_tree.path_value(target_repo_path.as_ref()))
         .map_err(|e| JjError::IoError(format!("Failed to read parent path value: {}", e)))?;
-    let after = futures::executor::block_on(tree.path_value(target_repo_path.as_ref()))
+    let after = block_on(tree.path_value(target_repo_path.as_ref()))
         .map_err(|e| JjError::IoError(format!("Failed to read working path value: {}", e)))?;
     let merge_options = MergeOptions::from_settings(&loaded.settings)
         .map_err(|e| JjError::IoError(format!("Failed to load merge options: {}", e)))?;
     let labels = ConflictLabels::unlabeled();
     let before_materialized =
-        futures::executor::block_on(jj_lib::conflicts::materialize_tree_value(
+        block_on(jj_lib::conflicts::materialize_tree_value(
             loaded.repo.store(),
             target_repo_path.as_ref(),
             before,
@@ -2228,7 +2259,7 @@ pub fn jj_get_file_hunks(
         ))
         .map_err(|e| JjError::IoError(format!("Failed to materialize parent value: {}", e)))?;
     let after_materialized =
-        futures::executor::block_on(jj_lib::conflicts::materialize_tree_value(
+        block_on(jj_lib::conflicts::materialize_tree_value(
             loaded.repo.store(),
             target_repo_path.as_ref(),
             after,
@@ -2237,13 +2268,13 @@ pub fn jj_get_file_hunks(
         .map_err(|e| JjError::IoError(format!("Failed to materialize working value: {}", e)))?;
 
     let style = parse_conflict_marker_style(conflict_marker_style);
-    let before_bytes = futures::executor::block_on(materialized_value_to_bytes(
+    let before_bytes = block_on(materialized_value_to_bytes(
         target_repo_path.as_ref(),
         before_materialized,
         style,
         Some(&merge_options),
     ));
-    let after_bytes = futures::executor::block_on(materialized_value_to_bytes(
+    let after_bytes = block_on(materialized_value_to_bytes(
         target_repo_path.as_ref(),
         after_materialized,
         style,
@@ -2375,7 +2406,7 @@ pub fn jj_restore_file(workspace_path: &str, file_path: &str) -> Result<String, 
     let ws_name = loaded.workspace.workspace_name().to_owned();
     let wc_commit = get_workspace_wc_commit(&loaded)?
         .ok_or_else(|| JjError::IoError("No working-copy commit".to_string()))?;
-    let parents = futures::executor::block_on(wc_commit.parents())
+    let parents = block_on(wc_commit.parents())
         .map_err(|e| JjError::IoError(format!("Failed to load working-copy parents: {}", e)))?;
     let parent = parents
         .first()
@@ -2385,7 +2416,7 @@ pub fn jj_restore_file(workspace_path: &str, file_path: &str) -> Result<String, 
     let repo_file = RepoPathBuf::from_internal_string(file_path)
         .map_err(|e| JjError::IoError(format!("Invalid file path '{}': {}", file_path, e)))?;
     let matcher = PrefixMatcher::new([repo_file.as_ref()]);
-    let restored_tree = futures::executor::block_on(rewrite::restore_tree(
+    let restored_tree = block_on(rewrite::restore_tree(
         &source_tree,
         &destination_tree,
         "source".to_string(),
@@ -2397,22 +2428,22 @@ pub fn jj_restore_file(workspace_path: &str, file_path: &str) -> Result<String, 
         return Ok(String::new());
     }
     let mut tx = loaded.repo.start_transaction();
-    let rewritten = futures::executor::block_on(
+    let rewritten = block_on(
         tx.repo_mut()
             .rewrite_commit(&wc_commit)
             .set_tree(restored_tree)
             .write(),
     )
     .map_err(|e| JjError::IoError(format!("Failed to rewrite working-copy commit: {}", e)))?;
-    futures::executor::block_on(tx.repo_mut().edit(ws_name, &rewritten)).map_err(|e| {
+    block_on(tx.repo_mut().edit(ws_name, &rewritten)).map_err(|e| {
         JjError::IoError(format!(
             "Failed to update working-copy commit pointer: {}",
             e
         ))
     })?;
-    futures::executor::block_on(tx.repo_mut().rebase_descendants())
+    block_on(tx.repo_mut().rebase_descendants())
         .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
-    let new_repo = futures::executor::block_on(tx.commit("restore file"))
+    let new_repo = block_on(tx.commit("restore file"))
         .map_err(|e| JjError::IoError(format!("Failed to commit restore: {}", e)))?;
     update_workspace_after_history_edit(
         &mut loaded,
@@ -2429,7 +2460,7 @@ pub fn jj_restore_all(workspace_path: &str) -> Result<String, JjError> {
     let ws_name = loaded.workspace.workspace_name().to_owned();
     let wc_commit = get_workspace_wc_commit(&loaded)?
         .ok_or_else(|| JjError::IoError("No working-copy commit".to_string()))?;
-    let parents = futures::executor::block_on(wc_commit.parents())
+    let parents = block_on(wc_commit.parents())
         .map_err(|e| JjError::IoError(format!("Failed to load working-copy parents: {}", e)))?;
     let parent = parents
         .first()
@@ -2440,22 +2471,22 @@ pub fn jj_restore_all(workspace_path: &str) -> Result<String, JjError> {
         return Ok(String::new());
     }
     let mut tx = loaded.repo.start_transaction();
-    let rewritten = futures::executor::block_on(
+    let rewritten = block_on(
         tx.repo_mut()
             .rewrite_commit(&wc_commit)
             .set_tree(source_tree)
             .write(),
     )
     .map_err(|e| JjError::IoError(format!("Failed to rewrite working-copy commit: {}", e)))?;
-    futures::executor::block_on(tx.repo_mut().edit(ws_name, &rewritten)).map_err(|e| {
+    block_on(tx.repo_mut().edit(ws_name, &rewritten)).map_err(|e| {
         JjError::IoError(format!(
             "Failed to update working-copy commit pointer: {}",
             e
         ))
     })?;
-    futures::executor::block_on(tx.repo_mut().rebase_descendants())
+    block_on(tx.repo_mut().rebase_descendants())
         .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
-    let new_repo = futures::executor::block_on(tx.commit("restore all"))
+    let new_repo = block_on(tx.commit("restore all"))
         .map_err(|e| JjError::IoError(format!("Failed to commit restore: {}", e)))?;
     update_workspace_after_history_edit(
         &mut loaded,
@@ -2480,7 +2511,7 @@ pub fn jj_set_bookmark(
         RefName::new(bookmark_name),
         RefTarget::normal(commit.id().clone()),
     );
-    futures::executor::block_on(tx.commit("set bookmark target")).map_err(|e| {
+    block_on(tx.commit("set bookmark target")).map_err(|e| {
         JjError::IoError(format!("Failed to set bookmark '{}': {}", bookmark_name, e))
     })?;
     Ok(())
@@ -2493,7 +2524,7 @@ pub fn jj_delete_bookmark(workspace_path: &str, bookmark_name: &str) -> Result<(
     let mut tx = loaded.repo.start_transaction();
     tx.repo_mut()
         .set_local_bookmark_target(RefName::new(bookmark_name), RefTarget::absent());
-    futures::executor::block_on(tx.commit("delete bookmark")).map_err(|e| {
+    block_on(tx.commit("delete bookmark")).map_err(|e| {
         JjError::IoError(format!(
             "Failed to delete bookmark '{}': {}",
             bookmark_name, e
@@ -2521,7 +2552,7 @@ pub fn jj_bookmark_track(
             bookmark_name, remote_name, e
         ))
     })?;
-    futures::executor::block_on(tx.commit("track remote bookmark"))
+    block_on(tx.commit("track remote bookmark"))
         .map_err(|e| JjError::IoError(format!("Failed to persist bookmark tracking: {}", e)))?;
     Ok(())
 }
@@ -2556,18 +2587,18 @@ pub fn jj_edit_bookmark(repo_path: &str, bookmark_name: &str) -> Result<String, 
     let old_wc_commit = get_workspace_wc_commit(&loaded)?;
     let workspace_name = loaded.workspace.workspace_name().to_owned();
     let mut tx = loaded.repo.start_transaction();
-    let new_wc = futures::executor::block_on(
+    let new_wc = block_on(
         tx.repo_mut()
             .new_commit(vec![destination.id().clone()], destination.tree())
             .write(),
     )
     .map_err(|e| JjError::IoError(format!("Failed to create working copy commit: {}", e)))?;
-    futures::executor::block_on(tx.repo_mut().edit(workspace_name, &new_wc))
+    block_on(tx.repo_mut().edit(workspace_name, &new_wc))
         .map_err(|e| JjError::IoError(format!("Failed to move working copy: {}", e)))?;
-    futures::executor::block_on(tx.repo_mut().rebase_descendants())
+    block_on(tx.repo_mut().rebase_descendants())
         .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
     let _ = git::export_refs(tx.repo_mut());
-    let new_repo = futures::executor::block_on(tx.commit("edit bookmark"))
+    let new_repo = block_on(tx.commit("edit bookmark"))
         .map_err(|e| JjError::IoError(format!("Failed to commit bookmark edit: {}", e)))?;
     update_workspace_after_history_edit(
         &mut loaded,
@@ -2646,7 +2677,7 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     )
     .map_err(|e| JjError::IoError(format!("Failed to load workspace: {}", e)))?;
 
-    let mut repo = futures::executor::block_on(workspace.repo_loader().load_at_head())
+    let mut repo = block_on(workspace.repo_loader().load_at_head())
         .map_err(|e| JjError::IoError(format!("Failed to load repo: {}", e)))?;
 
     let workspace_name: WorkspaceNameBuf = workspace.workspace_name().to_owned();
@@ -2673,20 +2704,20 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
                                 JjError::IoError(format!("Failed to load branch tip commit: {}", e))
                             })?;
                         let mut rtx = repo.start_transaction();
-                        futures::executor::block_on(
+                        block_on(
                             rtx.repo_mut()
                                 .check_out(workspace_name.clone(), &branch_tip_commit),
                         )
                         .map_err(|e| {
                             JjError::IoError(format!("Failed to repair home wc checkout: {}", e))
                         })?;
-                        futures::executor::block_on(rtx.repo_mut().rebase_descendants()).map_err(
+                        block_on(rtx.repo_mut().rebase_descendants()).map_err(
                             |e| {
                                 JjError::IoError(format!("Failed to rebase after wc repair: {}", e))
                             },
                         )?;
                         let _ = git::export_refs(rtx.repo_mut());
-                        let _ = futures::executor::block_on(rtx.commit("repair home wc")).map_err(
+                        let _ = block_on(rtx.commit("repair home wc")).map_err(
                             |e| JjError::IoError(format!("Failed to commit wc repair: {}", e)),
                         )?;
                         workspace = Workspace::load(
@@ -2698,7 +2729,7 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
                         .map_err(|e| {
                             JjError::IoError(format!("Failed to reload workspace: {}", e))
                         })?;
-                        repo = futures::executor::block_on(workspace.repo_loader().load_at_head())
+                        repo = block_on(workspace.repo_loader().load_at_head())
                             .map_err(|e| {
                                 JjError::IoError(format!("Failed to reload repo: {}", e))
                             })?;
@@ -2715,7 +2746,7 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     let mut locked_ws = workspace
         .start_working_copy_mutation()
         .map_err(|e| JjError::IoError(format!("Failed to lock working copy: {}", e)))?;
-    let (new_tree, _stats) = futures::executor::block_on(locked_ws.locked_wc().snapshot(&opts))
+    let (new_tree, _stats) = block_on(locked_ws.locked_wc().snapshot(&opts))
         .map_err(|e| JjError::IoError(format!("Snapshot failed: {}", e)))?;
 
     // Start transaction
@@ -2762,7 +2793,7 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
             .cloned()
             .collect();
         if !others.is_empty() {
-            let detached_wc = futures::executor::block_on(
+            let detached_wc = block_on(
                 tx.repo_mut()
                     .new_commit(vec![wc_commit.id().clone()], wc_commit.tree())
                     .write(),
@@ -2774,7 +2805,7 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
                 ))
             })?;
             for name in others {
-                futures::executor::block_on(tx.repo_mut().edit(name, &detached_wc)).map_err(
+                block_on(tx.repo_mut().edit(name, &detached_wc)).map_err(
                     |e| JjError::IoError(format!("Failed to detach workspace wc pointer: {}", e)),
                 )?;
             }
@@ -2791,10 +2822,10 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     let mut builder = tx.repo_mut().rewrite_commit(&wc_commit).detach();
     builder.set_tree(new_tree);
     builder.set_description(message);
-    let committed = futures::executor::block_on(builder.write(tx.repo_mut()))
+    let committed = block_on(builder.write(tx.repo_mut()))
         .map_err(|e| JjError::IoError(format!("Failed to write commit: {}", e)))?;
     // Before fresh WC child / bookmark updates: `rebase_descendants` after those steps can reparent the authored commit incorrectly when another jj workspace exists (sibling wc commits off the same bookmark parent).
-    futures::executor::block_on(tx.repo_mut().rebase_descendants())
+    block_on(tx.repo_mut().rebase_descendants())
         .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
 
     let ref_name = RefName::new(&branch);
@@ -2802,7 +2833,7 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
         .set_local_bookmark_target(ref_name, RefTarget::normal(committed.id().clone()));
 
     if !workspace_names.is_empty() {
-        let new_wc = futures::executor::block_on(
+        let new_wc = block_on(
             tx.repo_mut()
                 .new_commit(vec![committed.id().clone()], committed.tree())
                 .write(),
@@ -2817,7 +2848,7 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
         }
 
         for name in workspace_names {
-            futures::executor::block_on(tx.repo_mut().edit(name, &new_wc))
+            block_on(tx.repo_mut().edit(name, &new_wc))
                 .map_err(|e| JjError::IoError(format!("Failed to update wc pointer: {}", e)))?;
         }
     }
@@ -2826,9 +2857,9 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     let _ = git::export_refs(tx.repo_mut());
 
     // Commit the transaction and finalize working copy
-    let new_repo = futures::executor::block_on(tx.commit("commit_workspace"))
+    let new_repo = block_on(tx.commit("commit_workspace"))
         .map_err(|e| JjError::IoError(format!("Failed to commit transaction: {}", e)))?;
-    futures::executor::block_on(locked_ws.finish(new_repo.op_id().clone()))
+    block_on(locked_ws.finish(new_repo.op_id().clone()))
         .map_err(|e| JjError::IoError(format!("Failed to finish wc mutation: {}", e)))?;
 
     // For home repos, keep Git HEAD symbolic to the active branch (avoid detached HEAD after jj commit).
@@ -3000,12 +3031,12 @@ pub fn jj_split(
         .store()
         .get_commit(&wc_commit_id)
         .map_err(|e| JjError::IoError(format!("Failed to load wc commit: {}", e)))?;
-    let parent_tree = futures::executor::block_on(wc_commit.parent_tree(loaded.repo.as_ref()))
+    let parent_tree = block_on(wc_commit.parent_tree(loaded.repo.as_ref()))
         .map_err(|e| JjError::IoError(format!("Failed to load parent tree: {}", e)))?;
 
     let mut selected_tree_builder = MergedTreeBuilder::new(parent_tree.clone());
     let diff_matcher = repo_root_matcher();
-    let diff_entries = futures::executor::block_on(
+    let diff_entries = block_on(
         parent_tree
             .diff_stream(&current_tree, &diff_matcher)
             .collect::<Vec<_>>(),
@@ -3025,24 +3056,24 @@ pub fn jj_split(
             .map_err(|e| JjError::IoError(format!("Failed to read split diff entry: {}", e)))?;
         selected_tree_builder.set_or_remove(entry.path, values.after);
     }
-    let selected_tree = futures::executor::block_on(selected_tree_builder.write_tree())
+    let selected_tree = block_on(selected_tree_builder.write_tree())
         .map_err(|e| JjError::IoError(format!("Failed to write selected split tree: {}", e)))?;
 
     let mut tx = loaded.repo.start_transaction();
     let mut first_builder = tx.repo_mut().rewrite_commit(&wc_commit).detach();
     first_builder.set_tree(selected_tree);
     first_builder.set_description(message);
-    let first_commit = futures::executor::block_on(first_builder.write(tx.repo_mut()))
+    let first_commit = block_on(first_builder.write(tx.repo_mut()))
         .map_err(|e| JjError::IoError(format!("Failed to write selected split commit: {}", e)))?;
     let mut second_builder = tx.repo_mut().rewrite_commit(&wc_commit).detach();
     second_builder.set_parents(vec![first_commit.id().clone()]);
     second_builder.set_tree(current_tree);
-    let second_commit = futures::executor::block_on(second_builder.write(tx.repo_mut()))
+    let second_commit = block_on(second_builder.write(tx.repo_mut()))
         .map_err(|e| JjError::IoError(format!("Failed to write remaining split commit: {}", e)))?;
 
     tx.repo_mut()
         .set_rewritten_commit(wc_commit.id().clone(), second_commit.id().clone());
-    futures::executor::block_on(tx.repo_mut().transform_descendants(
+    block_on(tx.repo_mut().transform_descendants(
         vec![wc_commit.id().clone()],
         async |mut rewriter| {
             rewriter.replace_parent(first_commit.id(), [second_commit.id()]);
@@ -3053,7 +3084,7 @@ pub fn jj_split(
     .map_err(|e| JjError::IoError(format!("Failed to rewrite split descendants: {}", e)))?;
     for (name, working_copy_commit) in loaded.repo.view().wc_commit_ids() {
         if working_copy_commit == wc_commit.id() {
-            futures::executor::block_on(tx.repo_mut().edit(name.clone(), &second_commit)).map_err(
+            block_on(tx.repo_mut().edit(name.clone(), &second_commit)).map_err(
                 |e| {
                     JjError::IoError(format!(
                         "Failed to move working copy to remaining commit: {}",
@@ -3063,10 +3094,10 @@ pub fn jj_split(
             )?;
         }
     }
-    futures::executor::block_on(tx.repo_mut().rebase_descendants())
+    block_on(tx.repo_mut().rebase_descendants())
         .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
     let _ = git::export_refs(tx.repo_mut());
-    let new_repo = futures::executor::block_on(tx.commit("split working copy"))
+    let new_repo = block_on(tx.commit("split working copy"))
         .map_err(|e| JjError::IoError(format!("Failed to commit split transaction: {}", e)))?;
     update_workspace_after_history_edit(
         &mut loaded,
@@ -3165,7 +3196,7 @@ fn jj_rebase_workspace_bookmark_onto_with_checkout_mode(
         new_child_ids: Vec::new(),
         target: MoveCommitsTarget::Roots(vec![workspace_tip_commit.id().clone()]),
     };
-    let stats = futures::executor::block_on(async {
+    let stats = block_on(async {
         rewrite::compute_move_commits(tx.repo_mut(), &location)
             .await?
             .apply(tx.repo_mut(), &rebase_options)
@@ -3178,7 +3209,7 @@ fn jj_rebase_workspace_bookmark_onto_with_checkout_mode(
         ))
     })?;
 
-    futures::executor::block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
+    block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
         JjError::IoError(format!(
             "Failed to rebase descendants after bookmark lineage rebase: {}",
             e
@@ -3186,7 +3217,7 @@ fn jj_rebase_workspace_bookmark_onto_with_checkout_mode(
     })?;
     let _ = git::export_refs(tx.repo_mut());
 
-    let new_repo = futures::executor::block_on(tx.commit("rebase workspace bookmark lineage"))
+    let new_repo = block_on(tx.commit("rebase workspace bookmark lineage"))
         .map_err(|e| JjError::IoError(format!("Failed to commit rebase transaction: {}", e)))?;
     update_workspace_after_history_edit(
         &mut loaded,
@@ -3273,7 +3304,7 @@ fn get_conflicted_files_from_branch_diff(
 
     if conflicts.is_empty() {
         let wc_parent_tree =
-            futures::executor::block_on(wc_commit.parent_tree(loaded.repo.as_ref()))
+            block_on(wc_commit.parent_tree(loaded.repo.as_ref()))
                 .map_err(|e| JjError::IoError(format!("Failed to load wc parent tree: {}", e)))?;
         conflicts = collect_unresolved_conflict_paths(&wc_parent_tree, &working_copy_tree)?;
     }
@@ -3309,7 +3340,7 @@ fn collect_unresolved_conflict_paths(
     let mut conflicts = Vec::new();
     let diff_matcher = repo_root_matcher();
     let diff_entries =
-        futures::executor::block_on(before.diff_stream(after, &diff_matcher).collect::<Vec<_>>());
+        block_on(before.diff_stream(after, &diff_matcher).collect::<Vec<_>>());
     for entry in diff_entries {
         let values = entry
             .values
@@ -3531,17 +3562,17 @@ pub fn jj_rebase_with_revset(
         new_child_ids: Vec::new(),
         target: MoveCommitsTarget::Roots(commits.into_iter().map(|c| c.id().clone()).collect()),
     };
-    let stats = futures::executor::block_on(async {
+    let stats = block_on(async {
         rewrite::compute_move_commits(tx.repo_mut(), &location)
             .await?
             .apply(tx.repo_mut(), &rebase_options)
             .await
     })
     .map_err(|e| JjError::IoError(format!("Failed to rebase revset roots: {}", e)))?;
-    futures::executor::block_on(tx.repo_mut().rebase_descendants())
+    block_on(tx.repo_mut().rebase_descendants())
         .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
     let _ = git::export_refs(tx.repo_mut());
-    let new_repo = futures::executor::block_on(tx.commit("rebase revset roots"))
+    let new_repo = block_on(tx.commit("rebase revset roots"))
         .map_err(|e| JjError::IoError(format!("Failed to commit rebase transaction: {}", e)))?;
     update_workspace_after_history_edit(
         &mut loaded,
@@ -3662,7 +3693,7 @@ pub fn jj_push(workspace_path: &str) -> Result<String, JjError> {
             &git::GitPushOptions::default(),
         )
         .map_err(|e| JjError::IoError(format!("Failed to push bookmark: {}", e)))?;
-        futures::executor::block_on(tx.commit("push bookmark"))
+        block_on(tx.commit("push bookmark"))
             .map_err(|e| JjError::IoError(format!("Failed to commit push metadata: {}", e)))?;
     }
     Ok(tracking_message)
@@ -3859,7 +3890,7 @@ pub fn get_branches(repo_path: &str) -> Result<Vec<JjBranch>, JjError> {
         &default_working_copy_factories(),
     )
     .map_err(|e| JjError::IoError(format!("Failed to load workspace: {}", e)))?;
-    let repo = futures::executor::block_on(workspace.repo_loader().load_at_head())
+    let repo = block_on(workspace.repo_loader().load_at_head())
         .map_err(|e| JjError::IoError(format!("Failed to load repo: {}", e)))?;
 
     // Determine which commit IDs are parents of the current wc to mark is_current
@@ -3914,7 +3945,7 @@ pub fn check_remote_branch_exists(repo_path: &str, branch_ref: &str) -> Result<b
         &default_working_copy_factories(),
     )
     .map_err(|e| JjError::IoError(format!("Failed to load workspace: {}", e)))?;
-    let repo = futures::executor::block_on(workspace.repo_loader().load_at_head())
+    let repo = block_on(workspace.repo_loader().load_at_head())
         .map_err(|e| JjError::IoError(format!("Failed to load repo: {}", e)))?;
 
     let symbol = RemoteRefSymbol {
@@ -4458,7 +4489,7 @@ pub fn jj_dry_run_home_repo_rebase(
     let diff_matcher = repo_root_matcher();
 
     // Files changed on current branch since merge base
-    let current_changed: HashSet<String> = futures::executor::block_on(
+    let current_changed: HashSet<String> = block_on(
         merge_base_tree
             .diff_stream(&current_tree, &diff_matcher)
             .collect::<Vec<_>>(),
@@ -4473,7 +4504,7 @@ pub fn jj_dry_run_home_repo_rebase(
     .collect();
 
     // Files changed on target branch since merge base
-    let target_changed: HashSet<String> = futures::executor::block_on(
+    let target_changed: HashSet<String> = block_on(
         merge_base_tree
             .diff_stream(&target_tree, &diff_matcher)
             .collect::<Vec<_>>(),
@@ -4697,7 +4728,7 @@ fn update_workspace_after_history_edit(
         .get_commit(&new_wc_commit_id)
         .map_err(|e| JjError::IoError(format!("Failed to load updated wc commit: {}", e)))?;
     let old_tree = old_wc_commit.map(|commit| commit.tree());
-    futures::executor::block_on(loaded.workspace.check_out(
+    block_on(loaded.workspace.check_out(
         new_repo.op_id().clone(),
         old_tree.as_ref(),
         &new_wc_commit,
@@ -4761,7 +4792,7 @@ fn get_commit_copy_records(
         let records_stream = store
             .get_copy_records(None, parent_id, commit.id())
             .map_err(|e| JjError::IoError(format!("Failed to read copy records: {}", e)))?;
-        let records = futures::executor::block_on(records_stream.try_collect::<Vec<_>>())
+        let records = block_on(records_stream.try_collect::<Vec<_>>())
             .map_err(|e| JjError::IoError(format!("Failed to collect copy records: {}", e)))?;
         copy_records.add_records(records);
     }
@@ -4777,7 +4808,7 @@ fn get_copy_records_between(
     let stream = store
         .get_copy_records(None, root, head)
         .map_err(|e| JjError::IoError(format!("Failed to read copy records: {}", e)))?;
-    let records = futures::executor::block_on(
+    let records = block_on(
         stream
             .try_filter(|record| futures::future::ready(matcher.matches(&record.target)))
             .try_collect::<Vec<_>>(),
@@ -4906,7 +4937,7 @@ pub fn jj_get_merge_diff(
 
     let mut files = Vec::new();
     let mut hunks_by_file = Vec::new();
-    futures::executor::block_on(async {
+    block_on(async {
         futures::pin_mut!(diff_stream);
         while let Some(entry) = diff_stream.next().await {
             let values = match entry.values {
@@ -4977,7 +5008,7 @@ pub fn jj_get_commit_diff(
 
     let loaded = load_workspace_repo(workspace_path)?;
     let commit = resolve_commit_by_revision(&loaded, revision)?;
-    let parent_tree = futures::executor::block_on(commit.parent_tree(loaded.repo.as_ref()))
+    let parent_tree = block_on(commit.parent_tree(loaded.repo.as_ref()))
         .map_err(|e| JjError::IoError(format!("Failed to read parent tree: {}", e)))?;
     let commit_tree = commit.tree();
     let copy_records = get_commit_copy_records(loaded.repo.store(), &commit)?;
@@ -4990,7 +5021,7 @@ pub fn jj_get_commit_diff(
     );
     let mut files = Vec::new();
     let mut hunks_by_file = Vec::new();
-    let too_large = futures::executor::block_on(async {
+    let too_large = block_on(async {
         futures::pin_mut!(diff_stream);
         let mut total_changed_lines = 0usize;
 
@@ -5082,7 +5113,7 @@ pub fn jj_get_commit_file_diff(
 
     let loaded = load_workspace_repo(workspace_path)?;
     let commit = resolve_commit_by_revision(&loaded, revision)?;
-    let parent_tree = futures::executor::block_on(commit.parent_tree(loaded.repo.as_ref()))
+    let parent_tree = block_on(commit.parent_tree(loaded.repo.as_ref()))
         .map_err(|e| JjError::IoError(format!("Failed to read parent tree: {}", e)))?;
     let commit_tree = commit.tree();
     let copy_records = get_commit_copy_records(loaded.repo.store(), &commit)?;
@@ -5093,7 +5124,7 @@ pub fn jj_get_commit_file_diff(
         parent_tree.diff_stream_with_copies(&commit_tree, &matcher, &copy_records),
         conflict_labels,
     );
-    futures::executor::block_on(async {
+    block_on(async {
         futures::pin_mut!(diff_stream);
         while let Some(entry) = diff_stream.next().await {
             let target_path = entry.path.target().as_internal_file_string().to_string();
@@ -5220,9 +5251,9 @@ pub fn jj_create_merge_commit(
     let mut tx = loaded.repo.start_transaction();
     let parent_commits = vec![workspace_parent, target_parent];
     let merged_tree =
-        futures::executor::block_on(merge_commit_trees(tx.repo(), &parent_commits))
+        block_on(merge_commit_trees(tx.repo(), &parent_commits))
             .map_err(|e| JjError::IoError(format!("Failed to build merge tree: {}", e)))?;
-    let merge_commit = futures::executor::block_on(async {
+    let merge_commit = block_on(async {
         tx.repo_mut()
             .new_commit(
                 parent_commits
@@ -5238,19 +5269,19 @@ pub fn jj_create_merge_commit(
     .map_err(|e| JjError::IoError(format!("Failed to write merge commit: {}", e)))?;
 
     let new_wc_commit =
-        futures::executor::block_on(tx.repo_mut().check_out(workspace_name, &merge_commit))
+        block_on(tx.repo_mut().check_out(workspace_name, &merge_commit))
             .map_err(|e| {
                 JjError::IoError(format!("Failed to create working-copy commit: {}", e))
             })?;
     let _ = new_wc_commit;
-    futures::executor::block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
+    block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
         JjError::IoError(format!("Failed to rebase descendants after merge: {}", e))
     })?;
 
     set_local_bookmark_target(tx.repo_mut(), target_branch, merge_commit.id().clone());
     let _ = git::export_refs(tx.repo_mut());
 
-    let new_repo = futures::executor::block_on(tx.commit("create merge commit"))
+    let new_repo = block_on(tx.commit("create merge commit"))
         .map_err(|e| JjError::IoError(format!("Failed to commit merge transaction: {}", e)))?;
     update_workspace_after_history_edit(
         &mut loaded,
@@ -5333,7 +5364,7 @@ pub fn jj_rebase_merge_commit(
         new_child_ids: Vec::new(),
         target: MoveCommitsTarget::Roots(vec![workspace_commit.id().clone()]),
     };
-    let stats = futures::executor::block_on(async {
+    let stats = block_on(async {
         rewrite::compute_move_commits(tx.repo_mut(), &loc)
             .await?
             .apply(tx.repo_mut(), &rebase_options)
@@ -5372,14 +5403,14 @@ pub fn jj_rebase_merge_commit(
     })?;
 
     let parent_commits = vec![target_tip_commit, rebased_tip_commit];
-    let merged_tree = futures::executor::block_on(merge_commit_trees(tx.repo(), &parent_commits))
+    let merged_tree = block_on(merge_commit_trees(tx.repo(), &parent_commits))
         .map_err(|e| {
         JjError::IoError(format!(
             "Failed to build merge tree for rebase merge: {}",
             e
         ))
     })?;
-    let merge_commit = futures::executor::block_on(async {
+    let merge_commit = block_on(async {
         tx.repo_mut()
             .new_commit(
                 parent_commits
@@ -5394,9 +5425,9 @@ pub fn jj_rebase_merge_commit(
     })
     .map_err(|e| JjError::IoError(format!("Failed to write rebase merge commit: {}", e)))?;
 
-    let _ = futures::executor::block_on(tx.repo_mut().check_out(workspace_name, &merge_commit))
+    let _ = block_on(tx.repo_mut().check_out(workspace_name, &merge_commit))
         .map_err(|e| JjError::IoError(format!("Failed to create working-copy commit: {}", e)))?;
-    futures::executor::block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
+    block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
         JjError::IoError(format!(
             "Failed to rebase descendants after rebase merge: {}",
             e
@@ -5405,7 +5436,7 @@ pub fn jj_rebase_merge_commit(
     set_local_bookmark_target(tx.repo_mut(), target_branch, merge_commit.id().clone());
     let _ = git::export_refs(tx.repo_mut());
 
-    let new_repo = futures::executor::block_on(tx.commit("rebase merge workspace"))
+    let new_repo = block_on(tx.commit("rebase merge workspace"))
         .map_err(|e| JjError::IoError(format!("Failed to commit rebase transaction: {}", e)))?;
     update_workspace_after_history_edit(
         &mut loaded,
@@ -5449,9 +5480,9 @@ pub fn jj_squash_merge_commit(
 
     let mut tx = loaded.repo.start_transaction();
     let parent_commits = vec![destination_commit.clone(), workspace_tip_commit];
-    let squashed_tree = futures::executor::block_on(merge_commit_trees(tx.repo(), &parent_commits))
+    let squashed_tree = block_on(merge_commit_trees(tx.repo(), &parent_commits))
         .map_err(|e| JjError::IoError(format!("Failed to build squash merge tree: {}", e)))?;
-    let squashed_commit = futures::executor::block_on(async {
+    let squashed_commit = block_on(async {
         tx.repo_mut()
             .new_commit(vec![destination_commit.id().clone()], squashed_tree)
             .set_description(message)
@@ -5459,15 +5490,15 @@ pub fn jj_squash_merge_commit(
             .await
     })
     .map_err(|e| JjError::IoError(format!("Failed to write squashed commit: {}", e)))?;
-    let _ = futures::executor::block_on(tx.repo_mut().check_out(workspace_name, &squashed_commit))
+    let _ = block_on(tx.repo_mut().check_out(workspace_name, &squashed_commit))
         .map_err(|e| JjError::IoError(format!("Failed to create working-copy commit: {}", e)))?;
-    futures::executor::block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
+    block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
         JjError::IoError(format!("Failed to rebase descendants after squash: {}", e))
     })?;
     set_local_bookmark_target(tx.repo_mut(), target_branch, squashed_commit.id().clone());
     let _ = git::export_refs(tx.repo_mut());
 
-    let new_repo = futures::executor::block_on(tx.commit("squash merge workspace"))
+    let new_repo = block_on(tx.commit("squash merge workspace"))
         .map_err(|e| JjError::IoError(format!("Failed to commit squash transaction: {}", e)))?;
     update_workspace_after_history_edit(
         &mut loaded,
@@ -5503,16 +5534,16 @@ fn import_colocated_git_state(
         remote_auto_track_bookmarks: HashMap::new(),
     };
     let mut tx = loaded.repo.start_transaction();
-    futures::executor::block_on(git::import_refs(tx.repo_mut(), &import_options))
+    block_on(git::import_refs(tx.repo_mut(), &import_options))
         .map_err(|e| JjError::GitWorkspaceError(format!("git import_refs: {}", e)))?;
     if tx.repo().has_changes() {
-        futures::executor::block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
+        block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
             JjError::GitWorkspaceError(format!(
                 "Failed to rebase descendants after git import_refs: {}",
                 e
             ))
         })?;
-        loaded.repo = futures::executor::block_on(tx.commit("import git refs")).map_err(|e| {
+        loaded.repo = block_on(tx.commit("import git refs")).map_err(|e| {
             JjError::GitWorkspaceError(format!("Failed to commit git import_refs: {}", e))
         })?;
     }
