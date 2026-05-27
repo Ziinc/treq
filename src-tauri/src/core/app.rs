@@ -60,7 +60,7 @@ pub fn ensure_workspace_rebased(
         repo_path,
         workspace_id,
         "main",
-        true,
+        false,
         conflict_style,
     )?;
     Ok(result.is_some())
