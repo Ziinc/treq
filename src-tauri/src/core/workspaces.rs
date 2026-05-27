@@ -1001,6 +1001,15 @@ fn sync_home_and_workspace_for_branch(
         }
         SyncSource::HomeToWorkspace => {
             let _ = jj::jj_workspace_update_stale(destination_path);
+            // Move @ onto the new bookmark tip so the workspace working copy stays
+            // in sync. Without this, jj_working_copy_needs_sync returns true on
+            // every subsequent call, re-triggering the auto-sync log in a loop.
+            if let Err(e) = jj::jj_sync_working_copy_if_safe(destination_path, branch) {
+                log::warn!(
+                    "sync_home_and_workspace_for_branch: could not sync workspace @ to '{}': {}",
+                    branch, e
+                );
+            }
         }
     }
     Ok(())

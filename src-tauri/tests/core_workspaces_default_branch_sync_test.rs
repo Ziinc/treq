@@ -387,3 +387,62 @@ fn workspace_main_uncommitted_changes_take_precedence_when_rebasing_children() {
 
     let _ = main_workspace;
 }
+
+/// After a home pull that advances the home branch tip, the matching workspace's working
+/// copy (@) must also be moved onto the new tip.  Without the fix, `HomeToWorkspace` sync
+/// only updated the workspace bookmark but left @ behind, making
+/// `jj_working_copy_needs_sync` permanently true and triggering the infinite
+/// `[rebase_single_workspace::after_rebase]` log loop on every subsequent rebase call.
+#[test]
+fn home_pull_syncs_workspace_working_copy_to_new_tip() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+    TestRepo::run_git(&repo.repo_path, &["checkout", "-b", PROP_BRANCH])
+        .expect("Failed to create branch");
+    repo.push_branch(PROP_BRANCH)
+        .expect("Failed to push branch to remote");
+
+    let branch_workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        PROP_BRANCH,
+        Some("sync wc workspace".to_string()),
+        None,
+        Some(PROP_BRANCH),
+        None,
+    )
+    .expect("Failed to create branch workspace");
+    TestRepo::run_git(&repo.repo_path, &["checkout", PROP_BRANCH])
+        .expect("Failed to checkout branch after workspace creation");
+
+    let branch_workspace_root = workspace_path(&repo.repo_path, &branch_workspace.workspace_path);
+
+    // Advance the remote branch so a pull actually moves the bookmark.
+    repo.remote_commit_on_branch(
+        PROP_BRANCH,
+        "home-pull-wc-sync.txt",
+        "remote content\n",
+        "Remote advance",
+    )
+    .expect("Failed to create remote commit");
+
+    // Pull through the home repo path (workspace_id = None).
+    let pull_result = treq_lib::core::pull_workspace_from_remote(&repo.repo_path, None, "git")
+        .expect("Home pull should succeed");
+    assert!(pull_result.success, "Home pull should report success: {}", pull_result.message);
+
+    // The workspace working copy (@) should now equal the branch bookmark tip.
+    // Resolve both via jj log so the test stays at the command level.
+    let wc_id = TestRepo::run_jj(
+        &branch_workspace_root,
+        &["log", "-r", "@", "--no-graph", "-T", "commit_id ++ \"\\n\""],
+    )
+    .expect("Failed to resolve workspace @ commit id")
+    .trim()
+    .to_string();
+    let bookmark_ids = resolve_bookmark_tip_ids(&branch_workspace_root, PROP_BRANCH);
+    assert_eq!(
+        bookmark_ids,
+        vec![wc_id],
+        "workspace @ should equal the branch bookmark after home pull (HomeToWorkspace sync); \
+         if this fails the infinite rebase-sync loop will recur"
+    );
+}
