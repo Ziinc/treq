@@ -160,7 +160,7 @@ pub fn rebase_workspaces_for_target(
             match jj::jj_sync_working_copy_if_safe(&full_path, &workspace.branch_name) {
                 Ok(true) => {
                     log::info!(
-                        "Auto-synced working copy for workspace '{}'",
+                        "Auto-synced working copy for workspace '{}' [rebase_workspaces_for_target::same_branch]",
                         workspace.workspace_name
                     );
                 }
@@ -244,7 +244,7 @@ pub fn rebase_workspaces_for_target(
                 match jj::jj_sync_working_copy_if_safe(&full_path, &workspace.branch_name) {
                     Ok(true) => {
                         log::info!(
-                            "Auto-synced working copy for workspace '{}'",
+                            "Auto-synced working copy for workspace '{}' [rebase_workspaces_for_target::after_rebase]",
                             workspace.workspace_name
                         );
                     }
@@ -391,7 +391,7 @@ pub fn rebase_single_workspace(
     match jj::jj_sync_working_copy_if_safe(&full_path, &workspace.branch_name) {
         Ok(true) => {
             log::info!(
-                "Auto-synced working copy for workspace '{}'",
+                "Auto-synced working copy for workspace '{}' [rebase_single_workspace::after_rebase]",
                 workspace.workspace_name
             );
         }
