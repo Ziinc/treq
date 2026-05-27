@@ -591,6 +591,34 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             Ok(Value::Bool(true))
         }
 
+        // ── rebase_home_repo_branch ───────────────────────────────────────
+        "rebase_home_repo_branch" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let current_branch = get_str(&args, "currentBranch")?;
+            let target_branch = get_str(&args, "targetBranch")?;
+            let result = treq_lib::jj::jj_rebase_home_repo_branch(
+                &repo_path,
+                &current_branch,
+                &target_branch,
+            )
+            .map_err(|e| e.to_string())?;
+            serde_json::to_value(result).map_err(|e| e.to_string())
+        }
+
+        // ── dry_run_home_repo_rebase ──────────────────────────────────────
+        "dry_run_home_repo_rebase" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let current_branch = get_str(&args, "currentBranch")?;
+            let target_branch = get_str(&args, "targetBranch")?;
+            let result = treq_lib::jj::jj_dry_run_home_repo_rebase(
+                &repo_path,
+                &current_branch,
+                &target_branch,
+            )
+            .map_err(|e| e.to_string())?;
+            serde_json::to_value(result).map_err(|e| e.to_string())
+        }
+
         // ── Tauri-runtime-only: silent no-ops ─────────────────────────────
         "pty_create_session"
         | "pty_session_exists"
