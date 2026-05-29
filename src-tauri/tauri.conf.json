@@ -19,35 +19,33 @@
     "cli": {
       "description": "Treq - Coding Agent Manager",
       "subcommands": {
-        "workspace": {
-          "description": "Manage treq workspaces",
-          "subcommands": {
-            "add": {
-              "description": "Create a new workspace",
-              "args": [
-                { "name": "branch_name", "index": 1, "required": true, "description": "Branch name for the workspace" },
-                { "name": "intent", "short": "i", "takesValue": true, "description": "Intent/description" },
-                { "name": "source-branch", "short": "s", "takesValue": true, "description": "Source branch to stack on" }
-              ]
-            },
-            "set": {
-              "description": "Update workspace settings",
-              "args": [
-                { "name": "workspace_name", "index": 1, "required": true, "description": "Workspace branch name" },
-                { "name": "intent", "short": "i", "takesValue": true, "description": "Set intent" },
-                { "name": "target-branch", "short": "t", "takesValue": true, "description": "Set target branch" }
-              ]
-            },
-            "st": {
-              "description": "Show workspace status",
-              "args": [
-                { "name": "workspace_name", "index": 1, "description": "Workspace name (omit for all)" }
-              ]
-            },
-            "ls": {
-              "description": "List all workspaces with status"
-            }
-          }
+        "add": {
+          "description": "Create a new workspace",
+          "args": [
+            { "name": "branch_name", "index": 1, "required": true, "description": "Branch name for the workspace" },
+            { "name": "intent", "short": "i", "takesValue": true, "description": "Intent/description" },
+            { "name": "source-branch", "short": "s", "takesValue": true, "description": "Source branch to stack on" }
+          ]
+        },
+        "set": {
+          "description": "Update workspace settings",
+          "args": [
+            { "name": "workspace_name", "index": 1, "required": true, "description": "Workspace branch name" },
+            { "name": "intent", "short": "i", "takesValue": true, "description": "Set intent" },
+            { "name": "target-branch", "short": "t", "takesValue": true, "description": "Set target branch" }
+          ]
+        },
+        "st": {
+          "description": "Show workspace status",
+          "args": [
+            { "name": "workspace_name", "index": 1, "description": "Workspace name (omit for all)" }
+          ]
+        },
+        "help": {
+          "description": "Show available commands"
+        },
+        "open": {
+          "description": "Open the Treq GUI"
         }
       }
     },

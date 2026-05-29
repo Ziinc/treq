@@ -65,13 +65,10 @@ pub fn run() {
             {
                 use tauri_plugin_cli::CliExt;
                 if let Ok(matches) = app.cli().matches() {
-                    if let Some(ref subcommand) = matches.subcommand {
-                        cli::init_cli_binary_paths();
-                        let handled = cli::handle_cli_command(subcommand);
-                        if handled {
-                            app.handle().exit(0);
-                            return Ok(());
-                        }
+                    cli::init_cli_binary_paths();
+                    if cli::should_exit_after_cli(&matches) {
+                        app.handle().exit(0);
+                        return Ok(());
                     }
                 }
             }
