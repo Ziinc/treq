@@ -146,6 +146,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 		const [targetBranchCommitsBranch, setTargetBranchCommitsBranch] = useState<
 			string | null
 		>(null);
+		const [workspaceBranch, setWorkspaceBranch] = useState<string | null>(null);
 		const [targetBranchLimit, setTargetBranchLimit] = useState(10);
 		const [homeRepoLimit, setHomeRepoLimit] = useState(15);
 		const [loadingMore, setLoadingMore] = useState(false);
@@ -307,6 +308,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 				.then((result) => {
 					const nextCommits = result?.commits ?? [];
 					setCommits(normalizeCommits(nextCommits));
+					setWorkspaceBranch(result?.workspace_branch ?? null);
 					if (!isHomeRepo) {
 						setTargetBranchCommits(result?.target_branch_commits ?? []);
 						setTargetBranchCommitsBranch(result?.target_branch ?? null);
@@ -319,6 +321,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 					console.error("Failed to fetch commit history:", err);
 					setCommits([]);
 					setTargetBranchCommits([]);
+					setWorkspaceBranch(null);
 				})
 				.finally(() => setLoading(false));
 		}, [repoPath, workspaceId, isHomeRepo]);
@@ -479,6 +482,13 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 			() => groupCommitsByDay(targetBranchCommits),
 			[targetBranchCommits],
 		);
+		const isDefaultWorkspaceBranch =
+			!isHomeRepo &&
+			workspaceBranch != null &&
+			targetBranchCommitsBranch != null &&
+			workspaceBranch === targetBranchCommitsBranch;
+		const showTargetBranchSection =
+			!isHomeRepo && !isDefaultWorkspaceBranch && targetBranchCommits.length > 0;
 
 		if (loading) {
 			return (
@@ -489,7 +499,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 			);
 		}
 
-		if (commits.length === 0) {
+		if (commits.length === 0 && !showTargetBranchSection) {
 			return (
 				<div className="p-4 text-center">
 					<p className="text-sm text-muted-foreground">No commits yet.</p>
@@ -593,8 +603,13 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 								</div>
 							)}
 
-							{!isHomeRepo && targetBranchCommits.length > 0 && (
+							{showTargetBranchSection && (
 								<>
+									{commits.length === 0 && (
+										<p className="text-sm text-muted-foreground mb-3 pl-7">
+											There are no commits within this workspace branch yet.
+										</p>
+									)}
 									<div className="border-t border-border my-4 mx-2" />
 									<p className="text-xs font-semibold text-muted-foreground mb-2 pl-7">
 										Recent on {targetBranchCommitsBranch}

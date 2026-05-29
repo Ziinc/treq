@@ -143,6 +143,49 @@ describe("ShowWorkspace - Commits tab", () => {
 			screen.queryByRole("button", { name: "Load diff" }),
 		).not.toBeInTheDocument();
 	});
+
+	it("shows workspace and target sections with divider for non-default workspace branch", async () => {
+		await openWorkspaceCommitsTab(user, "feat/commits-it");
+
+		await screen.findByText("Commits diff two");
+		expect(screen.getByText(/^Recent on /)).toBeInTheDocument();
+	});
+
+	it("shows workspace-empty message above target section when non-default workspace has no commits", async () => {
+		const noCommitWorkspace = await createWorkspaceRef(
+			repoPath,
+			"feat/no-workspace-commits",
+		);
+		expect(noCommitWorkspace.id).toBeGreaterThan(0);
+
+		await openWorkspaceCommitsTab(user, "feat/no-workspace-commits");
+
+		await screen.findByText(
+			"There are no commits within this workspace branch yet.",
+		);
+		await screen.findByText(/^Recent on /);
+	});
+
+	it("does not render target divider or workspace-empty message for default-branch workspace", async () => {
+		const mainWorkspace = await createWorkspaceRef(repoPath, "main");
+		await commitWorkspaceFile(
+			repoPath,
+			mainWorkspace,
+			"default-branch-workspace.txt",
+			"default branch workspace content",
+			"Default branch workspace commit",
+		);
+
+		await openWorkspaceCommitsTab(user, "main");
+
+		await screen.findByText("Default branch workspace commit");
+		expect(screen.queryByText(/^Recent on /)).not.toBeInTheDocument();
+		expect(
+			screen.queryByText(
+				"There are no commits within this workspace branch yet.",
+			),
+		).not.toBeInTheDocument();
+	});
 });
 
 describe("ShowWorkspace - Commits tab single-commit regression", () => {

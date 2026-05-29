@@ -72,6 +72,7 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 		const [targetBranchCommits, setTargetBranchCommits] = useState<JjLogCommit[]>([]);
 		const [mergeBaseId, setMergeBaseId] = useState<string | null>(null);
 		const [targetBranch, setTargetBranch] = useState<string>("");
+		const [workspaceBranch, setWorkspaceBranch] = useState<string>("");
 		const [loading, setLoading] = useState(true);
 		const [limit, setLimit] = useState(14);
 		const [loadingMore, setLoadingMore] = useState(false);
@@ -84,19 +85,21 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 			}
 			setLoading(true);
 			setLimit(14);
-			listCommits(repoPath, workspaceId, false, undefined, 14)
+			listCommits(repoPath, workspaceId, workspaceId != null, undefined, 14)
 				.then((result) => {
 					const nextCommits = result?.commits ?? [];
 					setCommits(normalizeCommits(nextCommits));
 					setTargetBranchCommits(result?.target_branch_commits ?? []);
 					setMergeBaseId(result?.merge_base_id ?? null);
 					setTargetBranch(result?.target_branch ?? "");
+					setWorkspaceBranch(result?.workspace_branch ?? "");
 					onCommitsLoaded?.(result);
 				})
 				.catch((err) => {
 					console.error("Failed to fetch commit history:", err);
 					setCommits([]);
 					setTargetBranchCommits([]);
+					setWorkspaceBranch("");
 				})
 				.finally(() => {
 					setLoading(false);
@@ -126,13 +129,20 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 			() => groupCommitsByDay(targetBranchCommits),
 			[targetBranchCommits],
 		);
+		const isWorkspaceView = workspaceId != null;
+		const isDefaultWorkspaceBranch =
+			isWorkspaceView &&
+			workspaceBranch.length > 0 &&
+			workspaceBranch === targetBranch;
+		const showWorkspaceTargetSection =
+			isWorkspaceView && !isDefaultWorkspaceBranch && targetBranchCommits.length > 0;
 		const hasDivergence = isHomeRepo && targetBranchCommits.length > 0;
 
 		if (loading) {
 			return <LoadingState />;
 		}
 
-		if (commits.length === 0 && !hasDivergence) {
+		if (commits.length === 0 && !hasDivergence && !showWorkspaceTargetSection) {
 			return (
 				<div className="p-4">
 					<h3 className="text-sm font-semibold text-muted-foreground mb-4">
@@ -220,6 +230,47 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 													@ {mergeBaseId}
 												</span>
 											)}
+										</span>
+										<div className="flex-1 border-t border-dashed border-border" />
+									</div>
+								</div>
+
+								{targetDayGroups.map((group, groupIndex) => (
+									<div
+										key={`target-${group.dayKey}-${groupIndex}`}
+										className="mt-5 first:mt-0"
+									>
+										<p className="text-xs font-semibold text-muted-foreground mb-1 pl-7">
+											{group.label}
+										</p>
+										<ul className="space-y-0">
+											{group.commits.map((commit) => (
+												<CommitItem
+													key={commit.commit_id}
+													commit={commit}
+													isFirst={false}
+													isTargetOnly={true}
+													onCommitClick={onCommitClick}
+												/>
+											))}
+										</ul>
+									</div>
+								))}
+							</>
+						)}
+
+						{showWorkspaceTargetSection && (
+							<>
+								{commits.length === 0 && (
+									<p className="text-sm text-muted-foreground pl-7 mb-3">
+										There are no commits within this workspace branch yet.
+									</p>
+								)}
+								<div className="my-4 pl-7">
+									<div className="flex items-center gap-2">
+										<div className="flex-1 border-t border-dashed border-border" />
+										<span className="text-xs text-muted-foreground whitespace-nowrap px-2">
+											Recent on {targetBranch}
 										</span>
 										<div className="flex-1 border-t border-dashed border-border" />
 									</div>
