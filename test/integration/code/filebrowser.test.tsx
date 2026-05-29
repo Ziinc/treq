@@ -62,7 +62,7 @@ describe("Dashboard - FileBrowser integration", () => {
 	let user: ReturnType<typeof userEvent.setup>;
 
 	beforeEach(() => {
-		user = userEvent.setup();
+		user = userEvent.setup({ writeToClipboard: true });
 		vi.clearAllMocks();
 		vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
 	});
@@ -172,5 +172,42 @@ describe("Dashboard - FileBrowser integration", () => {
 		await screen.findByText("Copy relative path");
 		await screen.findByText("Copy full path");
 		await screen.findByText("Open in...");
+	});
+
+	it("keeps selected text when pointer moves to another code line before copy", async () => {
+		await setupWorkspace("feat/filebrowser-selection-persist-test", {
+			"selection-target.ts":
+				"const selectedSnippet = 'persist_me';\nconst otherLine = 'cursor moved';\n",
+		});
+
+		await openWorkspaceCodeBrowser(
+			user,
+			"feat/filebrowser-selection-persist-test",
+			"selection-target.ts",
+		);
+
+		await waitFor(() => {
+			expect(screen.getAllByTestId("code-line").length).toBeGreaterThan(1);
+		});
+
+		const [firstLine, secondLine] = screen.getAllByTestId("code-line");
+		const firstLineContent = within(firstLine).getByTestId("code-line-content");
+
+		const range = document.createRange();
+		range.selectNodeContents(firstLineContent);
+
+		const selection = window.getSelection();
+		expect(selection).not.toBeNull();
+		selection!.removeAllRanges();
+		selection!.addRange(range);
+		const selectedText = selection!.toString();
+		expect(selectedText).toContain("selectedSnippet");
+
+		fireEvent.mouseEnter(secondLine);
+		fireEvent.mouseMove(secondLine);
+
+		await user.copy();
+
+		expect(await navigator.clipboard.readText()).toBe(selectedText);
 	});
 });

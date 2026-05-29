@@ -1181,6 +1181,14 @@ export const FileBrowser = memo(
 			setIsSelecting(false);
 		}, []);
 
+		const handleSetHoveredLine = useCallback((lineNum: number | null) => {
+			// Avoid re-rendering line rows while native text selection is active.
+			if ((window.getSelection()?.toString() ?? "").length > 0) {
+				return;
+			}
+			setHoveredLine(lineNum);
+		}, []);
+
 		const isLineSelected = useCallback(
 			(lineNum: number) => {
 				if (!lineSelection) return false;
@@ -1489,7 +1497,7 @@ export const FileBrowser = memo(
 				fileHunks={fileHunks}
 				deletionMarkers={deletionMarkers}
 				getItemHeight={getItemHeight}
-				onSetHoveredLine={setHoveredLine}
+				onSetHoveredLine={handleSetHoveredLine}
 				fontSize={fontSize}
 				hoveredLine={hoveredLine}
 				isSelecting={isSelecting}
