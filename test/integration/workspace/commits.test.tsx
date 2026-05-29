@@ -148,7 +148,7 @@ describe("ShowWorkspace - Commits tab", () => {
 		await openWorkspaceCommitsTab(user, "feat/commits-it");
 
 		await screen.findByText("Commits diff two");
-		expect(screen.getByText(/^Recent on /)).toBeInTheDocument();
+		await screen.findByText(/^Recent on /);
 	});
 
 	it("shows workspace-empty message above target section when non-default workspace has no commits", async () => {

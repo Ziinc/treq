@@ -6,6 +6,7 @@ use opentelemetry_sdk::logs::{LogBatch, LogExporter, SdkLoggerProvider, SimpleLo
 use opentelemetry_sdk::Resource;
 use serde_json::{json, Map, Value};
 use std::io::Write;
+use std::mem::ManuallyDrop;
 use std::path::Path;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -16,10 +17,19 @@ use tracing_subscriber::{EnvFilter, Registry};
 
 pub const MAX_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
-#[allow(dead_code)] // Fields are RAII guards — only used via Drop.
 pub struct TelemetryGuards {
-    file_guard: WorkerGuard,
-    provider: SdkLoggerProvider,
+    file_guard: ManuallyDrop<WorkerGuard>,
+    provider: ManuallyDrop<SdkLoggerProvider>,
+}
+
+impl Drop for TelemetryGuards {
+    fn drop(&mut self) {
+        // Shut down OTel provider before stopping the non-blocking writer worker.
+        unsafe {
+            ManuallyDrop::drop(&mut self.provider);
+            ManuallyDrop::drop(&mut self.file_guard);
+        }
+    }
 }
 
 pub fn init(log_dir: &Path) -> Result<TelemetryGuards, Box<dyn std::error::Error>> {
@@ -50,8 +60,8 @@ pub fn init(log_dir: &Path) -> Result<TelemetryGuards, Box<dyn std::error::Error
     tracing::subscriber::set_global_default(subscriber)?;
 
     Ok(TelemetryGuards {
-        file_guard,
-        provider,
+        file_guard: ManuallyDrop::new(file_guard),
+        provider: ManuallyDrop::new(provider),
     })
 }
 
@@ -117,8 +127,7 @@ impl LogExporter for FileLogExporter {
             .map(|r| r.clone())
             .unwrap_or_default();
 
-        // Group log records by their instrumentation scope so the OTLP
-        // envelope stays correct when a batch spans multiple scopes.
+        // Group log records by instrumentation scope so the OTLP envelope stays correct across scopes.
         let mut scope_groups: Vec<(String, Option<String>, Vec<Value>)> = Vec::new();
         for (record, scope) in batch.iter() {
             let name = scope.name().to_string();

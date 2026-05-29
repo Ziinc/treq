@@ -221,6 +221,23 @@ impl TestRepo {
         fs::rename(from.as_ref(), to.as_ref()).map_err(|e| e.to_string())
     }
 
+    /// Set a file's modification time to `now - delta` (for age-based cleanup tests).
+    pub fn set_file_modified_back(
+        path: impl AsRef<Path>,
+        delta: std::time::Duration,
+    ) -> Result<(), String> {
+        use std::fs::OpenOptions;
+        use std::time::SystemTime;
+        let file = OpenOptions::new()
+            .write(true)
+            .open(path.as_ref())
+            .map_err(|e| e.to_string())?;
+        let when = SystemTime::now()
+            .checked_sub(delta)
+            .ok_or_else(|| "clock cannot go that far back".to_string())?;
+        file.set_modified(when).map_err(|e| e.to_string())
+    }
+
     /// Copy a file (avoids `fs::copy` in `*_test.rs`).
     pub fn copy_path(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<(), String> {
         fs::copy(from.as_ref(), to.as_ref())

@@ -3,7 +3,6 @@ import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
 	Bot,
 	Copy,
-	CornerLeftUp,
 	FolderOpen,
 	GitBranch,
 	AlertTriangle,

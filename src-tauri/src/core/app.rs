@@ -32,8 +32,7 @@ fn try_recover_workspace_branch_name(
     let candidate =
         match jj::classify_workspace_bookmark_with_import(workspace_full_path, stored_branch) {
             Ok(jj::WorkspaceBookmarkState::Healthy | jj::WorkspaceBookmarkState::Conflicted) => {
-                // The branch became visible after importing the workspace's git state —
-                // update the DB to the stored name (it was fine) and proceed.
+                // Branch visible after git import — DB name was fine; proceed with stored name.
                 stored_branch.to_string()
             }
             _ => {
@@ -74,15 +73,12 @@ pub fn ensure_workspace_rebased(
         return Ok(false);
     }
 
-    // Classify the bookmark state before building any revset — revset evaluation
-    // fails for both conflicted and missing bookmarks, so we must branch early.
+    // Classify bookmark state before revset work — revsets fail for conflicted or missing bookmarks.
     match jj::classify_workspace_bookmark(repo_path, &workspace.branch_name)
         .map_err(|e| format!("Failed to classify workspace bookmark: {}", e))?
     {
         jj::WorkspaceBookmarkState::Missing => {
-            // Attempt recovery: read the workspace's own .git/HEAD to find the real branch
-            // name in case the DB row was written with the sanitized dir form (dashes) while
-            // the actual jj bookmark uses slashes.
+            // Recover real branch name from workspace .git/HEAD when DB has sanitized dir form (dashes vs slashes).
             let workspace_full_path = full_workspace_path(repo_path, &workspace.workspace_path);
             let recovered = try_recover_workspace_branch_name(
                 repo_path,
@@ -101,8 +97,7 @@ pub fn ensure_workspace_rebased(
             ));
         }
         jj::WorkspaceBookmarkState::Conflicted => {
-            // rebase_single_workspace(force=true) calls resolve_bookmark_conflict_if_needed
-            // before touching any revset, so it handles conflicted bookmarks safely.
+            // rebase_single_workspace(force=true) resolves bookmark conflicts before any revset.
             let result = auto_rebase::rebase_single_workspace(
                 repo_path,
                 workspace_id,
