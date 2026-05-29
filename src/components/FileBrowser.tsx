@@ -120,7 +120,7 @@ function filterHiddenEntries(entries: DirectoryEntry[]): DirectoryEntry[] {
 }
 
 // Virtualization constants
-const LINE_HEIGHT = 24;
+const LINE_HEIGHT = 18;
 const COMMENT_ROW_HEIGHT = 165;
 
 // TreeNode component - memoized to prevent unnecessary re-renders
@@ -225,13 +225,13 @@ const CodeLine = memo(
           className="select-none text-muted-foreground/50 pr-2 text-right"
           style={{
             minWidth: `${lineNumberWidth}ch`,
-            paddingLeft: diffStatus ? "4px" : "0",
+            paddingLeft: diffStatus ? "4px" : "2px",
           }}
         >
           {lineNum}
         </span>
         {/* Comment button - appears on hover to the right of line numbers */}
-        <span className="flex-shrink-0 w-6 flex items-center justify-center">
+        <span className="flex-shrink-0 w-5 h-5 -ml-4 flex items-center justify-center">
           {hoveredLine === lineNum && !isSelecting && (
             <button
               onMouseDown={(e) => {
@@ -251,7 +251,7 @@ const CodeLine = memo(
         {/* Code content */}
         <span
           data-testid="code-line-content"
-          className="flex-1 whitespace-pre-wrap break-words font-mono text-sm"
+          className="whitespace-pre-wrap break-words font-mono"
           dangerouslySetInnerHTML={{ __html: htmlContent }}
         />
       </div>
@@ -462,8 +462,6 @@ const FileContentView = memo(
         <div className="flex-1 overflow-hidden relative">
           <List
             listRef={listRef}
-            style={{ height: window.innerHeight, width: "100%" }}
-            className="px-4 pb-4"
             rowCount={
               lines.length + (showCommentInput && pendingComment ? 1 : 0)
             }
