@@ -711,8 +711,7 @@ pub struct JjLogCommit {
     pub is_immutable: bool,
     pub insertions: u32,
     pub deletions: u32,
-    /// True when this commit belongs to the target branch but not the current branch
-    /// (i.e. the target is ahead of the current branch by this commit).
+    /// True when this commit is on the target branch but not the current branch (target is ahead).
     #[serde(default)]
     pub on_target_only: bool,
 }
@@ -725,8 +724,7 @@ pub struct JjLogResult {
     pub workspace_branch: String,
     #[serde(default)]
     pub target_branch_commits: Vec<JjLogCommit>,
-    /// Commit ID of the common ancestor (merge base) between the current branch and target.
-    /// Only populated for home-repo non-default-branch views.
+    /// Merge-base commit ID between current and target branch (home-repo non-default views only).
     #[serde(default)]
     pub merge_base_id: Option<String>,
 }
@@ -1089,8 +1087,7 @@ pub fn create_workspace(
 
     let settings = create_user_settings(repo_path)?;
 
-    // Import all colocated git refs (HEAD + all branches/remotes) so that external commits
-    // made outside treq are visible to the parent resolution below.
+    // Import colocated git refs (HEAD + branches/remotes) so external commits are visible for parent resolution.
     let _ = jj_util_import_git_refs(repo_path);
 
     // Load parent workspace and repo (re-loaded after the git import so it sees fresh refs).
@@ -1250,10 +1247,7 @@ pub fn create_workspace(
             wc_override.unwrap_or(bookmark_id)
         }
     } else {
-        // Default: resolve the target branch's local bookmark tip so the new workspace
-        // is always parented on the correct branch, even after external git commits that
-        // jj hasn't imported yet (import_colocated_git_state above handles that).
-        // Fall back to git HEAD only if the target branch bookmark is absent.
+        // Parent on target branch bookmark tip (post import_colocated_git_state); fall back to git HEAD if absent.
         let resolved_target = target_branch
             .map(|b| b.to_string())
             .or_else(|| get_default_branch(repo_path).ok())
@@ -2187,10 +2181,7 @@ pub fn jj_sync_working_copy_if_safe(
     let old_wc_commit = get_workspace_wc_commit(&loaded)?;
 
     let mut tx = loaded.repo.start_transaction();
-    // Edit the bookmark commit directly so @ == bookmark after sync.
-    // Previously this created a new empty child commit, which left @ ≠ bookmark
-    // and caused jj_working_copy_needs_sync to return true on every subsequent
-    // call, producing an infinite sync loop.
+    // Edit bookmark commit directly so @ == bookmark after sync (empty child caused infinite sync loop).
     block_on(tx.repo_mut().edit(workspace_name, &destination))
         .map_err(|e| JjError::IoError(format!("Failed to sync working copy to bookmark: {}", e)))?;
     // jj requires rebase_descendants() after any rewrite before committing the transaction.
@@ -3798,8 +3789,7 @@ pub fn classify_workspace_bookmark(
     if !local.is_absent() {
         return Ok(WorkspaceBookmarkState::Healthy);
     }
-    // Local bookmark absent — a remote tracking ref means the branch is real but
-    // not yet promoted to local (e.g. before git fetch or auto_local_bookmark=false).
+    // Local bookmark absent but remote tracking ref exists — branch not yet promoted local.
     let remote = view.get_remote_bookmark(RemoteRefSymbol {
         name: RefName::new(branch_name),
         remote: RemoteName::new("origin"),

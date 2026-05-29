@@ -3,8 +3,8 @@ use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use opentelemetry_sdk::logs::{SdkLoggerProvider, SimpleLogProcessor};
 use opentelemetry_sdk::Resource;
 use serde_json::Value;
-use std::fs::OpenOptions;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
+use e2e_test_helpers::TestRepo;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::Registry;
 use treq_lib::telemetry::{cleanup_old_logs, forward_log_record, FileLogExporter};
@@ -48,18 +48,6 @@ fn emit_log_line_to(dir: &std::path::Path) -> std::path::PathBuf {
         .path()
 }
 
-fn set_mtime_back(path: &std::path::Path, delta: Duration) {
-    let file = OpenOptions::new()
-        .write(true)
-        .open(path)
-        .expect("open for mtime edit");
-    let when = SystemTime::now()
-        .checked_sub(delta)
-        .expect("clock cannot go that far back");
-    file.set_modified(when).expect("set_modified");
-    drop(file);
-}
-
 /// `cleanup_old_logs` is called on every app start; it must delete files
 /// older than the threshold and leave fresher files untouched.
 #[test]
@@ -68,19 +56,16 @@ fn cleanup_old_logs_deletes_only_files_older_than_threshold() {
 
     let old = emit_log_line_to(dir.path());
     // Rewind mtime so the file looks ancient compared to the cutoff below.
-    set_mtime_back(&old, Duration::from_secs(60 * 60));
+    TestRepo::set_file_modified_back(&old, Duration::from_secs(60 * 60)).expect("mtime old");
 
-    // Move the just-written file aside so a second emission produces a
-    // distinct path, then restore it. The rolling appender names files by
-    // date so a same-day second call would otherwise reuse the same path.
+    // Move the just-written file aside so a second emission produces a distinct path, then restore it.
     let stash = dir.path().join("old.stash");
-    std::fs::rename(&old, &stash).expect("stash old");
+    TestRepo::rename_path(&old, &stash).expect("stash old");
 
     let fresh = emit_log_line_to(dir.path());
-    // Move the stashed old file back beside the fresh one.
     let old_final = dir.path().join("old.log");
-    std::fs::rename(&stash, &old_final).expect("restore old");
-    set_mtime_back(&old_final, Duration::from_secs(60 * 60));
+    TestRepo::rename_path(&stash, &old_final).expect("restore old");
+    TestRepo::set_file_modified_back(&old_final, Duration::from_secs(60 * 60)).expect("mtime old");
 
     cleanup_old_logs(dir.path(), Duration::from_secs(60));
 
@@ -98,10 +83,10 @@ fn cleanup_old_logs_is_tolerant_of_subdirs_and_missing_dir() {
     let dir = tempfile::tempdir().expect("tempdir");
 
     let subdir = dir.path().join("subdir");
-    std::fs::create_dir(&subdir).expect("mkdir");
+    TestRepo::ensure_dir(&subdir).expect("mkdir");
 
     let old = emit_log_line_to(dir.path());
-    set_mtime_back(&old, Duration::from_secs(60 * 60));
+    TestRepo::set_file_modified_back(&old, Duration::from_secs(60 * 60)).expect("mtime old");
 
     cleanup_old_logs(dir.path(), Duration::from_secs(60));
 

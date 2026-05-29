@@ -283,9 +283,7 @@ pub fn create_workspace(
         source_branch.map(|s| s.to_string())
     };
 
-    // Determine the effective target branch for parent resolution and DB persistence.
-    // Stacked workspaces target the source workspace's branch; plain workspaces target the
-    // repo's default branch (usually "main").
+    // Effective target branch for parent resolution: stacked → source branch, plain → default (usually "main").
     let effective_target_branch: String = if let Some(source_ws) = &stacked_source_workspace {
         source_ws.branch_name.clone()
     } else {
@@ -1011,9 +1009,7 @@ fn sync_home_and_workspace_for_branch(
         }
         SyncSource::HomeToWorkspace => {
             let _ = jj::jj_workspace_update_stale(destination_path);
-            // Move @ onto the new bookmark tip so the workspace working copy stays
-            // in sync. Without this, jj_working_copy_needs_sync returns true on
-            // every subsequent call, re-triggering the auto-sync log in a loop.
+            // Move @ onto the new bookmark tip so the workspace working copy stays in sync (avoids infinite auto-sync loop).
             if let Err(e) = jj::jj_sync_working_copy_if_safe(destination_path, branch) {
                 log::warn!(
                     "sync_home_and_workspace_for_branch: could not sync workspace @ to '{}': {}",
@@ -1609,8 +1605,7 @@ fn resolve_workspace_diff_conflict_marker_style(repo_path: &str) -> Result<Strin
             }
         }
         Ok(None) => Ok(crate::core::DEFAULT_CONFLICT_MARKER_STYLE.to_string()),
-        // Settings table not yet initialized → fall back to default.
-        // Other db errors (corrupt file, schema mismatch) propagate.
+        // Settings table not yet initialized → default; other db errors propagate.
         Err(e) if e.to_string().contains("no such table") => {
             Ok(crate::core::DEFAULT_CONFLICT_MARKER_STYLE.to_string())
         }
