@@ -3,6 +3,7 @@ mod e2e_test_helpers;
 use e2e_test_helpers::{JjVerifier, TestRepo};
 use std::fs;
 use std::path::Path;
+use treq_lib::jj;
 
 #[test]
 fn test_repo_initialization() {
@@ -252,4 +253,205 @@ fn init_checks_all_workspaces_and_rebases_only_diverged_ones() {
         3,
         "init should be best-effort across workspaces"
     );
+}
+
+fn workspace_full_path(repo: &TestRepo, ws: &treq_lib::local_db::Workspace) -> String {
+    repo.workspaces_dir()
+        .join(&ws.workspace_path)
+        .to_string_lossy()
+        .to_string()
+}
+
+fn setup_workspace_with_pushed_commit(
+    repo: &TestRepo,
+    branch_name: &str,
+    filename: &str,
+    content: &str,
+) -> treq_lib::local_db::Workspace {
+    let ws = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        branch_name,
+        Some(branch_name.to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+    let full_path = workspace_full_path(repo, &ws);
+    TestRepo::write_workspace_file(&full_path, filename, content).expect("Failed to write file");
+    treq_lib::core::commit_workspace(&repo.repo_path, ws.id, &format!("Add {}", filename))
+        .expect("Failed to create commit");
+    jj::jj_push(&full_path).expect("Failed to push branch via jj");
+    jj::jj_git_fetch(&repo.repo_path).expect("Failed to fetch");
+    ws
+}
+
+#[test]
+fn ensure_workspace_rebased_handles_conflicted_bookmark() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+
+    let ws = setup_workspace_with_pushed_commit(
+        &repo,
+        "feat/ensure-conflict",
+        "local.txt",
+        "local content",
+    );
+    let full_path = workspace_full_path(&repo, &ws);
+
+    // Make a local commit diverging from origin
+    TestRepo::write_workspace_file(&full_path, "local2.txt", "local2")
+        .expect("Failed to write local2");
+    treq_lib::core::commit_workspace(&repo.repo_path, ws.id, "Local diverge")
+        .expect("commit local diverge");
+
+    // Make a remote commit on same branch to create conflict
+    repo.remote_commit_on_branch(
+        "feat/ensure-conflict",
+        "remote.txt",
+        "remote content",
+        "Remote diverge",
+    )
+    .expect("Failed to make remote commit");
+    jj::jj_git_fetch(&repo.repo_path).expect("Failed to fetch");
+
+    assert!(
+        jj::jj_is_bookmark_conflicted(&full_path, "feat/ensure-conflict"),
+        "bookmark should be conflicted"
+    );
+
+    let rebased = treq_lib::core::ensure_workspace_rebased(&repo.repo_path, ws.id, "diff")
+        .expect("ensure_workspace_rebased should succeed on conflicted bookmark");
+
+    assert!(rebased, "conflicted workspace should be rebased");
+    assert!(
+        !jj::jj_is_bookmark_conflicted(&full_path, "feat/ensure-conflict"),
+        "bookmark should be resolved after rebase"
+    );
+}
+
+#[test]
+fn ensure_workspace_rebased_errors_on_missing_bookmark() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let ws = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/missing-bookmark",
+        Some("missing bookmark".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    // Corrupt branch_name to something that doesn't exist as a jj bookmark
+    treq_lib::local_db::update_workspace_branch_name(
+        &repo.repo_path,
+        ws.id,
+        "feat-missing-bookmark", // dash form — no such jj bookmark
+    )
+    .expect("update branch_name");
+
+    let result = treq_lib::core::ensure_workspace_rebased(&repo.repo_path, ws.id, "diff");
+
+    assert!(result.is_err(), "missing bookmark should return an error");
+    let msg = result.unwrap_err();
+    assert!(
+        msg.contains("not found in repo"),
+        "error should mention 'not found in repo', got: {msg}"
+    );
+}
+
+#[test]
+fn sync_workspaces_healthy_bookmark_is_untouched() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let ws = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/healthy",
+        Some("healthy".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    treq_lib::core::sync_workspaces(&repo.repo_path).expect("sync should succeed");
+
+    let workspaces =
+        treq_lib::core::list_workspaces(&repo.repo_path).expect("list workspaces after sync");
+    assert!(
+        workspaces.iter().any(|w| w.id == ws.id),
+        "healthy workspace should not be pruned"
+    );
+}
+
+#[test]
+fn sync_workspaces_does_not_delete_on_missing_bookmark() {
+    // A missing bookmark alone is not enough to delete — the workspace must be preserved
+    // so the user can inspect and delete via the UI.
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let ws = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/missing-safe",
+        Some("missing safe".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    // Corrupt branch_name so it no longer matches any jj bookmark
+    treq_lib::local_db::update_workspace_branch_name(
+        &repo.repo_path,
+        ws.id,
+        "feat-missing-safe-nonexistent",
+    )
+    .expect("update branch_name");
+
+    treq_lib::core::sync_workspaces(&repo.repo_path).expect("sync should succeed");
+
+    let workspaces =
+        treq_lib::core::list_workspaces(&repo.repo_path).expect("list workspaces after sync");
+    assert!(
+        workspaces.iter().any(|w| w.id == ws.id),
+        "workspace with missing bookmark should NOT be auto-deleted by sync"
+    );
+}
+
+#[test]
+fn ensure_workspace_rebased_errors_but_preserves_on_truly_missing_bookmark() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let ws = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/truly-missing",
+        Some("truly missing".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    // Corrupt to a value that doesn't match any local, remote, or git-HEAD branch
+    treq_lib::local_db::update_workspace_branch_name(
+        &repo.repo_path,
+        ws.id,
+        "nonexistent-ghost-branch",
+    )
+    .expect("update branch_name");
+
+    let result = treq_lib::core::ensure_workspace_rebased(&repo.repo_path, ws.id, "diff");
+
+    assert!(result.is_err(), "truly missing bookmark should return an Err");
+    assert!(
+        result.unwrap_err().contains("not found in repo"),
+        "error should describe the problem"
+    );
+
+    // Crucially, the workspace row must still exist — no auto-deletion
+    let still_exists = treq_lib::local_db::get_workspace_by_id(&repo.repo_path, ws.id)
+        .expect("db lookup should succeed")
+        .is_some();
+    assert!(still_exists, "workspace row must not be auto-deleted");
 }

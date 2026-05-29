@@ -3792,6 +3792,71 @@ pub fn jj_get_sync_status(
     Ok((ahead_count, behind_count))
 }
 
+/// The state of a workspace's local bookmark in the jj repo view.
+#[derive(Debug, PartialEq)]
+pub enum WorkspaceBookmarkState {
+    Healthy,
+    Conflicted,
+    Missing,
+}
+
+/// Classify a workspace bookmark as Healthy, Conflicted, or Missing.
+///
+/// Loads the home repo at `repo_path` (not the workspace subdirectory) so that
+/// this works even when the workspace directory does not exist yet.
+pub fn classify_workspace_bookmark(
+    repo_path: &str,
+    branch_name: &str,
+) -> Result<WorkspaceBookmarkState, JjError> {
+    let mut loaded = load_workspace_repo(repo_path)?;
+    import_colocated_git_state(&mut loaded, repo_path)?;
+    let view = loaded.repo.view();
+    let local = view.get_local_bookmark(RefName::new(branch_name));
+    if local.has_conflict() {
+        return Ok(WorkspaceBookmarkState::Conflicted);
+    }
+    if !local.is_absent() {
+        return Ok(WorkspaceBookmarkState::Healthy);
+    }
+    // Local bookmark absent — a remote tracking ref means the branch is real but
+    // not yet promoted to local (e.g. before git fetch or auto_local_bookmark=false).
+    let remote = view.get_remote_bookmark(RemoteRefSymbol {
+        name: RefName::new(branch_name),
+        remote: RemoteName::new("origin"),
+    });
+    if !remote.is_absent() {
+        return Ok(WorkspaceBookmarkState::Healthy);
+    }
+    Ok(WorkspaceBookmarkState::Missing)
+}
+
+/// Like `classify_workspace_bookmark`, but loads from the workspace directory itself
+/// so that `import_git_head_if_needed` reads that workspace's own `.git/HEAD` — useful
+/// for recovering a missing bookmark when the DB holds the wrong branch name.
+pub fn classify_workspace_bookmark_with_import(
+    workspace_path: &str,
+    branch_name: &str,
+) -> Result<WorkspaceBookmarkState, JjError> {
+    let mut loaded = load_workspace_repo(workspace_path)?;
+    import_colocated_git_state(&mut loaded, workspace_path)?;
+    let view = loaded.repo.view();
+    let local = view.get_local_bookmark(RefName::new(branch_name));
+    if local.has_conflict() {
+        return Ok(WorkspaceBookmarkState::Conflicted);
+    }
+    if !local.is_absent() {
+        return Ok(WorkspaceBookmarkState::Healthy);
+    }
+    let remote = view.get_remote_bookmark(RemoteRefSymbol {
+        name: RefName::new(branch_name),
+        remote: RemoteName::new("origin"),
+    });
+    if !remote.is_absent() {
+        return Ok(WorkspaceBookmarkState::Healthy);
+    }
+    Ok(WorkspaceBookmarkState::Missing)
+}
+
 /// Check if a bookmark is in a conflicted (diverged) state.
 ///
 /// This happens when both local and remote have diverged from a common ancestor.
@@ -4976,7 +5041,7 @@ pub fn jj_get_merge_diff(
     let loaded = load_workspace_repo(workspace_path)?;
     let target_symbol = resolve_target_branch_symbol(&loaded, workspace_path, target_branch)?;
     let from_commit = resolve_commit_by_revision(&loaded, &target_symbol)?;
-    let to_commit = resolve_commit_by_revision(&loaded, "@-")?;
+    let to_commit = resolve_commit_by_revision(&loaded, "@")?;
     let from_tree = from_commit.tree();
     let to_tree = to_commit.tree();
 

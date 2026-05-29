@@ -19,6 +19,41 @@ fn full_workspace_path(repo_path: &str, workspace_path: &str) -> String {
     }
 }
 
+/// Try to recover the workspace's branch name by reading the workspace's git state,
+/// then run the rebase if recovery succeeds. Returns true if a rebase was performed.
+fn try_recover_workspace_branch_name(
+    repo_path: &str,
+    workspace_id: i64,
+    stored_branch: &str,
+    workspace_full_path: &str,
+    conflict_style: &str,
+) -> Result<bool, String> {
+    // Import the workspace's own git state so jj-lib can see refs from its .git dir.
+    let candidate = match jj::classify_workspace_bookmark_with_import(
+        workspace_full_path,
+        stored_branch,
+    ) {
+        Ok(jj::WorkspaceBookmarkState::Healthy | jj::WorkspaceBookmarkState::Conflicted) => {
+            // The branch became visible after importing the workspace's git state —
+            // update the DB to the stored name (it was fine) and proceed.
+            stored_branch.to_string()
+        }
+        _ => {
+            // Still missing after workspace-scoped import. No recovery possible.
+            return Ok(false);
+        }
+    };
+
+    if candidate != stored_branch {
+        local_db::update_workspace_branch_name(repo_path, workspace_id, &candidate)
+            .map_err(|e| format!("Failed to update workspace branch name: {}", e))?;
+    }
+
+    let result =
+        auto_rebase::rebase_single_workspace(repo_path, workspace_id, "main", false, conflict_style)?;
+    Ok(result.is_some())
+}
+
 pub fn ensure_workspace_rebased(
     repo_path: &str,
     workspace_id: i64,
@@ -34,6 +69,48 @@ pub fn ensure_workspace_rebased(
 
     if workspace.branch_name == target_branch {
         return Ok(false);
+    }
+
+    // Classify the bookmark state before building any revset — revset evaluation
+    // fails for both conflicted and missing bookmarks, so we must branch early.
+    match jj::classify_workspace_bookmark(repo_path, &workspace.branch_name)
+        .map_err(|e| format!("Failed to classify workspace bookmark: {}", e))?
+    {
+        jj::WorkspaceBookmarkState::Missing => {
+            // Attempt recovery: read the workspace's own .git/HEAD to find the real branch
+            // name in case the DB row was written with the sanitized dir form (dashes) while
+            // the actual jj bookmark uses slashes.
+            let workspace_full_path =
+                full_workspace_path(repo_path, &workspace.workspace_path);
+            let recovered = try_recover_workspace_branch_name(
+                repo_path,
+                workspace_id,
+                &workspace.branch_name,
+                &workspace_full_path,
+                conflict_style,
+            )?;
+            if recovered {
+                return Ok(true);
+            }
+            return Err(format!(
+                "Workspace bookmark '{}' not found in repo — skipping auto-rebase. \
+                 The workspace's stored bookmark name may be out of sync with jj state.",
+                workspace.branch_name
+            ));
+        }
+        jj::WorkspaceBookmarkState::Conflicted => {
+            // rebase_single_workspace(force=true) calls resolve_bookmark_conflict_if_needed
+            // before touching any revset, so it handles conflicted bookmarks safely.
+            let result = auto_rebase::rebase_single_workspace(
+                repo_path,
+                workspace_id,
+                "main",
+                true,
+                conflict_style,
+            )?;
+            return Ok(result.is_some());
+        }
+        jj::WorkspaceBookmarkState::Healthy => {}
     }
 
     let workspace_full_path = full_workspace_path(repo_path, &workspace.workspace_path);

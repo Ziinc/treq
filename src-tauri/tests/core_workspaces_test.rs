@@ -2813,6 +2813,23 @@ fn merge_diff_commit(repo: &TestRepo, ws: &Workspace, msg: &str) {
     treq_lib::core::commit_workspace(&repo.repo_path, ws.id, msg).unwrap();
 }
 
+fn run_jj_in(dir: &std::path::Path, args: &[&str]) {
+    let jj = treq_lib::binary_paths::detect_binary("jj").unwrap_or_else(|| "jj".to_string());
+    let output = Command::new(jj)
+        .current_dir(dir)
+        .args(args)
+        .env("JJ_USER", "Test User")
+        .env("JJ_EMAIL", "test@example.com")
+        .output()
+        .expect("jj command should execute");
+    assert!(
+        output.status.success(),
+        "jj {} failed: {}",
+        args.join(" "),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 fn merge_diff_paths(repo: &TestRepo, ws: &Workspace) -> Vec<String> {
     init_test_app_db(repo, Some("git"));
     treq_lib::core::workspace_diff(&repo.repo_path, ws.id)
@@ -2894,6 +2911,34 @@ fn test_multiple_workspace_commits() {
     assert!(paths.contains(&"f1.txt".into()));
     assert!(paths.contains(&"f2.txt".into()));
     assert!(!paths.contains(&"target.txt".into()));
+}
+
+#[test]
+fn test_workspace_diff_when_wc_is_merge_commit() {
+    // Regression test: "Revision '@-' resolved to multiple commits".
+    // When @ has multiple parents (e.g. after `jj new A B`), @- is a set
+    // and resolve_commit_by_revision rejects it. Using @ instead of @-
+    // always resolves to a single commit.
+    let repo = TestRepo::new().unwrap();
+    repo.commit_file("target.txt", "t", "t").unwrap();
+
+    let ws = merge_diff_new_workspace(&repo, "feat/merge-wc");
+    merge_diff_write_file(&repo, &ws, "ws.txt", "ws");
+    merge_diff_commit(&repo, &ws, "add ws.txt");
+
+    // Force @ to become a merge commit by creating a new commit with two parents.
+    let ws_dir = repo.workspaces_dir().join(&ws.workspace_path);
+    run_jj_in(&ws_dir, &["new", "feat/merge-wc", "main"]);
+
+    init_test_app_db(&repo, Some("git"));
+    let result = treq_lib::core::workspace_diff(&repo.repo_path, ws.id);
+    let diff = result.expect("workspace_diff must succeed when @ is a merge commit");
+    let paths: Vec<String> = diff.files.iter().map(|f| f.path.clone()).collect();
+    assert!(
+        paths.contains(&"ws.txt".into()),
+        "expected merged tree to include workspace commit's files, got {:?}",
+        paths
+    );
 }
 
 #[test]
