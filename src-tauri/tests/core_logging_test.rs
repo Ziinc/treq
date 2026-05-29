@@ -1,3 +1,5 @@
+mod e2e_test_helpers;
+
 use opentelemetry::KeyValue;
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use opentelemetry_sdk::logs::{SdkLoggerProvider, SimpleLogProcessor};
