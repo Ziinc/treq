@@ -42,7 +42,9 @@ async function clickFileInSection(
 	sectionName: "Conflicts" | "Changes",
 	fileName: string,
 ) {
-	const sectionToggle = await screen.findByRole("button", { name: sectionName });
+	const sectionToggle = await screen.findByRole("button", {
+		name: sectionName,
+	});
 	const sectionHeader = sectionToggle.closest("div");
 	if (!sectionHeader?.parentElement) {
 		throw new Error(`Could not locate ${sectionName} section container`);

@@ -229,15 +229,12 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 		}, [workspace?.id]);
 
 		// When commits are loaded from LinearCommitHistory, capture divergence counts
-		const handleCommitsLoaded = useCallback(
-			(result: JjLogResult) => {
-				const targetAheadCount = result.target_branch_commits?.length ?? 0;
-				setHomeRepoTargetAheadCount(targetAheadCount);
-				// Reset dry-run when commit data changes
-				setHomeRebaseDryRun(null);
-			},
-			[],
-		);
+		const handleCommitsLoaded = useCallback((result: JjLogResult) => {
+			const targetAheadCount = result.target_branch_commits?.length ?? 0;
+			setHomeRepoTargetAheadCount(targetAheadCount);
+			// Reset dry-run when commit data changes
+			setHomeRebaseDryRun(null);
+		}, []);
 
 		useEffect(() => {
 			if (!workspace) {
@@ -1183,7 +1180,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 																		<p className="font-medium mb-1">
 																			Potential conflicts detected
 																		</p>
-																		{homeRebaseDryRun.conflicted_files.length > 0 && (
+																		{homeRebaseDryRun.conflicted_files.length >
+																			0 && (
 																			<ul className="text-xs space-y-0.5">
 																				{homeRebaseDryRun.conflicted_files.map(
 																					(f) => (

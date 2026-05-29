@@ -22,9 +22,11 @@ pub async fn get_workspace_changed_files(
     repo_path: String,
     workspace_id: Option<i64>,
 ) -> Result<Vec<crate::jj::JjFileChange>, String> {
-    tauri::async_runtime::spawn_blocking(move || crate::core::list_changed_files(&repo_path, workspace_id))
-        .await
-        .map_err(|e| format!("Failed to join get_workspace_changed_files task: {}", e))?
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::core::list_changed_files(&repo_path, workspace_id)
+    })
+    .await
+    .map_err(|e| format!("Failed to join get_workspace_changed_files task: {}", e))?
 }
 
 #[tauri::command]
@@ -443,7 +445,8 @@ pub async fn resolve_workspace_bookmark_conflict(
             return Err("Workspace path does not exist".to_string());
         }
 
-        jj::jj_set_bookmark(&workspace_path, &branch_name, &revision_id).map_err(|e| e.to_string())?;
+        jj::jj_set_bookmark(&workspace_path, &branch_name, &revision_id)
+            .map_err(|e| e.to_string())?;
 
         if let Err(e) =
             local_db::update_workspace_last_rebased_commit(&repo_path, workspace_id, &revision_id)
@@ -470,7 +473,12 @@ pub async fn resolve_workspace_bookmark_conflict(
         })
     })
     .await
-    .map_err(|e| format!("Failed to join resolve_workspace_bookmark_conflict task: {}", e))?
+    .map_err(|e| {
+        format!(
+            "Failed to join resolve_workspace_bookmark_conflict task: {}",
+            e
+        )
+    })?
 }
 
 /// Rename a workspace's branch/bookmark.

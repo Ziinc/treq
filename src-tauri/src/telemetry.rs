@@ -81,7 +81,9 @@ pub fn cleanup_old_logs(dir: &Path, max_age: Duration) {
         if !meta.is_file() {
             continue;
         }
-        let Ok(modified) = meta.modified() else { continue };
+        let Ok(modified) = meta.modified() else {
+            continue;
+        };
         if modified < cutoff {
             let _ = std::fs::remove_file(entry.path());
         }
@@ -248,4 +250,3 @@ fn otel_value_to_otlp(v: &opentelemetry::Value) -> Value {
         _ => Value::Null,
     }
 }
-

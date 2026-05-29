@@ -29,28 +29,31 @@ fn try_recover_workspace_branch_name(
     conflict_style: &str,
 ) -> Result<bool, String> {
     // Import the workspace's own git state so jj-lib can see refs from its .git dir.
-    let candidate = match jj::classify_workspace_bookmark_with_import(
-        workspace_full_path,
-        stored_branch,
-    ) {
-        Ok(jj::WorkspaceBookmarkState::Healthy | jj::WorkspaceBookmarkState::Conflicted) => {
-            // The branch became visible after importing the workspace's git state —
-            // update the DB to the stored name (it was fine) and proceed.
-            stored_branch.to_string()
-        }
-        _ => {
-            // Still missing after workspace-scoped import. No recovery possible.
-            return Ok(false);
-        }
-    };
+    let candidate =
+        match jj::classify_workspace_bookmark_with_import(workspace_full_path, stored_branch) {
+            Ok(jj::WorkspaceBookmarkState::Healthy | jj::WorkspaceBookmarkState::Conflicted) => {
+                // The branch became visible after importing the workspace's git state —
+                // update the DB to the stored name (it was fine) and proceed.
+                stored_branch.to_string()
+            }
+            _ => {
+                // Still missing after workspace-scoped import. No recovery possible.
+                return Ok(false);
+            }
+        };
 
     if candidate != stored_branch {
         local_db::update_workspace_branch_name(repo_path, workspace_id, &candidate)
             .map_err(|e| format!("Failed to update workspace branch name: {}", e))?;
     }
 
-    let result =
-        auto_rebase::rebase_single_workspace(repo_path, workspace_id, "main", false, conflict_style)?;
+    let result = auto_rebase::rebase_single_workspace(
+        repo_path,
+        workspace_id,
+        "main",
+        false,
+        conflict_style,
+    )?;
     Ok(result.is_some())
 }
 
@@ -80,8 +83,7 @@ pub fn ensure_workspace_rebased(
             // Attempt recovery: read the workspace's own .git/HEAD to find the real branch
             // name in case the DB row was written with the sanitized dir form (dashes) while
             // the actual jj bookmark uses slashes.
-            let workspace_full_path =
-                full_workspace_path(repo_path, &workspace.workspace_path);
+            let workspace_full_path = full_workspace_path(repo_path, &workspace.workspace_path);
             let recovered = try_recover_workspace_branch_name(
                 repo_path,
                 workspace_id,

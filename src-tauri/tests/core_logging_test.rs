@@ -246,5 +246,4 @@ fn forward_log_record_emits_otlp_json_per_level() {
             "timeUnixNano should be a string per OTLP JSON spec"
         );
     }
-
 }

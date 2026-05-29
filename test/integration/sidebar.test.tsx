@@ -38,7 +38,7 @@ describe("Dashboard - workspace list", () => {
 	});
 
 	it("shows detached HEAD short hash in home repo row instead of unknown", async () => {
-		execSync("git commit --allow-empty -m \"temp commit for detached test\"", {
+		execSync('git commit --allow-empty -m "temp commit for detached test"', {
 			cwd: repoPath,
 		});
 		const detachedCommit = execSync("git rev-parse HEAD~1", {

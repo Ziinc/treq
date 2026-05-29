@@ -162,9 +162,11 @@ pub async fn get_workspace_diff(
     repo_path: String,
     workspace_id: i64,
 ) -> Result<jj::JjRevisionDiff, String> {
-    tauri::async_runtime::spawn_blocking(move || crate::core::workspace_diff(&repo_path, workspace_id))
-        .await
-        .map_err(|e| format!("Failed to join get_workspace_diff task: {}", e))?
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::core::workspace_diff(&repo_path, workspace_id)
+    })
+    .await
+    .map_err(|e| format!("Failed to join get_workspace_diff task: {}", e))?
 }
 
 /// Get diff for a single commit by revision (commit_id or change_id)
@@ -232,7 +234,10 @@ pub async fn list_repo_branches(repo_path: String) -> Result<Vec<jj::JjBranch>, 
 
 /// Switch the repository working copy to the given bookmark (branch).
 #[tauri::command]
-pub async fn switch_repo_branch(repo_path: String, bookmark_name: String) -> Result<String, String> {
+pub async fn switch_repo_branch(
+    repo_path: String,
+    bookmark_name: String,
+) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         core::switch_repo_branch(&repo_path, &bookmark_name)
     })

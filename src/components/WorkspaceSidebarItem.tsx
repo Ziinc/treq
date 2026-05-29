@@ -182,12 +182,10 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 											onDoubleClick={(e) => onDoubleClick?.(workspace, e)}
 										>
 											<GitBranch
-													className={`w-3 h-3 mr-1 shrink-0 -scale-y-100 ${
-														isSelected
-															? "text-primary"
-															: "text-muted-foreground"
-													}`}
-												/>
+												className={`w-3 h-3 mr-1 shrink-0 -scale-y-100 ${
+													isSelected ? "text-primary" : "text-muted-foreground"
+												}`}
+											/>
 											<span
 												className={`flex-1 min-w-0 truncate font-mono ${
 													isSelected

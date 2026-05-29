@@ -20,7 +20,14 @@ fn resolve_bookmark_tip_ids(cwd: &str, branch: &str) -> Vec<String> {
     let revset = format!("bookmarks(exact:{})", branch);
     let output = TestRepo::run_jj(
         cwd,
-        &["log", "-r", &revset, "--no-graph", "-T", "commit_id ++ \"\\n\""],
+        &[
+            "log",
+            "-r",
+            &revset,
+            "--no-graph",
+            "-T",
+            "commit_id ++ \"\\n\"",
+        ],
     )
     .unwrap_or_else(|e| panic!("Failed to resolve bookmark tips for '{branch}' in '{cwd}': {e}"));
     let mut ids: Vec<String> = output
@@ -57,8 +64,12 @@ fn home_commit_on_branch_syncs_matching_workspace_branch() {
         .expect("Failed to checkout branch after workspace creation");
     let branch_workspace_root = workspace_path(&repo.repo_path, &branch_workspace.workspace_path);
 
-    TestRepo::write_workspace_file(&repo.repo_path, "home-branch-sync.txt", "home commit content\n")
-        .expect("Failed to write file in home repo");
+    TestRepo::write_workspace_file(
+        &repo.repo_path,
+        "home-branch-sync.txt",
+        "home commit content\n",
+    )
+    .expect("Failed to write file in home repo");
 
     treq_lib::core::commit_workspace(&repo.repo_path, Option::<i64>::None, "home branch commit")
         .expect("Home commit should succeed");
@@ -97,8 +108,12 @@ fn workspace_commit_on_branch_syncs_home_when_home_on_same_branch() {
     )
     .expect("Failed to write workspace file");
 
-    treq_lib::core::commit_workspace(&repo.repo_path, branch_workspace.id, "workspace branch commit")
-        .expect("Workspace commit should succeed");
+    treq_lib::core::commit_workspace(
+        &repo.repo_path,
+        branch_workspace.id,
+        "workspace branch commit",
+    )
+    .expect("Workspace commit should succeed");
 
     let home_tip = resolve_bookmark_tip_ids(&repo.repo_path, PROP_BRANCH);
     let workspace_tip = resolve_bookmark_tip_ids(&branch_workspace_root, PROP_BRANCH);
@@ -209,8 +224,12 @@ fn workspace_merge_same_branch_syncs_home_branch_tip_and_working_copy() {
         None,
     )
     .expect("Failed to create branch workspace");
-    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, branch_workspace.id, PROP_BRANCH)
-        .expect("Failed to set branch workspace target branch");
+    treq_lib::local_db::update_workspace_target_branch(
+        &repo.repo_path,
+        branch_workspace.id,
+        PROP_BRANCH,
+    )
+    .expect("Failed to set branch workspace target branch");
 
     let feature_workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -269,9 +288,10 @@ fn no_sync_when_home_on_different_branch() {
     )
     .expect("Failed to create branch workspace");
 
-    let branch_workspace = treq_lib::local_db::get_workspace_by_branch(&repo.repo_path, PROP_BRANCH)
-        .expect("workspace lookup should succeed")
-        .expect("workspace should exist");
+    let branch_workspace =
+        treq_lib::local_db::get_workspace_by_branch(&repo.repo_path, PROP_BRANCH)
+            .expect("workspace lookup should succeed")
+            .expect("workspace should exist");
     let branch_workspace_root = workspace_path(&repo.repo_path, &branch_workspace.workspace_path);
 
     TestRepo::write_workspace_file(
@@ -288,7 +308,9 @@ fn no_sync_when_home_on_different_branch() {
     .expect("Workspace commit should succeed");
 
     assert!(
-        !Path::new(&repo.repo_path).join("should-not-sync.txt").exists(),
+        !Path::new(&repo.repo_path)
+            .join("should-not-sync.txt")
+            .exists(),
         "home working copy should not be force-synced when home is on a different branch"
     );
 }
@@ -312,8 +334,12 @@ fn workspace_main_uncommitted_changes_take_precedence_when_rebasing_children() {
     let main_workspace_root = workspace_path(&repo.repo_path, "main");
     let shared_file = "shared-precedence.txt";
 
-    TestRepo::write_workspace_file(&main_workspace_root, shared_file, "workspace-main-version\n")
-        .expect("Failed to write uncommitted workspace-main version");
+    TestRepo::write_workspace_file(
+        &main_workspace_root,
+        shared_file,
+        "workspace-main-version\n",
+    )
+    .expect("Failed to write uncommitted workspace-main version");
 
     let child_workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -359,7 +385,8 @@ fn workspace_main_uncommitted_changes_take_precedence_when_rebasing_children() {
         treq_lib::local_db::get_workspace_by_id(&repo.repo_path, child_workspace.id)
             .expect("child workspace lookup should succeed")
             .expect("child workspace should exist after rebase");
-    let child_workspace_root_after = workspace_path(&repo.repo_path, &child_workspace_after.workspace_path);
+    let child_workspace_root_after =
+        workspace_path(&repo.repo_path, &child_workspace_after.workspace_path);
     assert!(
         Path::new(&child_workspace_root_after).exists(),
         "child workspace path should exist after rebase: {}",
@@ -427,7 +454,11 @@ fn home_pull_syncs_workspace_working_copy_to_new_tip() {
     // Pull through the home repo path (workspace_id = None).
     let pull_result = treq_lib::core::pull_workspace_from_remote(&repo.repo_path, None, "git")
         .expect("Home pull should succeed");
-    assert!(pull_result.success, "Home pull should report success: {}", pull_result.message);
+    assert!(
+        pull_result.success,
+        "Home pull should report success: {}",
+        pull_result.message
+    );
 
     // The workspace working copy (@) should now equal the branch bookmark tip.
     // Resolve both via jj log so the test stays at the command level.

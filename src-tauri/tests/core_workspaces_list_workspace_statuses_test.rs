@@ -295,8 +295,8 @@ fn test_workspace_list_statuses_conflict_bit_matches_workspace_status_for_diverg
 }
 
 #[test]
-fn test_workspace_list_statuses_does_not_cross_assign_sibling_branch_name_when_exact_bookmark_missing()
-{
+fn test_workspace_list_statuses_does_not_cross_assign_sibling_branch_name_when_exact_bookmark_missing(
+) {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
     let checks = treq_lib::core::create_workspace(
@@ -319,8 +319,11 @@ fn test_workspace_list_statuses_does_not_cross_assign_sibling_branch_name_when_e
     )
     .expect("Failed to create logging workspace");
 
-    TestRepo::run_jj(&repo.repo_path, &["bookmark", "delete", "treq/feat-logging"])
-        .expect("Failed to delete logging bookmark");
+    TestRepo::run_jj(
+        &repo.repo_path,
+        &["bookmark", "delete", "treq/feat-logging"],
+    )
+    .expect("Failed to delete logging bookmark");
 
     let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
         .expect("Failed to list workspace statuses");

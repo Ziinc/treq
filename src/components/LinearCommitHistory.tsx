@@ -69,7 +69,9 @@ function groupCommitsByDay(commits: JjLogCommit[]): DayGroup[] {
 export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 	({ repoPath, workspaceId, onCommitClick, onCommitsLoaded }) => {
 		const [commits, setCommits] = useState<JjLogCommit[]>([]);
-		const [targetBranchCommits, setTargetBranchCommits] = useState<JjLogCommit[]>([]);
+		const [targetBranchCommits, setTargetBranchCommits] = useState<
+			JjLogCommit[]
+		>([]);
 		const [mergeBaseId, setMergeBaseId] = useState<string | null>(null);
 		const [targetBranch, setTargetBranch] = useState<string>("");
 		const [workspaceBranch, setWorkspaceBranch] = useState<string>("");
@@ -135,7 +137,9 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 			workspaceBranch.length > 0 &&
 			workspaceBranch === targetBranch;
 		const showWorkspaceTargetSection =
-			isWorkspaceView && !isDefaultWorkspaceBranch && targetBranchCommits.length > 0;
+			isWorkspaceView &&
+			!isDefaultWorkspaceBranch &&
+			targetBranchCommits.length > 0;
 		const hasDivergence = isHomeRepo && targetBranchCommits.length > 0;
 
 		if (loading) {
@@ -313,7 +317,12 @@ interface CommitItemProps {
 	onCommitClick?: (changeId: string) => void;
 }
 
-function CommitItem({ commit, isFirst, isTargetOnly, onCommitClick }: CommitItemProps) {
+function CommitItem({
+	commit,
+	isFirst,
+	isTargetOnly,
+	onCommitClick,
+}: CommitItemProps) {
 	const firstLine = commit.description.split("\n")[0] || "(no message)";
 	const hasStats = commit.insertions > 0 || commit.deletions > 0;
 
@@ -337,7 +346,9 @@ function CommitItem({ commit, isFirst, isTargetOnly, onCommitClick }: CommitItem
 			<div
 				className={cn(
 					"flex-1 min-w-0 pt-0.5 rounded-md",
-					isFirst && !isTargetOnly && "bg-accent/50 p-2 -m-2 shadow-sm border border-accent",
+					isFirst &&
+						!isTargetOnly &&
+						"bg-accent/50 p-2 -m-2 shadow-sm border border-accent",
 					isTargetOnly && "bg-muted/30 p-2 -m-2 rounded-md",
 					onCommitClick && "cursor-pointer hover:bg-muted/40 transition-colors",
 				)}

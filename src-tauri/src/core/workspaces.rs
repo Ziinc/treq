@@ -289,8 +289,7 @@ pub fn create_workspace(
     let effective_target_branch: String = if let Some(source_ws) = &stacked_source_workspace {
         source_ws.branch_name.clone()
     } else {
-        jj::get_default_branch(repo_path)
-            .unwrap_or_else(|_| "main".to_string())
+        jj::get_default_branch(repo_path).unwrap_or_else(|_| "main".to_string())
     };
 
     let new_branch: bool = !branch_exists;
@@ -809,7 +808,7 @@ pub fn workspace_status(
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_workspace_has_conflicts, resolve_workspace_diff_conflict_marker_style};
+    use super::{resolve_workspace_diff_conflict_marker_style, resolve_workspace_has_conflicts};
     use rusqlite::Connection;
     use std::sync::{Mutex, OnceLock};
     use tempfile::TempDir;
@@ -986,8 +985,8 @@ fn sync_home_and_workspace_for_branch(
         SyncSource::WorkspaceToHome => workspace_path_str,
     };
     let _ = jj::jj_workspace_update_stale(source_path);
-    let source_tip =
-        jj::jj_get_commit_id(source_path, "@").map_err(|e| format!("Failed to resolve source tip: {}", e))?;
+    let source_tip = jj::jj_get_commit_id(source_path, "@")
+        .map_err(|e| format!("Failed to resolve source tip: {}", e))?;
 
     let destination_path = match source {
         SyncSource::HomeToWorkspace => workspace_path_str,
@@ -1018,7 +1017,8 @@ fn sync_home_and_workspace_for_branch(
             if let Err(e) = jj::jj_sync_working_copy_if_safe(destination_path, branch) {
                 log::warn!(
                     "sync_home_and_workspace_for_branch: could not sync workspace @ to '{}': {}",
-                    branch, e
+                    branch,
+                    e
                 );
             }
         }
@@ -1445,7 +1445,11 @@ pub fn pull_workspace_from_remote(
             jj::jj_git_fetch(repo_path).map_err(|e| format!("Fetch failed: {}", e))?;
             let home_branch = jj::resolve_home_repo_branch(repo_path)
                 .map_err(|e| format!("Failed to resolve home repo branch: {}", e))?;
-            sync_home_and_workspace_for_branch(repo_path, &home_branch, SyncSource::HomeToWorkspace)?;
+            sync_home_and_workspace_for_branch(
+                repo_path,
+                &home_branch,
+                SyncSource::HomeToWorkspace,
+            )?;
             return Ok(PullWorkspaceResult {
                 success: true,
                 message: "Fetched home repo".to_string(),

@@ -67,10 +67,7 @@ fn test_diverged_log_splits_branch_and_target_commits() {
         "feature commit should be in commits"
     );
     assert!(
-        result
-            .commits
-            .iter()
-            .all(|c| !c.on_target_only),
+        result.commits.iter().all(|c| !c.on_target_only),
         "commits should not be marked on_target_only"
     );
 
