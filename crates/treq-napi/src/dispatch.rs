@@ -537,6 +537,15 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             Ok(Value::String(content))
         }
 
+        "get_file_modified_at" => {
+            let path = get_str(&args, "path")?;
+            let modified_at = modified_at_rfc3339(&path);
+            Ok(match modified_at {
+                Some(value) => Value::String(value),
+                None => Value::Null,
+            })
+        }
+
         "list_directory" => {
             let path = get_str(&args, "path")?;
             let entries = list_directory_impl(&path)?;
@@ -715,6 +724,7 @@ struct DirEntry {
     name: String,
     path: String,
     is_directory: bool,
+    modified_at: Option<String>,
 }
 
 fn list_directory_impl(path: &str) -> Result<Vec<DirEntry>, String> {
@@ -728,6 +738,7 @@ fn list_directory_impl(path: &str) -> Result<Vec<DirEntry>, String> {
                 name: name.to_string(),
                 path: ep.to_string_lossy().to_string(),
                 is_directory: ep.is_dir(),
+                modified_at: modified_at_rfc3339(&ep.to_string_lossy()),
             });
         }
     }
@@ -747,6 +758,7 @@ struct CachedDirEntry {
     path: String,
     is_directory: bool,
     relative_path: String,
+    modified_at: Option<String>,
 }
 
 fn list_directory_cached_impl(
@@ -769,11 +781,13 @@ fn list_directory_cached_impl(
                         .and_then(|n| n.to_str())
                         .unwrap_or(&f.relative_path)
                         .to_string();
+                    let modified_at = modified_at_rfc3339(&f.file_path);
                     CachedDirEntry {
                         name,
                         path: f.file_path,
                         is_directory: f.is_directory,
                         relative_path: f.relative_path,
+                        modified_at,
                     }
                 })
                 .collect());
@@ -797,7 +811,15 @@ fn list_directory_cached_impl(
                 path: e.path,
                 is_directory: e.is_directory,
                 relative_path: relative,
+                modified_at: e.modified_at,
             }
         })
         .collect())
+}
+
+fn modified_at_rfc3339(path: &str) -> Option<String> {
+    std::fs::metadata(path)
+        .ok()
+        .and_then(|metadata| metadata.modified().ok())
+        .map(|modified| chrono::DateTime::<chrono::Utc>::from(modified).to_rfc3339())
 }

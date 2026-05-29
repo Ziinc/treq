@@ -16,13 +16,19 @@ import {
   type DirectoryEntry,
   type Workspace,
   ensureWorkspaceIndexed,
+  getFileModifiedAt,
   getWorkspaceChangedFiles,
   getWorkspaceFileHunks,
   listDirectory,
   listDirectoryCached,
   readFile,
 } from "../lib/api";
-import { cn, getFullWorkspacePath } from "../lib/utils";
+import {
+  cn,
+  formatFullTimestamp,
+  formatRelativeTime,
+  getFullWorkspacePath,
+} from "../lib/utils";
 import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
 import { useToast } from "./ui/toast";
 import {
@@ -262,6 +268,7 @@ const CodeLine = memo(
 // FileContentView component - memoized file content panel
 interface FileContentViewProps {
   selectedFile: string | null;
+  selectedFileModifiedAt: string | null;
   isLoadingFile: boolean;
   fileContent: string;
   fileContentData: {
@@ -312,6 +319,7 @@ interface FileContentViewProps {
 const FileContentView = memo(
   ({
     selectedFile,
+    selectedFileModifiedAt,
     isLoadingFile,
     fileContent,
     fileContentData,
@@ -351,6 +359,12 @@ const FileContentView = memo(
       selectedFile && basePath && selectedFile.startsWith(`${basePath}/`)
         ? selectedFile.slice(basePath.length + 1)
         : selectedFile;
+    const modifiedAgoLabel = selectedFileModifiedAt
+      ? `Modified ${formatRelativeTime(selectedFileModifiedAt)}`
+      : null;
+    const modifiedTimestampLabel = selectedFileModifiedAt
+      ? formatFullTimestamp(selectedFileModifiedAt)
+      : null;
 
     const handleCopy = useCallback(async () => {
       if (!fileContentData) return;
@@ -415,8 +429,8 @@ const FileContentView = memo(
     return (
       <div className="h-full flex flex-col bg-[hsl(var(--code-background))]">
         <TooltipProvider>
-          <div className="px-4 pt-4 pb-2 border-b-[1px] border-solid border-zinc-700 flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="px-4 pt-2 pb-2 border-b-[1px] border-solid border-zinc-700 flex items-center justify-between">
+            <div className="flex items-center gap-3">
               <span className="text-sm text-muted-foreground font-mono">
                 {relativePath}
               </span>
@@ -439,24 +453,38 @@ const FileContentView = memo(
                 </TooltipContent>
               </Tooltip>
             </div>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={handleCopy}
-                  className="p-1 hover:bg-muted rounded border border-border/50 transition-colors text-muted-foreground hover:text-foreground"
-                >
-                  {copied ? (
-                    <Check className="w-4 h-4" />
-                  ) : (
-                    <Copy className="w-4 h-4" />
-                  )}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Copy file contents</p>
-              </TooltipContent>
-            </Tooltip>
+            <div className="flex items-center gap-2">
+              {modifiedAgoLabel && modifiedTimestampLabel && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="text-sm text-muted-foreground/90 hover:text-muted-foreground cursor-default">
+                      {modifiedAgoLabel}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{modifiedTimestampLabel}</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={handleCopy}
+                    className="p-1 hover:bg-muted rounded border border-border/50 transition-colors text-muted-foreground hover:text-foreground"
+                  >
+                    {copied ? (
+                      <Check className="w-4 h-4" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Copy file contents</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
           </div>
         </TooltipProvider>
         <div className="flex-1 overflow-hidden relative">
@@ -884,6 +912,9 @@ export const FileBrowser = memo(
       new Set([basePath])
     );
     const [selectedFile, setSelectedFile] = useState<string | null>(null);
+    const [selectedFileModifiedAt, setSelectedFileModifiedAt] = useState<
+      string | null
+    >(null);
     const [fileContent, setFileContent] = useState<string>("");
     const [directoryCache, setDirectoryCache] = useState<
       Map<string, DirectoryEntry[]>
@@ -1057,6 +1088,9 @@ export const FileBrowser = memo(
     const handleFileClick = useCallback(
       async (path: string) => {
         setSelectedFile(path);
+        getFileModifiedAt(path)
+          .then((modifiedAt) => setSelectedFileModifiedAt(modifiedAt))
+          .catch(() => setSelectedFileModifiedAt(null));
 
         // Check if binary file
         if (isBinaryFile(path)) {
@@ -1284,6 +1318,7 @@ export const FileBrowser = memo(
       } else {
         // Clear selection if no README.md
         setSelectedFile(null);
+        setSelectedFileModifiedAt(null);
         setFileContent("");
       }
     }, [rootEntries, handleFileClick]);
@@ -1488,6 +1523,7 @@ export const FileBrowser = memo(
     const renderFileContent = () => (
       <FileContentView
         selectedFile={selectedFile}
+        selectedFileModifiedAt={selectedFileModifiedAt}
         isLoadingFile={isLoadingFile}
         fileContent={fileContent}
         fileContentData={fileContentData}
