@@ -21,6 +21,7 @@ pub struct WorkspaceEntry {
     pub name: String,
     pub path: String,
     pub is_directory: bool,
+    pub modified_at: Option<String>,
 }
 
 /// Defines how a workspace is merged into its target branch.
@@ -182,10 +183,15 @@ pub fn ls_workspace(
         }
 
         if let Some(name) = entry_path.file_name().and_then(|name| name.to_str()) {
+            let modified_at = std::fs::metadata(entry_path)
+                .ok()
+                .and_then(|metadata| metadata.modified().ok())
+                .map(|modified| chrono::DateTime::<chrono::Utc>::from(modified).to_rfc3339());
             entries.push(WorkspaceEntry {
                 name: name.to_string(),
                 path: entry_path.to_string_lossy().to_string(),
                 is_directory: entry_path.is_dir(),
+                modified_at,
             });
         }
     }

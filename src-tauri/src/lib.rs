@@ -440,6 +440,7 @@ pub fn run() {
             commands::pty_resize,
             commands::pty_close,
             commands::read_file,
+            commands::get_file_modified_at,
             commands::list_directory,
             commands::ls_workspace,
             commands::get_workspace_readme,

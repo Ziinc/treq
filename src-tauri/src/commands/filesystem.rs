@@ -9,11 +9,28 @@ pub struct CachedDirectoryEntry {
     pub path: String,
     pub is_directory: bool,
     pub relative_path: String,
+    pub modified_at: Option<String>,
+}
+
+fn modified_at_rfc3339(path: &str) -> Option<String> {
+    std::fs::metadata(path)
+        .ok()
+        .and_then(|metadata| metadata.modified().ok())
+        .map(|modified| chrono::DateTime::<chrono::Utc>::from(modified).to_rfc3339())
 }
 
 #[tauri::command]
 pub fn read_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_file_modified_at(path: String) -> Result<Option<String>, String> {
+    if !std::path::Path::new(&path).exists() {
+        return Ok(None);
+    }
+
+    Ok(modified_at_rfc3339(&path))
 }
 
 #[tauri::command]
@@ -48,6 +65,7 @@ pub fn list_directory(path: String) -> Result<Vec<DirectoryEntry>, String> {
                     name: name.to_string(),
                     path: entry_path.to_string_lossy().to_string(),
                     is_directory: is_dir,
+                    modified_at: modified_at_rfc3339(&entry_path.to_string_lossy()),
                 });
             }
         }
@@ -101,11 +119,13 @@ pub fn list_directory_cached(
                         .and_then(|n| n.to_str())
                         .unwrap_or(&file.relative_path)
                         .to_string();
+                    let modified_at = modified_at_rfc3339(&file.file_path);
                     CachedDirectoryEntry {
                         name,
                         path: file.file_path,
                         is_directory: file.is_directory,
                         relative_path: file.relative_path,
+                        modified_at,
                     }
                 })
                 .collect();
@@ -135,6 +155,7 @@ pub fn list_directory_cached(
                 path: entry.path,
                 is_directory: entry.is_directory,
                 relative_path: relative,
+                modified_at: entry.modified_at,
             }
         })
         .collect();

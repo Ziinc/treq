@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "fs";
+import path from "path";
 import { fireEvent, render, screen, waitFor, within } from "../../test-utils";
 import userEvent from "@testing-library/user-event";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -83,6 +85,35 @@ describe("Dashboard - FileBrowser integration", () => {
 		expect(appTsLabels.length).toBeGreaterThan(1);
 		await fileBrowser.findByText("runApp");
 		await screen.findByRole("button", { name: /back/i });
+	});
+
+	it("shows humanized modified time and reveals absolute timestamp on hover in file header", async () => {
+		const { workspacePath } = await setupWorkspace(
+			"feat/filebrowser-edit-time-test",
+			{
+				"main.ts": "const x = 1;\n",
+			},
+		);
+		const knownMtime = new Date(Date.now() - 2 * 60 * 1000);
+		const mainTsPath = path.join(workspacePath, "main.ts");
+		fs.utimesSync(mainTsPath, knownMtime, knownMtime);
+
+		await openWorkspaceCodeBrowser(
+			user,
+			"feat/filebrowser-edit-time-test",
+			"main.ts",
+		);
+
+		await screen.findByRole("button", { name: /back/i });
+		const relativeEditTime = await screen.findByText(/Modified .* ago/i);
+		expect(relativeEditTime).toBeTruthy();
+
+		await user.hover(relativeEditTime);
+
+		const timestampMatches = await screen.findAllByText(
+			new RegExp(`\\b${knownMtime.getFullYear().toString()}\\b`),
+		);
+		expect(timestampMatches.length).toBeGreaterThan(0);
 	});
 
 	it("supports in-file search open, navigation, highlighting, and close", async () => {

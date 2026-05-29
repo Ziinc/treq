@@ -187,6 +187,7 @@ export interface DirectoryEntry {
 	name: string;
 	path: string;
 	is_directory: boolean;
+	modified_at?: string | null;
 }
 
 export interface CachedDirectoryEntry {
@@ -194,6 +195,7 @@ export interface CachedDirectoryEntry {
 	path: string;
 	is_directory: boolean;
 	relative_path: string;
+	modified_at?: string | null;
 }
 
 export interface FileSearchResult {

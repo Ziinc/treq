@@ -57,6 +57,9 @@ export const ptyListen = (
 export const readFile = (path: string): Promise<string> =>
 	invoke("read_file", { path });
 
+export const getFileModifiedAt = (path: string): Promise<string | null> =>
+	invoke("get_file_modified_at", { path });
+
 export const listDirectory = (path: string): Promise<DirectoryEntry[]> =>
 	invoke("list_directory", { path });
 
