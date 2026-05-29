@@ -488,7 +488,9 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 			targetBranchCommitsBranch != null &&
 			workspaceBranch === targetBranchCommitsBranch;
 		const showTargetBranchSection =
-			!isHomeRepo && !isDefaultWorkspaceBranch && targetBranchCommits.length > 0;
+			!isHomeRepo &&
+			!isDefaultWorkspaceBranch &&
+			targetBranchCommits.length > 0;
 
 		if (loading) {
 			return (

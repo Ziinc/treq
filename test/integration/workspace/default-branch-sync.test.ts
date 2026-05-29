@@ -14,10 +14,14 @@ import {
 } from "../../../src/lib/api";
 
 function getCommitId(cwd: string, revset: string): string {
-	return execFileSync("jj", ["log", "-r", revset, "--no-graph", "-T", "commit_id"], {
-		cwd,
-		encoding: "utf8",
-	}).trim();
+	return execFileSync(
+		"jj",
+		["log", "-r", revset, "--no-graph", "-T", "commit_id"],
+		{
+			cwd,
+			encoding: "utf8",
+		},
+	).trim();
 }
 
 describe("default-branch workspace sync after home commit", () => {
@@ -26,9 +30,14 @@ describe("default-branch workspace sync after home commit", () => {
 		openRepo(repoPath);
 
 		const workspaceId = await createWorkspace(repoPath, "main");
-		const workspace = (await getWorkspaces(repoPath)).find((w) => w.id === workspaceId);
+		const workspace = (await getWorkspaces(repoPath)).find(
+			(w) => w.id === workspaceId,
+		);
 		expect(workspace).toBeTruthy();
-		const workspacePath = resolveWorkspacePath(repoPath, workspace!.workspace_path);
+		const workspacePath = resolveWorkspacePath(
+			repoPath,
+			workspace!.workspace_path,
+		);
 		await switchRepoBranch(repoPath, "main");
 
 		const beforeMain = getCommitId(repoPath, "main");
@@ -50,15 +59,30 @@ describe("default-branch workspace sync after home commit", () => {
 		openRepo(repoPath);
 
 		const workspaceId = await createWorkspace(repoPath, "main");
-		const workspace = (await getWorkspaces(repoPath)).find((w) => w.id === workspaceId);
+		const workspace = (await getWorkspaces(repoPath)).find(
+			(w) => w.id === workspaceId,
+		);
 		expect(workspace).toBeTruthy();
-		const workspacePath = resolveWorkspacePath(repoPath, workspace!.workspace_path);
+		const workspacePath = resolveWorkspacePath(
+			repoPath,
+			workspace!.workspace_path,
+		);
 		await switchRepoBranch(repoPath, "main");
 
-		writeWorkspaceFile(workspacePath, "dirty.txt", "dirty workspace content\n", true);
+		writeWorkspaceFile(
+			workspacePath,
+			"dirty.txt",
+			"dirty workspace content\n",
+			true,
+		);
 		const workspaceAtBefore = getCommitId(workspacePath, "@");
 
-		writeWorkspaceFile(repoPath, "home-dirty-safe-sync.txt", "home commit\n", true);
+		writeWorkspaceFile(
+			repoPath,
+			"home-dirty-safe-sync.txt",
+			"home commit\n",
+			true,
+		);
 		await createCommit(repoPath, null, "home commit with dirty workspace");
 
 		const mainAfter = getCommitId(repoPath, "main");

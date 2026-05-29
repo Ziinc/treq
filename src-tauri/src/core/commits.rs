@@ -80,8 +80,9 @@ pub fn list_commits(
 
             if !is_default_branch_workspace {
                 let target_limit = target_branch_limit.unwrap_or(10);
-                let target_commits = jj::jj_get_target_branch_log(repo_path, target_branch, target_limit)
-                    .map_err(|e| format!("Failed to list target branch history: {}", e))?;
+                let target_commits =
+                    jj::jj_get_target_branch_log(repo_path, target_branch, target_limit)
+                        .map_err(|e| format!("Failed to list target branch history: {}", e))?;
                 result.commits =
                     merge_workspace_and_target_commits(result.commits, target_commits.clone());
 
@@ -93,8 +94,9 @@ pub fn list_commits(
             if include_target_branch_history {
                 if is_default_branch_workspace {
                     let limit = target_branch_limit.unwrap_or(10);
-                    result.target_branch_commits = jj::jj_get_target_branch_log(repo_path, target_branch, limit)
-                        .map_err(|e| format!("Failed to list target branch history: {}", e))?;
+                    result.target_branch_commits =
+                        jj::jj_get_target_branch_log(repo_path, target_branch, limit)
+                            .map_err(|e| format!("Failed to list target branch history: {}", e))?;
                 }
             }
 

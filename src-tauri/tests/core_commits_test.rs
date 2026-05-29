@@ -675,7 +675,9 @@ fn test_list_commits() {
     let committed: Vec<_> = result
         .commits
         .iter()
-        .filter(|c| !c.is_working_copy && (c.description == "Add hello" || c.description == "Add world"))
+        .filter(|c| {
+            !c.is_working_copy && (c.description == "Add hello" || c.description == "Add world")
+        })
         .collect();
     assert_eq!(
         committed.len(),

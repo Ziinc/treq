@@ -130,7 +130,8 @@ impl TestRepo {
 
     /// Run a jj command in the specified directory.
     pub fn run_jj(cwd: &str, args: &[&str]) -> Result<String, String> {
-        let jj_binary = treq_lib::binary_paths::detect_binary("jj").unwrap_or_else(|| "jj".to_string());
+        let jj_binary =
+            treq_lib::binary_paths::detect_binary("jj").unwrap_or_else(|| "jj".to_string());
         let output = Command::new(jj_binary)
             .current_dir(cwd)
             .args(args)

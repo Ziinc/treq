@@ -203,7 +203,6 @@ fn load_workspace_repo(workspace_path: &str) -> Result<LoadedWorkspaceRepo, JjEr
     })
 }
 
-
 fn import_git_head_if_needed(
     loaded: &mut LoadedWorkspaceRepo,
     repo_path: &str,
@@ -1286,15 +1285,14 @@ pub fn create_workspace(
 
     // Initialize the new workspace (creates .jj, registers workspace, checks out root commit)
     let wc_factory = default_working_copy_factory();
-    let (mut new_workspace, new_repo) =
-        block_on(Workspace::init_workspace_with_existing_repo(
-            &workspace_dir,
-            parent_workspace.repo_path(),
-            &parent_repo,
-            &*wc_factory,
-            new_ws_name.clone(),
-        ))
-        .map_err(|e| JjError::GitWorkspaceError(format!("Failed to init workspace: {}", e)))?;
+    let (mut new_workspace, new_repo) = block_on(Workspace::init_workspace_with_existing_repo(
+        &workspace_dir,
+        parent_workspace.repo_path(),
+        &parent_repo,
+        &*wc_factory,
+        new_ws_name.clone(),
+    ))
+    .map_err(|e| JjError::GitWorkspaceError(format!("Failed to init workspace: {}", e)))?;
 
     // Start a transaction on the new repo to move wc to the desired source commit
     let source_commit = new_repo
@@ -1304,9 +1302,8 @@ pub fn create_workspace(
 
     let mut tx = new_repo.start_transaction();
 
-    let parent_tree =
-        block_on(merge_commit_trees(tx.repo(), &[source_commit.clone()]))
-            .map_err(|e| JjError::GitWorkspaceError(format!("Failed to merge trees: {}", e)))?;
+    let parent_tree = block_on(merge_commit_trees(tx.repo(), &[source_commit.clone()]))
+        .map_err(|e| JjError::GitWorkspaceError(format!("Failed to merge trees: {}", e)))?;
 
     // Create new wc commit on top of source_commit (empty, inherits source tree)
     let new_wc = block_on(
@@ -2023,13 +2020,9 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
                                     let _ = block_on(
                                         tx.repo_mut().check_out(workspace_name, &branch_tip_commit),
                                     );
-                                    let _ = block_on(
-                                        tx.repo_mut().rebase_descendants(),
-                                    );
+                                    let _ = block_on(tx.repo_mut().rebase_descendants());
                                     let _ = git::export_refs(tx.repo_mut());
-                                    if block_on(tx.commit("repair home wc"))
-                                        .is_ok()
-                                    {
+                                    if block_on(tx.commit("repair home wc")).is_ok() {
                                         repaired_home_wc = true;
                                     }
                                 }
@@ -2088,15 +2081,11 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
         builder.set_tree(new_tree.clone());
         match block_on(builder.write(tx.repo_mut())) {
             Ok(rewritten_wc) => {
-                let _ = block_on(
-                    tx.repo_mut().edit(workspace_name.clone(), &rewritten_wc),
-                );
+                let _ = block_on(tx.repo_mut().edit(workspace_name.clone(), &rewritten_wc));
                 let _ = block_on(tx.repo_mut().rebase_descendants());
                 match block_on(tx.commit("snapshot working copy")) {
                     Ok(final_repo) => {
-                        let _ = block_on(
-                            locked_ws.finish(final_repo.op_id().clone()),
-                        );
+                        let _ = block_on(locked_ws.finish(final_repo.op_id().clone()));
                     }
                     Err(_) => {
                         let _ = block_on(locked_ws.finish(repo.op_id().clone()));
@@ -2259,22 +2248,20 @@ pub fn jj_get_file_hunks(
     let merge_options = MergeOptions::from_settings(&loaded.settings)
         .map_err(|e| JjError::IoError(format!("Failed to load merge options: {}", e)))?;
     let labels = ConflictLabels::unlabeled();
-    let before_materialized =
-        block_on(jj_lib::conflicts::materialize_tree_value(
-            loaded.repo.store(),
-            target_repo_path.as_ref(),
-            before,
-            &labels,
-        ))
-        .map_err(|e| JjError::IoError(format!("Failed to materialize parent value: {}", e)))?;
-    let after_materialized =
-        block_on(jj_lib::conflicts::materialize_tree_value(
-            loaded.repo.store(),
-            target_repo_path.as_ref(),
-            after,
-            &labels,
-        ))
-        .map_err(|e| JjError::IoError(format!("Failed to materialize working value: {}", e)))?;
+    let before_materialized = block_on(jj_lib::conflicts::materialize_tree_value(
+        loaded.repo.store(),
+        target_repo_path.as_ref(),
+        before,
+        &labels,
+    ))
+    .map_err(|e| JjError::IoError(format!("Failed to materialize parent value: {}", e)))?;
+    let after_materialized = block_on(jj_lib::conflicts::materialize_tree_value(
+        loaded.repo.store(),
+        target_repo_path.as_ref(),
+        after,
+        &labels,
+    ))
+    .map_err(|e| JjError::IoError(format!("Failed to materialize working value: {}", e)))?;
 
     let style = parse_conflict_marker_style(conflict_marker_style);
     let before_bytes = block_on(materialized_value_to_bytes(
@@ -2720,15 +2707,13 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
                         .map_err(|e| {
                             JjError::IoError(format!("Failed to repair home wc checkout: {}", e))
                         })?;
-                        block_on(rtx.repo_mut().rebase_descendants()).map_err(
-                            |e| {
-                                JjError::IoError(format!("Failed to rebase after wc repair: {}", e))
-                            },
-                        )?;
+                        block_on(rtx.repo_mut().rebase_descendants()).map_err(|e| {
+                            JjError::IoError(format!("Failed to rebase after wc repair: {}", e))
+                        })?;
                         let _ = git::export_refs(rtx.repo_mut());
-                        let _ = block_on(rtx.commit("repair home wc")).map_err(
-                            |e| JjError::IoError(format!("Failed to commit wc repair: {}", e)),
-                        )?;
+                        let _ = block_on(rtx.commit("repair home wc")).map_err(|e| {
+                            JjError::IoError(format!("Failed to commit wc repair: {}", e))
+                        })?;
                         workspace = Workspace::load(
                             &settings,
                             Path::new(workspace_path),
@@ -2738,10 +2723,9 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
                         .map_err(|e| {
                             JjError::IoError(format!("Failed to reload workspace: {}", e))
                         })?;
-                        repo = block_on(workspace.repo_loader().load_at_head())
-                            .map_err(|e| {
-                                JjError::IoError(format!("Failed to reload repo: {}", e))
-                            })?;
+                        repo = block_on(workspace.repo_loader().load_at_head()).map_err(|e| {
+                            JjError::IoError(format!("Failed to reload repo: {}", e))
+                        })?;
                     }
                 }
             }
@@ -2814,9 +2798,9 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
                 ))
             })?;
             for name in others {
-                block_on(tx.repo_mut().edit(name, &detached_wc)).map_err(
-                    |e| JjError::IoError(format!("Failed to detach workspace wc pointer: {}", e)),
-                )?;
+                block_on(tx.repo_mut().edit(name, &detached_wc)).map_err(|e| {
+                    JjError::IoError(format!("Failed to detach workspace wc pointer: {}", e))
+                })?;
             }
         }
         workspace_names = tx
@@ -3093,14 +3077,12 @@ pub fn jj_split(
     .map_err(|e| JjError::IoError(format!("Failed to rewrite split descendants: {}", e)))?;
     for (name, working_copy_commit) in loaded.repo.view().wc_commit_ids() {
         if working_copy_commit == wc_commit.id() {
-            block_on(tx.repo_mut().edit(name.clone(), &second_commit)).map_err(
-                |e| {
-                    JjError::IoError(format!(
-                        "Failed to move working copy to remaining commit: {}",
-                        e
-                    ))
-                },
-            )?;
+            block_on(tx.repo_mut().edit(name.clone(), &second_commit)).map_err(|e| {
+                JjError::IoError(format!(
+                    "Failed to move working copy to remaining commit: {}",
+                    e
+                ))
+            })?;
         }
     }
     block_on(tx.repo_mut().rebase_descendants())
@@ -3312,9 +3294,8 @@ fn get_conflicted_files_from_branch_diff(
     let mut conflicts = collect_unresolved_conflict_paths(&target_tree, &working_copy_tree)?;
 
     if conflicts.is_empty() {
-        let wc_parent_tree =
-            block_on(wc_commit.parent_tree(loaded.repo.as_ref()))
-                .map_err(|e| JjError::IoError(format!("Failed to load wc parent tree: {}", e)))?;
+        let wc_parent_tree = block_on(wc_commit.parent_tree(loaded.repo.as_ref()))
+            .map_err(|e| JjError::IoError(format!("Failed to load wc parent tree: {}", e)))?;
         conflicts = collect_unresolved_conflict_paths(&wc_parent_tree, &working_copy_tree)?;
     }
 
@@ -3348,8 +3329,7 @@ fn collect_unresolved_conflict_paths(
 ) -> Result<Vec<String>, JjError> {
     let mut conflicts = Vec::new();
     let diff_matcher = repo_root_matcher();
-    let diff_entries =
-        block_on(before.diff_stream(after, &diff_matcher).collect::<Vec<_>>());
+    let diff_entries = block_on(before.diff_stream(after, &diff_matcher).collect::<Vec<_>>());
     for entry in diff_entries {
         let values = entry
             .values
@@ -3893,7 +3873,10 @@ pub fn jj_get_diverged_sync_counts(
     Ok((ahead_count, behind_count))
 }
 
-fn get_sync_revset_tips(workspace_path: &str, branch_name: &str) -> Result<(String, String), JjError> {
+fn get_sync_revset_tips(
+    workspace_path: &str,
+    branch_name: &str,
+) -> Result<(String, String), JjError> {
     let loaded = load_workspace_repo(workspace_path)?;
     let view = loaded.repo.view();
     let repo_path = derive_repo_path_from_workspace(workspace_path)
@@ -4535,7 +4518,8 @@ pub fn jj_get_home_repo_diverged_log(
                 .map(|c| c.id().hex()[..12].to_string())
         });
 
-    let workspace_branch = get_workspace_branch(repo_path).unwrap_or_else(|_| current_branch.to_string());
+    let workspace_branch =
+        get_workspace_branch(repo_path).unwrap_or_else(|_| current_branch.to_string());
 
     Ok(JjLogResult {
         commits: branch_commits,
@@ -4592,9 +4576,8 @@ pub fn jj_dry_run_home_repo_rebase(
     let merge_base_revset = format!("latest(::{current_sym} & ::{target_sym})");
 
     let merge_base_commit = {
-        let revset = evaluate_revset(&loaded, &merge_base_revset).map_err(|e| {
-            JjError::IoError(format!("Failed to find merge base: {}", e))
-        })?;
+        let revset = evaluate_revset(&loaded, &merge_base_revset)
+            .map_err(|e| JjError::IoError(format!("Failed to find merge base: {}", e)))?;
         revset
             .iter()
             .commits(loaded.repo.store())
@@ -5374,9 +5357,8 @@ pub fn jj_create_merge_commit(
 
     let mut tx = loaded.repo.start_transaction();
     let parent_commits = vec![workspace_parent, target_parent];
-    let merged_tree =
-        block_on(merge_commit_trees(tx.repo(), &parent_commits))
-            .map_err(|e| JjError::IoError(format!("Failed to build merge tree: {}", e)))?;
+    let merged_tree = block_on(merge_commit_trees(tx.repo(), &parent_commits))
+        .map_err(|e| JjError::IoError(format!("Failed to build merge tree: {}", e)))?;
     let merge_commit = block_on(async {
         tx.repo_mut()
             .new_commit(
@@ -5392,11 +5374,8 @@ pub fn jj_create_merge_commit(
     })
     .map_err(|e| JjError::IoError(format!("Failed to write merge commit: {}", e)))?;
 
-    let new_wc_commit =
-        block_on(tx.repo_mut().check_out(workspace_name, &merge_commit))
-            .map_err(|e| {
-                JjError::IoError(format!("Failed to create working-copy commit: {}", e))
-            })?;
+    let new_wc_commit = block_on(tx.repo_mut().check_out(workspace_name, &merge_commit))
+        .map_err(|e| JjError::IoError(format!("Failed to create working-copy commit: {}", e)))?;
     let _ = new_wc_commit;
     block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
         JjError::IoError(format!("Failed to rebase descendants after merge: {}", e))
@@ -5527,8 +5506,7 @@ pub fn jj_rebase_merge_commit(
     })?;
 
     let parent_commits = vec![target_tip_commit, rebased_tip_commit];
-    let merged_tree = block_on(merge_commit_trees(tx.repo(), &parent_commits))
-        .map_err(|e| {
+    let merged_tree = block_on(merge_commit_trees(tx.repo(), &parent_commits)).map_err(|e| {
         JjError::IoError(format!(
             "Failed to build merge tree for rebase merge: {}",
             e
@@ -5699,7 +5677,6 @@ mod tests {
             .expect("jj git init should run");
         assert!(status.success(), "jj git init should succeed");
     }
-
 
     #[test]
     fn bookmark_set_get_delete_round_trip() {
@@ -5881,5 +5858,4 @@ mod tests {
         assert_eq!(lines.start_line, 2);
         assert_eq!(lines.end_line, 3);
     }
-
 }

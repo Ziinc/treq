@@ -77,12 +77,8 @@ pub fn run() {
             }
 
             // --- GUI mode: initialize telemetry before anything that may log ---
-            let log_dir = app
-                .path()
-                .app_log_dir()
-                .expect("Failed to get app log dir");
-            let telemetry =
-                telemetry::init(&log_dir).expect("Failed to initialize telemetry");
+            let log_dir = app.path().app_log_dir().expect("Failed to get app log dir");
+            let telemetry = telemetry::init(&log_dir).expect("Failed to initialize telemetry");
 
             let app_dir = app
                 .path()
@@ -373,9 +369,7 @@ pub fn run() {
                 "view_logs" => {
                     use tauri_plugin_opener::OpenerExt;
                     if let Ok(dir) = app.path().app_log_dir() {
-                        let _ = app
-                            .opener()
-                            .open_path(dir.to_string_lossy(), None::<&str>);
+                        let _ = app.opener().open_path(dir.to_string_lossy(), None::<&str>);
                     }
                 }
                 "learn_more" => {

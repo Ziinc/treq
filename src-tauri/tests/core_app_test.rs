@@ -443,7 +443,10 @@ fn ensure_workspace_rebased_errors_but_preserves_on_truly_missing_bookmark() {
 
     let result = treq_lib::core::ensure_workspace_rebased(&repo.repo_path, ws.id, "diff");
 
-    assert!(result.is_err(), "truly missing bookmark should return an Err");
+    assert!(
+        result.is_err(),
+        "truly missing bookmark should return an Err"
+    );
     assert!(
         result.unwrap_err().contains("not found in repo"),
         "error should describe the problem"
