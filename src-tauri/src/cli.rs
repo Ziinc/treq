@@ -41,33 +41,49 @@ pub fn init_cli_binary_paths() {
 /// Top-level CLI dispatch. Returns `true` if a CLI command was handled.
 pub fn handle_cli_command(subcommand: &SubcommandMatches) -> bool {
     match subcommand.name.as_str() {
-        "workspace" => {
-            if let Some(ref sub) = subcommand.matches.subcommand {
-                handle_workspace_subcommand(sub);
-            } else {
-                eprintln!("Usage: treq workspace <add|set|st|ls>");
-                eprintln!("Run `treq workspace --help` for details.");
-            }
+        "add" => {
+            handle_workspace_add(&subcommand.matches);
             true
         }
+        "set" => {
+            handle_workspace_set(&subcommand.matches);
+            true
+        }
+        "st" => {
+            handle_workspace_status(&subcommand.matches);
+            true
+        }
+        "help" => {
+            print_cli_help();
+            true
+        }
+        "open" => false,
         _ => false,
     }
 }
 
-fn handle_workspace_subcommand(subcommand: &SubcommandMatches) {
-    let name = &subcommand.name;
-    let matches = &subcommand.matches;
-
-    match name.as_str() {
-        "add" => handle_workspace_add(matches),
-        "set" => handle_workspace_set(matches),
-        "st" => handle_workspace_status(matches),
-        "ls" => handle_workspace_list(),
-        _ => {
-            eprintln!("Unknown workspace command: {}", name);
-            eprintln!("Available: add, set, st, ls");
-        }
+pub fn should_exit_after_cli(matches: &Matches) -> bool {
+    if let Some(ref subcommand) = matches.subcommand {
+        return handle_cli_command(subcommand);
     }
+    print_cli_help();
+    true
+}
+
+#[cfg(test)]
+fn is_supported_cli_command(name: &str) -> bool {
+    matches!(name, "add" | "set" | "st" | "help" | "open")
+}
+
+fn print_cli_help() {
+    println!("Treq - Coding Agent Manager");
+    println!();
+    println!("Usage:");
+    println!("  treq add <branch_name> [-i intent] [-s source_branch]");
+    println!("  treq set <workspace_name> [-i intent] [-t target_branch]");
+    println!("  treq st [workspace_name]");
+    println!("  treq help");
+    println!("  treq open");
 }
 
 fn get_arg_value(matches: &Matches, name: &str) -> Option<String> {
@@ -84,7 +100,7 @@ fn handle_workspace_add(matches: &Matches) {
         Some(name) => name,
         None => {
             eprintln!("Error: branch name is required");
-            eprintln!("Usage: treq workspace add <branch_name> [-i intent] [-s source_branch]");
+            eprintln!("Usage: treq add <branch_name> [-i intent] [-s source_branch]");
             return;
         }
     };
@@ -136,7 +152,7 @@ fn handle_workspace_set(matches: &Matches) {
         Some(name) => name,
         None => {
             eprintln!("Error: workspace name is required");
-            eprintln!("Usage: treq workspace set <workspace_name> [-i intent] [-t target_branch]");
+            eprintln!("Usage: treq set <workspace_name> [-i intent] [-t target_branch]");
             return;
         }
     };
@@ -251,38 +267,6 @@ fn handle_workspace_status(matches: &Matches) {
     }
 }
 
-fn handle_workspace_list() {
-    let repo_path = match detect_repo_path() {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            return;
-        }
-    };
-
-    match core::list_workspace_statuses(&repo_path) {
-        Ok(statuses) => {
-            if statuses.is_empty() {
-                println!("No workspaces found.");
-                return;
-            }
-            println!("{:<30} {:<15} {:<10}", "BRANCH", "TARGET", "CONFLICTS");
-            println!("{}", "-".repeat(58));
-            for status in &statuses {
-                let target = status.current.target_branch.as_deref().unwrap_or("main");
-                let conflicts = if status.has_conflicts { "YES" } else { "no" };
-                println!(
-                    "{:<30} {:<15} {:<10}",
-                    status.current.branch_name, target, conflicts
-                );
-            }
-        }
-        Err(e) => {
-            eprintln!("Error listing workspaces: {}", e);
-        }
-    }
-}
-
 fn print_workspace_partial_status(status: &core::WorkspaceSidebarStatus) {
     let flags = if status.has_conflicts {
         " [CONFLICTS]"
@@ -295,6 +279,54 @@ fn print_workspace_partial_status(status: &core::WorkspaceSidebarStatus) {
     }
     if let Some(ref target) = status.current.target_branch {
         println!("    Target: {}", target);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tauri_plugin_cli::SubcommandMatches;
+
+    fn make_subcommand(name: &str) -> SubcommandMatches {
+        let mut sub = SubcommandMatches::default();
+        sub.name = name.to_string();
+        sub.matches = Matches::default();
+        sub
+    }
+
+    #[test]
+    fn supports_new_top_level_commands() {
+        assert!(is_supported_cli_command("add"));
+        assert!(is_supported_cli_command("set"));
+        assert!(is_supported_cli_command("st"));
+        assert!(is_supported_cli_command("help"));
+        assert!(is_supported_cli_command("open"));
+    }
+
+    #[test]
+    fn rejects_removed_commands() {
+        assert!(!is_supported_cli_command("ls"));
+        assert!(!is_supported_cli_command("workspace"));
+    }
+
+    #[test]
+    fn open_does_not_exit_cli_mode() {
+        let mut matches = Matches::default();
+        matches.subcommand = Some(Box::new(make_subcommand("open")));
+        assert!(!should_exit_after_cli(&matches));
+    }
+
+    #[test]
+    fn help_exits_cli_mode() {
+        let mut matches = Matches::default();
+        matches.subcommand = Some(Box::new(make_subcommand("help")));
+        assert!(should_exit_after_cli(&matches));
+    }
+
+    #[test]
+    fn bare_treq_exits_like_help() {
+        let matches = Matches::default();
+        assert!(should_exit_after_cli(&matches));
     }
 }
 

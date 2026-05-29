@@ -234,13 +234,8 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 
 		// Shared treq CLI documentation injected as system prompt for any agent
 		const treqSystemPrompt = [
-			"You have access to the treq CLI for managing workspaces. Available commands:",
-			"- treq workspace ls — List all workspaces with their status",
-			"- treq workspace st — Show status of all workspaces",
-			"- treq workspace st <name> — Show detailed status for a specific workspace",
-			"- treq workspace add <branch> [-i intent] [-s source_branch] — Create a new workspace",
-			"- treq workspace set <name> [-i intent] [-t target_branch] — Update workspace settings",
-			"- treq help — Show all available commands",
+			"You have access to the treq CLI for managing workspaces.",
+			"Run `treq help` to discover the currently available commands before using the CLI.",
 			"",
 			`IMPORTANT: You must read, write, edit, delete only files in the current working directory.`,
 		].join("\\n");
