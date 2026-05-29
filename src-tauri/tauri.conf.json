@@ -41,9 +41,6 @@
             { "name": "workspace_name", "index": 1, "description": "Workspace name (omit for all)" }
           ]
         },
-        "help": {
-          "description": "Show available commands"
-        },
         "open": {
           "description": "Open the Treq GUI"
         }
