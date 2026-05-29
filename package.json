@@ -7,6 +7,7 @@
     "pro": false
   },
   "scripts": {
+    "start": "npm run tauri dev open",
     "dev": "vite",
     "build": "tsc && vite build && npm run verify:frontend-dist",
     "verify:frontend-dist": "node -e \"const fs=require('node:fs');const path='src/dist';if(!fs.existsSync(path)){console.error('Missing frontend build output at '+path);process.exit(1)}\"",
