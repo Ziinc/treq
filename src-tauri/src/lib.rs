@@ -30,7 +30,6 @@ pub(crate) struct AppState {
     dispatch_instance_id: String,
     dispatch_started_at: u64,
     dispatch_endpoint: String,
-    dispatch_registry_path: std::path::PathBuf,
     // Held for its Drop guards (file writer + provider shutdown).
     _telemetry: telemetry::TelemetryGuards,
 }
@@ -230,36 +229,57 @@ fn start_instance_registry_heartbeat(app: AppHandle) {
             }
         }
         drop(focus_map);
+        let mut windows_by_repo: HashMap<String, Vec<agent_dispatch::InstanceWindowSnapshot>> =
+            HashMap::new();
+        for snapshot in snapshots {
+            windows_by_repo
+                .entry(snapshot.normalized_repo_path.clone())
+                .or_default()
+                .push(snapshot);
+        }
 
-        let mut registry = match agent_dispatch::load_registry(&state.dispatch_registry_path) {
-            Ok(registry) => registry,
-            Err(error) => {
-                log::warn!("{}", error);
-                std::thread::sleep(std::time::Duration::from_millis(
-                    agent_dispatch::HEARTBEAT_INTERVAL_MS,
-                ));
+        for (repo_path, windows) in windows_by_repo {
+            if repo_path.is_empty() {
+                log::warn!("Skipping instance heartbeat for empty repo path");
                 continue;
             }
-        };
-        agent_dispatch::prune_stale_instances(
-            &mut registry,
-            now,
-            agent_dispatch::HEARTBEAT_TIMEOUT_MS,
-        );
-        agent_dispatch::upsert_instance(
-            &mut registry,
-            agent_dispatch::RegisteredInstance {
-                instance_id: state.dispatch_instance_id.clone(),
-                pid: std::process::id(),
-                started_at: state.dispatch_started_at,
-                last_heartbeat_at: now,
-                endpoint: state.dispatch_endpoint.clone(),
-                windows: snapshots,
-            },
-        );
-
-        if let Err(error) = agent_dispatch::save_registry(&state.dispatch_registry_path, &registry) {
-            log::warn!("{}", error);
+            if let Err(error) = local_db::init_local_db(&repo_path) {
+                log::warn!(
+                    "Skipping instance heartbeat for repo {}: {}",
+                    repo_path,
+                    error
+                );
+                continue;
+            }
+            if let Err(error) = local_db::prune_stale_instance_registry(
+                &repo_path,
+                now,
+                agent_dispatch::HEARTBEAT_TIMEOUT_MS,
+            ) {
+                log::warn!(
+                    "Failed pruning stale instance registry rows for repo {}: {}",
+                    repo_path,
+                    error
+                );
+                continue;
+            }
+            if let Err(error) = local_db::upsert_instance_registry(
+                &repo_path,
+                agent_dispatch::RegisteredInstance {
+                    instance_id: state.dispatch_instance_id.clone(),
+                    pid: std::process::id(),
+                    started_at: state.dispatch_started_at,
+                    last_heartbeat_at: now,
+                    endpoint: state.dispatch_endpoint.clone(),
+                    windows,
+                },
+            ) {
+                log::warn!(
+                    "Failed upserting instance registry row for repo {}: {}",
+                    repo_path,
+                    error
+                );
+            }
         }
 
         std::thread::sleep(std::time::Duration::from_millis(
@@ -329,7 +349,6 @@ pub fn run() {
             let db_path = app_dir.join("treq.db");
             std::env::set_var("TREQ_APP_DB_PATH", db_path.to_string_lossy().to_string());
 
-            let dispatch_registry_path = agent_dispatch::registry_path_from_db_path(&db_path);
             let db = Database::new(db_path).expect("Failed to open database");
             db.init().expect("Failed to initialize database");
 
@@ -377,7 +396,6 @@ pub fn run() {
                 dispatch_instance_id,
                 dispatch_started_at,
                 dispatch_endpoint,
-                dispatch_registry_path,
                 _telemetry: telemetry,
             };
 
