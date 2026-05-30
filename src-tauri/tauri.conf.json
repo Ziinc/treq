@@ -22,7 +22,7 @@
         "add": {
           "description": "Create a new workspace",
           "args": [
-            { "name": "branch_name", "index": 1, "required": true, "description": "Branch name for the workspace" },
+            { "name": "branch_name", "index": 1, "takesValue": true, "required": true, "description": "Branch name for the workspace" },
             { "name": "intent", "short": "i", "takesValue": true, "description": "Intent/description" },
             { "name": "source-branch", "short": "s", "takesValue": true, "description": "Source branch to stack on" }
           ]
@@ -30,7 +30,7 @@
         "set": {
           "description": "Update workspace settings",
           "args": [
-            { "name": "workspace_name", "index": 1, "required": true, "description": "Workspace branch name" },
+            { "name": "workspace_name", "index": 1, "takesValue": true, "required": true, "description": "Workspace branch name" },
             { "name": "intent", "short": "i", "takesValue": true, "description": "Set intent" },
             { "name": "target-branch", "short": "t", "takesValue": true, "description": "Set target branch" }
           ]
@@ -38,11 +38,8 @@
         "st": {
           "description": "Show workspace status",
           "args": [
-            { "name": "workspace_name", "index": 1, "description": "Workspace name (omit for all)" }
+            { "name": "workspace_name", "index": 1, "takesValue": true, "description": "Workspace name (omit for all)" }
           ]
-        },
-        "open": {
-          "description": "Open the Treq GUI"
         }
       }
     },
