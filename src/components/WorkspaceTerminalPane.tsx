@@ -253,11 +253,44 @@ const WorkspaceTerminalPaneInner = forwardRef<
 		// Close shell terminal
 		const handleCloseShell = useCallback(
 			(terminalId: string) => {
-				ptyClose(terminalId).catch(console.error);
+				console.info(
+					"[WorkspaceTerminalPane] shell close requested",
+					JSON.stringify({
+						terminalId,
+						activePtySessionId,
+					}),
+				);
+				ptyClose(terminalId)
+					.then(() => {
+						console.info(
+							"[WorkspaceTerminalPane] ptyClose succeeded",
+							JSON.stringify({ terminalId }),
+						);
+					})
+					.catch((error) => {
+						console.warn(
+							"[WorkspaceTerminalPane] ptyClose failed",
+							JSON.stringify({
+								terminalId,
+								error:
+									error instanceof Error
+										? error.message
+										: String(error),
+							}),
+						);
+					});
 				terminalRefs.current.delete(terminalId);
+				console.info(
+					"[WorkspaceTerminalPane] terminal ref deleted",
+					JSON.stringify({ terminalId }),
+				);
 				setShellTerminals((prev) => prev.filter((t) => t.id !== terminalId));
 				setTerminalOrder((prev) => prev.filter((id) => id !== terminalId));
 				if (activePtySessionId === terminalId) {
+					console.info(
+						"[WorkspaceTerminalPane] clearing active shell session",
+						JSON.stringify({ terminalId }),
+					);
 					setActivePtySessionId(null);
 				}
 			},
@@ -268,12 +301,28 @@ const WorkspaceTerminalPaneInner = forwardRef<
 		const handleCloseClaudeSession = useCallback(
 			(sessionId: number) => {
 				const claudeTerminalId = `claude-${sessionId}`;
+				console.info(
+					"[WorkspaceTerminalPane] agent session close requested",
+					JSON.stringify({
+						sessionId,
+						claudeTerminalId,
+						activePtySessionId,
+					}),
+				);
 				const sessionData = claudeSessions.find(
 					(s) => s.sessionId === sessionId,
 				);
 				if (sessionData) {
 					// ptyClose(sessionData.ptySessionId).catch(console.error);
 					terminalRefs.current.delete(claudeTerminalId);
+					console.info(
+						"[WorkspaceTerminalPane] agent terminal ref deleted",
+						JSON.stringify({
+							sessionId,
+							claudeTerminalId,
+							ptySessionId: sessionData.ptySessionId,
+						}),
+					);
 				}
 				setMountedClaudeSessions((prev) => {
 					const next = new Set(prev);
@@ -284,7 +333,15 @@ const WorkspaceTerminalPaneInner = forwardRef<
 					prev.filter((id) => id !== claudeTerminalId),
 				);
 				onCloseSession?.(sessionId);
+				console.info(
+					"[WorkspaceTerminalPane] onCloseSession callback fired",
+					JSON.stringify({ sessionId }),
+				);
 				if (activePtySessionId === claudeTerminalId) {
+					console.info(
+						"[WorkspaceTerminalPane] clearing active agent session",
+						JSON.stringify({ sessionId, claudeTerminalId }),
+					);
 					setActivePtySessionId(null);
 				}
 			},

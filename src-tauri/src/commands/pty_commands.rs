@@ -11,8 +11,17 @@ pub fn pty_create_session(
     initial_command: Option<String>,
     suppress_echo_for: Option<String>,
 ) -> Result<(), String> {
+    log::debug!(
+        "pty_create_session: session_id={}, working_dir={:?}, shell={:?}, initial_command_present={}, suppress_echo_for_present={}",
+        session_id,
+        working_dir,
+        shell,
+        initial_command.is_some(),
+        suppress_echo_for.is_some()
+    );
     let pty_manager = state.pty_manager.lock().unwrap();
     let sid = session_id.clone();
+    let event_name = format!("pty-data-{}", sid);
 
     pty_manager.create_session(
         session_id,
@@ -21,7 +30,14 @@ pub fn pty_create_session(
         initial_command,
         suppress_echo_for,
         Box::new(move |data| {
-            let _ = app.emit(&format!("pty-data-{}", sid), data);
+            if let Err(error) = app.emit(&event_name, data) {
+                log::warn!(
+                    "pty emit failed: session_id={}, event={}, error={}",
+                    sid,
+                    event_name,
+                    error
+                );
+            }
         }),
     )
 }
@@ -34,6 +50,11 @@ pub fn pty_session_exists(state: State<AppState>, session_id: String) -> Result<
 
 #[tauri::command]
 pub fn pty_write(state: State<AppState>, session_id: String, data: String) -> Result<(), String> {
+    log::debug!(
+        "pty_write: session_id={}, data_len={}",
+        session_id,
+        data.len()
+    );
     let pty_manager = state.pty_manager.lock().unwrap();
     pty_manager.write_to_session(&session_id, &data)
 }
@@ -45,6 +66,12 @@ pub fn pty_resize(
     rows: u16,
     cols: u16,
 ) -> Result<(), String> {
+    log::debug!(
+        "pty_resize: session_id={}, rows={}, cols={}",
+        session_id,
+        rows,
+        cols
+    );
     let pty_manager = state.pty_manager.lock().unwrap();
     pty_manager.resize_session(&session_id, rows, cols)
 }
@@ -55,6 +82,11 @@ pub fn pty_write_suppress_echo(
     session_id: String,
     data: String,
 ) -> Result<(), String> {
+    log::debug!(
+        "pty_write_suppress_echo: session_id={}, data_len={}",
+        session_id,
+        data.len()
+    );
     let pty_manager = state.pty_manager.lock().unwrap();
     pty_manager.set_auto_command(&session_id, &data)?;
     pty_manager.write_to_session(&session_id, &data)
@@ -62,6 +94,7 @@ pub fn pty_write_suppress_echo(
 
 #[tauri::command]
 pub fn pty_close(state: State<AppState>, session_id: String) -> Result<(), String> {
+    log::debug!("pty_close: session_id={}", session_id);
     let pty_manager = state.pty_manager.lock().unwrap();
     pty_manager.close_session(&session_id)
 }
