@@ -57,7 +57,6 @@ pub fn handle_cli_command(subcommand: &SubcommandMatches) -> bool {
             print_cli_help();
             true
         }
-        "open" => false,
         _ => false,
     }
 }
@@ -66,13 +65,12 @@ pub fn should_exit_after_cli(matches: &Matches) -> bool {
     if let Some(ref subcommand) = matches.subcommand {
         return handle_cli_command(subcommand);
     }
-    print_cli_help();
-    true
+    false
 }
 
 #[cfg(test)]
 fn is_supported_cli_command(name: &str) -> bool {
-    matches!(name, "add" | "set" | "st" | "help" | "open")
+    matches!(name, "add" | "set" | "st" | "help")
 }
 
 fn print_cli_help() {
@@ -83,7 +81,6 @@ fn print_cli_help() {
     println!("  treq set <workspace_name> [-i intent] [-t target_branch]");
     println!("  treq st [workspace_name]");
     println!("  treq help");
-    println!("  treq open");
 }
 
 fn get_arg_value(matches: &Matches, name: &str) -> Option<String> {
@@ -285,6 +282,9 @@ fn print_workspace_partial_status(status: &core::WorkspaceSidebarStatus) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value;
+    use std::fs;
+    use std::path::Path;
     use tauri_plugin_cli::SubcommandMatches;
 
     fn make_subcommand(name: &str) -> SubcommandMatches {
@@ -300,20 +300,13 @@ mod tests {
         assert!(is_supported_cli_command("set"));
         assert!(is_supported_cli_command("st"));
         assert!(is_supported_cli_command("help"));
-        assert!(is_supported_cli_command("open"));
+        assert!(!is_supported_cli_command("open"));
     }
 
     #[test]
     fn rejects_removed_commands() {
         assert!(!is_supported_cli_command("ls"));
         assert!(!is_supported_cli_command("workspace"));
-    }
-
-    #[test]
-    fn open_does_not_exit_cli_mode() {
-        let mut matches = Matches::default();
-        matches.subcommand = Some(Box::new(make_subcommand("open")));
-        assert!(!should_exit_after_cli(&matches));
     }
 
     #[test]
@@ -324,9 +317,50 @@ mod tests {
     }
 
     #[test]
-    fn bare_treq_exits_like_help() {
+    fn bare_treq_does_not_exit_cli_mode() {
         let matches = Matches::default();
-        assert!(should_exit_after_cli(&matches));
+        assert!(!should_exit_after_cli(&matches));
+    }
+
+    #[test]
+    fn positional_cli_args_take_values_in_tauri_config() {
+        let config_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json");
+        let config = fs::read_to_string(config_path).expect("failed to read tauri.conf.json");
+        let json: Value = serde_json::from_str(&config).expect("failed to parse tauri.conf.json");
+
+        let subcommands = json["plugins"]["cli"]["subcommands"]
+            .as_object()
+            .expect("plugins.cli.subcommands must be an object");
+
+        for (subcommand_name, subcommand) in subcommands {
+            let args = match subcommand.get("args").and_then(Value::as_array) {
+                Some(args) => args,
+                None => continue,
+            };
+
+            for arg in args {
+                let has_index = arg.get("index").is_some();
+                if !has_index {
+                    continue;
+                }
+
+                let takes_value = arg
+                    .get("takesValue")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                let arg_name = arg
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("<unknown>");
+
+                assert!(
+                    takes_value,
+                    "positional arg '{}' in subcommand '{}' must set takesValue=true",
+                    arg_name,
+                    subcommand_name
+                );
+            }
+        }
     }
 }
 
