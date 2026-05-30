@@ -173,18 +173,15 @@ fn dispatch_agent_request(
     agent: &str,
     request_id: &str,
 ) -> Result<(), String> {
-    let db_path = core::resolve_app_db_path(repo_path);
-    let registry_path = agent_dispatch::registry_path_from_db_path(&db_path);
-    let mut registry = agent_dispatch::load_registry(&registry_path)?;
     let now = agent_dispatch::now_millis();
-    agent_dispatch::prune_stale_instances(
-        &mut registry,
+    local_db::prune_stale_instance_registry(
+        repo_path,
         now,
         agent_dispatch::HEARTBEAT_TIMEOUT_MS,
-    );
-    agent_dispatch::save_registry(&registry_path, &registry)?;
+    )?;
+    let instances = local_db::list_instance_registry(repo_path)?;
 
-    let instance = agent_dispatch::resolve_target_instance(&registry, repo_path).ok_or_else(|| {
+    let instance = agent_dispatch::resolve_target_instance(&instances, repo_path).ok_or_else(|| {
         format!(
             "No running Treq instance has repo '{}'. Open this repo in Treq first.",
             repo_path
@@ -685,19 +682,14 @@ mod tests {
         LOCK.get_or_init(|| Mutex::new(()))
     }
 
-    fn write_registry(
-        temp: &TempDir,
+    fn seed_registry(
         instances: Vec<agent_dispatch::RegisteredInstance>,
-    ) -> std::path::PathBuf {
-        let db_path = temp.path().join("treq.db");
-        std::env::set_var("TREQ_APP_DB_PATH", db_path.to_string_lossy().to_string());
-        let path = agent_dispatch::registry_path_from_db_path(&db_path);
-        let registry = agent_dispatch::InstanceRegistry {
-            version: agent_dispatch::REGISTRY_VERSION,
-            instances,
-        };
-        agent_dispatch::save_registry(&path, &registry).expect("save registry");
-        path
+        repo_path: &str,
+    ) {
+        local_db::init_local_db(repo_path).expect("init local db");
+        for instance in instances {
+            local_db::upsert_instance_registry(repo_path, instance).expect("upsert instance");
+        }
     }
 
     #[test]
@@ -722,8 +714,7 @@ mod tests {
         let repo = temp.path().join("repo");
         std::fs::create_dir_all(&repo).expect("mkdir");
         let normalized_repo = agent_dispatch::normalize_repo_path(repo.to_str().unwrap());
-        write_registry(
-            &temp,
+        seed_registry(
             vec![agent_dispatch::RegisteredInstance {
                 instance_id: "instance-1".to_string(),
                 pid: 1,
@@ -737,6 +728,7 @@ mod tests {
                     last_focused_at: Some(agent_dispatch::now_millis()),
                 }],
             }],
+            repo.to_str().unwrap(),
         );
 
         let result = dispatch_agent_request(
@@ -749,18 +741,18 @@ mod tests {
         );
         assert!(result.is_ok());
         handle.join().expect("join");
-        std::env::remove_var("TREQ_APP_DB_PATH");
     }
 
     #[test]
     fn dispatch_agent_request_returns_error_when_no_matching_instance() {
         let _guard = env_lock().lock().unwrap();
         let temp = TempDir::new().expect("temp");
-        write_registry(&temp, vec![]);
+        let repo = temp.path().join("repo");
+        std::fs::create_dir_all(&repo).expect("mkdir");
+        seed_registry(vec![], repo.to_str().unwrap());
         let result = dispatch_agent_request("/tmp/unknown-repo", "feat/x", "hello", "plan", "codex", "req-1");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("No running Treq instance"));
-        std::env::remove_var("TREQ_APP_DB_PATH");
     }
 
     #[test]
@@ -778,8 +770,7 @@ mod tests {
         let repo = temp.path().join("repo");
         std::fs::create_dir_all(&repo).expect("mkdir");
         let normalized_repo = agent_dispatch::normalize_repo_path(repo.to_str().unwrap());
-        write_registry(
-            &temp,
+        seed_registry(
             vec![agent_dispatch::RegisteredInstance {
                 instance_id: "instance-timeout".to_string(),
                 pid: 1,
@@ -793,6 +784,7 @@ mod tests {
                     last_focused_at: Some(agent_dispatch::now_millis()),
                 }],
             }],
+            repo.to_str().unwrap(),
         );
 
         let result = dispatch_agent_request(
@@ -810,7 +802,6 @@ mod tests {
                 || error.contains("invalid dispatch response payload")
         );
         handle.join().expect("join");
-        std::env::remove_var("TREQ_APP_DB_PATH");
     }
 }
 

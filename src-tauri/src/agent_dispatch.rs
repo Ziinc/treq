@@ -1,11 +1,9 @@
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-pub const REGISTRY_VERSION: u32 = 1;
 pub const HEARTBEAT_INTERVAL_MS: u64 = 2_000;
 pub const HEARTBEAT_TIMEOUT_MS: u64 = 15_000;
 
@@ -49,12 +47,6 @@ impl AgentDispatchResponse {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct InstanceRegistry {
-    pub version: u32,
-    pub instances: Vec<RegisteredInstance>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RegisteredInstance {
     pub instance_id: String,
@@ -87,76 +79,15 @@ pub fn normalize_repo_path(path: &str) -> String {
         .unwrap_or_else(|| path.to_string())
 }
 
-pub fn registry_path_from_db_path(db_path: &Path) -> PathBuf {
-    db_path
-        .parent()
-        .unwrap_or_else(|| Path::new("."))
-        .join("instance_registry.json")
-}
-
-pub fn load_registry(path: &Path) -> Result<InstanceRegistry, String> {
-    if !path.exists() {
-        return Ok(InstanceRegistry {
-            version: REGISTRY_VERSION,
-            instances: Vec::new(),
-        });
-    }
-
-    let raw = fs::read_to_string(path)
-        .map_err(|e| format!("failed reading instance registry {}: {}", path.display(), e))?;
-    let mut registry: InstanceRegistry = serde_json::from_str(&raw)
-        .map_err(|e| format!("failed parsing instance registry {}: {}", path.display(), e))?;
-    if registry.version == 0 {
-        registry.version = REGISTRY_VERSION;
-    }
-    Ok(registry)
-}
-
-pub fn save_registry(path: &Path, registry: &InstanceRegistry) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| {
-            format!(
-                "failed creating instance registry directory {}: {}",
-                parent.display(),
-                e
-            )
-        })?;
-    }
-
-    let serialized = serde_json::to_string_pretty(registry)
-        .map_err(|e| format!("failed serializing instance registry: {}", e))?;
-    let temp_path = path.with_extension("json.tmp");
-    fs::write(&temp_path, serialized)
-        .map_err(|e| format!("failed writing instance registry {}: {}", temp_path.display(), e))?;
-    fs::rename(&temp_path, path).map_err(|e| {
-        format!(
-            "failed replacing instance registry {}: {}",
-            path.display(),
-            e
-        )
-    })
-}
-
-pub fn upsert_instance(registry: &mut InstanceRegistry, instance: RegisteredInstance) {
-    if let Some(existing) = registry
-        .instances
-        .iter_mut()
-        .find(|i| i.instance_id == instance.instance_id)
-    {
-        *existing = instance;
-        return;
-    }
-    registry.instances.push(instance);
-}
-
-pub fn prune_stale_instances(registry: &mut InstanceRegistry, now: u64, timeout_ms: u64) {
-    registry.instances.retain(|instance| {
+#[allow(dead_code)]
+pub fn prune_stale_instances(instances: &mut Vec<RegisteredInstance>, now: u64, timeout_ms: u64) {
+    instances.retain(|instance| {
         now.saturating_sub(instance.last_heartbeat_at) <= timeout_ms
     });
 }
 
 pub fn resolve_target_instance<'a>(
-    registry: &'a InstanceRegistry,
+    instances: &'a [RegisteredInstance],
     repo_path: &str,
 ) -> Option<&'a RegisteredInstance> {
     let normalized_repo = normalize_repo_path(repo_path);
@@ -165,7 +96,7 @@ pub fn resolve_target_instance<'a>(
     let mut recency_match: Option<(&RegisteredInstance, u64)> = None;
     let mut any_match: Option<(&RegisteredInstance, u64)> = None;
 
-    for instance in &registry.instances {
+    for instance in instances {
         for window in &instance.windows {
             if window.normalized_repo_path != normalized_repo {
                 continue;
@@ -267,11 +198,8 @@ mod tests {
     #[test]
     fn resolves_focused_before_recency() {
         let repo = normalize_repo_path("/tmp/repo");
-        let mut registry = InstanceRegistry {
-            version: REGISTRY_VERSION,
-            instances: vec![],
-        };
-        registry.instances.push(make_instance(
+        let mut instances = vec![];
+        instances.push(make_instance(
             "a",
             10,
             vec![InstanceWindowSnapshot {
@@ -281,7 +209,7 @@ mod tests {
                 last_focused_at: Some(100),
             }],
         ));
-        registry.instances.push(make_instance(
+        instances.push(make_instance(
             "b",
             10,
             vec![InstanceWindowSnapshot {
@@ -292,16 +220,14 @@ mod tests {
             }],
         ));
 
-        let selected = resolve_target_instance(&registry, "/tmp/repo").unwrap();
+        let selected = resolve_target_instance(&instances, "/tmp/repo").unwrap();
         assert_eq!(selected.instance_id, "b");
     }
 
     #[test]
     fn resolves_recency_when_no_focused() {
         let repo = normalize_repo_path("/tmp/repo");
-        let registry = InstanceRegistry {
-            version: REGISTRY_VERSION,
-            instances: vec![
+        let instances = vec![
                 make_instance(
                     "a",
                     10,
@@ -322,26 +248,22 @@ mod tests {
                         last_focused_at: Some(50),
                     }],
                 ),
-            ],
-        };
+            ];
 
-        let selected = resolve_target_instance(&registry, "/tmp/repo").unwrap();
+        let selected = resolve_target_instance(&instances, "/tmp/repo").unwrap();
         assert_eq!(selected.instance_id, "a");
     }
 
     #[test]
     fn prunes_stale_instances_by_heartbeat_timeout() {
-        let mut registry = InstanceRegistry {
-            version: REGISTRY_VERSION,
-            instances: vec![
-                make_instance("alive", 95, vec![]),
-                make_instance("stale", 10, vec![]),
-            ],
-        };
+        let mut instances = vec![
+            make_instance("alive", 95, vec![]),
+            make_instance("stale", 10, vec![]),
+        ];
 
-        prune_stale_instances(&mut registry, 100, 10);
-        assert_eq!(registry.instances.len(), 1);
-        assert_eq!(registry.instances[0].instance_id, "alive");
+        prune_stale_instances(&mut instances, 100, 10);
+        assert_eq!(instances.len(), 1);
+        assert_eq!(instances[0].instance_id, "alive");
     }
 
     #[test]

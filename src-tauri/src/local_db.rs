@@ -6,6 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
+use crate::agent_dispatch::{InstanceWindowSnapshot, RegisteredInstance};
 use crate::jj::DiscoveredWorkspace;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -315,6 +316,27 @@ pub fn init_local_db(repo_path: &str) -> Result<PathBuf, String> {
     )
     .map_err(|e| format!("Failed to create pending_reviews workspace index: {}", e))?;
 
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS instance_registry (
+            instance_id TEXT NOT NULL PRIMARY KEY,
+            pid INTEGER NOT NULL,
+            started_at INTEGER NOT NULL,
+            last_heartbeat_at INTEGER NOT NULL,
+            endpoint TEXT NOT NULL,
+            windows_json TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )",
+        [],
+    )
+    .map_err(|e| format!("Failed to create instance_registry table: {}", e))?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_instance_registry_last_heartbeat_at
+         ON instance_registry(last_heartbeat_at)",
+        [],
+    )
+    .map_err(|e| format!("Failed to create instance_registry heartbeat index: {}", e))?;
+
     // Migration: rename pending_reviews columns from old schema to new schema.
     let has_old_columns: Result<i64, _> = conn.query_row(
         "SELECT COUNT(*) FROM pragma_table_info('pending_reviews') WHERE name IN ('comments_json', 'overall_comment', 'viewed_files_json')",
@@ -396,6 +418,97 @@ fn get_connection(repo_path: &str) -> Result<Connection, String> {
 
     let db_path = get_local_db_path(repo_path);
     Connection::open(db_path).map_err(|e| format!("Failed to open local db: {}", e))
+}
+
+pub fn upsert_instance_registry(repo_path: &str, instance: RegisteredInstance) -> Result<(), String> {
+    let conn = get_connection(repo_path)?;
+    let windows_json = serde_json::to_string(&instance.windows)
+        .map_err(|e| format!("Failed to serialize instance windows: {}", e))?;
+    let updated_at = Utc::now().to_rfc3339();
+
+    conn.execute(
+        "INSERT INTO instance_registry
+            (instance_id, pid, started_at, last_heartbeat_at, endpoint, windows_json, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         ON CONFLICT(instance_id) DO UPDATE SET
+            pid = excluded.pid,
+            started_at = excluded.started_at,
+            last_heartbeat_at = excluded.last_heartbeat_at,
+            endpoint = excluded.endpoint,
+            windows_json = excluded.windows_json,
+            updated_at = excluded.updated_at",
+        params![
+            instance.instance_id,
+            instance.pid as i64,
+            instance.started_at as i64,
+            instance.last_heartbeat_at as i64,
+            instance.endpoint,
+            windows_json,
+            updated_at,
+        ],
+    )
+    .map_err(|e| format!("Failed to upsert instance registry row: {}", e))?;
+
+    Ok(())
+}
+
+pub fn list_instance_registry(repo_path: &str) -> Result<Vec<RegisteredInstance>, String> {
+    let conn = get_connection(repo_path)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT instance_id, pid, started_at, last_heartbeat_at, endpoint, windows_json
+             FROM instance_registry",
+        )
+        .map_err(|e| format!("Failed to prepare instance registry query: {}", e))?;
+
+    let mut rows = stmt
+        .query([])
+        .map_err(|e| format!("Failed to list instance registry rows: {}", e))?;
+    let mut instances = Vec::new();
+    while let Some(row) = rows
+        .next()
+        .map_err(|e| format!("Failed to read instance registry row: {}", e))?
+    {
+        let windows_json: String = row
+            .get(5)
+            .map_err(|e| format!("Failed to read instance windows payload: {}", e))?;
+        let windows: Vec<InstanceWindowSnapshot> = serde_json::from_str(&windows_json)
+            .map_err(|e| format!("Failed to parse instance windows payload: {}", e))?;
+        instances.push(RegisteredInstance {
+            instance_id: row
+                .get(0)
+                .map_err(|e| format!("Failed to read instance_id: {}", e))?,
+            pid: row
+                .get::<_, i64>(1)
+                .map_err(|e| format!("Failed to read pid: {}", e))? as u32,
+            started_at: row
+                .get::<_, i64>(2)
+                .map_err(|e| format!("Failed to read started_at: {}", e))? as u64,
+            last_heartbeat_at: row
+                .get::<_, i64>(3)
+                .map_err(|e| format!("Failed to read last_heartbeat_at: {}", e))? as u64,
+            endpoint: row
+                .get(4)
+                .map_err(|e| format!("Failed to read endpoint: {}", e))?,
+            windows,
+        });
+    }
+    Ok(instances)
+}
+
+pub fn prune_stale_instance_registry(
+    repo_path: &str,
+    now: u64,
+    timeout_ms: u64,
+) -> Result<(), String> {
+    let conn = get_connection(repo_path)?;
+    let threshold = now.saturating_sub(timeout_ms) as i64;
+    conn.execute(
+        "DELETE FROM instance_registry WHERE last_heartbeat_at < ?1",
+        params![threshold],
+    )
+    .map_err(|e| format!("Failed to prune stale instance registry rows: {}", e))?;
+    Ok(())
 }
 
 pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
@@ -1164,6 +1277,98 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::TempDir;
+
+    #[test]
+    fn init_local_db_creates_instance_registry_table() {
+        use rusqlite::Connection;
+
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let repo_path = temp_dir.path().to_str().unwrap();
+
+        let db_path = init_local_db(repo_path).expect("init_local_db should succeed");
+        let conn = Connection::open(db_path).expect("Failed to open database");
+
+        let table_exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'instance_registry'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("Should query sqlite_master");
+        assert_eq!(table_exists, 1, "instance_registry table should exist");
+
+        if let Some(initialized) = INITIALIZED_DBS.get() {
+            initialized.lock().unwrap().remove(repo_path);
+        }
+    }
+
+    #[test]
+    fn upsert_and_list_instance_registry_round_trip_windows_json() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let repo_path = temp_dir.path().to_str().unwrap();
+
+        let instance = RegisteredInstance {
+            instance_id: "inst-1".to_string(),
+            pid: 12345,
+            started_at: 1000,
+            last_heartbeat_at: 2000,
+            endpoint: "127.0.0.1:1234".to_string(),
+            windows: vec![InstanceWindowSnapshot {
+                window_label: "main".to_string(),
+                normalized_repo_path: "/tmp/repo-a".to_string(),
+                focused: true,
+                last_focused_at: Some(1900),
+            }],
+        };
+
+        upsert_instance_registry(repo_path, instance.clone()).expect("upsert should succeed");
+        let instances = list_instance_registry(repo_path).expect("list should succeed");
+        assert_eq!(instances, vec![instance]);
+
+        if let Some(initialized) = INITIALIZED_DBS.get() {
+            initialized.lock().unwrap().remove(repo_path);
+        }
+    }
+
+    #[test]
+    fn prune_stale_instance_registry_removes_old_rows_only() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let repo_path = temp_dir.path().to_str().unwrap();
+
+        upsert_instance_registry(
+            repo_path,
+            RegisteredInstance {
+                instance_id: "alive".to_string(),
+                pid: 1,
+                started_at: 100,
+                last_heartbeat_at: 95,
+                endpoint: "127.0.0.1:1".to_string(),
+                windows: vec![],
+            },
+        )
+        .expect("alive upsert should succeed");
+        upsert_instance_registry(
+            repo_path,
+            RegisteredInstance {
+                instance_id: "stale".to_string(),
+                pid: 2,
+                started_at: 100,
+                last_heartbeat_at: 10,
+                endpoint: "127.0.0.1:2".to_string(),
+                windows: vec![],
+            },
+        )
+        .expect("stale upsert should succeed");
+
+        prune_stale_instance_registry(repo_path, 100, 10).expect("prune should succeed");
+        let instances = list_instance_registry(repo_path).expect("list should succeed");
+        assert_eq!(instances.len(), 1);
+        assert_eq!(instances[0].instance_id, "alive");
+
+        if let Some(initialized) = INITIALIZED_DBS.get() {
+            initialized.lock().unwrap().remove(repo_path);
+        }
+    }
 
     #[test]
     fn test_add_workspace_persists_to_db() {
