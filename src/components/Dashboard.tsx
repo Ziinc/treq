@@ -44,6 +44,16 @@ import {
 	updateSessionAccess,
 } from "../lib/api";
 import { getFullWorkspacePath } from "../lib/utils";
+import {
+	findWorkspaceByBranch,
+	isProcessedAgentRequest,
+	markProcessedAgentRequest,
+	parseAgentDeepLinks,
+	popPendingAgentRequests,
+	queuePendingAgentRequest,
+	tryClaimAgentRequest,
+	type AgentDeepLinkRequest,
+} from "../lib/agentDeepLink";
 import { Onboarding } from "./Onboarding";
 import type { BranchListItem } from "./TargetBranchSelector";
 
@@ -103,6 +113,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	const [lastSelectedWorkspaceIndex, setLastSelectedWorkspaceIndex] = useState<
 		number | null
 	>(null);
+	const [deferredAgentRequests, setDeferredAgentRequests] = useState<
+		AgentDeepLinkRequest[]
+	>([]);
 	const [, setShowWorkspaceActiveTab] = useState("overview");
 
 	const terminalPaneRef = useRef<WorkspaceTerminalPaneHandle>(null);
@@ -631,6 +644,99 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		},
 		[getOrCreateSession, workspaces, repoPath, queryClient],
 	);
+
+	const handleStartAgentRequest = useCallback(
+		async (request: AgentDeepLinkRequest) => {
+			const workspace = findWorkspaceByBranch(workspaces, request.branch);
+			if (!workspace) {
+				addToast({
+					title: "Workspace not found",
+					description: `Branch '${request.branch}' is not available in this window.`,
+					type: "error",
+				});
+				return;
+			}
+
+			const sessionId = await getOrCreateSession(workspace.id, {
+				forceNew: true,
+				agent: request.agent,
+			});
+			setActiveSessionId(sessionId);
+			setSelectedWorkspace(workspace);
+			setViewMode("show-workspace");
+			setPendingSessionData((prev) => {
+				const next = new Map(prev);
+				next.set(sessionId, {
+					pendingPrompt: request.prompt,
+					permissionMode: request.mode,
+					agent: request.agent,
+				});
+				return next;
+			});
+			markProcessedAgentRequest(request.requestId);
+		},
+		[addToast, getOrCreateSession, workspaces],
+	);
+
+	useEffect(() => {
+		const setup = async () =>
+			await listen<string[]>("deep-link-received", async (event) => {
+				const requests = parseAgentDeepLinks(event.payload ?? []);
+				for (const request of requests) {
+					if (isProcessedAgentRequest(request.requestId)) continue;
+
+					if (request.repo === repoPath) {
+						if (!tryClaimAgentRequest(request.requestId)) continue;
+						if (workspaces.length === 0) {
+							setDeferredAgentRequests((prev) => [...prev, request]);
+							continue;
+						}
+						await handleStartAgentRequest(request);
+						continue;
+					}
+
+					if (!tryClaimAgentRequest(request.requestId)) continue;
+					queuePendingAgentRequest(request);
+					const windowLabel = `treq-agent-${Date.now()}-${Math.floor(
+						Math.random() * 1000,
+					)}`;
+					const newRepoName =
+						request.repo.split("/").pop() ||
+						request.repo.split("\\").pop() ||
+						request.repo;
+					new WebviewWindow(windowLabel, {
+						url: `index.html?repo=${encodeURIComponent(request.repo)}`,
+						title: `Treq - ${newRepoName}`,
+						width: 1400,
+						height: 900,
+					});
+				}
+			});
+
+		const unlistenPromise = setup();
+		return () => {
+			unlistenPromise.then((fn) => fn());
+		};
+	}, [handleStartAgentRequest, repoPath, workspaces.length]);
+
+	useEffect(() => {
+		if (!repoPath || workspaces.length === 0) return;
+		const queued = popPendingAgentRequests(repoPath);
+		if (queued.length === 0 && deferredAgentRequests.length === 0) return;
+		const pending = [...queued, ...deferredAgentRequests];
+		setDeferredAgentRequests([]);
+		void Promise.all(
+			pending.map(async (request) => {
+				if (isProcessedAgentRequest(request.requestId)) return;
+				await handleStartAgentRequest(request);
+			}),
+		);
+	}, [
+		deferredAgentRequests,
+		handleStartAgentRequest,
+		repoPath,
+		workspaces.length,
+	]);
 
 	const handleWorkspaceMultiSelect = useCallback(
 		(workspace: Workspace | null, event: React.MouseEvent) => {

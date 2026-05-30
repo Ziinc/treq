@@ -21,24 +21,86 @@
       "subcommands": {
         "add": {
           "description": "Create a new workspace",
-          "args": [
-            { "name": "branch_name", "index": 1, "takesValue": true, "required": true, "description": "Branch name for the workspace" },
-            { "name": "intent", "short": "i", "takesValue": true, "description": "Intent/description" },
-            { "name": "source-branch", "short": "s", "takesValue": true, "description": "Source branch to stack on" }
+          "args": [ 
+            {
+              "name": "branch_name",
+              "index": 1,
+              "takesValue": true,
+              "required": true,
+              "description": "Branch name for the workspace"
+            },
+            {
+              "name": "intent",
+              "short": "i",
+              "takesValue": true,
+              "description": "Intent/description"
+            },
+            {
+              "name": "source-branch",
+              "short": "s",
+              "takesValue": true,
+              "description": "Source branch to stack on"
+            }
           ]
         },
         "set": {
           "description": "Update workspace settings",
           "args": [
-            { "name": "workspace_name", "index": 1, "takesValue": true, "required": true, "description": "Workspace branch name" },
-            { "name": "intent", "short": "i", "takesValue": true, "description": "Set intent" },
-            { "name": "target-branch", "short": "t", "takesValue": true, "description": "Set target branch" }
+            {
+              "name": "workspace_name",
+              "index": 1,
+              "takesValue": true,
+              "required": true,
+              "description": "Workspace branch name"
+            },
+            {
+              "name": "intent",
+              "short": "i",
+              "takesValue": true,
+              "description": "Set intent"
+            },
+            {
+              "name": "target-branch",
+              "short": "t",
+              "takesValue": true,
+              "description": "Set target branch"
+            }
           ]
         },
         "st": {
           "description": "Show workspace status",
           "args": [
-            { "name": "workspace_name", "index": 1, "takesValue": true, "description": "Workspace name (omit for all)" }
+            {
+              "name": "workspace_name",
+              "index": 1,
+              "takesValue": true,
+              "description": "Workspace name (omit for all)"
+            }
+          ]
+        },
+        "agent": {
+          "description": "Start an agent session in a workspace",
+          "args": [
+            {
+              "name": "branch",
+              "index": 1,
+              "takesValue": true,
+              "required": true,
+              "description": "Workspace branch name"
+            },
+            {
+              "name": "prompt",
+              "index": 2,
+              "takesValue": true,
+              "required": true,
+              "description": "Prompt to send to the agent"
+            },
+            {
+              "name": "mode",
+              "short": "m",
+              "takesValue": true,
+              "description": "Permission mode: edit or plan"
+            }
           ]
         }
       }
