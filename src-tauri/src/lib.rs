@@ -1,4 +1,5 @@
 pub mod auto_rebase;
+mod agent_dispatch;
 pub mod binary_paths;
 mod cli;
 mod commands;
@@ -15,6 +16,7 @@ use commands::file_watcher::WatcherManager;
 use db::Database;
 use pty::PtyManager;
 use std::collections::HashMap;
+use std::io::{Read, Write};
 use std::sync::Mutex;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, EventTarget, Manager};
@@ -24,6 +26,11 @@ pub(crate) struct AppState {
     pty_manager: Mutex<PtyManager>,
     watcher_manager: WatcherManager,
     window_repo_paths: Mutex<HashMap<String, String>>,
+    window_last_focused_at: Mutex<HashMap<String, u64>>,
+    dispatch_instance_id: String,
+    dispatch_started_at: u64,
+    dispatch_endpoint: String,
+    dispatch_registry_path: std::path::PathBuf,
     // Held for its Drop guards (file writer + provider shutdown).
     _telemetry: telemetry::TelemetryGuards,
 }
@@ -39,6 +46,226 @@ pub fn emit_to_focused<S: serde::Serialize + Clone>(app: &AppHandle, event: &str
     }
     // Fallback: emit globally if no focused window found
     let _ = app.emit(event, payload);
+}
+
+fn extract_repo_from_agent_deep_link(url: &str) -> Option<String> {
+    let prefix = "treq://agent/start?";
+    if !url.starts_with(prefix) {
+        return None;
+    }
+    let query = &url[prefix.len()..];
+    for pair in query.split('&') {
+        let (key, value) = pair.split_once('=')?;
+        if key != "repo" {
+            continue;
+        }
+        let decoded = urlencoding::decode(value).ok()?;
+        return Some(decoded.into_owned());
+    }
+    None
+}
+
+fn find_target_window_label_for_repo(app: &AppHandle, repo: &str) -> Option<String> {
+    let state = app.state::<AppState>();
+    let repo_map = state.window_repo_paths.lock().ok()?;
+    let normalized_target = agent_dispatch::normalize_repo_path(repo);
+
+    let mut fallback: Option<String> = None;
+    let windows = app.webview_windows();
+    for (label, repo_path) in repo_map.iter() {
+        let normalized = agent_dispatch::normalize_repo_path(repo_path);
+        if normalized != normalized_target {
+            continue;
+        }
+        let Some(window) = windows.get(label) else {
+            continue;
+        };
+        if window.is_focused().unwrap_or(false) {
+            return Some(label.clone());
+        }
+        if fallback.is_none() {
+            fallback = Some(label.clone());
+        }
+    }
+    fallback
+}
+
+fn route_agent_deep_link(app: &AppHandle, url: String) -> bool {
+    if let Some(repo) = extract_repo_from_agent_deep_link(&url) {
+        if let Some(label) = find_target_window_label_for_repo(app, &repo) {
+            let _ = app.emit_to(
+                EventTarget::webview_window(&label),
+                "deep-link-received",
+                vec![url],
+            );
+            return true;
+        }
+    }
+    false
+}
+
+fn parse_agent_request_from_url(url: &str) -> Option<agent_dispatch::AgentDispatchRequest> {
+    let prefix = "treq://agent/start?";
+    if !url.starts_with(prefix) {
+        return None;
+    }
+    let mut values = std::collections::HashMap::new();
+    for pair in url[prefix.len()..].split('&') {
+        let (key, value) = pair.split_once('=')?;
+        let decoded = urlencoding::decode(value).ok()?.into_owned();
+        values.insert(key.to_string(), decoded);
+    }
+    Some(agent_dispatch::AgentDispatchRequest {
+        request_id: values.get("request_id")?.clone(),
+        repo: values.get("repo")?.clone(),
+        branch: values.get("branch")?.clone(),
+        prompt: values.get("prompt")?.clone(),
+        mode: values.get("mode")?.clone(),
+        agent: values.get("agent")?.clone(),
+    })
+}
+
+fn build_agent_deep_link_url(request: &agent_dispatch::AgentDispatchRequest) -> String {
+    format!(
+        "treq://agent/start?repo={}&branch={}&prompt={}&mode={}&agent={}&request_id={}",
+        urlencoding::encode(&request.repo),
+        urlencoding::encode(&request.branch),
+        urlencoding::encode(&request.prompt),
+        urlencoding::encode(&request.mode),
+        urlencoding::encode(&request.agent),
+        urlencoding::encode(&request.request_id),
+    )
+}
+
+fn route_agent_dispatch_request(
+    app: &AppHandle,
+    request: &agent_dispatch::AgentDispatchRequest,
+) -> agent_dispatch::AgentDispatchResponse {
+    let url = build_agent_deep_link_url(request);
+    if let Some(label) = find_target_window_label_for_repo(app, &request.repo) {
+        let _ = app.emit_to(
+            EventTarget::webview_window(&label),
+            "deep-link-received",
+            vec![url],
+        );
+        return agent_dispatch::AgentDispatchResponse::handled();
+    }
+    agent_dispatch::AgentDispatchResponse::not_handled(format!(
+        "no matching window for repo '{}' request_id '{}'",
+        request.repo, request.request_id
+    ))
+}
+
+fn start_agent_ipc_listener(app: AppHandle, listener: std::net::TcpListener) {
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else {
+                continue;
+            };
+
+            let mut payload = String::new();
+            if stream.read_to_string(&mut payload).is_err() {
+                let _ = stream.write_all(
+                    serde_json::to_string(&agent_dispatch::AgentDispatchResponse::error(
+                        "invalid request payload",
+                    ))
+                    .unwrap_or_else(|_| {
+                        "{\"status\":\"error\",\"reason\":\"invalid request payload\"}".to_string()
+                    })
+                    .as_bytes(),
+                );
+                continue;
+            }
+
+            let response = match serde_json::from_str::<agent_dispatch::AgentDispatchRequest>(
+                payload.trim(),
+            ) {
+                Ok(request) => route_agent_dispatch_request(&app, &request),
+                Err(error) => agent_dispatch::AgentDispatchResponse::error(format!(
+                    "invalid request json: {}",
+                    error
+                )),
+            };
+            let response_json = serde_json::to_string(&response).unwrap_or_else(|_| {
+                "{\"status\":\"error\",\"reason\":\"failed to serialize response\"}".to_string()
+            });
+            let _ = stream.write_all(response_json.as_bytes());
+        }
+    });
+}
+
+fn start_instance_registry_heartbeat(app: AppHandle) {
+    std::thread::spawn(move || loop {
+        let state = app.state::<AppState>();
+        let now = agent_dispatch::now_millis();
+
+        let repo_map = state.window_repo_paths.lock().ok().map(|m| m.clone());
+        let mut focus_map = match state.window_last_focused_at.lock() {
+            Ok(guard) => guard,
+            Err(_) => {
+                std::thread::sleep(std::time::Duration::from_millis(
+                    agent_dispatch::HEARTBEAT_INTERVAL_MS,
+                ));
+                continue;
+            }
+        };
+        let windows = app.webview_windows();
+        let mut snapshots = Vec::new();
+        if let Some(repo_map) = repo_map {
+            for (label, repo_path) in repo_map {
+                let focused = windows
+                    .get(&label)
+                    .and_then(|w| w.is_focused().ok())
+                    .unwrap_or(false);
+                if focused {
+                    focus_map.insert(label.clone(), now);
+                }
+                let last_focused_at = focus_map.get(&label).copied();
+                snapshots.push(agent_dispatch::InstanceWindowSnapshot {
+                    window_label: label,
+                    normalized_repo_path: agent_dispatch::normalize_repo_path(&repo_path),
+                    focused,
+                    last_focused_at,
+                });
+            }
+        }
+        drop(focus_map);
+
+        let mut registry = match agent_dispatch::load_registry(&state.dispatch_registry_path) {
+            Ok(registry) => registry,
+            Err(error) => {
+                log::warn!("{}", error);
+                std::thread::sleep(std::time::Duration::from_millis(
+                    agent_dispatch::HEARTBEAT_INTERVAL_MS,
+                ));
+                continue;
+            }
+        };
+        agent_dispatch::prune_stale_instances(
+            &mut registry,
+            now,
+            agent_dispatch::HEARTBEAT_TIMEOUT_MS,
+        );
+        agent_dispatch::upsert_instance(
+            &mut registry,
+            agent_dispatch::RegisteredInstance {
+                instance_id: state.dispatch_instance_id.clone(),
+                pid: std::process::id(),
+                started_at: state.dispatch_started_at,
+                last_heartbeat_at: now,
+                endpoint: state.dispatch_endpoint.clone(),
+                windows: snapshots,
+            },
+        );
+
+        if let Err(error) = agent_dispatch::save_registry(&state.dispatch_registry_path, &registry) {
+            log::warn!("{}", error);
+        }
+
+        std::thread::sleep(std::time::Duration::from_millis(
+            agent_dispatch::HEARTBEAT_INTERVAL_MS,
+        ));
+    });
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -66,9 +293,25 @@ pub fn run() {
                 use tauri_plugin_cli::CliExt;
                 if let Ok(matches) = app.cli().matches() {
                     cli::init_cli_binary_paths();
-                    if cli::should_exit_after_cli(&matches) {
-                        app.handle().exit(0);
+                    if let Some(ref subcommand) = matches.subcommand {
+                        if cli::handle_cli_command(subcommand) {
+                            app.handle().exit(0);
+                            return Ok(());
+                        }
+                        eprintln!("Unknown command: {}", subcommand.name);
+                        eprintln!("Usage:");
+                        eprintln!("  treq add <branch_name> [-i intent] [-s source_branch]");
+                        eprintln!("  treq set <workspace_name> [-i intent] [-t target_branch]");
+                        eprintln!("  treq st [workspace_name]");
+                        eprintln!("  treq agent <branch> <prompt> [-m <edit|plan>]");
+                        eprintln!("  treq help");
                         return Ok(());
+                    } else {
+                        if cli::handle_cli_global_args(&matches) {
+                            app.handle().exit(0);
+                            return Ok(());
+                        }
+                        eprintln!("No subcommand provided, args: {:?}", matches.args);
                     }
                 }
             }
@@ -86,6 +329,7 @@ pub fn run() {
             let db_path = app_dir.join("treq.db");
             std::env::set_var("TREQ_APP_DB_PATH", db_path.to_string_lossy().to_string());
 
+            let dispatch_registry_path = agent_dispatch::registry_path_from_db_path(&db_path);
             let db = Database::new(db_path).expect("Failed to open database");
             db.init().expect("Failed to initialize database");
 
@@ -121,15 +365,25 @@ pub fn run() {
             let watcher_manager = WatcherManager::new();
             watcher_manager.set_app_handle(app.handle().clone());
 
+            let (dispatch_listener, dispatch_endpoint) = agent_dispatch::bind_ephemeral_listener()?;
+            let dispatch_instance_id = uuid::Uuid::new_v4().to_string();
+            let dispatch_started_at = agent_dispatch::now_millis();
             let app_state = AppState {
                 db: Mutex::new(db),
                 pty_manager: Mutex::new(pty_manager),
                 watcher_manager,
                 window_repo_paths: Mutex::new(HashMap::new()),
+                window_last_focused_at: Mutex::new(HashMap::new()),
+                dispatch_instance_id,
+                dispatch_started_at,
+                dispatch_endpoint,
+                dispatch_registry_path,
                 _telemetry: telemetry,
             };
 
             app.manage(app_state);
+            start_agent_ipc_listener(app.handle().clone(), dispatch_listener);
+            start_instance_registry_heartbeat(app.handle().clone());
 
             // Listen for deep-link events and forward to frontend
             #[cfg(desktop)]
@@ -139,7 +393,20 @@ pub fn run() {
                 app.deep_link().on_open_url(move |event| {
                     let urls: Vec<String> =
                         event.urls().into_iter().map(|u| u.to_string()).collect();
-                    let _ = handle.emit("deep-link-received", &urls);
+                    for url in urls {
+                        if let Some(request) = parse_agent_request_from_url(&url) {
+                            let response = route_agent_dispatch_request(&handle, &request);
+                            if response.status != "handled" {
+                                log::info!(
+                                    "agent deep link unmatched repo={} request_id={}",
+                                    request.repo,
+                                    request.request_id
+                                );
+                            }
+                        } else if !route_agent_deep_link(&handle, url) {
+                            log::info!("agent deep link ignored (no matching window/repo)");
+                        }
+                    }
                 });
             }
 
@@ -456,4 +723,53 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        build_agent_deep_link_url, extract_repo_from_agent_deep_link, parse_agent_request_from_url,
+    };
+    use tempfile::TempDir;
+
+    #[test]
+    fn extracts_repo_from_agent_deep_link() {
+        let url =
+            "treq://agent/start?repo=%2Ftmp%2Frepo&branch=feat%2Fx&prompt=hello&mode=plan&agent=codex&request_id=req-1";
+        let repo = extract_repo_from_agent_deep_link(url);
+        assert_eq!(repo.as_deref(), Some("/tmp/repo"));
+    }
+
+    #[test]
+    fn ignores_non_agent_deep_link() {
+        let url = "treq://auth/callback?token=abc";
+        assert_eq!(extract_repo_from_agent_deep_link(url), None);
+    }
+
+    #[test]
+    fn parse_agent_request_from_url_round_trips() {
+        let request = crate::agent_dispatch::AgentDispatchRequest {
+            request_id: "req-1".to_string(),
+            repo: "/tmp/repo".to_string(),
+            branch: "feat/x".to_string(),
+            prompt: "hello".to_string(),
+            mode: "plan".to_string(),
+            agent: "codex".to_string(),
+        };
+        let url = build_agent_deep_link_url(&request);
+        let parsed = parse_agent_request_from_url(&url).expect("request should parse");
+        assert_eq!(parsed, request);
+    }
+
+    #[test]
+    fn normalize_repo_path_canonicalizes_existing_paths() {
+        let temp = TempDir::new().expect("temp dir");
+        let canonical = std::fs::canonicalize(temp.path()).expect("canonical path");
+        let normalized = crate::agent_dispatch::normalize_repo_path(
+            temp.path()
+                .to_str()
+                .expect("temp dir should be valid utf-8"),
+        );
+        assert_eq!(normalized, canonical.to_string_lossy());
+    }
 }

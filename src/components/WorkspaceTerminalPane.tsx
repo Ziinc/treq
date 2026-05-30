@@ -272,7 +272,7 @@ const WorkspaceTerminalPaneInner = forwardRef<
 					(s) => s.sessionId === sessionId,
 				);
 				if (sessionData) {
-					ptyClose(sessionData.ptySessionId).catch(console.error);
+					// ptyClose(sessionData.ptySessionId).catch(console.error);
 					terminalRefs.current.delete(claudeTerminalId);
 				}
 				setMountedClaudeSessions((prev) => {

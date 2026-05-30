@@ -1,10 +1,20 @@
 use std::collections::HashMap;
 use std::path::Path;
+use std::time::Duration;
 use tauri_plugin_cli::{Matches, SubcommandMatches};
 
+use crate::agent_dispatch;
 use crate::binary_paths;
 use crate::core;
+use crate::db::Database;
 use crate::local_db;
+
+fn normalize_repo_path(path: &Path) -> String {
+    std::fs::canonicalize(path)
+        .ok()
+        .and_then(|p| p.to_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| path.to_string_lossy().to_string())
+}
 
 /// Walk up from CWD to find a directory containing `.treq` or `.git`.
 pub fn detect_repo_path() -> Result<String, String> {
@@ -13,10 +23,7 @@ pub fn detect_repo_path() -> Result<String, String> {
     let mut dir = cwd.as_path();
     loop {
         if dir.join(".git").is_dir() {
-            return dir
-                .to_str()
-                .map(|s| s.to_string())
-                .ok_or_else(|| "Path is not valid UTF-8".to_string());
+            return Ok(normalize_repo_path(dir));
         }
         match dir.parent() {
             Some(parent) => dir = parent,
@@ -53,6 +60,10 @@ pub fn handle_cli_command(subcommand: &SubcommandMatches) -> bool {
             handle_workspace_status(&subcommand.matches);
             true
         }
+        "agent" => {
+            handle_workspace_agent(&subcommand.matches);
+            true
+        }
         "help" => {
             print_cli_help();
             true
@@ -61,16 +72,25 @@ pub fn handle_cli_command(subcommand: &SubcommandMatches) -> bool {
     }
 }
 
-pub fn should_exit_after_cli(matches: &Matches) -> bool {
-    if let Some(ref subcommand) = matches.subcommand {
-        return handle_cli_command(subcommand);
+/// Handles top-level CLI args that do not map to subcommands.
+/// Returns `true` when an arg is consumed and no GUI should be opened.
+pub fn handle_cli_global_args(matches: &Matches) -> bool {
+    if let Some(help_text) = matches.args.get("help").and_then(|arg| arg.value.as_str()) {
+        println!("{}", help_text);
+        return true;
     }
+
+    if matches.args.contains_key("version") {
+        println!("treq {}", env!("CARGO_PKG_VERSION"));
+        return true;
+    }
+
     false
 }
 
 #[cfg(test)]
 fn is_supported_cli_command(name: &str) -> bool {
-    matches!(name, "add" | "set" | "st" | "help")
+    matches!(name, "add" | "set" | "st" | "agent" | "help")
 }
 
 fn print_cli_help() {
@@ -80,7 +100,121 @@ fn print_cli_help() {
     println!("  treq add <branch_name> [-i intent] [-s source_branch]");
     println!("  treq set <workspace_name> [-i intent] [-t target_branch]");
     println!("  treq st [workspace_name]");
+    println!("  treq agent <branch> <prompt> [-m <edit|plan>]");
     println!("  treq help");
+}
+
+fn parse_agent_mode(mode: &str) -> Result<&'static str, String> {
+    match mode.trim() {
+        "edit" => Ok("acceptEdits"),
+        "plan" => Ok("plan"),
+        other => Err(format!(
+            "invalid mode '{}'. Expected one of: edit, plan",
+            other
+        )),
+    }
+}
+
+fn parse_agent_mode_or_default(mode: Option<&str>) -> Result<&'static str, String> {
+    match mode {
+        Some(value) => parse_agent_mode(value),
+        None => Ok("acceptEdits"),
+    }
+}
+
+fn get_db_setting(db: &Database, key: &str) -> Option<String> {
+    db.get_setting(key)
+        .ok()
+        .flatten()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+}
+
+fn resolve_default_agent(repo_path: &str) -> String {
+    let db_path = core::resolve_app_db_path(repo_path);
+    let Ok(db) = Database::new(db_path) else {
+        return "claude".to_string();
+    };
+
+    db.get_repo_setting(repo_path, "default_agent")
+        .ok()
+        .flatten()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .or_else(|| get_db_setting(&db, "default_agent"))
+        .unwrap_or_else(|| "claude".to_string())
+}
+
+#[cfg(test)]
+fn build_agent_deep_link_url(
+    repo_path: &str,
+    branch: &str,
+    prompt: &str,
+    mode: &str,
+    agent: &str,
+    request_id: &str,
+) -> String {
+    format!(
+        "treq://agent/start?repo={}&branch={}&prompt={}&mode={}&agent={}&request_id={}",
+        urlencoding::encode(repo_path),
+        urlencoding::encode(branch),
+        urlencoding::encode(prompt),
+        urlencoding::encode(mode),
+        urlencoding::encode(agent),
+        urlencoding::encode(request_id),
+    )
+}
+
+fn dispatch_agent_request(
+    repo_path: &str,
+    branch: &str,
+    prompt: &str,
+    mode: &str,
+    agent: &str,
+    request_id: &str,
+) -> Result<(), String> {
+    let db_path = core::resolve_app_db_path(repo_path);
+    let registry_path = agent_dispatch::registry_path_from_db_path(&db_path);
+    let mut registry = agent_dispatch::load_registry(&registry_path)?;
+    let now = agent_dispatch::now_millis();
+    agent_dispatch::prune_stale_instances(
+        &mut registry,
+        now,
+        agent_dispatch::HEARTBEAT_TIMEOUT_MS,
+    );
+    agent_dispatch::save_registry(&registry_path, &registry)?;
+
+    let instance = agent_dispatch::resolve_target_instance(&registry, repo_path).ok_or_else(|| {
+        format!(
+            "No running Treq instance has repo '{}'. Open this repo in Treq first.",
+            repo_path
+        )
+    })?;
+
+    let request = agent_dispatch::AgentDispatchRequest {
+        request_id: request_id.to_string(),
+        repo: repo_path.to_string(),
+        branch: branch.to_string(),
+        prompt: prompt.to_string(),
+        mode: mode.to_string(),
+        agent: agent.to_string(),
+    };
+    let response = agent_dispatch::send_dispatch_request(
+        &instance.endpoint,
+        &request,
+        Duration::from_millis(250),
+        Duration::from_millis(600),
+    )?;
+    if response.status == "handled" {
+        return Ok(());
+    }
+    Err(format!(
+        "Agent request not handled by instance '{}': {}",
+        instance.instance_id,
+        response
+            .reason
+            .unwrap_or_else(|| "unknown dispatch failure".to_string())
+    ))
 }
 
 fn get_arg_value(matches: &Matches, name: &str) -> Option<String> {
@@ -264,6 +398,80 @@ fn handle_workspace_status(matches: &Matches) {
     }
 }
 
+fn handle_workspace_agent(matches: &Matches) {
+    let branch = match get_arg_value(matches, "branch") {
+        Some(value) => value,
+        None => {
+            eprintln!("Error: branch is required");
+            eprintln!("Usage: treq agent <branch> <prompt> [-m <edit|plan>]");
+            return;
+        }
+    };
+
+    let prompt = match get_arg_value(matches, "prompt") {
+        Some(value) => value,
+        None => {
+            eprintln!("Error: prompt is required");
+            eprintln!("Usage: treq agent <branch> <prompt> [-m <edit|plan>]");
+            return;
+        }
+    };
+
+    let mode = match parse_agent_mode_or_default(get_arg_value(matches, "mode").as_deref()) {
+        Ok(mode) => mode.to_string(),
+        Err(error) => {
+            eprintln!("Error: {}", error);
+            return;
+        }
+    };
+
+    let repo_path = match detect_repo_path() {
+        Ok(path) => path,
+        Err(error) => {
+            eprintln!("Error: {}", error);
+            return;
+        }
+    };
+
+    if let Err(error) = core::init(&repo_path) {
+        eprintln!("Error initializing repo: {}", error);
+        return;
+    }
+
+    let workspace = match local_db::get_workspace_by_branch(&repo_path, &branch) {
+        Ok(Some(workspace)) => workspace,
+        Ok(None) => {
+            eprintln!(
+                "Error: workspace branch '{}' not found. Create it first with `treq add {}`.",
+                branch, branch
+            );
+            return;
+        }
+        Err(error) => {
+            eprintln!("Error looking up workspace: {}", error);
+            return;
+        }
+    };
+
+    let request_id = format!(
+        "cli-{}-{}",
+        workspace.id,
+        chrono::Utc::now().timestamp_millis()
+    );
+    let agent = resolve_default_agent(&repo_path);
+    if let Err(error) = dispatch_agent_request(
+        &repo_path,
+        &workspace.branch_name,
+        &prompt,
+        &mode,
+        &agent,
+        &request_id,
+    ) {
+        eprintln!("Error dispatching agent request: {}", error);
+        std::process::exit(1);
+    }
+}
+
 fn print_workspace_partial_status(status: &core::WorkspaceSidebarStatus) {
     let flags = if status.has_conflicts {
         " [CONFLICTS]"
@@ -282,9 +490,16 @@ fn print_workspace_partial_status(status: &core::WorkspaceSidebarStatus) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent_dispatch;
     use serde_json::Value;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
     use std::fs;
     use std::path::Path;
+    use std::sync::{Mutex, OnceLock};
+    use std::thread;
+    use std::time::Duration;
+    use tempfile::TempDir;
     use tauri_plugin_cli::SubcommandMatches;
 
     fn make_subcommand(name: &str) -> SubcommandMatches {
@@ -299,6 +514,7 @@ mod tests {
         assert!(is_supported_cli_command("add"));
         assert!(is_supported_cli_command("set"));
         assert!(is_supported_cli_command("st"));
+        assert!(is_supported_cli_command("agent"));
         assert!(is_supported_cli_command("help"));
         assert!(!is_supported_cli_command("open"));
     }
@@ -310,16 +526,117 @@ mod tests {
     }
 
     #[test]
-    fn help_exits_cli_mode() {
-        let mut matches = Matches::default();
-        matches.subcommand = Some(Box::new(make_subcommand("help")));
-        assert!(should_exit_after_cli(&matches));
+    fn help_is_handled_by_cli_dispatch() {
+        let subcommand = make_subcommand("help");
+        assert!(handle_cli_command(&subcommand));
     }
 
     #[test]
-    fn bare_treq_does_not_exit_cli_mode() {
+    fn unknown_subcommand_is_not_handled_by_cli_dispatch() {
+        let subcommand = make_subcommand("open");
+        assert!(!handle_cli_command(&subcommand));
+    }
+
+    #[test]
+    fn top_level_help_arg_is_handled_by_global_dispatch() {
+        let mut matches = Matches::default();
+        let mut help_arg = tauri_plugin_cli::ArgData::default();
+        help_arg.value = Value::String("generated help text".to_string());
+        help_arg.occurrences = 0;
+        matches.args.insert(
+            "help".to_string(),
+            help_arg,
+        );
+
+        assert!(handle_cli_global_args(&matches));
+    }
+
+    #[test]
+    fn no_global_args_are_not_handled() {
         let matches = Matches::default();
-        assert!(!should_exit_after_cli(&matches));
+        assert!(!handle_cli_global_args(&matches));
+    }
+
+    #[test]
+    fn top_level_version_arg_is_handled_by_global_dispatch() {
+        let mut matches = Matches::default();
+        matches
+            .args
+            .insert("version".to_string(), tauri_plugin_cli::ArgData::default());
+
+        assert!(handle_cli_global_args(&matches));
+    }
+
+    #[test]
+    fn parse_agent_mode_maps_edit_and_plan() {
+        assert_eq!(
+            parse_agent_mode("edit").expect("edit mode should parse"),
+            "acceptEdits"
+        );
+        assert_eq!(
+            parse_agent_mode("plan").expect("plan mode should parse"),
+            "plan"
+        );
+    }
+
+    #[test]
+    fn parse_agent_mode_defaults_to_edit_when_missing() {
+        assert_eq!(
+            parse_agent_mode_or_default(None).expect("missing mode should default"),
+            "acceptEdits"
+        );
+    }
+
+    #[test]
+    fn parse_agent_mode_or_default_uses_explicit_mode() {
+        assert_eq!(
+            parse_agent_mode_or_default(Some("plan")).expect("plan should parse"),
+            "plan"
+        );
+    }
+
+    #[test]
+    fn parse_agent_mode_rejects_invalid_mode() {
+        let error = parse_agent_mode("invalid").expect_err("invalid mode must fail");
+        assert!(error.contains("invalid mode"));
+    }
+
+    #[test]
+    fn build_agent_deep_link_encodes_payload() {
+        let url = build_agent_deep_link_url(
+            "/tmp/repo path",
+            "feat/test",
+            "Fix this now",
+            "acceptEdits",
+            "codex",
+            "req-123",
+        );
+        assert!(url.starts_with("treq://agent/start?"));
+        assert!(url.contains("repo=%2Ftmp%2Frepo%20path"));
+        assert!(url.contains("branch=feat%2Ftest"));
+        assert!(url.contains("prompt=Fix%20this%20now"));
+        assert!(url.contains("mode=acceptEdits"));
+        assert!(url.contains("agent=codex"));
+        assert!(url.contains("request_id=req-123"));
+    }
+
+    #[test]
+    fn normalize_repo_path_returns_canonical_when_available() {
+        let temp = TempDir::new().expect("temp dir");
+        let canonical = std::fs::canonicalize(temp.path()).expect("canonical path");
+        let normalized = normalize_repo_path(temp.path());
+        assert_eq!(
+            Path::new(&normalized),
+            canonical.as_path(),
+            "normalized path should be canonical"
+        );
+    }
+
+    #[test]
+    fn normalize_repo_path_falls_back_for_missing_path() {
+        let missing = Path::new("/definitely/not/present/treq-missing-path");
+        let normalized = normalize_repo_path(missing);
+        assert_eq!(normalized, missing.to_string_lossy());
     }
 
     #[test]
@@ -361,6 +678,139 @@ mod tests {
                 );
             }
         }
+    }
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    fn write_registry(
+        temp: &TempDir,
+        instances: Vec<agent_dispatch::RegisteredInstance>,
+    ) -> std::path::PathBuf {
+        let db_path = temp.path().join("treq.db");
+        std::env::set_var("TREQ_APP_DB_PATH", db_path.to_string_lossy().to_string());
+        let path = agent_dispatch::registry_path_from_db_path(&db_path);
+        let registry = agent_dispatch::InstanceRegistry {
+            version: agent_dispatch::REGISTRY_VERSION,
+            instances,
+        };
+        agent_dispatch::save_registry(&path, &registry).expect("save registry");
+        path
+    }
+
+    #[test]
+    fn dispatch_agent_request_selects_matching_instance_and_handles_ack() {
+        let _guard = env_lock().lock().unwrap();
+        let temp = TempDir::new().expect("temp");
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let endpoint = listener.local_addr().unwrap().to_string();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut payload = String::new();
+            stream.read_to_string(&mut payload).expect("read");
+            let request: agent_dispatch::AgentDispatchRequest =
+                serde_json::from_str(payload.trim()).expect("json");
+            assert_eq!(request.branch, "feat/x");
+            let response = serde_json::to_string(&agent_dispatch::AgentDispatchResponse::handled())
+                .expect("serialize");
+            stream.write_all(response.as_bytes()).expect("write");
+        });
+
+        let repo = temp.path().join("repo");
+        std::fs::create_dir_all(&repo).expect("mkdir");
+        let normalized_repo = agent_dispatch::normalize_repo_path(repo.to_str().unwrap());
+        write_registry(
+            &temp,
+            vec![agent_dispatch::RegisteredInstance {
+                instance_id: "instance-1".to_string(),
+                pid: 1,
+                started_at: 1,
+                last_heartbeat_at: agent_dispatch::now_millis(),
+                endpoint,
+                windows: vec![agent_dispatch::InstanceWindowSnapshot {
+                    window_label: "main".to_string(),
+                    normalized_repo_path: normalized_repo,
+                    focused: true,
+                    last_focused_at: Some(agent_dispatch::now_millis()),
+                }],
+            }],
+        );
+
+        let result = dispatch_agent_request(
+            repo.to_str().unwrap(),
+            "feat/x",
+            "hello",
+            "plan",
+            "codex",
+            "req-1",
+        );
+        assert!(result.is_ok());
+        handle.join().expect("join");
+        std::env::remove_var("TREQ_APP_DB_PATH");
+    }
+
+    #[test]
+    fn dispatch_agent_request_returns_error_when_no_matching_instance() {
+        let _guard = env_lock().lock().unwrap();
+        let temp = TempDir::new().expect("temp");
+        write_registry(&temp, vec![]);
+        let result = dispatch_agent_request("/tmp/unknown-repo", "feat/x", "hello", "plan", "codex", "req-1");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("No running Treq instance"));
+        std::env::remove_var("TREQ_APP_DB_PATH");
+    }
+
+    #[test]
+    fn dispatch_agent_request_surfaces_ack_timeout_error() {
+        let _guard = env_lock().lock().unwrap();
+        let temp = TempDir::new().expect("temp");
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let endpoint = listener.local_addr().unwrap().to_string();
+        let handle = thread::spawn(move || {
+            let (_stream, _) = listener.accept().expect("accept");
+            thread::sleep(Duration::from_millis(900));
+        });
+
+        let repo = temp.path().join("repo");
+        std::fs::create_dir_all(&repo).expect("mkdir");
+        let normalized_repo = agent_dispatch::normalize_repo_path(repo.to_str().unwrap());
+        write_registry(
+            &temp,
+            vec![agent_dispatch::RegisteredInstance {
+                instance_id: "instance-timeout".to_string(),
+                pid: 1,
+                started_at: 1,
+                last_heartbeat_at: agent_dispatch::now_millis(),
+                endpoint,
+                windows: vec![agent_dispatch::InstanceWindowSnapshot {
+                    window_label: "main".to_string(),
+                    normalized_repo_path: normalized_repo,
+                    focused: true,
+                    last_focused_at: Some(agent_dispatch::now_millis()),
+                }],
+            }],
+        );
+
+        let result = dispatch_agent_request(
+            repo.to_str().unwrap(),
+            "feat/x",
+            "hello",
+            "plan",
+            "codex",
+            "req-1",
+        );
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(
+            error.contains("failed reading dispatch response")
+                || error.contains("invalid dispatch response payload")
+        );
+        handle.join().expect("join");
+        std::env::remove_var("TREQ_APP_DB_PATH");
     }
 }
 

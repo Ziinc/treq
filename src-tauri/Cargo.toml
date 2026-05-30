@@ -39,6 +39,7 @@ log = "0.4"
 regex = "1"
 rayon = "1.10"
 urlencoding = "2"
+uuid = { version = "1", features = ["v4"] }
 imara-diff = "0.1.8"
 gix = "0.81.0"
 tracing = "0.1.44"

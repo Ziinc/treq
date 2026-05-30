@@ -235,7 +235,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 		// Shared treq CLI documentation injected as system prompt for any agent
 		const treqSystemPrompt = [
 			"You have access to the treq CLI for managing workspaces.",
-			"Run `treq help` to discover the currently available commands before using the CLI.",
+			"Run `treq --help` to discover the currently available commands before using the CLI.",
 			"",
 			`IMPORTANT: You must read, write, edit, delete only files in the current working directory.`,
 		].join("\\n");
