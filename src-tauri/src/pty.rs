@@ -70,7 +70,7 @@ pub fn line_matches_auto_command(stripped_line: &str, auto_command: &str) -> boo
 pub struct PtySession {
     writer: Box<dyn Write + Send>,
     master: Box<dyn MasterPty + Send>,
-    _child: Box<dyn Child + Send>,
+    child: Box<dyn Child + Send>,
     auto_command: Arc<Mutex<Option<String>>>,
 }
 
@@ -89,6 +89,31 @@ impl PtySession {
                 pixel_height: 0,
             })
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+    }
+
+    fn shutdown(&mut self) -> Result<(), String> {
+        if let Err(err) = self.child.kill() {
+            let err_text = err.to_string().to_lowercase();
+            if !err_text.contains("no such process") && !err_text.contains("not found") {
+                return Err(format!("Failed to kill PTY child: {err}"));
+            }
+        }
+
+        if let Err(err) = self.child.wait() {
+            let err_text = err.to_string().to_lowercase();
+            if !err_text.contains("no child processes")
+                && !err_text.contains("already")
+                && !err_text.contains("not found")
+            {
+                return Err(format!("Failed to wait PTY child: {err}"));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn process_id(&self) -> Option<u32> {
+        self.child.process_id()
     }
 }
 
@@ -160,7 +185,7 @@ impl PtyManager {
                 PtySession {
                     writer,
                     master,
-                    _child: child,
+                    child,
                     auto_command,
                 },
             );
@@ -290,8 +315,15 @@ impl PtyManager {
     }
 
     pub fn close_session(&self, session_id: &str) -> Result<(), String> {
-        let mut sessions = self.sessions.lock().unwrap();
-        sessions.remove(session_id);
+        let mut session = {
+            let mut sessions = self.sessions.lock().unwrap();
+            sessions.remove(session_id)
+        };
+
+        if let Some(ref mut session) = session {
+            session.shutdown()?;
+        }
+
         Ok(())
     }
 
@@ -309,5 +341,11 @@ impl PtyManager {
     pub fn session_exists(&self, session_id: &str) -> bool {
         let sessions = self.sessions.lock().unwrap();
         sessions.contains_key(session_id)
+    }
+
+    #[doc(hidden)]
+    pub fn session_process_id(&self, session_id: &str) -> Option<u32> {
+        let sessions = self.sessions.lock().unwrap();
+        sessions.get(session_id).and_then(|session| session.process_id())
     }
 }
