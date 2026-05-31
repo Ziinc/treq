@@ -66,6 +66,35 @@ pub enum SplitPosition {
     After,
 }
 
+#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct WorkspaceMoveRequest {
+    pub files: Vec<String>,
+    pub hunks: Vec<HunkSpec>,
+    pub commits: Vec<String>,
+}
+
+impl WorkspaceMoveRequest {
+    pub fn has_selectors(&self) -> bool {
+        !self.files.is_empty() || !self.hunks.is_empty() || !self.commits.is_empty()
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct WorkspaceMoveResult {
+    pub commits_moved: usize,
+    pub files_moved: usize,
+    pub hunks_applied: usize,
+    pub hunks_skipped: usize,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct HunkSpec {
+    pub file_path: String,
+    pub start_line: usize,
+    pub end_line: usize,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RenameWorkspaceResult {
     pub success: bool,
@@ -226,6 +255,44 @@ impl WorkspaceMetadata {
     pub fn to_json(&self) -> String {
         serde_json::to_string(self).unwrap_or_else(|_| "{}".to_string())
     }
+}
+
+pub fn parse_hunk_spec(raw: &str) -> Result<HunkSpec, String> {
+    let (file_path, range) = raw
+        .rsplit_once(':')
+        .ok_or_else(|| format!("Invalid hunk spec '{}': expected file:start-end", raw))?;
+    if file_path.is_empty() {
+        return Err(format!(
+            "Invalid hunk spec '{}': file path cannot be empty",
+            raw
+        ));
+    }
+    let (start, end) = range
+        .split_once('-')
+        .ok_or_else(|| format!("Invalid hunk spec '{}': expected start-end", raw))?;
+    let start_line = start
+        .parse::<usize>()
+        .map_err(|_| format!("Invalid hunk spec '{}': start line is not a number", raw))?;
+    let end_line = end
+        .parse::<usize>()
+        .map_err(|_| format!("Invalid hunk spec '{}': end line is not a number", raw))?;
+    if start_line == 0 || end_line == 0 {
+        return Err(format!(
+            "Invalid hunk spec '{}': line numbers must be >= 1",
+            raw
+        ));
+    }
+    if end_line < start_line {
+        return Err(format!(
+            "Invalid hunk spec '{}': end line must be >= start line",
+            raw
+        ));
+    }
+    Ok(HunkSpec {
+        file_path: file_path.to_string(),
+        start_line,
+        end_line,
+    })
 }
 
 /// Creates a new workspace in the repository.
@@ -806,7 +873,10 @@ pub fn workspace_status(
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_workspace_diff_conflict_marker_style, resolve_workspace_has_conflicts};
+    use super::{
+        parse_hunk_spec, resolve_workspace_diff_conflict_marker_style,
+        resolve_workspace_has_conflicts, HunkSpec, WorkspaceMoveRequest,
+    };
     use rusqlite::Connection;
     use std::sync::{Mutex, OnceLock};
     use tempfile::TempDir;
@@ -851,6 +921,33 @@ mod tests {
             style.expect("should resolve style"),
             crate::core::DEFAULT_CONFLICT_MARKER_STYLE
         );
+    }
+
+    #[test]
+    fn parse_hunk_spec_accepts_file_range_format() {
+        let spec = parse_hunk_spec("src/main.rs:10-20").expect("valid hunk spec");
+        assert_eq!(
+            spec,
+            HunkSpec {
+                file_path: "src/main.rs".to_string(),
+                start_line: 10,
+                end_line: 20,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_hunk_spec_rejects_malformed_values() {
+        assert!(parse_hunk_spec("src/main.rs").is_err());
+        assert!(parse_hunk_spec("src/main.rs:10").is_err());
+        assert!(parse_hunk_spec("src/main.rs:abc-10").is_err());
+        assert!(parse_hunk_spec("src/main.rs:20-10").is_err());
+    }
+
+    #[test]
+    fn workspace_move_request_requires_at_least_one_selector() {
+        let request = WorkspaceMoveRequest::default();
+        assert!(!request.has_selectors());
     }
 }
 
@@ -1416,6 +1513,116 @@ pub fn split_workspace(
                 .ok_or_else(|| "New workspace not found after split".to_string())
         }
     }
+}
+
+pub fn move_workspace_changes(
+    repo_path: &str,
+    source_branch: &str,
+    destination_branch: &str,
+    request: WorkspaceMoveRequest,
+) -> Result<WorkspaceMoveResult, String> {
+    if !request.has_selectors() {
+        return Err("Must specify at least one selector: -f, -h, or -c".to_string());
+    }
+
+    let source = local_db::get_workspace_by_branch(repo_path, source_branch)
+        .map_err(|e| format!("Failed to look up source workspace: {}", e))?
+        .ok_or_else(|| format!("Source workspace '{}' not found", source_branch))?;
+    let destination = local_db::get_workspace_by_branch(repo_path, destination_branch)
+        .map_err(|e| format!("Failed to look up destination workspace: {}", e))?
+        .ok_or_else(|| format!("Destination workspace '{}' not found", destination_branch))?;
+
+    let source_full_path = Path::new(repo_path)
+        .join(".treq")
+        .join("workspaces")
+        .join(&source.workspace_path);
+    let source_full_path_str = source_full_path
+        .to_str()
+        .ok_or("Failed to convert source workspace path to string")?
+        .to_string();
+    let destination_full_path = Path::new(repo_path)
+        .join(".treq")
+        .join("workspaces")
+        .join(&destination.workspace_path);
+    let destination_full_path_str = destination_full_path
+        .to_str()
+        .ok_or("Failed to convert destination workspace path to string")?
+        .to_string();
+
+    let mut result = WorkspaceMoveResult {
+        commits_moved: 0,
+        files_moved: 0,
+        hunks_applied: 0,
+        hunks_skipped: 0,
+        warnings: Vec::new(),
+    };
+    let mut commits_to_abandon_from_source: Vec<String> = Vec::new();
+
+    if !request.commits.is_empty() {
+        let source_log = crate::core::commits::list_commits(
+            repo_path,
+            Some(source.id),
+            false,
+            None,
+            None,
+        )?;
+        let history_ids: HashSet<String> = source_log
+            .commits
+            .iter()
+            .flat_map(|commit| [commit.change_id.clone(), commit.commit_id.clone()])
+            .filter(|id| !id.is_empty())
+            .collect();
+        for commit_id in &request.commits {
+            if !history_ids.contains(commit_id) {
+                return Err(format!(
+                    "Commit '{}' not found in source workspace history",
+                    commit_id
+                ));
+            }
+        }
+
+        for commit_id in &request.commits {
+            crate::core::commits::move_commit_to_existing_workspace(
+                repo_path,
+                source.id,
+                commit_id,
+                destination.id,
+            )?;
+            commits_to_abandon_from_source.push(commit_id.clone());
+            result.commits_moved += 1;
+        }
+    }
+
+    if !request.files.is_empty() {
+        jj::squash_to_workspace(
+            &source_full_path_str,
+            &destination.workspace_name,
+            Some(request.files.clone()),
+        )
+        .map_err(|e| format!("Failed to move files: {}", e))?;
+        result.files_moved = request.files.len();
+    }
+
+    if !request.hunks.is_empty() {
+        let hunk_outcome = jj::move_hunks_between_workspaces(
+            &source_full_path_str,
+            &destination_full_path_str,
+            &request.hunks,
+        )
+        .map_err(|e| format!("Failed to move hunks: {}", e))?;
+        result.hunks_applied = hunk_outcome.applied;
+        result.hunks_skipped = hunk_outcome.skipped;
+        result.warnings.extend(hunk_outcome.warnings);
+    }
+
+    for commit_id in &commits_to_abandon_from_source {
+        crate::core::commits::abandon_commit(repo_path, source.id, commit_id)?;
+    }
+
+    let _ = jj::update_stale_workspace(&source_full_path_str);
+    let _ = jj::update_stale_workspace(&destination_full_path_str);
+
+    Ok(result)
 }
 
 /// Pull a workspace from remote, automatically resolving divergence by rebasing

@@ -78,6 +78,46 @@
             }
           ]
         },
+        "mv": {
+          "description": "Move selected changes from source workspace to destination workspace",
+          "args": [
+            {
+              "name": "source",
+              "index": 1,
+              "takesValue": true,
+              "required": true,
+              "description": "Source workspace branch name"
+            },
+            {
+              "name": "destination",
+              "index": 2,
+              "takesValue": true,
+              "required": true,
+              "description": "Destination workspace branch name"
+            },
+            {
+              "name": "files",
+              "short": "f",
+              "takesValue": true,
+              "multiple": true,
+              "description": "Files to move"
+            },
+            {
+              "name": "ranges",
+              "short": "r",
+              "takesValue": true,
+              "multiple": true,
+              "description": "Hunk ranges in file:start-end format"
+            },
+            {
+              "name": "commits",
+              "short": "c",
+              "takesValue": true,
+              "multiple": true,
+              "description": "Commit IDs to move"
+            }
+          ]
+        },
         "agent": {
           "description": "Start an agent session in a workspace",
           "args": [
