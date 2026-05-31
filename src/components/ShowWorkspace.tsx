@@ -1124,25 +1124,30 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
     const hasSyncChanges =
       !!syncStatus && (syncStatus.ahead > 0 || syncStatus.behind > 0);
 
-    // Extract description from workspace metadata
-    const workspaceIntent = workspace?.metadata
+    const workspaceMetadata = workspace?.metadata
       ? (() => {
           try {
-            const metadata = JSON.parse(workspace.metadata);
-            return metadata.description || null;
+            return JSON.parse(workspace.metadata) as {
+              title?: string;
+              description?: string;
+            };
           } catch {
             return null;
           }
         })()
       : null;
+    const workspaceTitle =
+      workspace?.title || workspaceMetadata?.title || workspace?.branch_name || null;
+    const workspaceDescription =
+      workspace?.description || workspaceMetadata?.description || null;
 
     // Truncate description at 100 characters
-    const truncatedIntent =
-      workspaceIntent && workspaceIntent.length > 100
-        ? `${workspaceIntent.substring(0, 100)}...`
-        : workspaceIntent;
+    const truncatedDescription =
+      workspaceDescription && workspaceDescription.length > 100
+        ? `${workspaceDescription.substring(0, 100)}...`
+        : workspaceDescription;
 
-    const isTruncated = workspaceIntent && workspaceIntent.length > 100;
+    const isTruncated = workspaceDescription && workspaceDescription.length > 100;
 
     return (
       <>
@@ -1454,23 +1459,31 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
                 </DropdownMenu>
               </div>
             </div>
-            {/* Row 2: Description (if workspace and description exists) */}
-            {workspace && workspaceIntent && (
+            {/* Row 2: Title (if workspace title exists) */}
+            {workspace && workspaceTitle && workspaceTitle !== branchTitle && (
+              <div className="flex items-center px-1 mt-2">
+                <h1 className="text-sm font-medium text-foreground">
+                  {workspaceTitle}
+                </h1>
+              </div>
+            )}
+            {/* Row 3: Description (if workspace description exists) */}
+            {workspace && workspaceDescription && (
               <div className="flex items-center px-1">
                 {isTruncated ? (
                   <Popover>
                     <PopoverTrigger asChild>
-                      <span className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
-                        {truncatedIntent}
+                      <span className="text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+                        {truncatedDescription}
                       </span>
                     </PopoverTrigger>
                     <PopoverContent className="w-96">
-                      <p className="text-sm">{workspaceIntent}</p>
+                      <p className="text-sm">{workspaceDescription}</p>
                     </PopoverContent>
                   </Popover>
                 ) : (
-                  <span className="text-xs text-muted-foreground">
-                    {truncatedIntent}
+                  <span className="text-sm text-muted-foreground">
+                    {truncatedDescription}
                   </span>
                 )}
               </div>
