@@ -13,7 +13,8 @@ import { useToast } from "../components/ui/toast";
 
 export interface UseWorkspaceDialogSubmitParams {
 	repoPath: string;
-	intent: string;
+	title: string;
+	description: string;
 	branchName: string;
 	moveToExisting: boolean;
 	isHomeRepo: boolean;
@@ -40,7 +41,8 @@ export function useWorkspaceDialogSubmit(
 ) {
 	const {
 		repoPath,
-		intent,
+		title,
+		description,
 		branchName,
 		moveToExisting,
 		isHomeRepo,
@@ -115,7 +117,8 @@ export function useWorkspaceDialogSubmit(
 					repoPath,
 					sourceWorkspace.id,
 					branchName,
-					intent.trim() || null,
+					title.trim() || null,
+					description.trim() || null,
 					null,
 					Array.from(selectedCommits),
 					"move",
@@ -140,7 +143,8 @@ export function useWorkspaceDialogSubmit(
 					repoPath,
 					sourceWorkspace.id,
 					branchName,
-					intent.trim() || null,
+					title.trim() || null,
+					description.trim() || null,
 					selectedFilePaths,
 					null,
 					"move",
@@ -158,7 +162,8 @@ export function useWorkspaceDialogSubmit(
 
 			if (isHomeRepo && selectedHunks.size > 0) {
 				const metadata = JSON.stringify({
-					intent: intent.trim() || undefined,
+					title: title.trim() || undefined,
+					description: description.trim() || undefined,
 					moved_files: selectedFilePaths,
 				});
 				const workspaceId = await createWorkspace(
@@ -183,7 +188,7 @@ export function useWorkspaceDialogSubmit(
 					parentBranch: sourceWorkspace.branch_name,
 					parentWorkspace: sourceWorkspace,
 					branchName,
-					intent: intent.trim() || undefined,
+					description: description.trim() || undefined,
 					position,
 				});
 				onSuccess(workspaceId);
@@ -202,7 +207,7 @@ export function useWorkspaceDialogSubmit(
 							repoPath,
 							targetBranch,
 							undefined,
-							JSON.stringify({ intent: `Workspace for ${targetBranch}` }),
+							JSON.stringify({ description: `Workspace for ${targetBranch}` }),
 						);
 						const updatedWorkspaces = await getWorkspaces(repoPath);
 						const createdTarget = updatedWorkspaces.find(
@@ -215,8 +220,11 @@ export function useWorkspaceDialogSubmit(
 					}
 				}
 
-				const metadata = intent.trim()
-					? JSON.stringify({ intent: intent.trim() })
+				const metadata = description.trim()
+					? JSON.stringify({
+							title: title.trim() || undefined,
+							description: description.trim(),
+						})
 					: JSON.stringify({});
 
 				let effectiveSourceBranch: string | undefined;

@@ -36,8 +36,10 @@ export interface WorkspaceDialogDefaults {
 	preSelectedCommits?: string[];
 	/** Pre-selected file paths for the Changes tab */
 	preSelectedFiles?: string[];
-	/** Pre-filled intent text */
-	intent?: string;
+	/** Pre-filled description text */
+	description?: string;
+	/** Pre-filled title text */
+	title?: string;
 	/** Pre-filled branch name */
 	branchName?: string;
 	/** Which right-panel tab to show by default */
@@ -60,7 +62,8 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
 	defaults,
 }) => {
 	// ── form state ──────────────────────────────────────────────────────────────
-	const [intent, setIntent] = useState("");
+	const [description, setIntent] = useState("");
+	const [title, setTitle] = useState("");
 	const [branchName, setBranchName] = useState("");
 	const [branchPattern, setBranchPattern] = useState("treq/{name}");
 	const [isEditingBranch, setIsEditingBranch] = useState(false);
@@ -297,7 +300,8 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
 		defaults,
 		sourceWorkspace,
 		isHomeRepo,
-		intent,
+		description,
+		title,
 		branchName,
 		branchPattern,
 		isEditingBranch,
@@ -306,6 +310,7 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
 		position,
 		fileHunksMap,
 		setIntent,
+		setTitle,
 		setBranchName,
 		setBranchPattern,
 		setIsEditingBranch,
@@ -333,7 +338,8 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
 	// ── submit (extracted to hook) ────────────────────────────────────────────
 	const { handleSubmit } = useWorkspaceDialogSubmit({
 		repoPath,
-		intent,
+		description,
+		title,
 		branchName,
 		moveToExisting,
 		isHomeRepo,
@@ -412,8 +418,10 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
 						otherWorkspaces={otherWorkspaces}
 						targetWorkspaceId={targetWorkspaceId}
 						onSetTargetWorkspaceId={(id) => setTargetWorkspaceId(id)}
-						intent={intent}
-						onSetIntent={setIntent}
+						description={description}
+						onSetDescription={setIntent}
+						title={title}
+						onSetTitle={setTitle}
 						branchName={branchName}
 						onSetBranchName={setBranchName}
 						onSetIsEditingBranch={setIsEditingBranch}

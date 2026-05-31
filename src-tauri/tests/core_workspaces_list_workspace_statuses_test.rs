@@ -195,7 +195,7 @@ fn test_workspace_list_statuses_preserves_existing_workspace_metadata_on_upsert(
     let workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
         "feat/preserve-metadata",
-        Some("initial intent".to_string()),
+        Some("initial description".to_string()),
         Some(vec!["src/lib.rs".to_string()]),
         None,
         None,
@@ -221,7 +221,7 @@ fn test_workspace_list_statuses_preserves_existing_workspace_metadata_on_upsert(
         .expect("workspace status should exist");
 
     assert_eq!(status.current.target_branch.as_deref(), Some("main"));
-    assert_eq!(status.current.intent.as_deref(), Some("initial intent"));
+    assert_eq!(status.current.description.as_deref(), Some("initial description"));
     assert_eq!(
         status.current.moved_files,
         Some(vec!["src/lib.rs".to_string()])

@@ -30,10 +30,16 @@
               "description": "Branch name for the workspace"
             },
             {
-              "name": "intent",
-              "short": "i",
+              "name": "description",
+              "short": "d",
               "takesValue": true,
-              "description": "Intent/description"
+              "description": "Workspace description"
+            },
+            {
+              "name": "title",
+              "short": "l",
+              "takesValue": true,
+              "description": "Workspace title"
             },
             {
               "name": "source-branch",
@@ -54,10 +60,16 @@
               "description": "Workspace branch name"
             },
             {
-              "name": "intent",
-              "short": "i",
+              "name": "description",
+              "short": "d",
               "takesValue": true,
-              "description": "Set intent"
+              "description": "Set description"
+            },
+            {
+              "name": "title",
+              "short": "l",
+              "takesValue": true,
+              "description": "Set title"
             },
             {
               "name": "target-branch",

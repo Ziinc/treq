@@ -396,11 +396,11 @@ fn test_moved_files_from_main_repo() {
         "Workspace should have moved_files set after creation"
     );
 
-    // Verify workspace has intent set
+    // Verify workspace has description set
     assert_eq!(
-        workspace.intent,
+        workspace.description,
         Some("refactor code".to_string()),
-        "Workspace should have intent set"
+        "Workspace should have description set"
     );
 
     // Verify the workspace directory exists and is a valid jj workspace

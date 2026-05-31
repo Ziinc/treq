@@ -47,13 +47,14 @@ pub async fn create_workspace(
     metadata: Option<String>,
 ) -> Result<i64, String> {
     let started_at = Instant::now();
-    // Parse metadata JSON to extract intent and moved_files fields directly
-    let (intent, moved_files) = metadata
+    // Parse metadata JSON to extract title/description and moved_files fields directly
+    let (title, description, moved_files) = metadata
         .and_then(|m| {
             serde_json::from_str::<serde_json::Value>(&m)
                 .ok()
                 .and_then(|obj| {
-                    let intent = obj.get("intent").and_then(|v| v.as_str()).map(String::from);
+                    let title = obj.get("title").and_then(|v| v.as_str()).map(String::from);
+                    let description = obj.get("description").and_then(|v| v.as_str()).map(String::from);
                     let moved_files =
                         obj.get("moved_files")
                             .and_then(|v| v.as_array())
@@ -64,10 +65,10 @@ pub async fn create_workspace(
                             });
                     // Only return Some if moved_files has actual items
                     let moved_files = moved_files.filter(|v| !v.is_empty());
-                    Some((intent, moved_files))
+                    Some((title, description, moved_files))
                 })
         })
-        .unwrap_or((None, None));
+        .unwrap_or((None, None, None));
 
     // Read included_copy_files setting from DB
     let included_copy_files: Option<Vec<String>> = {
@@ -89,11 +90,14 @@ pub async fn create_workspace(
         let workspace = crate::core::create_workspace(
             &repo_path_for_task,
             &branch_name_for_task,
-            intent,
+            description,
             moved_files,
             source_branch.as_deref(),
             included_copy_files,
         )?;
+        if let Some(t) = title {
+            local_db::update_workspace_title(&repo_path_for_task, workspace.id, &t)?;
+        }
 
         // Initialize rebase flag to trigger rebase on first view
         local_db::update_workspace_last_rebased_commit(&repo_path_for_task, workspace.id, "")?;
@@ -263,7 +267,8 @@ pub async fn update_workspace(
     repo_path: String,
     workspace_id: i64,
     target_branch: Option<String>,
-    intent: Option<String>,
+    title: Option<String>,
+    description: Option<String>,
 ) -> Result<Workspace, String> {
     use crate::core::MaybeEmptyParam;
 
@@ -272,7 +277,12 @@ pub async fn update_workspace(
         Some(s) => MaybeEmptyParam::Some(s),
         None => MaybeEmptyParam::Omitted,
     };
-    let int = match intent {
+    let t = match title {
+        Some(s) if s.is_empty() => MaybeEmptyParam::EmptyValue,
+        Some(s) => MaybeEmptyParam::Some(s),
+        None => MaybeEmptyParam::Omitted,
+    };
+    let d = match description {
         Some(s) if s.is_empty() => MaybeEmptyParam::EmptyValue,
         Some(s) => MaybeEmptyParam::Some(s),
         None => MaybeEmptyParam::Omitted,
@@ -280,7 +290,7 @@ pub async fn update_workspace(
     let started_at = Instant::now();
     let repo_path_for_task = repo_path.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        crate::core::update_workspace(&repo_path_for_task, workspace_id, tb, int)
+        crate::core::update_workspace_with_title(&repo_path_for_task, workspace_id, tb, t, d)
     })
     .await
     .map_err(|e| format!("Failed to join update_workspace task: {}", e))?;
@@ -500,7 +510,8 @@ pub fn split_workspace(
     repo_path: String,
     workspace_id: i64,
     branch_name: String,
-    intent: Option<String>,
+    title: Option<String>,
+    description: Option<String>,
     file_paths: Option<Vec<String>>,
     commit_ids: Option<Vec<String>>,
     mode: String,
@@ -521,12 +532,15 @@ pub fn split_workspace(
         &repo_path,
         workspace_id,
         &branch_name,
-        intent,
+        description,
         file_paths,
         commit_ids,
         mode,
         position,
     )?;
+    if let Some(t) = title {
+        local_db::update_workspace_title(&repo_path, workspace.id, &t)?;
+    }
 
     Ok(workspace.id)
 }

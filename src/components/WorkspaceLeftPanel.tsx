@@ -27,8 +27,10 @@ export interface WorkspaceLeftPanelProps {
 	otherWorkspaces: Workspace[];
 	targetWorkspaceId: number | null;
 	onSetTargetWorkspaceId: (id: number) => void;
-	intent: string;
-	onSetIntent: (val: string) => void;
+	description: string;
+	onSetDescription: (val: string) => void;
+	title: string;
+	onSetTitle: (val: string) => void;
 	branchName: string;
 	onSetBranchName: (val: string) => void;
 	onSetIsEditingBranch: (val: boolean) => void;
@@ -55,8 +57,10 @@ export const WorkspaceLeftPanel: React.FC<WorkspaceLeftPanelProps> = ({
 	otherWorkspaces,
 	targetWorkspaceId,
 	onSetTargetWorkspaceId,
-	intent,
-	onSetIntent,
+	description,
+	onSetDescription,
+	title,
+	onSetTitle,
 	branchName,
 	onSetBranchName,
 	onSetIsEditingBranch,
@@ -199,16 +203,31 @@ export const WorkspaceLeftPanel: React.FC<WorkspaceLeftPanelProps> = ({
 			</div>
 		)}
 
-		{/* Intent (hidden when moveToExisting) */}
 		{!moveToExisting && (
 			<div className="grid gap-1.5">
-				<Label htmlFor="intent" className="text-xs">
-					Intent / Description (optional)
+				<Label htmlFor="title" className="text-xs">
+					Title (optional)
+				</Label>
+				<Input
+					id="title"
+					value={title}
+					onChange={(e) => onSetTitle(e.target.value)}
+					placeholder="e.g., Settings Dark Mode"
+					className="text-sm h-8"
+				/>
+			</div>
+		)}
+
+		{/* Description (hidden when moveToExisting) */}
+		{!moveToExisting && (
+			<div className="grid gap-1.5">
+				<Label htmlFor="description" className="text-xs">
+					Description (optional)
 				</Label>
 				<Textarea
-					id="intent"
-					value={intent}
-					onChange={(e) => onSetIntent(e.target.value)}
+					id="description"
+					value={description}
+					onChange={(e) => onSetDescription(e.target.value)}
 					placeholder="e.g., Add dark mode to settings"
 					rows={2}
 					className="resize-none text-sm"

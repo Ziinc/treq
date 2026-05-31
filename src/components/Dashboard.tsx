@@ -968,7 +968,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 											targetBranch: workspace?.branch_name,
 											sourceWorkspace: workspace ?? null,
 											preSelectedCommits: [commit.change_id],
-											intent: firstLine,
+											description: firstLine,
 											activeTab: "commits",
 										});
 									}}

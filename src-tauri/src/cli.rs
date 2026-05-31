@@ -101,8 +101,8 @@ fn print_cli_help() {
     println!("Treq - Coding Agent Manager");
     println!();
     println!("Usage:");
-    println!("  treq add <branch_name> [-i intent] [-s source_branch]");
-    println!("  treq set <workspace_name> [-i intent] [-t target_branch]");
+    println!("  treq add <branch_name> [-d description] [-l title] [-s source_branch]");
+    println!("  treq set <workspace_name> [-d description] [-l title] [-t target_branch]");
     println!("  treq st [workspace_name]");
     println!("  treq mv <source> <destination> -f [FILES...] -h [HUNKS...] -c [COMMITS...]");
     println!("  treq agent <branch> <prompt> [-m <edit|plan>]");
@@ -249,12 +249,12 @@ fn handle_workspace_add(matches: &Matches) {
         Some(name) => name,
         None => {
             eprintln!("Error: branch name is required");
-            eprintln!("Usage: treq add <branch_name> [-i intent] [-s source_branch]");
+            eprintln!("Usage: treq add <branch_name> [-d description] [-l title] [-s source_branch]");
             return;
         }
     };
 
-    let intent = get_arg_value(matches, "intent");
+    let description = get_arg_value(matches, "description");
     let source_branch = get_arg_value(matches, "source-branch");
 
     let repo_path = match detect_repo_path() {
@@ -274,15 +274,15 @@ fn handle_workspace_add(matches: &Matches) {
     match core::create_workspace(
         &repo_path,
         &branch_name,
-        intent,
+        description,
         None,
         source_branch.as_deref(),
         None,
     ) {
         Ok(workspace) => {
             println!("Created workspace: {}", workspace.branch_name);
-            if let Some(ref intent) = workspace.intent {
-                println!("  Intent: {}", intent);
+            if let Some(ref description) = workspace.description {
+                println!("  Description: {}", description);
             }
             let full_path = Path::new(&repo_path)
                 .join(".treq")
@@ -301,16 +301,17 @@ fn handle_workspace_set(matches: &Matches) {
         Some(name) => name,
         None => {
             eprintln!("Error: workspace name is required");
-            eprintln!("Usage: treq set <workspace_name> [-i intent] [-t target_branch]");
+            eprintln!("Usage: treq set <workspace_name> [-d description] [-l title] [-t target_branch]");
             return;
         }
     };
 
-    let intent = get_arg_value(matches, "intent");
+    let description = get_arg_value(matches, "description");
+    let title = get_arg_value(matches, "title");
     let target_branch = get_arg_value(matches, "target-branch");
 
-    if intent.is_none() && target_branch.is_none() {
-        eprintln!("Error: specify at least one of -i (intent) or -t (target branch)");
+    if description.is_none() && target_branch.is_none() && title.is_none() {
+        eprintln!("Error: specify at least one of -d (description), -l (title), or -t (target branch)");
         return;
     }
 
@@ -335,8 +336,12 @@ fn handle_workspace_set(matches: &Matches) {
         }
     };
 
-    let intent_param = match intent {
+    let description_param = match description {
         Some(i) => core::MaybeEmptyParam::Some(i),
+        None => core::MaybeEmptyParam::Omitted,
+    };
+    let title_param = match title {
+        Some(t) => core::MaybeEmptyParam::Some(t),
         None => core::MaybeEmptyParam::Omitted,
     };
 
@@ -345,11 +350,18 @@ fn handle_workspace_set(matches: &Matches) {
         None => core::MaybeEmptyParam::Omitted,
     };
 
-    match core::update_workspace(&repo_path, workspace.id, target_param, intent_param) {
+    match core::update_workspace_with_title(
+        &repo_path,
+        workspace.id,
+        target_param,
+        title_param,
+        description_param,
+    ) {
         Ok(updated) => {
             println!("Updated workspace: {}", updated.branch_name);
-            if let Some(ref intent) = updated.intent {
-                println!("  Intent: {}", intent);
+            println!("  Title: {}", updated.title);
+            if let Some(ref description) = updated.description {
+                println!("  Description: {}", description);
             }
             if let Some(ref target) = updated.target_branch {
                 println!("  Target: {}", target);
@@ -572,8 +584,8 @@ fn print_workspace_partial_status(status: &core::WorkspaceSidebarStatus) {
         ""
     };
     println!("  {} {}{}", "●", status.current.branch_name, flags);
-    if let Some(ref intent) = status.current.intent {
-        println!("    Intent: {}", intent);
+    if let Some(ref description) = status.current.description {
+        println!("    Description: {}", description);
     }
     if let Some(ref target) = status.current.target_branch {
         println!("    Target: {}", target);
@@ -938,8 +950,8 @@ mod tests {
 
 fn print_workspace_status_detail(status: &core::WorkspaceStatus) {
     println!("Workspace: {}", status.partial.current.branch_name);
-    if let Some(ref intent) = status.partial.current.intent {
-        println!("  Intent: {}", intent);
+    if let Some(ref description) = status.partial.current.description {
+        println!("  Description: {}", description);
     }
     if let Some(ref target) = &status.target {
         println!("  Target: {}", target.branch_name);

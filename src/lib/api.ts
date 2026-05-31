@@ -269,7 +269,8 @@ export const splitWorkspace = (
 	repoPath: string,
 	workspaceId: number,
 	branchName: string,
-	intent: string | null,
+	title: string | null,
+	description: string | null,
 	filePaths: string[] | null,
 	commitIds: string[] | null,
 	mode: "move" | "copy",
@@ -279,7 +280,8 @@ export const splitWorkspace = (
 		repoPath,
 		workspaceId,
 		branchName,
-		intent,
+		title,
+		description,
 		filePaths,
 		commitIds,
 		mode,
@@ -341,13 +343,15 @@ export const updateWorkspace = (
 	repoPath: string,
 	workspaceId: number,
 	targetBranch?: string,
-	intent?: string,
+	title?: string,
+	description?: string,
 ): Promise<Workspace> =>
 	invoke("update_workspace", {
 		repoPath,
 		workspaceId,
 		...(targetBranch !== undefined && { targetBranch }),
-		...(intent !== undefined && { intent }),
+		...(title !== undefined && { title }),
+		...(description !== undefined && { description }),
 	});
 
 export const setWorkspaceTargetBranch = (

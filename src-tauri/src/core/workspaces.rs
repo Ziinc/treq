@@ -148,11 +148,13 @@ pub struct WorkspaceNode {
     pub depth: usize,
 }
 
-/// Metadata for workspace creation, supporting both simple intent and complex metadata with files.
+/// Metadata for workspace creation, supporting both simple description and complex metadata with files.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WorkspaceMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub intent: Option<String>,
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub moved_files: Option<Vec<String>>,
 }
@@ -300,7 +302,7 @@ pub fn parse_hunk_spec(raw: &str) -> Result<HunkSpec, String> {
 /// # Arguments
 /// * `repo_path` - Path to the repository root
 /// * `branch_name` - Name of the branch to create
-/// * `intent` - Intent for the workspace
+/// * `description` - Description for the workspace
 /// * `source_branch` - Source branch to create the workspace from
 ///
 /// # Returns
@@ -308,7 +310,7 @@ pub fn parse_hunk_spec(raw: &str) -> Result<HunkSpec, String> {
 pub fn create_workspace(
     repo_path: &str,
     branch_name: &str,
-    intent: Option<String>,
+    description: Option<String>,
     moved_files: Option<Vec<String>>,
     source_branch: Option<&str>,
     included_copy_files: Option<Vec<String>>,
@@ -404,7 +406,7 @@ pub fn create_workspace(
         workspace_path.clone(),
         workspace_path.clone(),
         branch_name.to_string(),
-        intent,
+        description,
         moved_files.clone(),
     )
     .map_err(|e| format!("Failed to add workspace to db: {}", e))?;
@@ -723,12 +725,13 @@ pub fn workspace_status(
                 repo_path: repo_path.to_string(),
                 workspace_name: "home".to_string(),
                 workspace_path: repo_path.to_string(),
-                branch_name: default_branch,
+                branch_name: default_branch.clone(),
                 created_at: String::new(),
                 refreshed_at: None,
                 metadata: None,
                 target_branch: None,
-                intent: None,
+                title: default_branch.clone(),
+                description: None,
                 moved_files: None,
                 not_on_remote: false,
             };
@@ -1119,14 +1122,30 @@ fn sync_home_and_workspace_for_branch(
     Ok(())
 }
 
-/// Updates a workspace's target branch and/or intent.
+/// Updates a workspace's target branch and/or description.
 /// Rebases the workspace to the target branch and updates metadata.
 /// The workspace's branch name remains unchanged.
 pub fn update_workspace(
     repo_path: &str,
     workspace_id: i64,
     target_branch: MaybeEmptyParam<String>,
-    intent: MaybeEmptyParam<String>,
+    description: MaybeEmptyParam<String>,
+) -> Result<local_db::Workspace, String> {
+    update_workspace_with_title(
+        repo_path,
+        workspace_id,
+        target_branch,
+        MaybeEmptyParam::Omitted,
+        description,
+    )
+}
+
+pub fn update_workspace_with_title(
+    repo_path: &str,
+    workspace_id: i64,
+    target_branch: MaybeEmptyParam<String>,
+    title: MaybeEmptyParam<String>,
+    description: MaybeEmptyParam<String>,
 ) -> Result<local_db::Workspace, String> {
     let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
         .map_err(|e| format!("Failed to get workspace from db: {}", e))?
@@ -1170,9 +1189,14 @@ pub fn update_workspace(
         MaybeEmptyParam::Omitted => {}
     }
 
-    if let MaybeEmptyParam::Some(intent_str) = intent {
-        local_db::update_workspace_intent(repo_path, workspace_id, &intent_str)
-            .map_err(|e| format!("Failed to update intent: {}", e))?;
+    if let MaybeEmptyParam::Some(title_str) = title {
+        local_db::update_workspace_title(repo_path, workspace_id, &title_str)
+            .map_err(|e| format!("Failed to update title: {}", e))?;
+    }
+
+    if let MaybeEmptyParam::Some(description_str) = description {
+        local_db::update_workspace_description(repo_path, workspace_id, &description_str)
+            .map_err(|e| format!("Failed to update description: {}", e))?;
     }
 
     local_db::get_workspace_by_id(repo_path, workspace_id)
@@ -1315,7 +1339,7 @@ pub fn rename_workspace(
 /// * `repo_path` - Path to the repository root
 /// * `workspace_id` - ID of the source workspace to split from
 /// * `branch_name` - Branch name for the new workspace
-/// * `intent` - Optional intent/description for the new workspace
+/// * `description` - Optional description/description for the new workspace
 /// * `file_paths` - Files to split (mutually exclusive with commit_ids)
 /// * `commit_ids` - Change IDs of commits to split (mutually exclusive with file_paths)
 /// * `mode` - Move or Copy
@@ -1324,7 +1348,7 @@ pub fn split_workspace(
     repo_path: &str,
     workspace_id: i64,
     branch_name: &str,
-    intent: Option<String>,
+    description: Option<String>,
     file_paths: Option<Vec<String>>,
     commit_ids: Option<Vec<String>>,
     mode: SplitMode,
@@ -1362,7 +1386,7 @@ pub fn split_workspace(
             let new_workspace = create_workspace(
                 repo_path,
                 branch_name,
-                intent.clone(),
+                description.clone(),
                 None,
                 Some(&source.branch_name),
                 None,
@@ -1422,7 +1446,7 @@ pub fn split_workspace(
             let new_workspace = create_workspace(
                 repo_path,
                 branch_name,
-                intent.clone(),
+                description.clone(),
                 None,
                 Some(&source_target),
                 None,
