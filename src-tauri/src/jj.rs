@@ -1716,6 +1716,94 @@ pub fn squash_commit_to_workspace(
     squash_to_workspace(workspace_path, target_workspace_name, Some(selected_paths))
 }
 
+#[derive(Debug, Clone)]
+pub struct HunkMoveOutcome {
+    pub applied: usize,
+    pub skipped: usize,
+    pub warnings: Vec<String>,
+}
+
+pub fn move_hunks_between_workspaces(
+    source_workspace_path: &str,
+    destination_workspace_path: &str,
+    hunks: &[crate::core::workspaces::HunkSpec],
+) -> Result<HunkMoveOutcome, JjError> {
+    let mut outcome = HunkMoveOutcome {
+        applied: 0,
+        skipped: 0,
+        warnings: Vec::new(),
+    };
+
+    for hunk in hunks {
+        let source_file = Path::new(source_workspace_path).join(&hunk.file_path);
+        let destination_file = Path::new(destination_workspace_path).join(&hunk.file_path);
+
+        let source_content = match fs::read_to_string(&source_file) {
+            Ok(content) => content,
+            Err(_) => {
+                outcome.skipped += 1;
+                outcome.warnings.push(format!(
+                    "Skipped {}:{}-{}: source file not found",
+                    hunk.file_path, hunk.start_line, hunk.end_line
+                ));
+                continue;
+            }
+        };
+        let mut source_lines: Vec<String> = source_content.lines().map(|line| line.to_string()).collect();
+        if hunk.end_line > source_lines.len() || hunk.start_line > source_lines.len() {
+            outcome.skipped += 1;
+            outcome.warnings.push(format!(
+                "Skipped {}:{}-{}: source range out of bounds",
+                hunk.file_path, hunk.start_line, hunk.end_line
+            ));
+            continue;
+        }
+
+        let moved_lines: Vec<String> = source_lines[(hunk.start_line - 1)..hunk.end_line].to_vec();
+        source_lines.drain((hunk.start_line - 1)..hunk.end_line);
+        let new_source_content = if source_lines.is_empty() {
+            String::new()
+        } else {
+            format!("{}\n", source_lines.join("\n"))
+        };
+
+        let destination_content = fs::read_to_string(&destination_file).unwrap_or_default();
+        let mut destination_lines: Vec<String> =
+            destination_content.lines().map(|line| line.to_string()).collect();
+        destination_lines.extend(moved_lines);
+        let new_destination_content = if destination_lines.is_empty() {
+            String::new()
+        } else {
+            format!("{}\n", destination_lines.join("\n"))
+        };
+
+        if let Some(parent) = destination_file.parent() {
+            fs::create_dir_all(parent).map_err(|e| {
+                JjError::IoError(format!(
+                    "Failed to create directory {}: {}",
+                    parent.display(),
+                    e
+                ))
+            })?;
+        }
+
+        fs::write(&source_file, new_source_content).map_err(|e| {
+            JjError::IoError(format!("Failed to write source file {}: {}", source_file.display(), e))
+        })?;
+        fs::write(&destination_file, new_destination_content).map_err(|e| {
+            JjError::IoError(format!(
+                "Failed to write destination file {}: {}",
+                destination_file.display(),
+                e
+            ))
+        })?;
+
+        outcome.applied += 1;
+    }
+
+    Ok(outcome)
+}
+
 fn copy_path_recursive(source: &Path, destination: &Path) -> Result<(), JjError> {
     if source.is_dir() {
         fs::create_dir_all(destination).map_err(|e| {

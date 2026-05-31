@@ -60,6 +60,10 @@ pub fn handle_cli_command(subcommand: &SubcommandMatches) -> bool {
             handle_workspace_status(&subcommand.matches);
             true
         }
+        "mv" => {
+            handle_workspace_move(&subcommand.matches);
+            true
+        }
         "agent" => {
             handle_workspace_agent(&subcommand.matches);
             true
@@ -90,7 +94,7 @@ pub fn handle_cli_global_args(matches: &Matches) -> bool {
 
 #[cfg(test)]
 fn is_supported_cli_command(name: &str) -> bool {
-    matches!(name, "add" | "set" | "st" | "agent" | "help")
+    matches!(name, "add" | "set" | "st" | "mv" | "agent" | "help")
 }
 
 fn print_cli_help() {
@@ -100,6 +104,7 @@ fn print_cli_help() {
     println!("  treq add <branch_name> [-i intent] [-s source_branch]");
     println!("  treq set <workspace_name> [-i intent] [-t target_branch]");
     println!("  treq st [workspace_name]");
+    println!("  treq mv <source> <destination> -f [FILES...] -h [HUNKS...] -c [COMMITS...]");
     println!("  treq agent <branch> <prompt> [-m <edit|plan>]");
     println!("  treq help");
 }
@@ -221,6 +226,22 @@ fn get_arg_value(matches: &Matches, name: &str) -> Option<String> {
             .filter(|s| !s.is_empty())
             .map(|s| s.to_string())
     })
+}
+
+fn get_arg_values(matches: &Matches, name: &str) -> Vec<String> {
+    let Some(arg) = matches.args.get(name) else {
+        return Vec::new();
+    };
+    match &arg.value {
+        serde_json::Value::Array(values) => values
+            .iter()
+            .filter_map(|value| value.as_str())
+            .map(|value| value.to_string())
+            .filter(|value| !value.is_empty())
+            .collect(),
+        serde_json::Value::String(value) if !value.is_empty() => vec![value.to_string()],
+        _ => Vec::new(),
+    }
 }
 
 fn handle_workspace_add(matches: &Matches) {
@@ -395,6 +416,81 @@ fn handle_workspace_status(matches: &Matches) {
     }
 }
 
+fn handle_workspace_move(matches: &Matches) {
+    let source = match get_arg_value(matches, "source") {
+        Some(value) => value,
+        None => {
+            eprintln!("Error: source workspace is required");
+            eprintln!(
+                "Usage: treq mv <source> <destination> -f [FILES...] -h [HUNKS...] -c [COMMITS...]"
+            );
+            return;
+        }
+    };
+    let destination = match get_arg_value(matches, "destination") {
+        Some(value) => value,
+        None => {
+            eprintln!("Error: destination workspace is required");
+            eprintln!(
+                "Usage: treq mv <source> <destination> -f [FILES...] -h [HUNKS...] -c [COMMITS...]"
+            );
+            return;
+        }
+    };
+
+    let files = get_arg_values(matches, "files");
+    let commits = get_arg_values(matches, "commits");
+    let raw_hunks = get_arg_values(matches, "hunks");
+    let mut hunks = Vec::new();
+    for raw_hunk in raw_hunks {
+        match core::parse_hunk_spec(&raw_hunk) {
+            Ok(spec) => hunks.push(spec),
+            Err(error) => {
+                eprintln!("Error: {}", error);
+                return;
+            }
+        }
+    }
+
+    let request = core::WorkspaceMoveRequest {
+        files,
+        hunks,
+        commits,
+    };
+    if !request.has_selectors() {
+        eprintln!("Error: specify at least one of -f, -h, or -c");
+        return;
+    }
+
+    let repo_path = match detect_repo_path() {
+        Ok(path) => path,
+        Err(error) => {
+            eprintln!("Error: {}", error);
+            return;
+        }
+    };
+
+    match core::move_workspace_changes(&repo_path, &source, &destination, request) {
+        Ok(result) => {
+            println!(
+                "Moved changes from '{}' to '{}': commits={}, files={}, hunks_applied={}, hunks_skipped={}",
+                source,
+                destination,
+                result.commits_moved,
+                result.files_moved,
+                result.hunks_applied,
+                result.hunks_skipped
+            );
+            for warning in result.warnings {
+                eprintln!("Warning: {}", warning);
+            }
+        }
+        Err(error) => {
+            eprintln!("Error moving workspace changes: {}", error);
+        }
+    }
+}
+
 fn handle_workspace_agent(matches: &Matches) {
     let branch = match get_arg_value(matches, "branch") {
         Some(value) => value,
@@ -511,6 +607,7 @@ mod tests {
         assert!(is_supported_cli_command("add"));
         assert!(is_supported_cli_command("set"));
         assert!(is_supported_cli_command("st"));
+        assert!(is_supported_cli_command("mv"));
         assert!(is_supported_cli_command("agent"));
         assert!(is_supported_cli_command("help"));
         assert!(!is_supported_cli_command("open"));
@@ -675,6 +772,40 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn mv_subcommand_uses_source_and_destination_positionals() {
+        let config_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json");
+        let config = fs::read_to_string(config_path).expect("failed to read tauri.conf.json");
+        let json: Value = serde_json::from_str(&config).expect("failed to parse tauri.conf.json");
+        let mv = json["plugins"]["cli"]["subcommands"]["mv"]
+            .as_object()
+            .expect("mv subcommand must exist");
+        let args = mv
+            .get("args")
+            .and_then(Value::as_array)
+            .expect("mv args must be an array");
+
+        let source = args
+            .iter()
+            .find(|arg| arg.get("name").and_then(Value::as_str) == Some("source"))
+            .expect("mv must define source positional arg");
+        assert_eq!(source.get("index").and_then(Value::as_i64), Some(1));
+        assert_eq!(
+            source.get("takesValue").and_then(Value::as_bool),
+            Some(true)
+        );
+
+        let destination = args
+            .iter()
+            .find(|arg| arg.get("name").and_then(Value::as_str) == Some("destination"))
+            .expect("mv must define destination positional arg");
+        assert_eq!(destination.get("index").and_then(Value::as_i64), Some(2));
+        assert_eq!(
+            destination.get("takesValue").and_then(Value::as_bool),
+            Some(true)
+        );
     }
 
     fn env_lock() -> &'static Mutex<()> {
