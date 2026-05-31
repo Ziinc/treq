@@ -20,8 +20,8 @@ export interface CreateStackedWorkspaceOptions {
 	parentWorkspace: Workspace | null;
 	// If provided, use this branch name instead of auto-generating.
 	branchName?: string;
-	// If provided, use this intent instead of auto-generating.
-	intent?: string;
+	// If provided, use this description instead of auto-generating.
+	description?: string;
 	// Position relative to parent; "before" triggers reparenting. Default: "after".
 	position?: "before" | "after";
 }
@@ -36,7 +36,7 @@ export function useCreateStackedWorkspace() {
 			parentBranch,
 			parentWorkspace,
 			branchName: userBranchName,
-			intent: userIntent,
+			description: userIntent,
 			position = "after",
 		}: CreateStackedWorkspaceOptions) => {
 			try {
@@ -69,23 +69,23 @@ export function useCreateStackedWorkspace() {
 					} while (existingBranches.has(branchName));
 				}
 
-				// Step 4: Determine intent
-				let intent: string;
+				// Step 4: Determine description
+				let description: string;
 				if (userIntent !== undefined) {
-					intent = userIntent;
+					description = userIntent;
 				} else {
 					const parentIntent = parentWorkspace?.metadata
 						? (() => {
 								try {
-									return JSON.parse(parentWorkspace.metadata).intent || null;
+									return JSON.parse(parentWorkspace.metadata).description || null;
 								} catch {
 									return null;
 								}
 							})()
 						: null;
-					intent = generateStackedIntent(parentIntent, parentBranch);
+					description = generateStackedIntent(parentIntent, parentBranch);
 				}
-				const metadata = JSON.stringify({ intent });
+				const metadata = JSON.stringify({ description });
 
 				// "before": new workspace targets parent's parent; original parent reparents onto the new workspace.
 				const effectiveParentBranch =

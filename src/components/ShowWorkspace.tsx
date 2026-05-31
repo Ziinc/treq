@@ -1124,19 +1124,19 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
     const hasSyncChanges =
       !!syncStatus && (syncStatus.ahead > 0 || syncStatus.behind > 0);
 
-    // Extract intent from workspace metadata
+    // Extract description from workspace metadata
     const workspaceIntent = workspace?.metadata
       ? (() => {
           try {
             const metadata = JSON.parse(workspace.metadata);
-            return metadata.intent || null;
+            return metadata.description || null;
           } catch {
             return null;
           }
         })()
       : null;
 
-    // Truncate intent at 100 characters
+    // Truncate description at 100 characters
     const truncatedIntent =
       workspaceIntent && workspaceIntent.length > 100
         ? `${workspaceIntent.substring(0, 100)}...`
@@ -1454,7 +1454,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
                 </DropdownMenu>
               </div>
             </div>
-            {/* Row 2: Intent (if workspace and intent exists) */}
+            {/* Row 2: Description (if workspace and description exists) */}
             {workspace && workspaceIntent && (
               <div className="flex items-center px-1">
                 {isTruncated ? (

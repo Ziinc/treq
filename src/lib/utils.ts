@@ -145,7 +145,7 @@ export function formatDayLabel(timestamp: string): string {
 	});
 }
 
-// Generate stacked workspace intent from parent workspace/branch.
+// Generate stacked workspace description from parent workspace/branch.
 export function generateStackedIntent(
 	parentIntent: string | null,
 	parentBranch: string,

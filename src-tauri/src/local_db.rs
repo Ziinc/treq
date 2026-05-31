@@ -20,7 +20,8 @@ pub struct Workspace {
     pub refreshed_at: Option<String>,
     pub metadata: Option<String>,
     pub target_branch: Option<String>,
-    pub intent: Option<String>,
+    pub title: String,
+    pub description: Option<String>,
     pub moved_files: Option<Vec<String>>,
     pub not_on_remote: bool,
 }
@@ -38,7 +39,7 @@ pub struct Session {
 static INITIALIZED_DBS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
 fn workspace_from_row(repo_path: &str, row: &Row<'_>) -> rusqlite::Result<Workspace> {
-    let moved_files_json: Option<String> = row.get(9)?;
+    let moved_files_json: Option<String> = row.get(10)?;
     let moved_files =
         moved_files_json.and_then(|json| serde_json::from_str::<Vec<String>>(&json).ok());
     Ok(Workspace {
@@ -52,7 +53,8 @@ fn workspace_from_row(repo_path: &str, row: &Row<'_>) -> rusqlite::Result<Worksp
         metadata: row.get(6)?,
         target_branch: row.get(7)?,
         not_on_remote: row.get::<_, i64>(8)? != 0,
-        intent: row.get(10)?,
+        title: row.get(9)?,
+        description: row.get(11)?,
         moved_files,
     })
 }
@@ -147,7 +149,8 @@ pub fn init_local_db(repo_path: &str) -> Result<PathBuf, String> {
         "ALTER TABLE workspaces ADD COLUMN not_on_remote BOOLEAN DEFAULT 0",
         [],
     );
-    let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN intent TEXT", []);
+    let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN title TEXT", []);
+    let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN description TEXT", []);
     let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN moved_files TEXT", []);
     let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN refreshed_at TEXT", []);
 
@@ -514,7 +517,7 @@ pub fn prune_stale_instance_registry(
 pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), moved_files, intent FROM workspaces ORDER BY branch_name COLLATE NOCASE ASC")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), COALESCE(title, branch_name), moved_files, description FROM workspaces ORDER BY branch_name COLLATE NOCASE ASC")
         .map_err(|e| format!("Failed to prepare workspaces query: {}", e))?;
 
     let workspaces = stmt
@@ -529,7 +532,7 @@ pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
 pub fn get_workspace_by_id(repo_path: &str, id: i64) -> Result<Option<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), moved_files, intent FROM workspaces WHERE id = ?1")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), COALESCE(title, branch_name), moved_files, description FROM workspaces WHERE id = ?1")
         .map_err(|e| format!("Failed to prepare workspace query: {}", e))?;
 
     let workspace = stmt
@@ -546,7 +549,7 @@ pub fn get_workspace_by_path(
 ) -> Result<Option<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), moved_files, intent FROM workspaces WHERE workspace_path = ?1")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), COALESCE(title, branch_name), moved_files, description FROM workspaces WHERE workspace_path = ?1")
         .map_err(|e| format!("Failed to prepare workspace query: {}", e))?;
 
     let workspace = stmt
@@ -563,7 +566,7 @@ pub fn get_workspace_by_branch(
 ) -> Result<Option<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), moved_files, intent FROM workspaces WHERE branch_name = ?1")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), COALESCE(title, branch_name), moved_files, description FROM workspaces WHERE branch_name = ?1")
         .map_err(|e| format!("Failed to prepare workspace query: {}", e))?;
 
     let workspace = stmt
@@ -579,7 +582,7 @@ pub fn add_workspace(
     workspace_name: String,
     workspace_path: String,
     branch_name: String,
-    intent: Option<String>,
+    description: Option<String>,
     moved_files: Option<Vec<String>>,
 ) -> Result<i64, String> {
     let conn = get_connection(repo_path)?;
@@ -596,7 +599,7 @@ pub fn add_workspace(
     });
 
     conn.execute(
-        "INSERT INTO workspaces (workspace_name, workspace_path, branch_name, created_at, refreshed_at, intent, moved_files)
+        "INSERT INTO workspaces (workspace_name, workspace_path, branch_name, created_at, refreshed_at, description, moved_files)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         params![
             workspace_name,
@@ -604,7 +607,7 @@ pub fn add_workspace(
             branch_name,
             created_at,
             refreshed_at,
-            intent,
+            description,
             moved_files_json
         ],
     )
@@ -620,13 +623,27 @@ pub fn delete_workspace(repo_path: &str, id: i64) -> Result<(), String> {
     Ok(())
 }
 
-pub fn update_workspace_intent(repo_path: &str, id: i64, intent: &str) -> Result<(), String> {
+pub fn update_workspace_description(
+    repo_path: &str,
+    id: i64,
+    description: &str,
+) -> Result<(), String> {
     let conn = get_connection(repo_path)?;
     conn.execute(
-        "UPDATE workspaces SET intent = ?1 WHERE id = ?2",
-        params![intent, id],
+        "UPDATE workspaces SET description = ?1 WHERE id = ?2",
+        params![description, id],
     )
-    .map_err(|e| format!("Failed to update workspace intent: {}", e))?;
+    .map_err(|e| format!("Failed to update workspace description: {}", e))?;
+    Ok(())
+}
+
+pub fn update_workspace_title(repo_path: &str, id: i64, title: &str) -> Result<(), String> {
+    let conn = get_connection(repo_path)?;
+    conn.execute(
+        "UPDATE workspaces SET title = ?1 WHERE id = ?2",
+        params![title, id],
+    )
+    .map_err(|e| format!("Failed to update workspace title: {}", e))?;
     Ok(())
 }
 
@@ -753,7 +770,7 @@ pub fn get_workspaces_by_target_branch(
 ) -> Result<Vec<Workspace>, String> {
     let conn = get_connection(repo_path)?;
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), moved_files, intent FROM workspaces WHERE target_branch = ?1 ORDER BY branch_name COLLATE NOCASE ASC")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), COALESCE(title, branch_name), moved_files, description FROM workspaces WHERE target_branch = ?1 ORDER BY branch_name COLLATE NOCASE ASC")
         .map_err(|e| format!("Failed to prepare workspaces query: {}", e))?;
 
     let workspaces = stmt
@@ -854,7 +871,7 @@ pub fn sync_discovered_workspaces(
         .map(|workspace| workspace.workspace_path.as_str())
         .collect();
     let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), moved_files, intent FROM workspaces ORDER BY branch_name COLLATE NOCASE ASC")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), COALESCE(title, branch_name), moved_files, description FROM workspaces ORDER BY branch_name COLLATE NOCASE ASC")
         .map_err(|e| format!("Failed to prepare synced workspaces query: {}", e))?;
 
     let workspaces = stmt
@@ -1390,7 +1407,7 @@ mod tests {
             "test-workspace".to_string(),
             workspace_path.clone(),
             "test-branch".to_string(),
-            Some("test intent".to_string()),
+            Some("test description".to_string()),
             None,
         )
         .expect("add_workspace should succeed");
@@ -1405,7 +1422,7 @@ mod tests {
         assert_eq!(workspaces[0].workspace_path, workspace_path);
         assert_eq!(workspaces[0].branch_name, "test-branch");
         assert_eq!(workspaces[0].metadata, None);
-        assert_eq!(workspaces[0].intent.as_deref(), Some("test intent"));
+        assert_eq!(workspaces[0].description.as_deref(), Some("test description"));
         assert!(workspaces[0].target_branch.is_none());
 
         let db_path = get_local_db_path(repo_path);
@@ -1618,7 +1635,7 @@ mod tests {
             .expect("workspace should exist");
         assert_eq!(workspace.branch_name, "branch-after");
         assert_eq!(workspace.target_branch.as_deref(), Some("main"));
-        assert_eq!(workspace.intent.as_deref(), Some("keep me"));
+        assert_eq!(workspace.description.as_deref(), Some("keep me"));
         assert_eq!(workspace.moved_files, Some(vec!["src/main.rs".to_string()]));
         assert!(workspace.not_on_remote);
         assert_eq!(workspace.created_at, original_created_at);

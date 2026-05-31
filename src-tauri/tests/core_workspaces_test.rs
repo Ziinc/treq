@@ -244,11 +244,11 @@ fn test_can_update_workspace() {
     )
     .expect("Failed to update workspace");
 
-    // correctly updates intent
+    // correctly updates description
     assert_eq!(
-        updated.intent,
+        updated.description,
         Some("develop different feature".to_string()),
-        "Workspace intent should be updated"
+        "Workspace description should be updated"
     );
     assert_eq!(
         updated.branch_name, workspace.branch_name,
@@ -303,9 +303,9 @@ fn test_update_workspace_target_branch_perform_rebase() {
         "Workspace branch name should remain unchanged after update"
     );
     assert_eq!(
-        updated.intent,
+        updated.description,
         Some("initial feature".to_string()),
-        "Workspace intent should remain unchanged from creation"
+        "Workspace description should remain unchanged from creation"
     );
 
     // verify that the workspace is rebased onto the develop branch, check that develop.txt is present in workspace

@@ -196,7 +196,8 @@ mod tests {
             refreshed_at: None,
             metadata: None,
             target_branch: target.map(ToString::to_string),
-            intent: None,
+            title: branch.to_string(),
+            description: None,
             moved_files: None,
             not_on_remote: false,
         }

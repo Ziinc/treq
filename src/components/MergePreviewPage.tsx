@@ -101,22 +101,22 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
 
 		// Update commit message when merge strategy changes
 		useEffect(() => {
-			let intent = "";
+			let description = "";
 			if (workspace.metadata) {
 				try {
 					const metadata = JSON.parse(workspace.metadata);
-					intent = metadata.intent || "";
+					description = metadata.description || "";
 				} catch {
-					// If metadata is not valid JSON, intent stays empty
+					// If metadata is not valid JSON, description stays empty
 				}
 			}
 
 			if (mergeStrategy === "squash") {
-				setCommitMessage(intent);
+				setCommitMessage(description);
 			} else if (mergeStrategy === "merge") {
-				if (intent) {
+				if (description) {
 					setCommitMessage(
-						`Merge ${workspace.branch_name} into ${targetBranch}\n\n${intent}`,
+						`Merge ${workspace.branch_name} into ${targetBranch}\n\n${description}`,
 					);
 				} else {
 					setCommitMessage(

@@ -96,15 +96,18 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
                 .and_then(|v| v.as_str())
                 .map(String::from);
 
-            let (intent, moved_files) = parse_metadata(metadata.as_deref());
+            let (title, description, moved_files) = parse_metadata(metadata.as_deref());
             let workspace = treq_lib::core::create_workspace(
                 &repo_path,
                 &branch_name,
-                intent,
+                description,
                 moved_files,
                 source_branch.as_deref(),
                 None, // included_copy_files
             )?;
+            if let Some(t) = title {
+                treq_lib::local_db::update_workspace_title(&repo_path, workspace.id, &t)?;
+            }
             let workspace_id = workspace.id;
             treq_lib::local_db::update_workspace_last_rebased_commit(&repo_path, workspace_id, "")?;
             Ok(Value::Number(serde_json::Number::from(workspace_id)))
@@ -127,7 +130,14 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
                 Some(Value::String(s)) => treq_lib::core::MaybeEmptyParam::Some(s.clone()),
                 _ => treq_lib::core::MaybeEmptyParam::Omitted,
             };
-            let intent = match args.get("intent") {
+            let description = match args.get("description") {
+                Some(Value::String(s)) if s.is_empty() => {
+                    treq_lib::core::MaybeEmptyParam::EmptyValue
+                }
+                Some(Value::String(s)) => treq_lib::core::MaybeEmptyParam::Some(s.clone()),
+                _ => treq_lib::core::MaybeEmptyParam::Omitted,
+            };
+            let title = match args.get("title") {
                 Some(Value::String(s)) if s.is_empty() => {
                     treq_lib::core::MaybeEmptyParam::EmptyValue
                 }
@@ -135,7 +145,7 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
                 _ => treq_lib::core::MaybeEmptyParam::Omitted,
             };
             let workspace =
-                treq_lib::core::update_workspace(&repo_path, workspace_id, target_branch, intent)?;
+                treq_lib::core::update_workspace_with_title(&repo_path, workspace_id, target_branch, title, description)?;
             serde_json::to_value(workspace).map_err(|e| e.to_string())
         }
 
@@ -288,8 +298,12 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             let repo_path = get_str(&args, "repoPath")?;
             let workspace_id: i64 = get_i64(&args, "workspaceId")?;
             let branch_name = get_str(&args, "branchName")?;
-            let intent: Option<String> = args
-                .get("intent")
+            let title: Option<String> = args
+                .get("title")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let description: Option<String> = args
+                .get("description")
                 .and_then(|v| v.as_str())
                 .map(String::from);
             let file_paths: Option<Vec<String>> = args
@@ -316,12 +330,15 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
                 &repo_path,
                 workspace_id,
                 &branch_name,
-                intent,
+                description,
                 file_paths,
                 commit_ids,
                 mode,
                 position,
             )?;
+            if let Some(t) = title {
+                treq_lib::local_db::update_workspace_title(&repo_path, new_workspace.id, &t)?;
+            }
             Ok(Value::Number(serde_json::Number::from(new_workspace.id)))
         }
 
@@ -699,14 +716,15 @@ fn get_conflict_style() -> Result<String, String> {
     Ok("git".to_string())
 }
 
-fn parse_metadata(metadata: Option<&str>) -> (Option<String>, Option<Vec<String>>) {
+fn parse_metadata(metadata: Option<&str>) -> (Option<String>, Option<String>, Option<Vec<String>>) {
     let Some(m) = metadata else {
-        return (None, None);
+        return (None, None, None);
     };
     let Ok(obj) = serde_json::from_str::<serde_json::Value>(m) else {
-        return (None, None);
+        return (None, None, None);
     };
-    let intent = obj.get("intent").and_then(|v| v.as_str()).map(String::from);
+    let title = obj.get("title").and_then(|v| v.as_str()).map(String::from);
+    let description = obj.get("description").and_then(|v| v.as_str()).map(String::from);
     let moved_files = obj
         .get("moved_files")
         .and_then(|v| v.as_array())
@@ -716,7 +734,7 @@ fn parse_metadata(metadata: Option<&str>) -> (Option<String>, Option<Vec<String>
                 .collect::<Vec<_>>()
         })
         .filter(|v| !v.is_empty());
-    (intent, moved_files)
+    (title, description, moved_files)
 }
 
 #[derive(serde::Serialize)]

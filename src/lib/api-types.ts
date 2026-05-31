@@ -7,6 +7,8 @@ export interface Workspace {
 	created_at: string;
 	metadata?: string;
 	target_branch?: string | null;
+	title: string;
+	description?: string | null;
 	not_on_remote: boolean;
 }
 

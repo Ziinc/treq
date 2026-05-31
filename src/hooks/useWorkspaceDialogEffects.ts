@@ -26,7 +26,8 @@ export interface UseWorkspaceDialogEffectsParams {
 	defaults: WorkspaceDialogDefaults;
 	sourceWorkspace: Workspace | null;
 	isHomeRepo: boolean;
-	intent: string;
+	description: string;
+	title: string;
 	branchName: string;
 	branchPattern: string;
 	isEditingBranch: boolean;
@@ -35,6 +36,7 @@ export interface UseWorkspaceDialogEffectsParams {
 	position: "before" | "after";
 	fileHunksMap: HunkMap;
 	setIntent: (v: string) => void;
+	setTitle: (v: string) => void;
 	setBranchName: (v: string) => void;
 	setBranchPattern: (v: string) => void;
 	setIsEditingBranch: (v: boolean) => void;
@@ -68,7 +70,8 @@ export function useWorkspaceDialogEffects(
 		defaults,
 		sourceWorkspace,
 		isHomeRepo,
-		intent,
+		description,
+		title,
 		branchName,
 		branchPattern,
 		isEditingBranch,
@@ -77,6 +80,7 @@ export function useWorkspaceDialogEffects(
 		position,
 		fileHunksMap,
 		setIntent,
+		setTitle,
 		setBranchName,
 		setBranchPattern,
 		setIsEditingBranch,
@@ -119,8 +123,9 @@ export function useWorkspaceDialogEffects(
 			setActiveRightTab("commits");
 		}
 
-		const initIntent = defaults.intent ?? "";
+		const initIntent = defaults.description ?? "";
 		setIntent(initIntent);
+		setTitle(defaults.title ?? "");
 
 		if (defaults.branchName) {
 			setBranchName(defaults.branchName);
@@ -220,12 +225,12 @@ export function useWorkspaceDialogEffects(
 	}, [open, repoPath]);
 
 	useEffect(() => {
-		if (!isEditingBranch && intent.trim()) {
-			setBranchName(applyBranchNamePattern(branchPattern, intent));
-		} else if (!isEditingBranch && !intent.trim()) {
+		if (!isEditingBranch && title.trim()) {
+			setBranchName(applyBranchNamePattern(branchPattern, title));
+		} else if (!isEditingBranch && !title.trim()) {
 			setBranchName("");
 		}
-	}, [intent, branchPattern, isEditingBranch]);
+	}, [title, branchPattern, isEditingBranch]);
 
 	useEffect(() => {
 		if (checkBranchTimeoutRef.current)
