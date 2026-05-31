@@ -1,5 +1,5 @@
-pub mod auto_rebase;
 mod agent_dispatch;
+pub mod auto_rebase;
 pub mod binary_paths;
 mod cli;
 mod commands;
@@ -292,17 +292,25 @@ fn start_instance_registry_heartbeat(app: AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(
-            tauri_plugin_log::Builder::new()
-                .target(tauri_plugin_log::Target::new(
-                    tauri_plugin_log::TargetKind::Webview,
-                ))
-                .level(log::LevelFilter::Info)
-                .format(|out, message, record| {
-                    crate::telemetry::forward_log_record(record);
-                    out.finish(format_args!("{}", message));
-                })
+            tauri_plugin_log::Builder::new() 
+             .target(tauri_plugin_log::Target::new(
+                tauri_plugin_log::TargetKind::Stdout,
+              ))
+                .level(tauri_plugin_log::log::LevelFilter::Info)
                 .build(),
         )
+        // .plugin(
+        //     tauri_plugin_log::Builder::new()
+        //         .target(tauri_plugin_log::Target::new(
+        //             tauri_plugin_log::TargetKind::Webview,
+        //         ))
+        //         .level(log::LevelFilter::Info)
+        //         .format(|out, message, record| {
+        //             crate::telemetry::forward_log_record(record);
+        //             out.finish(format_args!("{}", message));
+        //         })
+        //         .build(),
+        // )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_deep_link::init())
