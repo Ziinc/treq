@@ -1,6 +1,7 @@
 mod e2e_test_helpers;
 
 use e2e_test_helpers::TestRepo;
+use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -37,6 +38,30 @@ fn wait_for_output(output: &Arc<Mutex<String>>, needle: &str, timeout_ms: u64) -
             return false;
         }
         thread::sleep(Duration::from_millis(50));
+    }
+}
+
+#[cfg(unix)]
+fn is_process_alive(pid: u32) -> bool {
+    Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn is_process_alive(pid: u32) -> bool {
+    let output = Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {pid}")])
+        .output();
+
+    match output {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            stdout.contains(&pid.to_string()) && !stdout.contains("No tasks are running")
+        }
+        Err(_) => false,
     }
 }
 
@@ -211,6 +236,46 @@ fn test_close_session() {
     // Closing again should still succeed (idempotent)
     let result = manager.close_session("test-close");
     assert!(result.is_ok());
+}
+
+#[test]
+fn test_close_session_terminates_process() {
+    let repo = TestRepo::new_without_init().expect("Failed to create test repo");
+    let (manager, output) = setup();
+
+    manager
+        .create_session(
+            "test-close-terminates".to_string(),
+            Some(repo.repo_path.clone()),
+            None,
+            None,
+            None,
+            make_callback(&output),
+        )
+        .expect("create_session should succeed");
+
+    let pid = manager
+        .session_process_id("test-close-terminates")
+        .expect("session should expose a process id");
+
+    assert!(
+        is_process_alive(pid),
+        "Process should be alive before close. pid={pid}"
+    );
+
+    manager
+        .close_session("test-close-terminates")
+        .expect("close_session should succeed");
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(3);
+    while std::time::Instant::now() < deadline && is_process_alive(pid) {
+        thread::sleep(Duration::from_millis(50));
+    }
+
+    assert!(
+        !is_process_alive(pid),
+        "Process should be terminated after close. pid={pid}"
+    );
 }
 
 #[test]
