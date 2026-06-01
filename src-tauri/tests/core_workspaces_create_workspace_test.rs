@@ -62,17 +62,8 @@ fn test_can_create_workspace() {
     );
 
     // verify workspace is valid jj workspace
-    let jj_works = Command::new("jj")
-        .current_dir(workspace_path)
-        .args(["status"])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    assert!(
-        jj_works,
-        "Workspace should be valid jj workspace, got: {}",
-        jj_works
-    );
+    TestRepo::run_jj(workspace_path.to_str().unwrap(), &["status"])
+        .expect("Workspace should be valid jj workspace");
 
     // JJ VERIFICATION: Verify workspace via jj workspace list (primary source of truth)
     let jj_workspaces =
@@ -92,6 +83,116 @@ fn test_can_create_workspace() {
         "Bookmark '{}' should exist in workspace, got: {:?}",
         workspace.branch_name,
         bookmarks
+    );
+}
+
+#[test]
+fn workspace_creation_creates_empty_wc_but_bookmark_targets_parent() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/wc-parent-check",
+        Some("wc parent check".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().expect("Workspace path should be valid UTF-8");
+
+    let status = TestRepo::run_jj(workspace_path_str, &["st"]).expect("jj st failed");
+    assert!(
+        status.contains("The working copy has no changes."),
+        "Expected newly created workspace to report an empty working copy, got:\n{}",
+        status
+    );
+
+    let at_commit = JjVerifier::get_commit_id_for_rev(workspace_path_str, "@")
+        .expect("Failed to resolve @ commit id")
+        .expect("@ commit id should exist");
+    let parent_commit = JjVerifier::get_commit_id_for_rev(workspace_path_str, "@-")
+        .expect("Failed to resolve @- commit id")
+        .expect("@- commit id should exist");
+    assert_ne!(
+        at_commit, parent_commit,
+        "Expected @ to be an empty working-copy commit above @-"
+    );
+
+    let bookmark_tip = JjVerifier::get_bookmark_commit_id(&repo.repo_path, &workspace.branch_name)
+        .expect("Failed to resolve workspace bookmark tip")
+        .expect("Workspace bookmark should resolve");
+    assert_eq!(
+        bookmark_tip, at_commit,
+        "Workspace bookmark should point to @ (working-copy commit)"
+    );
+    assert_ne!(
+        bookmark_tip, parent_commit,
+        "Workspace bookmark should not point to @- (parent commit)"
+    );
+
+    let raw_log = TestRepo::run_jj(
+        workspace_path_str,
+        &["log", "-n", "8", "--no-graph", "-T", "commit_id ++ \"\\n\""],
+    )
+    .expect("Failed to get jj log");
+    assert!(
+        raw_log.contains(&at_commit),
+        "Raw jj log should include @ commit id (empty working copy): {}",
+        at_commit
+    );
+    assert!(
+        raw_log.contains(&parent_commit),
+        "Raw jj log should include @- commit id: {}",
+        parent_commit
+    );
+}
+
+#[test]
+fn workspace_creation_list_commits_excludes_all_working_copy_commits() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/list-commits-filter-check",
+        Some("list commits filter check".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().expect("Workspace path should be valid UTF-8");
+
+    let status = TestRepo::run_jj(workspace_path_str, &["st"]).expect("jj st failed");
+    assert!(
+        status.contains("The working copy has no changes."),
+        "Expected newly created workspace to report an empty working copy, got:\n{}",
+        status
+    );
+
+    let at_commit = JjVerifier::get_commit_id_for_rev(workspace_path_str, "@")
+        .expect("Failed to resolve @ commit id")
+        .expect("@ commit id should exist");
+
+    let log = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+        .expect("list_commits should succeed");
+
+    assert!(
+        log.commits.iter().all(|c| !c.is_working_copy),
+        "list_commits should exclude all working-copy commits, got: {:?}",
+        log.commits
+            .iter()
+            .map(|c| (c.commit_id.clone(), c.description.clone(), c.is_working_copy))
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        !log.commits.iter().any(|c| c.commit_id == at_commit),
+        "list_commits should not include current @ commit id (empty working-copy commit): {}",
+        at_commit
     );
 }
 
