@@ -1,6 +1,86 @@
 mod e2e_test_helpers;
 use e2e_test_helpers::TestRepo;
 
+fn assert_raw_jj_log_has_working_copy_commit(workspace_path: &str, expected_message: &str) {
+    let raw_log = TestRepo::run_jj(
+        workspace_path,
+        &[
+            "log",
+            "--no-graph",
+            "-T",
+            "description.first_line() ++ \"|\" ++ commit_id.short(12) ++ \"\\n\"",
+            "-n",
+            "15",
+        ],
+    )
+    .expect("jj log failed");
+
+    assert!(
+        raw_log.contains(expected_message),
+        "expected '{expected_message}' in raw jj log, got:\n{raw_log}"
+    );
+    assert!(
+        raw_log.lines().any(|line| line.starts_with('|')),
+        "expected raw jj log to include empty working copy commit, got:\n{raw_log}"
+    );
+}
+
+fn assert_workspace_status_is_clean(workspace_path: &str) {
+    let status = TestRepo::run_jj(workspace_path, &["st"]).expect("jj st failed");
+    assert!(
+        status.contains("The working copy has no changes."),
+        "expected clean workspace status after commit, got:\n{status}"
+    );
+    assert!(
+        status.contains("Working copy  (@)") && status.contains("(empty)"),
+        "expected status to show an empty working copy commit, got:\n{status}"
+    );
+    assert!(
+        status.contains("(no description set)"),
+        "expected status to show no-description working copy commit, got:\n{status}"
+    );
+}
+
+fn assert_workspace_list_commits_hides_working_copy(
+    repo_path: &str,
+    workspace_id: i64,
+    expected_message: Option<&str>,
+) {
+    let log = treq_lib::core::list_commits(repo_path, Some(workspace_id), false, None, None)
+        .expect("list_commits failed");
+
+    if let Some(expected_message) = expected_message {
+        assert!(
+            log.commits
+                .iter()
+                .any(|c| c.description.contains(expected_message)),
+            "expected '{expected_message}' in workspace commit log, got: {:?}",
+            log.commits
+                .iter()
+                .map(|c| &c.description)
+                .collect::<Vec<_>>()
+        );
+    }
+    assert!(
+        log.commits.iter().all(|c| !c.is_working_copy),
+        "expected workspace log to exclude working copy commits, got: {:?}",
+        log.commits
+            .iter()
+            .map(|c| (c.description.clone(), c.is_working_copy))
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        log.commits
+            .iter()
+            .all(|c| !c.description.trim().is_empty()),
+        "expected workspace log to exclude empty working copy commits, got: {:?}",
+        log.commits
+            .iter()
+            .map(|c| &c.description)
+            .collect::<Vec<_>>()
+    );
+}
+
 #[test]
 fn test_create_commit_basic() {
     let repo = TestRepo::new().expect("Failed to create test repo");
@@ -22,18 +102,9 @@ fn test_create_commit_basic() {
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "add data")
         .expect("create_commit failed");
 
-    let log = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
-        .expect("list_commits failed");
-    assert!(
-        log.commits
-            .iter()
-            .any(|c| c.description.contains("add data")),
-        "expected 'add data' in commit log, got: {:?}",
-        log.commits
-            .iter()
-            .map(|c| &c.description)
-            .collect::<Vec<_>>()
-    );
+    assert_workspace_status_is_clean(ws_dir_str);
+    assert_raw_jj_log_has_working_copy_commit(ws_dir_str, "add data");
+    assert_workspace_list_commits_hides_working_copy(&repo.repo_path, workspace.id, Some("add data"));
 }
 
 #[test]
@@ -62,6 +133,17 @@ fn test_create_commit_empty_workspace() {
 
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "empty commit")
         .expect("create_commit on empty workspace should succeed");
+
+    let ws_dir = repo.workspaces_dir().join(&workspace.workspace_path);
+    let ws_dir_str = ws_dir.to_str().expect("utf-8");
+
+    assert_workspace_status_is_clean(ws_dir_str);
+    assert_raw_jj_log_has_working_copy_commit(ws_dir_str, "empty commit");
+    assert_workspace_list_commits_hides_working_copy(
+        &repo.repo_path,
+        workspace.id,
+        None,
+    );
 }
 
 #[test]

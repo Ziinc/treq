@@ -537,6 +537,26 @@ impl JjVerifier {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
 
+    /// Resolve a revset to a single commit id.
+    pub fn get_commit_id_for_rev(workspace_path: &str, rev: &str) -> Result<Option<String>, String> {
+        let output = Command::new(Self::jj_binary())
+            .current_dir(workspace_path)
+            .args(["log", "-r", rev, "-n", "1", "--no-graph", "-T", "commit_id"])
+            .output()
+            .map_err(|e| format!("Failed to execute jj log: {}", e))?;
+
+        if !output.status.success() {
+            return Ok(None);
+        }
+
+        let id = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if id.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(id))
+        }
+    }
+
     /// Get jj log output for a workspace
     pub fn get_log_previous_commit(workspace_path: &str) -> Result<String, String> {
         let output = Command::new(Self::jj_binary())
