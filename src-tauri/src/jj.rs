@@ -5096,13 +5096,23 @@ fn annotate_conflict_regions(
 pub fn jj_get_merge_diff(
     workspace_path: &str,
     target_branch: &str,
+    conflict_marker_style: &str,
+) -> Result<JjRevisionDiff, JjError> {
+    jj_get_merge_diff_between_revisions(workspace_path, target_branch, "@", conflict_marker_style)
+}
+
+/// Get combined diff between two revisions.
+pub fn jj_get_merge_diff_between_revisions(
+    workspace_path: &str,
+    from_revision: &str,
+    to_revision: &str,
     _conflict_marker_style: &str,
 ) -> Result<JjRevisionDiff, JjError> {
-    validate_branch_name(target_branch, "target")?;
+    validate_branch_name(from_revision, "target")?;
+    validate_branch_name(to_revision, "revision")?;
     let loaded = load_workspace_repo(workspace_path)?;
-    let target_symbol = resolve_target_branch_symbol(&loaded, workspace_path, target_branch)?;
-    let from_commit = resolve_commit_by_revision(&loaded, &target_symbol)?;
-    let to_commit = resolve_commit_by_revision(&loaded, "@")?;
+    let from_commit = resolve_commit_by_revision(&loaded, from_revision)?;
+    let to_commit = resolve_commit_by_revision(&loaded, to_revision)?;
     let from_tree = from_commit.tree();
     let to_tree = to_commit.tree();
 
