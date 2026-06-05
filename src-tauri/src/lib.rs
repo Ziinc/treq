@@ -293,9 +293,9 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new() 
-             .target(tauri_plugin_log::Target::new(
-                tauri_plugin_log::TargetKind::Stdout,
-              ))
+            //  .target(tauri_plugin_log::Target::new(
+            //     tauri_plugin_log::TargetKind::Stdout,
+            //   ))
                 .level(tauri_plugin_log::log::LevelFilter::Info)
                 .build(),
         )
