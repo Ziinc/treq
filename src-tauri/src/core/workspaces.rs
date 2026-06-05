@@ -1857,6 +1857,7 @@ fn workspace_diff_with_conflict_style(
         .ok_or_else(|| format!("Workspace not found: {}", workspace_id))?;
 
     let target_branch = workspace.target_branch.as_deref().unwrap_or("main");
+    let tip_revision = resolve_workspace_diff_tip_revision(repo_path, &workspace)?;
 
     let workspace_dir = Path::new(repo_path)
         .join(".treq")
@@ -1866,8 +1867,43 @@ fn workspace_diff_with_conflict_style(
         .to_str()
         .ok_or("Failed to convert workspace path to string")?;
 
-    jj::jj_get_merge_diff(workspace_dir_str, target_branch, conflict_marker_style)
+    jj::jj_get_merge_diff_between_revisions(
+        workspace_dir_str,
+        target_branch,
+        &tip_revision,
+        conflict_marker_style,
+    )
         .map_err(|e| format!("Failed to get workspace diff: {}", e))
+}
+
+fn resolve_workspace_diff_tip_revision(
+    repo_path: &str,
+    workspace: &local_db::Workspace,
+) -> Result<String, String> {
+    let mut current_branch = workspace.branch_name.clone();
+    let mut visited = std::collections::HashSet::new();
+    visited.insert(current_branch.clone());
+
+    loop {
+        let children = local_db::get_workspaces_by_target_branch(repo_path, &current_branch)
+            .map_err(|e| format!("Failed to get child workspaces: {}", e))?;
+
+        if children.len() != 1 {
+            break;
+        }
+
+        let next_branch = children[0].branch_name.clone();
+        if !visited.insert(next_branch.clone()) {
+            break;
+        }
+        current_branch = next_branch;
+    }
+
+    if current_branch == workspace.branch_name {
+        Ok("@".to_string())
+    } else {
+        Ok(current_branch)
+    }
 }
 
 fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {

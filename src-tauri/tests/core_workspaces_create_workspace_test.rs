@@ -408,6 +408,187 @@ fn test_can_create_stacked_workspace() {
 }
 
 #[test]
+fn test_create_workspace_from_ahead_source_stacks_history_and_working_copy_and_diff() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let b_workspace: Workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/source-ahead",
+        Some("source ahead workspace".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create B workspace");
+
+    let b_path = repo.workspaces_dir().join(&b_workspace.workspace_path);
+    let b_path_str = b_path
+        .to_str()
+        .expect("B workspace path should be valid UTF-8");
+
+    TestRepo::write_workspace_file(
+        b_path_str,
+        "b-committed.txt",
+        "B committed change marker\n",
+    )
+    .expect("Failed to write B change");
+    treq_lib::core::commit_workspace(&repo.repo_path, b_workspace.id, "B committed change")
+        .expect("Failed to commit in B");
+
+    let b_ahead = treq_lib::jj::jj_get_commits_ahead(b_path_str, "main")
+        .expect("Failed to compute commits ahead for B");
+    assert_eq!(
+        b_ahead.total_count, 1,
+        "B should be exactly 1 commit ahead of main, got {}",
+        b_ahead.total_count
+    );
+
+    let a_workspace: Workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/stacked-on-ahead",
+        Some("stacked on B".to_string()),
+        None,
+        Some(&b_workspace.branch_name),
+        None,
+    )
+    .expect("Failed to create A workspace from B");
+
+    let a_path = repo.workspaces_dir().join(&a_workspace.workspace_path);
+    let a_path_str = a_path
+        .to_str()
+        .expect("A workspace path should be valid UTF-8");
+
+    TestRepo::write_workspace_file(
+        a_path_str,
+        "a-committed.txt",
+        "A committed change marker\n",
+    )
+    .expect("Failed to write A change");
+    treq_lib::core::commit_workspace(&repo.repo_path, a_workspace.id, "A committed change")
+        .expect("Failed to commit in A");
+
+    for (workspace_label, workspace_path) in [("A", a_path_str), ("B", b_path_str)] {
+        let status = TestRepo::run_jj(workspace_path, &["st"]).expect("jj st failed");
+        assert!(
+            status.contains("The working copy has no changes."),
+            "{} working copy should be clean, got:\n{}",
+            workspace_label,
+            status
+        );
+    }
+
+    let b_raw_log = TestRepo::run_jj(b_path_str, &["log", "-n", "12", "--no-graph"])
+        .expect("Failed to collect B raw jj log");
+    assert!(
+        b_raw_log.contains("B committed change"),
+        "B raw jj log should include B committed change, got:\n{}",
+        b_raw_log
+    );
+    assert!(
+        b_raw_log.contains("(empty)"),
+        "B raw jj log should include working-copy lineage, got:\n{}",
+        b_raw_log
+    );
+
+    let a_raw_log = TestRepo::run_jj(a_path_str, &["log", "-n", "16", "--no-graph"])
+        .expect("Failed to collect A raw jj log");
+    assert!(
+        a_raw_log.contains("B committed change"),
+        "A raw jj log should include B committed change, got:\n{}",
+        a_raw_log
+    );
+    assert!(
+        a_raw_log.contains("A committed change"),
+        "A raw jj log should include A committed change, got:\n{}",
+        a_raw_log
+    );
+    assert!(
+        a_raw_log.contains("(empty)"),
+        "A raw jj log should include working-copy lineage, got:\n{}",
+        a_raw_log
+    );
+
+    let b_commits = treq_lib::core::list_commits(&repo.repo_path, Some(b_workspace.id), false, None, None)
+        .expect("list_commits should succeed for B");
+    assert!(
+        b_commits.commits.iter().all(|c| !c.is_working_copy),
+        "B list_commits should exclude working-copy commits"
+    );
+    assert!(
+        b_commits
+            .commits
+            .iter()
+            .any(|c| c.description.contains("B committed change")),
+        "B list_commits should include B committed change"
+    );
+
+    let a_commits = treq_lib::core::list_commits(&repo.repo_path, Some(a_workspace.id), false, None, None)
+        .expect("list_commits should succeed for A");
+    assert!(
+        a_commits.commits.iter().all(|c| !c.is_working_copy),
+        "A list_commits should exclude working-copy commits"
+    );
+    assert!(
+        a_commits
+            .commits
+            .iter()
+            .any(|c| c.description.contains("B committed change")),
+        "A list_commits should include B committed change"
+    );
+    assert!(
+        a_commits
+            .commits
+            .iter()
+            .any(|c| c.description.contains("A committed change")),
+        "A list_commits should include A committed change"
+    );
+
+    let b_status = treq_lib::core::workspace_status(&repo.repo_path, Some(b_workspace.id))
+        .expect("workspace_status should succeed for B");
+    let a_status = treq_lib::core::workspace_status(&repo.repo_path, Some(a_workspace.id))
+        .expect("workspace_status should succeed for A");
+    assert!(
+        b_status.children.iter().any(|child| child.id == a_workspace.id),
+        "B should list A as child"
+    );
+    assert_eq!(
+        a_status.target.as_ref().map(|ws| ws.id),
+        Some(b_workspace.id),
+        "A target should be B"
+    );
+
+    let app_db_path = std::path::Path::new(&repo.repo_path).join(".treq").join("treq.db");
+    let app_db = treq_lib::db::Database::new(app_db_path).expect("test app db should open");
+    app_db.init().expect("test app db should initialize");
+    app_db
+        .set_setting("conflict_marker_style", "git")
+        .expect("set conflict marker style should succeed");
+
+    let a_diff = treq_lib::core::workspace_diff(&repo.repo_path, a_workspace.id)
+        .expect("workspace_diff should succeed for A");
+    let a_diff_text = format!("{:?}", a_diff.hunks_by_file);
+    assert!(
+        a_diff_text.contains("A committed change marker"),
+        "A workspace_diff should include A committed change content, got:\n{}",
+        a_diff_text
+    );
+
+    let b_diff = treq_lib::core::workspace_diff(&repo.repo_path, b_workspace.id)
+        .expect("workspace_diff should succeed for B");
+    let b_diff_text = format!("{:?}", b_diff.hunks_by_file);
+    assert!(
+        b_diff_text.contains("A committed change marker"),
+        "B workspace_diff should include descendant A committed change content, got:\n{}",
+        b_diff_text
+    );
+    assert!(
+        b_diff_text.contains("B committed change marker"),
+        "B workspace_diff should include B committed change content, got:\n{}",
+        b_diff_text
+    );
+}
+
+#[test]
 fn test_list_workspaces_removes_db_workspace_missing_from_jj_state() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
