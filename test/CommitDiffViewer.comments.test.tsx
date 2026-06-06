@@ -36,7 +36,7 @@ const activeCommits = [
 ];
 
 const mockDiff: JjRevisionDiff = {
-	files: [
+	committed_files: [
 		{
 			path: "src/main.ts",
 			status: "M",

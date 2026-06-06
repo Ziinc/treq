@@ -93,7 +93,7 @@ export function useFileLoading({
 				const diff = await getWorkspaceDiff(repoPath, workspaceId);
 				const parsed = parseJjChangedFiles(diff.uncommitted_files ?? []);
 				applyChangedFilesRef.current(parsed);
-				setCommittedFiles(diff.files);
+				setCommittedFiles(diff.committed_files);
 				setAllFileHunks((prev) => {
 					const updated = new Map(prev);
 					for (const fileDiff of diff.hunks_by_file) {

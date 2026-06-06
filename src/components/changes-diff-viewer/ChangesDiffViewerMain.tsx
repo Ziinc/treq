@@ -24,7 +24,7 @@ import { ContextMenu } from "./ContextMenu";
 import { ReviewActionBar } from "./ReviewActionBar";
 import { DiffContentArea } from "./DiffContentArea";
 import { FileSidebar } from "./FileSidebar";
-import { filesEqual } from "./utils";
+import { filterCommittedFiles, filesEqual } from "./utils";
 import type {
 	ChangesDiffViewerHandle,
 	ChangesDiffViewerProps,
@@ -103,6 +103,10 @@ export const ChangesDiffViewer = memo(
 				isReloadingRef,
 				addToast,
 			});
+			const visibleCommittedFiles = useMemo(
+				() => filterCommittedFiles(committedFiles, files),
+				[committedFiles, files],
+			);
 
 			const {
 				actualConflictedFiles,
@@ -165,7 +169,7 @@ export const ChangesDiffViewer = memo(
 				collapsedFiles,
 				expandedLargeDiffs,
 				showCommittedChanges: showCommittedChanges ?? false,
-				committedFiles,
+				committedFiles: visibleCommittedFiles,
 				conflictRegionsByFile,
 				conflictLineLookups,
 				workspacePath,
@@ -426,7 +430,7 @@ export const ChangesDiffViewer = memo(
 						setExpandedLargeDiffs={setExpandedLargeDiffs}
 						conflictFileRefs={conflictFileRefs}
 						showCommittedChanges={showCommittedChanges}
-						committedFiles={committedFiles}
+						committedFiles={visibleCommittedFiles}
 						committedSectionCollapsed={committedSectionCollapsed}
 						setCommittedSectionCollapsed={setCommittedSectionCollapsed}
 						scrollToFileIfNeeded={scrollToFileIfNeeded}
@@ -491,7 +495,7 @@ export const ChangesDiffViewer = memo(
 							loadingAllHunks={loadingAllHunks}
 							files={files}
 							allFileHunks={allFileHunks}
-							committedFiles={committedFiles}
+							committedFiles={visibleCommittedFiles}
 							showCommittedChanges={showCommittedChanges}
 							largeChangesetExpanded={largeChangesetExpanded}
 							setLargeChangesetExpanded={setLargeChangesetExpanded}

@@ -787,7 +787,7 @@ pub struct JjFileDiff {
 /// Combined diff between two revisions
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct JjRevisionDiff {
-    pub files: Vec<JjFileChange>,
+    pub committed_files: Vec<JjFileChange>,
     pub hunks_by_file: Vec<JjFileDiff>,
     #[serde(default)]
     pub uncommitted_files: Vec<JjFileChange>,
@@ -4763,7 +4763,7 @@ pub fn jj_abandon_empty_commits(
 
 fn too_large_revision_diff() -> JjRevisionDiff {
     JjRevisionDiff {
-        files: Vec::new(),
+        committed_files: Vec::new(),
         hunks_by_file: Vec::new(),
         uncommitted_files: Vec::new(),
         conflicted_files: Vec::new(),
@@ -5139,7 +5139,7 @@ pub fn jj_get_merge_diff_between_revisions(
         conflict_labels,
     );
 
-    let mut files = Vec::new();
+    let mut committed_files = Vec::new();
     let mut hunks_by_file = Vec::new();
     block_on(async {
         futures::pin_mut!(diff_stream);
@@ -5189,12 +5189,12 @@ pub fn jj_get_merge_diff_between_revisions(
                 conflict_style,
                 conflict_regions,
             });
-            files.push(file);
+            committed_files.push(file);
         }
     });
 
     Ok(JjRevisionDiff {
-        files,
+        committed_files,
         hunks_by_file,
         uncommitted_files: Vec::new(),
         conflicted_files: Vec::new(),
@@ -5225,7 +5225,7 @@ pub fn jj_get_commit_diff(
         parent_tree.diff_stream_with_copies(&commit_tree, &matcher, &copy_records),
         conflict_labels,
     );
-    let mut files = Vec::new();
+    let mut committed_files = Vec::new();
     let mut hunks_by_file = Vec::new();
     let too_large = block_on(async {
         futures::pin_mut!(diff_stream);
@@ -5286,7 +5286,7 @@ pub fn jj_get_commit_diff(
                     conflict_regions,
                 });
             }
-            files.push(file);
+            committed_files.push(file);
         }
 
         false
@@ -5297,7 +5297,7 @@ pub fn jj_get_commit_diff(
     }
 
     Ok(JjRevisionDiff {
-        files,
+        committed_files,
         hunks_by_file,
         uncommitted_files: Vec::new(),
         conflicted_files: Vec::new(),

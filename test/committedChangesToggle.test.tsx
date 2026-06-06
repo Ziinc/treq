@@ -41,7 +41,7 @@ vi.mock("../src/lib/api", async () => {
 		setWorkspaceTargetBranch: vi.fn().mockResolvedValue(undefined),
 		jjGetChangedFiles: vi.fn().mockResolvedValue([]),
 		jjGetMergeDiff: vi.fn().mockResolvedValue({
-			files: [],
+			committed_files: [],
 			hunks_by_file: [],
 			too_large_to_render: false,
 			render_block_reason: null,
