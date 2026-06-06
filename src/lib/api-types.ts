@@ -143,9 +143,11 @@ export interface JjLogCommit {
 }
 
 export interface JjLogResult {
+	/** Workspace-branch history only for workspace views; home-repo history for home views. */
 	commits: JjLogCommit[];
 	target_branch: string;
 	workspace_branch: string;
+	/** Target-branch history only for workspace views; target-ahead history for home views. */
 	target_branch_commits?: JjLogCommit[];
 	/** Commit ID of the common ancestor (merge base) for non-default home-repo branch views */
 	merge_base_id?: string | null;
@@ -181,6 +183,8 @@ export interface JjFileDiff {
 export interface JjRevisionDiff {
 	files: JjFileChange[];
 	hunks_by_file: JjFileDiff[];
+	uncommitted_files?: JjFileChange[];
+	conflicted_files?: string[];
 	too_large_to_render: boolean;
 	render_block_reason?: string | null;
 }

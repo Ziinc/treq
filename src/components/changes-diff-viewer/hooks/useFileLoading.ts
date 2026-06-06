@@ -89,6 +89,24 @@ export function useFileLoading({
 		setRefreshing(true);
 		onRefreshingChange?.(true);
 		try {
+			if (showCommittedChanges && repoPath && workspaceId !== undefined) {
+				const diff = await getWorkspaceDiff(repoPath, workspaceId);
+				const parsed = parseJjChangedFiles(diff.uncommitted_files ?? []);
+				applyChangedFilesRef.current(parsed);
+				setCommittedFiles(diff.files);
+				setAllFileHunks((prev) => {
+					const updated = new Map(prev);
+					for (const fileDiff of diff.hunks_by_file) {
+						updated.set(fileDiff.path, {
+							filePath: fileDiff.path,
+							hunks: fileDiff.hunks,
+							isLoading: false,
+						});
+					}
+					return updated;
+				});
+				return;
+			}
 			const jjFiles = await getWorkspaceChangedFiles(
 				repoPath ?? "",
 				workspaceId ?? null,
@@ -124,31 +142,6 @@ export function useFileLoading({
 
 	const refreshCommittedChanges = useCallback(async () => {
 		if (showCommittedChanges && repoPath && workspaceId !== undefined) {
-			try {
-				const mergeDiff: JjRevisionDiff = await getWorkspaceDiff(
-					repoPath,
-					workspaceId,
-				);
-				setCommittedFiles(mergeDiff.files);
-				setAllFileHunks((prev) => {
-					const updated = new Map(prev);
-					for (const fileDiff of mergeDiff.hunks_by_file) {
-						updated.set(fileDiff.path, {
-							filePath: fileDiff.path,
-							hunks: fileDiff.hunks,
-							isLoading: false,
-						});
-					}
-					return updated;
-				});
-			} catch (error) {
-				console.error("Failed to fetch committed changes:", error);
-				addToast?.({
-					description: error instanceof Error ? error.message : "Unknown error",
-					title: "Failed to load committed changes",
-					type: "error",
-				});
-			}
 			return;
 		}
 		setCommittedFiles((previousCommittedFiles) => {

@@ -1867,13 +1867,20 @@ fn workspace_diff_with_conflict_style(
         .to_str()
         .ok_or("Failed to convert workspace path to string")?;
 
-    jj::jj_get_merge_diff_between_revisions(
+    let mut diff = jj::jj_get_merge_diff_between_revisions(
         workspace_dir_str,
         target_branch,
         &tip_revision,
         conflict_marker_style,
     )
-        .map_err(|e| format!("Failed to get workspace diff: {}", e))
+    .map_err(|e| format!("Failed to get workspace diff: {}", e))?;
+
+    diff.uncommitted_files = jj::jj_get_changed_files(workspace_dir_str)
+        .map_err(|e| format!("Failed to get uncommitted workspace changes: {}", e))?;
+    diff.conflicted_files = jj::get_conflicted_files(workspace_dir_str, Some(target_branch))
+        .map_err(|e| format!("Failed to get conflicted workspace files: {}", e))?;
+
+    Ok(diff)
 }
 
 fn resolve_workspace_diff_tip_revision(

@@ -968,7 +968,7 @@ fn test_list_commits_with_target_branch_history() {
         treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), true, None, None)
             .expect("Failed to list commits");
 
-    // Active commits should include both branch commit and target history
+    // Workspace commits should only include the workspace-side history.
     let committed: Vec<_> = result
         .commits
         .iter()
@@ -976,8 +976,16 @@ fn test_list_commits_with_target_branch_history() {
         .collect();
     let descriptions: Vec<&str> = committed.iter().map(|c| c.description.as_str()).collect();
     assert!(descriptions.contains(&"Branch commit"));
-    assert!(descriptions.contains(&"Base commit 1"));
-    assert!(descriptions.contains(&"Base commit 2"));
+    assert!(
+        !descriptions.contains(&"Base commit 1"),
+        "workspace commits should not include target history, got: {:?}",
+        descriptions
+    );
+    assert!(
+        !descriptions.contains(&"Base commit 2"),
+        "workspace commits should not include target history, got: {:?}",
+        descriptions
+    );
 
     // Target branch commits should include the base commits
     assert!(
@@ -998,6 +1006,82 @@ fn test_list_commits_with_target_branch_history() {
         target_descriptions.contains(&"Base commit 2"),
         "target_branch_commits should contain 'Base commit 2', got: {:?}",
         target_descriptions
+    );
+}
+
+#[test]
+fn test_list_commits_keeps_workspace_and_target_histories_disjoint() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    repo.commit_file("base.txt", "base\n", "Base commit")
+        .expect("Failed to create base commit");
+    repo.commit_file("target-only.txt", "target only\n", "Target only commit")
+        .expect("Failed to create target-only commit");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/disjoint-history",
+        Some("disjoint history test".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path
+        .to_str()
+        .expect("workspace path should be utf-8");
+    TestRepo::write_workspace_file(
+        workspace_path_str,
+        "workspace-only.txt",
+        "workspace only\n",
+    )
+    .expect("Failed to write workspace file");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Workspace only commit")
+        .expect("Failed to commit workspace change");
+
+    let result =
+        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), true, None, None)
+            .expect("Failed to list commits");
+
+    let workspace_descriptions: Vec<&str> = result
+        .commits
+        .iter()
+        .filter(|c| !c.is_working_copy)
+        .map(|c| c.description.as_str())
+        .collect();
+    let target_descriptions: Vec<&str> = result
+        .target_branch_commits
+        .iter()
+        .map(|c| c.description.as_str())
+        .collect();
+
+    assert!(
+        workspace_descriptions.contains(&"Workspace only commit"),
+        "workspace commits should include the workspace-only commit, got: {:?}",
+        workspace_descriptions
+    );
+    assert!(
+        !workspace_descriptions.contains(&"Target only commit"),
+        "workspace commits should not include target-only commits, got: {:?}",
+        workspace_descriptions
+    );
+    assert!(
+        target_descriptions.contains(&"Target only commit"),
+        "target_branch_commits should include the target-only commit, got: {:?}",
+        target_descriptions
+    );
+
+    let overlap: Vec<_> = workspace_descriptions
+        .iter()
+        .filter(|description| target_descriptions.contains(description))
+        .copied()
+        .collect();
+    assert!(
+        overlap.is_empty(),
+        "workspace and target_branch_commits should be disjoint, overlap: {:?}",
+        overlap
     );
 }
 

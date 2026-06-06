@@ -151,7 +151,7 @@ describe("ShowWorkspace - Commits tab", () => {
 		await screen.findByText(/^Recent on /);
 	});
 
-	it("shows workspace-empty message above target section when non-default workspace has no commits", async () => {
+	it("shows the target section for a non-default workspace with no extra commits", async () => {
 		const noCommitWorkspace = await createWorkspaceRef(
 			repoPath,
 			"feat/no-workspace-commits",
@@ -160,10 +160,41 @@ describe("ShowWorkspace - Commits tab", () => {
 
 		await openWorkspaceCommitsTab(user, "feat/no-workspace-commits");
 
-		await screen.findByText(
-			"There are no commits within this workspace branch yet.",
-		);
 		await screen.findByText(/^Recent on /);
+		await screen.findByText("Initial commit");
+		expect(
+			screen.queryByText("There are no commits within this workspace branch yet."),
+		).not.toBeInTheDocument();
+	});
+
+	it("renders overlapping workspace and target commits only once each", async () => {
+		await commitRepoFile(
+			repoPath,
+			"target-overlap.txt",
+			"target overlap content",
+			"Target overlap commit",
+		);
+
+		const overlapWorkspace = await createWorkspaceRef(
+			repoPath,
+			"feat/disjoint-commits",
+		);
+
+		await commitWorkspaceFile(
+			repoPath,
+			overlapWorkspace,
+			"workspace-overlap.txt",
+			"workspace overlap content",
+			"Workspace overlap commit",
+		);
+
+		await openWorkspaceCommitsTab(user, "feat/disjoint-commits");
+
+		await screen.findByText("Workspace overlap commit");
+		await screen.findByText("Target overlap commit");
+		await screen.findByText(/^Recent on /);
+		expect(screen.getAllByText("Workspace overlap commit")).toHaveLength(1);
+		expect(screen.getAllByText("Target overlap commit")).toHaveLength(1);
 	});
 
 	it("does not render target divider or workspace-empty message for default-branch workspace", async () => {
