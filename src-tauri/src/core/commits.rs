@@ -3,32 +3,6 @@ use std::path::Path;
 use crate::jj;
 use crate::local_db;
 
-fn merge_workspace_and_target_commits(
-    workspace_commits: Vec<jj::JjLogCommit>,
-    target_commits: Vec<jj::JjLogCommit>,
-) -> Vec<jj::JjLogCommit> {
-    let mut merged = workspace_commits;
-    merged.extend(target_commits);
-
-    let mut seen = std::collections::HashSet::new();
-    merged.retain(|commit| {
-        let key = if commit.change_id.is_empty() {
-            format!("commit:{}", commit.commit_id)
-        } else {
-            format!("change:{}", commit.change_id)
-        };
-        seen.insert(key)
-    });
-
-    merged.sort_by(|a, b| {
-        b.timestamp
-            .cmp(&a.timestamp)
-            .then_with(|| b.commit_id.cmp(&a.commit_id))
-    });
-
-    merged
-}
-
 /// Lists commits for a workspace by its database ID, or for the home repo
 /// when no workspace ID is provided.
 ///
@@ -36,6 +10,10 @@ fn merge_workspace_and_target_commits(
 /// * `repo_path`                     - Path to the repository root
 /// * `workspace_id`                  - ID of the workspace to list commits for, or `None` for the home repo
 /// * `include_target_branch_history` - When listing a workspace: if true, also load commits from the workspace's target branch in the home repo (ignored for the home-repo listing)
+///
+/// Workspace views return disjoint commit sets:
+/// * `commits` contains workspace-branch history only
+/// * `target_branch_commits` contains target-branch history only
 /// * `target_branch_limit`           - Max commits to load for that target-branch history; defaults to 10 when `include_target_branch_history` is true
 /// * `limit`                         - Max commits for the home-repo log only; ignored when `workspace_id` is set
 ///
@@ -83,8 +61,6 @@ pub fn list_commits(
                 let target_commits =
                     jj::jj_get_target_branch_log(repo_path, target_branch, target_limit)
                         .map_err(|e| format!("Failed to list target branch history: {}", e))?;
-                result.commits =
-                    merge_workspace_and_target_commits(result.commits, target_commits.clone());
 
                 if include_target_branch_history {
                     result.target_branch_commits = target_commits;

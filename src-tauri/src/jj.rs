@@ -719,9 +719,11 @@ pub struct JjLogCommit {
 /// The full log response including metadata
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct JjLogResult {
+    /// Workspace-branch history only for workspace views; home-repo branch history for home views.
     pub commits: Vec<JjLogCommit>,
     pub target_branch: String,
     pub workspace_branch: String,
+    /// Target-branch history only for workspace views; diverged target-ahead history for home views.
     #[serde(default)]
     pub target_branch_commits: Vec<JjLogCommit>,
     /// Merge-base commit ID between current and target branch (home-repo non-default views only).
@@ -787,7 +789,12 @@ pub struct JjFileDiff {
 pub struct JjRevisionDiff {
     pub files: Vec<JjFileChange>,
     pub hunks_by_file: Vec<JjFileDiff>,
+    #[serde(default)]
+    pub uncommitted_files: Vec<JjFileChange>,
+    #[serde(default)]
+    pub conflicted_files: Vec<String>,
     pub too_large_to_render: bool,
+    #[serde(default)]
     pub render_block_reason: Option<String>,
 }
 
@@ -4758,6 +4765,8 @@ fn too_large_revision_diff() -> JjRevisionDiff {
     JjRevisionDiff {
         files: Vec::new(),
         hunks_by_file: Vec::new(),
+        uncommitted_files: Vec::new(),
+        conflicted_files: Vec::new(),
         too_large_to_render: true,
         render_block_reason: Some(TOO_LARGE_COMMIT_DIFF_MESSAGE.to_string()),
     }
@@ -5187,6 +5196,8 @@ pub fn jj_get_merge_diff_between_revisions(
     Ok(JjRevisionDiff {
         files,
         hunks_by_file,
+        uncommitted_files: Vec::new(),
+        conflicted_files: Vec::new(),
         too_large_to_render: false,
         render_block_reason: None,
     })
@@ -5288,6 +5299,8 @@ pub fn jj_get_commit_diff(
     Ok(JjRevisionDiff {
         files,
         hunks_by_file,
+        uncommitted_files: Vec::new(),
+        conflicted_files: Vec::new(),
         too_large_to_render: false,
         render_block_reason: None,
     })

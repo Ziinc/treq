@@ -11,6 +11,7 @@ vi.mock("../src/lib/api", async () => {
 		...actual,
 		jjGetChangedFiles: vi.fn().mockResolvedValue([]),
 		listConflictedFiles: vi.fn().mockResolvedValue([]),
+		getWorkspaceDiff: vi.fn(),
 		jjGetMergeDiff: vi.fn(),
 	};
 });
@@ -254,5 +255,48 @@ describe("Committed Changes Conflict Detection", () => {
 			'[class*="border-destructive"]',
 		);
 		expect(conflictCards.length).toBe(0);
+	});
+
+	it("renders committed and uncommitted sections from getWorkspaceDiff", async () => {
+		const { getWorkspaceDiff, jjGetChangedFiles } = await import(
+			"../src/lib/api"
+		);
+		(getWorkspaceDiff as any).mockResolvedValue({
+			files: mockCommittedFilesNoConflict,
+			hunks_by_file: [
+				{
+					path: "src/normal.ts",
+					hunks: mockHunksNoConflict,
+				},
+			],
+			uncommitted_files: [
+				{
+					path: "src/local.ts",
+					status: "M",
+					changed_line_count: 1,
+					diff_deferred: false,
+				},
+			],
+			conflicted_files: ["src/normal.ts"],
+			too_large_to_render: false,
+			render_block_reason: null,
+		});
+
+		render(
+			<ChangesDiffViewer
+				workingDirectory="/test/workspace"
+				workspacePath="/test/workspace"
+				showCommittedChanges={true}
+				targetBranch="main"
+			/>,
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText("normal.ts")).toBeInTheDocument();
+		});
+		await waitFor(() => {
+			expect(screen.getByText("local.ts")).toBeInTheDocument();
+		});
+		expect(jjGetChangedFiles).not.toHaveBeenCalled();
 	});
 });
