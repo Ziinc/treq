@@ -290,14 +290,14 @@ fn test_commit_diff_added_files() {
 
     // Should have 2 files in the summary
     assert_eq!(
-        diff.files.len(),
+        diff.committed_files.len(),
         2,
         "Should have 2 changed files, got {}",
-        diff.files.len()
+        diff.committed_files.len()
     );
 
     // All files should be Added
-    for file in &diff.files {
+    for file in &diff.committed_files {
         assert_eq!(
             file.status, "A",
             "File {} should have status 'A', got '{}'",
@@ -375,9 +375,9 @@ fn test_commit_diff_modified_files() {
     .expect("Failed to get commit diff");
 
     // Should have 1 modified file
-    assert_eq!(diff.files.len(), 1);
-    assert_eq!(diff.files[0].status, "M");
-    assert_eq!(diff.files[0].path, "data.txt");
+    assert_eq!(diff.committed_files.len(), 1);
+    assert_eq!(diff.committed_files[0].status, "M");
+    assert_eq!(diff.committed_files[0].path, "data.txt");
 
     // Should have hunks
     assert_eq!(diff.hunks_by_file.len(), 1);
@@ -431,9 +431,9 @@ fn test_commit_diff_deleted_files() {
     .expect("Failed to get commit diff");
 
     // Should have 1 deleted file
-    assert_eq!(diff.files.len(), 1);
-    assert_eq!(diff.files[0].status, "D");
-    assert_eq!(diff.files[0].path, "temp.txt");
+    assert_eq!(diff.committed_files.len(), 1);
+    assert_eq!(diff.committed_files[0].status, "D");
+    assert_eq!(diff.committed_files[0].path, "temp.txt");
 
     // Should have hunks showing deletion
     assert_eq!(diff.hunks_by_file.len(), 1);
@@ -483,10 +483,10 @@ fn test_commit_diff_defers_large_file_diffs() {
     )
     .expect("Failed to get commit diff");
 
-    assert_eq!(diff.files.len(), 1);
-    assert_eq!(diff.files[0].path, "large.txt");
-    assert!(diff.files[0].diff_deferred);
-    assert_eq!(diff.files[0].changed_line_count, 501);
+    assert_eq!(diff.committed_files.len(), 1);
+    assert_eq!(diff.committed_files[0].path, "large.txt");
+    assert!(diff.committed_files[0].diff_deferred);
+    assert_eq!(diff.committed_files[0].changed_line_count, 501);
     assert!(
         diff.hunks_by_file
             .iter()
@@ -539,7 +539,7 @@ fn test_commit_diff_blocks_rendering_when_commit_is_too_large() {
     .expect("Failed to get commit diff");
 
     assert!(diff.too_large_to_render);
-    assert_eq!(diff.files.len(), 0);
+    assert_eq!(diff.committed_files.len(), 0);
     assert_eq!(diff.hunks_by_file.len(), 0);
     assert_eq!(
         diff.render_block_reason.as_deref(),

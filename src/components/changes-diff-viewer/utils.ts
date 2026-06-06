@@ -70,6 +70,14 @@ export const filesEqual = (
 	return true;
 };
 
+export const filterCommittedFiles = (
+	committedFiles: Array<{ path: string }>,
+	files: ParsedFileChange[],
+) => {
+	const pendingPaths = new Set(files.map((file) => file.path));
+	return committedFiles.filter((file) => !pendingPaths.has(file.path));
+};
+
 export const parseCachedHunks = (raw: string): JjDiffHunk[] | null => {
 	try {
 		const parsed = JSON.parse(raw);

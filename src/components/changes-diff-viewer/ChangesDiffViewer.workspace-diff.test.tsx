@@ -24,7 +24,7 @@ describe("ChangesDiffViewer workspace diff contract", () => {
 	it("renders committed and uncommitted files from getWorkspaceDiff", async () => {
 		const api = await import("../../lib/api");
 		vi.mocked(api.getWorkspaceDiff).mockResolvedValue({
-			files: [
+			committed_files: [
 				{
 					path: "src/committed.ts",
 					status: "M",
@@ -67,6 +67,54 @@ describe("ChangesDiffViewer workspace diff contract", () => {
 		await waitFor(() => {
 			expect(screen.getByText("local.ts")).toBeInTheDocument();
 		});
+		expect(api.getWorkspaceChangedFiles).not.toHaveBeenCalled();
+	});
+
+	it("dedupes committed files that also appear in pending changes", async () => {
+		const api = await import("../../lib/api");
+		vi.mocked(api.getWorkspaceDiff).mockResolvedValue({
+			committed_files: [
+				{
+					path: "src/shared.ts",
+					status: "M",
+					changed_line_count: 1,
+					diff_deferred: false,
+				},
+			],
+			hunks_by_file: [
+				{
+					path: "src/shared.ts",
+					hunks: [],
+				},
+			],
+			uncommitted_files: [
+				{
+					path: "src/shared.ts",
+					status: "M",
+					changed_line_count: 1,
+					diff_deferred: false,
+				},
+			],
+			conflicted_files: [],
+			too_large_to_render: false,
+			render_block_reason: null,
+		});
+
+		render(
+			<ChangesDiffViewer
+				workspacePath="/tmp/workspace"
+				repoPath="/tmp/repo"
+				workspaceId={1}
+				initialSelectedFile={null}
+				showCommittedChanges={true}
+			/>,
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText("shared.ts")).toBeInTheDocument();
+		});
+
+		expect(screen.queryByText("Committed")).not.toBeInTheDocument();
 		expect(api.getWorkspaceChangedFiles).not.toHaveBeenCalled();
 	});
 });

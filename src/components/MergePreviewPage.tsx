@@ -412,9 +412,9 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
 					{/* Combined diff */}
 					<section>
 						<h2 className="text-sm font-semibold mb-3">
-							Changed Files ({diff?.files.length || 0})
+							Changed Files ({diff?.committed_files.length || 0})
 						</h2>
-						{diff && diff.files.length > 0 ? (
+						{diff && diff.committed_files.length > 0 ? (
 							<div className="border rounded-lg divide-y">
 								{diff.hunks_by_file.map((fileDiff) => {
 									const isExpanded = expandedFiles.has(fileDiff.path);

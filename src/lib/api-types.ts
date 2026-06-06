@@ -181,7 +181,7 @@ export interface JjFileDiff {
 }
 
 export interface JjRevisionDiff {
-	files: JjFileChange[];
+	committed_files: JjFileChange[];
 	hunks_by_file: JjFileDiff[];
 	uncommitted_files?: JjFileChange[];
 	conflicted_files?: string[];

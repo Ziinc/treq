@@ -368,15 +368,10 @@ export function DiffContentArea({
 									/>
 								))}
 								{showCommittedChanges &&
-									committedFiles
-										.filter(
-											(file) =>
-												!files.some((pending) => pending.path === file.path),
-										)
-										.map((file) => (
-											<FileRowComponent
-												key={`committed-${file.path}`}
-												file={
+									committedFiles.map((file) => (
+										<FileRowComponent
+											key={`committed-${file.path}`}
+											file={
 													{
 														...file,
 														stagedStatus: "",

@@ -199,7 +199,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 						const diff = await getCommitDiff(repoPath, workspaceId, revision);
 						if (
 							diff.too_large_to_render ||
-							diff.files.length > 0 ||
+							diff.committed_files.length > 0 ||
 							diff.hunks_by_file.length > 0
 						) {
 							return diff;
@@ -211,7 +211,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 
 				if (lastError) throw lastError;
 				return {
-					files: [],
+					committed_files: [],
 					hunks_by_file: [],
 					too_large_to_render: false,
 					render_block_reason: null,
@@ -383,7 +383,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 						const next = new Map(prev);
 						next.set(commitId, {
 							diff: {
-								files: [],
+								committed_files: [],
 								hunks_by_file: [],
 								too_large_to_render: false,
 								render_block_reason: null,
@@ -405,7 +405,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 								const next = new Map(prev);
 								next.set(commitId, {
 									diff: {
-										files: [],
+										committed_files: [],
 										hunks_by_file: [],
 										too_large_to_render: false,
 										render_block_reason: null,
@@ -435,7 +435,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 								const next = new Map(prev);
 								next.set(commitId, {
 									diff: {
-										files: [],
+										committed_files: [],
 										hunks_by_file: [],
 										too_large_to_render: false,
 										render_block_reason: null,
@@ -457,7 +457,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 										const next = new Map(prev);
 										next.set(commitId, {
 											diff: {
-												files: [],
+												committed_files: [],
 												hunks_by_file: [],
 												too_large_to_render: false,
 												render_block_reason: null,
@@ -930,7 +930,7 @@ function CommitDiffContent({
 }: CommitDiffContentProps) {
 	// Always show all files expanded
 	const [expandedFiles, setExpandedFiles] = useState<Set<string>>(
-		() => new Set(diff.files.map((file) => file.path)),
+		() => new Set(diff.committed_files.map((file) => file.path)),
 	);
 	const [loadingDeferredFiles, setLoadingDeferredFiles] = useState<Set<string>>(
 		new Set(),
@@ -972,7 +972,7 @@ function CommitDiffContent({
 		);
 	}
 
-	if (diff.files.length === 0) {
+	if (diff.committed_files.length === 0) {
 		return <div className="p-3 text-sm text-muted-foreground">No changes</div>;
 	}
 
@@ -1220,7 +1220,7 @@ function CommitDiffContent({
 
 	return (
 		<div className="divide-y divide-border">
-			{diff.files.map((file) => {
+			{diff.committed_files.map((file) => {
 				const fileDiff = diff.hunks_by_file.find((f) => f.path === file.path);
 				const isFileExpanded = expandedFiles.has(file.path);
 				const isDeferred = file.diff_deferred && !fileDiff;

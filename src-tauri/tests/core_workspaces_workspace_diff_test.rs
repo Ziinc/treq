@@ -14,7 +14,7 @@ fn workspace_diff_paths(repo: &TestRepo, ws: &Workspace) -> Vec<String> {
     init_test_app_db(repo, Some("git"));
     treq_lib::core::workspace_diff(&repo.repo_path, ws.id)
         .unwrap()
-        .files
+        .committed_files
         .iter()
         .map(|f| f.path.clone())
         .collect()
@@ -81,7 +81,7 @@ fn test_empty_when_no_commits() {
     let diff = treq_lib::core::workspace_diff(&repo.repo_path, ws.id).unwrap();
 
     assert!(diff.uncommitted_files.is_empty());
-    assert!(diff.files.is_empty());
+    assert!(diff.committed_files.is_empty());
     assert!(diff.hunks_by_file.is_empty());
     assert!(diff.conflicted_files.is_empty());
     assert!(!diff.too_large_to_render);
@@ -141,7 +141,11 @@ fn test_workspace_diff_when_wc_is_merge_commit() {
     init_test_app_db(&repo, Some("git"));
     let result = treq_lib::core::workspace_diff(&repo.repo_path, ws.id);
     let diff = result.expect("workspace_diff must succeed when @ has unresolved conflicts");
-    let paths: Vec<String> = diff.files.iter().map(|f| f.path.clone()).collect();
+    let paths: Vec<String> = diff
+        .committed_files
+        .iter()
+        .map(|f| f.path.clone())
+        .collect();
     assert!(
         paths.contains(&"shared.txt".into()),
         "expected merged tree to include conflicted file, got {:?}",
@@ -174,7 +178,11 @@ fn test_workspace_diff_includes_uncommitted_changes_and_conflicts() {
     init_test_app_db(&repo, Some("git"));
     let diff = treq_lib::core::workspace_diff(&repo.repo_path, ws.id).unwrap();
 
-    let committed_paths: Vec<_> = diff.files.iter().map(|f| f.path.as_str()).collect();
+    let committed_paths: Vec<_> = diff
+        .committed_files
+        .iter()
+        .map(|f| f.path.as_str())
+        .collect();
     assert!(committed_paths.contains(&"committed.txt"));
     assert!(!committed_paths.contains(&"uncommitted.txt"));
 
@@ -243,7 +251,11 @@ fn test_workspace_diff_reports_delete_modify_conflicts_from_jj_lib() {
         diff.conflicted_files
     );
 
-    let committed_paths: Vec<_> = diff.files.iter().map(|f| f.path.as_str()).collect();
+    let committed_paths: Vec<_> = diff
+        .committed_files
+        .iter()
+        .map(|f| f.path.as_str())
+        .collect();
     assert!(
         committed_paths.contains(&"shared.txt"),
         "committed diff should still render the conflicting file, got {:?}",
@@ -298,7 +310,7 @@ fn test_reports_rename_with_previous_path() {
     init_test_app_db(&repo, Some("git"));
     let diff = treq_lib::core::workspace_diff(&repo.repo_path, ws.id).unwrap();
     let renamed = diff
-        .files
+        .committed_files
         .iter()
         .find(|f| f.path == "renamed.txt")
         .expect("renamed entry should exist");
@@ -323,7 +335,7 @@ fn test_workspace_diff_reports_copy_status() {
     init_test_app_db(&repo, Some("git"));
     let diff = treq_lib::core::workspace_diff(&repo.repo_path, ws.id).unwrap();
     let copied = diff
-        .files
+        .committed_files
         .iter()
         .find(|f| f.path == "copied.txt")
         .expect("copied entry should exist");

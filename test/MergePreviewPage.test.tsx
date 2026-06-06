@@ -45,7 +45,7 @@ describe("MergePreviewPage", () => {
 	};
 
 	const mockDiff: api.JjRevisionDiff = {
-		files: [
+		committed_files: [
 			{
 				path: "src/file.ts",
 				status: "M",
