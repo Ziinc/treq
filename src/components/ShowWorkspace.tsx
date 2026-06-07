@@ -231,7 +231,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 
 		// When commits are loaded from LinearCommitHistory, capture divergence counts
 		const handleCommitsLoaded = useCallback((result: JjLogResult) => {
-			const targetAheadCount = result.target_branch_commits?.length ?? 0;
+			const targetAheadCount =
+				result.commits?.filter((commit) => commit.on_target_only).length ?? 0;
 			setHomeRepoTargetAheadCount(targetAheadCount);
 			// Reset dry-run when commit data changes
 			setHomeRebaseDryRun(null);

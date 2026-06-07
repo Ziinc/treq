@@ -9,18 +9,20 @@ use treq_lib::core::{
 #[test]
 fn test_list_repo_branches_imports_git_refs() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     let branches = list_repo_branches(&repo.repo_path).expect("list_repo_branches should succeed");
     assert!(
-        branches.iter().any(|b| b.name == "main"),
-        "expected 'main' in branches, got: {:?}",
+        branches.iter().any(|b| b.name == default_branch),
+        "expected '{}' in branches, got: {:?}",
+        default_branch,
         branches
     );
 
     TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "feature-x"])
         .expect("Failed to create branch");
-    TestRepo::run_git(&repo.repo_path, &["checkout", "main"])
-        .expect("Failed to switch back to main");
+    TestRepo::run_git(&repo.repo_path, &["checkout", default_branch])
+        .expect("Failed to switch back to default branch");
 
     let branches = list_repo_branches(&repo.repo_path).expect("list_repo_branches should succeed");
     assert!(
@@ -33,13 +35,17 @@ fn test_list_repo_branches_imports_git_refs() {
 #[test]
 fn test_get_repo_branch_returns_current_and_default_branch() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     let branch = get_repo_branch(&repo.repo_path).expect("get_repo_branch should succeed");
 
-    assert_eq!(branch.current_branch, Some("main".to_string()));
-    assert_eq!(branch.display_ref, "main");
+    assert_eq!(
+        branch.current_branch,
+        Some(default_branch.to_string())
+    );
+    assert_eq!(branch.display_ref, default_branch);
     assert!(!branch.is_detached);
-    assert_eq!(branch.default_branch, "main");
+    assert_eq!(branch.default_branch, default_branch);
 
     TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "feature-x"])
         .expect("Failed to create branch");
@@ -47,7 +53,7 @@ fn test_get_repo_branch_returns_current_and_default_branch() {
     assert_eq!(branch.current_branch, Some("feature-x".to_string()));
     assert_eq!(branch.display_ref, "feature-x");
     assert!(!branch.is_detached);
-    assert_eq!(branch.default_branch, "main");
+    assert_eq!(branch.default_branch, default_branch);
 }
 
 #[test]
@@ -76,21 +82,38 @@ fn test_get_repo_branch_reports_detached_head_with_short_hash_display_ref() {
 #[test]
 fn test_check_branch_exists_local_and_remote_flags() {
     let local_only = TestRepo::new().expect("Failed to create local-only repo");
-    let local_main = treq_lib::jj::check_branch_exists(&local_only.repo_path, "main")
-        .expect("check_branch_exists should succeed");
-    assert!(local_main.local_exists, "main should exist locally");
+    let local_default_branch = local_only.default_branch();
+    let local_main =
+        treq_lib::jj::check_branch_exists(&local_only.repo_path, local_default_branch)
+            .expect("check_branch_exists should succeed");
+    assert!(
+        local_main.local_exists,
+        "{local_default_branch} should exist locally"
+    );
     assert!(
         !local_main.remote_exists,
-        "main should not exist on remote in local-only repo"
+        "{local_default_branch} should not exist on remote in local-only repo"
     );
 
     let with_remote = TestRepo::with_remote().expect("Failed to create repo with remote");
-    let remote_main = treq_lib::jj::check_branch_exists(&with_remote.repo_path, "main")
-        .expect("check_branch_exists should succeed");
-    assert!(remote_main.local_exists, "main should exist locally");
-    assert!(remote_main.remote_exists, "main should exist on origin");
+    let remote_default_branch = with_remote.default_branch();
+    let remote_main =
+        treq_lib::jj::check_branch_exists(&with_remote.repo_path, remote_default_branch)
+            .expect("check_branch_exists should succeed");
+    assert!(
+        remote_main.local_exists,
+        "{remote_default_branch} should exist locally"
+    );
+    assert!(
+        remote_main.remote_exists,
+        "{remote_default_branch} should exist on origin"
+    );
     assert_eq!(remote_main.remote_name.as_deref(), Some("origin"));
-    assert_eq!(remote_main.remote_ref.as_deref(), Some("origin/main"));
+    let expected_remote_ref = format!("origin/{remote_default_branch}");
+    assert_eq!(
+        remote_main.remote_ref.as_deref(),
+        Some(expected_remote_ref.as_str())
+    );
 }
 
 #[test]
@@ -98,7 +121,7 @@ fn test_get_default_branch_prefers_origin_head() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
     let default_branch =
         treq_lib::jj::get_default_branch(&repo.repo_path).expect("default branch should resolve");
-    assert_eq!(default_branch, "main");
+    assert_eq!(default_branch, repo.default_branch());
 }
 
 #[test]
@@ -257,7 +280,8 @@ fn test_switch_repo_branch_switches_to_existing_branch() {
 
     TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "feature-x"])
         .expect("Failed to create branch");
-    TestRepo::run_git(&repo.repo_path, &["checkout", "main"]).expect("Failed to return to main");
+    TestRepo::run_git(&repo.repo_path, &["checkout", repo.default_branch()])
+        .expect("Failed to return to default branch");
 
     let result = switch_repo_branch(&repo.repo_path, "feature-x");
     assert!(result.is_ok(), "Expected Ok, got: {:?}", result);
@@ -273,7 +297,7 @@ fn test_switch_repo_branch_switches_to_existing_branch() {
 fn test_switch_repo_branch_already_on_branch() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
-    let result = switch_repo_branch(&repo.repo_path, "main");
+    let result = switch_repo_branch(&repo.repo_path, repo.default_branch());
     assert!(result.is_ok(), "Expected Ok even when already on branch");
 }
 
@@ -288,10 +312,11 @@ fn test_switch_repo_branch_invalid_branch_returns_error() {
 #[test]
 fn test_commit_repo() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
-    let before = JjVerifier::get_bookmark_commit_id(&repo.repo_path, "main")
+    let before = JjVerifier::get_bookmark_commit_id(&repo.repo_path, default_branch)
         .expect("query bookmark")
-        .expect("main bookmark should exist after init");
+        .expect("default branch bookmark should exist after init");
 
     repo.create_file("home_repo_commit.txt", "content\n")
         .expect("Failed to write file");
@@ -299,18 +324,18 @@ fn test_commit_repo() {
     let msg = commit_repo(&repo.repo_path, "core commit_repo message")
         .expect("commit_repo should succeed");
     assert!(
-        msg.contains("main") || msg.contains("Committed"),
+        msg.contains(default_branch) || msg.contains("Committed"),
         "unexpected success message: {}",
         msg
     );
 
-    let after = JjVerifier::get_bookmark_commit_id(&repo.repo_path, "main")
+    let after = JjVerifier::get_bookmark_commit_id(&repo.repo_path, default_branch)
         .expect("query bookmark")
-        .expect("main bookmark should still exist");
+        .expect("default branch bookmark should still exist");
 
     assert_ne!(
         before, after,
-        "main bookmark should advance after commit_repo"
+        "default branch bookmark should advance after commit_repo"
     );
 
     let log = list_commits(&repo.repo_path, None, false, None, None).expect("list_commits");
@@ -329,10 +354,10 @@ fn test_commit_repo() {
             .collect::<Vec<_>>()
     );
 
-    // git head should be still on main branch
+    // git head should be still on default branch
     let git_head_after = TestRepo::run_git(&repo.repo_path, &["rev-parse", "--abbrev-ref", "HEAD"])
         .expect("get git head after commit");
-    assert_eq!(git_head_after.trim(), "main");
+    assert_eq!(git_head_after.trim(), default_branch);
 
     // No staged or unstaged changes should remain in the home repo after commit_repo.
     let staged = TestRepo::run_git(&repo.repo_path, &["diff", "--name-only", "--cached"])
@@ -354,6 +379,7 @@ fn test_commit_repo() {
 #[test]
 fn test_commit_repo_after_create_workspace() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -364,9 +390,9 @@ fn test_commit_repo_after_create_workspace() {
         None,
     )
     .expect("Failed to create workspace");
-    let before = JjVerifier::get_bookmark_commit_id(&repo.repo_path, "main")
+    let before = JjVerifier::get_bookmark_commit_id(&repo.repo_path, default_branch)
         .expect("query bookmark")
-        .expect("main bookmark should exist after init");
+        .expect("default branch bookmark should exist after init");
 
     repo.create_file("home_repo_commit.txt", "content\n")
         .expect("Failed to write file");
@@ -374,18 +400,18 @@ fn test_commit_repo_after_create_workspace() {
     let msg = commit_repo(&repo.repo_path, "core commit_repo message")
         .expect("commit_repo should succeed");
     assert!(
-        msg.contains("main") || msg.contains("Committed"),
+        msg.contains(default_branch) || msg.contains("Committed"),
         "unexpected success message: {}",
         msg
     );
 
-    let after = JjVerifier::get_bookmark_commit_id(&repo.repo_path, "main")
+    let after = JjVerifier::get_bookmark_commit_id(&repo.repo_path, default_branch)
         .expect("query bookmark")
-        .expect("main bookmark should still exist");
+        .expect("default branch bookmark should still exist");
 
     assert_ne!(
         before, after,
-        "main bookmark should advance after commit_repo"
+        "default branch bookmark should advance after commit_repo"
     );
 
     let log = list_commits(&repo.repo_path, None, false, None, None).expect("list_commits");

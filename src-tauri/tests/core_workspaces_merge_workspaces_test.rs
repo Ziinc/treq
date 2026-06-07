@@ -384,6 +384,7 @@ fn test_can_squash_and_merge_workspace_into_home_repo() {
 #[test]
 fn merge_into_main_succeeds_when_main_plus_empty() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     let workspace: Workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -404,20 +405,20 @@ fn merge_into_main_succeeds_when_main_plus_empty() {
         .expect("Failed to write feature file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Add feature for main+ empty")
         .expect("Failed to commit workspace change");
-    let main_before = treq_lib::jj::jj_get_commit_id(&repo.repo_path, "main")
+    let main_before = treq_lib::jj::jj_get_commit_id(&repo.repo_path, default_branch)
         .expect("main should resolve before merge");
 
     treq_lib::jj::jj_create_merge_commit(
         workspace_path_str,
         &workspace.branch_name,
-        "main",
+        default_branch,
         "Merge workspace when main+ is empty",
         "git",
     )
     .expect("Merge should succeed");
 
     let main_after =
-        treq_lib::jj::jj_get_commit_id(&repo.repo_path, "main").expect("main should resolve");
+        treq_lib::jj::jj_get_commit_id(&repo.repo_path, default_branch).expect("main should resolve");
     assert!(
         main_before != main_after,
         "main should move to the new merge commit"

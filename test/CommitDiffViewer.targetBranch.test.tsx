@@ -41,6 +41,7 @@ const targetBranchCommits = [
 		description: "Target branch commit 1",
 		timestamp: "2024-01-14 10:00:00",
 		is_immutable: true,
+		on_target_only: true,
 	}),
 	createMockCommit({
 		commit_id: "target002",
@@ -49,6 +50,7 @@ const targetBranchCommits = [
 		description: "Target branch commit 2",
 		timestamp: "2024-01-13 10:00:00",
 		is_immutable: true,
+		on_target_only: true,
 	}),
 ];
 
@@ -64,10 +66,9 @@ describe("CommitDiffViewer - Target Branch History", () => {
 			workspace_branch: "feat/test",
 		});
 		vi.mocked(api.listCommits).mockResolvedValue({
-			commits: activeCommits,
+			commits: [...activeCommits, ...targetBranchCommits],
 			target_branch: "main",
 			workspace_branch: "feat/test",
-			target_branch_commits: targetBranchCommits,
 		});
 
 		render(
@@ -92,10 +93,9 @@ describe("CommitDiffViewer - Target Branch History", () => {
 			workspace_branch: "feat/test",
 		});
 		vi.mocked(api.listCommits).mockResolvedValue({
-			commits: activeCommits,
+			commits: [...activeCommits, ...targetBranchCommits],
 			target_branch: "main",
 			workspace_branch: "feat/test",
-			target_branch_commits: targetBranchCommits,
 		});
 
 		const { container } = render(
@@ -124,10 +124,9 @@ describe("CommitDiffViewer - Target Branch History", () => {
 			workspace_branch: "feat/test",
 		});
 		vi.mocked(api.listCommits).mockResolvedValue({
-			commits: activeCommits,
+			commits: [...activeCommits, ...targetBranchCommits],
 			target_branch: "main",
 			workspace_branch: "feat/test",
-			target_branch_commits: targetBranchCommits,
 		});
 		vi.mocked(api.getCommitDiff).mockResolvedValue({
 			committed_files: [],
@@ -198,7 +197,7 @@ describe("CommitDiffViewer - Target Branch History", () => {
 		expect(screen.queryByText("Recent on main")).not.toBeInTheDocument();
 	});
 
-	it("section not rendered when target_branch_commits is empty", async () => {
+	it("section not rendered when no target-only commits are present", async () => {
 		vi.mocked(api.jjGetLog).mockResolvedValue({
 			commits: activeCommits,
 			target_branch: "main",
@@ -208,7 +207,6 @@ describe("CommitDiffViewer - Target Branch History", () => {
 			commits: activeCommits,
 			target_branch: "main",
 			workspace_branch: "feat/test",
-			target_branch_commits: [],
 		});
 
 		render(

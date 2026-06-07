@@ -12,6 +12,7 @@ type NapiTestBindings = {
 	createTestRepo: (withRemote: boolean) => {
 		repoPath: string;
 		tempDirPath: string;
+		defaultBranch: string;
 	};
 	gitCommitAll: (repoPath: string, message: string) => void;
 	writeWorkspaceFile: (
@@ -36,6 +37,7 @@ function getNapiBindings(): NapiTestBindings {
 export function createTestRepo(withRemote = false): {
 	repoPath: string;
 	tempDirPath: string;
+	defaultBranch: string;
 } {
 	return getNapiBindings().createTestRepo(withRemote);
 }

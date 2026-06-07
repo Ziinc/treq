@@ -19,7 +19,7 @@ describe("ChangesDiffViewer workspace diff contract", () => {
 		vi.clearAllMocks();
 	});
 
-	it("renders committed and uncommitted files from getWorkspaceDiff", async () => {
+	it("renders committed hunks from getWorkspaceDiff alongside uncommitted files", async () => {
 		const api = await import("../../lib/api");
 		vi.mocked(api.getWorkspaceDiff).mockResolvedValue({
 			committed_files: [
@@ -33,7 +33,14 @@ describe("ChangesDiffViewer workspace diff contract", () => {
 			hunks_by_file: [
 				{
 					path: "src/committed.ts",
-					hunks: [],
+					hunks: [
+						{
+							id: "committed-hunk",
+							header: "@@ -1,3 +1,4 @@",
+							lines: [" export const committed = true;", "+export const added = true;"],
+							patch: "...",
+						},
+					],
 				},
 			],
 			uncommitted_files: [
@@ -62,13 +69,20 @@ describe("ChangesDiffViewer workspace diff contract", () => {
 		await waitFor(() => {
 			expect(screen.getByText("committed.ts")).toBeInTheDocument();
 		});
+		expect(
+			screen
+				.getAllByText((_, element) =>
+					element?.textContent?.includes("added = true") ?? false,
+				)
+				.length,
+		).toBeGreaterThan(0);
 		await waitFor(() => {
 			expect(screen.getByText("local.ts")).toBeInTheDocument();
 		});
 		expect(api.getWorkspaceChangedFiles).not.toHaveBeenCalled();
 	});
 
-	it("dedupes committed files that also appear in pending changes", async () => {
+	it("keeps committed and uncommitted sections separate when paths overlap", async () => {
 		const api = await import("../../lib/api");
 		vi.mocked(api.getWorkspaceDiff).mockResolvedValue({
 			committed_files: [
@@ -82,7 +96,14 @@ describe("ChangesDiffViewer workspace diff contract", () => {
 			hunks_by_file: [
 				{
 					path: "src/shared.ts",
-					hunks: [],
+					hunks: [
+						{
+							id: "shared-committed",
+							header: "@@ -1,2 +1,3 @@",
+							lines: [" export const shared = 'committed';", "+export const extra = true;"],
+							patch: "...",
+						},
+					],
 				},
 			],
 			uncommitted_files: [
@@ -109,10 +130,16 @@ describe("ChangesDiffViewer workspace diff contract", () => {
 		);
 
 		await waitFor(() => {
-			expect(screen.getByText("shared.ts")).toBeInTheDocument();
+			expect(screen.getAllByText("shared.ts").length).toBe(2);
 		});
 
-		expect(screen.queryByText("Committed")).not.toBeInTheDocument();
+		expect(
+			screen
+				.getAllByText((_, element) =>
+					element?.textContent?.includes("extra = true") ?? false,
+				)
+				.length,
+		).toBeGreaterThan(0);
 		expect(api.getWorkspaceChangedFiles).not.toHaveBeenCalled();
 	});
 });

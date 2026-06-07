@@ -1,7 +1,24 @@
+use std::collections::HashSet;
 use std::path::Path;
 
 use crate::jj;
 use crate::local_db;
+
+fn append_target_branch_commits(result: &mut jj::JjLogResult, target_commits: Vec<jj::JjLogCommit>) {
+    let existing_ids: HashSet<String> = result
+        .commits
+        .iter()
+        .map(|c| c.commit_id.clone())
+        .collect();
+
+    for mut commit in target_commits {
+        if existing_ids.contains(&commit.commit_id) {
+            continue;
+        }
+        commit.on_target_only = true;
+        result.commits.push(commit);
+    }
+}
 
 /// Lists commits for a workspace by its database ID, or for the home repo
 /// when no workspace ID is provided.
@@ -9,12 +26,13 @@ use crate::local_db;
 /// # Arguments
 /// * `repo_path`                     - Path to the repository root
 /// * `workspace_id`                  - ID of the workspace to list commits for, or `None` for the home repo
-/// * `include_target_branch_history` - When listing a workspace: if true, also load commits from the workspace's target branch in the home repo (ignored for the home-repo listing)
+/// * `include_target_branch_history` - When true, append target-branch history after the
+///   current-branch commits (marked with `on_target_only = true`). Applies to both
+///   workspace and home-repo listings.
 ///
-/// Workspace views return disjoint commit sets:
-/// * `commits` contains workspace-branch history only
-/// * `target_branch_commits` contains target-branch history only
-/// * `target_branch_limit`           - Max commits to load for that target-branch history; defaults to 10 when `include_target_branch_history` is true
+/// Returns a single `commits` list: current-branch history first, then optional
+/// target-branch history when `include_target_branch_history` is true.
+/// * `target_branch_limit`           - Max commits to load for target-branch history; defaults to 10 when `include_target_branch_history` is true
 /// * `limit`                         - Max commits for the home-repo log only; ignored when `workspace_id` is set
 ///
 /// # Returns
@@ -56,24 +74,12 @@ pub fn list_commits(
             )
             .map_err(|e| format!("Failed to list commits: {}", e))?;
 
-            if !is_default_branch_workspace {
+            if include_target_branch_history && !is_default_branch_workspace {
                 let target_limit = target_branch_limit.unwrap_or(10);
                 let target_commits =
                     jj::jj_get_target_branch_log(repo_path, target_branch, target_limit)
                         .map_err(|e| format!("Failed to list target branch history: {}", e))?;
-
-                if include_target_branch_history {
-                    result.target_branch_commits = target_commits;
-                }
-            }
-
-            if include_target_branch_history {
-                if is_default_branch_workspace {
-                    let limit = target_branch_limit.unwrap_or(10);
-                    result.target_branch_commits =
-                        jj::jj_get_target_branch_log(repo_path, target_branch, limit)
-                            .map_err(|e| format!("Failed to list target branch history: {}", e))?;
-                }
+                append_target_branch_commits(&mut result, target_commits);
             }
 
             Ok(result)
@@ -84,8 +90,17 @@ pub fn list_commits(
             let default_branch = jj::get_default_branch(repo_path)
                 .map_err(|e| format!("Failed to resolve default branch: {}", e))?;
             if branch != default_branch {
-                jj::jj_get_home_repo_diverged_log(repo_path, &branch, &default_branch, limit)
-                    .map_err(|e| format!("Failed to list commits: {}", e))
+                let mut result = jj::jj_get_home_repo_diverged_log(
+                    repo_path,
+                    &branch,
+                    &default_branch,
+                    limit,
+                )
+                .map_err(|e| format!("Failed to list commits: {}", e))?;
+                if !include_target_branch_history {
+                    result.commits.retain(|c| !c.on_target_only);
+                }
+                Ok(result)
             } else {
                 jj::jj_get_log(repo_path, &branch, Some(true), limit)
                     .map_err(|e| format!("Failed to list commits: {}", e))

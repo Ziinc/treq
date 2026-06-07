@@ -159,16 +159,6 @@ pub struct WorkspaceMetadata {
     pub moved_files: Option<Vec<String>>,
 }
 
-fn resolve_workspace_has_conflicts(
-    unresolved_workspace_hint: Option<bool>,
-    conflicted_files: Option<&[String]>,
-) -> bool {
-    if let Some(files) = conflicted_files {
-        return !files.is_empty();
-    }
-    unresolved_workspace_hint.unwrap_or(false)
-}
-
 fn resolve_workspace_root(repo_path: &str, workspace_id: Option<i64>) -> Result<String, String> {
     match workspace_id {
         Some(id) => {
@@ -642,12 +632,10 @@ pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspaceSidebarSt
         .collect();
     let persisted = local_db::sync_discovered_workspaces(repo_path, &discovered, &refreshed_at)?;
 
-    let default_branch = jj::get_default_branch(repo_path).unwrap_or_else(|_| "main".to_string());
-
     persisted
         .into_iter()
         .map(|current| {
-            let unresolved_workspace_hint = conflict_by_path
+            let discovered_has_conflicts = conflict_by_path
                 .get(&current.workspace_path)
                 .copied()
                 .ok_or_else(|| {
@@ -656,39 +644,21 @@ pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspaceSidebarSt
                         current.workspace_path
                     )
                 })?;
-            let has_conflicts = if !unresolved_workspace_hint {
-                false
-            } else {
-                let workspace_dir = Path::new(repo_path)
-                    .join(".treq")
-                    .join("workspaces")
-                    .join(&current.workspace_path);
-                let workspace_dir_str = workspace_dir
-                    .to_str()
-                    .ok_or("Failed to convert workspace path to string")?;
-                let conflict_target = current.target_branch.as_deref().unwrap_or(&default_branch);
-                match jj::get_conflicted_files(workspace_dir_str, Some(conflict_target)) {
-                    Ok(conflicted_files) => {
-                        let file_level_conflicts =
-                            resolve_workspace_has_conflicts(None, Some(&conflicted_files));
-                        if !file_level_conflicts {
-                            log::debug!(
-                                "Sidebar conflict mismatch: candidate=true but file-level is clean for workspace {}",
-                                current.workspace_path
-                            );
-                        }
-                        file_level_conflicts
-                    }
-                    Err(err) => {
-                        log::warn!(
-                            "Failed to compute file-level conflicts for sidebar workspace {}: {}",
-                            current.workspace_path,
-                            err
-                        );
-                        false
-                    }
-                }
-            };
+            let workspace_dir = Path::new(repo_path)
+                .join(".treq")
+                .join("workspaces")
+                .join(&current.workspace_path);
+            let workspace_dir_str = workspace_dir
+                .to_str()
+                .ok_or("Failed to convert workspace path to string")?;
+            let unresolved_has_conflicts =
+                jj::workspace_has_unresolved_conflicts(workspace_dir_str).map_err(|e| {
+                    format!(
+                        "Failed to inspect conflict state for sidebar workspace {}: {}",
+                        current.workspace_path, e
+                    )
+                })?;
+            let has_conflicts = discovered_has_conflicts || unresolved_has_conflicts;
             Ok(WorkspaceSidebarStatus {
                 current,
                 has_conflicts,
@@ -828,7 +798,7 @@ pub fn workspace_status(
     let conflict_target = current_workspace.target_branch.as_deref().unwrap_or("main");
     let conflicted_files =
         jj::get_conflicted_files(workspace_path_str, Some(conflict_target)).unwrap_or_default();
-    let has_conflicts = resolve_workspace_has_conflicts(None, Some(&conflicted_files));
+    let has_conflicts = jj::workspace_has_unresolved_conflicts(workspace_path_str).unwrap_or(false);
 
     let commits_ahead_count = commits_ahead_of_target.len();
 
@@ -878,7 +848,7 @@ pub fn workspace_status(
 mod tests {
     use super::{
         parse_hunk_spec, resolve_workspace_diff_conflict_marker_style,
-        resolve_workspace_has_conflicts, HunkSpec, WorkspaceMoveRequest,
+        HunkSpec, WorkspaceMoveRequest,
     };
     use rusqlite::Connection;
     use std::sync::{Mutex, OnceLock};
@@ -887,23 +857,6 @@ mod tests {
     fn env_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))
-    }
-
-    #[test]
-    fn resolve_workspace_has_conflicts_prefers_conflicted_files_signal() {
-        let files: Vec<String> = vec![];
-        assert!(!resolve_workspace_has_conflicts(Some(true), Some(&files)));
-        assert!(resolve_workspace_has_conflicts(
-            Some(false),
-            Some(&["README.md".to_string()])
-        ));
-    }
-
-    #[test]
-    fn resolve_workspace_has_conflicts_falls_back_to_unresolved_hint() {
-        assert!(resolve_workspace_has_conflicts(Some(true), None));
-        assert!(!resolve_workspace_has_conflicts(Some(false), None));
-        assert!(!resolve_workspace_has_conflicts(None, None));
     }
 
     #[test]

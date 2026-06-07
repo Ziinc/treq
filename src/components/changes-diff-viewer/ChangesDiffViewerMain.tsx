@@ -24,7 +24,7 @@ import { ContextMenu } from "./ContextMenu";
 import { ReviewActionBar } from "./ReviewActionBar";
 import { DiffContentArea } from "./DiffContentArea";
 import { FileSidebar } from "./FileSidebar";
-import { filterCommittedFiles, filesEqual } from "./utils";
+import { filesEqual } from "./utils";
 import type {
 	ChangesDiffViewerHandle,
 	ChangesDiffViewerProps,
@@ -82,6 +82,7 @@ export const ChangesDiffViewer = memo(
 				setFiles,
 				allFileHunks,
 				setAllFileHunks,
+				committedFileHunks,
 				loadingAllHunks,
 				initialLoading,
 				committedFiles,
@@ -103,11 +104,6 @@ export const ChangesDiffViewer = memo(
 				isReloadingRef,
 				addToast,
 			});
-			const visibleCommittedFiles = useMemo(
-				() => filterCommittedFiles(committedFiles, files),
-				[committedFiles, files],
-			);
-
 			const {
 				actualConflictedFiles,
 				conflictRegionsByFile,
@@ -169,7 +165,8 @@ export const ChangesDiffViewer = memo(
 				collapsedFiles,
 				expandedLargeDiffs,
 				showCommittedChanges: showCommittedChanges ?? false,
-				committedFiles: visibleCommittedFiles,
+				committedFiles,
+				committedFileHunks,
 				conflictRegionsByFile,
 				conflictLineLookups,
 				workspacePath,
@@ -430,7 +427,7 @@ export const ChangesDiffViewer = memo(
 						setExpandedLargeDiffs={setExpandedLargeDiffs}
 						conflictFileRefs={conflictFileRefs}
 						showCommittedChanges={showCommittedChanges}
-						committedFiles={visibleCommittedFiles}
+						committedFiles={committedFiles}
 						committedSectionCollapsed={committedSectionCollapsed}
 						setCommittedSectionCollapsed={setCommittedSectionCollapsed}
 						scrollToFileIfNeeded={scrollToFileIfNeeded}
@@ -495,7 +492,8 @@ export const ChangesDiffViewer = memo(
 							loadingAllHunks={loadingAllHunks}
 							files={files}
 							allFileHunks={allFileHunks}
-							committedFiles={visibleCommittedFiles}
+							committedFiles={committedFiles}
+							committedFileHunks={committedFileHunks}
 							showCommittedChanges={showCommittedChanges}
 							largeChangesetExpanded={largeChangesetExpanded}
 							setLargeChangesetExpanded={setLargeChangesetExpanded}

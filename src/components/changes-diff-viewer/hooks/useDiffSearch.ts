@@ -10,6 +10,7 @@ import type { DiffSearchData, FileHunksData } from "../types";
 interface UseDiffSearchParams {
 	files: ParsedFileChange[];
 	allFileHunks: Map<string, FileHunksData>;
+	committedFileHunks: Map<string, FileHunksData>;
 	collapsedFiles: Set<string>;
 	expandedLargeDiffs: Set<string>;
 	showCommittedChanges: boolean;
@@ -23,6 +24,7 @@ interface UseDiffSearchParams {
 export function useDiffSearch({
 	files,
 	allFileHunks,
+	committedFileHunks,
 	collapsedFiles,
 	expandedLargeDiffs,
 	showCommittedChanges,
@@ -80,8 +82,11 @@ export function useDiffSearch({
 		for (const [, regions] of conflictRegionsByFile) {
 			for (const region of regions) processConflictRegion(region);
 		}
-		const processFile = (filePath: string) => {
-			const fileData = allFileHunks.get(filePath);
+		const processFile = (
+			filePath: string,
+			fileHunksMap: Map<string, FileHunksData>,
+		) => {
+			const fileData = fileHunksMap.get(filePath);
 			if (!fileData || fileData.isLoading || !fileData.hunks) return;
 			if (collapsedFiles.has(filePath)) return;
 			if (isBinaryFile(filePath)) return;
@@ -126,15 +131,17 @@ export function useDiffSearch({
 				}
 			}
 		};
-		for (const file of files) processFile(file.path);
+		for (const file of files) processFile(file.path, allFileHunks);
 		if (showCommittedChanges) {
-			for (const file of committedFiles) processFile(file.path);
+			for (const file of committedFiles)
+				processFile(file.path, committedFileHunks);
 		}
 		return { matches, matchesByKey };
 	}, [
 		debouncedSearchQuery,
 		files,
 		allFileHunks,
+		committedFileHunks,
 		collapsedFiles,
 		expandedLargeDiffs,
 		showCommittedChanges,

@@ -31,4 +31,6 @@ pub struct TestRepoInfo {
     pub repo_path: String,
     /// Absolute path to the temp directory (same as repo_path for simple repos).
     pub temp_dir_path: String,
+    /// Default git branch name for the test repository.
+    pub default_branch: String,
 }

@@ -16,6 +16,7 @@ pub fn create_test_repo_impl(with_remote: bool) -> Result<TestRepoInfo, String> 
     let info = TestRepoInfo {
         temp_dir_path: repo.temp_dir.path().to_string_lossy().to_string(),
         repo_path: repo.repo_path.clone(),
+        default_branch: repo.default_branch().to_string(),
     };
 
     TEST_REPOS.lock().map_err(|e| e.to_string())?.push(repo);

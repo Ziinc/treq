@@ -277,13 +277,14 @@ fn workspace_merge_same_branch_syncs_home_branch_tip_and_working_copy() {
 #[test]
 fn no_sync_when_home_on_different_branch() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     treq_lib::core::create_workspace(
         &repo.repo_path,
         PROP_BRANCH,
         Some("branch workspace".to_string()),
         None,
-        Some("main"),
+        Some(default_branch),
         None,
     )
     .expect("Failed to create branch workspace");
@@ -318,20 +319,21 @@ fn no_sync_when_home_on_different_branch() {
 #[test]
 fn workspace_main_uncommitted_changes_take_precedence_when_rebasing_children() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     let main_workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
-        "main",
+        default_branch,
         Some("root main workspace".to_string()),
         None,
         None,
         None,
     )
     .expect("Failed to create main workspace");
-    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, main_workspace.id, "main")
+    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, main_workspace.id, default_branch)
         .expect("Failed to set main workspace target branch");
 
-    let main_workspace_root = workspace_path(&repo.repo_path, "main");
+    let main_workspace_root = workspace_path(&repo.repo_path, default_branch);
     let shared_file = "shared-precedence.txt";
 
     TestRepo::write_workspace_file(
@@ -346,7 +348,7 @@ fn workspace_main_uncommitted_changes_take_precedence_when_rebasing_children() {
         "feat/main-child",
         Some("child of main".to_string()),
         None,
-        Some("main"),
+        Some(default_branch),
         None,
     )
     .expect("Failed to create child workspace");
@@ -369,7 +371,7 @@ fn workspace_main_uncommitted_changes_take_precedence_when_rebasing_children() {
     let rebase_result = treq_lib::core::check_and_rebase_workspaces(
         &repo.repo_path,
         Some(child_workspace.id),
-        Some("main".to_string()),
+        Some(default_branch.to_string()),
         Some(true),
         "git",
     )

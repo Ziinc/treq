@@ -213,8 +213,9 @@ fn test_workspace_status_invariant_unresolved_conflicts_require_conflicted_files
         "Unresolved conflict must set has_conflicts=true"
     );
     assert!(
-        !status.conflicted_files.is_empty(),
-        "Unresolved conflict must include conflicted_files"
+        status.conflicted_files.contains(&"README.md".to_string()),
+        "Unresolved conflict must include README.md in conflicted_files: {:?}",
+        status.conflicted_files
     );
 }
 

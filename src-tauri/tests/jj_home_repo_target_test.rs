@@ -22,12 +22,13 @@ fn create_branch_with_commit(
 }
 
 /// When on a non-default branch, jj_get_home_repo_diverged_log should return:
-/// - `commits` = commits unique to the current branch
-/// - `target_branch_commits` = commits that target is ahead by
+/// - `commits` = commits unique to the current branch, then target-ahead commits
+///   (`on_target_only = true`)
 /// - `merge_base_id` = Some(...)
 #[test]
 fn test_diverged_log_splits_branch_and_target_commits() {
     let repo = TestRepo::new().expect("create repo");
+    let default_branch = repo.default_branch();
 
     // Add a commit on main so it can be "ahead" later
     repo.commit_file("main_a.txt", "main A", "main commit A")
@@ -37,58 +38,54 @@ fn test_diverged_log_splits_branch_and_target_commits() {
     create_branch_with_commit(
         &repo,
         "feature",
-        "main",
+        default_branch,
         "feat.txt",
         "feature content",
         "feature commit",
     );
 
     // Go back to main and add another commit (target is now ahead)
-    TestRepo::run_git(&repo.repo_path, &["checkout", "main"]).expect("checkout main");
+    TestRepo::run_git(&repo.repo_path, &["checkout", default_branch]).expect("checkout main");
     repo.commit_file("main_b.txt", "main B", "main commit B")
         .expect("main commit B");
 
     // Back to feature to simulate home repo on feature branch
     TestRepo::run_git(&repo.repo_path, &["checkout", "feature"]).expect("checkout feature");
 
-    let result = jj_get_home_repo_diverged_log(&repo.repo_path, "feature", "main", Some(20))
+    let result = jj_get_home_repo_diverged_log(&repo.repo_path, "feature", default_branch, Some(20))
         .expect("diverged log should succeed");
 
-    // Feature-unique commits should be in `commits`
+    let branch_commits: Vec<_> = result
+        .commits
+        .iter()
+        .filter(|c| !c.on_target_only)
+        .collect();
+    let target_commits: Vec<_> = result
+        .commits
+        .iter()
+        .filter(|c| c.on_target_only)
+        .collect();
+
     assert!(
-        !result.commits.is_empty(),
+        !branch_commits.is_empty(),
         "should have branch-unique commits"
     );
     assert!(
-        result
-            .commits
+        branch_commits
             .iter()
             .any(|c| c.description.contains("feature commit")),
-        "feature commit should be in commits"
-    );
-    assert!(
-        result.commits.iter().all(|c| !c.on_target_only),
-        "commits should not be marked on_target_only"
+        "feature commit should be in branch-unique commits"
     );
 
-    // Main-ahead commits should be in target_branch_commits
     assert!(
-        !result.target_branch_commits.is_empty(),
+        !target_commits.is_empty(),
         "should have target-ahead commits"
     );
     assert!(
-        result
-            .target_branch_commits
+        target_commits
             .iter()
             .any(|c| c.description.contains("main commit B")),
-        "main commit B should be in target_branch_commits"
-    );
-    assert!(
-        result
-            .target_branch_commits
-            .iter()
-            .all(|c| c.on_target_only),
-        "target_branch_commits should all be marked on_target_only"
+        "main commit B should be in target-ahead commits"
     );
 
     // merge_base_id should be populated
@@ -99,7 +96,7 @@ fn test_diverged_log_splits_branch_and_target_commits() {
 }
 
 /// When on the default branch itself, list_commits should return a normal history
-/// (not the diverged view — no target_branch_commits and no merge_base_id).
+/// (not the diverged view — no target-only commits and no merge_base_id).
 #[test]
 fn test_list_commits_on_default_branch_returns_normal_history() {
     let repo = TestRepo::new().expect("create repo");
@@ -111,8 +108,8 @@ fn test_list_commits_on_default_branch_returns_normal_history() {
 
     // On default branch: no target-ahead commits and no merge base
     assert!(
-        result.target_branch_commits.is_empty(),
-        "on default branch, target_branch_commits should be empty"
+        result.commits.iter().all(|c| !c.on_target_only),
+        "on default branch, commits should not include target-only entries"
     );
     assert!(
         result.merge_base_id.is_none(),
@@ -124,10 +121,12 @@ fn test_list_commits_on_default_branch_returns_normal_history() {
     );
 }
 
-/// When on a non-default branch, list_commits should return the diverged view.
+/// When on a non-default branch, list_commits returns branch-unique commits and merge base.
+/// Target-ahead commits are only included when `include_target_branch_history` is true.
 #[test]
 fn test_list_commits_on_feature_branch_returns_diverged_view() {
     let repo = TestRepo::new().expect("create repo");
+    let default_branch = repo.default_branch();
 
     // Add commit to main
     repo.commit_file("main_extra.txt", "main extra", "main extra commit")
@@ -136,43 +135,79 @@ fn test_list_commits_on_feature_branch_returns_diverged_view() {
     // Create feature branch with a commit
     create_branch_with_commit(
         &repo,
-        "my-feature",
-        "main",
+        "myfeature",
+        default_branch,
         "feature_file.txt",
         "feature content",
         "feature work",
     );
 
     // Advance main beyond the feature branch point
-    TestRepo::run_git(&repo.repo_path, &["checkout", "main"]).expect("checkout main");
+    TestRepo::run_git(&repo.repo_path, &["checkout", default_branch]).expect("checkout main");
     repo.commit_file("main_new.txt", "main new", "main new commit")
         .expect("main new commit");
 
     // Switch to feature branch (simulating home repo on feature branch)
-    TestRepo::run_git(&repo.repo_path, &["checkout", "my-feature"])
+    TestRepo::run_git(&repo.repo_path, &["checkout", "myfeature"])
         .expect("checkout feature branch");
+
+    let direct = jj_get_home_repo_diverged_log(
+        &repo.repo_path,
+        "myfeature",
+        default_branch,
+        Some(20),
+    )
+    .expect("direct diverged log should succeed");
+    assert!(
+        direct.merge_base_id.is_some(),
+        "direct diverged log should populate merge_base_id"
+    );
 
     let result = list_commits(&repo.repo_path, None, false, None, Some(20))
         .expect("list_commits should succeed");
 
-    // Should have the diverged view
+    let branch_commits: Vec<_> = result
+        .commits
+        .iter()
+        .filter(|c| !c.on_target_only)
+        .collect();
+    let target_commits: Vec<_> = result
+        .commits
+        .iter()
+        .filter(|c| c.on_target_only)
+        .collect();
+
     assert!(
-        result
-            .commits
+        branch_commits
             .iter()
             .any(|c| c.description.contains("feature work")),
-        "feature work should appear in commits"
+        "feature work should appear in branch-unique commits"
     );
     assert!(
-        result
-            .target_branch_commits
-            .iter()
-            .any(|c| c.description.contains("main new commit")),
-        "main new commit should appear in target_branch_commits"
+        target_commits.is_empty(),
+        "target-ahead commits should be omitted when include_target_branch_history is false"
     );
     assert!(
         result.merge_base_id.is_some(),
         "merge_base_id should be set on non-default branch"
+    );
+
+    let with_target = list_commits(&repo.repo_path, None, true, None, Some(20))
+        .expect("list_commits with target history should succeed");
+    let target_with_history: Vec<_> = with_target
+        .commits
+        .iter()
+        .filter(|c| c.on_target_only)
+        .collect();
+    assert!(
+        target_with_history
+            .iter()
+            .any(|c| c.description.contains("main new commit")),
+        "main new commit should appear when include_target_branch_history is true, got: {:?}",
+        target_with_history
+            .iter()
+            .map(|c| &c.description)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -180,19 +215,20 @@ fn test_list_commits_on_feature_branch_returns_diverged_view() {
 #[test]
 fn test_rebase_home_repo_branch_onto_main() {
     let repo = TestRepo::new().expect("create repo");
+    let default_branch = repo.default_branch();
 
     // Create feature branch
     create_branch_with_commit(
         &repo,
         "rebase-me",
-        "main",
+        default_branch,
         "feature.txt",
         "feature content",
         "feature commit for rebase",
     );
 
     // Advance main
-    TestRepo::run_git(&repo.repo_path, &["checkout", "main"]).expect("checkout main");
+    TestRepo::run_git(&repo.repo_path, &["checkout", default_branch]).expect("checkout main");
     repo.commit_file("main_advance.txt", "advance", "advance main")
         .expect("advance main");
 
@@ -200,15 +236,15 @@ fn test_rebase_home_repo_branch_onto_main() {
     TestRepo::run_git(&repo.repo_path, &["checkout", "rebase-me"]).expect("checkout rebase-me");
 
     // Rebase
-    let result = jj_rebase_home_repo_branch(&repo.repo_path, "rebase-me", "main")
+    let result = jj_rebase_home_repo_branch(&repo.repo_path, "rebase-me", default_branch)
         .expect("rebase should succeed");
     assert!(result.success, "rebase should succeed: {}", result.message);
 
     // After rebase, the feature branch should be based on the advanced main
-    let log = jj_get_home_repo_diverged_log(&repo.repo_path, "rebase-me", "main", Some(20))
+    let log = jj_get_home_repo_diverged_log(&repo.repo_path, "rebase-me", default_branch, Some(20))
         .expect("diverged log after rebase");
     assert!(
-        log.target_branch_commits.is_empty(),
+        log.commits.iter().all(|c| !c.on_target_only),
         "after rebase, target should not be ahead"
     );
 }
@@ -217,6 +253,7 @@ fn test_rebase_home_repo_branch_onto_main() {
 #[test]
 fn test_dry_run_detects_conflicting_changes() {
     let repo = TestRepo::new().expect("create repo");
+    let default_branch = repo.default_branch();
 
     // Create base file on main
     repo.commit_file("shared.txt", "base content", "base commit")
@@ -226,14 +263,14 @@ fn test_dry_run_detects_conflicting_changes() {
     create_branch_with_commit(
         &repo,
         "conflict-branch",
-        "main",
+        default_branch,
         "shared.txt",
         "feature modification",
         "feature modifies shared",
     );
 
     // Advance main with a conflicting change to shared.txt
-    TestRepo::run_git(&repo.repo_path, &["checkout", "main"]).expect("checkout main");
+    TestRepo::run_git(&repo.repo_path, &["checkout", default_branch]).expect("checkout main");
     repo.commit_file("shared.txt", "main modification", "main modifies shared")
         .expect("main modification");
 
@@ -241,7 +278,7 @@ fn test_dry_run_detects_conflicting_changes() {
     TestRepo::run_git(&repo.repo_path, &["checkout", "conflict-branch"])
         .expect("checkout conflict-branch");
 
-    let dry_run = jj_dry_run_home_repo_rebase(&repo.repo_path, "conflict-branch", "main")
+    let dry_run = jj_dry_run_home_repo_rebase(&repo.repo_path, "conflict-branch", default_branch)
         .expect("dry run should not fail");
     assert!(
         dry_run.would_conflict,
@@ -258,26 +295,27 @@ fn test_dry_run_detects_conflicting_changes() {
 #[test]
 fn test_dry_run_no_conflict_with_disjoint_changes() {
     let repo = TestRepo::new().expect("create repo");
+    let default_branch = repo.default_branch();
 
     // Create feature branch modifying feature-only file
     create_branch_with_commit(
         &repo,
         "clean-branch",
-        "main",
+        default_branch,
         "feature_only.txt",
         "feature content",
         "feature adds file",
     );
 
     // Advance main with a different file
-    TestRepo::run_git(&repo.repo_path, &["checkout", "main"]).expect("checkout main");
+    TestRepo::run_git(&repo.repo_path, &["checkout", default_branch]).expect("checkout main");
     repo.commit_file("main_only.txt", "main content", "main adds file")
         .expect("main only file");
 
     // Switch to clean branch
     TestRepo::run_git(&repo.repo_path, &["checkout", "clean-branch"]).expect("checkout clean");
 
-    let dry_run = jj_dry_run_home_repo_rebase(&repo.repo_path, "clean-branch", "main")
+    let dry_run = jj_dry_run_home_repo_rebase(&repo.repo_path, "clean-branch", default_branch)
         .expect("dry run should not fail");
     assert!(
         !dry_run.would_conflict,

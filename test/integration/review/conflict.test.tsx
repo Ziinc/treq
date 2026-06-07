@@ -10,6 +10,7 @@ import {
 import {
 	createCommit,
 	createWorkspace,
+	ensureWorkspaceIndexed,
 	getWorkspaceStatus,
 	getWorkspaces,
 } from "../../../src/lib/api";
@@ -158,8 +159,7 @@ async function setupUnresolvedConflictState(
 		cwd: workspacePath,
 		encoding: "utf8",
 	});
-
-	writeWorkspaceFile(workspacePath, "notes.txt", "non-conflicted note\n");
+	await ensureWorkspaceIndexed(repoPath, workspaceId, workspacePath);
 
 	return {
 		repoPath,
@@ -223,15 +223,15 @@ describe("Review - conflict rendering contract", () => {
 		const fixture = await setupUnresolvedConflictState(
 			"feat/unresolved-conflict",
 		);
-		await assertStatus(fixture.repoPath, fixture.workspaceId, {
-			hasConflicts: true,
-			conflictedFiles: [fixture.conflictFile],
-		});
 
 		render(<Dashboard />);
 		await screen.findByTestId(
 			`workspace-conflict-indicator-${fixture.workspaceId}`,
 		);
+		await assertStatus(fixture.repoPath, fixture.workspaceId, {
+			hasConflicts: true,
+			conflictedFiles: [fixture.conflictFile],
+		});
 		await navigateToReviewTab(user, fixture.branchName);
 		await screen.findByText("Conflicts");
 		await screen.findByText("Changes");
@@ -242,10 +242,6 @@ describe("Review - conflict rendering contract", () => {
 
 	it("conflict identity without regions: keeps conflicted file identity with no invented conflict cards", async () => {
 		const fixture = await setupUnresolvedConflictState("feat/zero-regions");
-		await assertStatus(fixture.repoPath, fixture.workspaceId, {
-			hasConflicts: true,
-			conflictedFiles: [fixture.conflictFile],
-		});
 
 		const originalGetWorkspaceFileHunks = api.getWorkspaceFileHunks;
 		const getHunksSpy = vi.spyOn(api, "getWorkspaceFileHunks");
@@ -255,6 +251,13 @@ describe("Review - conflict rendering contract", () => {
 		});
 
 		render(<Dashboard />);
+		await screen.findByTestId(
+			`workspace-conflict-indicator-${fixture.workspaceId}`,
+		);
+		await assertStatus(fixture.repoPath, fixture.workspaceId, {
+			hasConflicts: true,
+			conflictedFiles: [fixture.conflictFile],
+		});
 		await navigateToReviewTab(user, fixture.branchName);
 		await screen.findByText("Conflicts");
 		await waitFor(() => {
@@ -266,12 +269,15 @@ describe("Review - conflict rendering contract", () => {
 
 	it("conflicted files suppress line-comment controls while non-conflicted files keep them", async () => {
 		const fixture = await setupUnresolvedConflictState("feat/comment-controls");
+
+		render(<Dashboard />);
+		await screen.findByTestId(
+			`workspace-conflict-indicator-${fixture.workspaceId}`,
+		);
 		await assertStatus(fixture.repoPath, fixture.workspaceId, {
 			hasConflicts: true,
 			conflictedFiles: [fixture.conflictFile],
 		});
-
-		render(<Dashboard />);
 		await navigateToReviewTab(user, fixture.branchName);
 
 		await clickFileInSection(user, "Conflicts", "README.md");
@@ -297,10 +303,6 @@ describe("Review - conflict rendering contract", () => {
 		const fixture = await setupUnresolvedConflictState(
 			"feat/deleted-conflict-placeholder",
 		);
-		await assertStatus(fixture.repoPath, fixture.workspaceId, {
-			hasConflicts: true,
-			conflictedFiles: [fixture.conflictFile],
-		});
 
 		const originalGetWorkspaceFileHunks = api.getWorkspaceFileHunks;
 		const getHunksSpy = vi.spyOn(api, "getWorkspaceFileHunks");
@@ -313,6 +315,13 @@ describe("Review - conflict rendering contract", () => {
 		});
 
 		render(<Dashboard />);
+		await screen.findByTestId(
+			`workspace-conflict-indicator-${fixture.workspaceId}`,
+		);
+		await assertStatus(fixture.repoPath, fixture.workspaceId, {
+			hasConflicts: true,
+			conflictedFiles: [fixture.conflictFile],
+		});
 		await navigateToReviewTab(user, fixture.branchName);
 		await clickFileInSection(user, "Conflicts", "README.md");
 		await screen.findByText(

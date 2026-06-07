@@ -130,8 +130,79 @@ fn test_jj_get_log_diff_stats_with_modifications() {
 }
 
 #[test]
+fn test_list_commits_includes_tentative_working_copy_for_dirty_workspace() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/tentative-working-copy",
+        Some("tentative working copy test".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().unwrap();
+
+    let clean_result = treq_lib::core::list_commits(
+        &repo.repo_path,
+        Some(workspace.id),
+        false,
+        None,
+        None,
+    )
+    .expect("Failed to list clean workspace commits");
+
+    assert!(
+        clean_result.tentative_working_copy.is_none(),
+        "Clean workspace should not include a tentative working copy entry"
+    );
+    assert!(
+        clean_result.commits.iter().all(|c| !c.is_working_copy),
+        "Clean workspace history should not include a working copy commit"
+    );
+
+    TestRepo::write_workspace_file(
+        workspace_path_str,
+        "tentative.txt",
+        "dirty working copy content",
+    )
+    .expect("Failed to dirty workspace");
+
+    let dirty_result = treq_lib::core::list_commits(
+        &repo.repo_path,
+        Some(workspace.id),
+        false,
+        None,
+        None,
+    )
+    .expect("Failed to list dirty workspace commits");
+
+    let tentative = dirty_result
+        .tentative_working_copy
+        .as_ref()
+        .expect("Dirty workspace should include a tentative working copy entry");
+
+    assert_eq!(
+        tentative.workspace_label, workspace.branch_name,
+        "Tentative entry should use the workspace branch name as its label"
+    );
+    assert!(
+        tentative.commit.is_working_copy,
+        "Tentative entry should wrap the working copy commit"
+    );
+    assert!(
+        dirty_result.commits.iter().all(|c| !c.is_working_copy),
+        "Committed history should not include the working copy commit when a tentative entry is present"
+    );
+}
+
+#[test]
 fn test_move_commit_to_existing_workspace() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     // Create source workspace
     let source = treq_lib::core::create_workspace(
@@ -154,7 +225,7 @@ fn test_move_commit_to_existing_workspace() {
         .expect("Failed to commit");
 
     // Get the change_id of the committed change
-    let commits_ahead = treq_lib::jj::jj_get_commits_ahead(source_path_str, "main")
+    let commits_ahead = treq_lib::jj::jj_get_commits_ahead(source_path_str, default_branch)
         .expect("Failed to get commits ahead");
     assert!(
         !commits_ahead.commits.is_empty(),
@@ -194,6 +265,7 @@ fn test_move_commit_to_existing_workspace() {
 #[test]
 fn test_abandon_commit() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     // Create workspace
     let workspace = treq_lib::core::create_workspace(
@@ -216,7 +288,7 @@ fn test_abandon_commit() {
         .expect("Failed to commit");
 
     // Get the change_id
-    let commits_ahead = treq_lib::jj::jj_get_commits_ahead(workspace_path_str, "main")
+    let commits_ahead = treq_lib::jj::jj_get_commits_ahead(workspace_path_str, default_branch)
         .expect("Failed to get commits ahead");
     assert!(
         !commits_ahead.commits.is_empty(),
@@ -229,7 +301,7 @@ fn test_abandon_commit() {
         .expect("Failed to abandon commit");
 
     // Verify commit is gone
-    let commits_after = treq_lib::jj::jj_get_commits_ahead(workspace_path_str, "main")
+    let commits_after = treq_lib::jj::jj_get_commits_ahead(workspace_path_str, default_branch)
         .expect("Failed to get commits after abandon");
     assert!(
         commits_after.commits.is_empty(),
@@ -740,29 +812,41 @@ fn test_list_commits_includes_base_branch_commits_for_non_default_workspace() {
         .expect("Failed to commit");
 
     let result =
-        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), true, None, None)
             .expect("Failed to list commits");
 
-    let committed: Vec<_> = result
+    let workspace_commits: Vec<_> = result
         .commits
         .iter()
-        .filter(|c| !c.is_working_copy)
+        .filter(|c| !c.is_working_copy && !c.on_target_only)
+        .collect();
+    let target_commits: Vec<_> = result
+        .commits
+        .iter()
+        .filter(|c| c.on_target_only)
         .collect();
 
     assert!(
-        committed.iter().any(|c| c.description == "Branch commit"),
+        workspace_commits
+            .iter()
+            .any(|c| c.description == "Branch commit"),
         "Should include branch commit, got {:?}",
-        committed.iter().map(|c| &c.description).collect::<Vec<_>>()
+        workspace_commits
+            .iter()
+            .map(|c| &c.description)
+            .collect::<Vec<_>>()
     );
 
-    // Verify base branch commits are included
-    let descriptions: Vec<&str> = committed.iter().map(|c| c.description.as_str()).collect();
+    let target_descriptions: Vec<&str> = target_commits
+        .iter()
+        .map(|c| c.description.as_str())
+        .collect();
     assert!(
-        descriptions.contains(&"Base commit 1"),
+        target_descriptions.contains(&"Base commit 1"),
         "Should contain base branch commit 1"
     );
     assert!(
-        descriptions.contains(&"Base commit 2"),
+        target_descriptions.contains(&"Base commit 2"),
         "Should contain base branch commit 2"
     );
 }
@@ -920,8 +1004,9 @@ fn test_list_commits_workspace_after_home_repo_jj_commits() {
         treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), true, Some(20), None)
             .expect("Expanded target branch history should succeed");
     let target_descriptions: Vec<&str> = expanded_result
-        .target_branch_commits
+        .commits
         .iter()
+        .filter(|c| c.on_target_only)
         .map(|c| c.description.as_str())
         .collect();
     assert!(
@@ -968,43 +1053,43 @@ fn test_list_commits_with_target_branch_history() {
         treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), true, None, None)
             .expect("Failed to list commits");
 
-    // Workspace commits should only include the workspace-side history.
-    let committed: Vec<_> = result
+    let workspace_descriptions: Vec<&str> = result
         .commits
         .iter()
-        .filter(|c| !c.is_working_copy)
-        .collect();
-    let descriptions: Vec<&str> = committed.iter().map(|c| c.description.as_str()).collect();
-    assert!(descriptions.contains(&"Branch commit"));
-    assert!(
-        !descriptions.contains(&"Base commit 1"),
-        "workspace commits should not include target history, got: {:?}",
-        descriptions
-    );
-    assert!(
-        !descriptions.contains(&"Base commit 2"),
-        "workspace commits should not include target history, got: {:?}",
-        descriptions
-    );
-
-    // Target branch commits should include the base commits
-    assert!(
-        !result.target_branch_commits.is_empty(),
-        "target_branch_commits should not be empty"
-    );
-    let target_descriptions: Vec<&str> = result
-        .target_branch_commits
-        .iter()
+        .filter(|c| !c.is_working_copy && !c.on_target_only)
         .map(|c| c.description.as_str())
         .collect();
+    let target_descriptions: Vec<&str> = result
+        .commits
+        .iter()
+        .filter(|c| c.on_target_only)
+        .map(|c| c.description.as_str())
+        .collect();
+
+    assert!(workspace_descriptions.contains(&"Branch commit"));
+    assert!(
+        !workspace_descriptions.contains(&"Base commit 1"),
+        "workspace commits should not include target history, got: {:?}",
+        workspace_descriptions
+    );
+    assert!(
+        !workspace_descriptions.contains(&"Base commit 2"),
+        "workspace commits should not include target history, got: {:?}",
+        workspace_descriptions
+    );
+
+    assert!(
+        !target_descriptions.is_empty(),
+        "target-only commits should not be empty"
+    );
     assert!(
         target_descriptions.contains(&"Base commit 1"),
-        "target_branch_commits should contain 'Base commit 1', got: {:?}",
+        "target-only commits should contain 'Base commit 1', got: {:?}",
         target_descriptions
     );
     assert!(
         target_descriptions.contains(&"Base commit 2"),
-        "target_branch_commits should contain 'Base commit 2', got: {:?}",
+        "target-only commits should contain 'Base commit 2', got: {:?}",
         target_descriptions
     );
 }
@@ -1044,12 +1129,13 @@ fn test_list_commits_keeps_workspace_and_target_histories_disjoint() {
     let workspace_descriptions: Vec<&str> = result
         .commits
         .iter()
-        .filter(|c| !c.is_working_copy)
+        .filter(|c| !c.is_working_copy && !c.on_target_only)
         .map(|c| c.description.as_str())
         .collect();
     let target_descriptions: Vec<&str> = result
-        .target_branch_commits
+        .commits
         .iter()
+        .filter(|c| c.on_target_only)
         .map(|c| c.description.as_str())
         .collect();
 
@@ -1065,18 +1151,29 @@ fn test_list_commits_keeps_workspace_and_target_histories_disjoint() {
     );
     assert!(
         target_descriptions.contains(&"Target only commit"),
-        "target_branch_commits should include the target-only commit, got: {:?}",
+        "target-only commits should include the target-only commit, got: {:?}",
         target_descriptions
     );
 
-    let overlap: Vec<_> = workspace_descriptions
+    let workspace_commit_ids: std::collections::HashSet<&str> = result
+        .commits
         .iter()
-        .filter(|description| target_descriptions.contains(description))
+        .filter(|c| !c.on_target_only)
+        .map(|c| c.commit_id.as_str())
+        .collect();
+    let target_commit_ids: std::collections::HashSet<&str> = result
+        .commits
+        .iter()
+        .filter(|c| c.on_target_only)
+        .map(|c| c.commit_id.as_str())
+        .collect();
+    let overlap: Vec<_> = workspace_commit_ids
+        .intersection(&target_commit_ids)
         .copied()
         .collect();
     assert!(
         overlap.is_empty(),
-        "workspace and target_branch_commits should be disjoint, overlap: {:?}",
+        "workspace and target-only commits should be disjoint, overlap: {:?}",
         overlap
     );
 }
@@ -1109,10 +1206,15 @@ fn test_list_commits_target_branch_history_limits_to_10() {
         treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), true, None, None)
             .expect("Failed to list commits");
 
+    let target_only_count = result
+        .commits
+        .iter()
+        .filter(|c| c.on_target_only)
+        .count();
     assert!(
-        result.target_branch_commits.len() <= 10,
-        "target_branch_commits should be limited to 10, got {}",
-        result.target_branch_commits.len()
+        target_only_count <= 10,
+        "target-only commits should be limited to 10, got {}",
+        target_only_count
     );
 }
 
@@ -1133,15 +1235,35 @@ fn test_list_commits_without_target_branch_history() {
     )
     .expect("Failed to create workspace");
 
-    // Call with include_target_branch_history=false (backward compatible)
+    repo.commit_workspace_file(&workspace, "workspace.txt", "workspace content\n", "Workspace commit")
+        .expect("Failed to commit workspace change");
+
     let result =
         treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
             .expect("Failed to list commits");
 
+    let workspace_descriptions: Vec<&str> = result
+        .commits
+        .iter()
+        .filter(|c| !c.is_working_copy && !c.on_target_only)
+        .map(|c| c.description.as_str())
+        .collect();
+    let target_descriptions: Vec<&str> = result
+        .commits
+        .iter()
+        .filter(|c| c.on_target_only)
+        .map(|c| c.description.as_str())
+        .collect();
+
     assert!(
-        result.target_branch_commits.is_empty(),
-        "target_branch_commits should be empty when include_target_branch_history=false, got {}",
-        result.target_branch_commits.len()
+        workspace_descriptions.contains(&"Workspace commit"),
+        "workspace commits should stay on the workspace side, got: {:?}",
+        workspace_descriptions
+    );
+    assert!(
+        target_descriptions.is_empty(),
+        "target-only commits should be omitted when include_target_branch_history is false, got: {:?}",
+        target_descriptions
     );
 }
 
@@ -1252,14 +1374,15 @@ fn test_list_commits_target_branch_history_uses_local_bookmark_only() {
             .expect("list_commits should succeed");
 
     let target_descriptions: Vec<&str> = result
-        .target_branch_commits
+        .commits
         .iter()
+        .filter(|c| c.on_target_only)
         .map(|c| c.description.as_str())
         .collect();
 
     assert!(
         target_descriptions.contains(&"Local main only commit"),
-        "target branch history should include local main commit, got: {:?}",
+        "target-only history should include local main commit, got: {:?}",
         target_descriptions
     );
     assert!(
@@ -1272,6 +1395,7 @@ fn test_list_commits_target_branch_history_uses_local_bookmark_only() {
 #[test]
 fn test_default_branch_workspace_returns_full_history() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     repo.commit_file("base_1.txt", "base 1\n", "Base commit 1")
         .expect("Failed to create base commit 1");
@@ -1280,7 +1404,7 @@ fn test_default_branch_workspace_returns_full_history() {
 
     let workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
-        "main",
+        default_branch,
         Some("root main workspace".to_string()),
         None,
         None,
@@ -1289,7 +1413,7 @@ fn test_default_branch_workspace_returns_full_history() {
     .expect("Failed to create main workspace");
 
     let result =
-        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), true, None, None)
             .expect("Failed to list commits");
 
     let committed_descriptions: Vec<&str> = result
@@ -1330,40 +1454,50 @@ fn test_non_default_workspace_includes_target_history() {
     )
     .expect("Failed to create workspace");
 
-    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path
-        .to_str()
-        .expect("workspace path should be utf-8");
-    TestRepo::write_workspace_file(workspace_path_str, "workspace_only.txt", "workspace\n")
-        .expect("Failed to write workspace file");
-    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Workspace commit")
+    repo.commit_workspace_file(&workspace, "workspace_only.txt", "workspace\n", "Workspace commit")
         .expect("Failed to commit workspace change");
 
     let result =
-        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), true, None, None)
             .expect("Failed to list commits");
 
-    let committed_descriptions: Vec<&str> = result
+    let workspace_descriptions: Vec<&str> = result
         .commits
         .iter()
-        .filter(|c| !c.is_working_copy)
+        .filter(|c| !c.is_working_copy && !c.on_target_only)
+        .map(|c| c.description.as_str())
+        .collect();
+    let target_descriptions: Vec<&str> = result
+        .commits
+        .iter()
+        .filter(|c| c.on_target_only)
         .map(|c| c.description.as_str())
         .collect();
 
     assert!(
-        committed_descriptions.contains(&"Workspace commit"),
+        workspace_descriptions.contains(&"Workspace commit"),
         "workspace history should include its own commit, got: {:?}",
-        committed_descriptions
+        workspace_descriptions
     );
     assert!(
-        committed_descriptions.contains(&"Base commit 1"),
-        "non-default workspace should include target branch history, got: {:?}",
-        committed_descriptions
+        !workspace_descriptions.contains(&"Base commit 1"),
+        "workspace history should not include target branch history, got: {:?}",
+        workspace_descriptions
     );
     assert!(
-        committed_descriptions.contains(&"Base commit 2"),
-        "non-default workspace should include target branch history, got: {:?}",
-        committed_descriptions
+        !workspace_descriptions.contains(&"Base commit 2"),
+        "workspace history should not include target branch history, got: {:?}",
+        workspace_descriptions
+    );
+    assert!(
+        target_descriptions.contains(&"Base commit 1"),
+        "target-only commits should include base history, got: {:?}",
+        target_descriptions
+    );
+    assert!(
+        target_descriptions.contains(&"Base commit 2"),
+        "target-only commits should include base history, got: {:?}",
+        target_descriptions
     );
 }
 
@@ -1387,34 +1521,42 @@ fn test_non_default_workspace_empty_ahead_includes_target_history() {
     .expect("Failed to create workspace");
 
     let result =
-        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), true, None, None)
             .expect("Failed to list commits");
 
-    let committed_descriptions: Vec<&str> = result
+    let workspace_descriptions: Vec<&str> = result
         .commits
         .iter()
-        .filter(|c| !c.is_working_copy)
+        .filter(|c| !c.is_working_copy && !c.on_target_only)
+        .map(|c| c.description.as_str())
+        .collect();
+    let target_descriptions: Vec<&str> = result
+        .commits
+        .iter()
+        .filter(|c| c.on_target_only)
         .map(|c| c.description.as_str())
         .collect();
 
     assert!(
-        !committed_descriptions.is_empty(),
-        "non-default workspace should include target history even with no ahead commits"
+        workspace_descriptions.is_empty()
+            || workspace_descriptions.contains(&"Workspace commit"),
+        "workspace commits should stay on the workspace side, got: {:?}",
+        workspace_descriptions
     );
     assert!(
-        committed_descriptions.contains(&"Base commit 1"),
-        "non-default workspace should include target branch history, got: {:?}",
-        committed_descriptions
+        target_descriptions.contains(&"Base commit 1"),
+        "target-only commits should include base history, got: {:?}",
+        target_descriptions
     );
     assert!(
-        committed_descriptions.contains(&"Base commit 2"),
-        "non-default workspace should include target branch history, got: {:?}",
-        committed_descriptions
+        target_descriptions.contains(&"Base commit 2"),
+        "target-only commits should include base history, got: {:?}",
+        target_descriptions
     );
 }
 
 #[test]
-fn test_non_default_workspace_combined_history_has_no_duplicate_change_ids() {
+fn test_non_default_workspace_combined_history_has_no_duplicate_commit_ids() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
     repo.commit_file("base_1.txt", "base 1\n", "Base commit 1")
@@ -1442,23 +1584,22 @@ fn test_non_default_workspace_combined_history_has_no_duplicate_change_ids() {
         .expect("Failed to commit workspace change");
 
     let result =
-        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), true, None, None)
             .expect("Failed to list commits");
 
-    let committed_change_ids: Vec<&str> = result
+    let all_commit_ids: Vec<&str> = result
         .commits
         .iter()
         .filter(|c| !c.is_working_copy)
-        .map(|c| c.change_id.as_str())
+        .map(|c| c.commit_id.as_str())
         .collect();
-    let unique_change_ids: std::collections::HashSet<&str> =
-        committed_change_ids.iter().copied().collect();
+    let unique_commit_ids: std::collections::HashSet<&str> =
+        all_commit_ids.iter().copied().collect();
 
     assert_eq!(
-        unique_change_ids.len(),
-        committed_change_ids.len(),
-        "combined history should not contain duplicate change IDs: {:?}",
-        committed_change_ids
+        unique_commit_ids.len(),
+        all_commit_ids.len(),
+        "combined commits should have unique commit ids"
     );
 }
 
@@ -1585,29 +1726,45 @@ fn test_non_default_workspace_uses_non_main_default_target_history() {
         .expect("Failed to commit workspace change");
 
     let result =
-        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), true, None, None)
             .expect("Failed to list commits");
 
-    let committed_descriptions: Vec<&str> = result
+    let workspace_descriptions: Vec<&str> = result
         .commits
         .iter()
-        .filter(|c| !c.is_working_copy)
+        .filter(|c| !c.is_working_copy && !c.on_target_only)
+        .map(|c| c.description.as_str())
+        .collect();
+    let target_descriptions: Vec<&str> = result
+        .commits
+        .iter()
+        .filter(|c| c.on_target_only)
         .map(|c| c.description.as_str())
         .collect();
 
     assert!(
-        committed_descriptions.contains(&"Workspace trunk commit"),
+        workspace_descriptions.contains(&"Workspace trunk commit"),
         "workspace history should include its own commit, got: {:?}",
-        committed_descriptions
+        workspace_descriptions
     );
     assert!(
-        committed_descriptions.contains(&"Trunk commit 1"),
-        "non-default workspace should include trunk history, got: {:?}",
-        committed_descriptions
+        !workspace_descriptions.contains(&"Trunk commit 1"),
+        "workspace history should not include trunk target history, got: {:?}",
+        workspace_descriptions
     );
     assert!(
-        committed_descriptions.contains(&"Trunk commit 2"),
-        "non-default workspace should include trunk history, got: {:?}",
-        committed_descriptions
+        !workspace_descriptions.contains(&"Trunk commit 2"),
+        "workspace history should not include trunk target history, got: {:?}",
+        workspace_descriptions
+    );
+    assert!(
+        target_descriptions.contains(&"Trunk commit 1"),
+        "target branch commits should include trunk history, got: {:?}",
+        target_descriptions
+    );
+    assert!(
+        target_descriptions.contains(&"Trunk commit 2"),
+        "target branch commits should include trunk history, got: {:?}",
+        target_descriptions
     );
 }

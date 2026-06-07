@@ -37,6 +37,7 @@ interface DiffContentAreaProps {
 	loadingAllHunks: boolean;
 	files: ParsedFileChange[];
 	allFileHunks: Map<string, FileHunksData>;
+	committedFileHunks: Map<string, FileHunksData>;
 	committedFiles: JjFileChange[];
 	showCommittedChanges: boolean | undefined;
 	// large changeset
@@ -126,6 +127,7 @@ export function DiffContentArea({
 	loadingAllHunks,
 	files,
 	allFileHunks,
+	committedFileHunks,
 	committedFiles,
 	showCommittedChanges,
 	largeChangesetExpanded,
@@ -380,6 +382,7 @@ export function DiffContentArea({
 												} as ParsedFileChange
 											}
 											allFileHunks={allFileHunks}
+											overrideFileHunks={committedFileHunks}
 											collapsedFiles={collapsedFiles}
 											viewedFiles={viewedFiles}
 											expandedLargeDiffs={expandedLargeDiffs}

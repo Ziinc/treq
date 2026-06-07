@@ -17,6 +17,7 @@ fn set_workspace_refreshed_at(repo_path: &str, id: i64, ts: &str) {
 #[test]
 fn test_workspace_list_statuses_show_conflict_state() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     let workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -50,7 +51,7 @@ fn test_workspace_list_statuses_show_conflict_state() {
         .expect("Failed to write conflict.txt in main repo");
     treq_lib::jj::jj_commit(&repo.repo_path, "main commit").expect("Failed to commit in main repo");
 
-    let rebase_result = treq_lib::jj::jj_rebase_onto(workspace_path_str, "main", "diff")
+    let rebase_result = treq_lib::jj::jj_rebase_onto(workspace_path_str, default_branch, "diff")
         .expect("Failed to rebase workspace onto main");
     assert!(
         rebase_result.success,
@@ -66,7 +67,7 @@ fn test_workspace_list_statuses_show_conflict_state() {
         conflicted_files
     );
     let conflicted_files_explicit_target =
-        treq_lib::jj::get_conflicted_files(workspace_path_str, Some("main"))
+        treq_lib::jj::get_conflicted_files(workspace_path_str, Some(default_branch))
             .expect("Failed to list conflicted files with explicit target");
     assert_eq!(
         conflicted_files_explicit_target, conflicted_files,
@@ -191,6 +192,7 @@ fn test_workspace_list_statuses_excludes_default_workspace_and_ignores_stale_db_
 #[test]
 fn test_workspace_list_statuses_preserves_existing_workspace_metadata_on_upsert() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     let workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -202,7 +204,7 @@ fn test_workspace_list_statuses_preserves_existing_workspace_metadata_on_upsert(
     )
     .expect("Failed to create workspace");
 
-    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, workspace.id, "main")
+    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, workspace.id, default_branch)
         .expect("Failed to set target branch");
     treq_lib::local_db::update_workspace_not_on_remote(&repo.repo_path, workspace.id, true)
         .expect("Failed to set not_on_remote");
@@ -220,7 +222,7 @@ fn test_workspace_list_statuses_preserves_existing_workspace_metadata_on_upsert(
         .find(|s| s.current.id == workspace.id)
         .expect("workspace status should exist");
 
-    assert_eq!(status.current.target_branch.as_deref(), Some("main"));
+    assert_eq!(status.current.target_branch.as_deref(), Some(default_branch));
     assert_eq!(
         status.current.description.as_deref(),
         Some("initial description")

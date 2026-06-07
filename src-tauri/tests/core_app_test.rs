@@ -120,12 +120,13 @@ fn test_init_triggers_workspaces_sync() {
 #[test]
 fn returns_false_when_workspace_is_descendant_of_target() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
     let ws = treq_lib::core::create_workspace(
         &repo.repo_path,
         "feat/descendant",
         Some("descendant".to_string()),
         None,
-        Some("main"),
+        Some(default_branch),
         None,
     )
     .expect("Failed to create workspace");
@@ -140,12 +141,13 @@ fn returns_false_when_workspace_is_descendant_of_target() {
 #[test]
 fn returns_true_and_rebases_when_workspace_diverged_from_target() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
     let ws = treq_lib::core::create_workspace(
         &repo.repo_path,
         "feat/diverged",
         Some("diverged".to_string()),
         None,
-        Some("main"),
+        Some(default_branch),
         None,
     )
     .expect("Failed to create workspace");
@@ -202,13 +204,14 @@ fn returns_false_for_self_target_workspace() {
 #[test]
 fn init_checks_all_workspaces_and_rebases_only_diverged_ones() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     let _ws_diverged = treq_lib::core::create_workspace(
         &repo.repo_path,
         "feat/init-diverged",
         Some("init diverged".to_string()),
         None,
-        Some("main"),
+        Some(default_branch),
         None,
     )
     .expect("Failed to create diverged workspace");
@@ -217,7 +220,7 @@ fn init_checks_all_workspaces_and_rebases_only_diverged_ones() {
         "feat/init-descendant",
         Some("init descendant".to_string()),
         None,
-        Some("main"),
+        Some(default_branch),
         None,
     )
     .expect("Failed to create descendant workspace");

@@ -147,8 +147,9 @@ fn test_create_commit_empty_workspace() {
 #[test]
 fn test_commit_home_repo_advances_branch() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
-    let before = e2e_test_helpers::JjVerifier::get_bookmark_commit_id(&repo.repo_path, "main")
+    let before = e2e_test_helpers::JjVerifier::get_bookmark_commit_id(&repo.repo_path, default_branch)
         .expect("query bookmark")
         .expect("main bookmark should exist after init");
 
@@ -158,7 +159,7 @@ fn test_commit_home_repo_advances_branch() {
     treq_lib::jj::jj_commit(&repo.repo_path, "home repo commit")
         .expect("jj_commit on home repo failed");
 
-    let after = e2e_test_helpers::JjVerifier::get_bookmark_commit_id(&repo.repo_path, "main")
+    let after = e2e_test_helpers::JjVerifier::get_bookmark_commit_id(&repo.repo_path, default_branch)
         .expect("query bookmark")
         .expect("main bookmark should still exist");
 

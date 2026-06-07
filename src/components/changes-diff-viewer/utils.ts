@@ -1,5 +1,4 @@
 import type { JjDiffHunk, LineComment as ApiLineComment } from "../../lib/api";
-import type { ParsedFileChange } from "../../lib/git-utils";
 import type { LineComment } from "./types";
 
 export function toLocalLineComment(c: ApiLineComment): LineComment {
@@ -68,14 +67,6 @@ export const filesEqual = (
 		}
 	}
 	return true;
-};
-
-export const filterCommittedFiles = (
-	committedFiles: Array<{ path: string }>,
-	files: ParsedFileChange[],
-) => {
-	const pendingPaths = new Set(files.map((file) => file.path));
-	return committedFiles.filter((file) => !pendingPaths.has(file.path));
 };
 
 export const parseCachedHunks = (raw: string): JjDiffHunk[] | null => {
