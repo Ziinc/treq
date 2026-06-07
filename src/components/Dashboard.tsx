@@ -37,12 +37,17 @@ import {
 	getWorkspaces,
 	initRepo,
 	listRepoBranches,
+	listWorkspaceStatuses,
 	selectFolder,
 	setSessionModel,
 	setSetting,
 	setWindowRepoPath,
 	updateSessionAccess,
 } from "../lib/api";
+import {
+	buildWorkspaceTree,
+	flattenWorkspaceTree,
+} from "../lib/workspace-tree";
 import { getFullWorkspacePath } from "../lib/utils";
 import {
 	findWorkspaceByBranch,
@@ -308,6 +313,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		refetchInterval: 10000,
 		enabled: !!repoPath,
 	});
+	const { data: workspaceStatuses = [] } = useQuery({
+		queryKey: ["workspace-statuses", repoPath],
+		queryFn: () => listWorkspaceStatuses(repoPath),
+		refetchInterval: 10000,
+		enabled: !!repoPath,
+	});
+
+	const visibleWorkspaces = useMemo(() => {
+		if (workspaceStatuses.length === 0) {
+			return workspaces;
+		}
+		return flattenWorkspaceTree(buildWorkspaceTree(workspaceStatuses)).map(
+			(node) => node.status.current,
+		);
+	}, [workspaceStatuses, workspaces]);
 
 	// Note: Git cache preloader removed since we're using JJ now
 
@@ -747,7 +767,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				return;
 			}
 
-			const workspaceIndex = workspaces.findIndex((w) => w.id === workspace.id);
+			const workspaceIndex = visibleWorkspaces.findIndex(
+				(w) => w.id === workspace.id,
+			);
 			if (workspaceIndex === -1) return;
 
 			const isMetaKey = event.metaKey || event.ctrlKey;
@@ -759,7 +781,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				const end = Math.max(lastSelectedWorkspaceIndex, workspaceIndex);
 				const newSelection = new Set<number>();
 				for (let i = start; i <= end; i++) {
-					newSelection.add(workspaces[i].id);
+					newSelection.add(visibleWorkspaces[i].id);
 				}
 				setSelectedWorkspaceIds(newSelection);
 			} else if (isMetaKey) {
@@ -781,7 +803,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				handleSelectWorkspace(workspace);
 			}
 		},
-		[workspaces, lastSelectedWorkspaceIndex, handleSelectWorkspace],
+		[visibleWorkspaces, lastSelectedWorkspaceIndex, handleSelectWorkspace],
 	);
 
 	const handleBulkDelete = async () => {

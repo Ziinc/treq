@@ -10,7 +10,7 @@ import {
 	updateWorkspace,
 } from "../../src/lib/api";
 import { Dashboard } from "../../src/components/Dashboard";
-import { waitFor } from "@testing-library/react";
+import { waitFor, within } from "@testing-library/react";
 
 const findWorkspaceByBranchName = (
 	workspaces: Awaited<ReturnType<typeof getWorkspaces>>,
@@ -264,6 +264,83 @@ describe("Dashboard - workspace list", () => {
 			await user.keyboard("{/Meta}");
 
 			await screen.findByText(/delete 2 workspaces/i);
+		});
+
+		it("keeps shift-click selection contiguous across the visible sidebar order", async () => {
+			await createWorkspace(repoPath, "gumbo-notes");
+			await createWorkspace(repoPath, "rubber-test-123");
+			await createWorkspace(repoPath, "dduck-joke-readme");
+			await createWorkspace(repoPath, "zebra-notes");
+
+			const workspaces = await getWorkspaces(repoPath);
+			const dduckWorkspace = findWorkspaceByBranchName(
+				workspaces,
+				"dduck-joke-readme",
+			);
+			const rubberWorkspace = findWorkspaceByBranchName(
+				workspaces,
+				"rubber-test-123",
+			);
+			const gumboWorkspace = findWorkspaceByBranchName(
+				workspaces,
+				"gumbo-notes",
+			);
+			const zebraWorkspace = findWorkspaceByBranchName(workspaces, "zebra-notes");
+			expect(dduckWorkspace).toBeTruthy();
+			expect(rubberWorkspace).toBeTruthy();
+			expect(gumboWorkspace).toBeTruthy();
+			expect(zebraWorkspace).toBeTruthy();
+
+			await updateWorkspace(
+				repoPath,
+				rubberWorkspace!.id,
+				dduckWorkspace!.branch_name,
+			);
+			await updateWorkspace(
+				repoPath,
+				zebraWorkspace!.id,
+				rubberWorkspace!.branch_name,
+			);
+
+			render(<Dashboard />);
+
+			const sidebarRoot = document.querySelector(
+				`.${CSS.escape("group/sidebar")}`,
+			) as HTMLElement;
+			const visibleOrder = [
+				"dduck-joke-readme",
+				"rubber-test-123",
+				"zebra-notes",
+				"feat/alpha",
+				"feat/beta",
+				"gumbo-notes",
+			];
+
+			const getWorkspaceRow = async (branchName: string) => {
+				const branchElement = await findSidebarBranchElement(branchName);
+				return branchElement.closest("div") as HTMLElement;
+			};
+
+			const anchorRow = await getWorkspaceRow("dduck-joke-readme");
+			const targetRow = await getWorkspaceRow("gumbo-notes");
+
+			fireEvent.click(anchorRow, { metaKey: true });
+			fireEvent.click(targetRow, { shiftKey: true });
+
+			await waitFor(async () => {
+				for (const branchName of visibleOrder) {
+					const row = await getWorkspaceRow(branchName);
+					expect(row).toHaveClass("bg-primary/20");
+				}
+			});
+
+			await waitFor(() => {
+				expect(
+					within(sidebarRoot).getByRole("button", {
+						name: /delete 6 workspaces/i,
+					}),
+				).toBeTruthy();
+			});
 		});
 	});
 });
