@@ -101,7 +101,9 @@ fn workspace_creation_creates_empty_wc_but_bookmark_targets_parent() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().expect("Workspace path should be valid UTF-8");
+    let workspace_path_str = workspace_path
+        .to_str()
+        .expect("Workspace path should be valid UTF-8");
 
     let status = TestRepo::run_jj(workspace_path_str, &["st"]).expect("jj st failed");
     assert!(
@@ -165,7 +167,9 @@ fn workspace_creation_list_commits_excludes_all_working_copy_commits() {
     .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path.to_str().expect("Workspace path should be valid UTF-8");
+    let workspace_path_str = workspace_path
+        .to_str()
+        .expect("Workspace path should be valid UTF-8");
 
     let status = TestRepo::run_jj(workspace_path_str, &["st"]).expect("jj st failed");
     assert!(
@@ -186,7 +190,11 @@ fn workspace_creation_list_commits_excludes_all_working_copy_commits() {
         "list_commits should exclude all working-copy commits, got: {:?}",
         log.commits
             .iter()
-            .map(|c| (c.commit_id.clone(), c.description.clone(), c.is_working_copy))
+            .map(|c| (
+                c.commit_id.clone(),
+                c.description.clone(),
+                c.is_working_copy
+            ))
             .collect::<Vec<_>>()
     );
     assert!(
@@ -426,12 +434,8 @@ fn test_create_workspace_from_ahead_source_stacks_history_and_working_copy_and_d
         .to_str()
         .expect("B workspace path should be valid UTF-8");
 
-    TestRepo::write_workspace_file(
-        b_path_str,
-        "b-committed.txt",
-        "B committed change marker\n",
-    )
-    .expect("Failed to write B change");
+    TestRepo::write_workspace_file(b_path_str, "b-committed.txt", "B committed change marker\n")
+        .expect("Failed to write B change");
     treq_lib::core::commit_workspace(&repo.repo_path, b_workspace.id, "B committed change")
         .expect("Failed to commit in B");
 
@@ -458,12 +462,8 @@ fn test_create_workspace_from_ahead_source_stacks_history_and_working_copy_and_d
         .to_str()
         .expect("A workspace path should be valid UTF-8");
 
-    TestRepo::write_workspace_file(
-        a_path_str,
-        "a-committed.txt",
-        "A committed change marker\n",
-    )
-    .expect("Failed to write A change");
+    TestRepo::write_workspace_file(a_path_str, "a-committed.txt", "A committed change marker\n")
+        .expect("Failed to write A change");
     treq_lib::core::commit_workspace(&repo.repo_path, a_workspace.id, "A committed change")
         .expect("Failed to commit in A");
 
@@ -508,8 +508,9 @@ fn test_create_workspace_from_ahead_source_stacks_history_and_working_copy_and_d
         a_raw_log
     );
 
-    let b_commits = treq_lib::core::list_commits(&repo.repo_path, Some(b_workspace.id), false, None, None)
-        .expect("list_commits should succeed for B");
+    let b_commits =
+        treq_lib::core::list_commits(&repo.repo_path, Some(b_workspace.id), false, None, None)
+            .expect("list_commits should succeed for B");
     assert!(
         b_commits.commits.iter().all(|c| !c.is_working_copy),
         "B list_commits should exclude working-copy commits"
@@ -522,8 +523,9 @@ fn test_create_workspace_from_ahead_source_stacks_history_and_working_copy_and_d
         "B list_commits should include B committed change"
     );
 
-    let a_commits = treq_lib::core::list_commits(&repo.repo_path, Some(a_workspace.id), false, None, None)
-        .expect("list_commits should succeed for A");
+    let a_commits =
+        treq_lib::core::list_commits(&repo.repo_path, Some(a_workspace.id), false, None, None)
+            .expect("list_commits should succeed for A");
     assert!(
         a_commits.commits.iter().all(|c| !c.is_working_copy),
         "A list_commits should exclude working-copy commits"
@@ -548,7 +550,10 @@ fn test_create_workspace_from_ahead_source_stacks_history_and_working_copy_and_d
     let a_status = treq_lib::core::workspace_status(&repo.repo_path, Some(a_workspace.id))
         .expect("workspace_status should succeed for A");
     assert!(
-        b_status.children.iter().any(|child| child.id == a_workspace.id),
+        b_status
+            .children
+            .iter()
+            .any(|child| child.id == a_workspace.id),
         "B should list A as child"
     );
     assert_eq!(
@@ -557,7 +562,9 @@ fn test_create_workspace_from_ahead_source_stacks_history_and_working_copy_and_d
         "A target should be B"
     );
 
-    let app_db_path = std::path::Path::new(&repo.repo_path).join(".treq").join("treq.db");
+    let app_db_path = std::path::Path::new(&repo.repo_path)
+        .join(".treq")
+        .join("treq.db");
     let app_db = treq_lib::db::Database::new(app_db_path).expect("test app db should open");
     app_db.init().expect("test app db should initialize");
     app_db

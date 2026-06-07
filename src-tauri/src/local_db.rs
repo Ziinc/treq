@@ -423,7 +423,10 @@ fn get_connection(repo_path: &str) -> Result<Connection, String> {
     Connection::open(db_path).map_err(|e| format!("Failed to open local db: {}", e))
 }
 
-pub fn upsert_instance_registry(repo_path: &str, instance: RegisteredInstance) -> Result<(), String> {
+pub fn upsert_instance_registry(
+    repo_path: &str,
+    instance: RegisteredInstance,
+) -> Result<(), String> {
     let conn = get_connection(repo_path)?;
     let windows_json = serde_json::to_string(&instance.windows)
         .map_err(|e| format!("Failed to serialize instance windows: {}", e))?;
@@ -486,10 +489,12 @@ pub fn list_instance_registry(repo_path: &str) -> Result<Vec<RegisteredInstance>
                 .map_err(|e| format!("Failed to read pid: {}", e))? as u32,
             started_at: row
                 .get::<_, i64>(2)
-                .map_err(|e| format!("Failed to read started_at: {}", e))? as u64,
+                .map_err(|e| format!("Failed to read started_at: {}", e))?
+                as u64,
             last_heartbeat_at: row
                 .get::<_, i64>(3)
-                .map_err(|e| format!("Failed to read last_heartbeat_at: {}", e))? as u64,
+                .map_err(|e| format!("Failed to read last_heartbeat_at: {}", e))?
+                as u64,
             endpoint: row
                 .get(4)
                 .map_err(|e| format!("Failed to read endpoint: {}", e))?,
@@ -1422,7 +1427,10 @@ mod tests {
         assert_eq!(workspaces[0].workspace_path, workspace_path);
         assert_eq!(workspaces[0].branch_name, "test-branch");
         assert_eq!(workspaces[0].metadata, None);
-        assert_eq!(workspaces[0].description.as_deref(), Some("test description"));
+        assert_eq!(
+            workspaces[0].description.as_deref(),
+            Some("test description")
+        );
         assert!(workspaces[0].target_branch.is_none());
 
         let db_path = get_local_db_path(repo_path);

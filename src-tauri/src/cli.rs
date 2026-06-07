@@ -179,19 +179,16 @@ fn dispatch_agent_request(
     request_id: &str,
 ) -> Result<(), String> {
     let now = agent_dispatch::now_millis();
-    local_db::prune_stale_instance_registry(
-        repo_path,
-        now,
-        agent_dispatch::HEARTBEAT_TIMEOUT_MS,
-    )?;
+    local_db::prune_stale_instance_registry(repo_path, now, agent_dispatch::HEARTBEAT_TIMEOUT_MS)?;
     let instances = local_db::list_instance_registry(repo_path)?;
 
-    let instance = agent_dispatch::resolve_target_instance(&instances, repo_path).ok_or_else(|| {
-        format!(
-            "No running Treq instance has repo '{}'. Open this repo in Treq first.",
-            repo_path
-        )
-    })?;
+    let instance =
+        agent_dispatch::resolve_target_instance(&instances, repo_path).ok_or_else(|| {
+            format!(
+                "No running Treq instance has repo '{}'. Open this repo in Treq first.",
+                repo_path
+            )
+        })?;
 
     let request = agent_dispatch::AgentDispatchRequest {
         request_id: request_id.to_string(),
@@ -249,7 +246,9 @@ fn handle_workspace_add(matches: &Matches) {
         Some(name) => name,
         None => {
             eprintln!("Error: branch name is required");
-            eprintln!("Usage: treq add <branch_name> [-d description] [-l title] [-s source_branch]");
+            eprintln!(
+                "Usage: treq add <branch_name> [-d description] [-l title] [-s source_branch]"
+            );
             return;
         }
     };
@@ -301,7 +300,9 @@ fn handle_workspace_set(matches: &Matches) {
         Some(name) => name,
         None => {
             eprintln!("Error: workspace name is required");
-            eprintln!("Usage: treq set <workspace_name> [-d description] [-l title] [-t target_branch]");
+            eprintln!(
+                "Usage: treq set <workspace_name> [-d description] [-l title] [-t target_branch]"
+            );
             return;
         }
     };
@@ -311,7 +312,9 @@ fn handle_workspace_set(matches: &Matches) {
     let target_branch = get_arg_value(matches, "target-branch");
 
     if description.is_none() && target_branch.is_none() && title.is_none() {
-        eprintln!("Error: specify at least one of -d (description), -l (title), or -t (target branch)");
+        eprintln!(
+            "Error: specify at least one of -d (description), -l (title), or -t (target branch)"
+        );
         return;
     }
 
@@ -597,15 +600,15 @@ mod tests {
     use super::*;
     use crate::agent_dispatch;
     use serde_json::Value;
+    use std::fs;
     use std::io::{Read, Write};
     use std::net::TcpListener;
-    use std::fs;
     use std::path::Path;
     use std::sync::{Mutex, OnceLock};
     use std::thread;
     use std::time::Duration;
-    use tempfile::TempDir;
     use tauri_plugin_cli::SubcommandMatches;
+    use tempfile::TempDir;
 
     fn make_subcommand(name: &str) -> SubcommandMatches {
         let mut sub = SubcommandMatches::default();
@@ -649,10 +652,7 @@ mod tests {
         let mut help_arg = tauri_plugin_cli::ArgData::default();
         help_arg.value = Value::String("generated help text".to_string());
         help_arg.occurrences = 0;
-        matches.args.insert(
-            "help".to_string(),
-            help_arg,
-        );
+        matches.args.insert("help".to_string(), help_arg);
 
         assert!(handle_cli_global_args(&matches));
     }
@@ -779,8 +779,7 @@ mod tests {
                 assert!(
                     takes_value,
                     "positional arg '{}' in subcommand '{}' must set takesValue=true",
-                    arg_name,
-                    subcommand_name
+                    arg_name, subcommand_name
                 );
             }
         }
@@ -825,10 +824,7 @@ mod tests {
         LOCK.get_or_init(|| Mutex::new(()))
     }
 
-    fn seed_registry(
-        instances: Vec<agent_dispatch::RegisteredInstance>,
-        repo_path: &str,
-    ) {
+    fn seed_registry(instances: Vec<agent_dispatch::RegisteredInstance>, repo_path: &str) {
         local_db::init_local_db(repo_path).expect("init local db");
         for instance in instances {
             local_db::upsert_instance_registry(repo_path, instance).expect("upsert instance");
@@ -893,7 +889,14 @@ mod tests {
         let repo = temp.path().join("repo");
         std::fs::create_dir_all(&repo).expect("mkdir");
         seed_registry(vec![], repo.to_str().unwrap());
-        let result = dispatch_agent_request("/tmp/unknown-repo", "feat/x", "hello", "plan", "codex", "req-1");
+        let result = dispatch_agent_request(
+            "/tmp/unknown-repo",
+            "feat/x",
+            "hello",
+            "plan",
+            "codex",
+            "req-1",
+        );
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("No running Treq instance"));
     }

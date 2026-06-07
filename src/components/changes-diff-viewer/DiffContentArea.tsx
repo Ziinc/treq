@@ -372,35 +372,35 @@ export function DiffContentArea({
 										<FileRowComponent
 											key={`committed-${file.path}`}
 											file={
-													{
-														...file,
-														stagedStatus: "",
-														workspaceStatus: file.status,
-														isUntracked: false,
-													} as ParsedFileChange
-												}
-												allFileHunks={allFileHunks}
-												collapsedFiles={collapsedFiles}
-												viewedFiles={viewedFiles}
-												expandedLargeDiffs={expandedLargeDiffs}
-												diffFontSize={diffFontSize}
-												readOnly={true}
-												fileActionTarget={null}
-												selectedUnstagedFiles={new Set()}
-												actualConflictedFiles={actualConflictedFiles}
-												workspacePath={workspacePath}
-												toggleFileCollapse={toggleFileCollapse}
-												toggleLargeDiff={toggleLargeDiff}
-												handleMarkFileViewed={handleMarkFileViewed}
-												handleUnmarkFileViewed={handleUnmarkFileViewed}
-												handleDiscardFiles={handleDiscardFiles}
-												handleContextMenu={handleContextMenu}
-												renderHunkLines={renderHunkLines}
-												addToast={addToast}
-												getOutdatedCommentsForFile={() => []}
-												deleteComment={deleteComment}
-											/>
-										))}
+												{
+													...file,
+													stagedStatus: "",
+													workspaceStatus: file.status,
+													isUntracked: false,
+												} as ParsedFileChange
+											}
+											allFileHunks={allFileHunks}
+											collapsedFiles={collapsedFiles}
+											viewedFiles={viewedFiles}
+											expandedLargeDiffs={expandedLargeDiffs}
+											diffFontSize={diffFontSize}
+											readOnly={true}
+											fileActionTarget={null}
+											selectedUnstagedFiles={new Set()}
+											actualConflictedFiles={actualConflictedFiles}
+											workspacePath={workspacePath}
+											toggleFileCollapse={toggleFileCollapse}
+											toggleLargeDiff={toggleLargeDiff}
+											handleMarkFileViewed={handleMarkFileViewed}
+											handleUnmarkFileViewed={handleUnmarkFileViewed}
+											handleDiscardFiles={handleDiscardFiles}
+											handleContextMenu={handleContextMenu}
+											renderHunkLines={renderHunkLines}
+											addToast={addToast}
+											getOutdatedCommentsForFile={() => []}
+											deleteComment={deleteComment}
+										/>
+									))}
 							</div>
 						</div>
 					);

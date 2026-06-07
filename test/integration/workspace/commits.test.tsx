@@ -163,7 +163,9 @@ describe("ShowWorkspace - Commits tab", () => {
 		await screen.findByText(/^Recent on /);
 		await screen.findByText("Initial commit");
 		expect(
-			screen.queryByText("There are no commits within this workspace branch yet."),
+			screen.queryByText(
+				"There are no commits within this workspace branch yet.",
+			),
 		).not.toBeInTheDocument();
 	});
 

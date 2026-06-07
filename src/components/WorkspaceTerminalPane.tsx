@@ -272,10 +272,7 @@ const WorkspaceTerminalPaneInner = forwardRef<
 							"[WorkspaceTerminalPane] ptyClose failed",
 							JSON.stringify({
 								terminalId,
-								error:
-									error instanceof Error
-										? error.message
-										: String(error),
+								error: error instanceof Error ? error.message : String(error),
 							}),
 						);
 					});

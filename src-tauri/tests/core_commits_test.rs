@@ -1032,12 +1032,8 @@ fn test_list_commits_keeps_workspace_and_target_histories_disjoint() {
     let workspace_path_str = workspace_path
         .to_str()
         .expect("workspace path should be utf-8");
-    TestRepo::write_workspace_file(
-        workspace_path_str,
-        "workspace-only.txt",
-        "workspace only\n",
-    )
-    .expect("Failed to write workspace file");
+    TestRepo::write_workspace_file(workspace_path_str, "workspace-only.txt", "workspace only\n")
+        .expect("Failed to write workspace file");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Workspace only commit")
         .expect("Failed to commit workspace change");
 

@@ -1,12 +1,12 @@
 mod e2e_test_helpers;
 
+use e2e_test_helpers::TestRepo;
 use opentelemetry::KeyValue;
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use opentelemetry_sdk::logs::{SdkLoggerProvider, SimpleLogProcessor};
 use opentelemetry_sdk::Resource;
 use serde_json::Value;
 use std::time::Duration;
-use e2e_test_helpers::TestRepo;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::Registry;
 use treq_lib::telemetry::{cleanup_old_logs, forward_log_record, FileLogExporter};

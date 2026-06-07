@@ -1756,7 +1756,10 @@ pub fn move_hunks_between_workspaces(
                 continue;
             }
         };
-        let mut source_lines: Vec<String> = source_content.lines().map(|line| line.to_string()).collect();
+        let mut source_lines: Vec<String> = source_content
+            .lines()
+            .map(|line| line.to_string())
+            .collect();
         if hunk.end_line > source_lines.len() || hunk.start_line > source_lines.len() {
             outcome.skipped += 1;
             outcome.warnings.push(format!(
@@ -1775,8 +1778,10 @@ pub fn move_hunks_between_workspaces(
         };
 
         let destination_content = fs::read_to_string(&destination_file).unwrap_or_default();
-        let mut destination_lines: Vec<String> =
-            destination_content.lines().map(|line| line.to_string()).collect();
+        let mut destination_lines: Vec<String> = destination_content
+            .lines()
+            .map(|line| line.to_string())
+            .collect();
         destination_lines.extend(moved_lines);
         let new_destination_content = if destination_lines.is_empty() {
             String::new()
@@ -1795,7 +1800,11 @@ pub fn move_hunks_between_workspaces(
         }
 
         fs::write(&source_file, new_source_content).map_err(|e| {
-            JjError::IoError(format!("Failed to write source file {}: {}", source_file.display(), e))
+            JjError::IoError(format!(
+                "Failed to write source file {}: {}",
+                source_file.display(),
+                e
+            ))
         })?;
         fs::write(&destination_file, new_destination_content).map_err(|e| {
             JjError::IoError(format!(

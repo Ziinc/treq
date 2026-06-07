@@ -25,7 +25,9 @@ describe("agent deep-link integration", () => {
 			(args) => args[0] === "deep-link-received",
 		);
 		expect(deepLinkCall).toBeTruthy();
-		const callback = deepLinkCall?.[1] as (event: { payload: string[] }) => void;
+		const callback = deepLinkCall?.[1] as (event: {
+			payload: string[];
+		}) => void;
 		const url = `treq://agent/start?repo=${encodeURIComponent(
 			repoPath,
 		)}&branch=feat%2Fagent-link&prompt=${encodeURIComponent(
@@ -57,7 +59,9 @@ describe("agent deep-link integration", () => {
 			(args) => args[0] === "deep-link-received",
 		);
 		expect(deepLinkCall).toBeTruthy();
-		const callback = deepLinkCall?.[1] as (event: { payload: string[] }) => void;
+		const callback = deepLinkCall?.[1] as (event: {
+			payload: string[];
+		}) => void;
 		const url = `treq://agent/start?repo=${encodeURIComponent(
 			otherRepoPath,
 		)}&branch=feat%2Fmissing&prompt=hello&mode=plan&agent=claude&request_id=req-link-2`;

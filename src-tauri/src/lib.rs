@@ -292,7 +292,7 @@ fn start_instance_registry_heartbeat(app: AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(
-            tauri_plugin_log::Builder::new() 
+            tauri_plugin_log::Builder::new()
             //  .target(tauri_plugin_log::Target::new(
             //     tauri_plugin_log::TargetKind::Stdout,
             //   ))

@@ -346,6 +346,8 @@ impl PtyManager {
     #[doc(hidden)]
     pub fn session_process_id(&self, session_id: &str) -> Option<u32> {
         let sessions = self.sessions.lock().unwrap();
-        sessions.get(session_id).and_then(|session| session.process_id())
+        sessions
+            .get(session_id)
+            .and_then(|session| session.process_id())
     }
 }

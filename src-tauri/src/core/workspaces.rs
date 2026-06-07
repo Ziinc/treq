@@ -1583,13 +1583,8 @@ pub fn move_workspace_changes(
     let mut commits_to_abandon_from_source: Vec<String> = Vec::new();
 
     if !request.commits.is_empty() {
-        let source_log = crate::core::commits::list_commits(
-            repo_path,
-            Some(source.id),
-            false,
-            None,
-            None,
-        )?;
+        let source_log =
+            crate::core::commits::list_commits(repo_path, Some(source.id), false, None, None)?;
         let history_ids: HashSet<String> = source_log
             .commits
             .iter()

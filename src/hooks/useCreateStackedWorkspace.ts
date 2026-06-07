@@ -77,7 +77,9 @@ export function useCreateStackedWorkspace() {
 					const parentIntent = parentWorkspace?.metadata
 						? (() => {
 								try {
-									return JSON.parse(parentWorkspace.metadata).description || null;
+									return (
+										JSON.parse(parentWorkspace.metadata).description || null
+									);
 								} catch {
 									return null;
 								}

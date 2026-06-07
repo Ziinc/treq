@@ -87,7 +87,9 @@ export const tryClaimAgentRequest = (requestId: string): boolean => {
 	return localStorage.getItem(key) === token;
 };
 
-export const queuePendingAgentRequest = (request: AgentDeepLinkRequest): void => {
+export const queuePendingAgentRequest = (
+	request: AgentDeepLinkRequest,
+): void => {
 	const key = `${PENDING_PREFIX}${request.repo}`;
 	const existing = localStorage.getItem(key);
 	const parsed: AgentDeepLinkRequest[] = existing ? JSON.parse(existing) : [];

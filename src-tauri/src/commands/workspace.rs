@@ -54,7 +54,10 @@ pub async fn create_workspace(
                 .ok()
                 .and_then(|obj| {
                     let title = obj.get("title").and_then(|v| v.as_str()).map(String::from);
-                    let description = obj.get("description").and_then(|v| v.as_str()).map(String::from);
+                    let description = obj
+                        .get("description")
+                        .and_then(|v| v.as_str())
+                        .map(String::from);
                     let moved_files =
                         obj.get("moved_files")
                             .and_then(|v| v.as_array())
