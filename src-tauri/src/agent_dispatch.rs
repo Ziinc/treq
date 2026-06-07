@@ -81,9 +81,7 @@ pub fn normalize_repo_path(path: &str) -> String {
 
 #[allow(dead_code)]
 pub fn prune_stale_instances(instances: &mut Vec<RegisteredInstance>, now: u64, timeout_ms: u64) {
-    instances.retain(|instance| {
-        now.saturating_sub(instance.last_heartbeat_at) <= timeout_ms
-    });
+    instances.retain(|instance| now.saturating_sub(instance.last_heartbeat_at) <= timeout_ms);
 }
 
 pub fn resolve_target_instance<'a>(
@@ -228,27 +226,27 @@ mod tests {
     fn resolves_recency_when_no_focused() {
         let repo = normalize_repo_path("/tmp/repo");
         let instances = vec![
-                make_instance(
-                    "a",
-                    10,
-                    vec![InstanceWindowSnapshot {
-                        window_label: "w1".to_string(),
-                        normalized_repo_path: repo.clone(),
-                        focused: false,
-                        last_focused_at: Some(100),
-                    }],
-                ),
-                make_instance(
-                    "b",
-                    10,
-                    vec![InstanceWindowSnapshot {
-                        window_label: "w2".to_string(),
-                        normalized_repo_path: repo,
-                        focused: false,
-                        last_focused_at: Some(50),
-                    }],
-                ),
-            ];
+            make_instance(
+                "a",
+                10,
+                vec![InstanceWindowSnapshot {
+                    window_label: "w1".to_string(),
+                    normalized_repo_path: repo.clone(),
+                    focused: false,
+                    last_focused_at: Some(100),
+                }],
+            ),
+            make_instance(
+                "b",
+                10,
+                vec![InstanceWindowSnapshot {
+                    window_label: "w2".to_string(),
+                    normalized_repo_path: repo,
+                    focused: false,
+                    last_focused_at: Some(50),
+                }],
+            ),
+        ];
 
         let selected = resolve_target_instance(&instances, "/tmp/repo").unwrap();
         assert_eq!(selected.instance_id, "a");

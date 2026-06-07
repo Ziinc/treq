@@ -538,7 +538,10 @@ impl JjVerifier {
     }
 
     /// Resolve a revset to a single commit id.
-    pub fn get_commit_id_for_rev(workspace_path: &str, rev: &str) -> Result<Option<String>, String> {
+    pub fn get_commit_id_for_rev(
+        workspace_path: &str,
+        rev: &str,
+    ) -> Result<Option<String>, String> {
         let output = Command::new(Self::jj_binary())
             .current_dir(workspace_path)
             .args(["log", "-r", rev, "-n", "1", "--no-graph", "-T", "commit_id"])

@@ -73,7 +73,12 @@ fn setup_sibling_graph(repo: &TestRepo) -> (Workspace, Workspace) {
     (left, right)
 }
 
-fn make_commit_fixture(repo: &TestRepo, source: &Workspace, file_path: &str, marker: &str) -> String {
+fn make_commit_fixture(
+    repo: &TestRepo,
+    source: &Workspace,
+    file_path: &str,
+    marker: &str,
+) -> String {
     let source_path = workspace_path(&repo.repo_path, source);
     TestRepo::write_workspace_file(&source_path, file_path, &format!("{}\n", marker))
         .expect("should write fixture file");
@@ -91,17 +96,14 @@ fn make_commit_fixture(repo: &TestRepo, source: &Workspace, file_path: &str, mar
 
 fn make_file_fixture(repo: &TestRepo, source: &Workspace, file_path: &str, content: &str) {
     let source_path = workspace_path(&repo.repo_path, source);
-    TestRepo::write_workspace_file(&source_path, file_path, content).expect("should write file fixture");
+    TestRepo::write_workspace_file(&source_path, file_path, content)
+        .expect("should write file fixture");
 }
 
 fn make_hunk_fixture(repo: &TestRepo, source: &Workspace, file_path: &str) {
     let source_path = workspace_path(&repo.repo_path, source);
-    TestRepo::write_workspace_file(
-        &source_path,
-        file_path,
-        "line-1\nline-2\nline-3\nline-4\n",
-    )
-    .expect("should write hunk fixture");
+    TestRepo::write_workspace_file(&source_path, file_path, "line-1\nline-2\nline-3\nline-4\n")
+        .expect("should write hunk fixture");
 }
 
 fn read_workspace_file(repo: &TestRepo, workspace: &Workspace, file_path: &str) -> String {
@@ -159,8 +161,9 @@ fn assert_source_working_copy_hunks_do_not_contain_lines(
     file_path: &str,
     forbidden_lines: &[&str],
 ) {
-    let hunks = treq_lib::core::list_file_hunks(&repo.repo_path, Some(workspace.id), file_path, "git")
-        .expect("should list file hunks");
+    let hunks =
+        treq_lib::core::list_file_hunks(&repo.repo_path, Some(workspace.id), file_path, "git")
+            .expect("should list file hunks");
     let all_hunk_lines = hunks
         .iter()
         .flat_map(|h| h.lines.iter())
@@ -168,7 +171,9 @@ fn assert_source_working_copy_hunks_do_not_contain_lines(
         .collect::<Vec<String>>();
     for forbidden_line in forbidden_lines {
         assert!(
-            !all_hunk_lines.iter().any(|line| line.contains(forbidden_line)),
+            !all_hunk_lines
+                .iter()
+                .any(|line| line.contains(forbidden_line)),
             "expected moved line '{}' to be absent from source working-copy hunks for '{}'",
             forbidden_line,
             file_path
@@ -180,7 +185,8 @@ fn assert_source_working_copy_hunks_do_not_contain_lines(
 fn moves_commits_parent_to_child() {
     let repo = TestRepo::new().expect("should create repo");
     let (parent, child) = setup_parent_child_graph(&repo);
-    let commit_id = make_commit_fixture(&repo, &parent, "commit-parent-to-child.txt", "parent-child");
+    let commit_id =
+        make_commit_fixture(&repo, &parent, "commit-parent-to-child.txt", "parent-child");
 
     assert_history_contains_commit(&repo, &parent, &commit_id);
 
@@ -203,7 +209,12 @@ fn moves_commits_parent_to_child() {
 fn moves_files_parent_to_child() {
     let repo = TestRepo::new().expect("should create repo");
     let (parent, child) = setup_parent_child_graph(&repo);
-    make_file_fixture(&repo, &parent, "files-parent-to-child.txt", "file-parent-child\n");
+    make_file_fixture(
+        &repo,
+        &parent,
+        "files-parent-to-child.txt",
+        "file-parent-child\n",
+    );
 
     let result = treq_lib::core::move_workspace_changes(
         &repo.repo_path,
@@ -217,7 +228,10 @@ fn moves_files_parent_to_child() {
     .expect("move files should succeed");
 
     assert_eq!(result.files_moved, 1);
-    assert!(read_workspace_file(&repo, &child, "files-parent-to-child.txt").contains("file-parent-child"));
+    assert!(
+        read_workspace_file(&repo, &child, "files-parent-to-child.txt")
+            .contains("file-parent-child")
+    );
     assert_source_working_copy_not_changed_for_file(&repo, &parent, "files-parent-to-child.txt");
 }
 
@@ -251,7 +265,10 @@ fn moves_hunks_parent_to_child() {
 
     assert_eq!(result.hunks_applied, 1);
     assert_eq!(result.hunks_skipped, 1);
-    assert!(result.warnings.iter().any(|w| w.contains("source range out of bounds")));
+    assert!(result
+        .warnings
+        .iter()
+        .any(|w| w.contains("source range out of bounds")));
 
     let source_content = read_workspace_file(&repo, &parent, "hunks-parent-to-child.txt");
     let destination_content = read_workspace_file(&repo, &child, "hunks-parent-to-child.txt");
@@ -269,7 +286,8 @@ fn moves_hunks_parent_to_child() {
 fn moves_commits_child_to_parent() {
     let repo = TestRepo::new().expect("should create repo");
     let (parent, child) = setup_parent_child_graph(&repo);
-    let commit_id = make_commit_fixture(&repo, &child, "commit-child-to-parent.txt", "child-parent");
+    let commit_id =
+        make_commit_fixture(&repo, &child, "commit-child-to-parent.txt", "child-parent");
 
     assert_history_contains_commit(&repo, &child, &commit_id);
 
@@ -292,7 +310,12 @@ fn moves_commits_child_to_parent() {
 fn moves_files_child_to_parent() {
     let repo = TestRepo::new().expect("should create repo");
     let (parent, child) = setup_parent_child_graph(&repo);
-    make_file_fixture(&repo, &child, "files-child-to-parent.txt", "file-child-parent\n");
+    make_file_fixture(
+        &repo,
+        &child,
+        "files-child-to-parent.txt",
+        "file-child-parent\n",
+    );
 
     let result = treq_lib::core::move_workspace_changes(
         &repo.repo_path,
@@ -306,7 +329,10 @@ fn moves_files_child_to_parent() {
     .expect("move files should succeed");
 
     assert_eq!(result.files_moved, 1);
-    assert!(read_workspace_file(&repo, &parent, "files-child-to-parent.txt").contains("file-child-parent"));
+    assert!(
+        read_workspace_file(&repo, &parent, "files-child-to-parent.txt")
+            .contains("file-child-parent")
+    );
     assert_source_working_copy_not_changed_for_file(&repo, &child, "files-child-to-parent.txt");
 }
 
@@ -340,7 +366,10 @@ fn moves_hunks_child_to_parent() {
 
     assert_eq!(result.hunks_applied, 1);
     assert_eq!(result.hunks_skipped, 1);
-    assert!(result.warnings.iter().any(|w| w.contains("source range out of bounds")));
+    assert!(result
+        .warnings
+        .iter()
+        .any(|w| w.contains("source range out of bounds")));
 
     let source_content = read_workspace_file(&repo, &child, "hunks-child-to-parent.txt");
     let destination_content = read_workspace_file(&repo, &parent, "hunks-child-to-parent.txt");
@@ -395,7 +424,9 @@ fn moves_files_between_siblings() {
     .expect("move files should succeed");
 
     assert_eq!(result.files_moved, 1);
-    assert!(read_workspace_file(&repo, &right, "files-left-to-right.txt").contains("file-left-right"));
+    assert!(
+        read_workspace_file(&repo, &right, "files-left-to-right.txt").contains("file-left-right")
+    );
     assert_source_working_copy_not_changed_for_file(&repo, &left, "files-left-to-right.txt");
 }
 
@@ -429,7 +460,10 @@ fn moves_hunks_between_siblings() {
 
     assert_eq!(result.hunks_applied, 1);
     assert_eq!(result.hunks_skipped, 1);
-    assert!(result.warnings.iter().any(|w| w.contains("source range out of bounds")));
+    assert!(result
+        .warnings
+        .iter()
+        .any(|w| w.contains("source range out of bounds")));
 
     let source_content = read_workspace_file(&repo, &left, "hunks-left-to-right.txt");
     let destination_content = read_workspace_file(&repo, &right, "hunks-left-to-right.txt");

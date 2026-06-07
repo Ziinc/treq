@@ -7,7 +7,11 @@ import {
 	resolveWorkspacePath,
 	writeWorkspaceFile,
 } from "../../utils";
-import { createCommit, createWorkspace, getWorkspaces } from "../../../src/lib/api";
+import {
+	createCommit,
+	createWorkspace,
+	getWorkspaces,
+} from "../../../src/lib/api";
 import { render, screen, waitFor } from "../../test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
 import userEvent from "@testing-library/user-event";
@@ -22,7 +26,10 @@ async function setupOverlappingWorkspace(branchName: string) {
 	);
 	if (!workspace) throw new Error(`Workspace not found for id ${workspaceId}`);
 
-	const workspacePath = resolveWorkspacePath(repoPath, workspace.workspace_path);
+	const workspacePath = resolveWorkspacePath(
+		repoPath,
+		workspace.workspace_path,
+	);
 
 	writeWorkspaceFile(workspacePath, "shared.txt", "shared v1\n");
 	await createCommit(repoPath, workspaceId, "commit shared file");

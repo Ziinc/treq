@@ -285,7 +285,10 @@ describe("Dashboard - workspace list", () => {
 				workspaces,
 				"gumbo-notes",
 			);
-			const zebraWorkspace = findWorkspaceByBranchName(workspaces, "zebra-notes");
+			const zebraWorkspace = findWorkspaceByBranchName(
+				workspaces,
+				"zebra-notes",
+			);
 			expect(dduckWorkspace).toBeTruthy();
 			expect(rubberWorkspace).toBeTruthy();
 			expect(gumboWorkspace).toBeTruthy();

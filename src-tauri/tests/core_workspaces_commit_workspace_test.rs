@@ -70,9 +70,7 @@ fn assert_workspace_list_commits_hides_working_copy(
             .collect::<Vec<_>>()
     );
     assert!(
-        log.commits
-            .iter()
-            .all(|c| !c.description.trim().is_empty()),
+        log.commits.iter().all(|c| !c.description.trim().is_empty()),
         "expected workspace log to exclude empty working copy commits, got: {:?}",
         log.commits
             .iter()
@@ -104,7 +102,11 @@ fn test_create_commit_basic() {
 
     assert_workspace_status_is_clean(ws_dir_str);
     assert_raw_jj_log_has_working_copy_commit(ws_dir_str, "add data");
-    assert_workspace_list_commits_hides_working_copy(&repo.repo_path, workspace.id, Some("add data"));
+    assert_workspace_list_commits_hides_working_copy(
+        &repo.repo_path,
+        workspace.id,
+        Some("add data"),
+    );
 }
 
 #[test]
@@ -139,11 +141,7 @@ fn test_create_commit_empty_workspace() {
 
     assert_workspace_status_is_clean(ws_dir_str);
     assert_raw_jj_log_has_working_copy_commit(ws_dir_str, "empty commit");
-    assert_workspace_list_commits_hides_working_copy(
-        &repo.repo_path,
-        workspace.id,
-        None,
-    );
+    assert_workspace_list_commits_hides_working_copy(&repo.repo_path, workspace.id, None);
 }
 
 #[test]

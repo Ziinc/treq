@@ -4,9 +4,7 @@ import { ChangesDiffViewer } from "./ChangesDiffViewerMain";
 
 vi.mock("../../lib/api", async () => {
 	const actual =
-		await vi.importActual<typeof import("../../lib/api")>(
-			"../../lib/api",
-		);
+		await vi.importActual<typeof import("../../lib/api")>("../../lib/api");
 	return {
 		...actual,
 		getWorkspaceDiff: vi.fn(),

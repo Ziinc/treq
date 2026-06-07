@@ -144,8 +144,13 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
                 Some(Value::String(s)) => treq_lib::core::MaybeEmptyParam::Some(s.clone()),
                 _ => treq_lib::core::MaybeEmptyParam::Omitted,
             };
-            let workspace =
-                treq_lib::core::update_workspace_with_title(&repo_path, workspace_id, target_branch, title, description)?;
+            let workspace = treq_lib::core::update_workspace_with_title(
+                &repo_path,
+                workspace_id,
+                target_branch,
+                title,
+                description,
+            )?;
             serde_json::to_value(workspace).map_err(|e| e.to_string())
         }
 
@@ -298,10 +303,8 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             let repo_path = get_str(&args, "repoPath")?;
             let workspace_id: i64 = get_i64(&args, "workspaceId")?;
             let branch_name = get_str(&args, "branchName")?;
-            let title: Option<String> = args
-                .get("title")
-                .and_then(|v| v.as_str())
-                .map(String::from);
+            let title: Option<String> =
+                args.get("title").and_then(|v| v.as_str()).map(String::from);
             let description: Option<String> = args
                 .get("description")
                 .and_then(|v| v.as_str())
@@ -724,7 +727,10 @@ fn parse_metadata(metadata: Option<&str>) -> (Option<String>, Option<String>, Op
         return (None, None, None);
     };
     let title = obj.get("title").and_then(|v| v.as_str()).map(String::from);
-    let description = obj.get("description").and_then(|v| v.as_str()).map(String::from);
+    let description = obj
+        .get("description")
+        .and_then(|v| v.as_str())
+        .map(String::from);
     let moved_files = obj
         .get("moved_files")
         .and_then(|v| v.as_array())

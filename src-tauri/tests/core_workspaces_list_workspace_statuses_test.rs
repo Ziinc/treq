@@ -221,7 +221,10 @@ fn test_workspace_list_statuses_preserves_existing_workspace_metadata_on_upsert(
         .expect("workspace status should exist");
 
     assert_eq!(status.current.target_branch.as_deref(), Some("main"));
-    assert_eq!(status.current.description.as_deref(), Some("initial description"));
+    assert_eq!(
+        status.current.description.as_deref(),
+        Some("initial description")
+    );
     assert_eq!(
         status.current.moved_files,
         Some(vec!["src/lib.rs".to_string()])
