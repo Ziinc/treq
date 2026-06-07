@@ -42,6 +42,7 @@ fn setup_workspace_with_pushed_commit(
 #[test]
 fn test_auto_rebase_resolves_bookmark_conflict() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+    let default_branch = repo.default_branch();
 
     let ws = setup_workspace_with_pushed_commit(
         &repo,
@@ -75,7 +76,7 @@ fn test_auto_rebase_resolves_bookmark_conflict() {
     let result = treq_lib::auto_rebase::rebase_single_workspace(
         &repo.repo_path,
         ws.id,
-        "main",
+        default_branch,
         true,
         "diff",
     )
@@ -91,6 +92,7 @@ fn test_auto_rebase_resolves_bookmark_conflict() {
 #[test]
 fn test_auto_rebase_resolves_conflict_no_local_commits() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+    let default_branch = repo.default_branch();
 
     let ws = setup_workspace_with_pushed_commit(
         &repo,
@@ -114,7 +116,7 @@ fn test_auto_rebase_resolves_conflict_no_local_commits() {
     let result = treq_lib::auto_rebase::rebase_single_workspace(
         &repo.repo_path,
         ws.id,
-        "main",
+        default_branch,
         true,
         "diff",
     )
@@ -130,6 +132,8 @@ fn test_auto_rebase_resolves_conflict_no_local_commits() {
 #[test]
 fn test_auto_rebase_batch_resolves_bookmark_conflicts() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+    let default_branch = repo.default_branch();
+    let origin_default = format!("origin/{default_branch}");
 
     let ws1 = setup_workspace_with_pushed_commit(&repo, "feat/batch-ws1", "ws1.txt", "ws1 content");
     let ws2 = setup_workspace_with_pushed_commit(&repo, "feat/batch-ws2", "ws2.txt", "ws2 content");
@@ -137,9 +141,9 @@ fn test_auto_rebase_batch_resolves_bookmark_conflicts() {
     let full_path1 = workspace_full_path(&repo, &ws1);
     let full_path2 = workspace_full_path(&repo, &ws2);
 
-    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, ws1.id, "origin/main")
+    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, ws1.id, &origin_default)
         .expect("Failed to set target branch on ws1");
-    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, ws2.id, "origin/main")
+    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, ws2.id, &origin_default)
         .expect("Failed to set target branch on ws2");
 
     repo.remote_commit_file(
@@ -189,6 +193,7 @@ fn test_auto_rebase_batch_resolves_bookmark_conflicts() {
 #[test]
 fn test_auto_rebase_no_conflict_still_works() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+    let default_branch = repo.default_branch();
 
     let ws = treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -220,7 +225,7 @@ fn test_auto_rebase_no_conflict_still_works() {
     let result = treq_lib::auto_rebase::rebase_single_workspace(
         &repo.repo_path,
         ws.id,
-        "main",
+        default_branch,
         true,
         "diff",
     )
@@ -237,12 +242,13 @@ fn test_auto_rebase_no_conflict_still_works() {
 #[test]
 fn test_force_rebase_rooted_subtree_handles_conflicted_local_main_target() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+    let default_branch = repo.default_branch();
 
-    // Create a local workspace on `main` so rooted-subtree force rebase can include descendants
-    // that target `main` (the local bookmark we intentionally make conflicted).
+    // Create a local workspace on the default branch so rooted-subtree force rebase can include descendants
+    // that target it (the local bookmark we intentionally make conflicted).
     let root_main = treq_lib::core::create_workspace(
         &repo.repo_path,
-        "main",
+        default_branch,
         Some("root main workspace".to_string()),
         None,
         None,
@@ -255,7 +261,7 @@ fn test_force_rebase_rooted_subtree_handles_conflicted_local_main_target() {
         "feat/force-main-child",
         Some("force main child".to_string()),
         None,
-        Some("main"),
+        Some(default_branch),
         None,
     )
     .expect("Failed to create child workspace");
@@ -283,14 +289,14 @@ fn test_force_rebase_rooted_subtree_handles_conflicted_local_main_target() {
 
     let main_workspace_path = workspace_full_path(&repo, &root_main);
     assert!(
-        jj::jj_is_bookmark_conflicted(&main_workspace_path, "main"),
+        jj::jj_is_bookmark_conflicted(&main_workspace_path, default_branch),
         "main bookmark should be conflicted before force rebase"
     );
 
     let result = treq_lib::auto_rebase::rebase_root_subtree_from_workspace_force(
         &repo.repo_path,
         root_main.id,
-        "main",
+        default_branch,
         "diff",
     )
     .expect("force rooted-subtree rebase should not fail when local main is conflicted");
@@ -302,11 +308,9 @@ fn test_force_rebase_rooted_subtree_handles_conflicted_local_main_target() {
         "force rooted-subtree rebase should succeed: {}",
         result.rebase_result.message
     );
+    let conflicted_name_msg = format!("Name '{default_branch}' is conflicted");
     assert!(
-        !result
-            .rebase_result
-            .message
-            .contains("Name 'main' is conflicted"),
+        !result.rebase_result.message.contains(&conflicted_name_msg),
         "force rebase should not fail on conflicted local main resolution: {}",
         result.rebase_result.message
     );

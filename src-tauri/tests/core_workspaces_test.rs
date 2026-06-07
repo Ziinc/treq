@@ -51,7 +51,8 @@ fn setup_workspace_with_source(
 #[test]
 fn test_check_and_rebase_workspaces_all_succeeds() {
     let repo = TestRepo::new().expect("Failed to create test repo");
-    let _ws = setup_workspace_with_target(&repo, "feat/rebase-all", "main");
+    let default_branch = repo.default_branch();
+    let _ws = setup_workspace_with_target(&repo, "feat/rebase-all", default_branch);
 
     let result =
         treq_lib::core::check_and_rebase_workspaces(&repo.repo_path, None, None, None, "git")
@@ -71,12 +72,13 @@ fn test_check_and_rebase_workspaces_all_succeeds() {
 #[test]
 fn test_check_and_rebase_workspaces_single_workspace() {
     let repo = TestRepo::new().expect("Failed to create test repo");
-    let ws = setup_workspace_with_target(&repo, "feat/single-rebase", "main");
+    let default_branch = repo.default_branch();
+    let ws = setup_workspace_with_target(&repo, "feat/single-rebase", default_branch);
 
     let result = treq_lib::core::check_and_rebase_workspaces(
         &repo.repo_path,
         Some(ws.id),
-        Some("main".to_string()),
+        Some(default_branch.to_string()),
         None,
         "git",
     )
@@ -92,13 +94,14 @@ fn test_check_and_rebase_workspaces_single_workspace() {
 #[test]
 fn test_check_and_rebase_workspaces_force_bypasses_up_to_date() {
     let repo = TestRepo::new().expect("Failed to create test repo");
-    let ws = setup_workspace_with_target(&repo, "feat/force-rebase", "main");
+    let default_branch = repo.default_branch();
+    let ws = setup_workspace_with_target(&repo, "feat/force-rebase", default_branch);
 
     // First call: marks workspace as up-to-date (last_rebased_commit = current main).
     treq_lib::core::check_and_rebase_workspaces(
         &repo.repo_path,
         Some(ws.id),
-        Some("main".to_string()),
+        Some(default_branch.to_string()),
         None,
         "git",
     )
@@ -108,7 +111,7 @@ fn test_check_and_rebase_workspaces_force_bypasses_up_to_date() {
     let result = treq_lib::core::check_and_rebase_workspaces(
         &repo.repo_path,
         Some(ws.id),
-        Some("main".to_string()),
+        Some(default_branch.to_string()),
         Some(true),
         "git",
     )
@@ -124,7 +127,8 @@ fn test_check_and_rebase_workspaces_force_bypasses_up_to_date() {
 #[test]
 fn test_force_rebase_workspace_uses_rooted_subtree_scope_excluding_root() {
     let repo = TestRepo::new().expect("Failed to create test repo");
-    let ws_a = setup_workspace_with_target(&repo, "feat/root-a", "main");
+    let default_branch = repo.default_branch();
+    let ws_a = setup_workspace_with_target(&repo, "feat/root-a", default_branch);
     let ws_b = setup_workspace_with_source(&repo, "feat/child-b", "feat/root-a");
     let ws_c = setup_workspace_with_source(&repo, "feat/grandchild-c", "feat/child-b");
     let ws_d = setup_workspace_with_source(&repo, "feat/sibling-d", "feat/root-a");
@@ -132,7 +136,7 @@ fn test_force_rebase_workspace_uses_rooted_subtree_scope_excluding_root() {
     let result = treq_lib::core::check_and_rebase_workspaces(
         &repo.repo_path,
         Some(ws_b.id),
-        Some("main".to_string()),
+        Some(default_branch.to_string()),
         Some(true),
         "git",
     )
@@ -259,6 +263,7 @@ fn test_can_update_workspace() {
 #[test]
 fn test_update_workspace_target_branch_perform_rebase() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     // base is
     let workspace: Workspace = treq_lib::core::create_workspace(
@@ -281,7 +286,7 @@ fn test_update_workspace_target_branch_perform_rebase() {
 
     // check out main branch on the home repo
 
-    TestRepo::run_git(&repo.repo_path, &["checkout", "main"][..]).expect("Failed to checkout main");
+    TestRepo::run_git(&repo.repo_path, &["checkout", default_branch][..]).expect("Failed to checkout main");
 
     // change the target branch of the workspace to the develop branch
     let updated = treq_lib::core::update_workspace(
@@ -329,6 +334,7 @@ fn test_update_workspace_target_branch_perform_rebase() {
 #[test]
 fn test_update_workspace_target_branch_rebases_workspace_bookmark_lineage() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     let workspace: Workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -368,7 +374,7 @@ fn test_update_workspace_target_branch_rebases_workspace_bookmark_lineage() {
         .expect("Failed to read develop tip")
         .trim()
         .to_string();
-    TestRepo::run_git(&repo.repo_path, &["checkout", "main"]).expect("Failed to checkout main");
+    TestRepo::run_git(&repo.repo_path, &["checkout", default_branch]).expect("Failed to checkout main");
 
     let updated = treq_lib::core::update_workspace(
         &repo.repo_path,
@@ -672,6 +678,7 @@ fn test_split_workspace_move_files_before() {
     use treq_lib::core::{SplitMode, SplitPosition};
 
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     let source = treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -727,7 +734,7 @@ fn test_split_workspace_move_files_before() {
     // New workspace's target should be source's old target (main, since source had no target)
     assert_eq!(
         new_workspace.target_branch.as_deref(),
-        Some("main"),
+        Some(default_branch),
         "New workspace's target should be source's original target"
     );
 
@@ -825,6 +832,7 @@ fn test_split_workspace_copy_files_before() {
     use treq_lib::core::{SplitMode, SplitPosition};
 
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     let source = treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -869,7 +877,7 @@ fn test_split_workspace_copy_files_before() {
     // New workspace target = source's old target (main)
     assert_eq!(
         new_workspace.target_branch.as_deref(),
-        Some("main"),
+        Some(default_branch),
         "New workspace's target should be main"
     );
 
@@ -889,6 +897,7 @@ fn test_split_workspace_move_commits_after() {
     use treq_lib::core::{SplitMode, SplitPosition};
 
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     let source = treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -915,7 +924,7 @@ fn test_split_workspace_move_commits_after() {
         .expect("Failed to commit");
 
     // Get commits ahead of main to extract change_ids
-    let commits_ahead = treq_lib::jj::jj_get_commits_ahead(source_path_str, "main")
+    let commits_ahead = treq_lib::jj::jj_get_commits_ahead(source_path_str, default_branch)
         .expect("Failed to get commits ahead");
 
     assert!(
@@ -972,6 +981,7 @@ fn test_split_workspace_move_commits_before() {
     use treq_lib::core::{SplitMode, SplitPosition};
 
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     let source = treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -999,7 +1009,7 @@ fn test_split_workspace_move_commits_before() {
 
     // Get commits
     let commits_ahead =
-        treq_lib::jj::jj_get_commits_ahead(source_path_str, "main").expect("Failed to get commits");
+        treq_lib::jj::jj_get_commits_ahead(source_path_str, default_branch).expect("Failed to get commits");
 
     let early_commit_id = commits_ahead.commits.last().unwrap().change_id.clone();
 
@@ -1039,7 +1049,7 @@ fn test_split_workspace_move_commits_before() {
     // New workspace target should be main (source's original target)
     assert_eq!(
         new_workspace.target_branch.as_deref(),
-        Some("main"),
+        Some(default_branch),
         "New workspace target should be main"
     );
 
@@ -1568,6 +1578,7 @@ fn test_ensure_jj_initialized_reinits_when_jj_deleted() {
 #[test]
 fn test_empty_commits_excluded_from_commits_ahead() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     let workspace: Workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -1601,7 +1612,7 @@ fn test_empty_commits_excluded_from_commits_ahead() {
         .expect("Failed to run jj new");
 
     // Verify that jj_get_commits_ahead only returns the real commit
-    let target_branch = workspace.target_branch.as_deref().unwrap_or("main");
+    let target_branch = workspace.target_branch.as_deref().unwrap_or(default_branch);
     let commits_ahead = jj::jj_get_commits_ahead(workspace_path_str, target_branch)
         .expect("Failed to get commits ahead");
 
@@ -2587,6 +2598,8 @@ fn test_workspace_push_pull_with_workspace_status() {
 #[test]
 fn test_pull_home_repo_fetches_remote_commits() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+    let default_branch = repo.default_branch();
+    let origin_default_revset = format!("{default_branch}@origin");
 
     // Record the git branch before pull
     let branch_before =
@@ -2605,13 +2618,13 @@ fn test_pull_home_repo_fetches_remote_commits() {
         .expect("pull_workspace_from_remote(None) should succeed");
     assert!(result.success, "Home repo pull should succeed");
 
-    // Verify the remote commit is visible via jj log (main@origin should have advanced)
+    // Verify the remote commit is visible via jj log (default branch@origin should have advanced)
     let log_output = Command::new("jj")
         .current_dir(&repo.repo_path)
         .args([
             "log",
             "-r",
-            "main@origin",
+            &origin_default_revset,
             "--no-graph",
             "-T",
             r#"description"#,
@@ -2621,7 +2634,7 @@ fn test_pull_home_repo_fetches_remote_commits() {
     let log_str = String::from_utf8_lossy(&log_output.stdout);
     assert!(
         log_str.contains("Remote commit on main"),
-        "main@origin should contain the remote commit after fetch, got: {}",
+        "{origin_default_revset} should contain the remote commit after fetch, got: {}",
         log_str
     );
 

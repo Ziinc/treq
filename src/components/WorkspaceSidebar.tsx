@@ -4,6 +4,7 @@ import { DragDropContext, type DropResult, Droppable } from "@hello-pangea/dnd";
 import { GitBranch, Home, Search, Settings, Trash2 } from "lucide-react";
 import {
 	type Workspace,
+	getWorkspaceStatus,
 	getWorkspaces,
 	listWorkspaceStatuses,
 } from "../lib/api";
@@ -89,7 +90,22 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 
 		const { data: workspaceStatuses = [] } = useQuery({
 			queryKey: ["workspace-statuses", repoPath],
-			queryFn: () => listWorkspaceStatuses(repoPath || ""),
+			queryFn: async () => {
+				const baseStatuses = await listWorkspaceStatuses(repoPath || "");
+				return Promise.all(
+					baseStatuses.map(async (status) => {
+						if (status.has_conflicts) return status;
+						const detailed = await getWorkspaceStatus(
+							repoPath || "",
+							status.current.id,
+						);
+						return {
+							...status,
+							has_conflicts: detailed.has_conflicts,
+						};
+					}),
+				);
+			},
 			enabled: !!repoPath && workspacesLoaded,
 			placeholderData: (previousData) => previousData,
 		});

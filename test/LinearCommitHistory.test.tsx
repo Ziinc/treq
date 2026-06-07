@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, waitFor } from "./test-utils";
+import { render, screen, waitFor } from "./test-utils";
 import { LinearCommitHistory } from "../src/components/LinearCommitHistory";
 import * as api from "../src/lib/api";
 import { createMockCommit } from "./factories/commit.factory";
@@ -69,19 +69,26 @@ describe("LinearCommitHistory", () => {
 		const listCommitsMock = vi.mocked(api.listCommits);
 
 		listCommitsMock.mockResolvedValueOnce({
-			commits: mockCommits,
+			commits: mockCommits.slice(1),
+			tentative_working_copy: {
+				workspace_label: "main",
+				commit: mockCommits[0],
+			},
 			target_branch: "main",
 			workspace_branch: "main",
 		});
 
 		render(<LinearCommitHistory repoPath="/test/repo" workspaceId={null} />);
 
-		// Wait for commits to load — working copy is skipped, so 2 commits
+		// Wait for commits to load — tentative working copy renders above 2 commits
 		await waitFor(() => {
 			const listItems = document.querySelectorAll("ul > li");
-			expect(listItems.length).toBe(2);
-			expect(listItems[0].textContent).toContain("Second commit");
-			expect(listItems[1].textContent).toContain("First commit");
+			expect(listItems.length).toBe(3);
+			expect(listItems[0].textContent).toContain("Working copy - main");
+			expect(listItems[0].textContent).toContain("main");
+			expect(listItems[0].textContent).not.toContain("wc000");
+			expect(listItems[1].textContent).toContain("Second commit");
+			expect(listItems[2].textContent).toContain("First commit");
 		});
 	});
 
@@ -89,7 +96,11 @@ describe("LinearCommitHistory", () => {
 		const listCommitsMock = vi.mocked(api.listCommits);
 
 		listCommitsMock.mockResolvedValueOnce({
-			commits: mockCommits,
+			commits: mockCommits.slice(1),
+			tentative_working_copy: {
+				workspace_label: "feature",
+				commit: mockCommits[0],
+			},
 			target_branch: "main",
 			workspace_branch: "feature",
 		});
@@ -98,9 +109,12 @@ describe("LinearCommitHistory", () => {
 
 		await waitFor(() => {
 			const listItems = document.querySelectorAll("ul > li");
-			expect(listItems.length).toBe(2);
-			expect(listItems[0].textContent).toContain("Second commit");
-			expect(listItems[1].textContent).toContain("First commit");
+			expect(listItems.length).toBe(3);
+			expect(listItems[0].textContent).toContain("Working copy - feature");
+			expect(listItems[0].textContent).toContain("feature");
+			expect(listItems[0].textContent).not.toContain("wc000");
+			expect(listItems[1].textContent).toContain("Second commit");
+			expect(listItems[2].textContent).toContain("First commit");
 		});
 	});
 
@@ -126,7 +140,7 @@ describe("LinearCommitHistory", () => {
 		];
 
 		listCommitsMock.mockResolvedValueOnce({
-			commits: manyCommits,
+			commits: manyCommits.slice(1),
 			target_branch: "main",
 			workspace_branch: "main",
 		});
@@ -146,7 +160,7 @@ describe("LinearCommitHistory", () => {
 		const listCommitsMock = vi.mocked(api.listCommits);
 
 		listCommitsMock.mockResolvedValueOnce({
-			commits: mockCommits,
+			commits: mockCommits.slice(1),
 			target_branch: "main",
 			workspace_branch: "feature",
 		});
@@ -164,5 +178,30 @@ describe("LinearCommitHistory", () => {
 			b.textContent?.includes("Load more commits"),
 		);
 		expect(loadMore).toBeUndefined();
+	});
+
+	it("should replace missing descriptions with a readable title", async () => {
+		const listCommitsMock = vi.mocked(api.listCommits);
+
+		listCommitsMock.mockResolvedValueOnce({
+			commits: [
+				createMockCommit({
+					commit_id: "abc123",
+					short_id: "abc123",
+					description: "(no description)",
+					timestamp: "2024-01-01 10:00:00",
+				}),
+			],
+			target_branch: "main",
+			workspace_branch: "main",
+		});
+
+		render(<LinearCommitHistory repoPath="/test/repo" workspaceId={null} />);
+
+		await waitFor(() => {
+			expect(screen.getByText("Untitled commit")).toBeTruthy();
+			expect(screen.queryByText("(no description)")).toBeNull();
+			expect(screen.queryByText("abc123")).toBeNull();
+		});
 	});
 });

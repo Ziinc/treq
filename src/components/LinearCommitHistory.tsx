@@ -1,5 +1,10 @@
 import { memo, useEffect, useMemo, useState } from "react";
-import { type JjLogCommit, type JjLogResult, listCommits } from "../lib/api";
+import {
+	type JjLogCommit,
+	type JjLogResult,
+	type JjTentativeWorkingCopy,
+	listCommits,
+} from "../lib/api";
 import {
 	cn,
 	formatDayLabel,
@@ -48,6 +53,17 @@ function normalizeCommits(commits: JjLogCommit[]): JjLogCommit[] {
 	return [second, ...rest];
 }
 
+function filterWorkingCopyCommits(commits: JjLogCommit[]) {
+	return commits.filter((commit) => !commit.is_working_copy);
+}
+
+function splitCommitsByTarget(commits: JjLogCommit[]) {
+	return {
+		workspaceCommits: commits.filter((commit) => !commit.on_target_only),
+		targetBranchCommits: commits.filter((commit) => commit.on_target_only),
+	};
+}
+
 function groupCommitsByDay(commits: JjLogCommit[]): DayGroup[] {
 	const groups: DayGroup[] = [];
 	for (const commit of commits) {
@@ -66,9 +82,18 @@ function groupCommitsByDay(commits: JjLogCommit[]): DayGroup[] {
 	return groups;
 }
 
+function getCommitHeadline(commit: JjLogCommit): string {
+	const headline = commit.description.split("\n")[0]?.trim();
+	return headline && headline !== "(no description)"
+		? headline
+		: "Untitled commit";
+}
+
 export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 	({ repoPath, workspaceId, onCommitClick, onCommitsLoaded }) => {
 		const [commits, setCommits] = useState<JjLogCommit[]>([]);
+		const [tentativeWorkingCopy, setTentativeWorkingCopy] =
+			useState<JjTentativeWorkingCopy | null>(null);
 		const [targetBranchCommits, setTargetBranchCommits] = useState<
 			JjLogCommit[]
 		>([]);
@@ -79,6 +104,7 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 		const [limit, setLimit] = useState(14);
 		const [loadingMore, setLoadingMore] = useState(false);
 		const isHomeRepo = workspaceId == null;
+		const includeTargetBranchHistory = workspaceId != null || isHomeRepo;
 
 		useEffect(() => {
 			if (!repoPath) {
@@ -87,11 +113,20 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 			}
 			setLoading(true);
 			setLimit(14);
-			listCommits(repoPath, workspaceId, workspaceId != null, undefined, 14)
+			listCommits(
+				repoPath,
+				workspaceId,
+				includeTargetBranchHistory,
+				undefined,
+				14,
+			)
 				.then((result) => {
-					const nextCommits = result?.commits ?? [];
-					setCommits(normalizeCommits(nextCommits));
-					setTargetBranchCommits(result?.target_branch_commits ?? []);
+					const { workspaceCommits, targetBranchCommits } = splitCommitsByTarget(
+						result?.commits ?? [],
+					);
+					setCommits(normalizeCommits(filterWorkingCopyCommits(workspaceCommits)));
+					setTentativeWorkingCopy(result?.tentative_working_copy ?? null);
+					setTargetBranchCommits(targetBranchCommits);
 					setMergeBaseId(result?.merge_base_id ?? null);
 					setTargetBranch(result?.target_branch ?? "");
 					setWorkspaceBranch(result?.workspace_branch ?? "");
@@ -100,6 +135,7 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 				.catch((err) => {
 					console.error("Failed to fetch commit history:", err);
 					setCommits([]);
+					setTentativeWorkingCopy(null);
 					setTargetBranchCommits([]);
 					setWorkspaceBranch("");
 				})
@@ -113,11 +149,14 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 			if (limit <= 14) return;
 			if (!isHomeRepo) return;
 			setLoadingMore(true);
-			listCommits(repoPath, workspaceId, false, undefined, limit)
+			listCommits(repoPath, workspaceId, includeTargetBranchHistory, undefined, limit)
 				.then((result) => {
-					const nextCommits = result?.commits ?? [];
-					setCommits(normalizeCommits(nextCommits));
-					setTargetBranchCommits(result?.target_branch_commits ?? []);
+					const { workspaceCommits, targetBranchCommits } = splitCommitsByTarget(
+						result?.commits ?? [],
+					);
+					setCommits(normalizeCommits(filterWorkingCopyCommits(workspaceCommits)));
+					setTentativeWorkingCopy(result?.tentative_working_copy ?? null);
+					setTargetBranchCommits(targetBranchCommits);
 					setMergeBaseId(result?.merge_base_id ?? null);
 					setTargetBranch(result?.target_branch ?? "");
 					onCommitsLoaded?.(result);
@@ -141,12 +180,18 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 			!isDefaultWorkspaceBranch &&
 			targetBranchCommits.length > 0;
 		const hasDivergence = isHomeRepo && targetBranchCommits.length > 0;
+		const hasTentativeWorkingCopy = tentativeWorkingCopy != null;
 
 		if (loading) {
 			return <LoadingState />;
 		}
 
-		if (commits.length === 0 && !hasDivergence && !showWorkspaceTargetSection) {
+		if (
+			commits.length === 0 &&
+			!hasDivergence &&
+			!showWorkspaceTargetSection &&
+			!hasTentativeWorkingCopy
+		) {
 			return (
 				<div className="p-4">
 					<h3 className="text-sm font-semibold text-muted-foreground mb-4">
@@ -175,6 +220,20 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 							className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-border"
 							aria-hidden="true"
 						/>
+
+						{tentativeWorkingCopy && (
+							<ul className="space-y-0 mb-3">
+								<CommitItem
+									commit={tentativeWorkingCopy.commit}
+									isFirst={true}
+									isTentative={true}
+									tentativeWorkspaceLabel={
+										tentativeWorkingCopy.workspace_label
+									}
+									onCommitClick={onCommitClick}
+								/>
+							</ul>
+						)}
 
 						{dayGroups.map((group, groupIndex) => (
 							<div
@@ -314,6 +373,8 @@ interface CommitItemProps {
 	commit: JjLogCommit;
 	isFirst: boolean;
 	isTargetOnly?: boolean;
+	isTentative?: boolean;
+	tentativeWorkspaceLabel?: string;
 	onCommitClick?: (changeId: string) => void;
 }
 
@@ -321,26 +382,30 @@ function CommitItem({
 	commit,
 	isFirst,
 	isTargetOnly,
+	isTentative,
+	tentativeWorkspaceLabel,
 	onCommitClick,
 }: CommitItemProps) {
-	const firstLine = commit.description.split("\n")[0] || "(no message)";
+	const firstLine = getCommitHeadline(commit);
 	const hasStats = commit.insertions > 0 || commit.deletions > 0;
 
 	return (
 		<li
 			className={cn(
 				"relative flex items-start gap-3 py-2 px-2 -mx-2 rounded-md group transition-all duration-200 hover:bg-muted",
+				isTentative && "bg-yellow-50/80 hover:bg-yellow-100/80 dark:bg-yellow-950/20 dark:hover:bg-yellow-950/30 border border-yellow-200/70 dark:border-yellow-900/60",
 				isTargetOnly && "opacity-60",
 			)}
 		>
 			<div className="relative z-10 flex-shrink-0">
 				<div
-					className={cn(
-						"w-[14px] h-[14px] rounded-full border-2 border-background",
-						isFirst ? "bg-primary" : "bg-muted-foreground",
-						isTargetOnly && "bg-muted-foreground/50",
-					)}
-				/>
+				className={cn(
+					"w-[14px] h-[14px] rounded-full border-2 border-background",
+					isFirst ? "bg-primary" : "bg-muted-foreground",
+					isTentative && "bg-yellow-500",
+					isTargetOnly && "bg-muted-foreground/50",
+				)}
+			/>
 			</div>
 
 			<div
@@ -349,20 +414,34 @@ function CommitItem({
 					isFirst &&
 						!isTargetOnly &&
 						"bg-accent/50 p-2 -m-2 shadow-sm border border-accent",
+					isTentative &&
+						"bg-yellow-50/80 p-2 -m-2 shadow-sm dark:bg-yellow-950/20",
 					isTargetOnly && "bg-muted/30 p-2 -m-2 rounded-md",
 					onCommitClick && "cursor-pointer hover:bg-muted/40 transition-colors",
 				)}
 				onClick={
-					onCommitClick ? () => onCommitClick(commit.change_id) : undefined
+					onCommitClick && !isTentative
+						? () => onCommitClick(commit.change_id)
+						: undefined
 				}
 			>
-				<p className="text-sm truncate" title={firstLine}>
-					{firstLine}
-				</p>
-				<div className="flex items-center gap-2 mt-0.5 flex-wrap">
-					<p className="text-xs text-muted-foreground font-mono">
-						{commit.short_id}
+				{isTentative ? (
+					<div className="space-y-0.5">
+						<p className="text-sm truncate" title={firstLine}>
+							{firstLine}
+						</p>
+						{tentativeWorkspaceLabel && (
+							<p className="text-xs text-muted-foreground font-mono truncate">
+								Working copy - {tentativeWorkspaceLabel}
+							</p>
+						)}
+					</div>
+				) : (
+					<p className="text-sm truncate" title={firstLine}>
+						{firstLine}
 					</p>
+				)}
+				<div className="flex items-center gap-2 mt-0.5 flex-wrap">
 					{commit.is_immutable && (
 						<span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border font-medium">
 							Immutable

@@ -77,7 +77,6 @@ function setupMocks(diff: JjRevisionDiff = mockDiff) {
 		commits: activeCommits,
 		target_branch: "main",
 		workspace_branch: "feat/test",
-		target_branch_commits: [],
 	});
 	vi.mocked(api.getCommitDiff).mockResolvedValue(diff);
 }

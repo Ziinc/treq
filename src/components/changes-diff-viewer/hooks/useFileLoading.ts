@@ -69,6 +69,9 @@ export function useFileLoading({
 	const [committedFiles, setCommittedFiles] = useState<
 		import("../../../lib/api").JjFileChange[]
 	>([]);
+	const [committedFileHunks, setCommittedFileHunks] = useState<
+		Map<string, FileHunksData>
+	>(new Map());
 	const prevFilePathsRef = useRef<string[]>([]);
 
 	const cachedChanges = useCachedWorkspaceChanges(workspacePath, {
@@ -94,17 +97,18 @@ export function useFileLoading({
 				const parsed = parseJjChangedFiles(diff.uncommitted_files ?? []);
 				applyChangedFilesRef.current(parsed);
 				setCommittedFiles(diff.committed_files);
-				setAllFileHunks((prev) => {
-					const updated = new Map(prev);
-					for (const fileDiff of diff.hunks_by_file) {
-						updated.set(fileDiff.path, {
-							filePath: fileDiff.path,
-							hunks: fileDiff.hunks,
-							isLoading: false,
-						});
-					}
-					return updated;
-				});
+				setCommittedFileHunks(
+					new Map(
+						diff.hunks_by_file.map((fileDiff) => [
+							fileDiff.path,
+							{
+								filePath: fileDiff.path,
+								hunks: fileDiff.hunks,
+								isLoading: false,
+							},
+						]),
+					),
+				);
 				return;
 			}
 			const jjFiles = await getWorkspaceChangedFiles(
@@ -121,11 +125,26 @@ export function useFileLoading({
 			setRefreshing(false);
 			onRefreshingChange?.(false);
 		}
-	}, [workspacePath, applyChangedFilesRef, addToast, onRefreshingChange]);
+	}, [
+		workspacePath,
+		repoPath,
+		workspaceId,
+		showCommittedChanges,
+		applyChangedFilesRef,
+		addToast,
+		onRefreshingChange,
+	]);
 
 	useEffect(() => {
 		loadChangedFiles();
 	}, [workspacePath]);
+
+	useEffect(() => {
+		if (!workspacePath || initialLoading) return;
+		if (showCommittedChanges) {
+			loadChangedFiles();
+		}
+	}, [workspacePath, showCommittedChanges, initialLoading, loadChangedFiles]);
 
 	useEffect(() => {
 		if (!workspaceId) return;
@@ -145,7 +164,7 @@ export function useFileLoading({
 			return;
 		}
 		setCommittedFiles((previousCommittedFiles) => {
-			setAllFileHunks((prev) => {
+			setCommittedFileHunks((prev) => {
 				const updated = new Map(prev);
 				for (const file of previousCommittedFiles) updated.delete(file.path);
 				return updated;
@@ -341,6 +360,7 @@ export function useFileLoading({
 		} else if (files.length === 0 && prevFilePathsRef.current.length > 0) {
 			prevFilePathsRef.current = [];
 			setAllFileHunks(new Map());
+			setCommittedFileHunks(new Map());
 			setLargeChangesetExpandedRef.current(false);
 		}
 	}, [files, loadAllFileHunks, setLargeChangesetExpandedRef]);
@@ -353,6 +373,7 @@ export function useFileLoading({
 		loadingAllHunks,
 		initialLoading,
 		committedFiles,
+		committedFileHunks,
 		setCommittedFiles,
 		invalidateCache,
 		refresh,

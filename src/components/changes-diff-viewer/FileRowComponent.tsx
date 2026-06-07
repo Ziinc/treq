@@ -50,6 +50,7 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
 	const {
 		file,
 		allFileHunks,
+		overrideFileHunks,
 		collapsedFiles,
 		viewedFiles,
 		expandedLargeDiffs,
@@ -74,7 +75,7 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
 	const editorApps = useEditorApps();
 
 	const filePath = file.path;
-	const fileData = allFileHunks.get(filePath);
+	const fileData = (overrideFileHunks ?? allFileHunks).get(filePath);
 	if (!fileData) return <div />;
 
 	const isRename = !!file.oldPath;

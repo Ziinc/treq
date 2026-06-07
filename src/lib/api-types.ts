@@ -142,12 +142,18 @@ export interface JjLogCommit {
 	on_target_only?: boolean;
 }
 
+export interface JjTentativeWorkingCopy {
+	workspace_label: string;
+	commit: JjLogCommit;
+}
+
 export interface JjLogResult {
-	/** Workspace-branch history only for workspace views; home-repo history for home views. */
+	/** Workspace/current-branch commits first, then target-only commits (`on_target_only`). */
 	commits: JjLogCommit[];
+	tentative_working_copy?: JjTentativeWorkingCopy | null;
 	target_branch: string;
 	workspace_branch: string;
-	/** Target-branch history only for workspace views; target-ahead history for home views. */
+	/** @deprecated Target-only commits are included in `commits` with `on_target_only = true`. */
 	target_branch_commits?: JjLogCommit[];
 	/** Commit ID of the common ancestor (merge base) for non-default home-repo branch views */
 	merge_base_id?: string | null;

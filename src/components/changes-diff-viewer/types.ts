@@ -130,6 +130,7 @@ export interface HighlightedLineProps {
 export interface FileRowComponentProps {
 	file: ParsedFileChange;
 	allFileHunks: Map<string, FileHunksData>;
+	overrideFileHunks?: Map<string, FileHunksData>;
 	collapsedFiles: Set<string>;
 	viewedFiles: Map<string, { viewedAt: string; contentHash: string }>;
 	expandedLargeDiffs: Set<string>;

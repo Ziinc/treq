@@ -207,6 +207,7 @@ fn workspace_creation_list_commits_excludes_all_working_copy_commits() {
 #[test]
 fn test_can_create_workspace_with_same_source_branch() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     assert!(
         &repo.workspaces_dir().exists(),
@@ -219,7 +220,7 @@ fn test_can_create_workspace_with_same_source_branch() {
         "feat/test1",
         Some("new feature".to_string()),
         None,         // moved_files
-        Some("main"), // source_branch (defaults to current)
+        Some(default_branch), // source_branch (defaults to current)
         None,
     )
     .expect("Failed to create workspace");
@@ -230,7 +231,7 @@ fn test_can_create_workspace_with_same_source_branch() {
         "feat/test2",
         Some("new feature2".to_string()),
         None,         // moved_files
-        Some("main"), // source_branch (defaults to current)
+        Some(default_branch), // source_branch (defaults to current)
         None,
     )
     .expect("Failed to create workspace");
@@ -418,6 +419,7 @@ fn test_can_create_stacked_workspace() {
 #[test]
 fn test_create_workspace_from_ahead_source_stacks_history_and_working_copy_and_diff() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     let b_workspace: Workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -439,7 +441,7 @@ fn test_create_workspace_from_ahead_source_stacks_history_and_working_copy_and_d
     treq_lib::core::commit_workspace(&repo.repo_path, b_workspace.id, "B committed change")
         .expect("Failed to commit in B");
 
-    let b_ahead = treq_lib::jj::jj_get_commits_ahead(b_path_str, "main")
+    let b_ahead = treq_lib::jj::jj_get_commits_ahead(b_path_str, default_branch)
         .expect("Failed to compute commits ahead for B");
     assert_eq!(
         b_ahead.total_count, 1,
@@ -905,6 +907,7 @@ fn test_create_workspace_skips_missing_included_files() {
 #[test]
 fn test_create_workspace_parents_on_target_branch_tip_after_external_commit() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     // Record the commit hash of main's current tip (the initial commit).
     let initial_sha = TestRepo::run_git(&repo.repo_path, &["rev-parse", "HEAD"])
@@ -918,7 +921,7 @@ fn test_create_workspace_parents_on_target_branch_tip_after_external_commit() {
 
     // Advance main bookmark via a raw git commit on the main branch without touching git HEAD
     // (simulate another tool or fetch updating main while we are on a detached HEAD / other branch).
-    TestRepo::run_git(&repo.repo_path, &["branch", "-f", "main", &initial_sha])
+    TestRepo::run_git(&repo.repo_path, &["branch", "-f", default_branch, &initial_sha])
         .expect("Failed to reset main");
     // Create a temp branch to land the new commit, then move main there.
     TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "tmp-advance"])
@@ -930,7 +933,7 @@ fn test_create_workspace_parents_on_target_branch_tip_after_external_commit() {
         .trim()
         .to_string();
     // Move main to this new commit, but keep git HEAD on tmp-advance (detached from main).
-    TestRepo::run_git(&repo.repo_path, &["branch", "-f", "main", &new_main_sha])
+    TestRepo::run_git(&repo.repo_path, &["branch", "-f", default_branch, &new_main_sha])
         .expect("Failed to move main to new commit");
     // Detach HEAD so it stays at the NEW commit but is NOT on main.
     TestRepo::run_git(&repo.repo_path, &["checkout", "--detach", &new_main_sha])
@@ -972,6 +975,7 @@ fn test_create_workspace_parents_on_target_branch_tip_after_external_commit() {
 #[test]
 fn test_create_workspace_sets_target_branch_in_db() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     let workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -989,7 +993,7 @@ fn test_create_workspace_sets_target_branch_in_db() {
     );
     assert_eq!(
         workspace.target_branch.as_deref(),
-        Some("main"),
-        "target_branch should default to 'main'"
+        Some(default_branch),
+        "target_branch should default to the repo default branch"
     );
 }

@@ -56,6 +56,7 @@ fn test_can_delete_workspace() {
 #[test]
 fn test_delete_workspace_retargets_children_to_default_branch() {
     let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
 
     let parent: Workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -121,8 +122,8 @@ fn test_delete_workspace_retargets_children_to_default_branch() {
         .find(|w| w.id == grandchild.id)
         .expect("grandchild should still exist");
 
-    assert_eq!(updated_child1.target_branch, Some("main".to_string()));
-    assert_eq!(updated_child2.target_branch, Some("main".to_string()));
+    assert_eq!(updated_child1.target_branch, Some(default_branch.to_string()));
+    assert_eq!(updated_child2.target_branch, Some(default_branch.to_string()));
     assert_eq!(
         updated_grandchild.target_branch,
         Some("feat/child1".to_string())

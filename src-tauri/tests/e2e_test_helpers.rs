@@ -1,12 +1,25 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tempfile::TempDir;
+
+fn random_default_branch_name() -> String {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    format!("branch-{nanos}-{seq}")
+}
 
 #[allow(dead_code)]
 pub struct TestRepo {
     pub temp_dir: TempDir,
     pub repo_path: String,
+    default_branch: String,
 }
 
 #[allow(dead_code)]
@@ -34,10 +47,11 @@ impl TestRepo {
         Self::run_git(&repo_path, &["config", "user.email", "test@example.com"])?;
         Self::run_git(&repo_path, &["config", "user.name", "Test User"])?;
 
-        Self::run_git(&repo_path, &["branch", "-M", "main"])
-            .map_err(|e| format!("Failed to create main branch: {}", e))?;
+        let default_branch = random_default_branch_name();
+        Self::run_git(&repo_path, &["branch", "-M", &default_branch])
+            .map_err(|e| format!("Failed to create default branch: {}", e))?;
 
-        Self::run_git(&repo_path, &["checkout", "-b", "main"])?;
+        Self::run_git(&repo_path, &["checkout", "-b", &default_branch])?;
 
         // Create initial commit (git repos need at least one commit)
         let readme_path = temp_dir.path().join("README.md");
@@ -54,7 +68,13 @@ impl TestRepo {
         Ok(TestRepo {
             temp_dir,
             repo_path,
+            default_branch,
         })
+    }
+
+    /// Returns the repository's default branch name (set at creation time).
+    pub fn default_branch(&self) -> &str {
+        &self.default_branch
     }
 
     /// Creates a test repo with a remote origin for testing remote branch operations.
@@ -82,9 +102,10 @@ impl TestRepo {
         // Add remote to main repo
         Self::run_git(&repo.repo_path, &["remote", "add", "origin", &remote_path])?;
 
-        // Push main branch to remote
-        Self::run_git(&repo.repo_path, &["push", "-u", "origin", "main"])?;
-
+        // Push default branch to remote
+        let default_branch = repo.default_branch();
+        Self::run_git(&repo.repo_path, &["push", "-u", "origin", default_branch])?;
+        Self::run_git(&repo.repo_path, &["remote", "set-head", "origin", default_branch])?;
         // Create a remote branch with a commit for testing
         // The test expects a "feature.txt" file in the remote branch
         Self::run_git(&repo.repo_path, &["checkout", "-b", "feature-remote"])?;
@@ -99,8 +120,8 @@ impl TestRepo {
         // Push the feature branch to remote
         Self::run_git(&repo.repo_path, &["push", "-u", "origin", "feature-remote"])?;
 
-        // Return to main branch
-        Self::run_git(&repo.repo_path, &["checkout", "main"])?;
+        // Return to default branch
+        Self::run_git(&repo.repo_path, &["checkout", default_branch])?;
 
         // Fetch to ensure jj knows about the remote branch
         if init {
@@ -269,6 +290,23 @@ impl TestRepo {
         Ok(())
     }
 
+    /// Write a file in a workspace and create a commit with the given message.
+    pub fn commit_workspace_file(
+        &self,
+        workspace: &treq_lib::local_db::Workspace,
+        relative_path: &str,
+        content: &str,
+        message: &str,
+    ) -> Result<(), String> {
+        let workspace_path = self.workspaces_dir().join(&workspace.workspace_path);
+        let workspace_path_str = workspace_path
+            .to_str()
+            .ok_or_else(|| format!("workspace path is not utf-8: {}", workspace_path.display()))?;
+        Self::write_workspace_file(workspace_path_str, relative_path, content)?;
+        treq_lib::core::commit_workspace(&self.repo_path, workspace.id, message)?;
+        Ok(())
+    }
+
     /// Create a commit in the bare remote (requires with_remote()).
     /// Uses a temporary git clone of the remote to make the commit and push,
     /// so the local repo is never modified.
@@ -300,6 +338,23 @@ impl TestRepo {
         )?;
         Self::run_git(&clone_path_str, &["config", "user.name", "Test User"])?;
 
+        let default_branch = self.default_branch();
+        if let Err(local_checkout_err) =
+            Self::run_git(&clone_path_str, &["checkout", default_branch])
+        {
+            let remote_ref = format!("origin/{default_branch}");
+            Self::run_git(
+                &clone_path_str,
+                &["checkout", "-b", default_branch, &remote_ref],
+            )
+            .map_err(|remote_checkout_err| {
+                format!(
+                    "Failed to checkout default branch '{}' in remote clone. Local checkout error: {} Fallback checkout from '{}' error: {}",
+                    default_branch, local_checkout_err, remote_ref, remote_checkout_err
+                )
+            })?;
+        }
+
         // Write file, commit, and push from the clone
         let file_path = clone_path.join(relative_path);
         if let Some(parent) = file_path.parent() {
@@ -311,7 +366,7 @@ impl TestRepo {
 
         Self::run_git(&clone_path_str, &["add", relative_path])?;
         Self::run_git(&clone_path_str, &["commit", "-m", message])?;
-        Self::run_git(&clone_path_str, &["push", "origin", "main"])?;
+        Self::run_git(&clone_path_str, &["push", "origin", self.default_branch()])?;
 
         // Clean up the clone
         fs::remove_dir_all(&clone_path)
