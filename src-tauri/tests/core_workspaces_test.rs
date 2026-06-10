@@ -286,7 +286,8 @@ fn test_update_workspace_target_branch_perform_rebase() {
 
     // check out main branch on the home repo
 
-    TestRepo::run_git(&repo.repo_path, &["checkout", default_branch][..]).expect("Failed to checkout main");
+    TestRepo::run_git(&repo.repo_path, &["checkout", default_branch][..])
+        .expect("Failed to checkout main");
 
     // change the target branch of the workspace to the develop branch
     let updated = treq_lib::core::update_workspace(
@@ -374,7 +375,8 @@ fn test_update_workspace_target_branch_rebases_workspace_bookmark_lineage() {
         .expect("Failed to read develop tip")
         .trim()
         .to_string();
-    TestRepo::run_git(&repo.repo_path, &["checkout", default_branch]).expect("Failed to checkout main");
+    TestRepo::run_git(&repo.repo_path, &["checkout", default_branch])
+        .expect("Failed to checkout main");
 
     let updated = treq_lib::core::update_workspace(
         &repo.repo_path,
@@ -1008,8 +1010,8 @@ fn test_split_workspace_move_commits_before() {
         .expect("Failed to commit");
 
     // Get commits
-    let commits_ahead =
-        treq_lib::jj::jj_get_commits_ahead(source_path_str, default_branch).expect("Failed to get commits");
+    let commits_ahead = treq_lib::jj::jj_get_commits_ahead(source_path_str, default_branch)
+        .expect("Failed to get commits");
 
     let early_commit_id = commits_ahead.commits.last().unwrap().change_id.clone();
 

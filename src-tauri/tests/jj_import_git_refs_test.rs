@@ -24,7 +24,8 @@ fn test_list_repo_branches_handles_abandoned_commits() {
     list_repo_branches(&repo.repo_path).expect("first import should succeed");
 
     // Make the doomed commit unreachable from any git ref.
-    TestRepo::run_git(&repo.repo_path, &["checkout", default_branch]).expect("Failed to return to main");
+    TestRepo::run_git(&repo.repo_path, &["checkout", default_branch])
+        .expect("Failed to return to main");
     TestRepo::run_git(&repo.repo_path, &["branch", "-D", "doomed"])
         .expect("Failed to delete branch");
 

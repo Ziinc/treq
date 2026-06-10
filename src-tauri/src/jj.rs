@@ -4423,7 +4423,9 @@ pub fn jj_get_log(
                     &loaded.repo,
                     &commit,
                     &wc_commit_ids,
-                    wc_tree_override.as_ref().map(|(commit_id, tree)| (commit_id, tree)),
+                    wc_tree_override
+                        .as_ref()
+                        .map(|(commit_id, tree)| (commit_id, tree)),
                     &is_immutable,
                     &std::collections::HashMap::<String, local_db::CachedCommitDiffStat>::new(),
                 ),
@@ -4687,10 +4689,8 @@ pub fn jj_get_home_repo_diverged_log(
         get_workspace_branch(repo_path).unwrap_or_else(|_| current_branch.to_string());
 
     let mut commits = branch_commits;
-    let existing_ids: std::collections::HashSet<String> = commits
-        .iter()
-        .map(|c| c.commit_id.clone())
-        .collect();
+    let existing_ids: std::collections::HashSet<String> =
+        commits.iter().map(|c| c.commit_id.clone()).collect();
     for commit in target_only_commits {
         if existing_ids.contains(&commit.commit_id) {
             continue;
@@ -5025,14 +5025,14 @@ fn build_tentative_working_copy(
         workspace_label: workspace_label.to_string(),
         commit: {
             let mut commit = build_log_commit(
-            cache_repo_path,
-            repo,
-            commit,
-            wc_commit_ids,
-            wc_tree_override,
-            is_immutable,
-            &std::collections::HashMap::<String, local_db::CachedCommitDiffStat>::new(),
-        );
+                cache_repo_path,
+                repo,
+                commit,
+                wc_commit_ids,
+                wc_tree_override,
+                is_immutable,
+                &std::collections::HashMap::<String, local_db::CachedCommitDiffStat>::new(),
+            );
             commit.workspace_label = Some(workspace_label.to_string());
             commit
         },
@@ -5048,8 +5048,10 @@ pub fn jj_get_tentative_working_copy(
     }
 
     let loaded = load_workspace_repo(workspace_path)?;
-    let immutable_revset =
-        evaluate_revset(&loaded, &format!("::{}", format_revset_symbol(workspace_label)))?;
+    let immutable_revset = evaluate_revset(
+        &loaded,
+        &format!("::{}", format_revset_symbol(workspace_label)),
+    )?;
     let is_immutable_val = immutable_revset.containing_fn();
     let wc_commit_ids: HashSet<_> = loaded
         .repo
@@ -5060,15 +5062,17 @@ pub fn jj_get_tentative_working_copy(
         .collect();
 
     get_workspace_wc_commit(&loaded).map(|maybe_commit| {
-        maybe_commit.map(|commit| build_tentative_working_copy(
-            workspace_path,
-            &loaded.repo,
-            &commit,
-            workspace_label,
-            &wc_commit_ids,
-            None,
-            &is_immutable_val,
-        ))
+        maybe_commit.map(|commit| {
+            build_tentative_working_copy(
+                workspace_path,
+                &loaded.repo,
+                &commit,
+                workspace_label,
+                &wc_commit_ids,
+                None,
+                &is_immutable_val,
+            )
+        })
     })
 }
 

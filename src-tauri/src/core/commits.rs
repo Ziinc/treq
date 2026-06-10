@@ -4,12 +4,12 @@ use std::path::Path;
 use crate::jj;
 use crate::local_db;
 
-fn append_target_branch_commits(result: &mut jj::JjLogResult, target_commits: Vec<jj::JjLogCommit>) {
-    let existing_ids: HashSet<String> = result
-        .commits
-        .iter()
-        .map(|c| c.commit_id.clone())
-        .collect();
+fn append_target_branch_commits(
+    result: &mut jj::JjLogResult,
+    target_commits: Vec<jj::JjLogCommit>,
+) {
+    let existing_ids: HashSet<String> =
+        result.commits.iter().map(|c| c.commit_id.clone()).collect();
 
     for mut commit in target_commits {
         if existing_ids.contains(&commit.commit_id) {
@@ -149,13 +149,9 @@ pub fn list_commits(
             let default_branch = jj::get_default_branch(repo_path)
                 .map_err(|e| format!("Failed to resolve default branch: {}", e))?;
             if branch != default_branch {
-                let mut result = jj::jj_get_home_repo_diverged_log(
-                    repo_path,
-                    &branch,
-                    &default_branch,
-                    limit,
-                )
-                .map_err(|e| format!("Failed to list commits: {}", e))?;
+                let mut result =
+                    jj::jj_get_home_repo_diverged_log(repo_path, &branch, &default_branch, limit)
+                        .map_err(|e| format!("Failed to list commits: {}", e))?;
                 if !include_target_branch_history {
                     result.commits.retain(|c| !c.on_target_only);
                 }

@@ -639,11 +639,11 @@ pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspaceSidebarSt
                 .get(&current.workspace_path)
                 .copied()
                 .ok_or_else(|| {
-                    format!(
-                        "Discovered workspace missing conflict state after sync: {}",
-                        current.workspace_path
-                    )
-                })?;
+                format!(
+                    "Discovered workspace missing conflict state after sync: {}",
+                    current.workspace_path
+                )
+            })?;
             let workspace_dir = Path::new(repo_path)
                 .join(".treq")
                 .join("workspaces")
@@ -847,8 +847,8 @@ pub fn workspace_status(
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_hunk_spec, resolve_workspace_diff_conflict_marker_style,
-        HunkSpec, WorkspaceMoveRequest,
+        parse_hunk_spec, resolve_workspace_diff_conflict_marker_style, HunkSpec,
+        WorkspaceMoveRequest,
     };
     use rusqlite::Connection;
     use std::sync::{Mutex, OnceLock};

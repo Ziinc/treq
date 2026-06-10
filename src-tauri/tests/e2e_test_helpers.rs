@@ -105,7 +105,10 @@ impl TestRepo {
         // Push default branch to remote
         let default_branch = repo.default_branch();
         Self::run_git(&repo.repo_path, &["push", "-u", "origin", default_branch])?;
-        Self::run_git(&repo.repo_path, &["remote", "set-head", "origin", default_branch])?;
+        Self::run_git(
+            &repo.repo_path,
+            &["remote", "set-head", "origin", default_branch],
+        )?;
         // Create a remote branch with a commit for testing
         // The test expects a "feature.txt" file in the remote branch
         Self::run_git(&repo.repo_path, &["checkout", "-b", "feature-remote"])?;
