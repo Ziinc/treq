@@ -1,17 +1,19 @@
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::agent_dispatch;
-    use serde_json::Value;
-    use std::fs;
-    use std::io::{Read, Write};
-    use std::net::TcpListener;
-    use std::path::Path;
-    use std::sync::{Mutex, OnceLock};
-    use std::thread;
-    use std::time::Duration;
-    use tauri_plugin_cli::SubcommandMatches;
-    use tempfile::TempDir;
+use super::{
+    build_agent_deep_link_url, dispatch_agent_request, handle_cli_command, handle_cli_global_args,
+    is_supported_cli_command, normalize_repo_path, parse_agent_mode, parse_agent_mode_or_default,
+};
+use crate::agent_dispatch;
+use crate::local_db;
+use serde_json::Value;
+use std::fs;
+use std::io::{Read, Write};
+use std::net::TcpListener;
+use std::path::Path;
+use std::sync::{Mutex, OnceLock};
+use std::thread;
+use std::time::Duration;
+use tauri_plugin_cli::{Matches, SubcommandMatches};
+use tempfile::TempDir;
 
     fn make_subcommand(name: &str) -> SubcommandMatches {
         let mut sub = SubcommandMatches::default();
@@ -352,4 +354,3 @@ mod tests {
         );
         handle.join().expect("join");
     }
-}

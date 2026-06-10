@@ -9,7 +9,7 @@ use crate::core;
 use crate::db::Database;
 use crate::local_db;
 
-fn normalize_repo_path(path: &Path) -> String {
+pub(super) fn normalize_repo_path(path: &Path) -> String {
     std::fs::canonicalize(path)
         .ok()
         .and_then(|p| p.to_str().map(|s| s.to_string()))
@@ -93,7 +93,7 @@ pub fn handle_cli_global_args(matches: &Matches) -> bool {
 }
 
 #[cfg(test)]
-fn is_supported_cli_command(name: &str) -> bool {
+pub(super) fn is_supported_cli_command(name: &str) -> bool {
     matches!(name, "add" | "set" | "st" | "mv" | "agent" | "help")
 }
 
@@ -109,7 +109,7 @@ fn print_cli_help() {
     println!("  treq help");
 }
 
-fn parse_agent_mode(mode: &str) -> Result<&'static str, String> {
+pub(super) fn parse_agent_mode(mode: &str) -> Result<&'static str, String> {
     match mode.trim() {
         "edit" => Ok("acceptEdits"),
         "plan" => Ok("plan"),
@@ -151,7 +151,7 @@ pub(super) fn resolve_default_agent(repo_path: &str) -> String {
 }
 
 #[cfg(test)]
-fn build_agent_deep_link_url(
+pub(super) fn build_agent_deep_link_url(
     repo_path: &str,
     branch: &str,
     prompt: &str,
@@ -223,4 +223,3 @@ mod status_output;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use status_output::{print_workspace_partial_status, print_workspace_status_detail};
