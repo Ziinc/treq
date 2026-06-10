@@ -1608,11 +1608,15 @@ fn workspace_diff_with_conflict_style(
         .iter()
         .map(|file| file.path.clone())
         .collect();
-    diff.committed_files
-        .retain(|file| !uncommitted_paths.contains(&file.path));
-    diff.uncommitted_files = uncommitted_files;
-    diff.conflicted_files = jj::get_conflicted_files(workspace_dir_str, Some(target_branch))
+    let conflicted_files = jj::get_conflicted_files(workspace_dir_str, Some(target_branch))
         .map_err(|e| format!("Failed to get conflicted workspace files: {}", e))?;
+    let conflicted_paths: std::collections::HashSet<String> =
+        conflicted_files.iter().cloned().collect();
+    diff.committed_files.retain(|file| {
+        !uncommitted_paths.contains(&file.path) || conflicted_paths.contains(&file.path)
+    });
+    diff.uncommitted_files = uncommitted_files;
+    diff.conflicted_files = conflicted_files;
 
     Ok(diff)
 }

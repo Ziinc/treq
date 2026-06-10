@@ -79,8 +79,8 @@ pub fn normalize_repo_path(path: &str) -> String {
         .unwrap_or_else(|| path.to_string())
 }
 
-#[allow(dead_code)]
-pub fn prune_stale_instances(instances: &mut Vec<RegisteredInstance>, now: u64, timeout_ms: u64) {
+#[cfg(test)]
+fn prune_stale_instances(instances: &mut Vec<RegisteredInstance>, now: u64, timeout_ms: u64) {
     instances.retain(|instance| now.saturating_sub(instance.last_heartbeat_at) <= timeout_ms);
 }
 
