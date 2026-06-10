@@ -1587,12 +1587,8 @@ fn workspace_diff_with_conflict_style(
     let workspace_dir_str = workspace_dir
         .to_str()
         .ok_or("Failed to convert workspace path to string")?;
-    let tip_revision = resolve_workspace_diff_tip_revision(
-        repo_path,
-        &workspace,
-        workspace_dir_str,
-        conflict_marker_style,
-    )?;
+    let tip_revision =
+        resolve_workspace_diff_tip_revision(repo_path, &workspace, workspace_dir_str)?;
 
     let mut diff = jj::jj_get_merge_diff_between_revisions(
         workspace_dir_str,
@@ -1625,7 +1621,6 @@ fn resolve_workspace_diff_tip_revision(
     repo_path: &str,
     workspace: &local_db::Workspace,
     workspace_dir_str: &str,
-    conflict_marker_style: &str,
 ) -> Result<String, String> {
     let target_branch = workspace.target_branch.as_deref().unwrap_or("main");
     if workspace.branch_name == target_branch {

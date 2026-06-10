@@ -222,4 +222,3 @@ mod status_output;
 
 #[cfg(test)]
 mod tests;
-
