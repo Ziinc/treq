@@ -227,20 +227,23 @@ const WorkspaceTerminalPaneInner = forwardRef<
 		}, [activePtySessionId, claudeSessions, shellTerminals]);
 
 		// Add new shell terminal in the active terminal's workspace, or sidebar-selected workspace
-		const handleAddShell = useCallback((dirOverride?: string) => {
-			const dir = dirOverride || activeWorkspaceDir || workingDirectory;
-			const newId = `shell-${dir.replace(/[^a-zA-Z0-9]/g, "-")}-${Date.now()}`;
-			setShellTerminals((prev) => [
-				...prev,
-				{ id: newId, workingDirectory: dir },
-			]);
-			// Add to terminal order (rightmost position)
-			setTerminalOrder((prev) => [...prev, newId]);
-			if (collapsed) {
-				setCollapsed(false);
-			}
-			scrollToTerminal(newId);
-		}, [activeWorkspaceDir, workingDirectory, collapsed, scrollToTerminal]);
+		const handleAddShell = useCallback(
+			(dirOverride?: string) => {
+				const dir = dirOverride || activeWorkspaceDir || workingDirectory;
+				const newId = `shell-${dir.replace(/[^a-zA-Z0-9]/g, "-")}-${Date.now()}`;
+				setShellTerminals((prev) => [
+					...prev,
+					{ id: newId, workingDirectory: dir },
+				]);
+				// Add to terminal order (rightmost position)
+				setTerminalOrder((prev) => [...prev, newId]);
+				if (collapsed) {
+					setCollapsed(false);
+				}
+				scrollToTerminal(newId);
+			},
+			[activeWorkspaceDir, workingDirectory, collapsed, scrollToTerminal],
+		);
 
 		// Create Agent session in the active terminal's workspace, or sidebar-selected workspace
 		const handleCreateAgentSession = useCallback(

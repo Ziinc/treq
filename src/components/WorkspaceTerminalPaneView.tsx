@@ -233,7 +233,7 @@ export const WorkspaceTerminalPaneView: React.FC<
 							</Tooltip>
 						</TooltipProvider>
 					)}
-					{!collapsed && !maximized  && totalTerminals > 0 && (
+					{!collapsed && !maximized && totalTerminals > 0 && (
 						<TooltipProvider>
 							<Tooltip>
 								<TooltipTrigger asChild>

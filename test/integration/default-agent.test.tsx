@@ -168,7 +168,9 @@ describe("default agent configuration", () => {
 		);
 
 		// Click the "Agent" button in the terminal pane header
-		const agentButton = await screen.findByRole("button", { name: /new agent/i });
+		const agentButton = await screen.findByRole("button", {
+			name: /new agent/i,
+		});
 		await user.click(agentButton);
 
 		// Session name should be "Codex 1" (not "Claude 1") when default_agent=codex

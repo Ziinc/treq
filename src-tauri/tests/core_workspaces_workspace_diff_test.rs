@@ -311,17 +311,13 @@ fn test_workspace_diff_does_not_leak_sibling_workspace_commits() {
     let main_workspace =
         treq_lib::core::create_workspace(&repo.repo_path, "treq/root", None, None, None, None)
             .unwrap();
-    let sibling_workspace = treq_lib::core::create_workspace(
-        &repo.repo_path,
-        "treq/chicken",
-        None,
-        None,
-        None,
-        None,
-    )
-    .unwrap();
+    let sibling_workspace =
+        treq_lib::core::create_workspace(&repo.repo_path, "treq/chicken", None, None, None, None)
+            .unwrap();
 
-    let sibling_dir = repo.workspaces_dir().join(&sibling_workspace.workspace_path);
+    let sibling_dir = repo
+        .workspaces_dir()
+        .join(&sibling_workspace.workspace_path);
     let sibling_dir_str = sibling_dir.to_str().unwrap();
     TestRepo::write_workspace_file(sibling_dir_str, "chicken.txt", "cluck").unwrap();
     treq_lib::core::commit_workspace(&repo.repo_path, sibling_workspace.id, "sibling change")

@@ -515,12 +515,7 @@ pub fn move_workspace_changes(
     destination_branch: String,
     request: crate::core::WorkspaceMoveRequest,
 ) -> Result<crate::core::WorkspaceMoveResult, String> {
-    crate::core::move_workspace_changes(
-        &repo_path,
-        &source_branch,
-        &destination_branch,
-        request,
-    )
+    crate::core::move_workspace_changes(&repo_path, &source_branch, &destination_branch, request)
 }
 
 #[tauri::command]
