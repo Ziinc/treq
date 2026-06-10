@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 export function cn(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs));
@@ -164,6 +165,21 @@ export function generateStackedBranchName(
 ): string {
 	const baseName = `${parentBranch}-stack-${index}`;
 	return applyBranchNamePattern(branchPattern, baseName);
+}
+
+/**
+ * Resolve a relative image `src` from a markdown file against its base directory,
+ * converting it to a Tauri asset protocol URL so the webview can load it.
+ * Absolute web URLs and inline data URIs are returned unchanged.
+ */
+export function resolveReadmeImageSrc(
+	src: string | undefined,
+	baseDir: string,
+): string | undefined {
+	if (!src) return src;
+	if (/^(https?:|data:|blob:|asset:)/i.test(src)) return src;
+	const cleaned = src.replace(/^\.\//, "");
+	return convertFileSrc(`${baseDir}/${cleaned}`);
 }
 
 // Construct a full workspace path; preserve legacy absolute workspace paths.

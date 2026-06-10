@@ -57,6 +57,7 @@ interface WorkspaceSidebarProps {
 	onMoveWorkspace?: (workspace: Workspace, targetBranch: string | null) => void;
 	onSelectStack?: (workspaceIds: Set<number>) => void;
 	onStartAgent?: (workspace: Workspace) => void;
+	onStartShell?: (workspace: Workspace) => void;
 }
 
 export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
@@ -77,6 +78,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 		onMoveWorkspace,
 		onSelectStack,
 		onStartAgent,
+		onStartShell,
 	}) => {
 		const {
 			data: workspaces = [],
@@ -205,7 +207,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 
 		return (
 			<TooltipProvider delayDuration={200} skipDelayDuration={100}>
-				<div className="group/sidebar w-[240px] bg-sidebar border-r border-border flex flex-col h-screen">
+				<div className="group/sidebar w-[280px] bg-sidebar border-r border-border flex flex-col h-screen">
 					<div className="flex items-center gap-2 mx-2 mt-2">
 						<button
 							onClick={onOpenCommandPalette}
@@ -355,6 +357,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 												onWorkspaceMultiSelect={onWorkspaceMultiSelect}
 												onAddAfter={onAddAfter}
 												onStartAgent={onStartAgent}
+												onStartShell={onStartShell}
 												onDeleteWorkspace={onDeleteWorkspace}
 												onRenameWorkspace={setRenameTarget}
 												onDoubleClick={handleDoubleClick}

@@ -287,9 +287,18 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 
 		const REMOVE_ANIMATION_MS = 220;
 
+		const resolveCommitById = useCallback(
+			(commitId: string) =>
+				commits.find((c) => c.commit_id === commitId) ??
+				(tentativeWorkingCopy?.commit_id === commitId
+					? tentativeWorkingCopy
+					: undefined),
+			[commits, tentativeWorkingCopy],
+		);
+
 		const loadCommitDiff = useCallback(
 			async (commitId: string): Promise<JjRevisionDiff> => {
-				const commit = commits.find((c) => c.commit_id === commitId);
+				const commit = resolveCommitById(commitId);
 				// Commit IDs resolve more consistently for per-commit diffs; keep
 				// change_id as a fallback for rewritten/alternate revisions.
 				const revisions = [commitId, commit?.change_id].filter(
@@ -323,14 +332,12 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 					render_block_reason: null,
 				};
 			},
-			[repoPath, workspaceId, commits],
+			[repoPath, workspaceId, resolveCommitById],
 		);
 
 		const loadCommitFileDiff = useCallback(
 			async (commitId: string, filePath: string): Promise<JjFileDiff> => {
-				const commit = commits.find(
-					(candidate) => candidate.commit_id === commitId,
-				);
+				const commit = resolveCommitById(commitId);
 				const revisions = [commitId, commit?.change_id].filter(
 					(value, index, values): value is string =>
 						typeof value === "string" &&
@@ -354,7 +361,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 
 				throw lastError ?? new Error("Failed to load commit file diff");
 			},
-			[repoPath, workspaceId, commits],
+			[repoPath, workspaceId, resolveCommitById],
 		);
 
 		const handleAbandon = useCallback(
@@ -403,7 +410,11 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 		useEffect(() => {
 			if (!scrollToCommitId || loading) return;
 			// Find the commit by change_id to get its commit_id for the key
-			const commit = commits.find((c) => c.change_id === scrollToCommitId);
+			const commit =
+				commits.find((c) => c.change_id === scrollToCommitId) ??
+				(tentativeWorkingCopy?.change_id === scrollToCommitId
+					? tentativeWorkingCopy
+					: undefined);
 			if (!commit) return;
 			const el = containerRef.current?.querySelector(
 				`[data-commit-id="${commit.commit_id}"]`,
@@ -414,7 +425,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 				fetchAndExpand(commit.commit_id);
 				onScrollComplete?.();
 			}
-		}, [scrollToCommitId, loading, commits]);
+		}, [scrollToCommitId, loading, commits, tentativeWorkingCopy]);
 
 		const fetchAndExpand = useCallback(
 			(commitId: string) => {
@@ -593,6 +604,9 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 											)}
 											isTentative={true}
 											tentativeWorkspaceLabel={tentativeWorkingCopyLabel}
+											diffData={commitDiffs.get(
+												tentativeWorkingCopy.commit_id,
+											)}
 											canAction={true}
 											isRemoving={false}
 											onToggle={() =>
@@ -602,7 +616,34 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 											onMoveToExisting={handleMoveToExisting}
 											onAbandon={handleAbandon}
 											onCreateAgentWithComment={onCreateAgentWithComment}
-											onLoadDeferredFileDiff={async () => {}}
+											onLoadDeferredFileDiff={(filePath) =>
+												loadCommitFileDiff(
+													tentativeWorkingCopy.commit_id,
+													filePath,
+												).then((fileDiff) => {
+													setCommitDiffs((prev) => {
+														const next = new Map(prev);
+														const current = next.get(
+															tentativeWorkingCopy.commit_id,
+														);
+														if (!current) return prev;
+														next.set(tentativeWorkingCopy.commit_id, {
+															...current,
+															diff: {
+																...current.diff,
+																hunks_by_file: [
+																	...current.diff.hunks_by_file.filter(
+																		(candidate) =>
+																			candidate.path !== fileDiff.path,
+																	),
+																	fileDiff,
+																],
+															},
+														});
+														return next;
+													});
+												})
+											}
 											onViewTentativeChanges={onViewTentativeChanges}
 											onDeleteTentativeChanges={async () => {
 												await onDeleteTentativeChanges?.();

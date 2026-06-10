@@ -62,6 +62,7 @@
     "react-hook-form": "^7.74.0",
     "react-markdown": "^10.1.0",
     "react-window": "^2.2.3",
+    "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^2.1.0",
     "uuid": "^14.0.0",

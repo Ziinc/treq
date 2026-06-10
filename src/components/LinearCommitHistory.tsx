@@ -429,7 +429,7 @@ function CommitItem({
 					onCommitClick && "cursor-pointer hover:bg-muted/40 transition-colors",
 				)}
 				onClick={
-					onCommitClick && !isTentative
+					onCommitClick
 						? () => onCommitClick(commit.change_id)
 						: undefined
 				}

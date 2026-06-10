@@ -647,22 +647,55 @@ export const Dashboard: React.FC<DashboardProps> = ({
 			const workspace = workspaceId
 				? (workspaces.find((w) => w.id === workspaceId) ?? null)
 				: null;
+
+			// When no agent is specified explicitly, resolve from settings (repo-level
+			// overrides app-level, both fall back to "claude").
+			let resolvedAgent = agent;
+			if (!resolvedAgent) {
+				let repoDefault: string | null = null;
+				let appDefault: string | null = null;
+				try {
+					repoDefault = await getRepoSetting(repoPath, "default_agent");
+				} catch {
+					// repo may not be initialized yet; fall through to app-level
+				}
+				try {
+					appDefault = await getSetting("default_agent");
+				} catch {
+					// ignore
+				}
+				const defaultAgent = repoDefault || appDefault;
+				if (defaultAgent === "codex" || defaultAgent === "cursor") {
+					resolvedAgent = defaultAgent;
+				}
+			}
+
 			const sessionId = await getOrCreateSession(workspaceId, {
 				forceNew: true,
-				agent,
+				agent: resolvedAgent,
 			});
 			queryClient.invalidateQueries({ queryKey: ["sessions"] });
 			setActiveSessionId(sessionId);
 			setSelectedWorkspace(workspace);
-			if (agent) {
+			if (resolvedAgent) {
 				setPendingSessionData((prev) => {
 					const next = new Map(prev);
-					next.set(sessionId, { agent });
+					next.set(sessionId, { agent: resolvedAgent! });
 					return next;
 				});
 			}
 		},
 		[getOrCreateSession, workspaces, repoPath, queryClient],
+	);
+
+	const handleStartShellFromSidebar = useCallback(
+		(workspace: Workspace) => {
+			setSelectedWorkspace(workspace);
+			terminalPaneRef.current?.createShellSession(
+				getFullWorkspacePath(workspace),
+			);
+		},
+		[],
 	);
 
 	const handleStartAgentRequest = useCallback(
@@ -910,7 +943,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	}, [sessions, workspaces, repoPath, pendingSessionData]);
 
 	const mainContentStyle = useMemo(
-		() => ({ width: showSidebar ? "calc(100vw - 240px)" : "100%" }),
+		() => ({ width: showSidebar ? "calc(100vw - 280px)" : "100%" }),
 		[showSidebar],
 	);
 	const sessionLayerStyle = useMemo<React.CSSProperties>(
@@ -946,6 +979,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				onStartAgent={(workspace) =>
 					handleCreateSessionFromSidebar(workspace.id)
 				}
+				onStartShell={handleStartShellFromSidebar}
 				currentPage={
 					viewMode === "settings"
 						? "settings"
