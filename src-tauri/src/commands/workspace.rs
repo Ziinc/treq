@@ -506,46 +506,21 @@ pub fn rename_workspace(
     crate::core::rename_workspace(&repo_path, workspace_id, &new_branch_name, dry_run)
 }
 
-/// Split a workspace by moving or copying files/commits to a new workspace.
-/// Delegates to core::split_workspace() for all logic.
+/// Move changes between two existing workspaces (files, hunks, or commits).
+/// Delegates to core::move_workspace_changes() for all logic.
 #[tauri::command]
-pub fn split_workspace(
+pub fn move_workspace_changes(
     repo_path: String,
-    workspace_id: i64,
-    branch_name: String,
-    title: Option<String>,
-    description: Option<String>,
-    file_paths: Option<Vec<String>>,
-    commit_ids: Option<Vec<String>>,
-    mode: String,
-    position: String,
-) -> Result<i64, String> {
-    use crate::core::{SplitMode, SplitPosition};
-
-    let mode = match mode.as_str() {
-        "copy" => SplitMode::Copy,
-        _ => SplitMode::Move,
-    };
-    let position = match position.as_str() {
-        "before" => SplitPosition::Before,
-        _ => SplitPosition::After,
-    };
-
-    let workspace = crate::core::split_workspace(
+    source_branch: String,
+    destination_branch: String,
+    request: crate::core::WorkspaceMoveRequest,
+) -> Result<crate::core::WorkspaceMoveResult, String> {
+    crate::core::move_workspace_changes(
         &repo_path,
-        workspace_id,
-        &branch_name,
-        description,
-        file_paths,
-        commit_ids,
-        mode,
-        position,
-    )?;
-    if let Some(t) = title {
-        local_db::update_workspace_title(&repo_path, workspace.id, &t)?;
-    }
-
-    Ok(workspace.id)
+        &source_branch,
+        &destination_branch,
+        request,
+    )
 }
 
 #[tauri::command]

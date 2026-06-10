@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { type ConsolidatedTerminalHandle } from "./ConsolidatedTerminal";
 import { Button } from "./ui/button";
+import { Kbd, KbdGroup } from "./ui/kbd";
 import { cn } from "../lib/utils";
 import {
 	Tooltip,
@@ -158,7 +159,12 @@ export const WorkspaceTerminalPaneView: React.FC<
 									Agent
 								</Button>
 							</TooltipTrigger>
-							<TooltipContent>New Agent Session (⌘+])</TooltipContent>
+							<TooltipContent className="flex items-center gap-1.5">
+								New Agent Session
+								<KbdGroup>
+									<Kbd>⌘ + ]</Kbd>
+								</KbdGroup>
+							</TooltipContent>
 						</Tooltip>
 					</TooltipProvider>
 					<TooltipProvider>
@@ -174,7 +180,12 @@ export const WorkspaceTerminalPaneView: React.FC<
 									<Terminal className="w-4 h-4" /> Shell
 								</Button>
 							</TooltipTrigger>
-							<TooltipContent>New Shell (⌘+\)</TooltipContent>
+							<TooltipContent className="flex items-center gap-1.5">
+								New Shell
+								<KbdGroup>
+									<Kbd>⌘ + \</Kbd>
+								</KbdGroup>
+							</TooltipContent>
 						</Tooltip>
 					</TooltipProvider>
 					{collapsed && totalTerminals > 0 ? (
@@ -191,7 +202,12 @@ export const WorkspaceTerminalPaneView: React.FC<
 										<ChevronUp className="w-3 h-3" />
 									</Button>
 								</TooltipTrigger>
-								<TooltipContent>Expand (⌘+J)</TooltipContent>
+								<TooltipContent className="flex items-center gap-1.5">
+									Expand
+									<KbdGroup>
+										<Kbd>⌘ + J</Kbd>
+									</KbdGroup>
+								</TooltipContent>
 							</Tooltip>
 						</TooltipProvider>
 					) : maximized ? (
@@ -225,7 +241,14 @@ export const WorkspaceTerminalPaneView: React.FC<
 										<Maximize2 className="w-3 h-3" />
 									</Button>
 								</TooltipTrigger>
-								<TooltipContent>Maximize (⌘+⌃+J)</TooltipContent>
+								<TooltipContent className="flex items-center gap-1.5">
+									Maximize
+									<KbdGroup>
+										<Kbd>⌘</Kbd>
+										<Kbd>⌃</Kbd>
+										<Kbd>J</Kbd>
+									</KbdGroup>
+								</TooltipContent>
 							</Tooltip>
 						</TooltipProvider>
 					)}
@@ -246,7 +269,12 @@ export const WorkspaceTerminalPaneView: React.FC<
 										<ChevronDown className="w-3 h-3" />
 									</Button>
 								</TooltipTrigger>
-								<TooltipContent>Collapse (⌘+J)</TooltipContent>
+								<TooltipContent className="flex items-center gap-1.5">
+									Collapse
+									<KbdGroup>
+										<Kbd>⌘ + J</Kbd>
+									</KbdGroup>
+								</TooltipContent>
 							</Tooltip>
 						</TooltipProvider>
 					)}

@@ -299,50 +299,23 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             Ok(Value::Null)
         }
 
-        "split_workspace" => {
+        "move_workspace_changes" => {
             let repo_path = get_str(&args, "repoPath")?;
-            let workspace_id: i64 = get_i64(&args, "workspaceId")?;
-            let branch_name = get_str(&args, "branchName")?;
-            let title: Option<String> =
-                args.get("title").and_then(|v| v.as_str()).map(String::from);
-            let description: Option<String> = args
-                .get("description")
-                .and_then(|v| v.as_str())
-                .map(String::from);
-            let file_paths: Option<Vec<String>> = args
-                .get("filePaths")
-                .and_then(|v| serde_json::from_value(v.clone()).ok());
-            let commit_ids: Option<Vec<String>> = args
-                .get("commitIds")
-                .and_then(|v| serde_json::from_value(v.clone()).ok());
-            let mode_str = get_str(&args, "mode")?;
-            let position_str = get_str(&args, "position")?;
-
-            let mode = match mode_str.as_str() {
-                "move" => treq_lib::core::SplitMode::Move,
-                "copy" => treq_lib::core::SplitMode::Copy,
-                _ => return Err(format!("Invalid split mode: {}", mode_str)),
-            };
-            let position = match position_str.as_str() {
-                "before" => treq_lib::core::SplitPosition::Before,
-                "after" => treq_lib::core::SplitPosition::After,
-                _ => return Err(format!("Invalid split position: {}", position_str)),
-            };
-
-            let new_workspace = treq_lib::core::split_workspace(
+            let source_branch = get_str(&args, "sourceBranch")?;
+            let destination_branch = get_str(&args, "destinationBranch")?;
+            let request: treq_lib::core::WorkspaceMoveRequest = serde_json::from_value(
+                args.get("request")
+                    .ok_or("Missing required argument: request")?
+                    .clone(),
+            )
+            .map_err(|e| e.to_string())?;
+            let result = treq_lib::core::move_workspace_changes(
                 &repo_path,
-                workspace_id,
-                &branch_name,
-                description,
-                file_paths,
-                commit_ids,
-                mode,
-                position,
+                &source_branch,
+                &destination_branch,
+                request,
             )?;
-            if let Some(t) = title {
-                treq_lib::local_db::update_workspace_title(&repo_path, new_workspace.id, &t)?;
-            }
-            Ok(Value::Number(serde_json::Number::from(new_workspace.id)))
+            serde_json::to_value(result).map_err(|e| e.to_string())
         }
 
         "rename_workspace" => {

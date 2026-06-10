@@ -269,27 +269,37 @@ export const getWorkspaceDiff = (
 ): Promise<JjRevisionDiff> =>
 	invoke("get_workspace_diff", { repoPath, workspaceId });
 
-export const splitWorkspace = (
+export interface HunkSpec {
+	file_path: string;
+	start_line: number;
+	end_line: number;
+}
+
+export interface WorkspaceMoveRequest {
+	files: string[];
+	hunks: HunkSpec[];
+	commits: string[];
+}
+
+export interface WorkspaceMoveResult {
+	commits_moved: number;
+	files_moved: number;
+	hunks_applied: number;
+	hunks_skipped: number;
+	warnings: string[];
+}
+
+export const moveWorkspaceChanges = (
 	repoPath: string,
-	workspaceId: number,
-	branchName: string,
-	title: string | null,
-	description: string | null,
-	filePaths: string[] | null,
-	commitIds: string[] | null,
-	mode: "move" | "copy",
-	position: "before" | "after",
-): Promise<number> =>
-	invoke("split_workspace", {
+	sourceBranch: string,
+	destinationBranch: string,
+	request: WorkspaceMoveRequest,
+): Promise<WorkspaceMoveResult> =>
+	invoke("move_workspace_changes", {
 		repoPath,
-		workspaceId,
-		branchName,
-		title,
-		description,
-		filePaths,
-		commitIds,
-		mode,
-		position,
+		sourceBranch,
+		destinationBranch,
+		request,
 	});
 
 export const renameWorkspace = (

@@ -304,6 +304,82 @@ fn test_workspace_diff_empty_uncommitted_and_conflicts_for_clean_workspace() {
 }
 
 #[test]
+fn test_workspace_diff_does_not_leak_sibling_workspace_commits() {
+    let repo = TestRepo::new().unwrap();
+    repo.commit_file("base.txt", "base", "base").unwrap();
+
+    let main_workspace =
+        treq_lib::core::create_workspace(&repo.repo_path, "treq/root", None, None, None, None)
+            .unwrap();
+    let sibling_workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "treq/chicken",
+        None,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+
+    let sibling_dir = repo.workspaces_dir().join(&sibling_workspace.workspace_path);
+    let sibling_dir_str = sibling_dir.to_str().unwrap();
+    TestRepo::write_workspace_file(sibling_dir_str, "chicken.txt", "cluck").unwrap();
+    treq_lib::core::commit_workspace(&repo.repo_path, sibling_workspace.id, "sibling change")
+        .unwrap();
+
+    let main_dir = repo.workspaces_dir().join(&main_workspace.workspace_path);
+    let main_status = TestRepo::run_jj(main_dir.to_str().unwrap(), &["st"]).unwrap();
+    assert!(
+        main_status.contains("The working copy has no changes."),
+        "main workspace should remain clean, got:\n{}",
+        main_status
+    );
+
+    init_test_app_db(&repo, Some("git"));
+    let diff = treq_lib::core::workspace_diff(&repo.repo_path, main_workspace.id).unwrap();
+
+    assert!(
+        diff.committed_files.is_empty(),
+        "main workspace review diff should not include sibling commits, got {:?}",
+        diff.committed_files
+            .iter()
+            .map(|file| file.path.as_str())
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        diff.uncommitted_files.is_empty(),
+        "main workspace review diff should not report uncommitted files, got {:?}",
+        diff.uncommitted_files
+            .iter()
+            .map(|file| file.path.as_str())
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        diff.hunks_by_file.is_empty(),
+        "main workspace review diff should not include hunks, got {:?}",
+        diff.hunks_by_file
+    );
+    assert!(
+        diff.conflicted_files.is_empty(),
+        "main workspace review diff should not include conflicted files, got {:?}",
+        diff.conflicted_files
+    );
+    assert!(!diff.too_large_to_render);
+    assert!(diff.render_block_reason.is_none());
+
+    let committed_paths: Vec<_> = diff
+        .committed_files
+        .iter()
+        .map(|f| f.path.as_str())
+        .collect();
+    assert!(
+        committed_paths.is_empty(),
+        "main workspace review diff should not include sibling commits, got {:?}",
+        committed_paths
+    );
+}
+
+#[test]
 fn test_excludes_uncommitted_changes() {
     let repo = TestRepo::new().unwrap();
     let ws = treq_lib::core::create_workspace(&repo.repo_path, "feat/wc", None, None, None, None)

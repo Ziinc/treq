@@ -23,6 +23,7 @@ import {
 	ContextMenuSeparator,
 	ContextMenuTrigger,
 } from "./ui/context-menu";
+import { Kbd, KbdGroup } from "./ui/kbd";
 import {
 	Tooltip,
 	TooltipContent,
@@ -212,9 +213,9 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 						>
 							<Search className="w-4 h-4 shrink-0" />
 							<span className="flex-1 text-left truncate">{repoName}</span>
-							<span className="text-[10px] text-muted-foreground/60 shrink-0">
-								⌘K
-							</span>
+							<KbdGroup className="shrink-0">
+								<Kbd>⌘ + K</Kbd>
+							</KbdGroup>
 						</button>
 						{openSettings && (
 							<Tooltip>
