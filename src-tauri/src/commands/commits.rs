@@ -54,6 +54,15 @@ pub async fn jj_restore_all(workspace_path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+pub async fn discard_workspace_changes(workspace_path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        jj::jj_restore_all(&workspace_path).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("Failed to join discard_workspace_changes task: {}", e))?
+}
+
+#[tauri::command]
 pub async fn create_commit(
     repo_path: String,
     workspace_id: Option<i64>,

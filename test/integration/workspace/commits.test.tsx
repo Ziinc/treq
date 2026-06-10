@@ -1,7 +1,7 @@
 import * as React from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import userEvent from "@testing-library/user-event";
-import { render, screen } from "../../test-utils";
+import { render, screen, within } from "../../test-utils";
 import {
 	commitRepoFile,
 	commitWorkspaceFile,
@@ -331,7 +331,10 @@ describe("ShowWorkspace - Commits tab tentative working copy", () => {
 		const dirtyUser = userEvent.setup();
 		await openWorkspaceCommitsTab(dirtyUser, "feat/tentative-working-copy");
 
-		await screen.findByText("Untitled commit");
+		const commitsList = screen.getByRole("list");
+		expect(
+			within(commitsList).getAllByText("feat/tentative-working-copy").length,
+		).toBeGreaterThan(0);
 		expect(
 			(await screen.findAllByText("Working copy - feat/tentative-working-copy")).length,
 		).toBeGreaterThanOrEqual(1);

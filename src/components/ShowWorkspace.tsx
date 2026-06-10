@@ -14,6 +14,7 @@ import {
 	type WorkspaceBookmarkConflict,
 	checkAndRebaseWorkspaces,
 	createSession,
+	discardWorkspaceChanges,
 	getWorkspaceReadme,
 	getWorkspaceStatus,
 	lsWorkspace,
@@ -517,6 +518,45 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			refetchWorkspaceStatus,
 			queryClient,
 		]);
+
+		const handleViewTentativeChanges = useCallback(() => {
+			setActiveTab("changes");
+		}, []);
+
+		const handleDeleteTentativeChanges = useCallback(async () => {
+			if (!workspace?.workspace_path || !effectiveRepoPath) return;
+
+			try {
+				await discardWorkspaceChanges(workingDirectory);
+				addToast({
+					title: "Changes discarded",
+					description: "Working copy changes were removed",
+					type: "success",
+				});
+				await Promise.all([
+					refetchWorkspaceStatus(),
+					queryClient.invalidateQueries({
+						queryKey: [
+							"commit-diff-viewer-commits",
+							effectiveRepoPath,
+							workspace.id,
+						],
+					}),
+					queryClient.invalidateQueries({
+						queryKey: ["workspace-status", effectiveRepoPath, workspace.id],
+					}),
+					queryClient.invalidateQueries({
+						queryKey: ["workspace-overview", effectiveRepoPath, workspace.id],
+					}),
+				]);
+			} catch (error) {
+				addToast({
+					title: "Failed to discard changes",
+					description: error instanceof Error ? error.message : String(error),
+					type: "error",
+				});
+			}
+		}, [workspace, effectiveRepoPath, addToast, queryClient, refetchWorkspaceStatus]);
 
 		const handleHomeRebase = useCallback(async () => {
 			if (!effectiveRepoPath || !mainRepoBranch) return;
@@ -1090,6 +1130,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 											onMoveCommitToExistingWorkspace(commit, workspace)
 									: undefined
 							}
+							onViewTentativeChanges={handleViewTentativeChanges}
+							onDeleteTentativeChanges={handleDeleteTentativeChanges}
 						/>
 					) : (
 						<ChangesDiffViewer

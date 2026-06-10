@@ -20,6 +20,39 @@ fn append_target_branch_commits(result: &mut jj::JjLogResult, target_commits: Ve
     }
 }
 
+fn collect_stacked_workspace_labels(
+    repo_path: &str,
+    workspace: &local_db::Workspace,
+) -> Result<Vec<String>, String> {
+    let workspaces = local_db::get_workspaces(repo_path)
+        .map_err(|e| format!("Failed to get workspaces: {}", e))?;
+    let by_branch: std::collections::HashMap<String, local_db::Workspace> = workspaces
+        .into_iter()
+        .map(|workspace| (workspace.branch_name.clone(), workspace))
+        .collect();
+
+    let mut labels = Vec::new();
+    let mut current_branch = workspace.branch_name.clone();
+    let mut visited = HashSet::new();
+
+    while visited.insert(current_branch.clone()) {
+        labels.push(current_branch.clone());
+        let Some(next_branch) = by_branch
+            .get(&current_branch)
+            .and_then(|workspace| workspace.target_branch.clone())
+        else {
+            break;
+        };
+
+        if !by_branch.contains_key(&next_branch) {
+            break;
+        }
+        current_branch = next_branch;
+    }
+
+    Ok(labels)
+}
+
 /// Lists commits for a workspace by its database ID, or for the home repo
 /// when no workspace ID is provided.
 ///
@@ -73,6 +106,32 @@ pub fn list_commits(
                 None,
             )
             .map_err(|e| format!("Failed to list commits: {}", e))?;
+
+            if let Ok(labels) = collect_stacked_workspace_labels(repo_path, &workspace) {
+                for branch_label in labels.into_iter().skip(1) {
+                    let Some(stacked_workspace) =
+                        local_db::get_workspace_by_branch(repo_path, &branch_label)
+                            .map_err(|e| format!("Failed to get workspace: {}", e))?
+                    else {
+                        continue;
+                    };
+                    let stacked_workspace_dir = Path::new(repo_path)
+                        .join(".treq")
+                        .join("workspaces")
+                        .join(&stacked_workspace.workspace_path);
+                    let stacked_workspace_dir_str = stacked_workspace_dir
+                        .to_str()
+                        .ok_or("Failed to convert stacked workspace path to string")?;
+                    if let Some(tentative) = jj::jj_get_tentative_working_copy(
+                        stacked_workspace_dir_str,
+                        &stacked_workspace.branch_name,
+                    )
+                    .map_err(|e| format!("Failed to list stacked working copy: {}", e))?
+                    {
+                        result.commits.push(tentative.commit);
+                    }
+                }
+            }
 
             if include_target_branch_history && !is_default_branch_workspace {
                 let target_limit = target_branch_limit.unwrap_or(10);
