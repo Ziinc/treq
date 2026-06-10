@@ -245,7 +245,6 @@ const WorkspaceTerminalPaneInner = forwardRef<
 		// Create Agent session in the active terminal's workspace, or sidebar-selected workspace
 		const handleCreateAgentSession = useCallback(
 			(agent?: "claude" | "codex" | "cursor") => {
-				console.log('agent', agent)
 				onCreateNewSession?.(activeWorkspaceDir, agent);
 			},
 			[onCreateNewSession, activeWorkspaceDir],
