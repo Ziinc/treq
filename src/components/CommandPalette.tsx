@@ -205,9 +205,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 					id: "new-agent-terminal",
 					type: "action",
 					label: "New Agent Terminal",
-					description: "Create a new Claude agent session",
+					description: "Create a new agent session using your default agent",
 					icon: <Bot className="w-4 h-4" />,
-					onSelect: () => onCreateAgentTerminal("claude"),
+					onSelect: () => onCreateAgentTerminal(),
 				});
 				result.push({
 					id: "new-codex-terminal",

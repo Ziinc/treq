@@ -130,7 +130,6 @@ export const WorkspaceTerminalPaneView: React.FC<
 		>
 			<div className="h-8 min-h-[32px] flex items-center justify-between px-2 border-b bg-muted/30 flex-shrink-0">
 				<div className="flex items-center gap-2 font-medium text-muted-foreground">
-					<Terminal className="w-4 h-4" />
 					<span>Terminals</span>
 					{totalTerminals > 0 && (
 						<span className="text-xs bg-muted px-1.5 py-0.5 rounded">
@@ -145,7 +144,7 @@ export const WorkspaceTerminalPaneView: React.FC<
 							<TooltipTrigger asChild>
 								<Button
 									type="button"
-									onClick={handleCreateAgentSession}
+									onClick={() => handleCreateAgentSession()}
 									variant={totalTerminals === 0 ? "default" : "ghost"}
 									className={cn(
 										"h-6 px-2 rounded-sm gap-1",
@@ -188,7 +187,7 @@ export const WorkspaceTerminalPaneView: React.FC<
 							</TooltipContent>
 						</Tooltip>
 					</TooltipProvider>
-					{collapsed && totalTerminals > 0 ? (
+					{collapsed && totalTerminals > 0 && (
 						<TooltipProvider>
 							<Tooltip>
 								<TooltipTrigger asChild>
@@ -210,7 +209,8 @@ export const WorkspaceTerminalPaneView: React.FC<
 								</TooltipContent>
 							</Tooltip>
 						</TooltipProvider>
-					) : maximized ? (
+					)}
+					{!collapsed && maximized && (
 						<TooltipProvider>
 							<Tooltip>
 								<TooltipTrigger asChild>
@@ -224,10 +224,16 @@ export const WorkspaceTerminalPaneView: React.FC<
 										<Minimize2 className="w-3 h-3" />
 									</Button>
 								</TooltipTrigger>
-								<TooltipContent>Restore</TooltipContent>
+								<TooltipContent className="flex items-center gap-1.5">
+									Restore
+									<KbdGroup>
+										<Kbd>⌘ + ^ + J</Kbd>
+									</KbdGroup>
+								</TooltipContent>
 							</Tooltip>
 						</TooltipProvider>
-					) : (
+					)}
+					{!collapsed && !maximized  && totalTerminals > 0 && (
 						<TooltipProvider>
 							<Tooltip>
 								<TooltipTrigger asChild>
@@ -244,9 +250,7 @@ export const WorkspaceTerminalPaneView: React.FC<
 								<TooltipContent className="flex items-center gap-1.5">
 									Maximize
 									<KbdGroup>
-										<Kbd>⌘</Kbd>
-										<Kbd>⌃</Kbd>
-										<Kbd>J</Kbd>
+										<Kbd>⌘ + Ctrl+ J</Kbd>
 									</KbdGroup>
 								</TooltipContent>
 							</Tooltip>

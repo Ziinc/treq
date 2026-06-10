@@ -8,6 +8,7 @@ import {
 	AlertTriangle,
 	Layers2,
 	Pencil,
+	Terminal,
 	Trash2,
 } from "lucide-react";
 import type { Workspace } from "../lib/api";
@@ -119,6 +120,7 @@ interface WorkspaceSidebarItemProps {
 	) => void;
 	onAddAfter?: (workspace: Workspace) => void;
 	onStartAgent?: (workspace: Workspace) => void;
+	onStartShell?: (workspace: Workspace) => void;
 	onDeleteWorkspace?: (workspace: Workspace) => void;
 	onRenameWorkspace: (workspace: Workspace) => void;
 	onDoubleClick?: (workspace: Workspace, event: React.MouseEvent) => void;
@@ -134,6 +136,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 	onWorkspaceMultiSelect,
 	onAddAfter,
 	onStartAgent,
+	onStartShell,
 	onDeleteWorkspace,
 	onRenameWorkspace,
 	onDoubleClick,
@@ -164,7 +167,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 										<div
 											style={indentStyle}
 											className={cn(
-												"group/workspace relative flex items-center text-sm tracking-wide pr-4 rounded-sm transition-colors cursor-pointer p-0.5",
+												"group/workspace relative flex items-center  tracking-wide pr-4 rounded-sm transition-colors cursor-pointer p-0.5",
 												{
 													"bg-primary/20": isSelected,
 													"hover:bg-muted/50": !isSelected,
@@ -201,7 +204,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 													aria-label="Conflicted workspace"
 												/>
 											)}
-											<div className="flex items-center gap-1 shrink-0 -mr-3">
+											<div className="flex items-center gap-1 shrink-0 mr-1">
 												<span
 													className={cn(
 														"group-hover/workspace:opacity-100 transition-opacity",
@@ -228,6 +231,25 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 														</TooltipTrigger>
 														<TooltipContent side="bottom">
 															Start agent
+														</TooltipContent>
+													</Tooltip>
+													<Tooltip>
+														<TooltipTrigger asChild>
+															<Button
+																size="icon-xs"
+																variant="ghost"
+																className="text-foreground"
+																aria-label="Open shell"
+																onClick={(e) => {
+																	e.stopPropagation();
+																	onStartShell?.(workspace);
+																}}
+															>
+																<Terminal className="w-4 h-4" />
+															</Button>
+														</TooltipTrigger>
+														<TooltipContent side="bottom">
+															Open shell
 														</TooltipContent>
 													</Tooltip>
 												</span>

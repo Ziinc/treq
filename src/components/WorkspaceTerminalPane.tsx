@@ -42,7 +42,7 @@ export interface WorkspaceTerminalPaneHandle {
 	toggleCollapse: () => void;
 	toggleMaximize: () => void;
 	createAgentSession: (agent?: "claude" | "codex" | "cursor") => void;
-	createShellSession: () => void;
+	createShellSession: (workingDir?: string) => void;
 }
 
 // Workspace group for rendering terminals grouped by workspace
@@ -227,8 +227,8 @@ const WorkspaceTerminalPaneInner = forwardRef<
 		}, [activePtySessionId, claudeSessions, shellTerminals]);
 
 		// Add new shell terminal in the active terminal's workspace, or sidebar-selected workspace
-		const handleAddShell = useCallback(() => {
-			const dir = activeWorkspaceDir || workingDirectory;
+		const handleAddShell = useCallback((dirOverride?: string) => {
+			const dir = dirOverride || activeWorkspaceDir || workingDirectory;
 			const newId = `shell-${dir.replace(/[^a-zA-Z0-9]/g, "-")}-${Date.now()}`;
 			setShellTerminals((prev) => [
 				...prev,
@@ -245,6 +245,7 @@ const WorkspaceTerminalPaneInner = forwardRef<
 		// Create Agent session in the active terminal's workspace, or sidebar-selected workspace
 		const handleCreateAgentSession = useCallback(
 			(agent?: "claude" | "codex" | "cursor") => {
+				console.log('agent', agent)
 				onCreateNewSession?.(activeWorkspaceDir, agent);
 			},
 			[onCreateNewSession, activeWorkspaceDir],

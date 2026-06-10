@@ -316,6 +316,41 @@ describe("ShowWorkspace - Commits tab tentative working copy", () => {
 		).toBe(true);
 	});
 
+	it("navigates to the Commits tab and expands the tentative diff when clicked from the Code sidebar", async () => {
+		await commitRepoFile(
+			repoPath,
+			"base.txt",
+			"base content",
+			"Base repo commit",
+		);
+
+		dirtyWorkspace = await createWorkspaceRef(
+			repoPath,
+			"feat/tentative-sidebar-click",
+		);
+
+		const workspacePath = resolveWorkspacePath(repoPath, dirtyWorkspace.path);
+		writeWorkspaceFile(
+			workspacePath,
+			"sidebar-tentative.txt",
+			"tentative sidebar click content",
+		);
+
+		const dirtyUser = userEvent.setup();
+		render(<Dashboard />);
+		await dirtyUser.click(
+			await findSidebarBranchElement("feat/tentative-sidebar-click"),
+		);
+
+		await dirtyUser.click(await screen.findByText("Working copy"));
+
+		expect(
+			await screen.findByRole("tab", { name: "Commits", selected: true }),
+		).toBeInTheDocument();
+		await screen.findByText("sidebar-tentative.txt");
+		await screen.findByText("tentative sidebar click content");
+	});
+
 	it("renders the tentative working copy above workspace commits", async () => {
 		await commitRepoFile(
 			repoPath,
@@ -337,12 +372,9 @@ describe("ShowWorkspace - Commits tab tentative working copy", () => {
 
 		const commitsList = screen.getByRole("list");
 		expect(
-			within(commitsList).getAllByText("feat/tentative-working-copy").length,
-		).toBeGreaterThan(0);
-		expect(
-			(await screen.findAllByText("Working copy - feat/tentative-working-copy"))
-				.length,
-		).toBeGreaterThanOrEqual(1);
+			within(commitsList).getByText(/feat\/tentative-working-copy/),
+		).toBeInTheDocument();
+		expect(within(commitsList).getByText("Working copy")).toBeInTheDocument();
 		expect(screen.queryByText("wc000")).not.toBeInTheDocument();
 	});
 });
