@@ -743,8 +743,7 @@ pub struct JjLogCommit {
 /// The full log response including metadata
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct JjLogResult {
-    /// Commit history: workspace/current-branch commits first, then target-only commits
-    /// (`on_target_only = true`) when target-branch history is included.
+    /// Commit history: workspace/current-branch commits first, then target-only commits (`on_target_only = true`) when target-branch history is included.
     pub commits: Vec<JjLogCommit>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tentative_working_copy: Option<JjTentativeWorkingCopy>,
@@ -4337,10 +4336,7 @@ pub fn jj_get_log(
             .unwrap_or_else(|| JjError::IoError("Failed to evaluate log revset".to_string())));
     };
     let (revset_expr, revset) = revset.expect("selected target ref must include a revset");
-    // When viewing the home/default-branch context, measure immutability against the
-    // remote tracking bookmark (e.g. `main@origin`) rather than the local one.
-    // Commits ahead of the remote (unpushed) are mutable; commits already pushed are
-    // immutable. Fall back to the local bookmark when no remote tracking ref exists.
+    // Home-repo immutability uses the remote tracking bookmark (e.g. `main@origin`); unpushed commits stay mutable, pushed commits immutable; falls back to local bookmark when no remote ref exists.
     let immutable_ref = if is_home_repo.unwrap_or(false) {
         let remote_symbol = RemoteRefSymbol {
             name: RefName::new(target_branch),
