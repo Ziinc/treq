@@ -1989,3 +1989,76 @@ fn test_non_default_workspace_uses_non_main_default_target_history() {
         target_descriptions
     );
 }
+
+#[test]
+fn test_unpushed_commits_on_default_branch_are_mutable() {
+    // Pushed commits should be immutable; local-only commits on the default branch
+    // should be mutable so users can edit/abandon them.
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+    let default_branch = repo.default_branch();
+
+    // Push a commit to establish the remote tip.
+    repo.commit_file("pushed.txt", "pushed\n", "Pushed commit")
+        .expect("Failed to create pushed commit");
+    TestRepo::run_git(&repo.repo_path, &["push", "origin", default_branch])
+        .expect("Failed to push commit");
+
+    // Add local commits that are NOT pushed.
+    repo.commit_file("local_1.txt", "local 1\n", "Local commit 1")
+        .expect("Failed to create local commit 1");
+    repo.commit_file("local_2.txt", "local 2\n", "Local commit 2")
+        .expect("Failed to create local commit 2");
+
+    // Fetch to ensure jj knows about the remote state.
+    treq_lib::jj::jj_git_fetch(&repo.repo_path).expect("Failed to fetch");
+
+    let result = treq_lib::jj::jj_get_log(&repo.repo_path, default_branch, Some(true), None)
+        .expect("Failed to list commits");
+
+    let pushed_commit = result.commits.iter().find(|c| c.description == "Pushed commit");
+    let local_commit_1 = result.commits.iter().find(|c| c.description == "Local commit 1");
+    let local_commit_2 = result.commits.iter().find(|c| c.description == "Local commit 2");
+
+    assert!(pushed_commit.is_some(), "pushed commit should appear in log");
+    assert!(local_commit_1.is_some(), "local commit 1 should appear in log");
+    assert!(local_commit_2.is_some(), "local commit 2 should appear in log");
+
+    assert!(
+        pushed_commit.unwrap().is_immutable,
+        "pushed commit should be immutable (already shared)"
+    );
+    assert!(
+        !local_commit_1.unwrap().is_immutable,
+        "unpushed local commit 1 should be mutable"
+    );
+    assert!(
+        !local_commit_2.unwrap().is_immutable,
+        "unpushed local commit 2 should be mutable"
+    );
+}
+
+#[test]
+fn test_default_branch_without_remote_all_commits_immutable() {
+    // When there is no remote, fall back to local bookmark — everything immutable.
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
+
+    repo.commit_file("commit_1.txt", "content\n", "Commit 1")
+        .expect("Failed to create commit 1");
+    repo.commit_file("commit_2.txt", "content\n", "Commit 2")
+        .expect("Failed to create commit 2");
+
+    let result = treq_lib::jj::jj_get_log(&repo.repo_path, default_branch, Some(true), None)
+        .expect("Failed to list commits");
+
+    let non_wc_commits: Vec<_> = result.commits.iter().filter(|c| !c.is_working_copy).collect();
+    assert!(!non_wc_commits.is_empty(), "should have commits");
+
+    for commit in &non_wc_commits {
+        assert!(
+            commit.is_immutable,
+            "without remote, commit '{}' should be immutable (fallback behavior)",
+            commit.description
+        );
+    }
+}
