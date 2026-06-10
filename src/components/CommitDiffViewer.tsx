@@ -604,9 +604,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 											)}
 											isTentative={true}
 											tentativeWorkspaceLabel={tentativeWorkingCopyLabel}
-											diffData={commitDiffs.get(
-												tentativeWorkingCopy.commit_id,
-											)}
+											diffData={commitDiffs.get(tentativeWorkingCopy.commit_id)}
 											canAction={true}
 											isRemoving={false}
 											onToggle={() =>

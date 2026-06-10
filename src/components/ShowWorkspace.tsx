@@ -1099,7 +1099,10 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 															components={{
 																img: ({ src, alt, ...props }) => (
 																	<img
-																		src={resolveReadmeImageSrc(src, readmeBaseDir)}
+																		src={resolveReadmeImageSrc(
+																			src,
+																			readmeBaseDir,
+																		)}
 																		alt={alt ?? ""}
 																		{...props}
 																	/>

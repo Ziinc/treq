@@ -688,15 +688,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		[getOrCreateSession, workspaces, repoPath, queryClient],
 	);
 
-	const handleStartShellFromSidebar = useCallback(
-		(workspace: Workspace) => {
-			setSelectedWorkspace(workspace);
-			terminalPaneRef.current?.createShellSession(
-				getFullWorkspacePath(workspace),
-			);
-		},
-		[],
-	);
+	const handleStartShellFromSidebar = useCallback((workspace: Workspace) => {
+		setSelectedWorkspace(workspace);
+		terminalPaneRef.current?.createShellSession(
+			getFullWorkspacePath(workspace),
+		);
+	}, []);
 
 	const handleStartAgentRequest = useCallback(
 		async (request: AgentDeepLinkRequest) => {

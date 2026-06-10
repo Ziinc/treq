@@ -52,7 +52,6 @@ enum SyncSource {
     WorkspaceToHome,
 }
 
-
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct WorkspaceMoveRequest {
     pub files: Vec<String>,
