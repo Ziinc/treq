@@ -556,7 +556,13 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 					type: "error",
 				});
 			}
-		}, [workspace, effectiveRepoPath, addToast, queryClient, refetchWorkspaceStatus]);
+		}, [
+			workspace,
+			effectiveRepoPath,
+			addToast,
+			queryClient,
+			refetchWorkspaceStatus,
+		]);
 
 		const handleHomeRebase = useCallback(async () => {
 			if (!effectiveRepoPath || !mainRepoBranch) return;

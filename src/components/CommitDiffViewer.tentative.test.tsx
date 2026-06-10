@@ -74,11 +74,19 @@ describe("CommitDiffViewer tentative working copy", () => {
 		expect(workingCopyButton).toBeTruthy();
 		await user.click(workingCopyButton);
 
-		expect(workingCopyButton!.querySelector("svg.lucide-chevron-right")).toBeInTheDocument();
+		expect(
+			workingCopyButton!.querySelector("svg.lucide-chevron-right"),
+		).toBeInTheDocument();
 
-		expect(await screen.findByRole("button", { name: /view changes/i })).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: /move changes/i })).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: /delete changes/i })).toBeInTheDocument();
+		expect(
+			await screen.findByRole("button", { name: /view changes/i }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: /move changes/i }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: /delete changes/i }),
+		).toBeInTheDocument();
 
 		await user.click(screen.getByRole("button", { name: /view changes/i }));
 		expect(onViewTentativeChanges).toHaveBeenCalledTimes(1);

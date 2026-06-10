@@ -37,7 +37,10 @@ describe("ChangesDiffViewer workspace diff contract", () => {
 						{
 							id: "committed-hunk",
 							header: "@@ -1,3 +1,4 @@",
-							lines: [" export const committed = true;", "+export const added = true;"],
+							lines: [
+								" export const committed = true;",
+								"+export const added = true;",
+							],
 							patch: "...",
 						},
 					],
@@ -70,11 +73,9 @@ describe("ChangesDiffViewer workspace diff contract", () => {
 			expect(screen.getByText("committed.ts")).toBeInTheDocument();
 		});
 		expect(
-			screen
-				.getAllByText((_, element) =>
-					element?.textContent?.includes("added = true") ?? false,
-				)
-				.length,
+			screen.getAllByText(
+				(_, element) => element?.textContent?.includes("added = true") ?? false,
+			).length,
 		).toBeGreaterThan(0);
 		await waitFor(() => {
 			expect(screen.getByText("local.ts")).toBeInTheDocument();
@@ -100,7 +101,10 @@ describe("ChangesDiffViewer workspace diff contract", () => {
 						{
 							id: "shared-committed",
 							header: "@@ -1,2 +1,3 @@",
-							lines: [" export const shared = 'committed';", "+export const extra = true;"],
+							lines: [
+								" export const shared = 'committed';",
+								"+export const extra = true;",
+							],
 							patch: "...",
 						},
 					],
@@ -134,11 +138,9 @@ describe("ChangesDiffViewer workspace diff contract", () => {
 		});
 
 		expect(
-			screen
-				.getAllByText((_, element) =>
-					element?.textContent?.includes("extra = true") ?? false,
-				)
-				.length,
+			screen.getAllByText(
+				(_, element) => element?.textContent?.includes("extra = true") ?? false,
+			).length,
 		).toBeGreaterThan(0);
 		expect(api.getWorkspaceChangedFiles).not.toHaveBeenCalled();
 	});

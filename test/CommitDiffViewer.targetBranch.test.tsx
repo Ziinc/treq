@@ -230,9 +230,15 @@ describe("CommitDiffViewer - Target Branch History", () => {
 
 		await user.click(screen.getByText("Working copy"));
 
-		expect(await screen.findByRole("button", { name: /view changes/i })).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: /move changes/i })).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: /delete changes/i })).toBeInTheDocument();
+		expect(
+			await screen.findByRole("button", { name: /view changes/i }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: /move changes/i }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: /delete changes/i }),
+		).toBeInTheDocument();
 
 		await user.click(screen.getByRole("button", { name: /view changes/i }));
 		expect(onViewTentativeChanges).toHaveBeenCalledTimes(1);
