@@ -13,48 +13,15 @@ import { ptyClose } from "../lib/api";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { type ClaudeSessionData } from "./terminal/types";
 import { WorkspaceTerminalPaneView } from "./WorkspaceTerminalPaneView";
+import { buildWorkspaceGroups } from "./workspace-terminal-pane/buildWorkspaceGroups";
+import { useTerminalPaneHeightResize } from "./workspace-terminal-pane/useTerminalPaneHeightResize";
+import {
+	type ShellTerminalData,
+	type WorkspaceTerminalPaneHandle,
+	type WorkspaceTerminalPaneProps,
+} from "./workspace-terminal-pane/types";
 
-// Shell terminal data
-interface ShellTerminalData {
-	id: string;
-	workingDirectory: string;
-}
-
-interface WorkspaceTerminalPaneProps {
-	workingDirectory: string;
-	onSessionError?: (message: string) => void;
-	currentBranch?: string | null;
-	// Claude terminal integration
-	claudeSessions?: ClaudeSessionData[];
-	activeClaudeSessionId?: number | null;
-	onActiveSessionChange?: (sessionId: number | null) => void;
-	// Callbacks for session management
-	onCreateNewSession?: (
-		activeWorkspacePath?: string | null,
-		agent?: "claude" | "codex" | "cursor",
-	) => void;
-	onCloseSession?: (sessionId: number) => void;
-	onNavigateToWorkspace?: (workspaceKey: string, isMainRepo: boolean) => void;
-	className?: string;
-}
-
-export interface WorkspaceTerminalPaneHandle {
-	toggleCollapse: () => void;
-	toggleMaximize: () => void;
-	createAgentSession: (agent?: "claude" | "codex" | "cursor") => void;
-	createShellSession: (workingDir?: string) => void;
-}
-
-// Workspace group for rendering terminals grouped by workspace
-interface WorkspaceGroup {
-	workspaceKey: string;
-	workspaceName: string;
-	isMainRepo: boolean;
-	terminals: Array<
-		| { type: "shell"; data: ShellTerminalData }
-		| { type: "claude"; data: ClaudeSessionData }
-	>;
-}
+export type { WorkspaceTerminalPaneHandle };
 
 const WorkspaceTerminalPaneInner = forwardRef<
 	WorkspaceTerminalPaneHandle,
@@ -77,8 +44,8 @@ const WorkspaceTerminalPaneInner = forwardRef<
 		// Shared pane state
 		const [collapsed, setCollapsed] = useState(true);
 		const [maximized, setMaximized] = useState(false);
-		const [height, setHeight] = useState(33); // percentage
-		const [isResizingHeight, setIsResizingHeight] = useState(false);
+		const { height, isResizingHeight, handleHeightResizeMouseDown } =
+			useTerminalPaneHeightResize(maximized);
 		const scrollContainerRef = useRef<HTMLDivElement>(null);
 		const paneRef = useRef<HTMLDivElement>(null);
 
@@ -372,51 +339,6 @@ const WorkspaceTerminalPaneInner = forwardRef<
 			[maximized, handleCreateAgentSession, handleAddShell],
 		);
 
-		// Height resize handlers
-		const handleHeightResizeMouseDown = useCallback(
-			(e: React.MouseEvent) => {
-				if (maximized) return; // Don't allow resize when maximized
-				e.preventDefault();
-				setIsResizingHeight(true);
-			},
-			[maximized],
-		);
-
-		useEffect(() => {
-			if (!isResizingHeight) return;
-
-			const handleMouseMove = (e: MouseEvent) => {
-				const container = document.querySelector(
-					".workspace-terminal-container",
-				);
-				if (!container) return;
-				const rect = container.getBoundingClientRect();
-				const distanceFromBottom = rect.bottom - e.clientY;
-				const newHeightPercent = (distanceFromBottom / rect.height) * 100;
-				setHeight(Math.max(15, Math.min(60, newHeightPercent)));
-			};
-
-			const handleMouseUp = () => setIsResizingHeight(false);
-
-			document.addEventListener("mousemove", handleMouseMove);
-			document.addEventListener("mouseup", handleMouseUp);
-			return () => {
-				document.removeEventListener("mousemove", handleMouseMove);
-				document.removeEventListener("mouseup", handleMouseUp);
-			};
-		}, [isResizingHeight]);
-
-		// Set cursor during height drag
-		useEffect(() => {
-			if (isResizingHeight) {
-				document.body.style.cursor = "ns-resize";
-				document.body.style.userSelect = "none";
-			} else {
-				document.body.style.cursor = "";
-				document.body.style.userSelect = "";
-			}
-		}, [isResizingHeight]);
-
 		// Terminal width resize handler
 		const handleTerminalResize = useCallback(
 			(leftId: string, rightId: string, deltaX: number) => {
@@ -573,41 +495,10 @@ const WorkspaceTerminalPaneInner = forwardRef<
 			}
 		}, [allTerminals.length]);
 
-		// Group terminals by workspace
-		const workspaceGroups = useMemo((): WorkspaceGroup[] => {
-			const groupMap = new Map<string, WorkspaceGroup>();
-
-			for (const terminal of allTerminals) {
-				let workspaceKey: string;
-				let workspaceName: string;
-
-				if (terminal.type === "claude") {
-					workspaceKey = terminal.data.workspacePath || terminal.data.repoPath;
-					workspaceName = terminal.data.workspaceName || "Main Repository";
-				} else {
-					// Shell terminal - derive workspace info from workingDirectory
-					// Try to find a matching Claude session's workspace info for this directory
-					const matchingClaude = claudeSessions.find((s) => {
-						const sessionDir = s.workspacePath || s.repoPath;
-						return sessionDir === terminal.data.workingDirectory;
-					});
-					workspaceKey = terminal.data.workingDirectory;
-					workspaceName = matchingClaude?.workspaceName || "Main Repository";
-				}
-
-				if (!groupMap.has(workspaceKey)) {
-					groupMap.set(workspaceKey, {
-						workspaceKey,
-						workspaceName,
-						isMainRepo: workspaceName === "Main Repository",
-						terminals: [],
-					});
-				}
-				groupMap.get(workspaceKey)!.terminals.push(terminal);
-			}
-
-			return Array.from(groupMap.values());
-		}, [allTerminals, claudeSessions]);
+		const workspaceGroups = useMemo(
+			() => buildWorkspaceGroups(allTerminals, claudeSessions),
+			[allTerminals, claudeSessions],
+		);
 
 		// Scroll to workspace group and focus first terminal when workingDirectory changes
 		useEffect(() => {

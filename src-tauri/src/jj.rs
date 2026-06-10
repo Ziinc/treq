@@ -1707,7 +1707,7 @@ pub fn squash_to_workspace(
 
 /// Copy files from one workspace to another using filesystem copy.
 /// jj auto-tracks new files, so no explicit add is needed.
-pub fn copy_files_between_workspaces(
+fn copy_files_between_workspaces(
     source_workspace_path: &str,
     target_workspace_path: &str,
     file_paths: Vec<String>,
@@ -5282,7 +5282,7 @@ fn annotate_conflict_regions(
 
 /// Get combined diff of all changes between target branch and workspace HEAD
 /// Uses: jj diff --from target_branch --to @- --git
-pub fn jj_get_merge_diff(
+fn jj_get_merge_diff(
     workspace_path: &str,
     target_branch: &str,
     conflict_marker_style: &str,

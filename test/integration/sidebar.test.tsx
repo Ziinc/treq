@@ -331,10 +331,12 @@ describe("Dashboard - workspace list", () => {
 			fireEvent.click(targetRow, { shiftKey: true });
 
 			await waitFor(async () => {
-				for (const branchName of visibleOrder) {
-					const row = await getWorkspaceRow(branchName);
-					expect(row).toHaveClass("bg-primary/20");
-				}
+				await Promise.all(
+					visibleOrder.map(async (branchName) => {
+						const row = await getWorkspaceRow(branchName);
+						expect(row).toHaveClass("bg-primary/20");
+					}),
+				);
 			});
 
 			await waitFor(() => {

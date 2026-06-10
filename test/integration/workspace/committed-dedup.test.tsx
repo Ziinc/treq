@@ -55,7 +55,7 @@ describe("ShowWorkspace - committed diff dedupe integration", () => {
 		const committedButtons = screen.getAllByRole("button", {
 			name: /^Committed$/,
 		});
-		const committedButton = committedButtons[0];
+		const [committedButton] = committedButtons;
 		if (!committedButton) {
 			throw new Error("Committed toggle button not found");
 		}
@@ -84,10 +84,10 @@ describe("ShowWorkspace - committed diff dedupe integration", () => {
 			expect(screen.getByTitle("uncommitted-only.txt")).toBeInTheDocument();
 		});
 
-		expect(screen.getByText("committed only")).toBeInTheDocument();
-		expect(screen.getByText("shared v2")).toBeInTheDocument();
-		expect(screen.getByText("shared v3")).toBeInTheDocument();
-		expect(screen.getByText("working only")).toBeInTheDocument();
+		expect(await screen.findByText("committed only")).toBeInTheDocument();
+		expect(await screen.findByText("shared v2")).toBeInTheDocument();
+		expect(await screen.findByText("shared v3")).toBeInTheDocument();
+		expect(await screen.findByText("working only")).toBeInTheDocument();
 
 		const committedButton = getCommittedToggleButton();
 		await user.click(committedButton);
@@ -97,9 +97,9 @@ describe("ShowWorkspace - committed diff dedupe integration", () => {
 			expect(screen.getByTitle("uncommitted-only.txt")).toBeInTheDocument();
 		});
 
-		expect(screen.getByText("shared v2")).toBeInTheDocument();
-		expect(screen.getByText("shared v3")).toBeInTheDocument();
-		expect(screen.getByText("working only")).toBeInTheDocument();
+		expect(await screen.findByText("shared v2")).toBeInTheDocument();
+		expect(await screen.findByText("shared v3")).toBeInTheDocument();
+		expect(await screen.findByText("working only")).toBeInTheDocument();
 
 		await user.click(getCommittedToggleButton());
 		await waitFor(() => {
@@ -109,9 +109,9 @@ describe("ShowWorkspace - committed diff dedupe integration", () => {
 			expect(screen.getByTitle("committed-only.txt")).toBeInTheDocument();
 		});
 
-		expect(screen.getByText("committed only")).toBeInTheDocument();
-		expect(screen.getByText("shared v2")).toBeInTheDocument();
-		expect(screen.getByText("shared v3")).toBeInTheDocument();
-		expect(screen.getByText("working only")).toBeInTheDocument();
+		expect(await screen.findByText("committed only")).toBeInTheDocument();
+		expect(await screen.findByText("shared v2")).toBeInTheDocument();
+		expect(await screen.findByText("shared v3")).toBeInTheDocument();
+		expect(await screen.findByText("working only")).toBeInTheDocument();
 	});
 });
