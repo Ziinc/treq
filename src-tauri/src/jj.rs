@@ -1704,47 +1704,6 @@ pub fn squash_to_workspace(
     Ok(String::new())
 }
 
-/// Copy files from one workspace to another using filesystem copy.
-/// jj auto-tracks new files, so no explicit add is needed.
-fn copy_files_between_workspaces(
-    source_workspace_path: &str,
-    target_workspace_path: &str,
-    file_paths: Vec<String>,
-) -> Result<(), JjError> {
-    for file_path in &file_paths {
-        let src = Path::new(source_workspace_path).join(file_path);
-        let dst = Path::new(target_workspace_path).join(file_path);
-
-        if !src.exists() {
-            return Err(JjError::IoError(format!(
-                "Source file does not exist: {}",
-                src.display()
-            )));
-        }
-
-        // Create parent directories if needed
-        if let Some(parent) = dst.parent() {
-            fs::create_dir_all(parent).map_err(|e| {
-                JjError::IoError(format!(
-                    "Failed to create directory {}: {}",
-                    parent.display(),
-                    e
-                ))
-            })?;
-        }
-
-        fs::copy(&src, &dst).map_err(|e| {
-            JjError::IoError(format!(
-                "Failed to copy {} to {}: {}",
-                src.display(),
-                dst.display(),
-                e
-            ))
-        })?;
-    }
-    Ok(())
-}
-
 /// Squash a specific commit's changes into a target workspace.
 /// Runs: jj squash --from <change_id> --into <target_workspace_name>@
 pub fn squash_commit_to_workspace(
@@ -5274,16 +5233,6 @@ fn annotate_conflict_regions(
             region
         })
         .collect()
-}
-
-/// Get combined diff of all changes between target branch and workspace HEAD
-/// Uses: jj diff --from target_branch --to @- --git
-fn jj_get_merge_diff(
-    workspace_path: &str,
-    target_branch: &str,
-    conflict_marker_style: &str,
-) -> Result<JjRevisionDiff, JjError> {
-    jj_get_merge_diff_between_revisions(workspace_path, target_branch, "@", conflict_marker_style)
 }
 
 /// Get combined diff between two revisions.
