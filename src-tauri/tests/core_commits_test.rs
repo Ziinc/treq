@@ -200,6 +200,227 @@ fn test_list_commits_includes_tentative_working_copy_for_dirty_workspace() {
 }
 
 #[test]
+fn test_list_commits_includes_stacked_working_copies_for_dirty_chain() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let root = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/root",
+        Some("root workspace".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create root workspace");
+    let child = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/child",
+        Some("child workspace".to_string()),
+        None,
+        Some(&root.branch_name),
+        None,
+    )
+    .expect("Failed to create child workspace");
+    let grandchild = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/grandchild",
+        Some("grandchild workspace".to_string()),
+        None,
+        Some(&child.branch_name),
+        None,
+    )
+    .expect("Failed to create grandchild workspace");
+
+    let root_path = repo.workspaces_dir().join(&root.workspace_path);
+    let child_path = repo.workspaces_dir().join(&child.workspace_path);
+    let grandchild_path = repo.workspaces_dir().join(&grandchild.workspace_path);
+
+    TestRepo::write_workspace_file(
+        root_path.to_str().expect("root path should be utf-8"),
+        "root.txt",
+        "root dirty",
+    )
+    .expect("Failed to dirty root workspace");
+    TestRepo::write_workspace_file(
+        child_path.to_str().expect("child path should be utf-8"),
+        "child.txt",
+        "child dirty",
+    )
+    .expect("Failed to dirty child workspace");
+    TestRepo::write_workspace_file(
+        grandchild_path
+            .to_str()
+            .expect("grandchild path should be utf-8"),
+        "grandchild.txt",
+        "grandchild dirty",
+    )
+    .expect("Failed to dirty grandchild workspace");
+
+    let result = treq_lib::core::list_commits(&repo.repo_path, Some(grandchild.id), false, None, None)
+        .expect("Failed to list stacked workspace commits");
+
+    assert_eq!(
+        result
+            .tentative_working_copy
+            .as_ref()
+            .expect("Grandchild should have a tentative working copy")
+            .workspace_label,
+        grandchild.branch_name
+    );
+
+    let stacked_labels: Vec<String> = std::iter::once(
+        result
+            .tentative_working_copy
+            .as_ref()
+            .expect("Grandchild should have a tentative working copy")
+            .workspace_label
+            .clone(),
+    )
+    .chain(
+        result
+            .commits
+            .iter()
+            .filter(|c| c.is_working_copy)
+            .map(|c| {
+                c.workspace_label
+                    .clone()
+                    .expect("stacked working-copy rows should be labeled")
+            }),
+    )
+    .collect();
+
+    assert_eq!(
+        stacked_labels,
+        vec![
+            grandchild.branch_name.clone(),
+            child.branch_name.clone(),
+            root.branch_name.clone()
+        ],
+        "Stacked working copies should be ordered from terminal workspace upward"
+    );
+}
+
+#[test]
+fn test_list_commits_skips_clean_branches_in_stacked_chain() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let root = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/root-clean",
+        Some("root clean workspace".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create root workspace");
+    let child = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/child-clean",
+        Some("child clean workspace".to_string()),
+        None,
+        Some(&root.branch_name),
+        None,
+    )
+    .expect("Failed to create child workspace");
+    let grandchild = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/grandchild-clean",
+        Some("grandchild clean workspace".to_string()),
+        None,
+        Some(&child.branch_name),
+        None,
+    )
+    .expect("Failed to create grandchild workspace");
+
+    let root_path = repo.workspaces_dir().join(&root.workspace_path);
+    let grandchild_path = repo.workspaces_dir().join(&grandchild.workspace_path);
+
+    TestRepo::write_workspace_file(
+        root_path.to_str().expect("root path should be utf-8"),
+        "root.txt",
+        "root dirty",
+    )
+    .expect("Failed to dirty root workspace");
+    TestRepo::write_workspace_file(
+        grandchild_path
+            .to_str()
+            .expect("grandchild path should be utf-8"),
+        "grandchild.txt",
+        "grandchild dirty",
+    )
+    .expect("Failed to dirty grandchild workspace");
+
+    let result = treq_lib::core::list_commits(&repo.repo_path, Some(grandchild.id), false, None, None)
+        .expect("Failed to list stacked workspace commits");
+
+    let stacked_labels: Vec<String> = std::iter::once(
+        result
+            .tentative_working_copy
+            .as_ref()
+            .expect("Grandchild should have a tentative working copy")
+            .workspace_label
+            .clone(),
+    )
+    .chain(
+        result
+            .commits
+            .iter()
+            .filter(|c| c.is_working_copy)
+            .map(|c| {
+                c.workspace_label
+                    .clone()
+                    .expect("stacked working-copy rows should be labeled")
+            }),
+    )
+    .collect();
+
+    assert_eq!(
+        stacked_labels,
+        vec![grandchild.branch_name.clone(), root.branch_name.clone()],
+        "Clean intermediate branches should be skipped without breaking ancestry traversal"
+    );
+}
+
+#[test]
+fn test_list_commits_non_stacked_workspace_keeps_single_working_copy() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/solo-working-copy",
+        Some("solo workspace".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    TestRepo::write_workspace_file(
+        workspace_path.to_str().expect("workspace path should be utf-8"),
+        "solo.txt",
+        "dirty",
+    )
+    .expect("Failed to dirty workspace");
+
+    let result = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+        .expect("Failed to list workspace commits");
+
+    assert_eq!(
+        result
+            .tentative_working_copy
+            .as_ref()
+            .expect("Single workspace should still expose a tentative working copy")
+            .workspace_label,
+        workspace.branch_name
+    );
+    assert!(
+        result.commits.iter().all(|c| !c.is_working_copy),
+        "Non-stacked workspace should not surface additional working-copy rows"
+    );
+}
+
+#[test]
 fn test_move_commit_to_existing_workspace() {
     let repo = TestRepo::new().expect("Failed to create test repo");
     let default_branch = repo.default_branch();

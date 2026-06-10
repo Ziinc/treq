@@ -82,11 +82,11 @@ function groupCommitsByDay(commits: JjLogCommit[]): DayGroup[] {
 	return groups;
 }
 
-function getCommitHeadline(commit: JjLogCommit): string {
+function getCommitHeadline(commit: JjLogCommit, isTentative: boolean): string {
 	const headline = commit.description.split("\n")[0]?.trim();
 	return headline && headline !== "(no description)"
 		? headline
-		: "Untitled commit";
+		: isTentative ? "Working copy" : "Untitled commit";
 }
 
 export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
@@ -386,7 +386,7 @@ function CommitItem({
 	tentativeWorkspaceLabel,
 	onCommitClick,
 }: CommitItemProps) {
-	const firstLine = getCommitHeadline(commit);
+	const firstLine = getCommitHeadline(commit, isTentative ?? false);
 	const hasStats = commit.insertions > 0 || commit.deletions > 0;
 
 	return (
@@ -431,8 +431,8 @@ function CommitItem({
 							{firstLine}
 						</p>
 						{tentativeWorkspaceLabel && (
-							<p className="text-xs text-muted-foreground font-mono truncate">
-								Working copy - {tentativeWorkspaceLabel}
+							<p className="text-sm text-muted-foreground font-mono truncate">
+								{tentativeWorkspaceLabel}
 							</p>
 						)}
 					</div>
@@ -445,11 +445,6 @@ function CommitItem({
 					{commit.is_immutable && (
 						<span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border font-medium">
 							Immutable
-						</span>
-					)}
-					{isTargetOnly && (
-						<span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-500/30 font-medium">
-							on target
 						</span>
 					)}
 					<TooltipProvider delayDuration={300}>

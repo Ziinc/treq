@@ -703,6 +703,7 @@ pub fn run() {
             commands::get_workspace_file_lines,
             commands::jj_restore_file,
             commands::jj_restore_all,
+            commands::discard_workspace_changes,
             commands::create_commit,
             commands::list_commits,
             commands::jj_split,

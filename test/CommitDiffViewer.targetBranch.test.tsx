@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "./test-utils";
+import userEvent from "@testing-library/user-event";
 import { CommitDiffViewer } from "../src/components/CommitDiffViewer";
 import * as api from "../src/lib/api";
 import { createMockCommit } from "./factories/commit.factory";
@@ -171,6 +172,72 @@ describe("CommitDiffViewer - Target Branch History", () => {
 			expect(moveCommitButton).toBeUndefined();
 			expect(deleteCommitButton).toBeUndefined();
 		});
+	});
+
+	it("renders tentative working copy actions and expands like a commit", async () => {
+		const user = userEvent.setup();
+		const tentativeCommit = createMockCommit({
+			commit_id: "wc-tentative",
+			short_id: "wc-tentative",
+			description: "(no description)",
+			is_working_copy: true,
+			timestamp: "2024-01-16 10:00:00",
+		});
+
+		vi.mocked(api.jjGetLog).mockResolvedValue({
+			commits: [tentativeCommit, activeCommits[1]],
+			tentative_working_copy: {
+				workspace_label: "feat/test",
+				commit: tentativeCommit,
+			},
+			target_branch: "main",
+			workspace_branch: "feat/test",
+		});
+		vi.mocked(api.listCommits).mockResolvedValue({
+			commits: [tentativeCommit, activeCommits[1]],
+			tentative_working_copy: {
+				workspace_label: "feat/test",
+				commit: tentativeCommit,
+			},
+			target_branch: "main",
+			workspace_branch: "feat/test",
+		});
+		vi.mocked(api.getCommitDiff).mockResolvedValue({
+			committed_files: [],
+			hunks_by_file: [],
+			too_large_to_render: false,
+			render_block_reason: null,
+		});
+
+		const onViewTentativeChanges = vi.fn();
+		const onDeleteTentativeChanges = vi.fn();
+
+		render(
+			<CommitDiffViewer
+				workspacePath="/test/workspace"
+				repoPath="/test/repo"
+				workspaceId={1}
+				targetBranch="main"
+				isHomeRepo={false}
+				onViewTentativeChanges={onViewTentativeChanges}
+				onDeleteTentativeChanges={onDeleteTentativeChanges}
+			/>,
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText("Working copy")).toBeInTheDocument();
+		});
+
+		await user.click(screen.getByText("Working copy"));
+
+		expect(await screen.findByRole("button", { name: /view changes/i })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /move changes/i })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /delete changes/i })).toBeInTheDocument();
+
+		await user.click(screen.getByRole("button", { name: /view changes/i }));
+		expect(onViewTentativeChanges).toHaveBeenCalledTimes(1);
+		await user.click(screen.getByRole("button", { name: /delete changes/i }));
+		expect(onDeleteTentativeChanges).toHaveBeenCalledTimes(1);
 	});
 
 	it("section not rendered when isHomeRepo=true", async () => {

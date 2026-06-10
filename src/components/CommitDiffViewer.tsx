@@ -33,6 +33,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
+import { Button } from "./ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -71,6 +72,10 @@ interface CommitDiffViewerProps {
   onMoveCommitToNewWorkspace?: (commit: JjLogCommit) => void;
   /** Called when user wants to move a commit to an existing workspace */
   onMoveCommitToExistingWorkspace?: (commit: JjLogCommit) => void;
+  /** Called when the tentative working copy should be shown in Review tab */
+  onViewTentativeChanges?: () => void;
+  /** Called when the tentative working copy should be discarded */
+  onDeleteTentativeChanges?: () => void;
 }
 
 interface DayGroup {
@@ -152,11 +157,15 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
     onCreateAgentWithComment,
     onMoveCommitToNewWorkspace,
     onMoveCommitToExistingWorkspace,
+    onViewTentativeChanges,
+    onDeleteTentativeChanges,
   }) => {
     const isHomeRepo = workspaceId == null;
     const [removedCommitIds, setRemovedCommitIds] = useState<Set<string>>(
       new Set()
     );
+    const [hideTentativeWorkingCopy, setHideTentativeWorkingCopy] =
+      useState(false);
     const [targetBranchLimit, setTargetBranchLimit] = useState(10);
     const [homeRepoLimit, setHomeRepoLimit] = useState(15);
     const [expandedCommits, setExpandedCommits] = useState<Set<string>>(
@@ -532,11 +541,15 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
     const showTentativeWorkingCopy =
       !isHomeRepo && tentativeWorkingCopy != null;
 
+    useEffect(() => {
+      setHideTentativeWorkingCopy(false);
+    }, [tentativeWorkingCopy?.commit_id]);
+
     if (loading) {
       return (
         <div className="h-full flex items-center justify-center p-4">
           <Loader2 className="w-4 h-4 animate-spin mr-2" />
-          <p className="text-sm text-muted-foreground">Loading commits...</p>
+          <p className="text-muted-foreground">Loading commits...</p>
         </div>
       );
     }
@@ -548,8 +561,8 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
     ) {
       return (
         <div className="p-4 text-center">
-          <p className="text-sm text-muted-foreground">No commits yet.</p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground">No commits yet.</p>
+          <p className="text-muted-foreground">
             Changes you commit will appear here.
           </p>
         </div>
@@ -568,22 +581,29 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                 aria-hidden="true"
               />
 
-              {showTentativeWorkingCopy && tentativeWorkingCopy && (
+              {showTentativeWorkingCopy &&
+                tentativeWorkingCopy &&
+                !hideTentativeWorkingCopy && (
                 <ul className="space-y-0 mb-3">
                   <CommitWithDiff
                     commit={tentativeWorkingCopy}
                     isFirst={true}
-                    isExpanded={false}
+                    isExpanded={expandedCommits.has(tentativeWorkingCopy.commit_id)}
                     isTentative={true}
                     tentativeWorkspaceLabel={tentativeWorkingCopyLabel}
-                    canAction={false}
+                    canAction={true}
                     isRemoving={false}
-                    onToggle={() => {}}
-                    onMoveToNew={() => {}}
-                    onMoveToExisting={() => {}}
-                    onAbandon={() => {}}
+                    onToggle={() => toggleCommit(tentativeWorkingCopy.commit_id)}
+                    onMoveToNew={handleMoveToNew}
+                    onMoveToExisting={handleMoveToExisting}
+                    onAbandon={handleAbandon}
                     onCreateAgentWithComment={onCreateAgentWithComment}
                     onLoadDeferredFileDiff={async () => {}}
+                    onViewTentativeChanges={onViewTentativeChanges}
+                    onDeleteTentativeChanges={async () => {
+                      await onDeleteTentativeChanges?.();
+                      setHideTentativeWorkingCopy(true);
+                    }}
                   />
                 </ul>
               )}
@@ -593,7 +613,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                   key={`${group.dayKey}-${groupIndex}`}
                   className="mt-5 first:mt-0"
                 >
-                  <p className="text-xs font-semibold text-muted-foreground mb-1 pl-7">
+                  <p className="text-base font-semibold text-muted-foreground mb-1 pl-7">
                     {group.label}
                   </p>
                   <div className="space-y-0">
@@ -653,7 +673,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                 <div className="mt-3 pl-7">
                   <button
                     type="button"
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    className="text-base text-muted-foreground hover:text-foreground transition-colors"
                     disabled={loadingMore}
                     onClick={() => setHomeRepoLimit((prev) => prev + 15)}
                   >
@@ -672,12 +692,12 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
               {showTargetBranchSection && (
                 <>
                   {commits.length === 0 && (
-                    <p className="text-sm text-muted-foreground mb-3 pl-7">
+                    <p className="text-muted-foreground mb-3 pl-7">
                       There are no commits within this workspace branch yet.
                     </p>
                   )}
                   <div className="border-t border-border my-4 mx-2" />
-                  <p className="text-xs font-semibold text-muted-foreground mb-2 pl-7">
+                  <p className="text-base font-semibold text-muted-foreground mb-2 pl-7">
                     Recent on {targetBranchCommitsBranch}
                   </p>
                   {targetBranchDayGroups.map((group, groupIndex) => (
@@ -685,7 +705,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                       key={`tb-${group.dayKey}-${groupIndex}`}
                       className="mt-5 first:mt-0"
                     >
-                      <p className="text-xs font-semibold text-muted-foreground mb-1 pl-7">
+                      <p className="text-base font-semibold text-muted-foreground mb-1 pl-7">
                         {group.label}
                       </p>
                       <div className="space-y-0">
@@ -747,7 +767,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                     <div className="mt-3 pl-7">
                       <button
                         type="button"
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        className="text-base text-muted-foreground hover:text-foreground transition-colors"
                         disabled={loadingMore}
                         onClick={() =>
                           setTargetBranchLimit((prev) => prev + 10)
@@ -793,6 +813,8 @@ interface CommitWithDiffProps {
   onMoveToNew: (commit: JjLogCommit) => void;
   onMoveToExisting: (commit: JjLogCommit) => void;
   onAbandon: (commit: JjLogCommit) => void;
+  onViewTentativeChanges?: () => void;
+  onDeleteTentativeChanges?: () => void;
   onCreateAgentWithComment?: (
     filePath: string,
     startLine: number,
@@ -816,6 +838,8 @@ function CommitWithDiff({
   onMoveToNew,
   onMoveToExisting,
   onAbandon,
+  onViewTentativeChanges,
+  onDeleteTentativeChanges,
   onCreateAgentWithComment,
   onLoadDeferredFileDiff,
   tentativeWorkspaceLabel,
@@ -852,8 +876,7 @@ function CommitWithDiff({
         type="button"
         onClick={onToggle}
         className={cn(
-          "relative flex items-start gap-3 py-2 px-2 -mx-2 w-full text-left group",
-          "hover:bg-muted/50 rounded-md transition-colors cursor-pointer",
+          "relative flex items-start gap-3 py-2 px-2 -mx-2 w-full text-left rounded-md group transition-all duration-200 hover:bg-muted",
           isTentative &&
             "bg-yellow-50/80 hover:bg-yellow-100/80 dark:bg-yellow-950/20 dark:hover:bg-yellow-950/30"
         )}
@@ -868,30 +891,20 @@ function CommitWithDiff({
           />
         </div>
 
-        <div
-          className={cn(
-            "flex-1 min-w-0 pt-0.5",
-            isTentative &&
-              "bg-yellow-50/80 p-2 -m-2 shadow-sm dark:bg-yellow-950/20"
-          )}
-        >
+        <div className="flex-1 min-w-0 pt-0.5">
           <div className="flex items-center gap-1.5">
-            {!isTentative && (
-              <ChevronRight
-                className={cn(
-                  "w-4 h-4 text-muted-foreground transition-transform flex-shrink-0",
-                  isExpanded && "rotate-90"
-                )}
-              />
-            )}
+            <ChevronRight
+              className={cn(
+                "w-4 h-4 text-muted-foreground transition-transform flex-shrink-0",
+                isExpanded && "rotate-90"
+              )}
+            />
             <div className="min-w-0">
-              <p className="text-sm truncate" title={firstLine}>
-                {firstLine}{" "}
-                {isTentative ? (
-                  <span>
-                    <span className="font-mono  text-xs ml-4 text-muted-foreground">
-                    {tentativeWorkspaceLabel}
-                    </span>
+              <p className="truncate" title={firstLine}>
+                {firstLine}
+                {isTentative && tentativeWorkspaceLabel ? (
+                  <span className="ml-2 font-mono text-muted-foreground">
+                    - {tentativeWorkspaceLabel}
                   </span>
                 ) : null}
               </p>
@@ -899,14 +912,14 @@ function CommitWithDiff({
           </div>
           <div className="flex items-center gap-2 mt-0.5 pl-5">
             {commit.is_immutable && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border font-medium">
+              <span className="px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border font-medium">
                 Immutable
               </span>
             )}
             <TooltipProvider delayDuration={300}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-base text-muted-foreground">
                     {formatRelativeTime(commit.timestamp)}
                   </span>
                 </TooltipTrigger>
@@ -916,7 +929,7 @@ function CommitWithDiff({
               </Tooltip>
             </TooltipProvider>
             {hasStats && (
-              <span className="text-xs text-muted-foreground ml-auto">
+              <span className="text-base text-muted-foreground ml-auto">
                 <span className="text-green-600">+{commit.insertions}</span>{" "}
                 <span className="text-red-600">-{commit.deletions}</span>
               </span>
@@ -928,41 +941,85 @@ function CommitWithDiff({
       {/* Expanded diff content */}
       {isExpanded && (
         <div className="ml-7 mb-3">
-          <div className="flex items-center gap-2 mb-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-md border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
-                  <ArrowRightLeft className="w-4 h-4" />
-                  Move commit
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem onClick={() => onMoveToNew(commit)}>
-                  Move to New Workspace
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onMoveToExisting(commit)}>
-                  Move to Existing Workspace
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <button
-              className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-md border border-border hover:bg-muted text-muted-foreground hover:text-destructive transition-colors"
-              onClick={() => onAbandon(commit)}
-              disabled={isRemoving}
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete commit
-            </button>
+          <div className="flex items-center gap-2 mb-2 mt-2">
+            {isTentative ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={onViewTentativeChanges}
+                >
+                  <FileText className="w-4 h-4" />
+                  View changes
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-1.5">
+                      <ArrowRightLeft className="w-4 h-4" />
+                      Move changes
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuItem onClick={() => onMoveToNew(commit)}>
+                      Move to New Workspace
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onMoveToExisting(commit)}>
+                      Move to Existing Workspace
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={onDeleteTentativeChanges}
+                  disabled={isRemoving}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete changes
+                </Button>
+              </>
+            ) : (
+              <>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-1.5">
+                      <ArrowRightLeft className="w-4 h-4" />
+                      Move commit
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuItem onClick={() => onMoveToNew(commit)}>
+                      Move to New Workspace
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onMoveToExisting(commit)}>
+                      Move to Existing Workspace
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => onAbandon(commit)}
+                  disabled={isRemoving}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete commit
+                </Button>
+              </>
+            )}
           </div>
 
           <div className="border border-border rounded-md overflow-hidden">
             {diffData?.loading ? (
-              <div className="flex items-center gap-2 p-3 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 p-3 text-muted-foreground">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 Loading diff...
               </div>
             ) : diffData?.error ? (
-              <div className="p-3 text-sm text-destructive">
+              <div className="p-3 text-destructive">
                 Failed to load diff: {diffData.error}
               </div>
             ) : diffData?.diff ? (
@@ -1051,14 +1108,14 @@ function CommitDiffContent({
 
   if (diff.too_large_to_render) {
     return (
-      <div className="p-3 text-sm text-muted-foreground">
+      <div className="p-3 text-muted-foreground">
         {diff.render_block_reason ?? "This commit diff is too large to render."}
       </div>
     );
   }
 
   if (diff.committed_files.length === 0) {
-    return <div className="p-3 text-sm text-muted-foreground">No changes</div>;
+    return <div className="p-3 text-muted-foreground">No changes</div>;
   }
 
   const toggleFile = (path: string) => {
@@ -1326,12 +1383,12 @@ function CommitDiffContent({
                 )}
               />
               <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              <span className="text-sm font-mono truncate flex-1">
+              <span className="font-mono truncate flex-1">
                 {file.path}
               </span>
               <span
                 className={cn(
-                  "text-xs font-medium px-1.5 py-0.5 rounded",
+                  "text-base font-medium px-1.5 py-0.5 rounded",
                   file.status === "A" && "text-green-600 bg-green-500/10",
                   file.status === "M" && "text-blue-600 bg-blue-500/10",
                   file.status === "D" && "text-red-600 bg-red-500/10"
@@ -1364,18 +1421,18 @@ function CommitDiffContent({
                   ))
                 ) : isDeferred ? (
                   <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-3">
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground">
                       This diff has {file.changed_line_count} changed lines.
                     </p>
                     <div className="flex items-center gap-3">
                       {deferredFileError && (
-                        <span className="text-xs text-destructive">
+                        <span className="text-base text-destructive">
                           {deferredFileError}
                         </span>
                       )}
                       <button
                         type="button"
-                        className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
+                        className="rounded-md border border-border px-2 py-1 text-base text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
                         disabled={isLoadingDeferred}
                         onClick={() => {
                           setLoadingDeferredFiles((prev) => {
@@ -1416,7 +1473,7 @@ function CommitDiffContent({
                   </div>
                 ) : null}
                 {!fileDiff && !isDeferred && (
-                  <div className="border-t border-border px-3 py-3 text-sm text-muted-foreground">
+                  <div className="border-t border-border px-3 py-3 text-muted-foreground">
                     No diff content available.
                   </div>
                 )}
@@ -1498,9 +1555,9 @@ function HunkView({
   let newLine = newStart;
 
   return (
-    <div className="text-sm font-mono">
+    <div className="font-mono">
       {/* Hunk header */}
-      <div className="px-3 py-0.5 bg-muted/60 text-muted-foreground border-t border-border text-xs">
+      <div className="px-3 py-0.5 bg-muted/60 text-muted-foreground border-t border-border text-base">
         {hunk.header}
       </div>
       {/* Hunk lines */}

@@ -134,6 +134,7 @@ export interface JjLogCommit {
 	timestamp: string;
 	parent_ids: string[];
 	is_working_copy: boolean;
+	workspace_label?: string | null;
 	bookmarks: string[];
 	is_immutable: boolean;
 	insertions: number;

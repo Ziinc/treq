@@ -557,6 +557,7 @@ fn build_log_commit(
                 timestamp: cached.timestamp.clone().unwrap_or_default(),
                 parent_ids,
                 is_working_copy,
+                workspace_label: None,
                 bookmarks,
                 is_immutable: is_immutable_val,
                 insertions: cached.insertions,
@@ -598,6 +599,7 @@ fn build_log_commit(
                 timestamp,
                 parent_ids,
                 is_working_copy,
+                workspace_label: None,
                 bookmarks,
                 is_immutable: is_immutable_val,
                 insertions,
@@ -727,6 +729,8 @@ pub struct JjLogCommit {
     pub timestamp: String,
     pub parent_ids: Vec<String>,
     pub is_working_copy: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_label: Option<String>,
     pub bookmarks: Vec<String>,
     pub is_immutable: bool,
     pub insertions: u32,
@@ -4986,6 +4990,68 @@ fn get_workspace_wc_commit(loaded: &LoadedWorkspaceRepo) -> Result<Option<Commit
         .get_commit(&wc_commit_id)
         .map(Some)
         .map_err(|e| JjError::IoError(format!("Failed to load wc commit: {}", e)))
+}
+
+fn build_tentative_working_copy(
+    cache_repo_path: &str,
+    repo: &Arc<ReadonlyRepo>,
+    commit: &Commit,
+    workspace_label: &str,
+    wc_commit_ids: &HashSet<jj_lib::backend::CommitId>,
+    wc_tree_override: Option<(&jj_lib::backend::CommitId, &MergedTree)>,
+    is_immutable: &impl Fn(
+        &jj_lib::backend::CommitId,
+    ) -> Result<bool, jj_lib::revset::RevsetEvaluationError>,
+) -> JjTentativeWorkingCopy {
+    JjTentativeWorkingCopy {
+        workspace_label: workspace_label.to_string(),
+        commit: {
+            let mut commit = build_log_commit(
+            cache_repo_path,
+            repo,
+            commit,
+            wc_commit_ids,
+            wc_tree_override,
+            is_immutable,
+            &std::collections::HashMap::<String, local_db::CachedCommitDiffStat>::new(),
+        );
+            commit.workspace_label = Some(workspace_label.to_string());
+            commit
+        },
+    }
+}
+
+pub fn jj_get_tentative_working_copy(
+    workspace_path: &str,
+    workspace_label: &str,
+) -> Result<Option<JjTentativeWorkingCopy>, JjError> {
+    if jj_is_working_copy_empty(workspace_path)? {
+        return Ok(None);
+    }
+
+    let loaded = load_workspace_repo(workspace_path)?;
+    let immutable_revset =
+        evaluate_revset(&loaded, &format!("::{}", format_revset_symbol(workspace_label)))?;
+    let is_immutable_val = immutable_revset.containing_fn();
+    let wc_commit_ids: HashSet<_> = loaded
+        .repo
+        .view()
+        .wc_commit_ids()
+        .values()
+        .cloned()
+        .collect();
+
+    get_workspace_wc_commit(&loaded).map(|maybe_commit| {
+        maybe_commit.map(|commit| build_tentative_working_copy(
+            workspace_path,
+            &loaded.repo,
+            &commit,
+            workspace_label,
+            &wc_commit_ids,
+            None,
+            &is_immutable_val,
+        ))
+    })
 }
 
 #[derive(Clone, Copy)]
