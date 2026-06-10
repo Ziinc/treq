@@ -144,12 +144,10 @@ describe("default agent configuration", () => {
 			await findSidebarBranchElement("feat/agent-terminal-default-test"),
 		);
 
-		// Open command palette and trigger "New Agent Terminal"
 		await user.keyboard("{Meta>}k{/Meta}");
 		const newAgentTerminal = await screen.findByText("New Agent Terminal");
 		await user.click(newAgentTerminal);
 
-		// The session name is derived from the agent label: "Codex 1" when default_agent=codex
 		await waitFor(async () => {
 			const sessions = await getSessions(repoPath);
 			expect(sessions.some((s) => s.name === "Codex 1")).toBe(true);
@@ -167,13 +165,11 @@ describe("default agent configuration", () => {
 			await findSidebarBranchElement("feat/agent-pane-button-test"),
 		);
 
-		// Click the "Agent" button in the terminal pane header
 		const agentButton = await screen.findByRole("button", {
 			name: /new agent/i,
 		});
 		await user.click(agentButton);
 
-		// Session name should be "Codex 1" (not "Claude 1") when default_agent=codex
 		await waitFor(async () => {
 			const sessions = await getSessions(repoPath);
 			expect(sessions.some((s) => s.name === "Codex 1")).toBe(true);

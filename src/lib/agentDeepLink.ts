@@ -122,3 +122,33 @@ export const findWorkspaceByBranch = (
 	branch: string,
 ): Workspace | null =>
 	workspaces.find((workspace) => workspace.branch_name === branch) ?? null;
+
+export async function processAgentDeepLinkRequests(
+	requests: AgentDeepLinkRequest[],
+	context: {
+		repoPath: string | null;
+		workspacesLength: number;
+		onSameRepoRequest: (request: AgentDeepLinkRequest) => Promise<void>;
+		deferRequest: (request: AgentDeepLinkRequest) => void;
+		openOtherRepoWindow: (request: AgentDeepLinkRequest) => void;
+	},
+): Promise<void> {
+	await requests.reduce<Promise<void>>(async (chain, request) => {
+		await chain;
+		if (isProcessedAgentRequest(request.requestId)) return;
+
+		if (request.repo === context.repoPath) {
+			if (!tryClaimAgentRequest(request.requestId)) return;
+			if (context.workspacesLength === 0) {
+				context.deferRequest(request);
+				return;
+			}
+			await context.onSameRepoRequest(request);
+			return;
+		}
+
+		if (!tryClaimAgentRequest(request.requestId)) return;
+		queuePendingAgentRequest(request);
+		context.openOtherRepoWindow(request);
+	}, Promise.resolve());
+}

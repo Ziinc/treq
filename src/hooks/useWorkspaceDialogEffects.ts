@@ -70,7 +70,6 @@ export function useWorkspaceDialogEffects(
 		defaults,
 		sourceWorkspace,
 		isHomeRepo,
-		description,
 		title,
 		branchName,
 		branchPattern,

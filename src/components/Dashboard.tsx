@@ -55,8 +55,7 @@ import {
 	markProcessedAgentRequest,
 	parseAgentDeepLinks,
 	popPendingAgentRequests,
-	queuePendingAgentRequest,
-	tryClaimAgentRequest,
+	processAgentDeepLinkRequests,
 	type AgentDeepLinkRequest,
 } from "../lib/agentDeepLink";
 import { Onboarding } from "./Onboarding";
@@ -650,8 +649,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
 			// When no agent is specified explicitly, resolve from settings (repo-level
 			// overrides app-level, both fall back to "claude").
-			let resolvedAgent = agent;
-			if (!resolvedAgent) {
+			const resolvedAgent = await (async (): Promise<
+				"claude" | "codex" | "cursor" | undefined
+			> => {
+				if (agent) return agent;
 				let repoDefault: string | null = null;
 				let appDefault: string | null = null;
 				try {
@@ -666,9 +667,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				}
 				const defaultAgent = repoDefault || appDefault;
 				if (defaultAgent === "codex" || defaultAgent === "cursor") {
-					resolvedAgent = defaultAgent;
+					return defaultAgent;
 				}
-			}
+				return undefined;
+			})();
 
 			const sessionId = await getOrCreateSession(workspaceId, {
 				forceNew: true,
@@ -732,35 +734,29 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		const setup = async () =>
 			await listen<string[]>("deep-link-received", async (event) => {
 				const requests = parseAgentDeepLinks(event.payload ?? []);
-				for (const request of requests) {
-					if (isProcessedAgentRequest(request.requestId)) continue;
-
-					if (request.repo === repoPath) {
-						if (!tryClaimAgentRequest(request.requestId)) continue;
-						if (workspaces.length === 0) {
-							setDeferredAgentRequests((prev) => [...prev, request]);
-							continue;
-						}
-						await handleStartAgentRequest(request);
-						continue;
-					}
-
-					if (!tryClaimAgentRequest(request.requestId)) continue;
-					queuePendingAgentRequest(request);
-					const windowLabel = `treq-agent-${Date.now()}-${Math.floor(
-						Math.random() * 1000,
-					)}`;
-					const newRepoName =
-						request.repo.split("/").pop() ||
-						request.repo.split("\\").pop() ||
-						request.repo;
-					new WebviewWindow(windowLabel, {
-						url: `index.html?repo=${encodeURIComponent(request.repo)}`,
-						title: `Treq - ${newRepoName}`,
-						width: 1400,
-						height: 900,
-					});
-				}
+				await processAgentDeepLinkRequests(requests, {
+					repoPath,
+					workspacesLength: workspaces.length,
+					onSameRepoRequest: handleStartAgentRequest,
+					deferRequest: (request) => {
+						setDeferredAgentRequests((prev) => [...prev, request]);
+					},
+					openOtherRepoWindow: (request) => {
+						const windowLabel = `treq-agent-${Date.now()}-${Math.floor(
+							Math.random() * 1000,
+						)}`;
+						const newRepoName =
+							request.repo.split("/").pop() ||
+							request.repo.split("\\").pop() ||
+							request.repo;
+						new WebviewWindow(windowLabel, {
+							url: `index.html?repo=${encodeURIComponent(request.repo)}`,
+							title: `Treq - ${newRepoName}`,
+							width: 1400,
+							height: 900,
+						});
+					},
+				});
 			});
 
 		const unlistenPromise = setup();

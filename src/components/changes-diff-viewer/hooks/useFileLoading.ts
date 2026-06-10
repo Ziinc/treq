@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
 	type JjDiffHunk,
-	type JjRevisionDiff,
 	getDiffCache,
 	getWorkspaceChangedFiles,
 	getWorkspaceDiff,
