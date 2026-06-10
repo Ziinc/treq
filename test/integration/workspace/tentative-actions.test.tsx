@@ -85,7 +85,9 @@ describe("ShowWorkspace - tentative working copy actions", () => {
 		);
 
 		await screen.findByText(/Stack a new Workspace/i);
-		expect(screen.getByRole("button", { name: /Split 1 item/i })).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: /Split 1 item/i }),
+		).toBeInTheDocument();
 	});
 
 	it("discards tentative changes and removes the working copy row", async () => {
@@ -100,7 +102,9 @@ describe("ShowWorkspace - tentative working copy actions", () => {
 		await user.click(screen.getByRole("button", { name: /delete changes/i }));
 
 		await waitFor(() => {
-			expect(screen.queryAllByRole("button", { name: /working copy/i })).toHaveLength(0);
+			expect(
+				screen.queryAllByRole("button", { name: /working copy/i }),
+			).toHaveLength(0);
 		});
 	});
 });

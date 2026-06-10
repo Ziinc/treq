@@ -285,7 +285,10 @@ describe("ShowWorkspace - Commits tab tentative working copy", () => {
 		);
 		expect(workspace).toBeTruthy();
 
-		const workspacePath = resolveWorkspacePath(repoPath, workspace!.workspace_path);
+		const workspacePath = resolveWorkspacePath(
+			repoPath,
+			workspace!.workspace_path,
+		);
 		writeWorkspaceFile(
 			workspacePath,
 			"tentative.txt",
@@ -306,7 +309,11 @@ describe("ShowWorkspace - Commits tab tentative working copy", () => {
 		);
 		expect(result.tentative_working_copy!.commit.is_working_copy).toBe(true);
 		expect(result.commits.some((commit) => commit.is_working_copy)).toBe(false);
-		expect(result.commits.some((commit) => commit.description === "Base repo commit")).toBe(true);
+		expect(
+			result.commits.some(
+				(commit) => commit.description === "Base repo commit",
+			),
+		).toBe(true);
 	});
 
 	it("renders the tentative working copy above workspace commits", async () => {
@@ -322,10 +329,7 @@ describe("ShowWorkspace - Commits tab tentative working copy", () => {
 			"feat/tentative-working-copy",
 		);
 
-		const workspacePath = resolveWorkspacePath(
-			repoPath,
-			dirtyWorkspace.path,
-		);
+		const workspacePath = resolveWorkspacePath(repoPath, dirtyWorkspace.path);
 		writeWorkspaceFile(workspacePath, "tentative.txt", "dirty working copy");
 
 		const dirtyUser = userEvent.setup();
@@ -336,7 +340,8 @@ describe("ShowWorkspace - Commits tab tentative working copy", () => {
 			within(commitsList).getAllByText("feat/tentative-working-copy").length,
 		).toBeGreaterThan(0);
 		expect(
-			(await screen.findAllByText("Working copy - feat/tentative-working-copy")).length,
+			(await screen.findAllByText("Working copy - feat/tentative-working-copy"))
+				.length,
 		).toBeGreaterThanOrEqual(1);
 		expect(screen.queryByText("wc000")).not.toBeInTheDocument();
 	});

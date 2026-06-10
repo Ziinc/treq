@@ -86,7 +86,9 @@ function getCommitHeadline(commit: JjLogCommit, isTentative: boolean): string {
 	const headline = commit.description.split("\n")[0]?.trim();
 	return headline && headline !== "(no description)"
 		? headline
-		: isTentative ? "Working copy" : "Untitled commit";
+		: isTentative
+			? "Working copy"
+			: "Untitled commit";
 }
 
 export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
@@ -121,10 +123,11 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 				14,
 			)
 				.then((result) => {
-					const { workspaceCommits, targetBranchCommits } = splitCommitsByTarget(
-						result?.commits ?? [],
+					const { workspaceCommits, targetBranchCommits } =
+						splitCommitsByTarget(result?.commits ?? []);
+					setCommits(
+						normalizeCommits(filterWorkingCopyCommits(workspaceCommits)),
 					);
-					setCommits(normalizeCommits(filterWorkingCopyCommits(workspaceCommits)));
 					setTentativeWorkingCopy(result?.tentative_working_copy ?? null);
 					setTargetBranchCommits(targetBranchCommits);
 					setMergeBaseId(result?.merge_base_id ?? null);
@@ -149,12 +152,19 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 			if (limit <= 14) return;
 			if (!isHomeRepo) return;
 			setLoadingMore(true);
-			listCommits(repoPath, workspaceId, includeTargetBranchHistory, undefined, limit)
+			listCommits(
+				repoPath,
+				workspaceId,
+				includeTargetBranchHistory,
+				undefined,
+				limit,
+			)
 				.then((result) => {
-					const { workspaceCommits, targetBranchCommits } = splitCommitsByTarget(
-						result?.commits ?? [],
+					const { workspaceCommits, targetBranchCommits } =
+						splitCommitsByTarget(result?.commits ?? []);
+					setCommits(
+						normalizeCommits(filterWorkingCopyCommits(workspaceCommits)),
 					);
-					setCommits(normalizeCommits(filterWorkingCopyCommits(workspaceCommits)));
 					setTentativeWorkingCopy(result?.tentative_working_copy ?? null);
 					setTargetBranchCommits(targetBranchCommits);
 					setMergeBaseId(result?.merge_base_id ?? null);
@@ -227,9 +237,7 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
 									commit={tentativeWorkingCopy.commit}
 									isFirst={true}
 									isTentative={true}
-									tentativeWorkspaceLabel={
-										tentativeWorkingCopy.workspace_label
-									}
+									tentativeWorkspaceLabel={tentativeWorkingCopy.workspace_label}
 									onCommitClick={onCommitClick}
 								/>
 							</ul>
@@ -393,19 +401,20 @@ function CommitItem({
 		<li
 			className={cn(
 				"relative flex items-start gap-3 py-2 px-2 -mx-2 rounded-md group transition-all duration-200 hover:bg-muted",
-				isTentative && "bg-yellow-50/80 hover:bg-yellow-100/80 dark:bg-yellow-950/20 dark:hover:bg-yellow-950/30 border border-yellow-200/70 dark:border-yellow-900/60",
+				isTentative &&
+					"bg-yellow-50/80 hover:bg-yellow-100/80 dark:bg-yellow-950/20 dark:hover:bg-yellow-950/30 border border-yellow-200/70 dark:border-yellow-900/60",
 				isTargetOnly && "opacity-60",
 			)}
 		>
 			<div className="relative z-10 flex-shrink-0">
 				<div
-				className={cn(
-					"w-[14px] h-[14px] rounded-full border-2 border-background",
-					isFirst ? "bg-primary" : "bg-muted-foreground",
-					isTentative && "bg-yellow-500",
-					isTargetOnly && "bg-muted-foreground/50",
-				)}
-			/>
+					className={cn(
+						"w-[14px] h-[14px] rounded-full border-2 border-background",
+						isFirst ? "bg-primary" : "bg-muted-foreground",
+						isTentative && "bg-yellow-500",
+						isTargetOnly && "bg-muted-foreground/50",
+					)}
+				/>
 			</div>
 
 			<div
