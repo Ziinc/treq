@@ -4337,9 +4337,27 @@ pub fn jj_get_log(
             .unwrap_or_else(|| JjError::IoError("Failed to evaluate log revset".to_string())));
     };
     let (revset_expr, revset) = revset.expect("selected target ref must include a revset");
+    // When viewing the home/default-branch context, measure immutability against the
+    // remote tracking bookmark (e.g. `main@origin`) rather than the local one.
+    // Commits ahead of the remote (unpushed) are mutable; commits already pushed are
+    // immutable. Fall back to the local bookmark when no remote tracking ref exists.
+    let immutable_ref = if is_home_repo.unwrap_or(false) {
+        let remote_symbol = RemoteRefSymbol {
+            name: RefName::new(target_branch),
+            remote: RemoteName::new("origin"),
+        };
+        let remote_ref = loaded.repo.view().get_remote_bookmark(remote_symbol);
+        if !remote_ref.target.is_absent() {
+            format!("{}@origin", target_branch)
+        } else {
+            selected_target_ref.clone()
+        }
+    } else {
+        selected_target_ref.clone()
+    };
     let immutable_revset = evaluate_revset(
         &loaded,
-        &format!("::{}", format_revset_symbol(&selected_target_ref)),
+        &format!("::{}", format_revset_symbol(&immutable_ref)),
     )?;
     let is_immutable = immutable_revset.containing_fn();
     let wc_commit_ids: HashSet<_> = loaded
