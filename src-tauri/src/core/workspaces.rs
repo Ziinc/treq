@@ -52,19 +52,6 @@ enum SyncSource {
     WorkspaceToHome,
 }
 
-/// Defines whether files/commits are moved or copied during a split.
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
-pub enum SplitMode {
-    Move,
-    Copy,
-}
-
-/// Defines where the new workspace is positioned relative to the source.
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
-pub enum SplitPosition {
-    Before,
-    After,
-}
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct WorkspaceMoveRequest {
@@ -1281,217 +1268,6 @@ pub fn rename_workspace(
         updated_children_ids,
     })
 }
-
-/// Splits an existing workspace by moving or copying files/commits to a new workspace.
-///
-/// The new workspace can be positioned before or after the source in the stack.
-/// All lower-level operations (workspace creation, file movement, rebasing) are
-/// encapsulated within this function.
-///
-/// # Arguments
-/// * `repo_path` - Path to the repository root
-/// * `workspace_id` - ID of the source workspace to split from
-/// * `branch_name` - Branch name for the new workspace
-/// * `description` - Optional description/description for the new workspace
-/// * `file_paths` - Files to split (mutually exclusive with commit_ids)
-/// * `commit_ids` - Change IDs of commits to split (mutually exclusive with file_paths)
-/// * `mode` - Move or Copy
-/// * `position` - Before or After the source workspace
-pub fn split_workspace(
-    repo_path: &str,
-    workspace_id: i64,
-    branch_name: &str,
-    description: Option<String>,
-    file_paths: Option<Vec<String>>,
-    commit_ids: Option<Vec<String>>,
-    mode: SplitMode,
-    position: SplitPosition,
-) -> Result<local_db::Workspace, String> {
-    // 1. Get source workspace
-    let source = local_db::get_workspace_by_id(repo_path, workspace_id)
-        .map_err(|e| format!("Failed to get source workspace: {}", e))?
-        .ok_or("Source workspace not found")?;
-
-    let source_full_path = Path::new(repo_path)
-        .join(".treq")
-        .join("workspaces")
-        .join(&source.workspace_path)
-        .to_str()
-        .ok_or("Failed to construct source workspace path")?
-        .to_string();
-
-    // Snapshot source working copy
-    let _ = jj::jj_get_changed_files(&source_full_path);
-
-    let has_files = file_paths.as_ref().map_or(false, |f| !f.is_empty());
-    let has_commits = commit_ids.as_ref().map_or(false, |c| !c.is_empty());
-
-    if !has_files && !has_commits {
-        return Err("Must specify either file_paths or commit_ids to split".to_string());
-    }
-    if has_files && has_commits {
-        return Err("Cannot specify both file_paths and commit_ids".to_string());
-    }
-
-    match position {
-        SplitPosition::After => {
-            // Create new workspace stacked on source
-            let new_workspace = create_workspace(
-                repo_path,
-                branch_name,
-                description.clone(),
-                None,
-                Some(&source.branch_name),
-                None,
-            )?;
-
-            let new_full_path = Path::new(repo_path)
-                .join(".treq")
-                .join("workspaces")
-                .join(&new_workspace.workspace_path)
-                .to_str()
-                .ok_or("Failed to construct new workspace path")?
-                .to_string();
-
-            if has_files {
-                let files = file_paths.unwrap();
-                match mode {
-                    SplitMode::Move => {
-                        // Move files from source to new workspace
-                        jj::squash_to_workspace(
-                            &source_full_path,
-                            &new_workspace.workspace_name,
-                            Some(files),
-                        )
-                        .map_err(|e| format!("Failed to move files: {}", e))?;
-                    }
-                    SplitMode::Copy => {
-                        // Copy files (filesystem level, jj auto-tracks)
-                        jj::copy_files_between_workspaces(&source_full_path, &new_full_path, files)
-                            .map_err(|e| format!("Failed to copy files: {}", e))?;
-                    }
-                }
-            } else if has_commits {
-                let commits = commit_ids.unwrap();
-                for change_id in &commits {
-                    jj::squash_commit_to_workspace(
-                        &source_full_path,
-                        change_id,
-                        &new_workspace.workspace_name,
-                    )
-                    .map_err(|e| format!("Failed to move commit {}: {}", change_id, e))?;
-                }
-            }
-
-            // Refresh working copies
-            let _ = jj::update_stale_workspace(&new_full_path);
-            let _ = jj::update_stale_workspace(&source_full_path);
-
-            // Return updated workspace from DB
-            local_db::get_workspace_by_id(repo_path, new_workspace.id)
-                .map_err(|e| format!("Failed to get new workspace: {}", e))?
-                .ok_or_else(|| "New workspace not found after split".to_string())
-        }
-        SplitPosition::Before => {
-            // Create new workspace at source's parent level
-            let source_target = source.target_branch.clone().unwrap_or("main".to_string());
-
-            let new_workspace = create_workspace(
-                repo_path,
-                branch_name,
-                description.clone(),
-                None,
-                Some(&source_target),
-                None,
-            )?;
-
-            let new_full_path = Path::new(repo_path)
-                .join(".treq")
-                .join("workspaces")
-                .join(&new_workspace.workspace_path)
-                .to_str()
-                .ok_or("Failed to construct new workspace path")?
-                .to_string();
-
-            // Set new workspace's target_branch to source's old target
-            local_db::update_workspace_target_branch(repo_path, new_workspace.id, &source_target)
-                .map_err(|e| format!("Failed to set new workspace target: {}", e))?;
-
-            // In Move mode, track files to remove from source after rebase to avoid inherited reappearance.
-            let mut files_to_remove_from_source: Vec<String> = Vec::new();
-
-            if has_files {
-                let files = file_paths.unwrap();
-                match mode {
-                    SplitMode::Move => {
-                        files_to_remove_from_source = files.clone();
-                        jj::squash_to_workspace(
-                            &source_full_path,
-                            &new_workspace.workspace_name,
-                            Some(files),
-                        )
-                        .map_err(|e| format!("Failed to move files: {}", e))?;
-                    }
-                    SplitMode::Copy => {
-                        jj::copy_files_between_workspaces(&source_full_path, &new_full_path, files)
-                            .map_err(|e| format!("Failed to copy files: {}", e))?;
-                    }
-                }
-            } else if has_commits {
-                let commits = commit_ids.unwrap();
-                if matches!(mode, SplitMode::Move) {
-                    // Collect files from commits before moving them
-                    for change_id in &commits {
-                        let commit_files =
-                            jj::jj_diff_summary(&source_full_path, change_id).unwrap_or_default();
-                        files_to_remove_from_source.extend(commit_files);
-                    }
-                }
-                for change_id in &commits {
-                    jj::squash_commit_to_workspace(
-                        &source_full_path,
-                        change_id,
-                        &new_workspace.workspace_name,
-                    )
-                    .map_err(|e| format!("Failed to move commit {}: {}", change_id, e))?;
-                }
-            }
-
-            // Repoint source's target to new workspace's branch
-            local_db::update_workspace_target_branch(
-                repo_path,
-                source.id,
-                &new_workspace.branch_name,
-            )
-            .map_err(|e| format!("Failed to update source target: {}", e))?;
-
-            // Rebase source onto new workspace
-            jj::jj_rebase_onto(&source_full_path, &new_workspace.branch_name, "diff")
-                .map_err(|e| format!("Failed to rebase source: {}", e))?;
-
-            // Refresh working copies
-            let _ = jj::update_stale_workspace(&new_full_path);
-            let _ = jj::update_stale_workspace(&source_full_path);
-
-            // Remove moved files from source working copy to record explicit removals.
-            if !files_to_remove_from_source.is_empty() {
-                let source_dir = Path::new(&source_full_path);
-                for file in &files_to_remove_from_source {
-                    let file_path = source_dir.join(file);
-                    if file_path.exists() {
-                        let _ = std::fs::remove_file(&file_path);
-                    }
-                }
-            }
-
-            // Return updated workspace from DB
-            local_db::get_workspace_by_id(repo_path, new_workspace.id)
-                .map_err(|e| format!("Failed to get new workspace: {}", e))?
-                .ok_or_else(|| "New workspace not found after split".to_string())
-        }
-    }
-}
-
 pub fn move_workspace_changes(
     repo_path: &str,
     source_branch: &str,
@@ -1805,8 +1581,6 @@ fn workspace_diff_with_conflict_style(
         .ok_or_else(|| format!("Workspace not found: {}", workspace_id))?;
 
     let target_branch = workspace.target_branch.as_deref().unwrap_or("main");
-    let tip_revision = resolve_workspace_diff_tip_revision(repo_path, &workspace)?;
-
     let workspace_dir = Path::new(repo_path)
         .join(".treq")
         .join("workspaces")
@@ -1814,6 +1588,12 @@ fn workspace_diff_with_conflict_style(
     let workspace_dir_str = workspace_dir
         .to_str()
         .ok_or("Failed to convert workspace path to string")?;
+    let tip_revision = resolve_workspace_diff_tip_revision(
+        repo_path,
+        &workspace,
+        workspace_dir_str,
+        conflict_marker_style,
+    )?;
 
     let mut diff = jj::jj_get_merge_diff_between_revisions(
         workspace_dir_str,
@@ -1841,7 +1621,18 @@ fn workspace_diff_with_conflict_style(
 fn resolve_workspace_diff_tip_revision(
     repo_path: &str,
     workspace: &local_db::Workspace,
+    workspace_dir_str: &str,
+    conflict_marker_style: &str,
 ) -> Result<String, String> {
+    let target_branch = workspace.target_branch.as_deref().unwrap_or("main");
+    if workspace.branch_name == target_branch {
+        let committed_ahead = jj::jj_get_commits_ahead(workspace_dir_str, target_branch)
+            .map_err(|e| format!("Failed to get workspace commits ahead: {}", e))?;
+        if committed_ahead.total_count == 0 {
+            return Ok("@".to_string());
+        }
+    }
+
     let mut current_branch = workspace.branch_name.clone();
     let mut visited = std::collections::HashSet::new();
     visited.insert(current_branch.clone());

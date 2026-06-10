@@ -683,7 +683,7 @@ pub fn run() {
             commands::push_workspace_to_remote,
             commands::pull_workspace_from_remote,
             commands::merge_workspace,
-            commands::split_workspace,
+            commands::move_workspace_changes,
             commands::move_commit_to_existing_workspace,
             commands::abandon_commit,
             commands::rename_workspace,

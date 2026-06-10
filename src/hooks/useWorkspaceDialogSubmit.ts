@@ -1,11 +1,11 @@
 import {
 	type BranchStatus,
 	type Workspace,
+	type WorkspaceMoveRequest,
 	createWorkspace,
 	getWorkspaces,
-	moveCommitToExistingWorkspace,
+	moveWorkspaceChanges,
 	setWorkspaceTargetBranch,
-	splitWorkspace,
 } from "../lib/api";
 import { getFullWorkspacePath } from "../lib/utils";
 import { useCreateStackedWorkspace } from "./useCreateStackedWorkspace";
@@ -74,36 +74,54 @@ export function useWorkspaceDialogSubmit(
 
 		try {
 			if (moveToExisting && targetWorkspaceId !== null && sourceWorkspace) {
+				const targetWs = allWorkspaces.find((w) => w.id === targetWorkspaceId);
+				if (!targetWs) {
+					setError("Target workspace not found");
+					setLoading(false);
+					return;
+				}
 				if (activeRightTab === "commits" && selectedCommits.size > 0) {
-					await Promise.all(
-						Array.from(selectedCommits).map((changeId) =>
-							moveCommitToExistingWorkspace(
-								repoPath,
-								sourceWorkspace.id,
-								changeId,
-								targetWorkspaceId,
-							),
-						),
-					);
-					const targetWs = allWorkspaces.find(
-						(w) => w.id === targetWorkspaceId,
+					const request: WorkspaceMoveRequest = {
+						files: [],
+						hunks: [],
+						commits: Array.from(selectedCommits),
+					};
+					await moveWorkspaceChanges(
+						repoPath,
+						sourceWorkspace.branch_name,
+						targetWs.branch_name,
+						request,
 					);
 					addToast({
 						title: "Commits moved",
-						description: `Moved to workspace: ${targetWs?.branch_name ?? ""}`,
+						description: `Moved to workspace: ${targetWs.branch_name}`,
 						type: "success",
 					});
 					onSuccess(targetWorkspaceId);
 					onOpenChange(false);
 					return;
 				} else if (activeRightTab === "changes" && selectedHunks.size > 0) {
-					setError(
-						"Moving files to an existing workspace is not yet supported. Please create a new workspace instead.",
+					const request: WorkspaceMoveRequest = {
+						files: selectedFilePaths,
+						hunks: [],
+						commits: [],
+					};
+					await moveWorkspaceChanges(
+						repoPath,
+						sourceWorkspace.branch_name,
+						targetWs.branch_name,
+						request,
 					);
-					setLoading(false);
+					addToast({
+						title: "Files moved",
+						description: `Moved ${selectedFilePaths.length} file(s) to ${targetWs.branch_name}`,
+						type: "success",
+					});
+					onSuccess(targetWorkspaceId);
+					onOpenChange(false);
 					return;
 				}
-				setError("Please select commits to move");
+				setError("Please select commits or files to move");
 				setLoading(false);
 				return;
 			}
@@ -113,17 +131,46 @@ export function useWorkspaceDialogSubmit(
 				selectedCommits.size > 0 &&
 				activeRightTab === "commits"
 			) {
-				const newWorkspaceId = await splitWorkspace(
+				const stackOnBranch =
+					position === "before"
+						? (sourceWorkspace.target_branch ?? "main")
+						: sourceWorkspace.branch_name;
+				const metadata = JSON.stringify({
+					title: title.trim() || undefined,
+					description: description.trim() || undefined,
+				});
+				const newWorkspaceId = await createWorkspace(
 					repoPath,
-					sourceWorkspace.id,
 					branchName,
-					title.trim() || null,
-					description.trim() || null,
-					null,
-					Array.from(selectedCommits),
-					"move",
-					position,
+					stackOnBranch,
+					metadata,
 				);
+				const request: WorkspaceMoveRequest = {
+					files: [],
+					hunks: [],
+					commits: Array.from(selectedCommits),
+				};
+				await moveWorkspaceChanges(
+					repoPath,
+					sourceWorkspace.branch_name,
+					branchName,
+					request,
+				);
+				if (position === "before") {
+					const updatedWorkspaces = await getWorkspaces(repoPath);
+					const sourceWs = updatedWorkspaces.find(
+						(w) => w.id === sourceWorkspace.id,
+					);
+					if (sourceWs) {
+						const fullPath = getFullWorkspacePath(sourceWs);
+						await setWorkspaceTargetBranch(
+							repoPath,
+							fullPath,
+							sourceWorkspace.id,
+							branchName,
+						);
+					}
+				}
 				addToast({
 					title: "Workspace created",
 					description: `Moved ${selectedCommits.size} commit(s) to ${branchName}`,
@@ -139,17 +186,46 @@ export function useWorkspaceDialogSubmit(
 				selectedHunks.size > 0 &&
 				activeRightTab === "changes"
 			) {
-				const newWorkspaceId = await splitWorkspace(
+				const stackOnBranch =
+					position === "before"
+						? (sourceWorkspace.target_branch ?? "main")
+						: sourceWorkspace.branch_name;
+				const metadata = JSON.stringify({
+					title: title.trim() || undefined,
+					description: description.trim() || undefined,
+				});
+				const newWorkspaceId = await createWorkspace(
 					repoPath,
-					sourceWorkspace.id,
 					branchName,
-					title.trim() || null,
-					description.trim() || null,
-					selectedFilePaths,
-					null,
-					"move",
-					position,
+					stackOnBranch,
+					metadata,
 				);
+				const request: WorkspaceMoveRequest = {
+					files: selectedFilePaths,
+					hunks: [],
+					commits: [],
+				};
+				await moveWorkspaceChanges(
+					repoPath,
+					sourceWorkspace.branch_name,
+					branchName,
+					request,
+				);
+				if (position === "before") {
+					const updatedWorkspaces = await getWorkspaces(repoPath);
+					const sourceWs = updatedWorkspaces.find(
+						(w) => w.id === sourceWorkspace.id,
+					);
+					if (sourceWs) {
+						const fullPath = getFullWorkspacePath(sourceWs);
+						await setWorkspaceTargetBranch(
+							repoPath,
+							fullPath,
+							sourceWorkspace.id,
+							branchName,
+						);
+					}
+				}
 				addToast({
 					title: "Workspace split",
 					description: `Moved ${selectedFilePaths.length} file(s) to ${branchName}`,
