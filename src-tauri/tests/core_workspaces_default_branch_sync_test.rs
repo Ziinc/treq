@@ -330,8 +330,12 @@ fn workspace_main_uncommitted_changes_take_precedence_when_rebasing_children() {
         None,
     )
     .expect("Failed to create main workspace");
-    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, main_workspace.id, default_branch)
-        .expect("Failed to set main workspace target branch");
+    treq_lib::local_db::update_workspace_target_branch(
+        &repo.repo_path,
+        main_workspace.id,
+        default_branch,
+    )
+    .expect("Failed to set main workspace target branch");
 
     let main_workspace_root = workspace_path(&repo.repo_path, default_branch);
     let shared_file = "shared-precedence.txt";

@@ -52,19 +52,16 @@ fn test_diverged_log_splits_branch_and_target_commits() {
     // Back to feature to simulate home repo on feature branch
     TestRepo::run_git(&repo.repo_path, &["checkout", "feature"]).expect("checkout feature");
 
-    let result = jj_get_home_repo_diverged_log(&repo.repo_path, "feature", default_branch, Some(20))
-        .expect("diverged log should succeed");
+    let result =
+        jj_get_home_repo_diverged_log(&repo.repo_path, "feature", default_branch, Some(20))
+            .expect("diverged log should succeed");
 
     let branch_commits: Vec<_> = result
         .commits
         .iter()
         .filter(|c| !c.on_target_only)
         .collect();
-    let target_commits: Vec<_> = result
-        .commits
-        .iter()
-        .filter(|c| c.on_target_only)
-        .collect();
+    let target_commits: Vec<_> = result.commits.iter().filter(|c| c.on_target_only).collect();
 
     assert!(
         !branch_commits.is_empty(),
@@ -151,13 +148,9 @@ fn test_list_commits_on_feature_branch_returns_diverged_view() {
     TestRepo::run_git(&repo.repo_path, &["checkout", "myfeature"])
         .expect("checkout feature branch");
 
-    let direct = jj_get_home_repo_diverged_log(
-        &repo.repo_path,
-        "myfeature",
-        default_branch,
-        Some(20),
-    )
-    .expect("direct diverged log should succeed");
+    let direct =
+        jj_get_home_repo_diverged_log(&repo.repo_path, "myfeature", default_branch, Some(20))
+            .expect("direct diverged log should succeed");
     assert!(
         direct.merge_base_id.is_some(),
         "direct diverged log should populate merge_base_id"
@@ -171,11 +164,7 @@ fn test_list_commits_on_feature_branch_returns_diverged_view() {
         .iter()
         .filter(|c| !c.on_target_only)
         .collect();
-    let target_commits: Vec<_> = result
-        .commits
-        .iter()
-        .filter(|c| c.on_target_only)
-        .collect();
+    let target_commits: Vec<_> = result.commits.iter().filter(|c| c.on_target_only).collect();
 
     assert!(
         branch_commits

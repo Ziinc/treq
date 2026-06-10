@@ -39,10 +39,7 @@ fn test_get_repo_branch_returns_current_and_default_branch() {
 
     let branch = get_repo_branch(&repo.repo_path).expect("get_repo_branch should succeed");
 
-    assert_eq!(
-        branch.current_branch,
-        Some(default_branch.to_string())
-    );
+    assert_eq!(branch.current_branch, Some(default_branch.to_string()));
     assert_eq!(branch.display_ref, default_branch);
     assert!(!branch.is_detached);
     assert_eq!(branch.default_branch, default_branch);
@@ -83,9 +80,8 @@ fn test_get_repo_branch_reports_detached_head_with_short_hash_display_ref() {
 fn test_check_branch_exists_local_and_remote_flags() {
     let local_only = TestRepo::new().expect("Failed to create local-only repo");
     let local_default_branch = local_only.default_branch();
-    let local_main =
-        treq_lib::jj::check_branch_exists(&local_only.repo_path, local_default_branch)
-            .expect("check_branch_exists should succeed");
+    let local_main = treq_lib::jj::check_branch_exists(&local_only.repo_path, local_default_branch)
+        .expect("check_branch_exists should succeed");
     assert!(
         local_main.local_exists,
         "{local_default_branch} should exist locally"

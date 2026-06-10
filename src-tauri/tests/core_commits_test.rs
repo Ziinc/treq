@@ -146,14 +146,9 @@ fn test_list_commits_includes_tentative_working_copy_for_dirty_workspace() {
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
     let workspace_path_str = workspace_path.to_str().unwrap();
 
-    let clean_result = treq_lib::core::list_commits(
-        &repo.repo_path,
-        Some(workspace.id),
-        false,
-        None,
-        None,
-    )
-    .expect("Failed to list clean workspace commits");
+    let clean_result =
+        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+            .expect("Failed to list clean workspace commits");
 
     assert!(
         clean_result.tentative_working_copy.is_none(),
@@ -171,14 +166,9 @@ fn test_list_commits_includes_tentative_working_copy_for_dirty_workspace() {
     )
     .expect("Failed to dirty workspace");
 
-    let dirty_result = treq_lib::core::list_commits(
-        &repo.repo_path,
-        Some(workspace.id),
-        false,
-        None,
-        None,
-    )
-    .expect("Failed to list dirty workspace commits");
+    let dirty_result =
+        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+            .expect("Failed to list dirty workspace commits");
 
     let tentative = dirty_result
         .tentative_working_copy
@@ -256,8 +246,9 @@ fn test_list_commits_includes_stacked_working_copies_for_dirty_chain() {
     )
     .expect("Failed to dirty grandchild workspace");
 
-    let result = treq_lib::core::list_commits(&repo.repo_path, Some(grandchild.id), false, None, None)
-        .expect("Failed to list stacked workspace commits");
+    let result =
+        treq_lib::core::list_commits(&repo.repo_path, Some(grandchild.id), false, None, None)
+            .expect("Failed to list stacked workspace commits");
 
     assert_eq!(
         result
@@ -350,8 +341,9 @@ fn test_list_commits_skips_clean_branches_in_stacked_chain() {
     )
     .expect("Failed to dirty grandchild workspace");
 
-    let result = treq_lib::core::list_commits(&repo.repo_path, Some(grandchild.id), false, None, None)
-        .expect("Failed to list stacked workspace commits");
+    let result =
+        treq_lib::core::list_commits(&repo.repo_path, Some(grandchild.id), false, None, None)
+            .expect("Failed to list stacked workspace commits");
 
     let stacked_labels: Vec<String> = std::iter::once(
         result
@@ -397,14 +389,17 @@ fn test_list_commits_non_stacked_workspace_keeps_single_working_copy() {
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
     TestRepo::write_workspace_file(
-        workspace_path.to_str().expect("workspace path should be utf-8"),
+        workspace_path
+            .to_str()
+            .expect("workspace path should be utf-8"),
         "solo.txt",
         "dirty",
     )
     .expect("Failed to dirty workspace");
 
-    let result = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
-        .expect("Failed to list workspace commits");
+    let result =
+        treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+            .expect("Failed to list workspace commits");
 
     assert_eq!(
         result
@@ -1041,11 +1036,7 @@ fn test_list_commits_includes_base_branch_commits_for_non_default_workspace() {
         .iter()
         .filter(|c| !c.is_working_copy && !c.on_target_only)
         .collect();
-    let target_commits: Vec<_> = result
-        .commits
-        .iter()
-        .filter(|c| c.on_target_only)
-        .collect();
+    let target_commits: Vec<_> = result.commits.iter().filter(|c| c.on_target_only).collect();
 
     assert!(
         workspace_commits
@@ -1427,11 +1418,7 @@ fn test_list_commits_target_branch_history_limits_to_10() {
         treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), true, None, None)
             .expect("Failed to list commits");
 
-    let target_only_count = result
-        .commits
-        .iter()
-        .filter(|c| c.on_target_only)
-        .count();
+    let target_only_count = result.commits.iter().filter(|c| c.on_target_only).count();
     assert!(
         target_only_count <= 10,
         "target-only commits should be limited to 10, got {}",
@@ -1456,8 +1443,13 @@ fn test_list_commits_without_target_branch_history() {
     )
     .expect("Failed to create workspace");
 
-    repo.commit_workspace_file(&workspace, "workspace.txt", "workspace content\n", "Workspace commit")
-        .expect("Failed to commit workspace change");
+    repo.commit_workspace_file(
+        &workspace,
+        "workspace.txt",
+        "workspace content\n",
+        "Workspace commit",
+    )
+    .expect("Failed to commit workspace change");
 
     let result =
         treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
@@ -1675,8 +1667,13 @@ fn test_non_default_workspace_includes_target_history() {
     )
     .expect("Failed to create workspace");
 
-    repo.commit_workspace_file(&workspace, "workspace_only.txt", "workspace\n", "Workspace commit")
-        .expect("Failed to commit workspace change");
+    repo.commit_workspace_file(
+        &workspace,
+        "workspace_only.txt",
+        "workspace\n",
+        "Workspace commit",
+    )
+    .expect("Failed to commit workspace change");
 
     let result =
         treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), true, None, None)
@@ -1759,8 +1756,7 @@ fn test_non_default_workspace_empty_ahead_includes_target_history() {
         .collect();
 
     assert!(
-        workspace_descriptions.is_empty()
-            || workspace_descriptions.contains(&"Workspace commit"),
+        workspace_descriptions.is_empty() || workspace_descriptions.contains(&"Workspace commit"),
         "workspace commits should stay on the workspace side, got: {:?}",
         workspace_descriptions
     );
@@ -2015,13 +2011,31 @@ fn test_unpushed_commits_on_default_branch_are_mutable() {
     let result = treq_lib::jj::jj_get_log(&repo.repo_path, default_branch, Some(true), None)
         .expect("Failed to list commits");
 
-    let pushed_commit = result.commits.iter().find(|c| c.description == "Pushed commit");
-    let local_commit_1 = result.commits.iter().find(|c| c.description == "Local commit 1");
-    let local_commit_2 = result.commits.iter().find(|c| c.description == "Local commit 2");
+    let pushed_commit = result
+        .commits
+        .iter()
+        .find(|c| c.description == "Pushed commit");
+    let local_commit_1 = result
+        .commits
+        .iter()
+        .find(|c| c.description == "Local commit 1");
+    let local_commit_2 = result
+        .commits
+        .iter()
+        .find(|c| c.description == "Local commit 2");
 
-    assert!(pushed_commit.is_some(), "pushed commit should appear in log");
-    assert!(local_commit_1.is_some(), "local commit 1 should appear in log");
-    assert!(local_commit_2.is_some(), "local commit 2 should appear in log");
+    assert!(
+        pushed_commit.is_some(),
+        "pushed commit should appear in log"
+    );
+    assert!(
+        local_commit_1.is_some(),
+        "local commit 1 should appear in log"
+    );
+    assert!(
+        local_commit_2.is_some(),
+        "local commit 2 should appear in log"
+    );
 
     assert!(
         pushed_commit.unwrap().is_immutable,
@@ -2051,7 +2065,11 @@ fn test_default_branch_without_remote_all_commits_immutable() {
     let result = treq_lib::jj::jj_get_log(&repo.repo_path, default_branch, Some(true), None)
         .expect("Failed to list commits");
 
-    let non_wc_commits: Vec<_> = result.commits.iter().filter(|c| !c.is_working_copy).collect();
+    let non_wc_commits: Vec<_> = result
+        .commits
+        .iter()
+        .filter(|c| !c.is_working_copy)
+        .collect();
     assert!(!non_wc_commits.is_empty(), "should have commits");
 
     for commit in &non_wc_commits {

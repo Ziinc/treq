@@ -417,8 +417,8 @@ fn merge_into_main_succeeds_when_main_plus_empty() {
     )
     .expect("Merge should succeed");
 
-    let main_after =
-        treq_lib::jj::jj_get_commit_id(&repo.repo_path, default_branch).expect("main should resolve");
+    let main_after = treq_lib::jj::jj_get_commit_id(&repo.repo_path, default_branch)
+        .expect("main should resolve");
     assert!(
         main_before != main_after,
         "main should move to the new merge commit"

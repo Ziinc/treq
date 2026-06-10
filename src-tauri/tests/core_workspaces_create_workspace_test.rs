@@ -219,7 +219,7 @@ fn test_can_create_workspace_with_same_source_branch() {
         &repo.repo_path,
         "feat/test1",
         Some("new feature".to_string()),
-        None,         // moved_files
+        None,                 // moved_files
         Some(default_branch), // source_branch (defaults to current)
         None,
     )
@@ -230,7 +230,7 @@ fn test_can_create_workspace_with_same_source_branch() {
         &repo.repo_path,
         "feat/test2",
         Some("new feature2".to_string()),
-        None,         // moved_files
+        None,                 // moved_files
         Some(default_branch), // source_branch (defaults to current)
         None,
     )
@@ -921,8 +921,11 @@ fn test_create_workspace_parents_on_target_branch_tip_after_external_commit() {
 
     // Advance main bookmark via a raw git commit on the main branch without touching git HEAD
     // (simulate another tool or fetch updating main while we are on a detached HEAD / other branch).
-    TestRepo::run_git(&repo.repo_path, &["branch", "-f", default_branch, &initial_sha])
-        .expect("Failed to reset main");
+    TestRepo::run_git(
+        &repo.repo_path,
+        &["branch", "-f", default_branch, &initial_sha],
+    )
+    .expect("Failed to reset main");
     // Create a temp branch to land the new commit, then move main there.
     TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "tmp-advance"])
         .expect("Failed to create tmp branch");
@@ -933,8 +936,11 @@ fn test_create_workspace_parents_on_target_branch_tip_after_external_commit() {
         .trim()
         .to_string();
     // Move main to this new commit, but keep git HEAD on tmp-advance (detached from main).
-    TestRepo::run_git(&repo.repo_path, &["branch", "-f", default_branch, &new_main_sha])
-        .expect("Failed to move main to new commit");
+    TestRepo::run_git(
+        &repo.repo_path,
+        &["branch", "-f", default_branch, &new_main_sha],
+    )
+    .expect("Failed to move main to new commit");
     // Detach HEAD so it stays at the NEW commit but is NOT on main.
     TestRepo::run_git(&repo.repo_path, &["checkout", "--detach", &new_main_sha])
         .expect("Failed to detach at new commit");

@@ -204,8 +204,12 @@ fn test_workspace_list_statuses_preserves_existing_workspace_metadata_on_upsert(
     )
     .expect("Failed to create workspace");
 
-    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, workspace.id, default_branch)
-        .expect("Failed to set target branch");
+    treq_lib::local_db::update_workspace_target_branch(
+        &repo.repo_path,
+        workspace.id,
+        default_branch,
+    )
+    .expect("Failed to set target branch");
     treq_lib::local_db::update_workspace_not_on_remote(&repo.repo_path, workspace.id, true)
         .expect("Failed to set not_on_remote");
     set_workspace_refreshed_at(&repo.repo_path, workspace.id, "2001-01-01T00:00:00Z");
@@ -222,7 +226,10 @@ fn test_workspace_list_statuses_preserves_existing_workspace_metadata_on_upsert(
         .find(|s| s.current.id == workspace.id)
         .expect("workspace status should exist");
 
-    assert_eq!(status.current.target_branch.as_deref(), Some(default_branch));
+    assert_eq!(
+        status.current.target_branch.as_deref(),
+        Some(default_branch)
+    );
     assert_eq!(
         status.current.description.as_deref(),
         Some("initial description")
