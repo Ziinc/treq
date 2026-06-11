@@ -43,6 +43,7 @@ export function createMockCommit(
 		timestamp: generateRandomTimestamp(),
 		parent_ids: [],
 		is_working_copy: false,
+		is_immutable: false,
 		bookmarks: [],
 		insertions: Math.floor(Math.random() * 100),
 		deletions: Math.floor(Math.random() * 50),

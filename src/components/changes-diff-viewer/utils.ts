@@ -1,4 +1,5 @@
 import type { JjDiffHunk, LineComment as ApiLineComment } from "../../lib/api";
+import type { ParsedFileChange } from "../../lib/git-utils";
 import type { LineComment } from "./types";
 
 export function toLocalLineComment(c: ApiLineComment): LineComment {

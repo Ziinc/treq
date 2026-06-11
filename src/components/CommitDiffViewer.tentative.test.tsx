@@ -70,12 +70,13 @@ describe("CommitDiffViewer tentative working copy", () => {
 			expect(screen.getByText("- feat/test")).toBeInTheDocument();
 		});
 
-		const workingCopyButton = screen.getByText("- feat/test").closest("button");
-		expect(workingCopyButton).toBeTruthy();
+		const workingCopyButton = screen
+			.getByText("- feat/test")
+			.closest("button") as HTMLButtonElement;
 		await user.click(workingCopyButton);
 
 		expect(
-			workingCopyButton!.querySelector("svg.lucide-chevron-right"),
+			workingCopyButton.querySelector("svg.lucide-chevron-right"),
 		).toBeInTheDocument();
 
 		expect(

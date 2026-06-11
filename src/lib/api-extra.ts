@@ -198,9 +198,9 @@ export const stopFileWatcher = (
 	workspacePath: string,
 ): Promise<void> => invoke("stop_file_watcher", { workspaceId, workspacePath });
 
-// Wrapper required by local/require-tauri-api-command-wrappers; not yet called from the UI.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const _moveCommitToExistingWorkspace = (
+// Wrapper required by local/require-tauri-api-command-wrappers; moveCommitToExistingWorkspace
+// is not yet called from the UI.
+export const moveCommitToExistingWorkspace = (
 	repoPath: string,
 	sourceWorkspaceId: number,
 	commitChangeId: string,
