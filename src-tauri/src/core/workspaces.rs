@@ -1795,6 +1795,15 @@ where
             .map_err(|e| format!("Failed to resolve home repo branch: {}", e))?
     };
     if !committed_branch.is_empty() {
+        // Pre-mark the just-committed workspace as already up-to-date before running
+        // auto-rebase. Without this, rebase_after_commit finds self-targeting workspaces
+        // (target_branch == branch_name) and calls jj_sync_working_copy_if_safe, which
+        // discards the fresh empty working-copy commit that jj_commit just created.
+        if let Some(id) = workspace_id {
+            if let Ok(new_tip) = jj::jj_get_commit_id(&workspace_root, &committed_branch) {
+                let _ = local_db::update_workspace_last_rebased_commit(repo_path, id, &new_tip);
+            }
+        }
         let _ = auto_rebase::rebase_after_commit(repo_path, &committed_branch);
     }
     match workspace_id {
