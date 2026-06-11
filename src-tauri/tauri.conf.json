@@ -15,7 +15,10 @@
       "csp": "default-src 'self' ipc: http://ipc.localhost; connect-src ipc: http://ipc.localhost ipc://localhost http://127.0.0.1:54321 https://tbgwjxmfxyobchwmgovz.supabase.co; img-src 'self' asset: http://asset.localhost data: blob: https://lh3.googleusercontent.com https://avatars.githubusercontent.com; style-src 'self' 'unsafe-inline'",
       "assetProtocol": {
         "enable": true,
-        "scope": { "allow": ["$HOME/**"], "deny": ["$HOME/.ssh/**"] }
+        "scope": {
+          "allow": ["$HOME/**/*", "$HOME/**/.treq/**/*"],
+          "deny": ["$HOME/.ssh/**"]
+        }
       }
     }
   },
