@@ -77,6 +77,11 @@ fn assert_workspace_list_commits_hides_working_copy(
             .map(|c| &c.description)
             .collect::<Vec<_>>()
     );
+    assert!(
+        log.tentative_working_copy.is_none(),
+        "expected no tentative working copy after commit, got: {:?}",
+        log.tentative_working_copy
+    );
 }
 
 #[test]
@@ -233,5 +238,55 @@ fn test_commit_workspace_advances_branch() {
             .iter()
             .map(|c| &c.description)
             .collect::<Vec<_>>()
+    );
+}
+
+// Regression test: when a workspace's target_branch equals its own branch_name,
+// the post-commit auto-rebase previously discarded the fresh empty working-copy
+// commit that jj_commit created and re-pinned @ back to the committed commit.
+#[test]
+fn test_create_commit_keeps_empty_working_copy_when_self_targeted() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/sync-clobber",
+        Some("sync clobber test".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    // Set the workspace's target_branch to itself so that post-commit
+    // rebase_after_commit picks it up and exercises the jj_sync_working_copy_if_safe
+    // code path (auto_rebase/mod.rs branch_name == target_branch branch).
+    treq_lib::local_db::update_workspace_target_branch(
+        &repo.repo_path,
+        workspace.id,
+        &workspace.branch_name,
+    )
+    .expect("Failed to set self-targeting target_branch");
+
+    let ws_dir = repo.workspaces_dir().join(&workspace.workspace_path);
+    let ws_dir_str = ws_dir.to_str().expect("utf-8");
+    TestRepo::write_workspace_file(ws_dir_str, "data.txt", "hello\n")
+        .expect("Failed to write file");
+
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "add data")
+        .expect("create_commit failed");
+
+    // @ must have advanced to a new empty working copy — not stayed on "add data".
+    // Use the raw jj assertions: list_commits returns empty for a self-targeted workspace
+    // (target..branch range is empty) so the important checks are via jj directly.
+    assert_workspace_status_is_clean(ws_dir_str);
+    assert_raw_jj_log_has_working_copy_commit(ws_dir_str, "add data");
+
+    // The tentative_working_copy must be absent — that's the UI-visible symptom of the bug.
+    let log = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+        .expect("list_commits failed");
+    assert!(
+        log.tentative_working_copy.is_none(),
+        "expected no tentative working copy after commit, got: {:?}",
+        log.tentative_working_copy
     );
 }

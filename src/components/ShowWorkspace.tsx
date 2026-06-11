@@ -18,6 +18,7 @@ import {
 	discardWorkspaceChanges,
 	getWorkspaceReadme,
 	getWorkspaceStatus,
+	listCommits,
 	lsWorkspace,
 	pullWorkspaceFromRemote,
 	pushWorkspaceToRemote,
@@ -191,6 +192,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 
 		// Committed changes toggle state
 		const [showCommittedChanges, setShowCommittedChanges] = useState(true);
+		// Whether the workspace has any of its own commits (not target-only, not working-copy)
+		const [hasWorkspaceCommits, setHasWorkspaceCommits] = useState(false);
 
 		// Home-repo branch divergence: counts of target-ahead commits and conflict dry-run result
 		const [homeRepoTargetAheadCount, setHomeRepoTargetAheadCount] = useState(0);
@@ -230,6 +233,37 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			setBookmarkConflict(null);
 			setConflictModalOpen(false);
 		}, [workspace?.id]);
+
+		// Load workspace commit count to control Committed toggle availability
+		const loadWorkspaceCommitCount = useCallback(async () => {
+			if (!effectiveRepoPath || workspace?.id === undefined) {
+				setHasWorkspaceCommits(false);
+				return;
+			}
+			try {
+				const result = await listCommits(effectiveRepoPath, workspace.id);
+				setHasWorkspaceCommits(
+					(result.commits ?? []).some(
+						(c) => !c.on_target_only && !c.is_working_copy,
+					),
+				);
+			} catch {
+				setHasWorkspaceCommits(false);
+			}
+		}, [effectiveRepoPath, workspace?.id]);
+
+		useEffect(() => {
+			loadWorkspaceCommitCount();
+		}, [loadWorkspaceCommitCount]);
+
+		// After a child refresh (e.g. post-commit), re-check if workspace now has commits
+		const handleRefreshingChange = useCallback(
+			(r: boolean) => {
+				setRefreshingFiles(r);
+				if (!r) loadWorkspaceCommitCount();
+			},
+			[loadWorkspaceCommitCount],
+		);
 
 		// When commits are loaded from LinearCommitHistory, capture divergence counts
 		const handleCommitsLoaded = useCallback((result: JjLogResult) => {
@@ -923,24 +957,31 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 						)}
 					</div>
 				</div>
-				{activeTab === "changes" && workspace && (
+				{activeTab === "changes" &&
+					workspace &&
+					workspace.branch_name !== defaultTargetBranch && (
 					<div className="px-4 py-2 border-b border-border flex">
 						<TooltipProvider>
 							<Tooltip>
 								<TooltipTrigger asChild>
 									<Button
-										variant={showCommittedChanges ? "default" : "outline"}
+										variant={
+											showCommittedChanges && hasWorkspaceCommits
+												? "default"
+												: "outline"
+										}
 										size="sm"
+										disabled={!hasWorkspaceCommits}
 										onClick={() =>
 											setShowCommittedChanges(!showCommittedChanges)
 										}
 										className={
-											showCommittedChanges
+											showCommittedChanges && hasWorkspaceCommits
 												? "bg-blue-500/20 hover:bg-blue-500/30 text-blue-700 dark:text-blue-300"
 												: ""
 										}
 									>
-										{showCommittedChanges ? (
+										{showCommittedChanges && hasWorkspaceCommits ? (
 											<Eye className="w-4 h-4 mr-1.5" />
 										) : (
 											<EyeOff className="w-4 h-4 mr-1.5" />
@@ -950,7 +991,11 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 								</TooltipTrigger>
 								<TooltipContent>
 									<p>
-										{showCommittedChanges ? "Hide" : "Show"} committed changes
+										{!hasWorkspaceCommits
+											? "No committed changes"
+											: showCommittedChanges
+												? "Hide committed changes"
+												: "Show committed changes"}
 									</p>
 								</TooltipContent>
 							</Tooltip>
@@ -1166,11 +1211,16 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 							workspaceId={workspace?.id}
 							repoPath={effectiveRepoPath}
 							onChangedFilesChange={handleChangedFilesUpdate}
-							onRefreshingChange={setRefreshingFiles}
+							onRefreshingChange={handleRefreshingChange}
 							initialSelectedFile={initialSelectedFile}
 							conflictedFiles={normalizedConflictedFiles}
 							onCreateAgentWithReview={handleCreateAgentWithReview}
-							showCommittedChanges={workspace ? showCommittedChanges : false}
+							showCommittedChanges={
+								workspace &&
+								workspace.branch_name !== defaultTargetBranch
+									? showCommittedChanges
+									: false
+							}
 							onMoveFilesToNewWorkspace={
 								onMoveFilesToNewWorkspace
 									? (files) => onMoveFilesToNewWorkspace(files, workspace)
