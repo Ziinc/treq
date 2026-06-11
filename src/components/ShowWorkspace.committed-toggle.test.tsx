@@ -107,6 +107,7 @@ const workspace: Workspace = {
 	workspace_name: "feature-one",
 	workspace_path: "/Users/test/repo/.treq/workspaces/feature-one",
 	branch_name: "feature-one",
+	title: "feature-one",
 	created_at: new Date().toISOString(),
 	not_on_remote: false,
 };
@@ -119,7 +120,6 @@ function renderWorkspace() {
 			mainRepoBranch="main"
 			initialSelectedFile={null}
 			onDeleteWorkspace={vi.fn()}
-			allWorkspaces={[workspace]}
 		/>,
 	);
 }

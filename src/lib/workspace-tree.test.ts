@@ -16,6 +16,7 @@ function makeStatus(
 			branch_name: branchName,
 			created_at: "2026-01-01T00:00:00.000Z",
 			target_branch: targetBranch,
+			title: branchName,
 			not_on_remote: false,
 		},
 		has_conflicts: false,
