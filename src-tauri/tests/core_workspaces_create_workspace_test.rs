@@ -533,11 +533,11 @@ fn test_create_workspace_from_ahead_source_stacks_history_and_working_copy_and_d
         "A list_commits should exclude working-copy commits"
     );
     assert!(
-        a_commits
+        !a_commits
             .commits
             .iter()
             .any(|c| c.description.contains("B committed change")),
-        "A list_commits should include B committed change"
+        "A list_commits should not include B committed change (include_target_branch_history=false)"
     );
     assert!(
         a_commits

@@ -1305,27 +1305,40 @@ pub fn create_workspace(
             .map(|b| b.to_string())
             .or_else(|| get_default_branch(repo_path).ok())
             .unwrap_or_else(|| "main".to_string());
-        let bookmark_id = parent_repo
-            .view()
-            .get_local_bookmark(RefName::new(&resolved_target))
-            .added_ids()
-            .next()
-            .cloned();
-        match bookmark_id {
-            Some(id) => id,
-            None => parent_repo
-                .view()
-                .git_head()
-                .added_ids()
-                .next()
-                .cloned()
-                .ok_or_else(|| {
-                    JjError::GitWorkspaceError(format!(
-                        "Bookmark '{}' not found and no git HEAD",
-                        resolved_target
-                    ))
-                })?,
-        }
+        // Read the live git branch ref first — it reflects external branch moves (e.g.
+        // `git branch -f main <sha>`) even when the jj local bookmark hasn't caught up yet.
+        let git_branch_id: Option<jj_lib::backend::CommitId> = (|| {
+            let git_repo = gix::open(repo_path).ok()?;
+            let ref_name: gix::refs::FullName =
+                format!("refs/heads/{resolved_target}").try_into().ok()?;
+            let reference = git_repo.find_reference(&ref_name).ok()?;
+            Some(jj_lib::backend::CommitId::from_bytes(
+                reference.id().as_bytes(),
+            ))
+        })();
+        git_branch_id
+            .or_else(|| {
+                parent_repo
+                    .view()
+                    .get_local_bookmark(RefName::new(&resolved_target))
+                    .added_ids()
+                    .next()
+                    .cloned()
+            })
+            .or_else(|| {
+                parent_repo
+                    .view()
+                    .git_head()
+                    .added_ids()
+                    .next()
+                    .cloned()
+            })
+            .ok_or_else(|| {
+                JjError::GitWorkspaceError(format!(
+                    "Bookmark '{}' not found and no git HEAD",
+                    resolved_target
+                ))
+            })?
     };
 
     let new_ws_name: WorkspaceNameBuf = sanitized_name.clone().into();
@@ -3811,8 +3824,30 @@ pub fn get_default_branch(repo_path: &str) -> Result<String, JjError> {
         }
     }
 
-    // Final fallback: current checked-out branch
-    resolve_home_repo_branch(repo_path)
+    // Final fallback: current checked-out branch.
+    let branch = resolve_home_repo_branch(repo_path)?;
+    // If git HEAD is detached, resolve_home_repo_branch returns "HEAD" which is invalid.
+    // In that case enumerate all git local branches and pick the first one that jj also
+    // has a local bookmark for (the import step will have synced it).
+    if branch == "HEAD" {
+        // HEAD is detached — jj import hasn't run yet so jj bookmarks are absent.
+        // Read git local branches directly and return the first one as the fallback.
+        // In production git HEAD is always on a branch so this path is only hit in
+        // unusual situations (detached HEAD, external branch moves, etc.).
+        if let Ok(git_repo) = gix::open(repo_path) {
+            if let Ok(refs) = git_repo.references() {
+                if let Ok(local_branches) = refs.local_branches() {
+                    for reference in local_branches.flatten() {
+                        let full_name = reference.name().as_bstr().to_string();
+                        if let Some(name) = full_name.strip_prefix("refs/heads/") {
+                            return Ok(name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(branch)
 }
 
 /// Push changes to remote using jj git push
