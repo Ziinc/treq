@@ -1269,7 +1269,10 @@ pub fn create_workspace(
                     JjError::GitWorkspaceError(format!("Remote bookmark '{}' not found", jj_ref))
                 })?
         } else {
-            // Prefer a workspace WC commit with same parents (uncommitted changes atop bookmark state).
+            // Prefer the workspace's WC commit that sits directly on top of the bookmark
+            // (parent == bookmark_id), so stacked workspaces form a straight line:
+            //   main → bookmark → wc → [new child]
+            // rather than forking wc and the new child as siblings off the bookmark.
             let bookmark_id = parent_repo
                 .view()
                 .get_local_bookmark(RefName::new(&jj_ref))
@@ -1279,11 +1282,6 @@ pub fn create_workspace(
                 .ok_or_else(|| {
                     JjError::GitWorkspaceError(format!("Bookmark '{}' not found", jj_ref))
                 })?;
-            let bookmark_parents: Vec<_> = parent_repo
-                .store()
-                .get_commit(&bookmark_id)
-                .map(|c| c.parent_ids().to_vec())
-                .unwrap_or_default();
             let wc_override = parent_repo
                 .view()
                 .wc_commit_ids()
@@ -1295,7 +1293,7 @@ pub fn create_workspace(
                     parent_repo
                         .store()
                         .get_commit(wc_id)
-                        .map(|wc| wc.parent_ids() == bookmark_parents.as_slice())
+                        .map(|wc| wc.parent_ids() == [bookmark_id.clone()])
                         .unwrap_or(false)
                 })
                 .cloned();

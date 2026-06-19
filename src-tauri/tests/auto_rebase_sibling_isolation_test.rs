@@ -1,18 +1,19 @@
-/// Investigates whether `rebase_after_commit` leaves stale working copies on stacked
-/// workspaces — the working-copy-staleness hypothesis for the live-repo conflict bug.
+/// Replicates the stacked-workspace fork bug: after auto-rebase the graph forks instead
+/// of staying linear.
 ///
-/// Live-repo symptom: after auto-rebase, workspaces `treq-test-chicken` and
-/// `treq/now-ducks-rule-the-world` end up as conflict commits.  The topology is *stacked*
-/// (now-ducks-rule is a child of treq-test-chicken), not sibling.  Hypothesis: the
-/// auto-rebase path leaves a stale on-disk WC tree; the next jj snapshot inverts the
-/// parent's committed content into the workspace, producing a spurious conflict.
+/// Root cause: when a child workspace is created stacked on a parent, the parent's
+/// working-copy commit (`wo`, a child of the parent bookmark `tsy`) is NOT used as the
+/// stack base — jj.rs:1271-1302 only selects the parent WC as base if its parents equal
+/// the bookmark's parents (a sibling, not a child), so it falls back to `bookmark_id`.
+/// The child therefore starts as a sibling of `wo` off `tsy`. Auto-rebase preserves the
+/// fork because `roots(main..ducks-bookmark)` is bookmark-relative and cannot see `wo`.
 ///
-/// If the assertions below FAIL → WC reconciliation gap confirmed.
-/// If they PASS → the conflict is a genuine content conflict (workspace edit authored
-///   against a different base than main), not a staleness issue.
+/// Expected lineage: main → tsy → wo → uorp → xvl (straight)
+/// Observed lineage: tsy has two children — wo (chicken WC) and uorp (ducks bookmark)
 mod e2e_test_helpers;
 
 use e2e_test_helpers::TestRepo;
+use treq_lib::jj;
 use treq_lib::local_db::Workspace;
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -24,26 +25,15 @@ fn workspace_full_path(repo: &TestRepo, ws: &Workspace) -> String {
         .to_string()
 }
 
-/// Assert that the working copy at `workspace_path` has no pending changes.
-/// A stale tree would show up as a non-empty `jj st` on the very next invocation.
-fn assert_working_copy_clean(label: &str, workspace_path: &str) {
-    let st = TestRepo::run_jj(workspace_path, &["st"]).unwrap_or_default();
-    println!("[{label}] jj st:\n{st}");
-    assert!(
-        st.contains("The working copy has no changes."),
-        "[{label}] Expected clean WC at '{workspace_path}', got:\n{st}"
-    );
-}
-
-/// Assert that the working copy does NOT contain a hunk removing `content`
-/// (stale-tree snapshot signature: parent's committed text reverted into the WC).
-fn assert_no_revert_hunk(label: &str, workspace_path: &str, content: &str) {
-    let diff = TestRepo::run_jj(workspace_path, &["diff", "--git"]).unwrap_or_default();
-    println!("[{label}] jj diff --git:\n{diff}");
-    assert!(
-        !diff.contains(&format!("-{content}")),
-        "[{label}] WC at '{workspace_path}' contains a revert hunk for '{content}'"
-    );
+/// Return the full commit id of the workspace's current `@` commit.
+fn workspace_wc_commit(workspace_path: &str) -> String {
+    TestRepo::run_jj(
+        workspace_path,
+        &["log", "--no-graph", "-r", "@", "-T", "commit_id"],
+    )
+    .unwrap_or_default()
+    .trim()
+    .to_string()
 }
 
 /// Create a workspace, write `filename` with `content`, and commit it.
@@ -73,32 +63,159 @@ fn create_workspace_with_commit(
     ws
 }
 
-// ─── test ────────────────────────────────────────────────────────────────────
+// ─── test 1: fork replication ─────────────────────────────────────────────────
 
-/// Stacked topology mirroring the live-repo bug:
+/// After auto-rebase, the stacked pair must form a straight line:
+///   main → chicken-bookmark → chicken-wc → ducks-bookmark → ducks-wc
 ///
-///   main ──► chicken-base (README has "chicken rules")
-///                 └─► ws-duck  (feat/duck-fencing,  adds "## duck fencing" section)
-///                       └─► ws-rule (feat/ducks-rule, adds "## ducks rule" section)
-///
-/// Both ws-duck and ws-rule target the default branch.  main then advances.
-/// `rebase_after_commit` is the real production entry point.
-///
-/// After the rebase, each workspace's on-disk WC must be clean:
-///   - no stale snapshot (jj st is empty)
-///   - no inverse diff of a parent's committed content (stale-tree signature)
-///
-/// FAIL → WC reconciliation gap confirmed (stale tree → spurious conflict).
-/// PASS → WC hypothesis disproven; live-repo conflict is a genuine content conflict.
+/// FAILS on current code: chicken's working-copy commit `wo` and the ducks bookmark
+/// `uorp` are siblings under the chicken bookmark `tsy`, not a straight line.
+#[test]
+fn test_stacked_workspace_lineage_stays_linear_after_auto_rebase() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch().to_string();
+
+    // chicken workspace stacked directly on main
+    let chicken = create_workspace_with_commit(
+        &repo,
+        "feat/chicken",
+        "chicken.txt",
+        "chicken content\n",
+        None,
+    );
+    let chicken_path = workspace_full_path(&repo, &chicken);
+
+    // ducks workspace stacked on chicken
+    let ducks = create_workspace_with_commit(
+        &repo,
+        "feat/ducks",
+        "ducks.txt",
+        "ducks content\n",
+        Some(&chicken.branch_name),
+    );
+
+    treq_lib::local_db::update_workspace_target_branch(
+        &repo.repo_path,
+        chicken.id,
+        &default_branch,
+    )
+    .expect("Failed to set target branch on chicken");
+    treq_lib::local_db::update_workspace_target_branch(
+        &repo.repo_path,
+        ducks.id,
+        &default_branch,
+    )
+    .expect("Failed to set target branch on ducks");
+
+    // Print pre-rebase graph so the test output shows the starting topology.
+    let pre_graph = TestRepo::run_jj(
+        &repo.repo_path,
+        &[
+            "log",
+            "--no-graph",
+            "-r",
+            "all()",
+            "-T",
+            "commit_id.short() ++ \" | \" ++ bookmarks ++ \" | \" ++ description.first_line() ++ \"\\n\"",
+        ],
+    )
+    .unwrap_or_default();
+    println!("=== pre-rebase graph ===\n{pre_graph}");
+
+    // Advance main.
+    repo.commit_file("main-advance.txt", "advance\n", "chore: advance main")
+        .expect("Failed to advance main");
+
+    // Capture chicken's WC commit before the rebase (it will be rewritten but position
+    // relative to ducks is what we care about after).
+    let chicken_wc_before = workspace_wc_commit(&chicken_path);
+    println!("chicken WC before rebase: {chicken_wc_before}");
+
+    // Run the production auto-rebase entry point.
+    treq_lib::auto_rebase::rebase_after_commit(&repo.repo_path, &default_branch)
+        .expect("rebase_after_commit should not error");
+
+    // Print post-rebase graph for evidence.
+    let post_graph = TestRepo::run_jj(
+        &repo.repo_path,
+        &[
+            "log",
+            "--no-graph",
+            "-r",
+            "all()",
+            "-T",
+            "commit_id.short() ++ \" | \" ++ bookmarks ++ \" | \" ++ description.first_line() ++ \"\\n\"",
+        ],
+    )
+    .unwrap_or_default();
+    println!("=== post-rebase graph ===\n{post_graph}");
+
+    let chicken_wc_after = workspace_wc_commit(&chicken_path);
+    let chicken_bm = jj::jj_get_commit_id(&repo.repo_path, &chicken.branch_name)
+        .expect("Failed to resolve chicken bookmark");
+    let ducks_bm = jj::jj_get_commit_id(&repo.repo_path, &ducks.branch_name)
+        .expect("Failed to resolve ducks bookmark");
+
+    println!("chicken bookmark:   {chicken_bm}");
+    println!("chicken WC (after): {chicken_wc_after}");
+    println!("ducks bookmark:     {ducks_bm}");
+
+    // PRIMARY assertion: ducks bookmark must be a descendant of chicken's WC commit.
+    // If they are siblings (the bug), ancestors(ducks_bm) does not contain chicken_wc.
+    let ancestors_check = TestRepo::run_jj(
+        &repo.repo_path,
+        &[
+            "log",
+            "--no-graph",
+            "-r",
+            &format!("{chicken_wc_after} & ancestors({ducks_bm})"),
+            "-T",
+            "commit_id",
+        ],
+    )
+    .unwrap_or_default();
+    assert!(
+        !ancestors_check.trim().is_empty(),
+        "ducks bookmark ({ducks_bm}) must be a descendant of chicken's WC commit \
+         ({chicken_wc_after}); got empty — they are siblings (fork bug)"
+    );
+
+    // CORROBORATING: chicken bookmark must have exactly one child (the chicken WC, not also
+    // the ducks bookmark). Two children means the fork exists.
+    let children_of_chicken_bm = TestRepo::run_jj(
+        &repo.repo_path,
+        &[
+            "log",
+            "--no-graph",
+            "-r",
+            &format!("children({chicken_bm})"),
+            "-T",
+            "commit_id ++ \"\\n\"",
+        ],
+    )
+    .unwrap_or_default();
+    let child_count = children_of_chicken_bm
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .count();
+    assert_eq!(
+        child_count, 1,
+        "chicken bookmark ({chicken_bm}) must have exactly 1 child (its WC commit), \
+         but has {child_count} — the ducks bookmark is forked as a sibling (fork bug)\n\
+         children:\n{children_of_chicken_bm}"
+    );
+}
+
+// ─── test 2: WC-staleness regression (disproven hypothesis, kept as coverage) ──
+
+/// Verifies that auto-rebase does not leave stale on-disk working copies on a stacked pair.
+/// This was the initial hypothesis for the live-repo conflict bug; it was disproven
+/// (the reconciliation path already works), but the test is kept as regression coverage.
 #[test]
 fn test_auto_rebase_does_not_leave_stale_working_copy_on_stacked_workspaces() {
     let repo = TestRepo::new().expect("Failed to create test repo");
     let default_branch = repo.default_branch().to_string();
 
-    // ── build the stacked topology ──────────────────────────────────────────
-
-    // chicken-base: stacked on main, introduces a README with a shared prefix.
-    // Using a unique filename avoids a content conflict with main's README.md.
     let chicken_base = create_workspace_with_commit(
         &repo,
         "feat/chicken-base",
@@ -106,8 +223,6 @@ fn test_auto_rebase_does_not_leave_stale_working_copy_on_stacked_workspaces() {
         "# chicken rules\n",
         None,
     );
-
-    // ws-duck: stacked on chicken-base, appends a duck-fencing section.
     let ws_duck = create_workspace_with_commit(
         &repo,
         "feat/duck-fencing",
@@ -116,8 +231,6 @@ fn test_auto_rebase_does_not_leave_stale_working_copy_on_stacked_workspaces() {
         Some(&chicken_base.branch_name),
     );
     let ws_duck_path = workspace_full_path(&repo, &ws_duck);
-
-    // ws-rule: stacked on ws-duck, appends a ducks-rule section.
     let ws_rule = create_workspace_with_commit(
         &repo,
         "feat/ducks-rule",
@@ -127,8 +240,6 @@ fn test_auto_rebase_does_not_leave_stale_working_copy_on_stacked_workspaces() {
     );
     let ws_rule_path = workspace_full_path(&repo, &ws_rule);
 
-    // Point both workspaces at the default branch (they already are by default,
-    // but be explicit so the auto-rebase filter picks them up).
     treq_lib::local_db::update_workspace_target_branch(
         &repo.repo_path,
         ws_duck.id,
@@ -142,28 +253,20 @@ fn test_auto_rebase_does_not_leave_stale_working_copy_on_stacked_workspaces() {
     )
     .expect("Failed to set target branch on ws_rule");
 
-    // ── sanity: WCs are clean before we do anything ─────────────────────────
-    assert_working_copy_clean("ws_duck pre-rebase", &ws_duck_path);
-    assert_working_copy_clean("ws_rule pre-rebase", &ws_rule_path);
+    repo.commit_file("main-advance.txt", "main advance\n", "chore: advance main")
+        .expect("Failed to advance main");
 
-    // ── advance main ─────────────────────────────────────────────────────────
-    repo.commit_file(
-        "main-advance.txt",
-        "main advance\n",
-        "chore: advance main",
-    )
-    .expect("Failed to advance main");
-
-    // ── trigger auto-rebase (production entry point) ─────────────────────────
     treq_lib::auto_rebase::rebase_after_commit(&repo.repo_path, &default_branch)
         .expect("rebase_after_commit should not error");
 
-    // ── assertions: WC must be clean after rebase ────────────────────────────
-    assert_working_copy_clean("ws_duck post-rebase", &ws_duck_path);
-    assert_working_copy_clean("ws_rule post-rebase", &ws_rule_path);
-
-    // No inverse diff of a parent's committed content (stale-tree signature).
-    assert_no_revert_hunk("ws_duck post-rebase", &ws_duck_path, "# chicken rules");
-    assert_no_revert_hunk("ws_rule post-rebase", &ws_rule_path, "# chicken rules");
-    assert_no_revert_hunk("ws_rule post-rebase", &ws_rule_path, "## duck fencing");
+    for (label, path) in [("ws_duck", &ws_duck_path), ("ws_rule", &ws_rule_path)] {
+        let st = TestRepo::run_jj(path, &["st"]).unwrap_or_default();
+        println!("[{label}] jj st:\n{st}");
+        assert!(
+            st.contains("The working copy has no changes."),
+            "[{label}] Expected clean WC at '{path}', got:\n{st}"
+        );
+        let diff = TestRepo::run_jj(path, &["diff", "--git"]).unwrap_or_default();
+        println!("[{label}] jj diff --git:\n{diff}");
+    }
 }
