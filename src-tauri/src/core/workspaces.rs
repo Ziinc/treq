@@ -377,6 +377,11 @@ pub fn create_workspace(
             .map_err(|e| format!("Failed to copy .claude/settings.local.json: {}", e))?;
     }
 
+    // Remove any stale db record for this branch so re-creates don't leave duplicates.
+    if let Ok(Some(existing)) = local_db::get_workspace_by_branch(repo_path, branch_name) {
+        let _ = local_db::delete_workspace(repo_path, existing.id);
+    }
+
     let workspace_id = local_db::add_workspace(
         repo_path,
         workspace_path.clone(),
@@ -1795,10 +1800,7 @@ where
             .map_err(|e| format!("Failed to resolve home repo branch: {}", e))?
     };
     if !committed_branch.is_empty() {
-        // Pre-mark the just-committed workspace as already up-to-date before running
-        // auto-rebase. Without this, rebase_after_commit finds self-targeting workspaces
-        // (target_branch == branch_name) and calls jj_sync_working_copy_if_safe, which
-        // discards the fresh empty working-copy commit that jj_commit just created.
+        // Pre-mark committed workspace up-to-date before auto-rebase so rebase_after_commit does not sync and discard jj_commit's fresh WC commit.
         if let Some(id) = workspace_id {
             if let Ok(new_tip) = jj::jj_get_commit_id(&workspace_root, &committed_branch) {
                 let _ = local_db::update_workspace_last_rebased_commit(repo_path, id, &new_tip);

@@ -241,6 +241,91 @@ fn test_commit_workspace_advances_branch() {
     );
 }
 
+// Regression test: committing in a parent workspace must not create divergent changes (??)
+// in stacked child workspaces. jj_commit runs rebase_descendants() which rewrites the WC
+// commits of every descendant workspace, but previously never reconciled those workspaces'
+// on-disk trees to the new commit pointers. The next jj command in the child would then
+// snapshot the stale on-disk tree and record an inverse diff, producing duplicate (divergent)
+// change IDs marked ?? in jj log.
+#[test]
+fn test_create_commit_no_divergence_with_stacked_descendant() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    // --- Set up parent workspace A ---
+    let ws_a = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/parent",
+        Some("parent workspace".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create parent workspace");
+    let ws_a_dir = repo.workspaces_dir().join(&ws_a.workspace_path);
+    let ws_a_dir_str = ws_a_dir.to_str().expect("utf-8");
+
+    // Give A a real committed change so it has a bookmark tip B can stack on.
+    TestRepo::write_workspace_file(ws_a_dir_str, "parent.txt", "parent v1\n")
+        .expect("write parent file");
+    treq_lib::core::commit_workspace(&repo.repo_path, ws_a.id, "parent change")
+        .expect("commit parent workspace");
+
+    // --- Set up stacked child workspace B ---
+    let ws_b = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/child",
+        Some("child workspace".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create child workspace");
+    // B targets A's branch so it is a descendant of A's stack.
+    treq_lib::local_db::update_workspace_target_branch(
+        &repo.repo_path,
+        ws_b.id,
+        &ws_a.branch_name,
+    )
+    .expect("Failed to set B's target_branch to A");
+
+    let ws_b_dir = repo.workspaces_dir().join(&ws_b.workspace_path);
+    let ws_b_dir_str = ws_b_dir.to_str().expect("utf-8");
+
+    // Give B its own committed change descending from A's tip.
+    TestRepo::write_workspace_file(ws_b_dir_str, "child.txt", "child v1\n")
+        .expect("write child file");
+    treq_lib::core::commit_workspace(&repo.repo_path, ws_b.id, "child change")
+        .expect("commit child workspace");
+
+    // --- Commit a second change in A ---
+    // This causes jj_commit to call rebase_descendants(), which rewrites the WC pointer
+    // of B (which descends from A). Without reconciliation, the next jj invocation in B
+    // snapshots B's stale on-disk tree and creates divergent (??) change IDs.
+    TestRepo::write_workspace_file(ws_a_dir_str, "parent.txt", "parent v2\n")
+        .expect("write parent v2 file");
+    treq_lib::core::commit_workspace(&repo.repo_path, ws_a.id, "parent change 2")
+        .expect("commit parent workspace v2");
+
+    // --- Assert: no divergent changes anywhere in the repo ---
+    // Divergent changes appear as `??` in jj log output (same change ID on multiple commits).
+    let all_log = TestRepo::run_jj(
+        ws_a_dir_str,
+        &["log", "--no-graph", "-r", "all()", "-T", "change_id.short() ++ \"\\n\""],
+    )
+    .expect("jj log all() failed");
+    // jj appends ?? to change IDs of divergent commits in log output
+    let full_log = TestRepo::run_jj(ws_a_dir_str, &["log", "-r", "all()"])
+        .expect("jj log all() graph failed");
+    assert!(
+        !full_log.contains("??"),
+        "expected no divergent changes (??) after committing in parent, got:\n{full_log}"
+    );
+    drop(all_log);
+
+    // --- Assert: B's working copy is clean (no phantom inverse-diff changes) ---
+    assert_workspace_status_is_clean(ws_b_dir_str);
+}
+
 // Regression test: when a workspace's target_branch equals its own branch_name,
 // the post-commit auto-rebase previously discarded the fresh empty working-copy
 // commit that jj_commit created and re-pinned @ back to the committed commit.
