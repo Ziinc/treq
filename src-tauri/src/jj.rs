@@ -1118,6 +1118,21 @@ pub fn create_workspace(
         .join("workspaces")
         .join(&sanitized_name);
 
+    // If a prior (possibly partial) workspace init left a .jj behind, tear it down
+    // cleanly so init_workspace_with_existing_repo can proceed without erroring.
+    if workspace_dir.join(".jj").exists() {
+        let workspace_dir_str = workspace_dir.to_string_lossy();
+        // Attempt a full jj-aware teardown first; fall back to raw removal for orphans.
+        if remove_workspace(repo_path, &workspace_dir_str).is_err() {
+            remove_workspace_directory_only(&workspace_dir_str).map_err(|e| {
+                JjError::GitWorkspaceError(format!(
+                    "Failed to remove existing workspace dir: {}",
+                    e
+                ))
+            })?;
+        }
+    }
+
     // Ensure workspace directory exists (init_workspace_with_existing_repo requires it)
     if !workspace_dir.exists() {
         fs::create_dir_all(&workspace_dir).map_err(|e| {
@@ -1659,6 +1674,9 @@ pub fn remove_workspace(repo_path: &str, workspace_path: &str) -> Result<(), JjE
             })?;
             block_on(tx.commit("forget workspace"))
                 .map_err(|e| JjError::IoError(format!("Failed to forget workspace: {}", e)))?;
+
+            // Reconcile remaining workspaces — WC commits may have been rewritten by rebase_descendants; skip the workspace being removed.
+            let _ = reconcile_all_workspaces_after_rewrite(repo_path, Some(workspace_name));
         }
     }
 
@@ -1907,6 +1925,12 @@ pub fn jj_abandon(workspace_path: &str, change_id: &str) -> Result<String, JjErr
         .map_err(|e| JjError::InitFailed(format!("Failed to rebase descendants: {}", e)))?;
     block_on(tx.commit("abandon commit"))
         .map_err(|e| JjError::InitFailed(format!("Failed to abandon commit: {}", e)))?;
+
+    // rebase_descendants() may have rewritten WC commits of every workspace; reconcile all.
+    let repo_path = derive_repo_path_from_workspace(workspace_path)
+        .unwrap_or_else(|| workspace_path.to_string());
+    let _ = reconcile_all_workspaces_after_rewrite(&repo_path, None);
+
     Ok(String::new())
 }
 
@@ -1933,9 +1957,14 @@ pub fn jj_diff_summary(workspace_path: &str, change_id: &str) -> Result<Vec<Stri
     Ok(files)
 }
 
-/// Update a stale workspace working copy
-/// Runs: jj workspace update-stale in the workspace directory
-pub fn update_stale_workspace(workspace_path: &str) -> Result<(), JjError> {
+/// Core staleness reconciliation for a single workspace path.
+///
+/// Loads the workspace at `workspace_path` fresh from disk (so it always sees the latest
+/// committed operation), checks whether its on-disk tree matches its recorded WC commit,
+/// and checks out the WC commit if not fresh.  This is the single authoritative
+/// recovery path — both `update_stale_workspace` and `reconcile_all_workspaces_after_rewrite`
+/// delegate here.
+fn reconcile_single_workspace(workspace_path: &str) -> Result<(), JjError> {
     let path = Path::new(workspace_path);
     if !path.join(".jj").exists() {
         return Ok(());
@@ -1992,6 +2021,90 @@ pub fn update_stale_workspace(workspace_path: &str) -> Result<(), JjError> {
     }
 
     Ok(())
+}
+
+/// After any history-rewriting transaction, reconcile **all** workspace working copies
+/// except the one already checked out by the caller (identified by `skip_workspace_name`).
+///
+/// `rebase_descendants()` rewrites the WC commit of every workspace that descends from the
+/// rewritten commits, but only the *loaded* workspace is checked out in-process.  Without
+/// this call, sibling/child workspaces have a mismatch between their on-disk tree and their
+/// new WC-commit pointer — the next `jj` command in those workspaces snapshots the stale tree
+/// and records an inverse diff of every rewritten commit.
+///
+/// Errors from individual workspaces are logged but do not abort the loop — one bad
+/// workspace must not block reconciliation of the others.
+fn reconcile_all_workspaces_after_rewrite(
+    repo_path: &str,
+    skip_workspace_name: Option<&str>,
+) -> Result<(), JjError> {
+    // Load the home workspace to enumerate all registered workspaces and their paths.
+    let (home_workspace, repo, workspace_store) = match load_home_repo(repo_path) {
+        Ok(r) => r,
+        Err(_) => return Ok(()), // best-effort; don't abort the calling operation
+    };
+
+    let home_ws_name = home_workspace.workspace_name().as_str().to_string();
+    let home_ws_path = home_workspace
+        .workspace_root()
+        .to_string_lossy()
+        .into_owned();
+
+    for (workspace_name, _wc_commit_id) in repo.view().wc_commit_ids() {
+        let ws_name_str = workspace_name.as_str();
+
+        // Skip the workspace whose checkout was already handled by the caller.
+        if let Some(skip) = skip_workspace_name {
+            if ws_name_str == skip {
+                continue;
+            }
+        }
+
+        // Resolve the on-disk path for this workspace.
+        let ws_path: String = if ws_name_str == home_ws_name {
+            home_ws_path.clone()
+        } else {
+            match workspace_store.get_workspace_path(workspace_name) {
+                Ok(Some(stored_path)) => {
+                    let full = if stored_path.is_absolute() {
+                        stored_path
+                    } else {
+                        Path::new(repo_path)
+                            .join(".jj")
+                            .join("repo")
+                            .join(stored_path)
+                    };
+                    // Prefer the .treq/workspaces/<name> path that treq uses.
+                    let treq_path = Path::new(repo_path)
+                        .join(".treq")
+                        .join("workspaces")
+                        .join(ws_name_str);
+                    if treq_path.exists() {
+                        treq_path.to_string_lossy().into_owned()
+                    } else {
+                        full.to_string_lossy().into_owned()
+                    }
+                }
+                _ => continue, // can't resolve path; skip gracefully
+            }
+        };
+
+        if let Err(e) = reconcile_single_workspace(&ws_path) {
+            // Log but continue — one bad workspace must not block the rest.
+            eprintln!(
+                "[treq] Warning: failed to reconcile workspace '{}' at '{}': {}",
+                ws_name_str, ws_path, e
+            );
+        }
+    }
+
+    Ok(())
+}
+
+/// Update a stale workspace working copy
+/// Runs: jj workspace update-stale in the workspace directory
+pub fn update_stale_workspace(workspace_path: &str) -> Result<(), JjError> {
+    reconcile_single_workspace(workspace_path)
 }
 
 // Stale Working Copy Detection and Recovery
@@ -2942,6 +3055,16 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     block_on(locked_ws.finish(new_repo.op_id().clone()))
         .map_err(|e| JjError::IoError(format!("Failed to finish wc mutation: {}", e)))?;
 
+    // Reconcile sibling/child workspaces whose WC commits rebase_descendants rewrote.
+    // Without this, the next jj command in those workspaces snapshots their stale on-disk
+    // tree and records an inverse diff, producing divergent (??) changes. Mirrors
+    // update_workspace_after_history_edit, which every other history-edit path uses.
+    let reconcile_repo_path = repo_path_opt.as_deref().unwrap_or(workspace_path);
+    let _ = reconcile_all_workspaces_after_rewrite(
+        reconcile_repo_path,
+        Some(workspace_name.as_str()),
+    );
+
     // For home repos, keep Git HEAD symbolic to the active branch (avoid detached HEAD after jj commit).
     if repo_path_opt.is_none() && branch != "HEAD" {
         if let Err(e) = set_git_head_branch_with_gix(workspace_path, &branch) {
@@ -3603,6 +3726,7 @@ pub fn jj_rebase_with_revset(
     _conflict_marker_style: &str,
 ) -> Result<JjRebaseResult, JjError> {
     let mut loaded = load_workspace_repo_for_history_edit(working_dir)?;
+    let old_wc_commit = get_workspace_wc_commit(&loaded)?;
     let commits = {
         let normalized_revset = strip_mutable_revset_filter(revset);
         let revset_expr = evaluate_revset(&loaded, &normalized_revset)?;
@@ -3615,6 +3739,15 @@ pub fn jj_rebase_with_revset(
             })?
     };
     if commits.is_empty() {
+        // Nothing to rebase — still reconcile on-disk WC state so sibling workspaces are
+        // consistent (avoids stale-tree snapshot on the next jj invocation).
+        let current_repo = Arc::clone(&loaded.repo);
+        let _ = update_workspace_after_history_edit(
+            &mut loaded,
+            &current_repo,
+            old_wc_commit.as_ref(),
+            CheckoutMode::Immediate,
+        );
         return Ok(JjRebaseResult {
             success: true,
             message: "Nothing to rebase (empty revision set)".to_string(),
@@ -3622,7 +3755,6 @@ pub fn jj_rebase_with_revset(
     }
     let target_symbol = resolve_target_branch_symbol(&loaded, working_dir, target_branch)?;
     let target_commit = resolve_commit_by_revision(&loaded, &target_symbol)?;
-    let old_wc_commit = get_workspace_wc_commit(&loaded)?;
 
     let rebase_options = RebaseOptions {
         empty: EmptyBehavior::Keep,
@@ -5043,13 +5175,28 @@ fn update_workspace_after_history_edit(
     old_wc_commit: Option<&Commit>,
     checkout_mode: CheckoutMode,
 ) -> Result<(), JjError> {
+    // Derive the home repo path (needed to enumerate sibling workspaces below).
+    let workspace_root = loaded
+        .workspace
+        .workspace_root()
+        .to_string_lossy()
+        .into_owned();
+    let repo_path =
+        derive_repo_path_from_workspace(&workspace_root).unwrap_or_else(|| workspace_root.clone());
+
+    let primary_workspace_name = loaded.workspace.workspace_name().as_str().to_string();
+
     if matches!(checkout_mode, CheckoutMode::Deferred) {
         loaded.repo = Arc::clone(new_repo);
+        // In deferred mode still reconcile sibling workspaces; skip the loaded workspace (caller owns checkout).
+        let _ = reconcile_all_workspaces_after_rewrite(&repo_path, Some(&primary_workspace_name));
         return Ok(());
     }
 
     let workspace_name = loaded.workspace.workspace_name().to_owned();
     let Some(new_wc_commit_id) = new_repo.view().get_wc_commit_id(&workspace_name).cloned() else {
+        // Primary workspace has no WC commit — still reconcile siblings.
+        let _ = reconcile_all_workspaces_after_rewrite(&repo_path, Some(&primary_workspace_name));
         return Ok(());
     };
     let new_wc_commit = new_repo
@@ -5064,6 +5211,10 @@ fn update_workspace_after_history_edit(
     ))
     .map_err(|e| JjError::IoError(format!("Failed to update working copy: {}", e)))?;
     loaded.repo = Arc::clone(new_repo);
+
+    // Reconcile every other workspace whose WC commit was rewritten by rebase_descendants.
+    let _ = reconcile_all_workspaces_after_rewrite(&repo_path, Some(&primary_workspace_name));
+
     Ok(())
 }
 

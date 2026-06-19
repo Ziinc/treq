@@ -240,39 +240,11 @@ pub fn rebase_workspaces_for_target(
                     workspace.workspace_name, result.message
                 ));
 
-                // Auto-sync working copy when safe (empty working copy) from the workspace dir.
-                match jj::jj_sync_working_copy_if_safe(&full_path, &workspace.branch_name) {
-                    Ok(true) => {
-                        log::info!(
-                            "Auto-synced working copy for workspace '{}' [rebase_workspaces_for_target::after_rebase]",
-                            workspace.workspace_name
-                        );
-                    }
-                    Ok(false) => {
-                        // Skipped (already synced or has uncommitted changes) - this is fine
-                    }
-                    Err(jj::JjError::BookmarkConflict(info)) => {
-                        bookmark_conflicts.push(WorkspaceBookmarkConflict {
-                            workspace_id: workspace.id,
-                            workspace_name: workspace.workspace_name.clone(),
-                            workspace_path: full_path.clone(),
-                            branch_name: workspace.branch_name.clone(),
-                            bookmark: info.bookmark.clone(),
-                            commits: info.commits.clone(),
-                        });
-                        eprintln!(
-                            "Warning: Working copy for workspace '{}' has conflicted bookmark '{}'",
-                            workspace.workspace_name, info.bookmark
-                        );
-                    }
-                    Err(e) => {
-                        eprintln!(
-                            "Warning: Failed to auto-sync working copy for workspace '{}': {}",
-                            workspace.workspace_name, e
-                        );
-                        // Don't fail entire rebase - bookmark is correctly rebased
-                    }
-                }
+                // WC placement is handled inside jj_rebase_with_revset via
+                // update_workspace_after_history_edit (both the rebase and the no-op path).
+                // A separate jj_sync_working_copy_if_safe call here would clobber the fresh
+                // empty working-copy commit that jj creates after committing, reverting @ back
+                // to the bookmark commit and producing incorrect state for stacked workspaces.
 
                 local_db::update_workspace_last_rebased_commit(
                     repo_path,
