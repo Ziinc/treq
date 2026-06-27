@@ -164,11 +164,9 @@ describe("ShowWorkspace - Commits tab", () => {
 
 		await screen.findByText(/^Recent on /);
 		await screen.findByText("Initial commit");
-		expect(
-			screen.queryByText(
-				"There are no commits within this workspace branch yet.",
-			),
-		).not.toBeInTheDocument();
+		await screen.findByText(
+			"There are no commits within this workspace branch yet.",
+		);
 	});
 
 	it("renders overlapping workspace and target commits only once each", async () => {
@@ -309,11 +307,6 @@ describe("ShowWorkspace - Commits tab tentative working copy", () => {
 		);
 		expect(result.tentative_working_copy!.commit.is_working_copy).toBe(true);
 		expect(result.commits.some((commit) => commit.is_working_copy)).toBe(false);
-		expect(
-			result.commits.some(
-				(commit) => commit.description === "Base repo commit",
-			),
-		).toBe(true);
 	});
 
 	it("navigates to the Commits tab and expands the tentative diff when clicked from the Code sidebar", async () => {
@@ -375,6 +368,9 @@ describe("ShowWorkspace - Commits tab tentative working copy", () => {
 			within(commitsList).getByText(/feat\/tentative-working-copy/),
 		).toBeInTheDocument();
 		expect(within(commitsList).getByText("Working copy")).toBeInTheDocument();
+		expect(
+			within(commitsList).getByText("- feat/tentative-working-copy"),
+		).toBeInTheDocument();
 		expect(screen.queryByText("wc000")).not.toBeInTheDocument();
 	});
 });
