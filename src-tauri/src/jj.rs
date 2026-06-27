@@ -3807,10 +3807,11 @@ pub fn get_default_branch(repo_path: &str) -> Result<String, JjError> {
     }
 
     // Final fallback: git config init.defaultBranch (merged global + local config).
-    if let Some(branch) = gix::open(repo_path)
-        .ok()
-        .and_then(|r| r.config_snapshot().string("init.defaultBranch").map(|s| s.to_string()))
-    {
+    if let Some(branch) = gix::open(repo_path).ok().and_then(|r| {
+        r.config_snapshot()
+            .string("init.defaultBranch")
+            .map(|s| s.to_string())
+    }) {
         if !branch.is_empty() {
             return Ok(branch);
         }

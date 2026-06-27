@@ -1361,6 +1361,19 @@ pub fn move_workspace_changes(
         }
     }
 
+    // Preserve commit-moved files across abandon-triggered destination checkout.
+    let mut commit_moved_file_saves: Vec<(String, Vec<u8>)> = Vec::new();
+    for commit_id in &commits_to_abandon_from_source {
+        if let Ok(file_paths) = jj::jj_diff_summary(&source_full_path_str, commit_id) {
+            for file_path in file_paths {
+                let dest_file = std::path::Path::new(&destination_full_path_str).join(&file_path);
+                if let Ok(content) = std::fs::read(&dest_file) {
+                    commit_moved_file_saves.push((file_path, content));
+                }
+            }
+        }
+    }
+
     if !request.files.is_empty() {
         jj::squash_to_workspace(
             &source_full_path_str,
@@ -1385,6 +1398,15 @@ pub fn move_workspace_changes(
 
     for commit_id in &commits_to_abandon_from_source {
         crate::core::commits::abandon_commit(repo_path, source.id, commit_id)?;
+    }
+
+    // Restore files that destination checkout may have removed.
+    for (file_path, content) in &commit_moved_file_saves {
+        let dest_file = std::path::Path::new(&destination_full_path_str).join(file_path);
+        if let Some(parent) = dest_file.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(&dest_file, content);
     }
 
     let _ = jj::update_stale_workspace(&source_full_path_str);
@@ -1816,7 +1838,7 @@ where
             .map_err(|e| format!("Failed to resolve home repo branch: {}", e))?
     };
     if !committed_branch.is_empty() {
-        // Pre-mark committed workspace up-to-date before auto-rebase so rebase_after_commit does not sync and discard jj_commit's fresh WC commit.
+        // Avoid syncing away the fresh working-copy commit during auto-rebase.
         if let Some(id) = workspace_id {
             if let Ok(new_tip) = jj::jj_get_commit_id(&workspace_root, &committed_branch) {
                 let _ = local_db::update_workspace_last_rebased_commit(repo_path, id, &new_tip);
