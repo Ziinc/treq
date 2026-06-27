@@ -1118,8 +1118,7 @@ pub fn create_workspace(
         .join("workspaces")
         .join(&sanitized_name);
 
-    // If a prior (possibly partial) workspace init left a .jj behind, tear it down
-    // cleanly so init_workspace_with_existing_repo can proceed without erroring.
+    // If a prior (possibly partial) workspace init left a .jj behind, tear it down cleanly so init can proceed.
     if workspace_dir.join(".jj").exists() {
         let workspace_dir_str = workspace_dir.to_string_lossy();
         // Attempt a full jj-aware teardown first; fall back to raw removal for orphans.
@@ -1269,10 +1268,7 @@ pub fn create_workspace(
                     JjError::GitWorkspaceError(format!("Remote bookmark '{}' not found", jj_ref))
                 })?
         } else {
-            // Prefer the workspace's WC commit that sits directly on top of the bookmark
-            // (parent == bookmark_id), so stacked workspaces form a straight line:
-            //   main → bookmark → wc → [new child]
-            // rather than forking wc and the new child as siblings off the bookmark.
+            // Prefer the WC commit whose parent is the bookmark so stacked workspaces stay linear (main → bookmark → wc → child).
             let bookmark_id = parent_repo
                 .view()
                 .get_local_bookmark(RefName::new(&jj_ref))
@@ -1305,8 +1301,7 @@ pub fn create_workspace(
             .map(|b| b.to_string())
             .or_else(|| get_default_branch(repo_path).ok())
             .unwrap_or_else(|| "main".to_string());
-        // Read the live git branch ref first — it reflects external branch moves (e.g.
-        // `git branch -f main <sha>`) even when the jj local bookmark hasn't caught up yet.
+        // Read the live git branch ref first — it reflects external branch moves before jj bookmarks catch up.
         let git_branch_id: Option<jj_lib::backend::CommitId> = (|| {
             let git_repo = gix::open(repo_path).ok()?;
             let ref_name: gix::refs::FullName =
@@ -3066,10 +3061,7 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     block_on(locked_ws.finish(new_repo.op_id().clone()))
         .map_err(|e| JjError::IoError(format!("Failed to finish wc mutation: {}", e)))?;
 
-    // Reconcile sibling/child workspaces whose WC commits rebase_descendants rewrote.
-    // Without this, the next jj command in those workspaces snapshots their stale on-disk
-    // tree and records an inverse diff, producing divergent (??) changes. Mirrors
-    // update_workspace_after_history_edit, which every other history-edit path uses.
+    // Reconcile sibling workspaces after rebase_descendants rewrites WCs (mirrors update_workspace_after_history_edit).
     let reconcile_repo_path = repo_path_opt.as_deref().unwrap_or(workspace_path);
     let _ = reconcile_all_workspaces_after_rewrite(
         reconcile_repo_path,
@@ -3750,8 +3742,7 @@ pub fn jj_rebase_with_revset(
             })?
     };
     if commits.is_empty() {
-        // Nothing to rebase — still reconcile on-disk WC state so sibling workspaces are
-        // consistent (avoids stale-tree snapshot on the next jj invocation).
+        // Nothing to rebase — still reconcile on-disk WC state so sibling workspaces stay consistent.
         let current_repo = Arc::clone(&loaded.repo);
         let _ = update_workspace_after_history_edit(
             &mut loaded,
@@ -3826,14 +3817,9 @@ pub fn get_default_branch(repo_path: &str) -> Result<String, JjError> {
 
     // Final fallback: current checked-out branch.
     let branch = resolve_home_repo_branch(repo_path)?;
-    // If git HEAD is detached, resolve_home_repo_branch returns "HEAD" which is invalid.
-    // In that case enumerate all git local branches and pick the first one that jj also
-    // has a local bookmark for (the import step will have synced it).
+    // Detached git HEAD yields "HEAD" from resolve_home_repo_branch; fall back to enumerating git local branches.
     if branch == "HEAD" {
-        // HEAD is detached — jj import hasn't run yet so jj bookmarks are absent.
-        // Read git local branches directly and return the first one as the fallback.
-        // In production git HEAD is always on a branch so this path is only hit in
-        // unusual situations (detached HEAD, external branch moves, etc.).
+        // Detached HEAD: jj bookmarks may be absent, so read git local branches directly (unusual in production).
         if let Ok(git_repo) = gix::open(repo_path) {
             if let Ok(refs) = git_repo.references() {
                 if let Ok(local_branches) = refs.local_branches() {

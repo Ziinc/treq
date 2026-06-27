@@ -240,11 +240,7 @@ pub fn rebase_workspaces_for_target(
                     workspace.workspace_name, result.message
                 ));
 
-                // WC placement is handled inside jj_rebase_with_revset via
-                // update_workspace_after_history_edit (both the rebase and the no-op path).
-                // A separate jj_sync_working_copy_if_safe call here would clobber the fresh
-                // empty working-copy commit that jj creates after committing, reverting @ back
-                // to the bookmark commit and producing incorrect state for stacked workspaces.
+                // WC placement is handled inside jj_rebase_with_revset; a separate jj_sync_working_copy_if_safe would clobber the fresh WC commit.
 
                 local_db::update_workspace_last_rebased_commit(
                     repo_path,
