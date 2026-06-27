@@ -52,16 +52,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Restore Cargo cache
-        uses: actions/cache@v5
+      - uses: Swatinem/rust-cache@v2
         if: matrix.kind == 'rust'
         with:
-          path: |
-            ~/.cargo
-          key: cargo-${{ runner.os }}-stable-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            cargo-${{ runner.os }}-stable-
-            cargo-${{ runner.os }}-
+          cache-on-failure: true
+          workspaces: "./src-tauri -> target"
 
       - name: Run JS task
         if: matrix.kind == 'js' || matrix.kind == 'verify'
