@@ -669,6 +669,12 @@ pub fn workspace_status(
     repo_path: &str,
     workspace_id: Option<i64>,
 ) -> Result<WorkspaceStatus, String> {
+    let resolve_status_default_branch = || {
+        jj::get_default_branch(repo_path)
+            .map_err(|e| format!("Failed to resolve default branch: {}", e))
+            .unwrap_or_default()
+    };
+
     // Home repo case: no workspace, build a minimal status
     let workspace_id = match workspace_id {
         Some(id) => id,
@@ -677,8 +683,7 @@ pub fn workspace_status(
             if let Some(err) = &rs.fetch_error {
                 log::warn!("Home repo fetch: {}", err);
             }
-            let default_branch =
-                jj::get_default_branch(repo_path).unwrap_or_else(|_| "main".to_string());
+            let default_branch = resolve_status_default_branch();
 
             // Synthesize a Workspace-like entry for the home repo
             let home_workspace = local_db::Workspace {
@@ -768,27 +773,38 @@ pub fn workspace_status(
             Err(_) => Vec::new(),
         }
     } else {
-        // No target branch, commits are ahead of main
-        match jj::jj_get_commits_ahead(workspace_path_str, "main") {
-            Ok(commits_ahead) => commits_ahead
-                .commits
-                .iter()
-                .map(|c| WorkspaceCommit {
-                    hash: c.commit_id.clone(),
-                    timestamp: c.timestamp.clone(),
-                    message: c.description.clone(),
-                })
-                .collect(),
-            Err(_) => Vec::new(),
+        // No target branch, commits are ahead of the repository default branch.
+        let default_branch = resolve_status_default_branch();
+        if default_branch.is_empty() {
+            Vec::new()
+        } else {
+            match jj::jj_get_commits_ahead(workspace_path_str, &default_branch) {
+                Ok(commits_ahead) => commits_ahead
+                    .commits
+                    .iter()
+                    .map(|c| WorkspaceCommit {
+                        hash: c.commit_id.clone(),
+                        timestamp: c.timestamp.clone(),
+                        message: c.description.clone(),
+                    })
+                    .collect(),
+                Err(_) => Vec::new(),
+            }
         }
     };
 
     let has_changes = jj::jj_get_changed_files(workspace_path_str)
         .map(|files| !files.is_empty())
         .unwrap_or(false);
-    let conflict_target = current_workspace.target_branch.as_deref().unwrap_or("main");
-    let conflicted_files =
-        jj::get_conflicted_files(workspace_path_str, Some(conflict_target)).unwrap_or_default();
+    let conflict_target = current_workspace
+        .target_branch
+        .clone()
+        .unwrap_or_else(resolve_status_default_branch);
+    let conflicted_files = if conflict_target.is_empty() {
+        jj::get_conflicted_files(workspace_path_str, None).unwrap_or_default()
+    } else {
+        jj::get_conflicted_files(workspace_path_str, Some(&conflict_target)).unwrap_or_default()
+    };
     let has_conflicts = jj::workspace_has_unresolved_conflicts(workspace_path_str).unwrap_or(false);
 
     let commits_ahead_count = commits_ahead_of_target.len();
