@@ -1,5 +1,5 @@
 use notify::{RecommendedWatcher, RecursiveMode};
-use notify_debouncer_full::{new_debouncer, DebounceEventResult, Debouncer, FileIdMap};
+use notify_debouncer_full::{new_debouncer_opt, DebounceEventResult, Debouncer, FileIdMap};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -42,7 +42,7 @@ impl WatcherManager {
         let ws_id = workspace_id;
 
         // Create debounced watcher with 1s debounce
-        let mut debouncer = new_debouncer(
+        let mut debouncer = new_debouncer_opt(
             Duration::from_millis(1000),
             None,
             move |result: DebounceEventResult| match result {
@@ -68,6 +68,8 @@ impl WatcherManager {
                     log::error!("Watcher errors for {}: {:?}", ws_path, errors);
                 }
             },
+            FileIdMap::new(),
+            notify::Config::default(),
         )
         .map_err(|e| format!("Failed to create watcher: {}", e))?;
 
