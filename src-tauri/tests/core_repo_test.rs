@@ -2,8 +2,8 @@ mod e2e_test_helpers;
 
 use e2e_test_helpers::{JjVerifier, TestRepo};
 use treq_lib::core::{
-    commit_repo, get_repo_branch, list_commits, list_repo_branches, repo_status,
-    switch_repo_branch, RemoteSyncStatus,
+    commit_repo, get_repo_current_branch, get_repo_default_branch, list_commits,
+    list_repo_branches, repo_status, switch_repo_branch, RemoteSyncStatus,
 };
 
 #[test]
@@ -33,28 +33,28 @@ fn test_list_repo_branches_imports_git_refs() {
 }
 
 #[test]
-fn test_get_repo_branch_returns_current_and_default_branch() {
+fn test_get_repo_current_branch_returns_checked_out_branch() {
     let repo = TestRepo::new().expect("Failed to create test repo");
     let default_branch = repo.default_branch();
 
-    let branch = get_repo_branch(&repo.repo_path).expect("get_repo_branch should succeed");
+    let branch =
+        get_repo_current_branch(&repo.repo_path).expect("get_repo_current_branch should succeed");
 
     assert_eq!(branch.current_branch, Some(default_branch.to_string()));
     assert_eq!(branch.display_ref, default_branch);
     assert!(!branch.is_detached);
-    assert_eq!(branch.default_branch, default_branch);
 
     TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "feature-x"])
         .expect("Failed to create branch");
-    let branch = get_repo_branch(&repo.repo_path).expect("get_repo_branch should succeed");
+    let branch =
+        get_repo_current_branch(&repo.repo_path).expect("get_repo_current_branch should succeed");
     assert_eq!(branch.current_branch, Some("feature-x".to_string()));
     assert_eq!(branch.display_ref, "feature-x");
     assert!(!branch.is_detached);
-    assert_eq!(branch.default_branch, default_branch);
 }
 
 #[test]
-fn test_get_repo_branch_reports_detached_head_with_short_hash_display_ref() {
+fn test_get_repo_current_branch_reports_detached_head_with_short_hash_display_ref() {
     let repo = TestRepo::new().expect("Failed to create test repo");
     repo.commit_file("detached.txt", "detached", "detached commit")
         .expect("Failed to create second commit");
@@ -64,7 +64,8 @@ fn test_get_repo_branch_reports_detached_head_with_short_hash_display_ref() {
     TestRepo::run_git(&repo.repo_path, &["checkout", &first_commit])
         .expect("checkout detached commit");
 
-    let branch = get_repo_branch(&repo.repo_path).expect("get_repo_branch should succeed");
+    let branch =
+        get_repo_current_branch(&repo.repo_path).expect("get_repo_current_branch should succeed");
     assert!(branch.is_detached);
     assert_eq!(branch.current_branch, None);
     assert_eq!(branch.display_ref.len(), 12);
@@ -74,6 +75,30 @@ fn test_get_repo_branch_reports_detached_head_with_short_hash_display_ref() {
         branch.display_ref
     );
     assert!(!branch.display_ref.is_empty());
+}
+
+#[test]
+fn test_get_repo_current_branch_errors_when_head_missing() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let head_path = std::path::Path::new(&repo.repo_path)
+        .join(".git")
+        .join("HEAD");
+    std::fs::remove_file(&head_path).expect("remove HEAD to simulate resolution failure");
+
+    let err =
+        get_repo_current_branch(&repo.repo_path).expect_err("expected branch resolution to fail");
+    assert!(
+        err.contains("Cannot read the repo") || err.contains("Failed to read .git/HEAD"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn test_get_repo_default_branch_prefers_origin_head() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+    let default_branch =
+        get_repo_default_branch(&repo.repo_path).expect("default branch should resolve");
+    assert_eq!(default_branch, repo.default_branch());
 }
 
 #[test]
@@ -110,14 +135,6 @@ fn test_check_branch_exists_local_and_remote_flags() {
         remote_main.remote_ref.as_deref(),
         Some(expected_remote_ref.as_str())
     );
-}
-
-#[test]
-fn test_get_default_branch_prefers_origin_head() {
-    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
-    let default_branch =
-        treq_lib::jj::get_default_branch(&repo.repo_path).expect("default branch should resolve");
-    assert_eq!(default_branch, repo.default_branch());
 }
 
 #[test]

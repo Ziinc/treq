@@ -30,7 +30,8 @@ import {
 	checkAndRebaseWorkspaces,
 	createSession,
 	deleteWorkspace,
-	getRepoBranch,
+	getRepoCurrentBranch,
+	getRepoDefaultBranch,
 	getRepoSetting,
 	getSessions,
 	getSetting,
@@ -146,7 +147,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
 	const { data: repoBranch } = useQuery({
 		queryKey: ["repo-branch", repoPath],
-		queryFn: () => getRepoBranch(repoPath),
+		queryFn: () => getRepoCurrentBranch(repoPath),
+		enabled: !!repoPath,
+	});
+	const { data: repoDefaultBranch } = useQuery({
+		queryKey: ["repo-default-branch", repoPath],
+		queryFn: () => getRepoDefaultBranch(repoPath),
 		enabled: !!repoPath,
 	});
 
@@ -157,8 +163,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		setHomeRepoDisplayRef(repoBranch.display_ref);
 	}, [repoPath, repoBranch]);
 
-	const effectiveDefaultBranch =
-		currentBranch || repoBranch?.default_branch || "main";
+	const effectiveDefaultBranch = currentBranch || repoDefaultBranch || "main";
 
 	const handleCreateStackedWorkspace = useCallback(() => {
 		if (!repoPath) return;
