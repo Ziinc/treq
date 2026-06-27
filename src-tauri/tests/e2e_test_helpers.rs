@@ -53,6 +53,15 @@ impl TestRepo {
 
         Self::run_git(&repo_path, &["checkout", "-b", &default_branch])?;
 
+        // Record the default branch in local git config so get_default_branch() can
+        // discover it via the merged init.defaultBranch fallback, even when HEAD moves
+        // to a feature branch and there is no remote or main/master branch.
+        Self::run_git(
+            &repo_path,
+            &["config", "init.defaultBranch", &default_branch],
+        )
+        .map_err(|e| format!("Failed to set init.defaultBranch: {}", e))?;
+
         // Create initial commit (git repos need at least one commit)
         let readme_path = temp_dir.path().join("README.md");
         fs::write(&readme_path, "# Test Repository\n")
