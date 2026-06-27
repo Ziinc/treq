@@ -31,9 +31,7 @@ fn test_create_workspace_recovers_orphaned_jj_dir() {
     )
     .unwrap_or_else(|e| panic!("Initial create_workspace failed: {}", e));
 
-    let workspace_dir = repo
-        .workspaces_dir()
-        .join(&ws.workspace_path);
+    let workspace_dir = repo.workspaces_dir().join(&ws.workspace_path);
     let jj_dir = workspace_dir.join(".jj");
 
     assert!(jj_dir.exists(), ".jj should exist after first creation");

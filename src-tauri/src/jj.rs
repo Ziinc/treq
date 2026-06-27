@@ -1320,14 +1320,7 @@ pub fn create_workspace(
                     .next()
                     .cloned()
             })
-            .or_else(|| {
-                parent_repo
-                    .view()
-                    .git_head()
-                    .added_ids()
-                    .next()
-                    .cloned()
-            })
+            .or_else(|| parent_repo.view().git_head().added_ids().next().cloned())
             .ok_or_else(|| {
                 JjError::GitWorkspaceError(format!(
                     "Bookmark '{}' not found and no git HEAD",
@@ -3063,10 +3056,8 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
 
     // Reconcile sibling workspaces after rebase_descendants rewrites WCs (mirrors update_workspace_after_history_edit).
     let reconcile_repo_path = repo_path_opt.as_deref().unwrap_or(workspace_path);
-    let _ = reconcile_all_workspaces_after_rewrite(
-        reconcile_repo_path,
-        Some(workspace_name.as_str()),
-    );
+    let _ =
+        reconcile_all_workspaces_after_rewrite(reconcile_repo_path, Some(workspace_name.as_str()));
 
     // For home repos, keep Git HEAD symbolic to the active branch (avoid detached HEAD after jj commit).
     if repo_path_opt.is_none() && branch != "HEAD" {
