@@ -34,8 +34,11 @@ export const initRepo = (repoPath: string): Promise<void> =>
 export const getWorkspaces = (repoPath: string): Promise<Workspace[]> =>
 	invoke("get_workspaces", { repoPath });
 
-export const getRepoBranch = (repoPath: string): Promise<RepoBranch> =>
-	invoke("get_repo_branch", { repoPath });
+export const getRepoCurrentBranch = (repoPath: string): Promise<RepoBranch> =>
+	invoke("get_repo_current_branch", { repoPath });
+
+export const getRepoDefaultBranch = (repoPath: string): Promise<string> =>
+	invoke("get_repo_default_branch", { repoPath });
 
 export const createWorkspace = (
 	repoPath: string,

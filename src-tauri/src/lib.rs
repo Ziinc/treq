@@ -461,7 +461,7 @@ pub fn run() {
             commands::create_commit,
             commands::list_commits,
             commands::jj_split,
-            commands::get_repo_branch,
+            commands::get_repo_current_branch,
             commands::get_workspace_changed_files,
             commands::init_repo,
             commands::jj_git_fetch_background,

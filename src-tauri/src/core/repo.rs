@@ -22,7 +22,6 @@ pub struct RepoBranch {
     pub current_branch: Option<String>,
     pub display_ref: String,
     pub is_detached: bool,
-    pub default_branch: String,
 }
 
 static REPO_COMMIT_LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
@@ -44,35 +43,13 @@ pub fn commit_repo(repo_path: &str, message: &str) -> Result<String, String> {
     jj::jj_commit(repo_path, message).map_err(|e| format!("Failed to create commit: {}", e))
 }
 
-/// Returns branch information for the home repo.
+/// Returns the current checkout branch information for the home repo.
 ///
-/// Imports colocated git refs into jj (same as [`list_repo_branches`]), then derives:
-/// - current branch: prefers `.git/HEAD` via [`jj::resolve_home_repo_branch`] so git wins when several
-///   bookmarks share a tip; falls back to jj `is_current` / `main` / `master`
-/// - default branch: prefers `main`, then `master`, then current branch
-pub fn get_repo_branch(repo_path: &str) -> Result<RepoBranch, String> {
+/// Imports colocated git refs into jj (same as [`list_repo_branches`]), then resolves the current
+/// checkout strictly from the working copy state.
+pub fn get_repo_current_branch(repo_path: &str) -> Result<RepoBranch, String> {
     jj::jj_util_import_git_refs(repo_path).map_err(|e| e.to_string())?;
-    let branches = jj::get_branches(repo_path).map_err(|e| e.to_string())?;
-
-    let resolved_branch = jj::resolve_home_repo_branch(repo_path).unwrap_or_else(|_| {
-        branches
-            .iter()
-            .find(|branch| branch.is_current)
-            .map(|branch| branch.name.clone())
-            .or_else(|| {
-                branches
-                    .iter()
-                    .find(|branch| branch.name == "main" || branch.name == "master")
-                    .map(|branch| branch.name.clone())
-            })
-            .or_else(|| {
-                branches
-                    .iter()
-                    .find(|branch| branch.name == "master")
-                    .map(|branch| branch.name.clone())
-            })
-            .unwrap_or_else(|| "main".to_string())
-    });
+    let resolved_branch = jj::resolve_home_repo_branch(repo_path).map_err(|e| e.to_string())?;
     let detached_head = read_detached_head_commit(repo_path)?;
     let is_detached = detached_head.is_some() || resolved_branch == "HEAD";
 
@@ -94,20 +71,16 @@ pub fn get_repo_branch(repo_path: &str) -> Result<RepoBranch, String> {
         resolved_branch.clone()
     };
 
-    let default_branch = if branches.iter().any(|branch| branch.name == "main") {
-        "main".to_string()
-    } else if branches.iter().any(|branch| branch.name == "master") {
-        "master".to_string()
-    } else {
-        resolved_branch.clone()
-    };
-
     Ok(RepoBranch {
         current_branch,
         display_ref,
         is_detached,
-        default_branch,
     })
+}
+
+/// Returns the repository default branch using jj's canonical resolver.
+pub fn get_repo_default_branch(repo_path: &str) -> Result<String, String> {
+    jj::get_default_branch(repo_path).map_err(|e| e.to_string())
 }
 
 fn read_detached_head_commit(repo_path: &str) -> Result<Option<String>, String> {
@@ -140,13 +113,7 @@ pub fn repo_status(repo_path: &str) -> Result<RepoStatus, String> {
     let _ = jj::jj_util_import_git_refs(repo_path);
 
     // Step 2: default branch for conflict/change checks
-    let branch_info = get_repo_branch(repo_path).unwrap_or(RepoBranch {
-        current_branch: Some("main".to_string()),
-        display_ref: "main".to_string(),
-        is_detached: false,
-        default_branch: "main".to_string(),
-    });
-    let default_branch = branch_info.default_branch;
+    let default_branch = get_repo_default_branch(repo_path).unwrap_or_else(|_| "main".to_string());
 
     // Step 3: uncommitted changes
     let has_changes = jj::jj_get_changed_files(repo_path)

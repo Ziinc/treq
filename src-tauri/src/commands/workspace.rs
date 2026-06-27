@@ -11,10 +11,10 @@ use tauri::State;
 static INDEXED_WORKSPACES: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
 #[tauri::command]
-pub async fn get_repo_branch(repo_path: String) -> Result<crate::core::RepoBranch, String> {
-    tauri::async_runtime::spawn_blocking(move || crate::core::get_repo_branch(&repo_path))
+pub async fn get_repo_current_branch(repo_path: String) -> Result<crate::core::RepoBranch, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::core::get_repo_current_branch(&repo_path))
         .await
-        .map_err(|e| format!("Failed to join get_repo_branch task: {}", e))?
+        .map_err(|e| format!("Failed to join get_repo_current_branch task: {}", e))?
 }
 
 #[tauri::command]

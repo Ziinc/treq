@@ -66,7 +66,6 @@ export interface RepoBranch {
 	current_branch: string | null;
 	display_ref: string;
 	is_detached: boolean;
-	default_branch: string;
 }
 
 export interface Session {
