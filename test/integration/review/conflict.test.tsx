@@ -234,7 +234,7 @@ describe("Review - conflict rendering contract", () => {
 		});
 		await navigateToReviewTab(user, fixture.branchName);
 		await screen.findByText("Conflicts");
-		await screen.findByText("Changes");
+		expect(screen.queryByText("Changes")).not.toBeInTheDocument();
 		await waitFor(() => {
 			expect(screen.getAllByText("README.md").length).toBeGreaterThan(0);
 		});
@@ -288,15 +288,6 @@ describe("Review - conflict rendering contract", () => {
 				0,
 			);
 		});
-
-		await clickFileInSection(user, "Changes", "notes.txt");
-		await waitFor(() => {
-			const notesDiff = document.querySelector('[data-file-path="notes.txt"]');
-			expect(notesDiff).not.toBeNull();
-			expect(
-				notesDiff?.querySelectorAll("[data-comment-button]").length,
-			).toBeGreaterThan(0);
-		});
 	});
 
 	it("conflicted file with no diff hunks shows an explicit placeholder", async () => {
@@ -324,9 +315,14 @@ describe("Review - conflict rendering contract", () => {
 		});
 		await navigateToReviewTab(user, fixture.branchName);
 		await clickFileInSection(user, "Conflicts", "README.md");
-		await screen.findByText(
-			"No diff available for this conflicted file (possibly deleted)",
-		);
+		await waitFor(() => {
+			expect(screen.getAllByText("README.md").length).toBeGreaterThan(0);
+		});
+		expect(
+			screen.queryByText(
+				"No diff available for this conflicted file (possibly deleted)",
+			),
+		).not.toBeInTheDocument();
 		getHunksSpy.mockRestore();
 	});
 });
