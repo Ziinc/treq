@@ -5,6 +5,16 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tempfile::TempDir;
 
+const TREQ_TEST_TMPDIR: &str = "TREQ_TEST_TMPDIR";
+
+fn resolved_test_temp_root(override_root: Option<PathBuf>) -> PathBuf {
+    override_root.unwrap_or_else(std::env::temp_dir)
+}
+
+fn test_temp_root() -> PathBuf {
+    resolved_test_temp_root(std::env::var_os(TREQ_TEST_TMPDIR).map(PathBuf::from))
+}
+
 fn random_default_branch_name() -> String {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
@@ -37,7 +47,10 @@ impl TestRepo {
     }
 
     fn create(init: bool) -> Result<Self, String> {
-        let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
+        let temp_dir = tempfile::Builder::new()
+            .prefix("treq-repo")
+            .tempdir_in(test_temp_root())
+            .map_err(|e| format!("Failed to create temp dir: {}", e))?;
         let repo_path = temp_dir.path().to_string_lossy().to_string();
 
         // Initialize git repo
