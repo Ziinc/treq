@@ -3806,25 +3806,17 @@ pub fn get_default_branch(repo_path: &str) -> Result<String, JjError> {
         }
     }
 
-    // Final fallback: current checked-out branch.
-    let branch = resolve_home_repo_branch(repo_path)?;
-    // Detached git HEAD yields "HEAD" from resolve_home_repo_branch; fall back to enumerating git local branches.
-    if branch == "HEAD" {
-        // Detached HEAD: jj bookmarks may be absent, so read git local branches directly (unusual in production).
-        if let Ok(git_repo) = gix::open(repo_path) {
-            if let Ok(refs) = git_repo.references() {
-                if let Ok(local_branches) = refs.local_branches() {
-                    for reference in local_branches.flatten() {
-                        let full_name = reference.name().as_bstr().to_string();
-                        if let Some(name) = full_name.strip_prefix("refs/heads/") {
-                            return Ok(name.to_string());
-                        }
-                    }
-                }
-            }
+    // Final fallback: git config init.defaultBranch (merged global + local config).
+    if let Some(branch) = gix::open(repo_path)
+        .ok()
+        .and_then(|r| r.config_snapshot().string("init.defaultBranch").map(|s| s.to_string()))
+    {
+        if !branch.is_empty() {
+            return Ok(branch);
         }
     }
-    Ok(branch)
+
+    Ok("main".to_string())
 }
 
 /// Push changes to remote using jj git push
