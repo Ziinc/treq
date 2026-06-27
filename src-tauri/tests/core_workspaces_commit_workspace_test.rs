@@ -281,12 +281,8 @@ fn test_create_commit_no_divergence_with_stacked_descendant() {
     )
     .expect("Failed to create child workspace");
     // B targets A's branch so it is a descendant of A's stack.
-    treq_lib::local_db::update_workspace_target_branch(
-        &repo.repo_path,
-        ws_b.id,
-        &ws_a.branch_name,
-    )
-    .expect("Failed to set B's target_branch to A");
+    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, ws_b.id, &ws_a.branch_name)
+        .expect("Failed to set B's target_branch to A");
 
     let ws_b_dir = repo.workspaces_dir().join(&ws_b.workspace_path);
     let ws_b_dir_str = ws_b_dir.to_str().expect("utf-8");
@@ -310,12 +306,19 @@ fn test_create_commit_no_divergence_with_stacked_descendant() {
     // Divergent changes appear as `??` in jj log output (same change ID on multiple commits).
     let all_log = TestRepo::run_jj(
         ws_a_dir_str,
-        &["log", "--no-graph", "-r", "all()", "-T", "change_id.short() ++ \"\\n\""],
+        &[
+            "log",
+            "--no-graph",
+            "-r",
+            "all()",
+            "-T",
+            "change_id.short() ++ \"\\n\"",
+        ],
     )
     .expect("jj log all() failed");
     // jj appends ?? to change IDs of divergent commits in log output
-    let full_log = TestRepo::run_jj(ws_a_dir_str, &["log", "-r", "all()"])
-        .expect("jj log all() graph failed");
+    let full_log =
+        TestRepo::run_jj(ws_a_dir_str, &["log", "-r", "all()"]).expect("jj log all() graph failed");
     assert!(
         !full_log.contains("??"),
         "expected no divergent changes (??) after committing in parent, got:\n{full_log}"

@@ -100,12 +100,8 @@ fn test_stacked_workspace_lineage_stays_linear_after_auto_rebase() {
         &default_branch,
     )
     .expect("Failed to set target branch on chicken");
-    treq_lib::local_db::update_workspace_target_branch(
-        &repo.repo_path,
-        ducks.id,
-        &default_branch,
-    )
-    .expect("Failed to set target branch on ducks");
+    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, ducks.id, &default_branch)
+        .expect("Failed to set target branch on ducks");
 
     // Print pre-rebase graph so the test output shows the starting topology.
     let pre_graph = TestRepo::run_jj(
