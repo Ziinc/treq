@@ -16,10 +16,11 @@ import { execFileSync } from "node:child_process";
 
 describe("ShowWorkspace - header", () => {
 	let repoPath: string;
+	let defaultBranch: string;
 	let user: ReturnType<typeof userEvent.setup>;
 
 	beforeEach(() => {
-		({ repoPath } = createTestRepo(false));
+		({ repoPath, defaultBranch } = createTestRepo(false));
 		openRepo(repoPath);
 		user = userEvent.setup();
 	});
@@ -29,7 +30,7 @@ describe("ShowWorkspace - header", () => {
 
 		const header = await screen.findByTestId("show-workspace-header");
 		expect(
-			await within(header).findByRole("button", { name: "main" }),
+			await within(header).findByRole("button", { name: defaultBranch }),
 		).toBeTruthy();
 	});
 
@@ -40,7 +41,7 @@ describe("ShowWorkspace - header", () => {
 
 		const header = await screen.findByTestId("show-workspace-header");
 		const branchButton = await within(header).findByRole("button", {
-			name: "main",
+			name: defaultBranch,
 		});
 		await user.click(branchButton);
 
@@ -78,7 +79,7 @@ describe("ShowWorkspace - header", () => {
 
 		await screen.findByText("feat/beta", { selector: "button *" });
 		expect(
-			screen.queryByText("main", { selector: "button *" }),
+			screen.queryByText(defaultBranch, { selector: "button *" }),
 		).not.toBeInTheDocument();
 	});
 
@@ -97,7 +98,7 @@ describe("ShowWorkspace - header", () => {
 			expect(targetBtn).not.toBeDisabled();
 		});
 
-		await screen.findByText("main", { selector: "button *" });
+		await screen.findByText(defaultBranch, { selector: "button *" });
 
 		fireEvent.click(targetBtn!);
 		const betaElement = await screen.findByText("feat/beta", {
@@ -107,7 +108,7 @@ describe("ShowWorkspace - header", () => {
 		await screen.findByText("feat/beta", { selector: "button *" });
 
 		await user.click(await findSidebarBranchElement("feat/beta"));
-		await screen.findByText("main", { selector: "button *" });
+		await screen.findByText(defaultBranch, { selector: "button *" });
 
 		await user.click(await findSidebarBranchElement("feat/alpha"));
 		await screen.findByText("feat/beta", { selector: "button *" });
@@ -137,7 +138,7 @@ describe("ShowWorkspace - header", () => {
 		const searchInput =
 			await screen.findByPlaceholderText("Search branches...");
 		const popover = searchInput.closest('[data-state="open"]') as HTMLElement;
-		expect(within(popover).getByText("main")).toBeTruthy();
+		expect(within(popover).getByText(defaultBranch)).toBeTruthy();
 		expect(within(popover).getByText("feat/beta")).toBeTruthy();
 	});
 
