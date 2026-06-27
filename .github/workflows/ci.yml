@@ -12,24 +12,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            kind: js
+          - platform: ubuntu-22.04
+            kind: verify
             task: verify
-          - os: ubuntu-latest
+          - platform: ubuntu-22.04
             kind: js
             task: test
-          - os: ubuntu-latest
-            kind: rust
-            task: check
-          - os: ubuntu-latest
+          - platform: ubuntu-22.04
             kind: rust
             task: test
-          - os: macos-latest
+          - platform: macos-latest
             kind: rust
             task: test
 
-    name: ${{ matrix.kind }} / ${{ matrix.task }} / ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.kind }} / ${{ matrix.task }} / ${{ matrix.platform }}
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
@@ -46,6 +43,12 @@ jobs:
           components: rustfmt
           toolchain: stable
 
+      - name: install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04' # This must match the platform value defined above.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
       - name: Install dependencies
         run: npm ci
 
@@ -61,9 +64,9 @@ jobs:
             cargo-${{ runner.os }}-
 
       - name: Run JS task
-        if: matrix.kind == 'js'
+        if: matrix.kind == 'js' || matrix.kind == 'verify'
         run: |
-          if [ "${{ matrix.task }}" = "verify" ]; then
+          if [ "${{ matrix.kind }}" = "verify" ] || [ "${{ matrix.task }}" = "verify" ]; then
             npm run check
             npm run check:format
             npm run lint
@@ -72,10 +75,10 @@ jobs:
           fi
 
       - name: Run Rust task
-        if: matrix.kind == 'rust'
+        if: matrix.kind == 'rust' || matrix.kind == 'verify'
         working-directory: src-tauri
         run: |
-          if [ "${{ matrix.task }}" = "check" ]; then
+          if [ "${{ matrix.kind }}" = "verify" ] || [ "${{ matrix.task }}" = "verify" ]; then
             cargo fmt --check
             cargo check
           else
