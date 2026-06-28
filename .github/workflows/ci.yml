@@ -128,6 +128,8 @@ jobs:
       - name: Run Rust task
         if: matrix.kind == 'rust' || matrix.kind == 'verify'
         working-directory: src-tauri
+        env:
+          RUST_BACKTRACE: 1
         run: |
           if [ "${{ matrix.kind }}" = "verify" ] || [ "${{ matrix.task }}" = "verify" ]; then
             cargo fmt --check
