@@ -364,6 +364,12 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
         }
 
         // ── Commits ───────────────────────────────────────────────────────
+        "discard_workspace_changes" => {
+            let workspace_path = get_str(&args, "workspacePath")?;
+            let result = treq_lib::jj::jj_restore_all(&workspace_path).map_err(|e| e.to_string())?;
+            Ok(Value::String(result))
+        }
+
         "create_commit" => {
             let repo_path = get_str(&args, "repoPath")?;
             let workspace_id: Option<i64> = opt_i64(&args, "workspaceId");

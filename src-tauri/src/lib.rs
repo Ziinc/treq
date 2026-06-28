@@ -434,6 +434,7 @@ pub fn run() {
             commands::get_workspaces,
             commands::create_workspace,
             commands::delete_workspace,
+            commands::get_repo_default_branch,
             commands::push_workspace_to_remote,
             commands::pull_workspace_from_remote,
             commands::merge_workspace,
