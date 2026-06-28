@@ -62,7 +62,7 @@ describe("LinearCommitHistory integration", () => {
 			"Default branch base commit",
 		);
 
-		const workspaceId = await createWorkspace(repoPath, "main");
+		const workspaceId = await createWorkspace(repoPath, "workspacebranch");
 		const workspace = (await getWorkspaces(repoPath)).find(
 			(w) => w.id === workspaceId,
 		);
@@ -77,14 +77,12 @@ describe("LinearCommitHistory integration", () => {
 		);
 
 		render(<Dashboard />);
-		await user.click(await findSidebarBranchElement("main"));
-
+		await user.click(await findSidebarBranchElement("workspacebranch"));
 		await screen.findByText("Default branch workspace commit");
-		expect(screen.queryByText(/^Recent on /)).not.toBeInTheDocument();
+
+		expect(screen.queryByText(/^Recent on /)).toBeInTheDocument();
 		expect(
-			screen.queryByText(
-				"There are no commits within this workspace branch yet.",
-			),
+			screen.queryByText("There are no commits within this workspace"),
 		).not.toBeInTheDocument();
 	});
 

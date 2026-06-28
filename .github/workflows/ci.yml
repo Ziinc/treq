@@ -8,6 +8,9 @@ on:
 
 jobs:
   ci:
+    env:
+      GIT_VERSION: 2.45.3
+      JJ_VERSION: 0.36.0
     strategy:
       fail-fast: false
       matrix:
@@ -43,25 +46,64 @@ jobs:
           components: rustfmt
           toolchain: stable
 
-      - name: install dependencies (ubuntu only)
+      - name: Install build dependencies (ubuntu only)
         if: matrix.platform == 'ubuntu-22.04' # This must match the platform value defined above.
         run: |
           sudo apt-get update
-          sudo apt-get install -y git
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y build-essential curl ca-certificates gettext libcurl4-openssl-dev libexpat1-dev libssl-dev zlib1g-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Install git and jj CLI (macOS)
+      - name: Install build dependencies (macOS)
         if: matrix.platform == 'macos-latest'
         run: |
           brew update
-          brew install git jj
-          echo "$(brew --prefix)/bin" >> $GITHUB_PATH
+          brew install gettext openssl@3 pcre2
 
-      - name: Install jj CLI (ubuntu)
-        if: matrix.platform == 'ubuntu-22.04' # This must match the platform value defined above.
+      - name: Install pinned git (macOS)
+        if: matrix.platform == 'macos-latest'
         run: |
-          cargo install --locked --force jj-cli
+          set -euo pipefail
+          prefix="$HOME/.local"
+          mkdir -p "$prefix/src" "$prefix/bin"
+          cd "$prefix/src"
+          curl -fsSL "https://mirrors.edge.kernel.org/pub/software/scm/git/git-${GIT_VERSION}.tar.xz" -o "git-${GIT_VERSION}.tar.xz"
+          tar -xf "git-${GIT_VERSION}.tar.xz"
+          cd "git-${GIT_VERSION}"
+          export PATH="$(brew --prefix gettext)/bin:$PATH"
+          export LDFLAGS="-L$(brew --prefix openssl@3)/lib -L$(brew --prefix gettext)/lib"
+          export CPPFLAGS="-I$(brew --prefix openssl@3)/include -I$(brew --prefix gettext)/include"
+          make configure
+          ./configure --prefix="$prefix"
+          make -j"$(sysctl -n hw.ncpu)"
+          make install
+          echo "$prefix/bin" >> $GITHUB_PATH
+
+      - name: Install pinned git (ubuntu)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          set -euo pipefail
+          prefix="$HOME/.local"
+          mkdir -p "$prefix/src" "$prefix/bin"
+          cd "$prefix/src"
+          curl -fsSL "https://mirrors.edge.kernel.org/pub/software/scm/git/git-${GIT_VERSION}.tar.xz" -o "git-${GIT_VERSION}.tar.xz"
+          tar -xf "git-${GIT_VERSION}.tar.xz"
+          cd "git-${GIT_VERSION}"
+          export LDFLAGS="-L/usr/lib/x86_64-linux-gnu"
+          export CPPFLAGS="-I/usr/include"
+          make configure
+          ./configure --prefix="$prefix"
+          make -j"$(nproc)"
+          make install
+          echo "$prefix/bin" >> $GITHUB_PATH
+
+      - name: Install pinned jj CLI
+        run: |
+          cargo install --locked --force jj-cli --version "$JJ_VERSION"
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Verify pinned tool versions
+        run: |
+          git --version
+          jj --version
 
       - name: Install dependencies
         run: npm ci
