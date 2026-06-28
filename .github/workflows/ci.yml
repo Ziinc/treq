@@ -52,9 +52,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Configure test temp dir
-        run: echo "TREQ_TEST_TMPDIR=${{ runner.temp }}/treq-tests" >> "$GITHUB_ENV"
-
       - uses: Swatinem/rust-cache@v2
         if: matrix.kind == 'rust'
         with:
