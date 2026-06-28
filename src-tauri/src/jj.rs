@@ -3948,7 +3948,7 @@ pub fn jj_get_sync_status(
         return jj_get_diverged_sync_counts(workspace_path, branch_name);
     }
 
-    let (local_tip, remote_tip) = get_sync_revset_tips(workspace_path, branch_name)?;
+    let (local_tip, remote_tip) = get_sync_revset_tips(workspace_path, branch_name, false)?;
     let ahead_revset = format!("({}..{}) ~ empty()", remote_tip, local_tip);
     let behind_revset = format!("({}..{}) ~ empty()", local_tip, remote_tip);
 
@@ -4080,7 +4080,7 @@ pub fn jj_get_diverged_sync_counts(
     workspace_path: &str,
     branch_name: &str,
 ) -> Result<(usize, usize), JjError> {
-    let (local_tip, remote_tip) = get_sync_revset_tips(workspace_path, branch_name)?;
+    let (local_tip, remote_tip) = get_sync_revset_tips(workspace_path, branch_name, true)?;
     let ahead_revset = format!("({}..{}) ~ empty()", remote_tip, local_tip);
     let behind_revset = format!("({}..{}) ~ empty()", local_tip, remote_tip);
 
@@ -4097,11 +4097,10 @@ pub fn jj_get_diverged_sync_counts(
 fn get_sync_revset_tips(
     workspace_path: &str,
     branch_name: &str,
+    use_working_copy_proxy: bool,
 ) -> Result<(String, String), JjError> {
     let loaded = load_workspace_repo(workspace_path)?;
     let view = loaded.repo.view();
-    let repo_path = derive_repo_path_from_workspace(workspace_path)
-        .unwrap_or_else(|| workspace_path.to_string());
     let remote_target = view.get_remote_bookmark(RemoteRefSymbol {
         name: RefName::new(branch_name),
         remote: RemoteName::new("origin"),
@@ -4109,7 +4108,11 @@ fn get_sync_revset_tips(
 
     // Sync status should compare the bookmark tip, not the working-copy tip.
     // Divergence handling uses `@-` separately once the bookmark is known to be conflicted.
-    let local_tip = format_revset_symbol(branch_name);
+    let local_tip = if use_working_copy_proxy {
+        "@-".to_string()
+    } else {
+        format_revset_symbol(branch_name)
+    };
     let remote_tip = remote_target
         .target
         .as_normal()
