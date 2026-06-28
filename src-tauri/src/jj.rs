@@ -4107,11 +4107,9 @@ fn get_sync_revset_tips(
         remote: RemoteName::new("origin"),
     });
 
-    let local_tip = if workspace_path == repo_path {
-        format_revset_symbol(branch_name)
-    } else {
-        "@".to_string()
-    };
+    // Sync status should compare the bookmark tip, not the working-copy tip.
+    // Divergence handling uses `@-` separately once the bookmark is known to be conflicted.
+    let local_tip = format_revset_symbol(branch_name);
     let remote_tip = remote_target
         .target
         .as_normal()
