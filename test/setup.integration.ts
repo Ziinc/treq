@@ -11,10 +11,10 @@
  *   2. Have `jj` and `git` installed and on PATH.
  */
 
+import os from "os";
 import path from "path";
 import fs from "fs";
 import { afterEach, beforeAll, expect, vi } from "vitest";
-import { ensureTestTempRoot, getTestTempRoot } from "./temp-root";
 
 // Shared DOM polyfills, browser API stubs, Tauri plugin mocks, and hook mocks
 import "./setup.common";
@@ -30,7 +30,7 @@ const napi = require("../crates/treq-napi");
 // ── Initialize state ─────────────────────────────────────────────────────────
 
 const testDbPath = path.join(
-	ensureTestTempRoot(),
+	os.tmpdir(),
 	`treq-integration-test-${Date.now()}.db`,
 );
 
@@ -77,6 +77,3 @@ process.on("exit", () => {
 		// ignore
 	}
 });
-
-export const testDatabasePath = testDbPath;
-export const testTempRoot = getTestTempRoot();
