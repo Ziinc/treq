@@ -18,6 +18,13 @@ pub async fn get_repo_current_branch(repo_path: String) -> Result<crate::core::R
 }
 
 #[tauri::command]
+pub async fn get_repo_default_branch(repo_path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::core::get_repo_default_branch(&repo_path))
+        .await
+        .map_err(|e| format!("Failed to join get_repo_default_branch task: {}", e))?
+}
+
+#[tauri::command]
 pub async fn get_workspace_changed_files(
     repo_path: String,
     workspace_id: Option<i64>,
