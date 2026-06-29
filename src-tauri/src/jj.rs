@@ -89,8 +89,7 @@ fn binary_command(binary: &str) -> Command {
     Command::new(path)
 }
 
-// NOTE: `git checkout` subprocess calls are intentionally retained for colocated
-// git-head synchronization in bookmark/workspace switch flows.
+// NOTE: `git checkout` subprocess calls are retained for colocated git-head sync flows.
 
 fn chain_ignore_file(base: &Arc<GitIgnoreFile>, prefix: &str, path: PathBuf) -> Arc<GitIgnoreFile> {
     base.chain_with_file(prefix, path)
@@ -4106,8 +4105,7 @@ fn get_sync_revset_tips(
         remote: RemoteName::new("origin"),
     });
 
-    // Sync status should compare the bookmark tip, not the working-copy tip.
-    // Divergence handling uses `@-` separately once the bookmark is known to be conflicted.
+    // Compare bookmark tips; conflicted bookmark divergence uses `@-` separately.
     let local_tip = if use_working_copy_proxy {
         "@-".to_string()
     } else {

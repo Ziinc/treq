@@ -367,15 +367,15 @@ fn test_update_workspace_target_branch_rebases_workspace_bookmark_lineage() {
         String::from_utf8_lossy(&new_wc_output.stderr)
     );
 
-    TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "develop"])
+    TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "develop"][..])
         .expect("Failed to create develop branch");
     repo.commit_file("develop.txt", "develop content", "Develop base commit")
         .expect("Failed to commit develop branch");
-    let develop_tip = TestRepo::run_git(&repo.repo_path, &["rev-parse", "develop"])
+    let develop_tip = TestRepo::run_git(&repo.repo_path, &["rev-parse", "develop"][..])
         .expect("Failed to read develop tip")
         .trim()
         .to_string();
-    TestRepo::run_git(&repo.repo_path, &["checkout", default_branch])
+    TestRepo::run_git(&repo.repo_path, &["checkout", default_branch][..])
         .expect("Failed to checkout main");
 
     let updated = treq_lib::core::update_workspace(
@@ -518,16 +518,10 @@ fn test_push_workspace_to_remote() {
 
     // Test 5: Verify file was pushed to remote by checking remote branch
     let remote_dir = repo.temp_dir.path().join("remote.git");
-    let verify_file = Command::new("git")
-        .current_dir(&remote_dir)
-        .args(["show", &format!("{}:test-push.txt", workspace.branch_name)])
-        .output()
-        .expect("Failed to verify file in remote");
-    assert!(
-        verify_file.status.success(),
-        "File should exist in remote branch"
-    );
-    let remote_file_content = String::from_utf8_lossy(&verify_file.stdout);
+    let remote_dir_str = remote_dir.to_str().expect("remote path should be utf-8");
+    let remote_ref = format!("{}:test-push.txt", workspace.branch_name);
+    let remote_file_content = TestRepo::run_git(remote_dir_str, &["show", remote_ref.as_str()][..])
+        .expect("File should exist in remote branch");
     assert!(
         remote_file_content.contains("test push content"),
         "Remote file should contain correct content, got: {}",
@@ -944,9 +938,13 @@ fn test_jj_get_changed_files_ignores_gitignored_noise_in_workspace() {
     let gitignore = repo.read_gitignore().expect("Failed to read .gitignore");
     repo.create_file(".gitignore", &format!("{gitignore}node_modules/\n"))
         .expect("Failed to update .gitignore");
-    TestRepo::run_git(&repo.repo_path, &["add", ".gitignore"]).expect("Failed to stage .gitignore");
-    TestRepo::run_git(&repo.repo_path, &["commit", "-m", "Ignore node_modules"])
-        .expect("Failed to commit .gitignore");
+    TestRepo::run_git(&repo.repo_path, &["add", ".gitignore"][..])
+        .expect("Failed to stage .gitignore");
+    TestRepo::run_git(
+        &repo.repo_path,
+        &["commit", "-m", "Ignore node_modules"][..],
+    )
+    .expect("Failed to commit .gitignore");
 
     let workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -1456,36 +1454,13 @@ fn test_workspace_status_behind_remote() {
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
         .expect("Failed to push workspace");
 
-    // Clone the bare remote, commit and push from the clone to simulate remote-ahead
-    let clone_dir = repo.temp_dir.path().join("clone");
-    let clone_path_str = clone_dir.to_str().unwrap();
-    let remote_dir = repo.temp_dir.path().join("remote.git");
-    Command::new("git")
-        .args(["clone", remote_dir.to_str().unwrap(), clone_path_str])
-        .output()
-        .expect("Failed to clone remote");
-    Command::new("git")
-        .current_dir(&clone_dir)
-        .args(["checkout", &workspace.branch_name])
-        .output()
-        .expect("Failed to checkout branch in clone");
-    TestRepo::write_workspace_file(clone_path_str, "remote-file.txt", "from remote")
-        .expect("Failed to write file");
-    Command::new("git")
-        .current_dir(&clone_dir)
-        .args(["add", "remote-file.txt"])
-        .output()
-        .expect("Failed to git add");
-    Command::new("git")
-        .current_dir(&clone_dir)
-        .args(["commit", "-m", "Remote commit"])
-        .output()
-        .expect("Failed to git commit");
-    Command::new("git")
-        .current_dir(&clone_dir)
-        .args(["push", "origin", &workspace.branch_name])
-        .output()
-        .expect("Failed to push from clone");
+    repo.remote_commit_on_branch(
+        &workspace.branch_name,
+        "remote-file.txt",
+        "from remote",
+        "Remote commit",
+    )
+    .expect("Failed to create remote commit");
 
     // Fetch in the main repo so jj knows about the remote commit.
     // Note: jj auto-fast-forwards the local bookmark to match remote on fetch.
@@ -1553,36 +1528,14 @@ fn test_workspace_status_diverged() {
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Local commit")
         .expect("Failed to commit");
 
-    // Clone the bare remote, commit and push from the clone to simulate remote-ahead
-    let clone_dir = repo.temp_dir.path().join("clone-diverged");
-    let clone_path_str = clone_dir.to_str().unwrap();
-    let remote_dir = repo.temp_dir.path().join("remote.git");
-    Command::new("git")
-        .args(["clone", remote_dir.to_str().unwrap(), clone_path_str])
-        .output()
-        .expect("Failed to clone remote");
-    Command::new("git")
-        .current_dir(&clone_dir)
-        .args(["checkout", &workspace.branch_name])
-        .output()
-        .expect("Failed to checkout branch in clone");
-    TestRepo::write_workspace_file(clone_path_str, "remote-file.txt", "from remote")
-        .expect("Failed to write file");
-    Command::new("git")
-        .current_dir(&clone_dir)
-        .args(["add", "remote-file.txt"])
-        .output()
-        .expect("Failed to git add");
-    Command::new("git")
-        .current_dir(&clone_dir)
-        .args(["commit", "-m", "Remote commit"])
-        .output()
-        .expect("Failed to git commit");
-    Command::new("git")
-        .current_dir(&clone_dir)
-        .args(["push", "origin", &workspace.branch_name])
-        .output()
-        .expect("Failed to push from clone");
+    // Commit and push from a clone to simulate remote-ahead
+    repo.remote_commit_on_branch(
+        &workspace.branch_name,
+        "remote-file.txt",
+        "from remote",
+        "Remote commit",
+    )
+    .expect("Failed to create remote commit");
 
     // Fetch in the main repo so jj knows about the remote commit
     treq_lib::jj::jj_git_fetch(&repo.repo_path).expect("Failed to fetch");
@@ -1631,36 +1584,14 @@ fn test_pull_workspace_resolves_divergence() {
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Local commit D")
         .expect("Failed to commit");
 
-    // Clone the bare remote, commit C, push from clone to simulate remote-ahead
-    let clone_dir = repo.temp_dir.path().join("clone-pull-diverged");
-    let clone_path_str = clone_dir.to_str().unwrap();
-    let remote_dir = repo.temp_dir.path().join("remote.git");
-    Command::new("git")
-        .args(["clone", remote_dir.to_str().unwrap(), clone_path_str])
-        .output()
-        .expect("Failed to clone remote");
-    Command::new("git")
-        .current_dir(&clone_dir)
-        .args(["checkout", &workspace.branch_name])
-        .output()
-        .expect("Failed to checkout branch in clone");
-    TestRepo::write_workspace_file(clone_path_str, "remote-file.txt", "from remote")
-        .expect("Failed to write file");
-    Command::new("git")
-        .current_dir(&clone_dir)
-        .args(["add", "remote-file.txt"])
-        .output()
-        .expect("Failed to git add");
-    Command::new("git")
-        .current_dir(&clone_dir)
-        .args(["commit", "-m", "Remote commit C"])
-        .output()
-        .expect("Failed to git commit");
-    Command::new("git")
-        .current_dir(&clone_dir)
-        .args(["push", "origin", &workspace.branch_name])
-        .output()
-        .expect("Failed to push from clone");
+    // Commit C and push from a clone to simulate remote-ahead
+    repo.remote_commit_on_branch(
+        &workspace.branch_name,
+        "remote-file.txt",
+        "from remote",
+        "Remote commit C",
+    )
+    .expect("Failed to create remote commit C");
 
     // Call pull_workspace_from_remote to resolve the divergence
     let result =
@@ -1729,35 +1660,13 @@ fn test_pull_workspace_no_divergence() {
         .expect("Failed to push workspace");
 
     // No local changes — simulate remote advancing
-    let clone_dir = repo.temp_dir.path().join("clone-pull-no-div");
-    let clone_path_str = clone_dir.to_str().unwrap();
-    let remote_dir = repo.temp_dir.path().join("remote.git");
-    Command::new("git")
-        .args(["clone", remote_dir.to_str().unwrap(), clone_path_str])
-        .output()
-        .expect("Failed to clone remote");
-    Command::new("git")
-        .current_dir(&clone_dir)
-        .args(["checkout", &workspace.branch_name])
-        .output()
-        .expect("Failed to checkout branch in clone");
-    TestRepo::write_workspace_file(clone_path_str, "remote-only.txt", "remote content")
-        .expect("Failed to write file");
-    Command::new("git")
-        .current_dir(&clone_dir)
-        .args(["add", "remote-only.txt"])
-        .output()
-        .expect("Failed to git add");
-    Command::new("git")
-        .current_dir(&clone_dir)
-        .args(["commit", "-m", "Remote commit"])
-        .output()
-        .expect("Failed to git commit");
-    Command::new("git")
-        .current_dir(&clone_dir)
-        .args(["push", "origin", &workspace.branch_name])
-        .output()
-        .expect("Failed to push from clone");
+    repo.remote_commit_on_branch(
+        &workspace.branch_name,
+        "remote-only.txt",
+        "remote content",
+        "Remote commit",
+    )
+    .expect("Failed to create remote commit");
 
     // Call pull — should NOT be diverged (local has no unpushed commits)
     let result =
@@ -2210,9 +2119,13 @@ fn test_workspace_status_ignores_gitignored_noise() {
     let gitignore = repo.read_gitignore().expect("Failed to read .gitignore");
     repo.create_file(".gitignore", &format!("{gitignore}node_modules/\n"))
         .expect("Failed to update .gitignore");
-    TestRepo::run_git(&repo.repo_path, &["add", ".gitignore"]).expect("Failed to stage .gitignore");
-    TestRepo::run_git(&repo.repo_path, &["commit", "-m", "Ignore node_modules"])
-        .expect("Failed to commit .gitignore");
+    TestRepo::run_git(&repo.repo_path, &["add", ".gitignore"][..])
+        .expect("Failed to stage .gitignore");
+    TestRepo::run_git(
+        &repo.repo_path,
+        &["commit", "-m", "Ignore node_modules"][..],
+    )
+    .expect("Failed to commit .gitignore");
 
     let workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
