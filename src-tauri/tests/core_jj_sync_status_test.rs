@@ -1,22 +1,11 @@
 mod e2e_test_helpers;
 
 use e2e_test_helpers::TestRepo;
-use std::process::Command;
 use treq_lib::core::{workspace_status, RemoteSyncStatus};
 
 fn run_git(repo_path: &str, args: &[&str]) {
-    let output = Command::new("git")
-        .current_dir(repo_path)
-        .args(args)
-        .output()
-        .expect("git command should run");
-    assert!(
-        output.status.success(),
-        "git command failed: {:?}\nstdout:\n{}\nstderr:\n{}",
-        args,
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
+    TestRepo::run_git(repo_path, args)
+        .unwrap_or_else(|error| panic!("git command failed: {:?}\n{}", args, error));
 }
 
 fn setup_workspace_with_remote() -> (TestRepo, treq_lib::local_db::Workspace, String) {

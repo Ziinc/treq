@@ -2,7 +2,6 @@ mod e2e_test_helpers;
 
 use e2e_test_helpers::{JjVerifier, TestRepo};
 use std::path::Path;
-use std::process::Command;
 use treq_lib::core::{commit_repo, MergeCommit};
 use treq_lib::local_db::Workspace;
 
@@ -69,12 +68,8 @@ fn test_can_rebase_and_merge_workspace() {
     );
 
     // verify that workspace is in git log
-    let git_log = Command::new("git")
-        .current_dir(&repo.repo_path)
-        .args(["log", "-1", "--pretty=%s"])
-        .output()
+    let git_log_str = TestRepo::run_git(&repo.repo_path, &["log", "-1", "--pretty=%s"])
         .expect("Failed to run git log");
-    let git_log_str = String::from_utf8_lossy(&git_log.stdout);
     assert_eq!(
         git_log_str.trim(),
         "Rebase feature-rebase onto main",
@@ -193,14 +188,11 @@ fn test_can_merge_workspace_into_home_repo_with_merge_commit_strategy() {
     );
 
     // Get the current branch before merge (should be on main)
-    let initial_branch = Command::new("git")
-        .current_dir(&repo.repo_path)
-        .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .output()
-        .expect("Failed to get current branch");
-    let initial_branch_str = String::from_utf8_lossy(&initial_branch.stdout)
-        .trim()
-        .to_string();
+    let initial_branch_str =
+        TestRepo::run_git(&repo.repo_path, &["rev-parse", "--abbrev-ref", "HEAD"])
+            .expect("Failed to get current branch")
+            .trim()
+            .to_string();
 
     // Perform the merge
     treq_lib::core::merge_workspace(
@@ -227,12 +219,8 @@ fn test_can_merge_workspace_into_home_repo_with_merge_commit_strategy() {
     );
 
     // Verify git picks up the merge commit
-    let git_log = Command::new("git")
-        .current_dir(&repo.repo_path)
-        .args(["log", "--oneline", "-5"])
-        .output()
+    let git_log_str = TestRepo::run_git(&repo.repo_path, &["log", "--oneline", "-5"])
         .expect("Failed to run git log");
-    let git_log_str = String::from_utf8_lossy(&git_log.stdout);
     assert!(
         git_log_str.contains("Merge") || git_log_str.contains("merge"),
         "Git log should contain merge commit, got: {}",
@@ -264,14 +252,11 @@ fn test_can_merge_workspace_into_home_repo_with_merge_commit_strategy() {
 
     // Verify home repo is correctly checked out to the branch it was at prior to the merge
     // and is not in detached HEAD state
-    let final_branch = Command::new("git")
-        .current_dir(&repo.repo_path)
-        .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .output()
-        .expect("Failed to get current branch after merge");
-    let final_branch_str = String::from_utf8_lossy(&final_branch.stdout)
-        .trim()
-        .to_string();
+    let final_branch_str =
+        TestRepo::run_git(&repo.repo_path, &["rev-parse", "--abbrev-ref", "HEAD"])
+            .expect("Failed to get current branch after merge")
+            .trim()
+            .to_string();
 
     assert_eq!(
         final_branch_str, initial_branch_str,
@@ -346,12 +331,8 @@ fn test_can_squash_and_merge_workspace_into_home_repo() {
         "Squash merge should preserve the final workspace file contents"
     );
 
-    let git_log = Command::new("git")
-        .current_dir(&repo.repo_path)
-        .args(["log", "-1", "--pretty=%s"])
-        .output()
+    let git_log_str = TestRepo::run_git(&repo.repo_path, &["log", "-1", "--pretty=%s"])
         .expect("Failed to run git log");
-    let git_log_str = String::from_utf8_lossy(&git_log.stdout);
     assert_eq!(
         git_log_str.trim(),
         "Squash feature-squash into main",
