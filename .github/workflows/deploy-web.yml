@@ -19,6 +19,10 @@ defaults:
     shell: bash
     working-directory: web
 
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
