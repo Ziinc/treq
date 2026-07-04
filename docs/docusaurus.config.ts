@@ -9,7 +9,7 @@ const featureFlags = pkg.featureFlags;
 
 const config: Config = {
   title: 'Treq',
-  tagline: 'A modern Git worktree manager',
+  tagline: 'A modern Git workspace manager',
   favicon: 'img/favicon.svg',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
@@ -56,6 +56,10 @@ const config: Config = {
         blog: false,
         theme: {
           customCss: './src/css/custom.css',
+        },
+        gtag: {
+          trackingID: 'G-V9MPP2ZWZF',
+          anonymizeIP: true,
         },
       } satisfies Preset.Options,
     ],
@@ -119,7 +123,7 @@ const config: Config = {
             },
             {
               label: 'Features',
-              to: '/docs/features/worktrees',
+              to: '/docs/features/workspaces',
             },
           ],
         },

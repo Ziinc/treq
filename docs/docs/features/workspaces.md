@@ -2,33 +2,33 @@
 sidebar_position: 1
 ---
 
-# Worktrees
+# Workspaces
 
-_Technical overview of Treq's worktree management system._
+_Technical overview of Treq's workspace management system._
 
-Treq enhances Git's native worktree functionality with visual management, metadata storage, and integrated tooling for working across multiple branches simultaneously. Treq uses the `.treq` directory to store and manage local state.
+Treq enhances Git's native workspace functionality with visual management, metadata storage, and integrated tooling for working across multiple branches simultaneously. Treq uses the `.treq` directory to store and manage local state.
 
-## How Git Worktrees Work
+## How Workspaces Work
 
 ### Git Fundamentals
 
-A Git worktree is an additional working directory linked to the same repository:
+A Git workspace is an additional working directory linked to the same repository:
 
 ```
 .git/               # Shared git directory
-.treq/worktrees/
-  ├── treq-feature-1/  # Worktree 1 (branch: treq/feature-1)
-  ├── treq-bugfix-2/   # Worktree 2 (branch: treq/bugfix-2)
+.treq/workspaces/
+  ├── treq-feature-1/  # Workspace 1 (branch: treq/feature-1)
+  ├── treq-bugfix-2/   # Workspace 2 (branch: treq/bugfix-2)
   └── ...
 ```
 
-All worktrees share the same `.git` directory, with each worktree checking out a different branch. Changes in one worktree don't affect others, while Git objects (commits, refs) are shared across all worktrees. Treq extends this by abstracting away some of the Git complexity and overhead for managing and working with these worktrees.
+All workspaces share the same `.git` directory, with each workspace checking out a different branch. Changes in one workspace don't affect others, while Git objects (commits, refs) are shared across all workspaces. Treq extends this by abstracting away some of the Git complexity and overhead for managing and working with these workspaces.
 
 ## Treq's Enhancements
 
 ### Visual Management
 
-Treq provides a dashboard interface showing all worktrees in use, branch names and status, commit divergence (ahead/behind), uncommitted changes indicator, and quick actions (open, merge, delete).
+Treq provides a dashboard interface showing all workspaces in use, branch names and status, commit divergence (ahead/behind), uncommitted changes indicator, and quick actions (open, merge, delete).
 
 ### Automated Workflows
 
@@ -36,7 +36,7 @@ Treq provides a dashboard interface showing all worktrees in use, branch names a
 
 ### Parallel Agent Terminals
 
-Each worktree can have multiple terminal sessions with independent shell environments, persistent session history, and associated plans and metadata.
+Each workspace can have multiple terminal sessions with independent shell environments, persistent session history, and associated plans and metadata.
 
 ## Storage Structure
 
@@ -46,8 +46,8 @@ Each worktree can have multiple terminal sessions with independent shell environ
 {repo}/
 ├── .git/                    # Shared git data
 ├── .treq/
-│   ├── worktrees/
-│   │   └── {branch-name}/   # Worktree directories
+│   ├── workspaces/
+│   │   └── {branch-name}/   # Workspace directories
 │   ├── plans/               # Implementation plans
 │   └── .gitignore           # Ignore .treq folder
 ├── src/                     # Main repo files
@@ -60,7 +60,7 @@ Each worktree can have multiple terminal sessions with independent shell environ
 
 1. User initiates creation (UI or CLI)
 2. Treq validates branch name and path
-3. Creates the worktree
+3. Creates the workspace
 4. Opens terminal session (optional)
 6. Updates dashboard
 
@@ -76,7 +76,7 @@ Treq polls for changes:
 1. User initiates deletion
 2. Treq checks for uncommitted changes
 3. Warns if work might be lost
-4. Removes worktree directory
+4. Removes workspace directory
 5. Closes associated sessions
 6. Updates dashboard
 
@@ -100,7 +100,7 @@ Treq caches expensive git operations:
 
 ### Lazy Loading
 
-- Worktree data loaded on-demand
+- Workspace data loaded on-demand
 - Diffs generated only when viewed
 - Terminal sessions created when opened
 
@@ -130,24 +130,24 @@ Application preferences:
 ## Limitations & Constraints
 
 **Git limitations**:
-- Can't check out same branch in multiple worktrees
-- Worktree paths must be unique
+- Can't check out same branch in multiple workspaces
+- Workspace paths must be unique
 - Requires Git 2.35+ for full features
 
 **Treq limitations**:
 - One repository at a time
-- Worktrees must be in `.treq/worktrees/`
+- Workspaces must be in `.treq/workspaces/`
 - Windows path length limits may apply
 
 ## Best Practices
 
-1. **Regular cleanup**: Delete unused worktrees
+1. **Regular cleanup**: Delete unused workspaces
 2. **Consistent naming**: Use branch patterns
 3. **Commit often**: Preserve work before operations
-4. **Monitor size**: Large repos = large worktrees
+4. **Monitor size**: Large repos = large workspaces
 
 ## Learn More
 
-- [Creating Worktrees Guide](/docs/guides/common-tasks/creating-worktrees)
-- [Merging Worktrees](/docs/guides/core-workflows/merging-worktrees)
+- [Creating Workspaces Guide](/docs/guides/getting-started/your-first-workspace)
+- [Merging Workspaces](/docs/guides/core-workflows/merging-workspaces)
 - [Using with Git Repo](/docs/guides/core-workflows/using-treq-with-git-repo)

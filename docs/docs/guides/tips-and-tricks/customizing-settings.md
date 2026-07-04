@@ -12,7 +12,7 @@ Open settings with the gear icon (⚙️) in the sidebar. Settings are split int
 
 **Branch naming pattern**: Construct branch names using variables like `{name}` (intent from plan), `{user}` (git username), and `{date}` (YYYY-MM-DD). Examples: `feature/{name}`, `dev/{user}`, `bugfix/{name}-{date}`.
 
-**Copy files**: If dependencies are already present in the repository, use this to copy specific files or directories from `.gitignore` (like `node_modules/`) to new worktrees instead of reinstalling.
+**Copy files**: If dependencies are already present in the repository, use this to copy specific files or directories from `.gitignore` (like `node_modules/`) to new workspaces instead of reinstalling.
 
 ## Terminal Settings
 
@@ -52,4 +52,3 @@ Export settings as JSON via Settings → Advanced → Export to share with team 
 
 - [Keyboard Shortcuts](/docs/keyboard-shortcuts)
 - [Using Treq with Git Repo](../core-workflows/using-treq-with-git-repo)
-- [Interface Overview](../getting-started/interface-overview)

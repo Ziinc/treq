@@ -31,4 +31,4 @@ Review the diff before discarding. Prefer stashing over discarding when unsureâ€
 ## Next Steps
 
 - [Staging and Committing](../core-workflows/staging-and-committing)
-- [Moving Files Between Worktrees](moving-files-between-worktrees)
+- [Moving Files Between Workspaces](moving-files-between-workspaces)

@@ -2,15 +2,15 @@
 sidebar_position: 4
 ---
 
-# Moving Files Between Worktrees
+# Moving Files Between Workspaces
 
-_How to transfer uncommitted changes from one worktree to another._
+_How to transfer uncommitted changes from one workspace to another._
 
-Use this when you started work in the wrong worktree, want to split changes into multiple branches, or realize changes belong elsewhere.
+Use this when you started work in the wrong workspace, want to split changes into multiple branches, or realize changes belong elsewhere.
 
 ## Using Treq's Move Feature
 
-In the source worktree's diff viewer, select files in the unstaged section (use `Cmd/Ctrl+Click` for multiple or `Shift+Click` for ranges). Right-click and choose **Move to Worktree** or click the **Move** button. Select the destination worktree from the dropdown and click **Move Files**.
+In the source workspace's diff viewer, select files in the unstaged section (use `Cmd/Ctrl+Click` for multiple or `Shift+Click` for ranges). Right-click and choose **Move to Workspace** or click the **Move** button. Select the destination workspace from the dropdown and click **Move Files**.
 
 Only unstaged changes are moved. Staged and committed changes must be unstaged or handled separately.
 
@@ -19,10 +19,10 @@ Only unstaged changes are moved. Staged and committed changes must be unstaged o
 For more control, use git stash:
 
 ```bash
-# In source worktree
-git stash push -m "moving to other worktree"
+# In source workspace
+git stash push -m "moving to other workspace"
 
-# In destination worktree
+# In destination workspace
 git stash pop stash@{0}
 ```
 

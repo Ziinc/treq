@@ -26,8 +26,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'guides/getting-started/installation',
-        'guides/getting-started/your-first-worktree',
-        'guides/getting-started/interface-overview',
+        'guides/getting-started/your-first-workspace',
       ],
     },
     {
@@ -39,7 +38,7 @@ const sidebars: SidebarsConfig = {
         'guides/core-workflows/executing-implementation-plans',
         'guides/core-workflows/staging-and-committing',
         'guides/core-workflows/code-review-workflow',
-        'guides/core-workflows/merging-worktrees',
+        'guides/core-workflows/merging-workspaces',
       ],
     },
     {
@@ -48,7 +47,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'guides/common-tasks/pushing-to-remote',
         'guides/common-tasks/discarding-changes',
-        'guides/common-tasks/moving-files-between-worktrees',
+        'guides/common-tasks/moving-files-between-workspaces',
       ],
     },
     {
@@ -76,7 +75,6 @@ const sidebars: SidebarsConfig = {
       ],
     },
     'keyboard-shortcuts',
-    'troubleshooting',
   ],
 };
 

@@ -6,11 +6,11 @@ sidebar_position: 5
 
 _How to review code using Treq's built-in review tools._
 
-Treq's review interface lets you examine changes in a dedicated worktree without disrupting your current work. You can add inline comments, test changes locally, and export review summaries for pull requests.
+Treq's review interface lets you examine changes in a dedicated workspace without disrupting your current work. You can add inline comments, test changes locally, and export review summaries for pull requests.
 
 ## Starting a Review
 
-Click the **Review** button on any worktree in the dashboard. To review someone else's branch, first fetch remote changes (`git fetch origin`), create a worktree from their branch via "New Worktree" → "From existing branch," then open the review interface.
+Click the **Review** button on any workspace in the dashboard. To review someone else's branch, first fetch remote changes (`git fetch origin`), create a workspace from their branch via "New Workspace" → "From existing branch," then open the review interface.
 
 ## The Review Interface
 
@@ -30,7 +30,7 @@ The review panel shows your progress: total comments, files reviewed, and diff s
 
 ## Testing Locally
 
-Since the worktree contains the actual code, you can run it during review. Open a terminal session, install dependencies if needed, run the application, and execute tests. Finding bugs locally is more valuable than catching them after merge.
+Since the workspace contains the actual code, you can run it during review. Open a terminal session, install dependencies if needed, run the application, and execute tests. Finding bugs locally is more valuable than catching them after merge.
 
 ## Tips
 
@@ -42,5 +42,5 @@ Review commit-by-commit to understand the development progression, or view the c
 
 ## Next Steps
 
-- [Merging Worktrees](merging-worktrees) — Merge approved changes
+- [Merging Workspaces](merging-workspaces) — Merge approved changes
 - [Staging and Committing](staging-and-committing) — Fix review feedback

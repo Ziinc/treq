@@ -18,7 +18,7 @@ After the first push, subsequent pushes only need `git push`.
 
 ## In Treq Dashboard
 
-Click the push icon (↑) on the worktree card, or right-click and select **Push**. Status indicators show commits ahead (↑2) and behind (↓3) relative to the remote.
+Click the push icon (↑) on the workspace card, or right-click and select **Push**. Status indicators show commits ahead (↑2) and behind (↓3) relative to the remote.
 
 ## Handling Rejections
 
@@ -50,5 +50,5 @@ Push often to keep local and remote in sync. Pull before pushing to avoid confli
 
 ## Next Steps
 
-- [Merging Worktrees](../core-workflows/merging-worktrees)
+- [Merging Workspaces](../core-workflows/merging-workspaces)
 - [Using Treq with Git Repo](../core-workflows/using-treq-with-git-repo)

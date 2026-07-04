@@ -6,7 +6,7 @@ sidebar_position: 5
 
 _Technical overview of Treq's code review system._
 
-Treq's review system provides a dedicated interface for examining branch differences, adding inline comments, and generating structured review summaries. Reviews are stored locally per worktree and can be exported for sharing.
+Treq's review system provides a dedicated interface for examining branch differences, adding inline comments, and generating structured review summaries. Reviews are stored locally per workspace and can be exported for sharing.
 
 ## Interface
 
@@ -37,4 +37,4 @@ Comments are local only—they're not synced to remote repositories. Export and 
 ## Learn More
 
 - [Code Review Workflow Guide](/docs/guides/core-workflows/code-review-workflow)
-- [Merging Worktrees](/docs/guides/core-workflows/merging-worktrees)
+- [Merging Workspaces](/docs/guides/core-workflows/merging-workspaces)

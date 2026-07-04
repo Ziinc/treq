@@ -20,7 +20,7 @@ function HomepageHeader() {
           </div>
           <Heading as="h1" className={styles.heroTitle}>
             Your{' '}
-            <span className={styles.heroAccent}>AI Code Review</span>
+            <span className={styles.heroAccent}>AI Coding</span>
             {' '}Manager
           </Heading>
           <p className={styles.heroSubtitle}>
@@ -32,9 +32,16 @@ function HomepageHeader() {
           <div className={styles.buttons}>
             <Link
               className={clsx('button', styles.primaryButton)}
-              href="https://github.com/Ziinc/treq/releases">
+              href="https://github.com/Ziinc/treq/releases"
+              target="_blank"
+              rel="noopener noreferrer">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Download for Desktop
+            </Link>
+            <Link
+              className={clsx('button', styles.secondaryButton)}
+              to="/docs/guides/getting-started/installation">
+              Read the docs
             </Link>
           </div>
           <div className={styles.platformsSupported}>
@@ -97,6 +104,18 @@ function HomepageHeader() {
             </svg>
             <span>Claude Code</span>
           </div>
+          <div className={styles.agentIcon} title="Codex">
+            <svg xmlns="http://www.w3.org/2000/svg" width="70" height="70" fill="currentColor" className={styles.platformIcon} viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 2 2 7v10l10 5 10-5V7L12 2zm0 2.236 7 3.5-7 3.5-7-3.5 7-3.5zM4 9.618l7 3.5v6.264l-7-3.5V9.618zm9 9.764v-6.264l7-3.5v6.264l-7 3.5z"/>
+            </svg>
+            <span>Codex</span>
+          </div>
+          <div className={styles.agentIcon} title="Cursor">
+            <svg xmlns="http://www.w3.org/2000/svg" width="70" height="70" fill="currentColor" className={styles.platformIcon} viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 1 21 6.5v11L12 23 3 17.5v-11L12 1zm0 2.311L5 7.5v9l7 4.189 7-4.189v-9l-7-4.189zM8 8l8 4-8 4V8z"/>
+            </svg>
+            <span>Cursor</span>
+          </div>
         </div>
       </div>
     </header>
@@ -150,7 +169,6 @@ function FeaturesSection(): ReactNode {
         {/* Core Feature: Automatic rebasing */}
         <div className={styles.featureRow}>
           <div className={styles.featureText}>
-            <div className={styles.featureBadge}>Core</div>
             <div className={styles.featureIconInline}><RefreshCw size={28} /></div>
             <Heading as="h3" className={styles.featureHeading}>
               Automatic rebasing
@@ -192,7 +210,6 @@ function FeaturesSection(): ReactNode {
         {/* Core Feature: Stacked workspaces */}
         <div className={clsx(styles.featureRow, styles.featureRowReverse)}>
           <div className={styles.featureText}>
-            <div className={styles.featureBadge}>Core</div>
             <div className={styles.featureIconInline}><Layers size={28} /></div>
             <Heading as="h3" className={styles.featureHeading}>
               Stacked workspaces
@@ -302,7 +319,9 @@ function ClosingCTA(): ReactNode {
         <div className={styles.closingCTAButtons}>
           <Link
             className={styles.closingCTAButton}
-            href="https://github.com/Ziinc/treq/releases">
+            href="https://github.com/Ziinc/treq/releases"
+            target="_blank"
+            rel="noopener noreferrer">
             Download Treq — Free &amp; Open Source
           </Link>
         </div>
@@ -316,7 +335,7 @@ export default function Home(): ReactNode {
   return (
     <Layout
       title={siteConfig.title}
-      description="Your AI Code Review Manager. Accelerate AI-assisted development with isolated workspaces, automatic rebasing, and stacked PRs. Free, open-source desktop app for macOS.">
+      description="Your AI Coding Manager. Accelerate AI-assisted development with isolated workspaces, automatic rebasing, and stacked PRs. Free, open-source desktop app for macOS.">
       <HomepageHeader />
       <ProblemSection />
       <FeaturesSection />

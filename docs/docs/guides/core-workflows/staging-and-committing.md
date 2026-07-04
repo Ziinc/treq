@@ -10,7 +10,7 @@ Git uses a two-stage commit process: changes move from the working directory (un
 
 ## Accessing the Diff Viewer
 
-Open the diff viewer from the dashboard by clicking any changed file in the Git Changes section, or from a worktree session by clicking the Staging tab. The top section shows your file tree organized by staging status, and the bottom section displays the actual diff with Monaco Editor syntax highlighting.
+Open the diff viewer from the dashboard by clicking any changed file in the Git Changes section, or from a workspace session by clicking the Staging tab. The top section shows your file tree organized by staging status, and the bottom section displays the actual diff with Monaco Editor syntax highlighting.
 
 ## Creating Commits
 
@@ -28,7 +28,7 @@ Before staging, click through each changed file to understand what changed. Look
 
 **Unstaging** moves files back to unstaged without losing changes. **Discarding** permanently deletes changes—right-click a file and select "Discard Changes," then confirm. This cannot be undone.
 
-Safer alternatives: stash changes with `git stash` to restore later, commit to a temporary branch, or use Treq's "Move to Worktree" feature to preserve changes elsewhere.
+Safer alternatives: stash changes with `git stash` to restore later, commit to a temporary branch, or use Treq's "Move to Workspace" feature to preserve changes elsewhere.
 
 ## Atomic Commits
 
@@ -39,5 +39,5 @@ Group related files, stage them, commit with a descriptive message, then repeat 
 ## Next Steps
 
 - [Code Review Workflow](code-review-workflow) — Review changes with others
-- [Merging Worktrees](merging-worktrees) — Merge commits to main
+- [Merging Workspaces](merging-workspaces) — Merge commits to main
 - [Pushing to Remote](../common-tasks/pushing-to-remote) — Share your commits

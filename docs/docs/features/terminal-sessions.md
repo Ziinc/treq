@@ -6,7 +6,7 @@ sidebar_position: 2
 
 _Technical overview of Treq's integrated terminal and PTY implementation._
 
-Treq provides full-featured terminal emulation using ghostty-web on the frontend and the `portable-pty` Rust crate on the backend. Each worktree can have multiple independent terminal sessions with separate PTY processes.
+Treq provides full-featured terminal emulation using ghostty-web on the frontend and the `portable-pty` Rust crate on the backend. Each workspace can have multiple independent terminal sessions with separate PTY processes.
 
 ## Architecture
 
@@ -16,7 +16,7 @@ The backend spawns PTY processes via the `portable-pty` crate—Unix PTY on macO
 
 ## Session Management
 
-Each worktree can have multiple terminal sessions sharing the same working directory base. Sessions run independently with their own PTY process and output buffer. Switching between sessions preserves state—all terminals continue running in the background.
+Each workspace can have multiple terminal sessions sharing the same working directory base. Sessions run independently with their own PTY process and output buffer. Switching between sessions preserves state—all terminals continue running in the background.
 
 Sessions follow a simple lifecycle: creation spawns a PTY and adds it to the session manager; active sessions receive input and stream output; backgrounded sessions keep running but aren't visible; closing terminates the PTY and cleans up resources.
 

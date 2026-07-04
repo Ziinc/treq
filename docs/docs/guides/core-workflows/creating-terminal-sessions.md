@@ -4,13 +4,13 @@ sidebar_position: 2
 
 # Creating Terminal Sessions
 
-_How to create and manage terminal sessions across worktrees._
+_How to create and manage terminal sessions across workspaces._
 
-Terminal sessions in Treq are full PTY shells bound to a worktree's directory. Each worktree can have multiple sessions for running parallel processes like dev servers, tests, and builds. Sessions use ghostty-web for terminal emulation with support for copy/paste, clickable URLs, and your default shell.
+Terminal sessions in Treq are full PTY shells bound to a workspace's directory. Each workspace can have multiple sessions for running parallel processes like dev servers, tests, and builds. Sessions use ghostty-web for terminal emulation with support for copy/paste, clickable URLs, and your default shell.
 
 ## Creating Sessions
 
-When you create a worktree and click "Open," Treq automatically creates a session with the working directory set to the worktree path. To create additional sessions for an existing worktree, right-click the worktree and select **New Session**, or click the **+** icon in the session tabs.
+When you create a workspace and click "Open," Treq automatically creates a session with the working directory set to the workspace path. To create additional sessions for an existing workspace, right-click the workspace and select **New Session**, or click the **+** icon in the session tabs.
 
 ## Managing Sessions
 
@@ -36,7 +36,7 @@ Close sessions by clicking the ✕ on the tab or right-clicking and selecting **
 
 ## Troubleshooting
 
-If a session won't open, verify the shell path in Settings → Terminal → Default Shell (`which zsh` or `which bash`). For garbled output, type `reset` or reopen the session. If commands fail, check your working directory with `pwd` and verify you're in the correct worktree.
+If a session won't open, verify the shell path in Settings → Terminal → Default Shell (`which zsh` or `which bash`). For garbled output, type `reset` or reopen the session. If commands fail, check your working directory with `pwd` and verify you're in the correct workspace.
 
 ## Next Steps
 

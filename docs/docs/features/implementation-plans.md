@@ -6,7 +6,7 @@ sidebar_position: 3
 
 _Technical overview of Treq's plan parsing, storage, and execution system._
 
-Treq's implementation plan system parses structured markdown plans from terminal output, stores them with metadata, and enables creating worktrees directly from plans to guide development.
+Treq's implementation plan system parses structured markdown plans from terminal output, stores them with metadata, and enables creating workspaces directly from plans to guide development.
 
 ## Plan Format
 
@@ -16,9 +16,9 @@ The parser watches terminal output for these markdown patterns, debouncing at 50
 
 ## Storage
 
-Plans are stored as markdown files in `.treq/plans/{uuid}.md` with YAML frontmatter containing metadata (id, title, creation date, associated worktree, status). Plan history is also stored in a database table for search and filtering.
+Plans are stored as markdown files in `.treq/plans/{uuid}.md` with YAML frontmatter containing metadata (id, title, creation date, associated workspace, status). Plan history is also stored in a database table for search and filtering.
 
-When you create a worktree from a plan, Treq extracts the title and intent to pre-fill the creation dialog, generates a sanitized branch name suggestion, and associates the plan with the new worktree.
+When you create a workspace from a plan, Treq extracts the title and intent to pre-fill the creation dialog, generates a sanitized branch name suggestion, and associates the plan with the new workspace.
 
 ## Plan Panel
 
@@ -26,7 +26,7 @@ The session view displays plans in a dedicated panel with markdown rendering, sy
 
 ## History and Search
 
-Plans are automatically saved when executed (worktree created from plan), manually saved, or when an associated worktree is deleted. Search by title, content keywords, or tags. Filter by status (in-progress, completed, abandoned), associated worktree, or date range.
+Plans are automatically saved when executed (workspace created from plan), manually saved, or when an associated workspace is deleted. Search by title, content keywords, or tags. Filter by status (in-progress, completed, abandoned), associated workspace, or date range.
 
 Export plans as markdown, JSON with metadata, or plain text. Import by dragging and dropping `.md` files or pasting markdown directly.
 
@@ -41,4 +41,4 @@ Maximum plan size is 10MB. Plan history retains up to 1000 entries. Plans must u
 ## Learn More
 
 - [Executing Implementation Plans Guide](/docs/guides/core-workflows/executing-implementation-plans)
-- [Creating Worktrees](/docs/guides/common-tasks/creating-worktrees)
+- [Creating Workspaces](/docs/guides/getting-started/your-first-workspace)
