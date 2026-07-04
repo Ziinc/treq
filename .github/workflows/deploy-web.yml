@@ -7,11 +7,13 @@ on:
       - main
     paths:
       - "web/**"
+      - ".github/workflows/deploy-web.yml"
   pull_request:
     branches:
       - main
     paths:
       - "web/**"
+      - ".github/workflows/deploy-web.yml"
 defaults:
   run:
     shell: bash
