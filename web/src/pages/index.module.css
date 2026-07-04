@@ -4,20 +4,59 @@
  */
 
 .heroBanner {
-  padding: 3.5rem 2rem 0;
-  background: linear-gradient(180deg, #fafafa 0%, #ffffff 100%);
+  padding: 4rem 2rem 0;
+  background:
+    linear-gradient(115deg, rgba(59, 156, 255, 0.2) 0%, transparent 27%),
+    radial-gradient(circle at 82% 18%, rgba(94, 176, 255, 0.28) 0%, transparent 28rem),
+    radial-gradient(circle at 18% 78%, rgba(14, 165, 233, 0.18) 0%, transparent 24rem),
+    linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   position: relative;
   overflow: hidden;
 }
 
+.heroBanner::before,
+.heroBanner::after,
+.problemSection::before,
+.featuresSection::before,
+.closingCTA::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.heroBanner::before,
+.problemSection::before,
+.featuresSection::before,
+.closingCTA::before {
+  background:
+    linear-gradient(90deg, rgba(15, 23, 42, 0.065) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.055) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.88), transparent 88%);
+}
+
+.heroBanner::after {
+  background:
+    linear-gradient(112deg, transparent 0 20%, rgba(59, 156, 255, 0.18) 20.2%, transparent 20.8%),
+    linear-gradient(112deg, transparent 0 38%, rgba(15, 23, 42, 0.12) 38.2%, transparent 38.55%),
+    linear-gradient(112deg, transparent 0 61%, rgba(59, 156, 255, 0.14) 61.1%, transparent 61.5%),
+    linear-gradient(112deg, transparent 0 78%, rgba(15, 23, 42, 0.1) 78.1%, transparent 78.45%);
+  opacity: 0.9;
+  transform: skewY(-4deg);
+  transform-origin: top left;
+}
+
 .heroGlow {
   position: absolute;
-  top: -50%;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 800px;
-  height: 800px;
-  background: radial-gradient(circle, rgba(0, 122, 255, 0.15) 0%, transparent 70%);
+  top: -22rem;
+  right: -12rem;
+  width: 52rem;
+  height: 52rem;
+  background:
+    radial-gradient(circle, rgba(59, 156, 255, 0.22) 0%, transparent 62%),
+    conic-gradient(from 220deg, transparent 0deg, rgba(59, 156, 255, 0.22) 55deg, transparent 120deg);
+  filter: blur(4px);
   pointer-events: none;
 }
 
@@ -42,7 +81,7 @@
 
 .heroEyebrow {
   font-size: 1.05rem;
-  color: #6b7280;
+  color: #334155;
   font-weight: 600;
   line-height: 1.6;
   margin-bottom: 1rem;
@@ -53,7 +92,7 @@
   font-weight: 800;
   line-height: 1.1;
   margin-bottom: 1.5rem;
-  color: #1a1a1a;
+  color: #07111f;
   letter-spacing: -0.02em;
   white-space: nowrap;
 }
@@ -76,7 +115,7 @@
 
 .platformsSupported {
   font-size: 0.95rem;
-  color: #6b7280;
+  color: #475569;
   margin-bottom: 1rem;
   display: flex;
   align-items: center;
@@ -93,9 +132,12 @@
 .agentsSupported {
   width: 100%;
   padding: 1.25rem 2rem;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid rgba(59, 156, 255, 0.18);
   text-align: center;
-  background: #ffffff;
+  background:
+    linear-gradient(90deg, transparent 0%, rgba(59, 156, 255, 0.08) 48%, transparent 100%),
+    rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(18px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -168,14 +210,14 @@
 }
 
 .primaryButton {
-  background: linear-gradient(135deg, var(--ifm-color-primary) 0%, var(--ifm-color-primary-dark) 100%);
+  background: var(--ifm-color-primary);
   color: #ffffff;
   padding: 1rem 2rem;
   font-size: 1.05rem;
   font-weight: 600;
-  border-radius: 12px;
+  border-radius: 10px;
   border: none;
-  box-shadow: 0 4px 20px rgba(0, 122, 255, 0.3);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(255, 255, 255, 0.22) inset;
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
@@ -184,19 +226,19 @@
 
 .primaryButton:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(0, 122, 255, 0.4);
+  box-shadow: 0 22px 50px rgba(15, 23, 42, 0.28), 0 0 34px rgba(59, 156, 255, 0.34);
   color: #ffffff;
   text-decoration: none;
 }
 
 .secondaryButton {
-  background: transparent;
-  color: #374151;
-  border: 2px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.68);
+  color: #0f172a;
+  border: 1px solid rgba(15, 23, 42, 0.16);
   padding: 1rem 2rem;
   font-size: 1.05rem;
   font-weight: 600;
-  border-radius: 12px;
+  border-radius: 10px;
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
@@ -204,9 +246,9 @@
 }
 
 .secondaryButton:hover {
-  background: #f9fafb;
-  border-color: #d1d5db;
-  color: #1a1a1a;
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(59, 156, 255, 0.32);
+  color: #07111f;
   text-decoration: none;
 }
 
@@ -216,13 +258,19 @@
   justify-content: center;
   align-items: center;
   padding: 0;
+  perspective: 1400px;
 }
 
 .heroScreenshot {
   width: min(100%, 760px);
   height: auto;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+  border: 1px solid rgba(59, 156, 255, 0.26);
+  box-shadow:
+    0 34px 90px rgba(15, 23, 42, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.55) inset,
+    0 0 70px rgba(59, 156, 255, 0.2);
+  transform: rotateX(2deg) rotateY(-4deg);
+  transform-origin: center;
 }
 
 .screenshotPlaceholder {
@@ -377,7 +425,26 @@
 }
 
 [data-theme='dark'] .heroBanner {
-  background: linear-gradient(180deg, #1a1a1a 0%, #0f0f0f 100%);
+  background:
+    linear-gradient(115deg, rgba(94, 176, 255, 0.16) 0%, transparent 27%),
+    radial-gradient(circle at 82% 18%, rgba(59, 156, 255, 0.24) 0%, transparent 28rem),
+    radial-gradient(circle at 18% 78%, rgba(14, 165, 233, 0.14) 0%, transparent 24rem),
+    linear-gradient(180deg, #020617 0%, #0f172a 58%, #0f0f0f 100%);
+}
+
+[data-theme='dark'] .heroBanner::before {
+  background:
+    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+[data-theme='dark'] .heroBanner::after {
+  background:
+    linear-gradient(112deg, transparent 0 20%, rgba(94, 176, 255, 0.22) 20.2%, transparent 20.8%),
+    linear-gradient(112deg, transparent 0 38%, rgba(148, 163, 184, 0.14) 38.2%, transparent 38.55%),
+    linear-gradient(112deg, transparent 0 61%, rgba(94, 176, 255, 0.18) 61.1%, transparent 61.5%),
+    linear-gradient(112deg, transparent 0 78%, rgba(148, 163, 184, 0.12) 78.1%, transparent 78.45%);
 }
 
 [data-theme='dark'] .heroTitle {
@@ -385,12 +452,17 @@
 }
 
 [data-theme='dark'] .heroGlow {
-  background: radial-gradient(circle, rgba(10, 132, 255, 0.15) 0%, transparent 70%);
+  background:
+    radial-gradient(circle, rgba(94, 176, 255, 0.2) 0%, transparent 62%),
+    conic-gradient(from 220deg, transparent 0deg, rgba(94, 176, 255, 0.2) 55deg, transparent 120deg);
 }
 
 [data-theme='dark'] .heroScreenshot {
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+  border-color: rgba(94, 176, 255, 0.3);
+  box-shadow:
+    0 34px 90px rgba(0, 0, 0, 0.56),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+    0 0 80px rgba(94, 176, 255, 0.18);
 }
 
 [data-theme='dark'] .heroEyebrow {
@@ -398,13 +470,14 @@
 }
 
 [data-theme='dark'] .secondaryButton {
+  background: rgba(15, 23, 42, 0.72);
   color: #e5e7eb;
-  border-color: #374151;
+  border-color: rgba(148, 163, 184, 0.24);
 }
 
 [data-theme='dark'] .secondaryButton:hover {
-  background: #1f2937;
-  border-color: #4b5563;
+  background: rgba(30, 41, 59, 0.86);
+  border-color: rgba(94, 176, 255, 0.42);
   color: #ffffff;
 }
 
@@ -425,8 +498,10 @@
 }
 
 [data-theme='dark'] .agentsSupported {
-  border-top-color: #374151;
-  background: #0f0f0f;
+  border-top-color: rgba(94, 176, 255, 0.18);
+  background:
+    linear-gradient(90deg, transparent 0%, rgba(94, 176, 255, 0.08) 48%, transparent 100%),
+    rgba(15, 15, 15, 0.9);
 }
 
 [data-theme='dark'] .agentsLabel {
@@ -463,14 +538,21 @@
 /* Problem Section */
 .problemSection {
   padding: 6rem 2rem;
-  background: linear-gradient(180deg, #1f2937 0%, #111827 100%);
+  background:
+    linear-gradient(115deg, rgba(59, 156, 255, 0.13) 0%, transparent 30%),
+    radial-gradient(circle at 82% 20%, rgba(59, 156, 255, 0.18) 0%, transparent 28rem),
+    radial-gradient(circle at 16% 82%, rgba(14, 165, 233, 0.16) 0%, transparent 24rem),
+    linear-gradient(180deg, #0f172a 0%, #111827 100%);
   position: relative;
+  overflow: hidden;
 }
 
 .problemContainer {
   max-width: 900px;
   margin: 0 auto;
   text-align: center;
+  position: relative;
+  z-index: 1;
 }
 
 .problemHeading {
@@ -533,18 +615,30 @@
 }
 
 [data-theme='dark'] .problemSection {
-  background: linear-gradient(180deg, #1f2937 0%, #111827 100%);
+  background:
+    linear-gradient(115deg, rgba(94, 176, 255, 0.12) 0%, transparent 30%),
+    radial-gradient(circle at 82% 20%, rgba(59, 156, 255, 0.16) 0%, transparent 28rem),
+    radial-gradient(circle at 16% 82%, rgba(14, 165, 233, 0.12) 0%, transparent 24rem),
+    linear-gradient(180deg, #0f172a 0%, #020617 100%);
 }
 
 /* Features Section */
 .featuresSection {
   padding: 6rem 2rem 4rem;
-  background: #ffffff;
+  background:
+    linear-gradient(115deg, rgba(59, 156, 255, 0.12) 0%, transparent 29%),
+    radial-gradient(circle at 78% 16%, rgba(94, 176, 255, 0.2) 0%, transparent 30rem),
+    radial-gradient(circle at 18% 70%, rgba(14, 165, 233, 0.12) 0%, transparent 24rem),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  position: relative;
+  overflow: hidden;
 }
 
 .featuresContainer {
   max-width: 1200px;
   margin: 0 auto;
+  position: relative;
+  z-index: 1;
 }
 
 .sectionHeader {
@@ -1012,7 +1106,11 @@
 }
 
 [data-theme='dark'] .featuresSection {
-  background: #0f0f0f;
+  background:
+    linear-gradient(115deg, rgba(94, 176, 255, 0.12) 0%, transparent 29%),
+    radial-gradient(circle at 78% 16%, rgba(59, 156, 255, 0.16) 0%, transparent 30rem),
+    radial-gradient(circle at 18% 70%, rgba(14, 165, 233, 0.1) 0%, transparent 24rem),
+    linear-gradient(180deg, #020617 0%, #0f0f0f 100%);
 }
 
 [data-theme='dark'] .featuresHeading {
@@ -1041,13 +1139,21 @@
 /* Closing CTA Section */
 .closingCTA {
   padding: 8rem 2rem;
-  background: linear-gradient(180deg, #fafafa 0%, #ffffff 100%);
+  background:
+    linear-gradient(115deg, rgba(59, 156, 255, 0.16) 0%, transparent 30%),
+    radial-gradient(circle at 82% 28%, rgba(94, 176, 255, 0.22) 0%, transparent 30rem),
+    radial-gradient(circle at 18% 78%, rgba(14, 165, 233, 0.16) 0%, transparent 24rem),
+    linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   text-align: center;
+  position: relative;
+  overflow: hidden;
 }
 
 .closingCTAContainer {
   max-width: 900px;
   margin: 0 auto;
+  position: relative;
+  z-index: 1;
 }
 
 .closingCTAHeading {
@@ -1145,7 +1251,11 @@
 }
 
 [data-theme='dark'] .closingCTA {
-  background: linear-gradient(180deg, #1a1a1a 0%, #0f0f0f 100%);
+  background:
+    linear-gradient(115deg, rgba(94, 176, 255, 0.14) 0%, transparent 30%),
+    radial-gradient(circle at 82% 28%, rgba(59, 156, 255, 0.18) 0%, transparent 30rem),
+    radial-gradient(circle at 18% 78%, rgba(14, 165, 233, 0.12) 0%, transparent 24rem),
+    linear-gradient(180deg, #0f0f0f 0%, #020617 100%);
 }
 
 [data-theme='dark'] .closingCTAHeading {
