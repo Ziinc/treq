@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'production' || 'preview' }}
-      url: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'https://docs.yunokit.com' || format('https://preview-{0}.yunokit-docs.pages.dev', github.event.pull_request.number) }}
+      url: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'https://treq.dev' || format('https://preview-{0}.treq-9zy.pages.dev', github.event.pull_request.number) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -47,7 +47,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy build --project-name=yunokit-docs --branch=main
+          command: pages deploy build --project-name=treq --branch=main
           workingDirectory: web
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish Preview
@@ -56,6 +56,6 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy build --project-name=yunokit-docs --branch=preview-${{ github.event.pull_request.number }}
+          command: pages deploy build --project-name=treq --branch=preview-${{ github.event.pull_request.number }}
           workingDirectory: web
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
