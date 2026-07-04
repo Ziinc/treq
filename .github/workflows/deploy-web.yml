@@ -1,0 +1,61 @@
+name: Deploy Web
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "web/**"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "web/**"
+defaults:
+  run:
+    shell: bash
+    working-directory: web
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'production' || 'preview' }}
+      url: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'https://docs.yunokit.com' || format('https://preview-{0}.yunokit-docs.pages.dev', github.event.pull_request.number) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: "24.3"
+          cache: npm
+          cache-dependency-path: 'web/package-lock.json'
+      - name: Restore node_modules cache
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-docs-build-${{ hashFiles('web/package-lock.json') }}
+      - name: Install dependencies
+        run: npm ci
+      - name: Build docs
+        run: npm run build
+      - name: Publish to Production
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy build --project-name=yunokit-docs --branch=main
+          workingDirectory: web
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish Preview
+        if: github.event_name == 'pull_request'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy build --project-name=yunokit-docs --branch=preview-${{ github.event.pull_request.number }}
+          workingDirectory: web
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
