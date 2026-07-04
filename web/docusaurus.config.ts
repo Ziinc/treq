@@ -6,10 +6,11 @@ import pkg from '../package.json';
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const featureFlags = pkg.featureFlags;
+const isProduction = process.env.NODE_ENV === 'production';
 
 const config: Config = {
   title: 'Treq',
-  tagline: 'A modern Git workspace manager',
+  tagline: 'The Open Source Graphite Alternative',
   favicon: 'img/favicon.svg',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
@@ -57,10 +58,12 @@ const config: Config = {
         theme: {
           customCss: './src/css/custom.css',
         },
-        gtag: {
-          trackingID: 'G-V9MPP2ZWZF',
-          anonymizeIP: true,
-        },
+        ...(isProduction ? {
+          gtag: {
+            trackingID: 'G-V9MPP2ZWZF',
+            anonymizeIP: true,
+          },
+        } : {}),
       } satisfies Preset.Options,
     ],
   ],
@@ -73,6 +76,7 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
+      hideOnScroll: true,
       logo: {
         alt: 'Treq Logo',
         src: 'assets/combined-horizontal.png',
@@ -88,7 +92,7 @@ const config: Config = {
           type: 'docSidebar',
           sidebarId: 'docsSidebar',
           position: 'left',
-          label: 'Docs',
+          label: 'Reference',
         },
         ...(featureFlags.pro ? [{
           to: '/dashboard',
@@ -113,6 +117,10 @@ const config: Config = {
         {
           title: 'Docs',
           items: [
+            {
+              label: 'Installation',
+              href: 'https://github.com/Ziinc/treq/releases',
+            },
             {
               label: 'Getting Started',
               to: '/docs/guides/getting-started/installation',
@@ -141,7 +149,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} Treq. Licensed under Apache License 2.0.`,
+      copyright: `Copyright © ${new Date().getFullYear()} Treq.<br />Treq is licensed under Apache License 2.0.`,
     },
     prism: {
       theme: prismThemes.github,

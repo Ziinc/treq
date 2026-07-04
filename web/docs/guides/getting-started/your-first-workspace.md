@@ -32,19 +32,35 @@ To work on a teammate's branch, first fetch (`git fetch origin`), then create a 
 
 ## FAQ
 
-**Where are workspaces stored?** In `.treq/workspaces/{branch-name}/` relative to your repository.
+<details>
+<summary>Where are workspaces stored?</summary>
 
-**Can I use my regular editor?** Yes—open the workspace directory in VS Code, Cursor, or any editor.
+In `.treq/workspaces/{branch-name}/` relative to your repository.
 
-**Can I create multiple workspaces?** Yes, create as many as you need for different features or fixes.
+</details>
 
-**How do I delete a workspace?** Click Delete on the workspace card (after committing or discarding changes).
+<details>
+<summary>Can I use my regular editor?</summary>
+
+Yes. Open the workspace directory in VS Code, Cursor, or any editor.
+
+</details>
+
+<details>
+<summary>Can I create multiple workspaces?</summary>
+
+Yes, create as many as you need for different features or fixes.
+
+</details>
+
+<details>
+<summary>How do I delete a workspace?</summary>
+
+Click Delete on the workspace card, after committing or discarding changes.
+
+</details>
 
 ## Troubleshooting
 
 If you see "Branch already exists," choose a different name or select the existing branch. If a workspace doesn't appear, use Settings → Rebuild Workspaces Database.
 
-## Next Steps
-
-- [Staging and Committing](../core-workflows/staging-and-committing) — Commit your changes
-- [Merging Workspaces](../core-workflows/merging-workspaces) — Merge back to main

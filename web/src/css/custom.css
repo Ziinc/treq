@@ -6,13 +6,13 @@
 
 /* You can override the default Infima variables here. */
 :root {
-  --ifm-color-primary: #10b981;
-  --ifm-color-primary-dark: #0ea672;
-  --ifm-color-primary-darker: #0d9d6b;
-  --ifm-color-primary-darkest: #0a8158;
-  --ifm-color-primary-light: #12cc90;
-  --ifm-color-primary-lighter: #1dd699;
-  --ifm-color-primary-lightest: #34dda5;
+  --ifm-color-primary: #3b9cff;
+  --ifm-color-primary-dark: #1f8eff;
+  --ifm-color-primary-darker: #1187ff;
+  --ifm-color-primary-darkest: #0070df;
+  --ifm-color-primary-light: #57aaff;
+  --ifm-color-primary-lighter: #65b1ff;
+  --ifm-color-primary-lightest: #8cc5ff;
   --ifm-code-font-size: 95%;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
   --ifm-background-color: #ffffff;
@@ -25,13 +25,13 @@
 
 /* For readability concerns, you should choose a lighter palette in dark mode. */
 [data-theme='dark'] {
-  --ifm-color-primary: #34d399;
-  --ifm-color-primary-dark: #1fce88;
-  --ifm-color-primary-darker: #1ac47e;
-  --ifm-color-primary-darkest: #15a268;
-  --ifm-color-primary-light: #49d8aa;
-  --ifm-color-primary-lighter: #5edbb4;
-  --ifm-color-primary-lightest: #88e4c8;
+  --ifm-color-primary: #5eb0ff;
+  --ifm-color-primary-dark: #3b9cff;
+  --ifm-color-primary-darker: #2993ff;
+  --ifm-color-primary-darkest: #007aff;
+  --ifm-color-primary-light: #81c1ff;
+  --ifm-color-primary-lighter: #93caff;
+  --ifm-color-primary-lightest: #bbdeff;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
   --ifm-background-color: #0f0f0f;
   --ifm-navbar-background-color: #1a1a1a;
@@ -64,6 +64,109 @@ html {
   font-weight: 500;
 }
 
+.navbar .button--primary {
+  background: linear-gradient(135deg, var(--ifm-color-primary) 0%, var(--ifm-color-primary-dark) 100%);
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 2px 10px rgba(0, 122, 255, 0.2);
+}
+
+.navbar .button--primary:hover {
+  color: #ffffff;
+  box-shadow: 0 4px 20px rgba(0, 122, 255, 0.3);
+}
+
+/* Docs sidebar */
+.theme-doc-sidebar-container {
+  border-right: 0;
+}
+
+.table-of-contents__left-border {
+  border-left: 3px solid var(--ifm-color-primary);
+}
+
+.theme-doc-toc-desktop {
+  padding-left: 1rem;
+}
+
+.theme-doc-toc-desktop .table-of-contents {
+  position: relative;
+  margin-top: 0;
+  padding: 2.75rem 1rem 1rem;
+  background: rgba(59, 156, 255, 0.06);
+  border: 1px solid rgba(59, 156, 255, 0.16);
+  border-left-width: 3px;
+  border-radius: 14px;
+}
+
+.theme-doc-toc-desktop .table-of-contents::before {
+  content: 'Contents';
+  position: absolute;
+  top: 0.9rem;
+  left: 1rem;
+  color: var(--ifm-color-primary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.theme-doc-toc-desktop .table-of-contents__link {
+  display: block;
+  padding: 0.35rem 0;
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.theme-doc-toc-desktop .table-of-contents__link--active {
+  color: var(--ifm-color-primary);
+  font-weight: 700;
+}
+
+.theme-doc-toc-desktop .table-of-contents__link:hover {
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+[data-theme='dark'] .theme-doc-toc-desktop .table-of-contents {
+  background: rgba(94, 176, 255, 0.08);
+  border-color: rgba(94, 176, 255, 0.22);
+}
+
+/* Floating docs content card */
+div[class*='docRoot'] {
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 45%);
+}
+
+main[class*='docMainContainer'] > .container {
+  max-width: 1120px;
+  margin: 2rem auto 3rem;
+  padding: 2.5rem 3rem;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 24px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12);
+}
+
+[data-theme='dark'] div[class*='docRoot'] {
+  background: linear-gradient(180deg, #111827 0%, #0f0f0f 45%);
+}
+
+[data-theme='dark'] main[class*='docMainContainer'] > .container {
+  background: rgba(17, 24, 39, 0.92);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.38);
+}
+
+@media screen and (max-width: 996px) {
+  main[class*='docMainContainer'] > .container {
+    margin: 1rem;
+    padding: 1.5rem;
+    border-radius: 18px;
+  }
+}
+
 /* Button styling with more personality */
 .button {
   border-radius: 10px;
@@ -74,17 +177,30 @@ html {
 
 .button--primary {
   background: linear-gradient(135deg, var(--ifm-color-primary) 0%, var(--ifm-color-primary-dark) 100%);
-  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.2);
+  box-shadow: 0 2px 10px rgba(0, 122, 255, 0.2);
+  color: #ffffff;
 }
 
 .button--primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 122, 255, 0.3);
+  color: #ffffff;
 }
 
 .button--sm {
   padding: 0.5rem 1.25rem;
   font-size: 0.9rem;
+}
+
+.docsDownloadButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  line-height: 1;
+  padding-top: 0;
+  padding-bottom: 0;
+  text-align: center;
 }
 
 /* Footer improvements */

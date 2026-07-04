@@ -36,19 +36,15 @@ For authentication issues, configure your credential helper for HTTPS (`git conf
 
 ## Force Push
 
-Only force push when you rebased your own branch or fixing mistakes in unpushed commits. Never force push shared or main branches.
+Only force push when you rebased your own branch or are fixing mistakes in unpushed commits. Never force push shared or main branches.
 
 ```bash
 git push --force-with-lease origin treq/your-branch
 ```
 
-Use `--force-with-lease` instead of `--force`—it fails if someone else pushed, preventing accidental overwrites.
+Use `--force-with-lease` instead of `--force`. It fails if someone else pushed, preventing accidental overwrites.
 
 ## Best Practices
 
 Push often to keep local and remote in sync. Pull before pushing to avoid conflicts. Never force push main or shared branches.
 
-## Next Steps
-
-- [Merging Workspaces](../core-workflows/merging-workspaces)
-- [Using Treq with Git Repo](../core-workflows/using-treq-with-git-repo)

@@ -4,57 +4,10 @@ sidebar_position: 1
 
 # User Guides
 
-Welcome to the Treq User Guides! These practical, step-by-step guides will help you master Treq and become productive quickly.
+Treq is an AI code review manager for developers who use coding agents. It gives each task an isolated workspace, keeps those workspaces rebased as the underlying code changes, and lets you review agent output before it reaches your main branch.
 
-## Choose Your Learning Path
+Use Treq to inspect diffs like a GitHub PR, leave inline comments, and send those comments back to an agent for changes. If you spot an issue while browsing files or reviewing a specific commit, Treq keeps that feedback tied to the code so the agent can work on it in the background.
 
-### Just Starting Out?
+Workspaces are separate copies of your codebase, so multiple agents can run in parallel without stepping on each other. Treq automatically rebases dependent workspaces, can hand conflict resolution to AI, and supports stacked workspaces for breaking large features into smaller reviewable branches.
 
-New to Treq? Start here to get up and running:
-
-1. [**Installation**](getting-started/installation) - Download and install Treq
-2. [**Your First Workspace**](getting-started/your-first-workspace) - Create your first workspace in 5 minutes
-
-### Learn Core Workflows
-
-Master the essential workflows for using Treq effectively:
-
-- [**Using Treq with a Git Repo**](core-workflows/using-treq-with-git-repo) - Set up Treq with your repository
-- [**Creating Terminal Sessions**](core-workflows/creating-terminal-sessions) - Work with integrated terminals
-- [**Executing Implementation Plans**](core-workflows/executing-implementation-plans) - Use AI-powered plans
-- [**Staging and Committing**](core-workflows/staging-and-committing) - Manage your git changes
-- [**Code Review Workflow**](core-workflows/code-review-workflow) - Review code with inline comments
-- [**Merging Workspaces**](core-workflows/merging-workspaces) - Merge branches with confidence
-
-### Quick Task Reference
-
-Need to do something specific? Jump to these task guides:
-
-- [Creating Workspaces](getting-started/your-first-workspace)
-- [Pushing to Remote](common-tasks/pushing-to-remote)
-- [Discarding Changes](common-tasks/discarding-changes)
-- [Moving Files Between Workspaces](common-tasks/moving-files-between-workspaces)
-
-### Work More Efficiently
-
-Level up your Treq skills:
-
-- [**Keyboard Shortcuts**](/docs/keyboard-shortcuts) - Speed up your workflow
-- [**Customizing Settings**](tips-and-tricks/customizing-settings) - Tailor Treq to your needs
-
-## Popular Workflows
-
-### Feature Development
-The most common workflow: create a workspace for a new feature, develop in the terminal, stage and commit changes, then merge back to main.
-
-**Quick Path**: [Installation](getting-started/installation) → [Your First Workspace](getting-started/your-first-workspace) → [Staging and Committing](core-workflows/staging-and-committing) → [Merging Workspaces](core-workflows/merging-workspaces)
-
-### Code Review
-Review pull requests without leaving your main development environment. Create a workspace from the PR branch, review with inline comments, and provide feedback.
-
-**Quick Path**: [Creating Workspaces](getting-started/your-first-workspace) → [Code Review Workflow](core-workflows/code-review-workflow)
-
-### Parallel Development
-Work on multiple features simultaneously, each in its own workspace with separate terminal sessions and build outputs.
-
-**Quick Path**: [Creating Terminal Sessions](core-workflows/creating-terminal-sessions) → [Moving Files Between Workspaces](common-tasks/moving-files-between-workspaces)
+Start with [Installation](getting-started/installation), then create [your first workspace](getting-started/your-first-workspace).

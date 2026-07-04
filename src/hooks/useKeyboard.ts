@@ -4,7 +4,7 @@ type KeyboardHandler = (event: KeyboardEvent) => void;
 
 function isWithinTerminal(element: HTMLElement | null): boolean {
 	if (!element) return false;
-	// Check for terminal containers (ghostty-web or xterm for backwards compatibility)
+	// Check for terminal containers.
 	return element.closest(".xterm, [data-terminal]") !== null;
 }
 

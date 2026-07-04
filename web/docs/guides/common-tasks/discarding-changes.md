@@ -6,17 +6,17 @@ sidebar_position: 3
 
 _How to safely discard unwanted changes._
 
-**Unstaging** moves files from staged to unstaged—changes are preserved. **Discarding** permanently deletes changes and cannot be undone.
+**Deselecting** a file removes it from the next commit without losing changes. **Discarding** permanently deletes changes and cannot be undone.
 
 ## Discarding Files
 
-In the diff viewer, right-click a file in the unstaged section and select **Discard Changes**, or select the file and press `Delete`. In the terminal, use `git checkout -- filename`. The file reverts to its last committed state.
+In the diff viewer, right-click a changed file and select **Discard Changes**, or select the file and press `Delete`. In the terminal, use `git checkout -- filename`. The file reverts to its last committed state.
 
 To discard all changes, click **Discard All** and confirm. In the terminal: `git checkout -- .`
 
 ## Partial Discards
 
-Treq doesn't support discarding specific lines directly. As a workaround: stage the lines you want to keep, discard unstaged changes, then unstage to continue working.
+Treq doesn't support discarding specific lines directly. As a workaround, commit the lines you want to keep, discard the remaining changes, then continue working.
 
 ## Recovery
 
@@ -26,9 +26,5 @@ Before discarding uncertain changes, create a safety net with `git stash push -m
 
 ## Best Practices
 
-Review the diff before discarding. Prefer stashing over discarding when unsure—you can always drop the stash later. Discard files individually when possible rather than all at once. Commit often so discards are less risky.
+Review the diff before discarding. Prefer stashing over discarding when unsure. You can always drop the stash later. Discard files individually when possible rather than all at once. Commit often so discards are less risky.
 
-## Next Steps
-
-- [Staging and Committing](../core-workflows/staging-and-committing)
-- [Moving Files Between Workspaces](moving-files-between-workspaces)

@@ -10,17 +10,29 @@ Treq's review interface lets you examine changes in a dedicated workspace withou
 
 ## Starting a Review
 
-Click the **Review** button on any workspace in the dashboard. To review someone else's branch, first fetch remote changes (`git fetch origin`), create a workspace from their branch via "New Workspace" → "From existing branch," then open the review interface.
+Click the **Review** button on any workspace in the dashboard. To review someone else's branch, fetch remote changes (`git fetch origin`), create a workspace from their branch via "New Workspace" → "From existing branch," then open the review interface.
 
 ## The Review Interface
 
-The interface has four areas. The **file tree** on the left shows all changed files with status indicators (M for modified, A for added, D for deleted) and checkmarks for files you've reviewed. The **diff viewer** in the center displays side-by-side or unified diffs with syntax highlighting—click any line to add a comment. The **review panel** on the right collects all your comments and provides export options. The **commit history** at the bottom lets you review individual commits or the cumulative diff.
+The interface has four areas. The **file tree** on the left shows all changed files with status indicators (M for modified, A for added, D for deleted) and checkmarks for files you've reviewed. The **diff viewer** in the center displays side-by-side or unified diffs with syntax highlighting. Click any line to add a comment. The **review panel** on the right collects all your comments and provides export options. The **commit history** at the bottom lets you review individual commits or the cumulative diff.
 
 Navigate files with arrow keys, press Enter to open, and Space to mark as reviewed. Toggle between side-by-side and unified diff modes in the toolbar.
 
 ## Adding Comments
 
-Click a line number to add an inline comment. Use markdown for formatting and prefix with emojis to indicate type: ❓ for questions, 💡 for suggestions, ⚠️ for issues, 👍 for praise. For multi-line comments, Shift+click to select a range. Reply to existing comments to create threads, and hover over your comments to edit or delete them.
+Click a line number in the diff viewer to add an inline comment.
+
+## Reviewing via the File Browser
+
+Open the file tree on the left and click a changed file to load its diff. Click a line number to leave a comment describing the change you want. Repeat across as many files as you need to review.
+
+Once you're done, send your comments to the **Agent Terminal**. The agent picks them up as instructions and works through them in the workspace's terminal session.
+
+## Reviewing via the Commit Browser
+
+Open the commit history at the bottom of the review interface and click a commit to load its individual diff. Review the commit the same way you'd review a file: click a line number and leave a comment.
+
+This is useful when an agent produced a sequence of commits and you want to review each step rather than the cumulative diff. Once you're done, send your comments to the **Agent Terminal** the same way as in the file browser.
 
 ## Completing the Review
 
@@ -34,13 +46,8 @@ Since the workspace contains the actual code, you can run it during review. Open
 
 ## Tips
 
-Review commit-by-commit to understand the development progression, or view the cumulative diff for small changes. Establish team guidelines for response times and approval requirements. Be constructive in feedback—suggest solutions, not just problems.
+Review commit-by-commit to understand the development progression, or view the cumulative diff for small changes. Establish team guidelines for response times and approval requirements. Be constructive in feedback: suggest solutions, not just problems.
 
 ## Keyboard Shortcuts
 
 `J`/`K` for next/previous file, `C` to add comment, `R` to mark reviewed, `A` to approve, `X` to request changes.
-
-## Next Steps
-
-- [Merging Workspaces](merging-workspaces) — Merge approved changes
-- [Staging and Committing](staging-and-committing) — Fix review feedback

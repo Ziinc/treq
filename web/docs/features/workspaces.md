@@ -8,9 +8,7 @@ _Technical overview of Treq's workspace management system._
 
 Treq enhances Git's native workspace functionality with visual management, metadata storage, and integrated tooling for working across multiple branches simultaneously. Treq uses the `.treq` directory to store and manage local state.
 
-## How Workspaces Work
-
-### Git Fundamentals
+## Git Fundamentals
 
 A Git workspace is an additional working directory linked to the same repository:
 
@@ -22,25 +20,19 @@ A Git workspace is an additional working directory linked to the same repository
   └── ...
 ```
 
-All workspaces share the same `.git` directory, with each workspace checking out a different branch. Changes in one workspace don't affect others, while Git objects (commits, refs) are shared across all workspaces. Treq extends this by abstracting away some of the Git complexity and overhead for managing and working with these workspaces.
+All workspaces share the same `.git` directory, with each workspace checking out a different branch. Changes in one workspace don't affect others, while Git objects (commits, refs) are shared across all workspaces. Treq extends this by abstracting away some of the Git complexity and overhead of managing and working with these workspaces.
 
-## Treq's Enhancements
-
-### Visual Management
+## Visual Management
 
 Treq provides a dashboard interface showing all workspaces in use, branch names and status, commit divergence (ahead/behind), uncommitted changes indicator, and quick actions (open, merge, delete).
 
-### Automated Workflows
+## Automated Workflows
 
-**Branch naming patterns**: You can customize branch naming patterns to maintain consistency across your team. For instance, you might use a pattern like `treq/{name}` to prefix all branches created through Treq. The system automatically sanitizes branch names to ensure they comply with Git's naming requirements.
+**Branch naming patterns**: You can customize branch naming patterns to maintain consistency across your team. For instance, use a pattern like `treq/{name}` to prefix all branches created through Treq. The system automatically sanitizes branch names to ensure they comply with Git's naming requirements.
 
-### Parallel Agent Terminals
-
-Each workspace can have multiple terminal sessions with independent shell environments, persistent session history, and associated plans and metadata.
+**Parallel agent terminals**: Each workspace can have multiple terminal sessions with independent shell environments, persistent session history, and associated plans and metadata.
 
 ## Storage Structure
-
-### Directory Layout
 
 ```
 {repo}/
@@ -56,95 +48,44 @@ Each workspace can have multiple terminal sessions with independent shell enviro
 
 ## Lifecycle Management
 
-### Creation Flow
+**Creation flow**: The user initiates creation from the UI or CLI. Treq validates the branch name and path, creates the workspace, optionally opens a terminal session, and updates the dashboard.
 
-1. User initiates creation (UI or CLI)
-2. Treq validates branch name and path
-3. Creates the workspace
-4. Opens terminal session (optional)
-6. Updates dashboard
+**Update flow**: Treq polls for changes, checks for uncommitted changes, calculates divergence from base, and updates UI indicators.
 
-### Update Flow
+**Deletion flow**: The user initiates deletion. Treq checks for uncommitted changes, warns if work might be lost, removes the workspace directory, closes associated sessions, and updates the dashboard.
 
-Treq polls for changes:
-1. Checks for uncommitted changes
-2. Calculates divergence from base
-3. Updates UI indicators
+## Stacks and Rebasing
 
-### Deletion Flow
+Stacked workspaces model dependent branches. `PR #2` can build on `PR #1`, and `PR #3` can build on `PR #2`. Treq tracks the target branch for each workspace and uses that relationship when it refreshes or rebases the stack.
 
-1. User initiates deletion
-2. Treq checks for uncommitted changes
-3. Warns if work might be lost
-4. Removes workspace directory
-5. Closes associated sessions
-6. Updates dashboard
+When a lower workspace changes, dependent workspaces can become stale. Treq rebases dependents so each branch continues to apply on top of its target. Conflict state is surfaced in the UI as a workspace problem, not hidden as terminal output.
+
+Rebase behavior has two important quirks:
+
+| Behavior | Detail |
+|---|---|
+| Dirty workspaces block some operations | Uncommitted changes can prevent safe rebases or merges. Commit, move, or discard those changes first. |
+| Stack order matters | Updating a lower branch affects every workspace above it. Resolve lower conflicts before reviewing higher workspaces. |
 
 ## Performance Optimizations
 
-### Caching Strategy
+Treq caches expensive git operations, including file status (staged/unstaged), commit divergence, branch information, and file diffs. The cache invalidates after git operations, on user-triggered refresh, after configuration changes, or after a maximum age of 5 minutes.
 
-Treq caches expensive git operations:
+Workspace data loads on-demand, diffs generate only when viewed, and terminal sessions start only when opened. Long-running operations like repository scanning and divergence calculation run in the background.
 
-**Cached data**:
-- File status (staged/unstaged)
-- Commit divergence
-- Branch information
-- File diffs
+## Settings and Configuration
 
-**Cache invalidation**:
-- After git operations
-- On user-triggered refresh
-- After configuration changes
-- Maximum age (5 minutes)
+**Repository settings** are scoped by repository path: branch naming pattern, default base branch, and ignored file patterns.
 
-### Lazy Loading
+**Global settings** are application preferences: terminal preferences, UI theme and layout, keyboard shortcuts, and update preferences.
 
-- Workspace data loaded on-demand
-- Diffs generated only when viewed
-- Terminal sessions created when opened
+## Limitations and Constraints
 
-### Background Operations
-
-Long-running operations run in background:
-- Repository scanning
-- Divergence calculation
-
-## Settings & Configuration
-
-### Repository Settings
-
-Scoped by repository path:
-- Branch naming pattern
-- Default base branch
-- Ignored file patterns
-
-### Global Settings
-
-Application preferences:
-- Terminal preferences
-- UI theme and layout
-- Keyboard shortcuts
-- Update preferences
-
-## Limitations & Constraints
-
-**Git limitations**:
-- Can't check out same branch in multiple workspaces
-- Workspace paths must be unique
-- Requires Git 2.35+ for full features
-
-**Treq limitations**:
-- One repository at a time
-- Workspaces must be in `.treq/workspaces/`
-- Windows path length limits may apply
+Git limits Treq to one branch checked out per workspace, unique workspace paths, and Git 2.35+ for full features. Treq itself supports one repository at a time and requires workspaces to live in `.treq/workspaces/`.
 
 ## Best Practices
 
-1. **Regular cleanup**: Delete unused workspaces
-2. **Consistent naming**: Use branch patterns
-3. **Commit often**: Preserve work before operations
-4. **Monitor size**: Large repos = large workspaces
+Delete unused workspaces regularly. Use consistent branch naming patterns. Commit often to preserve work before operations. Monitor size, since large repos produce large workspaces.
 
 ## Learn More
 

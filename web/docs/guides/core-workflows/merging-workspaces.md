@@ -10,7 +10,7 @@ Merge a workspace after its changes are committed, reviewed, and ready to land. 
 
 ## Before You Merge
 
-Open the workspace and confirm there are no unexpected uncommitted changes. Stage and commit anything that should be included, then run the relevant tests from the workspace terminal.
+Open the workspace and confirm there are no unexpected uncommitted changes. Commit anything that should be included, then run the relevant tests from the workspace terminal.
 
 If the branch is shared with a remote, push it before review or merge so collaborators can see the same commits.
 
@@ -22,16 +22,11 @@ Review the summary carefully, then confirm the merge. After the merge completes,
 
 ## Handling Conflicts
 
-If Git reports conflicts, open the affected files in the workspace or main repository and resolve the conflict markers. Stage the resolved files, complete the merge commit, then refresh Treq.
+Treq only opens the merge preview once the workspace has no conflicts against the target branch. If conflicts exist, resolve them in the workspace first: open the affected files, resolve the conflict markers, and commit the resolution.
 
-For large conflicts, pause and make sure the target branch is up to date before continuing. It is often easier to pull the latest main branch, resolve conflicts in the workspace, and retry the merge once tests pass.
+For large conflicts, pause and make sure the target branch is up to date before continuing. Pull the latest main branch, resolve conflicts in the workspace, and retry once tests pass. The merge preview becomes available as soon as the workspace is conflict-free.
 
 ## After Merging
 
-Push the target branch if the merge should be shared with a remote. Once the workspace is no longer needed, delete it from the dashboard to keep `.treq/workspaces/` tidy.
+Treq deletes the workspace automatically once the merge completes. Push the target branch if the merge should be shared with a remote.
 
-## Next Steps
-
-- [Pushing to Remote](../common-tasks/pushing-to-remote) — Share merged commits
-- [Discarding Changes](../common-tasks/discarding-changes) — Clean up unwanted work
-- [Moving Files Between Workspaces](../common-tasks/moving-files-between-workspaces) — Preserve work before cleanup

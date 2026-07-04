@@ -6,7 +6,7 @@ sidebar_position: 2
 
 _Personalize Treq to match your preferences and workflow._
 
-Open settings with the gear icon (⚙️) in the sidebar. Settings are split into **repository-level** (specific to the current Git repository) and **application-level** (applies to all windows). Both persist after saving. If the `.treq` directory is deleted, repository-level settings are lost.
+Open settings with the gear icon (⚙️) in the sidebar. Settings are split into **repository-level** (specific to the current Git repository) and **application-level** (applies globally). Both persist after saving. If the `.treq` directory is deleted, repository-level settings are lost.
 
 ## Repository Settings
 
@@ -38,7 +38,7 @@ Configure **file watching** with ignored patterns (`node_modules/`, `.git/`, `di
 
 ## Privacy
 
-Anonymous usage data (feature statistics, error reports, performance metrics) can be disabled in Privacy settings. Plan history is stored in `.treq/plans/`. Use **Clear All Data** to reset everything (cannot be undone).
+Anonymous usage data (feature statistics, error reports, performance metrics) can be disabled in Privacy settings. Plan history is stored in `.treq/plans/`. Use **Clear All Data** to reset everything. This cannot be undone.
 
 ## Advanced
 
@@ -48,7 +48,3 @@ Enable **developer mode** for debug logs and experimental features (may be unsta
 
 Export settings as JSON via Settings → Advanced → Export to share with team members or back up. Import by selecting a JSON file and choosing which settings to apply. Reset individual categories or all settings to defaults in Advanced settings.
 
-## Next Steps
-
-- [Keyboard Shortcuts](/docs/keyboard-shortcuts)
-- [Using Treq with Git Repo](../core-workflows/using-treq-with-git-repo)

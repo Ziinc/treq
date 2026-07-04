@@ -10,9 +10,9 @@ Use this when you started work in the wrong workspace, want to split changes int
 
 ## Using Treq's Move Feature
 
-In the source workspace's diff viewer, select files in the unstaged section (use `Cmd/Ctrl+Click` for multiple or `Shift+Click` for ranges). Right-click and choose **Move to Workspace** or click the **Move** button. Select the destination workspace from the dropdown and click **Move Files**.
+In the source workspace's diff viewer, select changed files (use `Cmd/Ctrl+Click` for multiple or `Shift+Click` for ranges). Right-click and choose **Move to Workspace**, or click the **Move** button. Select the destination workspace from the dropdown and click **Move Files**.
 
-Only unstaged changes are moved. Staged and committed changes must be unstaged or handled separately.
+Only uncommitted changes are moved. Committed changes must be handled separately, for example with cherry-pick.
 
 ## Using Git Stash
 
@@ -28,7 +28,7 @@ git stash pop stash@{0}
 
 ## Commit and Cherry-Pick
 
-The most reliable method: commit your changes in the source, cherry-pick in the destination, then reset the source:
+The most reliable method is to commit your changes in the source, cherry-pick in the destination, then reset the source:
 
 ```bash
 # In source
@@ -45,7 +45,3 @@ git reset HEAD~1
 
 If you moved the wrong files and haven't committed in the destination, discard there and check the source's stash or reflog. If already committed, reset the commit in the destination and move files back.
 
-## Next Steps
-
-- [Staging and Committing](../core-workflows/staging-and-committing)
-- [Discarding Changes](discarding-changes)
