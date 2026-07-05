@@ -469,6 +469,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 								}
 							}}
 							sessionId={sessionData.ptySessionId}
+							repoPath={sessionData.repoPath}
 							workingDirectory={
 								sessionData.workspacePath || sessionData.repoPath
 							}

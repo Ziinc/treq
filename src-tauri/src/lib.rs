@@ -9,6 +9,7 @@ pub mod core;
 pub mod db;
 pub mod file_indexer;
 pub mod jj;
+pub mod logs;
 pub mod local_db;
 pub mod pty;
 pub mod telemetry;

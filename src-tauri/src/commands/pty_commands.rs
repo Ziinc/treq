@@ -6,6 +6,7 @@ pub fn pty_create_session(
     state: State<AppState>,
     app: AppHandle,
     session_id: String,
+    repo_path: String,
     working_dir: Option<String>,
     shell: Option<String>,
     initial_command: Option<String>,
@@ -21,6 +22,10 @@ pub fn pty_create_session(
     );
     let pty_manager = state.pty_manager.lock().unwrap();
     let sid = session_id.clone();
+    let repo_path_for_logs = repo_path.clone();
+    let workspace_key = working_dir
+        .clone()
+        .unwrap_or_else(|| repo_path_for_logs.clone());
     let event_name = format!("pty-data-{}", sid);
 
     pty_manager.create_session(
@@ -30,6 +35,15 @@ pub fn pty_create_session(
         initial_command,
         suppress_echo_for,
         Box::new(move |data| {
+            let _ = crate::logs::append_workspace_log(
+                &repo_path_for_logs,
+                None,
+                &workspace_key,
+                &sid,
+                "pty",
+                "info",
+                data.trim_end(),
+            );
             if let Err(error) = app.emit(&event_name, data) {
                 log::warn!(
                     "pty emit failed: session_id={}, event={}, error={}",

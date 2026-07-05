@@ -18,6 +18,7 @@ import type {
 	RenameWorkspaceResult,
 	SingleRebaseResult,
 	Workspace,
+	WorkspaceLogSession,
 	WorkspaceSidebarStatus,
 	WorkspaceStatus,
 } from "./api-types";
@@ -100,6 +101,17 @@ export const getWindowRepoPath = (): Promise<string | null> =>
 
 export const detectEditorApps = (): Promise<EditorAppsResponse> =>
 	invoke("detect_editor_apps");
+
+export const getWorkspaceLogs = (
+	repoPath: string,
+	workspaceId: number | null,
+	workspaceKey?: string | null,
+): Promise<WorkspaceLogSession[]> =>
+	invoke("get_workspace_logs", {
+		repoPath,
+		workspaceId,
+		workspaceKey: workspaceKey ?? null,
+	});
 
 // JJ Workspace API
 // JJ Diff API

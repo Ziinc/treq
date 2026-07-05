@@ -77,6 +77,26 @@ export interface Session {
 	model?: string | null;
 }
 
+export interface WorkspaceLogRecord {
+	session_id: string;
+	workspace_key: string;
+	workspace_id: number | null;
+	timestamp_ms: number;
+	source: string;
+	level: string;
+	message: string;
+}
+
+export interface WorkspaceLogSession {
+	session_id: string;
+	workspace_key: string;
+	workspace_id: number | null;
+	first_timestamp_ms: number;
+	last_timestamp_ms: number;
+	log_count: number;
+	entries: WorkspaceLogRecord[];
+}
+
 export interface JjDiffHunk {
 	id: string;
 	header: string;

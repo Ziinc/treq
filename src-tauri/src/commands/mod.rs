@@ -4,6 +4,7 @@ pub mod commits;
 pub mod file_view;
 pub mod file_watcher;
 pub mod filesystem;
+pub mod logs;
 pub mod pending_review;
 pub mod pty_commands;
 pub mod session;

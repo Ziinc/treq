@@ -37,6 +37,7 @@ import {
 import { FileBrowser } from "./FileBrowser";
 import { LinearCommitHistory } from "./LinearCommitHistory";
 import { CommitDiffViewer } from "./CommitDiffViewer";
+import { WorkspaceLogsTab } from "./WorkspaceLogsTab";
 import { WorkspaceBookmarkConflictModal } from "./WorkspaceBookmarkConflictModal";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import { Button } from "./ui/button";
@@ -919,6 +920,13 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 									</span>
 								)}
 							</TabsTrigger>
+							<TabsTrigger
+								value="logs"
+								className="inline-flex items-center gap-1.5"
+							>
+								<Layers2 className="w-4 h-4" />
+								<span>Logs</span>
+							</TabsTrigger>
 						</TabsList>
 					</Tabs>
 					<div className="flex items-center gap-3">
@@ -1202,6 +1210,12 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 							}
 							onViewTentativeChanges={handleViewTentativeChanges}
 							onDeleteTentativeChanges={handleDeleteTentativeChanges}
+						/>
+					) : activeTab === "logs" ? (
+						<WorkspaceLogsTab
+							repoPath={effectiveRepoPath}
+							workspaceId={workspace?.id ?? null}
+							workspaceKey={workspace?.workspace_path ?? null}
 						/>
 					) : (
 						<ChangesDiffViewer

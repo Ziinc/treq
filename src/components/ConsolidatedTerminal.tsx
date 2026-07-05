@@ -29,6 +29,7 @@ import { Button } from "./ui/button";
 
 interface ConsolidatedTerminalProps {
 	sessionId: string;
+	repoPath?: string;
 	workingDirectory?: string;
 	shell?: string;
 	autoCommand?: string;
@@ -66,6 +67,7 @@ export const ConsolidatedTerminal = forwardRef<
 	(
 		{
 			sessionId,
+			repoPath,
 			workingDirectory,
 			shell,
 			autoCommand,
@@ -354,6 +356,7 @@ export const ConsolidatedTerminal = forwardRef<
 					if (isNewSession) {
 						await ptyCreateSession(
 							sessionId,
+							repoPath || workingDirectory || "",
 							workingDirectory,
 							shell,
 							undefined,
@@ -419,6 +422,7 @@ export const ConsolidatedTerminal = forwardRef<
 			};
 		}, [
 			sessionId,
+			repoPath,
 			workingDirectory,
 			shell,
 			fontSize,

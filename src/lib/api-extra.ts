@@ -14,6 +14,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 
 export const ptyCreateSession = (
 	sessionId: string,
+	repoPath: string,
 	workingDir?: string,
 	shell?: string,
 	initialCommand?: string,
@@ -21,6 +22,7 @@ export const ptyCreateSession = (
 ): Promise<void> =>
 	invoke("pty_create_session", {
 		sessionId,
+		repoPath,
 		workingDir,
 		shell,
 		initialCommand,
