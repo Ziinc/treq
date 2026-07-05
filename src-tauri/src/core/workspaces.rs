@@ -854,8 +854,9 @@ pub fn workspace_status(
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_hunk_spec, resolve_workspace_diff_conflict_marker_style, HunkSpec,
-        WorkspaceMoveRequest,
+        parse_hunk_spec, resolve_workspace_diff_base_revision_from_last_rebased,
+        resolve_workspace_diff_conflict_marker_style, resolve_workspace_diff_tip_revision_from_workspace_state,
+        HunkSpec, WorkspaceMoveRequest,
     };
     use rusqlite::Connection;
     use std::sync::{Mutex, OnceLock};
@@ -884,6 +885,39 @@ mod tests {
             style.expect("should resolve style"),
             crate::core::DEFAULT_CONFLICT_MARKER_STYLE
         );
+    }
+
+    #[test]
+    fn resolve_workspace_diff_base_revision_prefers_last_rebased_commit() {
+        let base = resolve_workspace_diff_base_revision_from_last_rebased(
+            Some("  abc123  ".to_string()),
+            "main",
+        );
+        assert_eq!(base, "abc123");
+    }
+
+    #[test]
+    fn resolve_workspace_diff_base_revision_falls_back_to_target_branch() {
+        assert_eq!(
+            resolve_workspace_diff_base_revision_from_last_rebased(None, "main"),
+            "main"
+        );
+        assert_eq!(
+            resolve_workspace_diff_base_revision_from_last_rebased(Some("   ".to_string()), "dev"),
+            "dev"
+        );
+    }
+
+    #[test]
+    fn resolve_workspace_diff_tip_revision_prefers_workspace_branch_over_parent_pointer() {
+        let tip = resolve_workspace_diff_tip_revision_from_workspace_state("feature", "main", 3);
+        assert_eq!(tip, "feature");
+    }
+
+    #[test]
+    fn resolve_workspace_diff_tip_revision_uses_parent_pointer_only_for_empty_target_workspace() {
+        let tip = resolve_workspace_diff_tip_revision_from_workspace_state("main", "main", 0);
+        assert_eq!(tip, "@-");
     }
 
     #[test]
@@ -1630,12 +1664,13 @@ fn workspace_diff_with_conflict_style(
     let workspace_dir_str = workspace_dir
         .to_str()
         .ok_or("Failed to convert workspace path to string")?;
-    let tip_revision =
-        resolve_workspace_diff_tip_revision(repo_path, &workspace, workspace_dir_str)?;
+    let base_revision =
+        resolve_workspace_diff_base_revision(repo_path, &workspace, workspace_dir_str)?;
+    let tip_revision = resolve_workspace_diff_tip_revision(repo_path, &workspace, workspace_dir_str)?;
 
     let mut diff = jj::jj_get_merge_diff_between_revisions(
         workspace_dir_str,
-        target_branch,
+        &base_revision,
         &tip_revision,
         conflict_marker_style,
     )
@@ -1660,12 +1695,21 @@ fn workspace_diff_with_conflict_style(
     Ok(diff)
 }
 
-fn resolve_workspace_diff_tip_revision(
+fn resolve_workspace_diff_base_revision(
     repo_path: &str,
     workspace: &local_db::Workspace,
     workspace_dir_str: &str,
 ) -> Result<String, String> {
     let target_branch = workspace.target_branch.as_deref().unwrap_or("main");
+    let last_rebased_target_commit =
+        local_db::get_workspace_last_rebased_commit(repo_path, workspace.id)?;
+    let base_revision = resolve_workspace_diff_base_revision_from_last_rebased(
+        last_rebased_target_commit,
+        target_branch,
+    );
+    if base_revision != target_branch {
+        return Ok(base_revision);
+    }
     if workspace.branch_name == target_branch {
         let committed_ahead = jj::jj_get_commits_ahead(workspace_dir_str, target_branch)
             .map_err(|e| format!("Failed to get workspace commits ahead: {}", e))?;
@@ -1674,30 +1718,44 @@ fn resolve_workspace_diff_tip_revision(
         }
     }
 
-    let mut current_branch = workspace.branch_name.clone();
-    let mut visited = std::collections::HashSet::new();
-    visited.insert(current_branch.clone());
+    Ok(target_branch.to_string())
+}
 
-    loop {
-        let children = local_db::get_workspaces_by_target_branch(repo_path, &current_branch)
-            .map_err(|e| format!("Failed to get child workspaces: {}", e))?;
+fn resolve_workspace_diff_tip_revision(
+    _repo_path: &str,
+    workspace: &local_db::Workspace,
+    workspace_dir_str: &str,
+) -> Result<String, String> {
+    let target_branch = workspace.target_branch.as_deref().unwrap_or("main");
+    let committed_ahead = jj::jj_get_commits_ahead(workspace_dir_str, &workspace.branch_name)
+        .map_err(|e| format!("Failed to get workspace commits ahead: {}", e))?;
+    Ok(resolve_workspace_diff_tip_revision_from_workspace_state(
+        &workspace.branch_name,
+        target_branch,
+        committed_ahead.total_count,
+    ))
+}
 
-        if children.len() != 1 {
-            break;
-        }
-
-        let next_branch = children[0].branch_name.clone();
-        if !visited.insert(next_branch.clone()) {
-            break;
-        }
-        current_branch = next_branch;
-    }
-
-    if current_branch == workspace.branch_name {
-        Ok("@".to_string())
+fn resolve_workspace_diff_tip_revision_from_workspace_state(
+    branch_name: &str,
+    target_branch: &str,
+    committed_ahead_count: usize,
+) -> String {
+    if branch_name == target_branch && committed_ahead_count == 0 {
+        "@-".to_string()
     } else {
-        Ok(current_branch)
+        branch_name.to_string()
     }
+}
+
+fn resolve_workspace_diff_base_revision_from_last_rebased(
+    last_rebased_target_commit: Option<String>,
+    target_branch: &str,
+) -> String {
+    last_rebased_target_commit
+        .map(|commit| commit.trim().to_string())
+        .filter(|commit| !commit.is_empty())
+        .unwrap_or_else(|| target_branch.to_string())
 }
 
 fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
