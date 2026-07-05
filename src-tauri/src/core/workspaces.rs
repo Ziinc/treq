@@ -1666,14 +1666,6 @@ fn resolve_workspace_diff_tip_revision(
     workspace_dir_str: &str,
 ) -> Result<String, String> {
     let target_branch = workspace.target_branch.as_deref().unwrap_or("main");
-    if workspace.branch_name == target_branch {
-        let committed_ahead = jj::jj_get_commits_ahead(workspace_dir_str, target_branch)
-            .map_err(|e| format!("Failed to get workspace commits ahead: {}", e))?;
-        if committed_ahead.total_count == 0 {
-            return Ok("@".to_string());
-        }
-    }
-
     let mut current_branch = workspace.branch_name.clone();
     let mut visited = std::collections::HashSet::new();
     visited.insert(current_branch.clone());
@@ -1694,7 +1686,15 @@ fn resolve_workspace_diff_tip_revision(
     }
 
     if current_branch == workspace.branch_name {
-        Ok("@".to_string())
+        if workspace.branch_name == target_branch {
+            let committed_ahead = jj::jj_get_commits_ahead(workspace_dir_str, target_branch)
+                .map_err(|e| format!("Failed to get workspace commits ahead: {}", e))?;
+            if committed_ahead.total_count == 0 {
+                return Ok(workspace.branch_name.clone());
+            }
+        }
+
+        Ok(workspace.branch_name.clone())
     } else {
         Ok(current_branch)
     }
