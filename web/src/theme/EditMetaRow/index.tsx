@@ -33,6 +33,31 @@ function IconMarkdown(): ReactNode {
   );
 }
 
+/**
+ * Resolve relative and site-absolute markdown links to full URLs.
+ * Uses window.location.origin so it works on any host (prod, preview, local).
+ * Matches [text](url) and ![alt](url), with an optional "title" after the url.
+ * Leaves already-absolute URLs, mailto:, and anchor-only links untouched.
+ */
+function resolveLinks(markdown: string, permalink: string): string {
+  const base = new URL(permalink, window.location.origin).href;
+  return markdown.replace(
+    /(!?\[[^\]]*\])\(([^)]+)\)/g,
+    (match, bracketPart, urlAndTitle) => {
+      // Split optional title: 'url "title"' or "url 'title'"
+      const parsed = urlAndTitle.match(/^(\S+)(\s+["'][^"']*["'])?$/);
+      if (!parsed) return match;
+      const [, url, title = ''] = parsed;
+      if (/^(https?:|mailto:|ftp:|#)/.test(url)) return match;
+      try {
+        return `${bracketPart}(${new URL(url, base).href}${title})`;
+      } catch {
+        return match;
+      }
+    },
+  );
+}
+
 export default function EditMetaRow({
   className,
   editUrl,
@@ -49,7 +74,8 @@ export default function EditMetaRow({
       const docPath = metadata.source.replace('@site/', '');
       const markdown = markdownData?.[docPath];
       if (markdown) {
-        await navigator.clipboard.writeText(markdown);
+        const resolved = resolveLinks(markdown, metadata.permalink);
+        await navigator.clipboard.writeText(resolved);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
       }
