@@ -8,9 +8,7 @@ describe("shellQuote", () => {
 	});
 
 	it("escapes a single embedded quote", () => {
-		expect(shellQuote("the file's contents")).toBe(
-			"'the file'\\''s contents'",
-		);
+		expect(shellQuote("the file's contents")).toBe("'the file'\\''s contents'");
 	});
 
 	it("escapes multiple embedded quotes, including adjacent ones", () => {
@@ -48,7 +46,7 @@ describe("shellQuote round-trip through a real POSIX shell", () => {
 
 	it("delivers strings mixing quotes, backticks, dollars, and bangs unchanged", () => {
 		const value =
-			"it's a \"quoted\" word with a `backtick`, a $VAR, and a bang! at the end";
+			'it\'s a "quoted" word with a `backtick`, a $VAR, and a bang! at the end';
 		expect(roundTrip(value)).toBe(value);
 	});
 
