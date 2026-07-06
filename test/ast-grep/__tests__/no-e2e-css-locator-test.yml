@@ -1,0 +1,23 @@
+id: no-e2e-css-locator
+valid:
+  - |
+    page.getByRole('navigation', { name: 'Main' });
+  - |
+    nav.getByRole('link', { name: 'Guides' });
+  - |
+    page.getByRole('button', { name: 'Core Workflows' });
+  - |
+    page.getByRole('contentinfo');
+  - |
+    page.getByText('User Guides');
+  - |
+    page.getByLabel('Search');
+invalid:
+  - |
+    page.locator('nav.navbar');
+  - |
+    page.locator('.theme-doc-sidebar-container');
+  - |
+    page.locator('a.navbar__brand');
+  - |
+    page.locator('#sidebar');

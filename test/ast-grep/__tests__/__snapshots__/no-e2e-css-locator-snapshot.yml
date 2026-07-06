@@ -1,0 +1,30 @@
+id: no-e2e-css-locator
+snapshots:
+  ? |
+    page.locator('#sidebar');
+  : labels:
+    - source: page.locator('#sidebar')
+      style: primary
+      start: 0
+      end: 24
+  ? |
+    page.locator('.theme-doc-sidebar-container');
+  : labels:
+    - source: page.locator('.theme-doc-sidebar-container')
+      style: primary
+      start: 0
+      end: 44
+  ? |
+    page.locator('a.navbar__brand');
+  : labels:
+    - source: page.locator('a.navbar__brand')
+      style: primary
+      start: 0
+      end: 31
+  ? |
+    page.locator('nav.navbar');
+  : labels:
+    - source: page.locator('nav.navbar')
+      style: primary
+      start: 0
+      end: 26

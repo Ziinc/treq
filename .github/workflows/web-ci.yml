@@ -31,3 +31,9 @@ jobs:
         run: npm run typecheck
       - name: Build
         run: npm run build
+      - name: Lint e2e tests (ast-grep)
+        working-directory: ${{ github.workspace }}
+        run: |
+          VERSION=$(node -p "require('./package.json').devDependencies['@ast-grep/cli']")
+          npm install --no-save --no-package-lock "@ast-grep/cli@${VERSION}"
+          ./node_modules/.bin/ast-grep scan web/e2e

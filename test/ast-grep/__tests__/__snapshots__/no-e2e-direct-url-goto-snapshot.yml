@@ -1,0 +1,23 @@
+id: no-e2e-direct-url-goto
+snapshots:
+  ? |
+    await page.goto('/docs/');
+  : labels:
+    - source: page.goto('/docs/')
+      style: primary
+      start: 6
+      end: 25
+  ? |
+    await page.goto('/docs/features/workspaces');
+  : labels:
+    - source: page.goto('/docs/features/workspaces')
+      style: primary
+      start: 6
+      end: 44
+  ? |
+    await page.goto('/docs/guides');
+  : labels:
+    - source: page.goto('/docs/guides')
+      style: primary
+      start: 6
+      end: 31
