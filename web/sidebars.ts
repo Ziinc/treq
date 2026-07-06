@@ -26,7 +26,6 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'guides/getting-started/installation',
-        'guides/getting-started/your-first-workspace',
       ],
     },
     {
@@ -35,6 +34,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'guides/core-workflows/using-treq-with-git-repo',
         'guides/core-workflows/creating-terminal-sessions',
+        'guides/core-workflows/managing-workspaces',
         'guides/core-workflows/committing-changes',
         'guides/core-workflows/code-review-workflow',
         'guides/core-workflows/merging-workspaces',

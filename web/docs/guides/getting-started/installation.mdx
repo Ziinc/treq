@@ -12,7 +12,15 @@ Download the latest version for macOS from the GitHub Releases page.
 
 ## Initial Setup
 
-1. Click **Select Repository** or the folder icon, and navigate to a Git repository, selecting the folder containing `.git`.
-2. Treq verifies the repository, checks for existing workspaces, and initializes the `.treq` folder for metadata.
-3. Optionally configure settings through the gear icon: branch naming pattern and terminal preferences. You can change these anytime.
+Click **Select Repository** or the folder icon, and navigate to a Git repository, selecting the folder containing `.git`.
+
+## Creating Your First Workspace
+
+Workspaces let you work on multiple branches simultaneously, each in its own directory. Click **New Workspace** in the dashboard (or `Cmd+N`) to open the creation dialog.
+
+Choose **Create new branch** and enter a name or intent like `add-user-profile`. Treq applies your branch naming pattern (default: `treq/{name}`) so this becomes `treq/add-user-profile`. Alternatively, select **From existing branch** to check out an existing local or remote branch.
+
+Select a **base branch** (usually `main` or `develop`) that your new branch will start from. Optionally add a **plan title** like "Add user profile page with avatar upload" to help you remember what you're working on.
+
+Click **Create Workspace**. Treq creates the directory in `.treq/workspaces/` and checks out the branch.
 
