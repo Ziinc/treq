@@ -116,11 +116,17 @@ fn test_multiple_workspace_commits() {
 fn test_commit_workspace_does_not_overwrite_last_rebased_target_commit() {
     let repo = TestRepo::new().unwrap();
     repo.commit_file("base.txt", "base", "base").unwrap();
-    let ws =
-        treq_lib::core::create_workspace(&repo.repo_path, "feat/rebased-meta", None, None, None, None)
-            .unwrap();
-    let target_commit = treq_lib::jj::jj_get_commit_id(&repo.repo_path, "@")
-        .expect("target commit should resolve");
+    let ws = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/rebased-meta",
+        None,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    let target_commit =
+        treq_lib::jj::jj_get_commit_id(&repo.repo_path, "@").expect("target commit should resolve");
     treq_lib::local_db::update_workspace_last_rebased_commit(
         &repo.repo_path,
         ws.id,
@@ -135,13 +141,16 @@ fn test_commit_workspace_does_not_overwrite_last_rebased_target_commit() {
         .expect("workspace lookup should succeed")
         .expect("workspace should exist");
     let workspace_dir = repo.workspaces_dir().join(&workspace.workspace_path);
-    let workspace_dir_str = workspace_dir.to_str().expect("workspace path should be valid utf-8");
+    let workspace_dir_str = workspace_dir
+        .to_str()
+        .expect("workspace path should be valid utf-8");
     let workspace_tip = treq_lib::jj::jj_get_commit_id(workspace_dir_str, &workspace.branch_name)
-    .expect("workspace tip should resolve");
+        .expect("workspace tip should resolve");
 
-    let last_rebased_target = treq_lib::local_db::get_workspace_last_rebased_commit(&repo.repo_path, ws.id)
-        .expect("should re-read rebased target commit")
-        .expect("rebased target commit should still exist");
+    let last_rebased_target =
+        treq_lib::local_db::get_workspace_last_rebased_commit(&repo.repo_path, ws.id)
+            .expect("should re-read rebased target commit")
+            .expect("rebased target commit should still exist");
 
     assert!(!last_rebased_target.is_empty());
     assert!(!workspace_tip.is_empty());

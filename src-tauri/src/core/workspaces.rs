@@ -855,8 +855,8 @@ pub fn workspace_status(
 mod tests {
     use super::{
         parse_hunk_spec, resolve_workspace_diff_base_revision_from_last_rebased,
-        resolve_workspace_diff_conflict_marker_style, resolve_workspace_diff_tip_revision_from_workspace_state,
-        HunkSpec, WorkspaceMoveRequest,
+        resolve_workspace_diff_conflict_marker_style,
+        resolve_workspace_diff_tip_revision_from_workspace_state, HunkSpec, WorkspaceMoveRequest,
     };
     use rusqlite::Connection;
     use std::sync::{Mutex, OnceLock};
@@ -1666,7 +1666,8 @@ fn workspace_diff_with_conflict_style(
         .ok_or("Failed to convert workspace path to string")?;
     let base_revision =
         resolve_workspace_diff_base_revision(repo_path, &workspace, workspace_dir_str)?;
-    let tip_revision = resolve_workspace_diff_tip_revision(repo_path, &workspace, workspace_dir_str)?;
+    let tip_revision =
+        resolve_workspace_diff_tip_revision(repo_path, &workspace, workspace_dir_str)?;
 
     let mut diff = jj::jj_get_merge_diff_between_revisions(
         workspace_dir_str,
