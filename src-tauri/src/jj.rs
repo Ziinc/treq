@@ -3370,11 +3370,10 @@ fn jj_rebase_workspace_bookmark_onto_with_checkout_mode(
 
     let mut loaded = load_workspace_repo_for_history_edit(workspace_path)?;
     let old_wc_commit = get_workspace_wc_commit(&loaded)?;
-    let workspace_tip_commit = resolve_commit_by_revision(&loaded, workspace_branch)?;
-    let target_commit = resolve_commit_by_revision(
-        &loaded,
-        &resolve_target_branch_symbol(&loaded, workspace_path, target_branch)?,
-    )?;
+    let workspace_revision = resolve_branch_revision_for_rebase(workspace_path, workspace_branch)?;
+    let target_revision = resolve_branch_revision_for_rebase(workspace_path, target_branch)?;
+    let workspace_tip_commit = resolve_commit_by_revision(&loaded, &workspace_revision)?;
+    let target_commit = resolve_commit_by_revision(&loaded, &target_revision)?;
 
     let rebase_options = RebaseOptions {
         empty: EmptyBehavior::Keep,
@@ -3745,8 +3744,8 @@ pub fn jj_rebase_with_revset(
             message: "Nothing to rebase (empty revision set)".to_string(),
         });
     }
-    let target_symbol = resolve_target_branch_symbol(&loaded, working_dir, target_branch)?;
-    let target_commit = resolve_commit_by_revision(&loaded, &target_symbol)?;
+    let target_revision = resolve_branch_revision_for_rebase(working_dir, target_branch)?;
+    let target_commit = resolve_commit_by_revision(&loaded, &target_revision)?;
 
     let rebase_options = RebaseOptions {
         empty: EmptyBehavior::Keep,
@@ -4380,6 +4379,17 @@ fn resolve_local_target_branch_revision(
     Ok(selected)
 }
 
+/// Resolve a branch/bookmark to a concrete commit ID for rebase operations.
+///
+/// This avoids embedding conflicted bookmark names in revsets or move-commit targets.
+pub fn resolve_branch_revision_for_rebase(
+    workspace_path: &str,
+    branch_name: &str,
+) -> Result<String, JjError> {
+    let loaded = load_workspace_repo(workspace_path)?;
+    resolve_local_target_branch_revision(&loaded, workspace_path, branch_name)
+}
+
 pub fn jj_get_log(
     workspace_path: &str,
     target_branch: &str,
@@ -4853,8 +4863,10 @@ pub fn jj_dry_run_home_repo_rebase(
             .map_err(|e| JjError::IoError(format!("Failed to load merge base commit: {}", e)))?
     };
 
-    let current_commit = resolve_commit_by_revision(&loaded, &current_sym)?;
-    let target_commit = resolve_commit_by_revision(&loaded, &target_sym)?;
+    let current_revision = resolve_branch_revision_for_rebase(repo_path, current_branch)?;
+    let target_revision = resolve_branch_revision_for_rebase(repo_path, target_branch)?;
+    let current_commit = resolve_commit_by_revision(&loaded, &current_revision)?;
+    let target_commit = resolve_commit_by_revision(&loaded, &target_revision)?;
 
     let merge_base_tree = merge_base_commit.tree();
     let current_tree = current_commit.tree();
@@ -6115,6 +6127,27 @@ mod tests {
         let ids =
             jj_log_revset_commit_ids(workspace_path, "none()").expect("none() should resolve");
         assert!(ids.is_empty(), "none() should return no commits");
+    }
+
+    #[test]
+    fn resolve_branch_revision_for_rebase_returns_current_tip() {
+        let temp = TempDir::new().expect("tempdir");
+        init_jj_repo(&temp);
+        let repo_path = temp.path().to_str().expect("utf8 path");
+
+        let branch = "feat/conflict-rebase";
+        jj_set_bookmark(repo_path, branch, "@").expect("set initial bookmark");
+        let loaded = load_workspace_repo(repo_path).expect("load repo");
+        let expected = resolve_commit_by_revision(&loaded, "@").expect("resolve wc tip");
+        let resolved =
+            resolve_branch_revision_for_rebase(repo_path, branch).expect("branch should resolve");
+        let resolved_commit =
+            resolve_commit_by_revision(&loaded, &resolved).expect("resolved branch should map to commit");
+        assert_eq!(
+            resolved_commit.id().hex(),
+            expected.id().hex(),
+            "helper should resolve to the bookmark tip commit"
+        );
     }
 
     #[test]
