@@ -92,6 +92,8 @@ describe("ShowWorkspace - header", () => {
 
 		await user.click(await findSidebarBranchElement("feat/alpha"));
 
+		const header = await screen.findByTestId("show-workspace-header");
+
 		let targetBtn: HTMLButtonElement;
 		await waitFor(() => {
 			targetBtn = screen.getByRole("button", {
@@ -100,20 +102,20 @@ describe("ShowWorkspace - header", () => {
 			expect(targetBtn).not.toBeDisabled();
 		});
 
-		await screen.findByText(defaultBranch, { selector: "button *" });
+		await within(header).findByText(defaultBranch, { selector: "button *" });
 
 		fireEvent.click(targetBtn!);
 		const betaElement = await screen.findByText("feat/beta", {
 			selector: ".branch-list-item *",
 		});
 		fireEvent.click(betaElement);
-		await screen.findByText("feat/beta", { selector: "button *" });
+		await within(header).findByText("feat/beta", { selector: "button *" });
 
 		await user.click(await findSidebarBranchElement("feat/beta"));
-		await screen.findByText(defaultBranch, { selector: "button *" });
+		await within(header).findByText(defaultBranch, { selector: "button *" });
 
 		await user.click(await findSidebarBranchElement("feat/alpha"));
-		await screen.findByText("feat/beta", { selector: "button *" });
+		await within(header).findByText("feat/beta", { selector: "button *" });
 	});
 
 	it("lazily loads branch list into the target-branch dropdown on open", async () => {
@@ -185,6 +187,8 @@ describe("ShowWorkspace - header", () => {
 
 		await user.click(await screen.findByText("feat/alpha"));
 
+		const header = await screen.findByTestId("show-workspace-header");
+
 		let targetBtn: HTMLButtonElement;
 		await waitFor(() => {
 			targetBtn = screen.getByRole("button", {
@@ -200,7 +204,7 @@ describe("ShowWorkspace - header", () => {
 		fireEvent.click(betaElement);
 
 		await screen.findByText("Rebased successfully");
-		await screen.findByText("feat/beta", { selector: "button *" });
+		await within(header).findByText("feat/beta", { selector: "button *" });
 
 		const betaWorkspacePath = resolveWorkspacePath(
 			repoPath,
