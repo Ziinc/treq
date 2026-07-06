@@ -3,12 +3,16 @@ name: CI
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - "web/**"
+    paths:
+      - "src/**"
+      - "src-tauri/**"
+      - ".github/workflows/ci.yml"
   pull_request:
     branches: [main]
-    paths-ignore:
-      - "web/**"
+    paths:
+      - "src/**"
+      - "src-tauri/**"
+      - ".github/workflows/ci.yml"
 
 jobs:
   ci:
