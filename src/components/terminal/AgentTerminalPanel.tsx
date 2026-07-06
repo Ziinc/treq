@@ -38,6 +38,7 @@ import {
 import { ModelSelector } from "../ModelSelector";
 import { Input } from "../ui/input";
 import { useToast } from "../ui/toast";
+import { shellQuote } from "../../lib/shellQuote";
 import { type ClaudeSessionData } from "./types";
 
 export interface AgentTerminalPanelProps {
@@ -240,22 +241,13 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 			`IMPORTANT: You must read, write, edit, delete only files in the current working directory.`,
 		].join("\\n");
 
-		// Escape a string for use inside a double-quoted shell argument
-		const escapeShellDoubleQuoted = (str: string) =>
-			str
-				.replace(/\\/g, "\\\\")
-				.replace(/"/g, '\\"')
-				.replace(/`/g, "\\`")
-				.replace(/\$/g, "\\$")
-				.replace(/!/g, "\\!");
-
 		let autoCommand: string;
 
 		if (sessionData.agent === "codex") {
 			// Codex CLI: pass system prompt via -c instructions override, then prompt as positional arg
-			autoCommand = `codex -c instructions="${escapeShellDoubleQuoted(treqSystemPrompt)}"`;
+			autoCommand = `codex -c ${shellQuote(`instructions="${treqSystemPrompt}"`)}`;
 			if (pendingPromptRef.current) {
-				autoCommand += ` "${escapeShellDoubleQuoted(pendingPromptRef.current)}"`;
+				autoCommand += ` ${shellQuote(pendingPromptRef.current)}`;
 			}
 		} else if (sessionData.agent === "cursor") {
 			// cursor-agent: no system-prompt flag; prepend treq instructions into the prompt arg.
@@ -264,7 +256,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 				? `${treqSystemPrompt}\n\n${pendingPromptRef.current}`
 				: treqSystemPrompt;
 			const planFlag = permissionModeRef.current === "plan" ? " --plan" : "";
-			autoCommand = `cursor-agent${planFlag} "${escapeShellDoubleQuoted(combined)}"`;
+			autoCommand = `cursor-agent${planFlag} ${shellQuote(combined)}`;
 		} else {
 			// Claude Code: permission mode, model, system prompt, then prompt after --
 			const permissionModeArg =
@@ -273,17 +265,17 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 					: " --permission-mode acceptEdits";
 			autoCommand = `claude${permissionModeArg}`;
 			if (sessionModel) {
-				autoCommand += ` --model="${sessionModel}"`;
+				autoCommand += ` --model=${shellQuote(sessionModel)}`;
 			}
-			autoCommand += ` --append-system-prompt "${treqSystemPrompt}"`;
+			autoCommand += ` --append-system-prompt ${shellQuote(treqSystemPrompt)}`;
 			if (pendingPromptRef.current) {
-				autoCommand += ` -- "${escapeShellDoubleQuoted(pendingPromptRef.current)}"`;
+				autoCommand += ` -- ${shellQuote(pendingPromptRef.current)}`;
 			}
 		}
 
 		// Prepend PATH export so treq CLI is available inside all agent sessions
 		if (treqBinDir) {
-			autoCommand = `export PATH="${treqBinDir}:$PATH"; ${autoCommand}`;
+			autoCommand = `export PATH=${shellQuote(treqBinDir)}:$PATH; ${autoCommand}`;
 		}
 
 		return (
