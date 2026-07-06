@@ -18,7 +18,16 @@ function rawMarkdownPlugin(context) {
             processDir(fullPath);
           } else if (entry.name.endsWith('.md') || entry.name.endsWith('.mdx')) {
             const relativePath = path.relative(context.siteDir, fullPath);
-            markdownData[relativePath] = fs.readFileSync(fullPath, 'utf8');
+            const raw = fs.readFileSync(fullPath, 'utf8');
+            markdownData[relativePath] = raw
+              // strip HTML/JSX comments <!-- ... --> and {/* ... */}
+              .replace(/<!--[\s\S]*?-->/g, '')
+              .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+              // strip HTML tags but keep their text content
+              .replace(/<[^>]+>/g, '')
+              // collapse runs of blank lines left by removed blocks
+              .replace(/\n{3,}/g, '\n\n')
+              .trim();
           }
         }
       }
