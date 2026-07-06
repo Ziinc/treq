@@ -4,7 +4,17 @@ sidebar_position: 3
 
 # Managing Workspaces
 
-_How to work in, configure, and troubleshoot Treq workspaces._
+_How to create, work in, configure, and troubleshoot Treq workspaces._
+
+## Creating a Workspace
+
+Workspaces let you work on multiple branches simultaneously, each in its own directory. Click **New Workspace** in the dashboard (or `Cmd+N`) to open the creation dialog.
+
+Choose **Create new branch** and enter a name or intent like `add-user-profile`. Treq applies your branch naming pattern (default: `treq/{name}`) so this becomes `treq/add-user-profile`. Alternatively, select **From existing branch** to check out an existing local or remote branch.
+
+Select a **base branch** (usually `main` or `develop`) that your new branch will start from. Optionally add a **plan title** like "Add user profile page with avatar upload" to help you remember what you're working on.
+
+Click **Create Workspace**. Treq creates the directory in `.treq/workspaces/` and checks out the branch.
 
 ## Working in Your Workspace
 
