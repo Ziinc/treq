@@ -46,8 +46,16 @@ html {
 /* Clean navbar styling */
 .navbar {
   box-shadow: var(--ifm-navbar-shadow);
-  backdrop-filter: blur(10px);
   background-color: rgba(255, 255, 255, 0.95);
+}
+
+.navbar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  backdrop-filter: blur(10px);
+  z-index: -1;
+  pointer-events: none;
 }
 
 [data-theme='dark'] .navbar {
