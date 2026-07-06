@@ -20,6 +20,8 @@ function rawMarkdownPlugin(context) {
             const relativePath = path.relative(context.siteDir, fullPath);
             const raw = fs.readFileSync(fullPath, 'utf8');
             markdownData[relativePath] = raw
+              // strip YAML frontmatter block
+              .replace(/^---[\s\S]*?---\n?/, '')
               // strip HTML/JSX comments <!-- ... --> and {/* ... */}
               .replace(/<!--[\s\S]*?-->/g, '')
               .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
