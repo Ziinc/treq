@@ -23,8 +23,8 @@ function rawMarkdownPlugin(context) {
               // strip HTML/JSX comments <!-- ... --> and {/* ... */}
               .replace(/<!--[\s\S]*?-->/g, '')
               .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
-              // strip HTML tags but keep their text content
-              .replace(/<[^>]+>/g, '')
+              // strip HTML and JSX tags (including multi-line) but keep their text content
+              .replace(/<[\s\S]*?>/g, '')
               // collapse runs of blank lines left by removed blocks
               .replace(/\n{3,}/g, '\n\n')
               .trim();
