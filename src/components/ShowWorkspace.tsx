@@ -441,6 +441,9 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 					queryClient.invalidateQueries({
 						queryKey: ["workspace-statuses", effectiveRepoPath],
 					});
+					queryClient.invalidateQueries({
+						queryKey: ["workspace-status", effectiveRepoPath, workspace.id],
+					});
 
 					setTargetBranch(branch);
 				} catch (error) {

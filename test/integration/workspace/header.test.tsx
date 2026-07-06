@@ -1,5 +1,10 @@
+import { execFileSync } from "node:child_process";
+import userEvent from "@testing-library/user-event";
 import * as React from "react";
 import { beforeEach, describe, expect, it } from "vitest";
+import { Dashboard } from "../../../src/components/Dashboard";
+import { createWorkspace, getWorkspaces } from "../../../src/lib/api";
+import { fireEvent, render, screen, waitFor, within } from "../../test-utils";
 import {
 	commitRepoFile,
 	commitWorkspaceFile,
@@ -10,11 +15,6 @@ import {
 	resolveWorkspacePath,
 	writeWorkspaceFile,
 } from "../../utils";
-import { fireEvent, render, screen, waitFor, within } from "../../test-utils";
-import { Dashboard } from "../../../src/components/Dashboard";
-import { createWorkspace, getWorkspaces } from "../../../src/lib/api";
-import userEvent from "@testing-library/user-event";
-import { execFileSync } from "node:child_process";
 
 describe("ShowWorkspace - header", () => {
 	let repoPath: string;

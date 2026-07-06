@@ -1,7 +1,8 @@
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createMockWorkspace } from "../../test/factories/workspace.factory";
 import { render, screen, waitFor } from "../../test/test-utils";
-import type { JjLogResult, Workspace } from "../lib/api";
+import type { JjLogResult } from "../lib/api";
 import * as api from "../lib/api";
 import { WorkspaceStackPanel } from "./WorkspaceStackPanel";
 
@@ -14,20 +15,6 @@ vi.mock("../lib/api", async () => {
 		listCommits: vi.fn(),
 	};
 });
-
-function makeWorkspace(overrides: Partial<Workspace>): Workspace {
-	return {
-		id: 1,
-		repo_path: "/Users/test/repo",
-		workspace_name: "ws",
-		workspace_path: "/Users/test/repo/.treq/workspaces/ws",
-		branch_name: "ws",
-		created_at: new Date().toISOString(),
-		title: "",
-		not_on_remote: false,
-		...overrides,
-	};
-}
 
 function makeLogResult(insertions: number, deletions: number): JjLogResult {
 	return {
@@ -56,7 +43,7 @@ function makeLogResult(insertions: number, deletions: number): JjLogResult {
 	};
 }
 
-const rootWorkspace = makeWorkspace({
+const rootWorkspace = createMockWorkspace({
 	id: 1,
 	branch_name: "chore/refactor",
 	workspace_name: "chore/refactor",
@@ -65,7 +52,7 @@ const rootWorkspace = makeWorkspace({
 	created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
 });
 
-const middleWorkspace = makeWorkspace({
+const middleWorkspace = createMockWorkspace({
 	id: 2,
 	branch_name: "feat/context-prompts",
 	workspace_name: "feat/context-prompts",
@@ -74,7 +61,7 @@ const middleWorkspace = makeWorkspace({
 	created_at: new Date(Date.now() - 28 * 60 * 1000).toISOString(),
 });
 
-const tipWorkspace = makeWorkspace({
+const tipWorkspace = createMockWorkspace({
 	id: 3,
 	branch_name: "feat/ai-summaries",
 	workspace_name: "feat/ai-summaries",
