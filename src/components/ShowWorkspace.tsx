@@ -38,6 +38,7 @@ import { FileBrowser } from "./FileBrowser";
 import { LinearCommitHistory } from "./LinearCommitHistory";
 import { CommitDiffViewer } from "./CommitDiffViewer";
 import { WorkspaceBookmarkConflictModal } from "./WorkspaceBookmarkConflictModal";
+import { WorkspaceStackPanel } from "./WorkspaceStackPanel";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import { Button } from "./ui/button";
 import { Kbd, KbdGroup } from "./ui/kbd";
@@ -96,6 +97,8 @@ interface ShowWorkspaceProps {
 	onOpenMergePreview?: () => void;
 	onOpenBranchSwitcher?: () => void;
 	onCreateStackedWorkspace?: () => void;
+	/** Called when the user clicks a sibling workspace in the stack panel */
+	onNavigateToWorkspace?: (workspace: Workspace) => void;
 	/** Called when user wants to move a commit to a new workspace */
 	onMoveCommitToNewWorkspace?: (
 		commit: import("../lib/api").JjLogCommit,
@@ -130,6 +133,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 		onOpenMergePreview,
 		onOpenBranchSwitcher,
 		onCreateStackedWorkspace,
+		onNavigateToWorkspace,
 		onMoveCommitToNewWorkspace,
 		onMoveCommitToExistingWorkspace,
 		onMoveFilesToNewWorkspace,
@@ -1167,17 +1171,28 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 									</div>
 								</div>
 
-								{/* RIGHT: Commit History (fixed width matching sidebar) */}
-								<div className="w-[240px] shrink-0 bg-muted/20">
-									<LinearCommitHistory
-										repoPath={effectiveRepoPath}
-										workspaceId={workspace?.id ?? null}
-										onCommitClick={(changeId) => {
-											setScrollToCommitId(changeId);
-											setActiveTab("commits");
-										}}
-										onCommitsLoaded={handleCommitsLoaded}
-									/>
+								{/* RIGHT: Stack + Commit History (fixed width matching sidebar) */}
+								<div className="w-[240px] shrink-0 bg-muted/20 flex flex-col h-full overflow-hidden">
+									{workspace && workspaceStatusData?.target != null && (
+										<div className="shrink-0 border-b border-border">
+											<WorkspaceStackPanel
+												repoPath={effectiveRepoPath}
+												workspace={workspace}
+												onSelectWorkspace={onNavigateToWorkspace}
+											/>
+										</div>
+									)}
+									<div className="flex-1 min-h-0">
+										<LinearCommitHistory
+											repoPath={effectiveRepoPath}
+											workspaceId={workspace?.id ?? null}
+											onCommitClick={(changeId) => {
+												setScrollToCommitId(changeId);
+												setActiveTab("commits");
+											}}
+											onCommitsLoaded={handleCommitsLoaded}
+										/>
+									</div>
 								</div>
 							</div>
 						)
