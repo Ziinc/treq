@@ -1,0 +1,13 @@
+id: no-e2e-xpath
+language: typescript
+severity: error
+message: >
+  Do not use XPath selectors in e2e tests.
+  Use page.getByRole(), page.getByText(), page.getByLabel(), etc. instead.
+files:
+  - "web/e2e/**/*.ts"
+rule:
+  pattern: $_.locator($XPATH)
+constraints:
+  XPATH:
+    regex: "^['\"](?:xpath=|//)"
