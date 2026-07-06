@@ -89,6 +89,7 @@ Delete unused workspaces regularly. Use consistent branch naming patterns. Commi
 
 ## Learn More
 
-- [Creating Workspaces Guide](/docs/guides/getting-started/your-first-workspace)
+- [Installation and Quickstart](/docs/guides/getting-started/installation)
+- [Managing Workspaces](/docs/guides/core-workflows/managing-workspaces)
 - [Merging Workspaces](/docs/guides/core-workflows/merging-workspaces)
 - [Using with Git Repo](/docs/guides/core-workflows/using-treq-with-git-repo)

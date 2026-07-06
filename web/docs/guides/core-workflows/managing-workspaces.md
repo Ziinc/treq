@@ -1,14 +1,14 @@
 ---
-sidebar_position: 2
+sidebar_position: 3
 ---
 
-# Creating Workspaces
+# Managing Workspaces
 
-_How to create and manage Git workspaces in Treq._
-
-Workspaces let you work on multiple branches simultaneously, each in its own directory. Click **New Workspace** in the dashboard (or `Cmd+N`) to open the creation dialog.
+_How to create, work in, configure, and troubleshoot Treq workspaces._
 
 ## Creating a Workspace
+
+Workspaces let you work on multiple branches simultaneously, each in its own directory. Click **New Workspace** in the dashboard (or `Cmd+N`) to open the creation dialog.
 
 Choose **Create new branch** and enter a name or intent like `add-user-profile`. Treq applies your branch naming pattern (default: `treq/{name}`) so this becomes `treq/add-user-profile`. Alternatively, select **From existing branch** to check out an existing local or remote branch.
 
@@ -63,4 +63,3 @@ Click Delete on the workspace card, after committing or discarding changes.
 ## Troubleshooting
 
 If you see "Branch already exists," choose a different name or select the existing branch. If a workspace doesn't appear, use Settings → Rebuild Workspaces Database.
-
