@@ -1708,7 +1708,11 @@ fn resolve_workspace_diff_base_revision(
         target_branch,
     );
     if base_revision != target_branch {
-        return Ok(base_revision);
+        let current_tip = jj::jj_get_commit_id(workspace_dir_str, &workspace.branch_name)
+            .map_err(|e| format!("Failed to resolve workspace tip: {}", e))?;
+        if current_tip != base_revision {
+            return Ok(base_revision);
+        }
     }
     if workspace.branch_name == target_branch {
         let committed_ahead = jj::jj_get_commits_ahead(workspace_dir_str, target_branch)
@@ -1882,10 +1886,6 @@ where
     let repo_commit_lock = commit_lock_for_repo(repo_path);
     let _repo_commit_guard = repo_commit_lock.lock().unwrap();
     let workspace_root = resolve_workspace_root(repo_path, workspace_id)?;
-
-    let result = jj::jj_commit(&workspace_root, message)
-        .map_err(|e| format!("Failed to create commit: {}", e))?;
-
     let committed_branch = if let Some(id) = workspace_id {
         let workspace = local_db::get_workspace_by_id(repo_path, id)
             .map_err(|e| format!("Failed to get workspace: {}", e))?
@@ -1895,13 +1895,17 @@ where
         jj::resolve_home_repo_branch(repo_path)
             .map_err(|e| format!("Failed to resolve home repo branch: {}", e))?
     };
+
+    let result = jj::jj_commit(&workspace_root, message)
+        .map_err(|e| format!("Failed to create commit: {}", e))?;
     if !committed_branch.is_empty() {
-        // Avoid syncing away the fresh working-copy commit during auto-rebase.
         if let Some(id) = workspace_id {
             if let Ok(new_tip) = jj::jj_get_commit_id(&workspace_root, &committed_branch) {
                 let _ = local_db::update_workspace_last_rebased_commit(repo_path, id, &new_tip);
             }
         }
+    }
+    if !committed_branch.is_empty() {
         let _ = auto_rebase::rebase_after_commit(repo_path, &committed_branch);
     }
     match workspace_id {
