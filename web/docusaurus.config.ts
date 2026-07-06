@@ -9,6 +9,8 @@ const featureFlags = pkg.featureFlags;
 const isProduction = process.env.NODE_ENV === 'production';
 
 const config: Config = {
+  plugins: [require.resolve('./plugins/rawMarkdownPlugin')],
+
   title: 'Treq',
   tagline: 'The Open Source Graphite Alternative',
   favicon: 'img/favicon.svg',
