@@ -44,10 +44,26 @@ html {
 }
 
 /* Clean navbar styling */
+/*
+ * backdrop-filter must live on a pseudo-element rather than directly on
+ * .navbar: applying it to .navbar makes .navbar the containing block for
+ * its fixed-position descendants (per spec, same as filter/transform).
+ * The mobile navbar-sidebar is rendered as a `position: fixed` child of
+ * .navbar, so a filter here shrinks it down to the navbar's own height
+ * instead of the full viewport, making the mobile sidebar menu unusable.
+ */
 .navbar {
   box-shadow: var(--ifm-navbar-shadow);
-  backdrop-filter: blur(10px);
   background-color: rgba(255, 255, 255, 0.95);
+}
+
+.navbar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  backdrop-filter: blur(10px);
+  z-index: -1;
+  pointer-events: none;
 }
 
 [data-theme='dark'] .navbar {
