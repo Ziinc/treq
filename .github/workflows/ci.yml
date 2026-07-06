@@ -3,8 +3,16 @@ name: CI
 on:
   push:
     branches: [main]
+    paths:
+      - "src/**"
+      - "src-tauri/**"
+      - ".github/workflows/ci.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "src/**"
+      - "src-tauri/**"
+      - ".github/workflows/ci.yml"
 
 jobs:
   ci:
