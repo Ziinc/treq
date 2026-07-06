@@ -1,0 +1,172 @@
+import { test, expect, type Page } from '@playwright/test';
+
+const nav = (page: Page) => page.locator('nav.navbar');
+const sidebar = (page: Page) => page.locator('.theme-doc-sidebar-container');
+
+test.describe('Navbar navigation', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+  });
+
+  test('Guides link navigates to guides section', async ({ page }) => {
+    await nav(page).getByRole('link', { name: 'Guides' }).click();
+    await expect(page).toHaveURL(/\/docs\/guides/);
+    await expect(page.getByRole('heading', { name: 'User Guides', level: 1 })).toBeVisible();
+  });
+
+  test('Reference link navigates to reference section', async ({ page }) => {
+    await nav(page).getByRole('link', { name: 'Reference' }).click();
+    // intro.md has slug "/" placing it at the docs base URL
+    await expect(page).toHaveURL(/\/docs\/?$/);
+    await expect(page.getByRole('heading', { name: 'Treq', level: 1 })).toBeVisible();
+    await expect(sidebar(page).getByRole('link', { name: 'CLI' })).toBeVisible();
+  });
+
+  test('Get Started button navigates to installation page', async ({ page }) => {
+    await nav(page).getByRole('link', { name: 'Get Started' }).click();
+    await expect(page).toHaveURL(/\/docs\/guides\/getting-started\/installation/);
+    await expect(page.getByRole('heading', { name: 'Installation', level: 1 })).toBeVisible();
+  });
+
+  test('logo navigates to home from a docs page', async ({ page }) => {
+    await page.goto('/docs/guides');
+    await page.locator('a.navbar__brand').click();
+    await expect(page).toHaveURL('/');
+  });
+
+  test('GitHub link points to the correct repo', async ({ page }) => {
+    const githubLink = nav(page).getByRole('link', { name: 'GitHub' });
+    await expect(githubLink).toHaveAttribute('href', 'https://github.com/Ziinc/treq');
+  });
+});
+
+test.describe('Guides sidebar navigation', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/docs/guides');
+  });
+
+  test('Getting Started items are visible by default', async ({ page }) => {
+    await expect(sidebar(page).getByRole('link', { name: 'Installation' })).toBeVisible();
+    await expect(sidebar(page).getByRole('link', { name: 'Creating Workspaces' })).toBeVisible();
+  });
+
+  test('navigates to Installation page', async ({ page }) => {
+    await sidebar(page).getByRole('link', { name: 'Installation' }).click();
+    await expect(page).toHaveURL(/\/docs\/guides\/getting-started\/installation/);
+    await expect(page.getByRole('heading', { name: 'Installation', level: 1 })).toBeVisible();
+  });
+
+  test('navigates to Creating Workspaces page', async ({ page }) => {
+    await sidebar(page).getByRole('link', { name: 'Creating Workspaces' }).click();
+    await expect(page).toHaveURL(/\/docs\/guides\/getting-started\/your-first-workspace/);
+    await expect(page.getByRole('heading', { name: 'Creating Workspaces', level: 1 })).toBeVisible();
+  });
+
+  test('expands Core Workflows and navigates to Committing Changes', async ({ page }) => {
+    await sidebar(page).getByRole('button', { name: 'Core Workflows' }).click();
+    await sidebar(page).getByRole('link', { name: 'Committing Changes' }).click();
+    await expect(page).toHaveURL(/\/docs\/guides\/core-workflows\/committing-changes/);
+    await expect(page.getByRole('heading', { name: 'Committing Changes', level: 1 })).toBeVisible();
+  });
+
+  test('expands Core Workflows and navigates to Code Review Workflow', async ({ page }) => {
+    await sidebar(page).getByRole('button', { name: 'Core Workflows' }).click();
+    await sidebar(page).getByRole('link', { name: 'Code Review Workflow' }).click();
+    await expect(page).toHaveURL(/\/docs\/guides\/core-workflows\/code-review-workflow/);
+  });
+
+  test('expands Common Tasks and navigates to Pushing to Remote', async ({ page }) => {
+    await sidebar(page).getByRole('button', { name: 'Common Tasks' }).click();
+    await sidebar(page).getByRole('link', { name: 'Pushing to Remote' }).click();
+    await expect(page).toHaveURL(/\/docs\/guides\/common-tasks\/pushing-to-remote/);
+    await expect(page.getByRole('heading', { name: 'Pushing to Remote', level: 1 })).toBeVisible();
+  });
+
+  test('expands Tips & Tricks and navigates to Customizing Settings', async ({ page }) => {
+    await sidebar(page).getByRole('button', { name: 'Tips & Tricks' }).click();
+    await sidebar(page).getByRole('link', { name: 'Customizing Settings' }).click();
+    await expect(page).toHaveURL(/\/docs\/guides\/tips-and-tricks\/customizing-settings/);
+  });
+});
+
+test.describe('Reference sidebar navigation', () => {
+  test.beforeEach(async ({ page }) => {
+    // intro.md has slug "/" so it lives at the docs base path
+    await page.goto('/docs/');
+  });
+
+  test('Workspaces link navigates to workspaces page', async ({ page }) => {
+    await sidebar(page).getByRole('link', { name: 'Workspaces' }).click();
+    await expect(page).toHaveURL(/\/docs\/features\/workspaces/);
+    await expect(page.getByRole('heading', { name: 'Workspaces', level: 1 })).toBeVisible();
+  });
+
+  test('Commit Management sub-item is visible and navigates correctly', async ({ page }) => {
+    await sidebar(page).getByRole('link', { name: 'Commits Management' }).click();
+    await expect(page).toHaveURL(/\/docs\/features\/commit-management/);
+  });
+
+  test('navigates to CLI page', async ({ page }) => {
+    await sidebar(page).getByRole('link', { name: 'CLI' }).click();
+    await expect(page).toHaveURL(/\/docs\/cli/);
+    await expect(page.getByRole('heading', { name: 'CLI', level: 1 })).toBeVisible();
+  });
+
+  test('navigates to Keyboard Shortcuts page', async ({ page }) => {
+    await sidebar(page).getByRole('link', { name: 'Keyboard Shortcuts' }).click();
+    await expect(page).toHaveURL(/\/docs\/keyboard-shortcuts/);
+    await expect(page.getByRole('heading', { name: 'Keyboard Shortcuts', level: 1 })).toBeVisible();
+  });
+
+  test('navigates to Contributing page', async ({ page }) => {
+    await sidebar(page).getByRole('link', { name: 'Contributing' }).click();
+    await expect(page).toHaveURL(/\/docs\/contributing/);
+    await expect(page.getByRole('heading', { name: 'Contributing', level: 1 })).toBeVisible();
+  });
+});
+
+test.describe('Cross-section navigation', () => {
+  test('switches from Guides to Reference via navbar', async ({ page }) => {
+    await page.goto('/docs/guides');
+    await nav(page).getByRole('link', { name: 'Reference' }).click();
+    await expect(page).toHaveURL(/\/docs\/?$/);
+    await expect(sidebar(page).getByRole('link', { name: 'CLI' })).toBeVisible();
+  });
+
+  test('switches from Reference to Guides via navbar', async ({ page }) => {
+    await page.goto('/docs/');
+    await nav(page).getByRole('link', { name: 'Guides' }).click();
+    await expect(page).toHaveURL(/\/docs\/guides/);
+    await expect(sidebar(page).getByRole('link', { name: 'Installation' })).toBeVisible();
+  });
+
+  test('navigates from a guides page back to home via logo', async ({ page }) => {
+    await page.goto('/docs/guides/getting-started/installation');
+    await page.locator('a.navbar__brand').click();
+    await expect(page).toHaveURL('/');
+  });
+});
+
+test.describe('Footer navigation', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+  });
+
+  test('Getting Started footer link navigates to installation page', async ({ page }) => {
+    await page.locator('footer').getByRole('link', { name: 'Getting Started' }).click();
+    await expect(page).toHaveURL(/\/docs\/guides\/getting-started\/installation/);
+    await expect(page.getByRole('heading', { name: 'Installation', level: 1 })).toBeVisible();
+  });
+
+  test('Guides footer link navigates to guides overview', async ({ page }) => {
+    await page.locator('footer').getByRole('link', { name: 'Guides' }).click();
+    await expect(page).toHaveURL(/\/docs\/guides/);
+    await expect(page.getByRole('heading', { name: 'User Guides', level: 1 })).toBeVisible();
+  });
+
+  test('Features footer link navigates to workspaces page', async ({ page }) => {
+    await page.locator('footer').getByRole('link', { name: 'Features' }).click();
+    await expect(page).toHaveURL(/\/docs\/features\/workspaces/);
+    await expect(page.getByRole('heading', { name: 'Workspaces', level: 1 })).toBeVisible();
+  });
+});
