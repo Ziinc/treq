@@ -45,6 +45,6 @@ Dirty workspaces can block operations that would rewrite or integrate history. C
 
 ## Learn More
 
-- [Committing Changes](/docs/guides/core-workflows/committing-changes)
-- [Code Review Workflow](/docs/guides/core-workflows/code-review-workflow)
-- [Workspaces](/docs/features/workspaces)
+- [Committing Changes](/learn/tutorials/committing-changes)
+- [Code Review Workflow](/learn/tutorials/code-review-workflow)
+- [Workspaces](/learn/concepts/workspaces)

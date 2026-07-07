@@ -4,4 +4,4 @@ export const PAYMENT_LINK_URL =
     : "https://buy.stripe.com/test_aFa4gzacLbZ40lHdPNbAs01";
 
 export const APP_DEEP_LINK = "treq://";
-export const APP_DOWNLOAD_URL = "/docs/guides/getting-started/installation";
+export const APP_DOWNLOAD_URL = "/docs/getting-started/installation";
