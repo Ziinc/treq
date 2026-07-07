@@ -9,7 +9,7 @@
  *   GITHUB_TOKEN=ghp_xxx node scripts/generate-changelog.mjs
  */
 
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -36,7 +36,17 @@ function headers() {
   return h;
 }
 
-async function fetchReleases() {
+function loadKnownVersions() {
+  if (!existsSync(JSON_OUT)) return new Set();
+  try {
+    const existing = JSON.parse(readFileSync(JSON_OUT, 'utf8'));
+    return new Set(existing.map(e => e.version));
+  } catch {
+    return new Set();
+  }
+}
+
+async function fetchReleases(knownVersions) {
   const releases = [];
   let page = 1;
 
@@ -51,8 +61,15 @@ async function fetchReleases() {
 
     const batch = await res.json();
     if (batch.length === 0) break;
-    releases.push(...batch);
-    if (batch.length < PER_PAGE) break;
+
+    // GitHub returns releases newest-first. Stop as soon as we hit a version
+    // that's already in the JSON so we don't re-fetch the entire history.
+    let done = false;
+    for (const release of batch) {
+      if (knownVersions.has(release.tag_name)) { done = true; break; }
+      releases.push(release);
+    }
+    if (done || batch.length < PER_PAGE) break;
     page++;
   }
 
@@ -115,15 +132,20 @@ function buildMarkdown(entries) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log(`Fetching releases for ${REPO}…`);
-  const raw = await fetchReleases();
+  const knownVersions = loadKnownVersions();
+  console.log(`Fetching releases for ${REPO}… (${knownVersions.size} already cached)`);
 
-  const entries = raw
-    .filter(r => !r.draft)
-    .map(toEntry)
+  const existingEntries = knownVersions.size > 0
+    ? JSON.parse(readFileSync(JSON_OUT, 'utf8'))
+    : [];
+
+  const raw = await fetchReleases(knownVersions);
+  const newEntries = raw.filter(r => !r.draft).map(toEntry);
+
+  console.log(`  ${newEntries.length} new release(s) fetched`);
+
+  const entries = [...newEntries, ...existingEntries]
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-
-  console.log(`  ${entries.length} releases found (${raw.length - entries.length} drafts excluded)`);
 
   // Write JSON
   mkdirSync(dirname(JSON_OUT), { recursive: true });
