@@ -40,6 +40,45 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Workflows',
+      link: {type: 'doc', id: 'workflows/index'},
+      items: [
+        {
+          type: 'category',
+          label: 'AI Workflows',
+          link: {type: 'doc', id: 'workflows/ai/index'},
+          items: [
+            'workflows/ai/ai-feature-development',
+            'workflows/ai/ai-bug-fix',
+            'workflows/ai/ai-refactoring',
+            'workflows/ai/ai-code-review',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Git Workflows',
+          link: {type: 'doc', id: 'workflows/git/index'},
+          items: [
+            'workflows/git/stacked-pr',
+            'workflows/git/parallel-development',
+            'workflows/git/human-in-the-loop-review',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Tech Stack Workflows',
+          link: {type: 'doc', id: 'workflows/stacks/index'},
+          items: [
+            'workflows/stacks/react-development',
+            'workflows/stacks/tauri-development',
+            'workflows/stacks/elixir-ai',
+            'workflows/stacks/rust-refactoring',
+          ],
+        },
+      ],
+    },
+    {
+      type: 'category',
       label: 'Tutorials',
       link: {type: 'doc', id: 'tutorials/index'},
       items: [
