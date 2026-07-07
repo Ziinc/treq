@@ -23,6 +23,17 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Concepts',
+      link: {type: 'doc', id: 'concepts/index'},
+      items: [
+        'concepts/workspaces',
+        'concepts/reviews',
+        'concepts/terminal-sessions',
+        'concepts/commit-management',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Reference',
       items: [
         'reference/cli',

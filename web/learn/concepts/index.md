@@ -4,4 +4,4 @@ sidebar_position: 1
 
 # Concepts
 
-Understand how Treq's core features work under the hood — workspaces, commits, reviews, and terminal sessions.
+Evergreen reference material on the engineering practices and tools that Treq is built around — AI-assisted development and Git workflows.

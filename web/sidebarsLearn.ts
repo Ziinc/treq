@@ -12,10 +12,30 @@ const sidebars: SidebarsConfig = {
       label: 'Concepts',
       link: {type: 'doc', id: 'concepts/index'},
       items: [
-        'concepts/workspaces',
-        'concepts/reviews',
-        'concepts/terminal-sessions',
-        'concepts/commit-management',
+        {
+          type: 'category',
+          label: 'AI Engineering',
+          link: {type: 'doc', id: 'concepts/ai-engineering/index'},
+          items: [
+            'concepts/ai-engineering/ai-assisted-software-engineering',
+            'concepts/ai-engineering/human-in-the-loop-development',
+            'concepts/ai-engineering/coding-agents',
+            'concepts/ai-engineering/ai-code-review',
+            'concepts/ai-engineering/agent-orchestration',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Git & Version Control',
+          link: {type: 'doc', id: 'concepts/git/index'},
+          items: [
+            'concepts/git/git-worktrees',
+            'concepts/git/stacked-prs',
+            'concepts/git/git-worktrees-vs-clones',
+            'concepts/git/cherry-pick-vs-rebase',
+            'concepts/git/merge-vs-rebase',
+          ],
+        },
       ],
     },
     {

@@ -44,8 +44,8 @@ Terminal state belongs to the workspace. Closing a workspace session can termina
 
 ## Learn More
 
-- [Workspaces](/learn/concepts/workspaces)
-- [Reviews](/learn/concepts/reviews)
-- [Terminal Sessions](/learn/concepts/terminal-sessions)
+- [Workspaces](/docs/concepts/workspaces)
+- [Reviews](/docs/concepts/reviews)
+- [Terminal Sessions](/docs/concepts/terminal-sessions)
 - [CLI](/docs/reference/cli)
 - [Contributing](/docs/reference/contributing)
