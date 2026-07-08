@@ -81,5 +81,5 @@ Public docs should describe supported macOS behavior unless another platform is 
 ## Learn More
 
 - [Overview](/docs/)
-- [CLI](/docs/cli)
-- [Workspaces](/docs/features/workspaces)
+- [CLI](/docs/reference/cli)
+- [Workspaces](/docs/concepts/workspaces)

@@ -9,7 +9,19 @@ const featureFlags = pkg.featureFlags;
 const isProduction = process.env.NODE_ENV === 'production';
 
 const config: Config = {
-  plugins: [require.resolve('./plugins/rawMarkdownPlugin')],
+  plugins: [
+    require.resolve('./plugins/rawMarkdownPlugin'),
+    [
+      '@docusaurus/plugin-content-docs',
+      {
+        id: 'learn',
+        path: 'learn',
+        routeBasePath: 'learn',
+        sidebarPath: './sidebarsLearn.ts',
+        editUrl: 'https://github.com/Ziinc/treq/tree/main/web/',
+      },
+    ],
+  ],
 
   title: 'Treq',
   tagline: 'The Open Source Graphite Alternative',
@@ -86,15 +98,16 @@ const config: Config = {
       items: [
         {
           type: 'docSidebar',
-          sidebarId: 'guidesSidebar',
+          sidebarId: 'learnSidebar',
+          docsPluginId: 'learn',
           position: 'left',
-          label: 'Guides',
+          label: 'Learn',
         },
         {
           type: 'docSidebar',
           sidebarId: 'docsSidebar',
           position: 'left',
-          label: 'Reference',
+          label: 'Docs',
         },
         ...(featureFlags.pro ? [{
           to: '/dashboard',
@@ -109,7 +122,7 @@ const config: Config = {
         {
           type: 'html',
           position: 'right',
-          value: '<a href="/docs/guides/getting-started/installation" class="button button--primary button--sm">Get Started</a>',
+          value: '<a href="/docs/getting-started/installation" class="button button--primary button--sm">Get Started</a>',
         },
       ],
     },
@@ -125,15 +138,15 @@ const config: Config = {
             },
             {
               label: 'Getting Started',
-              to: '/docs/guides/getting-started/installation',
+              to: '/docs/getting-started/installation',
             },
             {
-              label: 'Guides',
-              to: '/docs/guides',
+              label: 'Learn',
+              to: '/learn',
             },
             {
-              label: 'Features',
-              to: '/docs/features/workspaces',
+              label: 'Concepts',
+              to: '/learn/concepts',
             },
           ],
         },

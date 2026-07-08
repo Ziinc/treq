@@ -22,5 +22,5 @@ Sessions follow a simple lifecycle: creation spawns a PTY and adds it to the ses
 
 ## Learn More
 
-- [Creating Terminal Sessions Guide](/docs/guides/core-workflows/creating-terminal-sessions)
-- [Keyboard Shortcuts](/docs/keyboard-shortcuts)
+- [Creating Terminal Sessions Guide](/learn/tutorials/creating-terminal-sessions)
+- [Keyboard Shortcuts](/docs/reference/keyboard-shortcuts)
