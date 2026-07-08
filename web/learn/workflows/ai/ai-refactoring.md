@@ -16,7 +16,7 @@ After working through this workflow, you'll know how to scope a refactoring prec
 
 The core idea behind refactoring is behaviour preservation: the code does exactly the same thing as before, expressed differently. This is distinct from a feature change (new behaviour) or a bug fix (correcting wrong behaviour). The distinction matters because the review question changes: you're not asking "is this correct?" — you're asking "is this equivalent?"
 
-Coding agents are well-suited to refactoring because the work is structural and mechanical. Moving a module, extracting a class, renaming a function, updating all callers — these tasks require reading widely, writing precisely, and making no product judgements. An agent is faster than a human at all three, and it doesn't lose track of call sites the way a human working across many files tends to.
+Coding agents are well-suited to refactoring because the work is structural and mechanical. Moving a module, extracting a class, renaming a function, updating all callers: these tasks require reading widely, writing precisely, and making no product judgements. An agent is faster than a human at all three, and it doesn't lose track of call sites the way a human working across many files tends to.
 
 The primary risk is drift: the agent refactors beyond the defined scope, makes "improvements" that change behaviour subtly, or updates tests in ways that weaken their coverage. The discipline that prevents drift is explicit scope definition at the start and semantic equivalence checking at the review. These two constraints are the entire workflow in compressed form.
 
@@ -60,7 +60,7 @@ A third failure mode is scope creep: the agent identifying "improvements" beyond
 
 At team scale, the workflow scales well because it produces auditable commits: the scope is defined upfront, the stages are separate, and the test suite serves as a verification record. Teams adopting this workflow should establish a shared standard for how refactoring commits are labelled in the commit message, so they're easy to identify in history and easy to filter when bisecting for a regression.
 
-Performance implications are minimal — refactoring doesn't change runtime behaviour, so there's nothing to benchmark. The operational overhead is workspace management and commit hygiene. The maintenance burden is low if the commit discipline is maintained consistently. When the workflow breaks down and a regression is discovered after merge, the recovery path depends on whether the commit was kept separate: a standalone refactoring commit is clean to revert; a mixed commit is not. This is the strongest practical argument for the separation discipline.
+Performance implications are minimal — refactoring doesn't change runtime behaviour, so there's nothing to benchmark. The operational overhead is workspace management and commit hygiene. The maintenance burden is low if the commit discipline is maintained consistently. When the workflow breaks down and a regression is discovered after merge, the recovery path depends on whether the commit was kept separate: a standalone refactoring commit is clean to revert. A mixed commit is not. This is the strongest practical argument for the separation discipline.
 
 ## Next Steps
 

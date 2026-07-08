@@ -6,7 +6,7 @@ sidebar_position: 3
 
 ## Introduction
 
-The AI bug fix workflow is a structured approach for using a coding agent to investigate and resolve bugs — from documenting the problem through to a tested, merged fix. The problem it addresses is investigation time: tracing a bug through stack frames, searching for where state is set, reading call chains across files. These are mechanical tasks that an agent performs faster than a human, freeing the engineer to focus on evaluating whether the fix is correct and complete.
+The AI bug fix workflow is a structured approach for using a coding agent to investigate and resolve bugs: from documenting the problem through to a tested, merged fix. The problem it addresses is investigation time: tracing a bug through stack frames, searching for where state is set, reading call chains across files. These are mechanical tasks that an agent performs faster than a human, freeing the engineer to focus on evaluating whether the fix is correct and complete.
 
 This workflow suits engineers dealing with clearly reported bugs where reproduction steps are known or discoverable. It's especially useful for bugs in unfamiliar parts of the codebase, where the agent's ability to search broadly is most valuable. It's less suited to intermittent or environment-specific bugs where reproduction is itself the hard problem.
 
@@ -40,7 +40,7 @@ If the same bug pattern exists elsewhere, ask the agent to search for and fix th
 
 ## Engineering Considerations
 
-The main benefit of this workflow is investigation speed. An agent that can search the full codebase, read stack traces, and trace call chains can narrow down a bug's location in minutes. For unfamiliar codebases or complex multi-file bugs, this difference is significant — hours of detective work compressed to an agent session.
+The main benefit of this workflow is investigation speed. An agent that can search the full codebase, read stack traces, and trace call chains can narrow down a bug's location in minutes. For unfamiliar codebases or complex multi-file bugs, this difference is significant. Hours of detective work compress to an agent session.
 
 The trade-offs are important. The workflow requires a human who can evaluate root cause explanations critically. An agent's confidence in its explanation is not a reliable indicator of correctness. The reproduction-first discipline adds a step compared to asking for a fix directly, but that step is what makes the output trustworthy enough to merge.
 

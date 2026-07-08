@@ -14,7 +14,7 @@ After working through this workflow, you'll know how to focus an AI reviewer to 
 
 ## Understanding the Concept
 
-The core idea is that AI review is a layer in a pipeline, not a replacement for human review. An AI reviewer is fast, consistent, and tireless — it applies the same level of attention to every line, at any time, with no queue delay. It catches a reliable class of issues: logic errors, missing error handling, security patterns, null pointer risks, test gaps. These are mechanical catches that don't require understanding intent or architecture.
+The core idea is that AI review is a layer in a pipeline, not a replacement for human review. An AI reviewer is fast, consistent, and tireless. It applies the same level of attention to every line, at any time, with no queue delay. It catches a reliable class of issues: logic errors, missing error handling, security patterns, null pointer risks, test gaps. These are mechanical catches that don't require understanding intent or architecture.
 
 Human reviewers bring what AI cannot: understanding of intent ("does this solve the right problem?"), architectural judgment ("does this fit the system?"), and awareness of second-order effects ("what does this change in six months?"). The workflow is designed to route each type of concern to the reviewer best suited to catch it, so neither type of review is being asked to do what it's bad at.
 
