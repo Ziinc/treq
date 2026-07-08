@@ -53,7 +53,7 @@ Each agent operates in its own directory, writes its own files, runs its own tes
 
 Best practice: name worktree directories clearly and consistently, especially when spinning up many of them. A convention like `../<repo-name>-<branch-slug>` makes it easy to understand what each directory is for at a glance. Always remove worktrees with `git worktree remove` rather than deleting directories manually, because Git tracks linked worktrees in `.git/worktrees/` and stale entries cause warnings and block recreating a worktree at the same path.
 
-## Engineering Decision Guide
+## Engineering Considerations
 
 The primary benefit of worktrees over the naive alternative — stash and switch — is that they eliminate stashing entirely and allow genuinely parallel work. You can run a test suite in one worktree while editing code in another, and neither operation affects the other. The shared object store means you pay no disk cost for history: only the working tree files are duplicated, not the entire commit database.
 

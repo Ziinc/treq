@@ -40,7 +40,7 @@ Reviewing agent output effectively means reading the diff, not just running the 
 
 When an agent gets stuck — produces an error it cannot resolve, enters a loop of failing tests, or asks for clarification — intervening early saves time. Providing additional context, pointing to a relevant file the agent missed, or narrowing the scope of the remaining work usually breaks the deadlock faster than letting the agent continue to iterate on a broken approach.
 
-## Engineering Decision Guide
+## Engineering Considerations
 
 Coding agents offer the largest throughput gains on tasks that are well-defined, in areas with good test coverage, and involve implementation patterns the model has strong training signal for — REST API patterns, standard CRUD operations, common framework idioms, migration generation, test writing. For these tasks, an agent can produce a working implementation in minutes that would take a developer an hour, and the review overhead is modest because the output is mostly right.
 

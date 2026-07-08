@@ -71,7 +71,7 @@ git clone --origin staging git@staging.example.com:org/repo.git ../staging-env
 
 This clone has its own remote pointing at a different server, its own credential store, and its own Git configuration. Changes to the main repository's hooks or config do not affect it. For disposable environments, clones are also cleaner: `rm -rf ../staging-env` removes everything completely, with no residual state in the main repository's `.git/worktrees/` directory to clean up.
 
-## Engineering Decision Guide
+## Engineering Considerations
 
 Worktrees win on efficiency for most parallel-branch workflows within a single project. The shared object store means no disk duplication, no push-fetch cycles to synchronize commits between environments, and fast setup time that does not depend on repository size. These advantages compound when managing many concurrent working directories, as in agent orchestration: ten worktrees on a 2 GB repository cost roughly 10x the size of one working tree, while ten clones cost roughly 20 GB.
 

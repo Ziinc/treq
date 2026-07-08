@@ -51,7 +51,7 @@ cargo test
 
 Clippy catches a significant class of issues that compile but are wrong: unnecessary clones, incorrect iterator usage, patterns that are legal but that idiomatic Rust avoids. Treating Clippy warnings as errors in CI converts these from a review burden into an automatic gate.
 
-## Engineering Decision Guide
+## Engineering Considerations
 
 AI assistance adds the most value in Rust for mechanical refactoring tasks: replacing `unwrap()` with error propagation across many call sites, applying `cargo clippy --fix` suggestions systematically, splitting a large module into smaller files, renaming a type and updating all references. These tasks are time-consuming in large codebases, the compiler provides immediate verification of each change, and the risk of an agent introducing a subtle bug is low when the change is purely structural. Clippy suggestions are particularly safe to delegate — `cargo clippy --fix` changes are mechanical and the agent can apply them reliably.
 

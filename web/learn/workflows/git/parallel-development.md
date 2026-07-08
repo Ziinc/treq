@@ -34,7 +34,7 @@ When two workstreams do conflict — both modified the same file and the second 
 
 For small teams running two to three workstreams, this workflow is sustainable with minimal overhead. For teams using multiple AI agents, four to six simultaneous workstreams is a reasonable ceiling before conflict rates and review queue depth start degrading efficiency. Start with two or three and scale up deliberately.
 
-## Engineering Decision Guide
+## Engineering Considerations
 
 The benefit of parallel development is throughput. Tasks that would take a week serially can complete in two days when run concurrently, bounded by review bandwidth rather than implementation time. For teams working with AI agents, this difference is substantial — an agent implements a feature in minutes, and the only ceiling on how many features advance simultaneously is the team's capacity to review and guide them.
 

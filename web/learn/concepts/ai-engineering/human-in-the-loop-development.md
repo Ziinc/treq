@@ -34,7 +34,7 @@ Feedback mechanisms matter as much as the review step itself. If a reviewer can 
 
 The appropriate level of oversight varies by task risk. A migration renaming a column in a development database warrants lighter oversight than a change to authentication logic. A documentation update is different from a payment processing change. Calibrating oversight to risk — rather than applying the same review intensity to everything — is what makes HITL sustainable as agent usage scales. When an agent gets stuck or produces output that is clearly wrong, human intervention at that point costs less than waiting for a full task completion and then unravelling a compounding error.
 
-## Engineering Decision Guide
+## Engineering Considerations
 
 HITL development offers concrete benefits: AI agents handle implementation volume that would otherwise require more engineers, while humans retain responsibility for correctness, security, and architectural coherence. The combination can meaningfully increase team throughput without the risks of fully autonomous AI, and it keeps accountability clear — a human approved every change that shipped.
 

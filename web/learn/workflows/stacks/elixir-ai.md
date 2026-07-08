@@ -30,7 +30,7 @@ Third, implement the controller or LiveView, then the tests. For LiveView tests,
 
 For OTP code — GenServers, Tasks, Supervisors — ask the agent to explain its approach before writing code. Review `init/1` to confirm it handles slow or failing initialisation appropriately (consider `{:ok, state, {:continue, :init}}` for work that should not block supervision tree startup). Review every `handle_call` and `handle_cast` clause to confirm state transitions are correct and return values match what callers expect. Review the restart strategy against the process's purpose: `:permanent` for infrastructure processes that must always run, `:transient` for work processes that may fail legitimately, `:temporary` for fire-and-forget tasks.
 
-## Engineering Decision Guide
+## Engineering Considerations
 
 AI assistance adds the most value in Phoenix for high-volume, pattern-following work: schema generation, context function scaffolding, controller or LiveView boilerplate, and test fixtures. Phoenix features follow a predictable structure, and agents oriented to the project's patterns produce correct scaffolding reliably. Refactoring tasks are also well-suited — extracting a large context into focused sub-contexts, converting raw Ecto queries in controllers to proper context functions, adding telemetry events to existing operations. Elixir's pattern matching makes these transformations clear-cut when the scope is defined precisely, and the test suite catches regressions if it was written against behaviour rather than implementation.
 

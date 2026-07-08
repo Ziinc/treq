@@ -104,7 +104,7 @@ After any rebase, a force-push is required because the SHAs have changed. Use `-
 git push --force-with-lease origin feature/my-work
 ```
 
-## Engineering Decision Guide
+## Engineering Considerations
 
 Cherry-pick is the right choice when you need to move a specific, bounded change across branches — a bug fix to a release branch, a useful commit from a stale PR, a commit that was made on the wrong branch. Its selectivity is its value: it does not touch anything you did not explicitly name.
 

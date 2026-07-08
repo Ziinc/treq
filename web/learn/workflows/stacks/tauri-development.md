@@ -46,7 +46,7 @@ export async function getRecentFiles(limit: number): Promise<FileEntry[]> {
 
 When reviewing agent-generated commands, check every panic site first: `unwrap()`, `expect()`, or `panic!()` in a Tauri command crashes the app process, not just the command handler, so any unhandled error terminates the application. Check that complex return types derive `serde::Serialize` — missing derives produce cryptic runtime errors rather than compile errors. Check that long-running operations use `spawn_blocking` or are already async rather than blocking the command thread. On the TypeScript side, verify that the invoke call handles the rejected case of the returned Promise, not only the resolved case, and that the UI reflects the async nature of the call with a loading state.
 
-## Engineering Decision Guide
+## Engineering Considerations
 
 AI assistance adds significant value in Tauri for command boilerplate: handler signatures, state access patterns, serialization derives, and error mapping are mechanical and consistent once the agent has a reference command. The same applies to the TypeScript side — invoke wrappers, loading state management, and error display in the UI are repetitive work that agents handle well when the types are specified clearly. Agents also reduce the friction of generating capability declarations for standard operations like file dialog access or clipboard writes.
 

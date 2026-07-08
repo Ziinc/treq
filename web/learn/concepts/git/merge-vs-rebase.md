@@ -102,7 +102,7 @@ git commit -m "feat: implement user authentication"
 
 Squash-merge produces the cleanest possible `main` history — one commit per feature — at the cost of losing the individual commit granularity from the feature branch.
 
-## Engineering Decision Guide
+## Engineering Considerations
 
 The argument for merge centers on traceability and safety. Merge never rewrites existing commits, so it is always safe on shared branches regardless of how many people are working on them. The merge commit is an explicit record of when and how branches were integrated — valuable for audit trails, for `git log --merges`, and for understanding the evolution of a long-lived project. The non-destructive nature of merge makes it the conservative choice: if in doubt, merge.
 

@@ -38,7 +38,7 @@ The final step is human review, operating on a diff that's already been mechanic
 
 When reviewing AI-generated code specifically, the same workflow applies — but the failure modes are different. Agent output tends to be syntactically clean and structurally plausible, which makes it easy to approve quickly. The issues tend to be in edge cases the agent didn't consider, tests that are structured but not meaningful, and patterns that diverge from the codebase and accumulate as technical debt. Focus AI review of agent-generated code specifically on edge cases, error paths, and whether tests cover the right scenarios rather than just passing.
 
-## Engineering Decision Guide
+## Engineering Considerations
 
 The primary benefit is speed and consistency. AI review is available immediately, applies the same attention to every change regardless of diff size or time of day, and costs significantly less reviewer time for the mechanical class of issues it catches reliably.
 

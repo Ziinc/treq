@@ -36,7 +36,7 @@ After the agent updates the workspace, review the delta — what changed between
 
 For teams managing multiple agents in parallel, time-boxing reviews helps maintain throughput. If a single diff is taking more than 20–30 minutes to review, either the task was too broad or the diff is too large. Both are upstream problems to solve at task-definition time, not during review.
 
-## Engineering Decision Guide
+## Engineering Considerations
 
 The benefit of this workflow is precision and speed. Structured, targeted feedback gets the agent to a correct change faster than vague feedback or hoping the second attempt is better. A team that follows this workflow consistently develops a shared standard for what good feedback looks like and a predictable sense of how many rounds a normal change takes. That predictability is itself valuable — it lets the team plan review capacity against the volume of agent work in flight.
 

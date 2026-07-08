@@ -41,7 +41,7 @@ For event-driven orchestration, the critical design decision is what happens whe
 
 Tooling options range from purpose-built orchestration platforms — LangGraph, CrewAI, AutoGen, Inngest — to custom scripts that call agent APIs sequentially with state management in between. For many teams, a simple script that initialises worktrees, runs agents with appropriate scoping, and collects results is more reliable and easier to debug than a complex orchestration framework. Start with the simplest implementation that achieves the goal.
 
-## Engineering Decision Guide
+## Engineering Considerations
 
 Orchestration adds real complexity to your AI infrastructure. It is worth that complexity when: your team is already successfully using single coding agents and throughput is the binding constraint, the tasks you want to parallelise are genuinely independent of each other, you have engineering bandwidth to build and maintain the orchestration layer, and your human review process can handle multiple simultaneous agent outputs without becoming a bottleneck itself.
 

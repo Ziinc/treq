@@ -41,7 +41,7 @@ The next step is using a chat interface for isolated tasks: writing a test for a
 
 Task execution — where AI edits multiple files to implement a feature — is where most teams find the workflow adjustment is greatest. Effective patterns here include keeping the scope of each task narrow (one logical change per task, not an entire feature), being explicit about constraints (which files not to touch, which patterns to follow), and reviewing diffs rather than just running the tests. A change that passes tests can still be wrong. Across all stacks, the pattern that produces reliable results is: clear task description, constrained scope, explicit context, review of the diff, and human judgment on anything the output might have gotten wrong.
 
-## Engineering Decision Guide
+## Engineering Considerations
 
 The genuine benefits of AI-assisted engineering are throughput and coverage. Tasks that would have been deprioritised because they were not worth a senior engineer's time — adding tests to untested legacy functions, writing docstrings for a module, migrating a deprecated API call across dozens of files — become tractable. Teams can address more of the work queue simultaneously, and routine implementation tasks move faster.
 

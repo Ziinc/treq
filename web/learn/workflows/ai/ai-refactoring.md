@@ -38,7 +38,7 @@ After all stages, run the full test suite. Any failure requires investigation: i
 
 For smaller changes on codebases with strong test coverage, one or two stages may be sufficient. For large-scale restructuring across many modules, a plan with four or five incremental commits is more manageable. The key constraint throughout is that no single commit should be too large to review carefully in a single session.
 
-## Engineering Decision Guide
+## Engineering Considerations
 
 The primary benefit of this workflow is accuracy at scale. An agent updates every call site, every import, and every reference — consistently and without fatigue. On a large codebase, this is the difference between a refactoring that takes a week of careful human work and one that takes an hour of agent work plus a morning of review.
 

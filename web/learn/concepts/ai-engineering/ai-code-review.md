@@ -32,7 +32,7 @@ The pipeline for AI-generated code is particularly worth understanding. When a c
 
 For teams new to AI review, a good starting configuration focuses on a narrow, high-value category: security issues only, or missing error handling only. A tightly scoped configuration produces comments that are easier to evaluate and act on, which makes it easier to build confidence in the tool before expanding its scope.
 
-## Engineering Decision Guide
+## Engineering Considerations
 
 The concrete benefit of AI code review is throughput: mechanical issues are caught automatically on every PR, human reviewers spend less time on surface concerns and more time on judgment calls, and the total review cycle shortens. For teams with active codebases and limited reviewer bandwidth, this is a meaningful gain. The return is highest for security-critical code (where automated pattern matching catches real vulnerabilities at scale), for teams regularly reviewing AI-generated code (where a second automated pass adds real value), and for large teams where review consistency across many reviewers is a genuine problem.
 

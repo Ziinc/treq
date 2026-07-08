@@ -66,7 +66,7 @@ With Graphite installed and the stack configured, `gt restack` handles this casc
 
 A realistic scenario where stacking genuinely helps: implementing a feature that requires a new database table, a service layer, and a REST endpoint. These are naturally separable. The schema PR can be reviewed — and in some workflows, deployed — before the business logic is written. The business logic PR can be reviewed on its own merits before the API layer exists. Each layer has clear boundaries, its own test surface, and its own reviewable story. Best practice: keep each layer small enough that it could theoretically land independently without breaking the main branch. If a layer cannot exist without the layer above it already being merged, the boundary may not be the right one.
 
-## Engineering Decision Guide
+## Engineering Considerations
 
 The concrete benefit of stacked PRs is faster, higher-quality review. Reviewers who process a 200-line PR focused on schema changes will give more thorough feedback than reviewers confronting a 1,000-line PR that mixes schema, business logic, and UI. Smaller PRs also merge faster, reducing the window in which conflicts accumulate with other concurrent work.
 

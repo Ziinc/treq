@@ -38,7 +38,7 @@ With the root cause understood, let the agent produce the fix. Review the diff: 
 
 If the same bug pattern exists elsewhere, ask the agent to search for and fix those occurrences before closing the workspace. Once everything passes, merge the workspace and follow your team's deployment process. The workspace serves as a clear record of the investigation, the root cause, and the fix — useful context if the same area is touched again.
 
-## Engineering Decision Guide
+## Engineering Considerations
 
 The main benefit of this workflow is investigation speed. An agent that can search the full codebase, read stack traces, and trace call chains can narrow down a bug's location in minutes. For unfamiliar codebases or complex multi-file bugs, this difference is significant — hours of detective work compressed to an agent session.
 

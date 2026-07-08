@@ -34,7 +34,7 @@ Send the agent back with your comments. For small issues — rename a function, 
 
 Once the diff is clean, run the full test suite in the workspace. If everything passes, merge into the target branch and delete the workspace. The branch history records what changed and why. For smaller tasks on teams comfortable with the workflow, a single pass and review is typical. On large codebases, constraining the agent to specific files ("only modify `src/api/users.rs` and its test file") reduces unintended side effects and keeps the diff reviewable in one session.
 
-## Engineering Decision Guide
+## Engineering Considerations
 
 The primary benefit of this workflow is speed: a coding agent can produce a working implementation of a well-defined feature in minutes rather than hours, and it does so consistently across the team regardless of who's available or how loaded the sprint is.
 

@@ -34,7 +34,7 @@ Merge from the bottom up. Merge PR #1 into `main`. GitHub will automatically upd
 
 Once all PRs are merged, delete the workspaces and their branches. For smaller teams or solo work, two-layer stacks are common and manageable. Three layers is usually the practical limit for active teams before the rebase cascade becomes difficult to coordinate. Keep each PR below 400 lines of changed code where possible — above that threshold, review quality typically degrades regardless of how focused the diff is.
 
-## Engineering Decision Guide
+## Engineering Considerations
 
 The core benefit of stacked PRs is reviewability. Reviewers can meaningfully evaluate a 200-line diff. A 1,200-line diff representing the same feature in a single PR will receive a shallower review. Stacking also unblocks reviewers early — they can approve and merge the foundation layer before the upper layers exist, keeping work moving. For AI-assisted development, this means an agent can be implementing PR #3 while a human reviews PR #1, and the overall cycle time to ship the feature is shorter than working sequentially.
 

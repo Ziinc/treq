@@ -30,7 +30,7 @@ Once the agent produces a component, apply this review pass in order. Check hook
 
 For refactoring tasks — converting class components to function components with hooks, migrating from one state management library to another, replacing inline styles with Tailwind — always ensure tests exist before the agent touches the code. React Testing Library tests that drive user behaviour (click, type, submit, navigate) survive implementation changes that break implementation-detail tests, making them the most reliable safety net for agent-driven refactoring.
 
-## Engineering Decision Guide
+## Engineering Considerations
 
 AI assistance adds the most value in React for structural, pattern-following work: generating new components from a spec, scaffolding test files, and performing large but mechanical refactors like class-to-function conversions or state management migrations across many files. These tasks are time-consuming, repetitive, and the feedback loop is fast because TypeScript and the browser provide immediate error signals. Agents are also effective at reviewing existing components for accessibility gaps and suggesting the right ARIA roles — a review task that is tedious to do manually at scale.
 
