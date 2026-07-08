@@ -4,64 +4,64 @@ sidebar_position: 2
 
 # AI Feature Development Workflow
 
-A structured workflow for building new features using a coding agent — from scoping and task setup through implementation, review, and merge.
+## Introduction
 
-## Overview
+AI feature development is the practice of using a coding agent to implement a new feature end-to-end — from a task description through to a reviewed, merged change. The problem it solves is the high friction cost of implementation: reading context, finding the right files, writing boilerplate, keeping changes coherent across multiple modules. A coding agent handles that mechanical load while the engineer focuses on defining what needs to be built, reviewing what was produced, and deciding when to ship.
 
-AI-assisted feature development works best when the human defines the boundaries clearly and the agent handles execution within them. The main risk is an agent that drifts — implementing more than was asked, choosing architectural patterns that don't fit the codebase, or producing untestable code. A workspace-per-task model combined with iterative review keeps that risk contained.
+This workflow suits engineers who are comfortable reviewing diffs and giving precise, structured feedback. It's most valuable on tasks with well-defined scope — a new API endpoint, a UI component, a validation rule, a data migration — where the requirements can be expressed concisely. It's less suited to speculative or open-ended work where the problem definition is still unclear.
 
-## Step 1 — Define the feature scope
+After working through this workflow, you'll know how to write a task description that produces focused agent output, how to evaluate a diff for correctness and fit, and how to iterate efficiently when the first pass falls short.
 
-Before opening an agent session, write a clear task description that includes:
+## Understanding the Concept
 
-- **What** the feature does (user-facing behaviour)
-- **What it doesn't do** (explicit exclusions prevent scope creep)
-- **Where** in the codebase it belongs (file paths, modules, relevant conventions)
-- **How to verify it** (acceptance criteria or test scenarios)
+The core mental model is a tight loop between human and agent: the human defines the contract (what to build, where it belongs, how to verify it), the agent executes within that contract, and the human reviews the output. Responsibility is deliberately asymmetric — the agent does the searching and writing, the human does the judging.
 
-The more specific the description, the more focused the agent's output. Vague prompts produce sprawling implementations.
+This is distinct from pair programming or line-by-line code generation tools. A coding agent is given a complete task and runs autonomously until it finishes or gets stuck. The output is a diff, not a suggestion — it's ready to run, test, and merge, or to be sent back with feedback.
 
-## Step 2 — Create an isolated workspace
+The most important concept in this workflow is the workspace. Creating an isolated environment for each feature means the agent can read and write freely without interfering with other work. If the output is wrong, you discard the workspace. If it's right, you merge it. This containment model is what makes it safe to let an agent run without supervision.
 
-Create a dedicated workspace for the feature before starting the agent. This gives the agent a sandboxed environment: it can read and write freely without touching your main checkout or other in-progress work.
+AI feature development sits adjacent to the [AI Code Review Workflow](./ai-code-review) — reviewing what an agent produced is a distinct skill from reviewing human-written code, since the agent tends to be consistent but literal. It also connects to the [Parallel Development Workflow](/learn/workflows/git/parallel-development): because agents work in isolated workspaces, you can run multiple agents on different features simultaneously and review results when they're ready. The workflow exists as a distinct pattern because feature implementation is where agent capability is clearest: agents don't get bored, don't forget to update tests, and don't leave TODOs for later. The value is captured by being precise at the front (task description) and rigorous at the back (review).
 
-Name the workspace after the feature or task ID so it's easy to identify when reviewing.
+## Applying It in Practice
 
-## Step 3 — Run the agent
+Start by writing the task description before opening the agent session. The description should state what the feature does in user-facing terms, what it explicitly does not do (to prevent scope creep), where in the codebase it belongs (specific file paths, modules, or packages), and how to verify it (acceptance criteria or a test scenario). A concrete example: "Add a `POST /api/users/{id}/archive` endpoint in `src/api/users.rs`. It should mark the user as archived in the database and return 200 with the updated record. It should not delete the user. Tests should cover the success case and a 404 for a missing user ID." Vague prompts produce sprawling implementations; specificity is the lever.
 
-Point the agent at the workspace and give it the task description. Let it run to completion before reviewing. Interrupting mid-task and redirecting often produces incoherent output — it's better to let the agent finish, review the diff, and then give specific feedback for a second pass.
+With the description written, create a dedicated workspace named after the feature or task identifier. Open the agent session in that workspace and paste the task description as the initial prompt. Answer any clarifying questions the agent raises before the implementation begins — mid-task redirects are more disruptive than front-loaded answers.
 
-If the agent asks clarifying questions early, answer them. If it asks mid-task, use judgement: a quick answer unblocks it; a question about fundamental design is worth pausing to address properly.
+Let the agent run to completion before reviewing. Interrupting early tends to produce incoherent output. When the agent reports done, open the diff. Go through it in layers: first check scope (did it implement only what was asked, and nothing else?), then architecture (does the approach match how the rest of the codebase is structured?), then correctness (are error paths, empty states, and input validation handled?), then tests (do they cover the new behaviour meaningfully, or just pass trivially?). Leave specific inline comments on the code rather than rewriting the task description — agents act on concrete feedback more reliably than re-stated goals.
 
-## Step 4 — Review the diff
+Send the agent back with your comments. For small issues — rename a function, add a missing guard, extract a repeated block — one pass usually resolves them. For larger problems — wrong abstraction chosen, missing module, API design mismatch — break the feedback into prioritised chunks. If the agent's approach is fundamentally misaligned, it's often faster to discard the workspace, refine the task description, and start fresh than to iterate from a bad foundation.
 
-When the agent reports completion, review the diff in the workspace before running tests. Look for:
+Once the diff is clean, run the full test suite in the workspace. If everything passes, merge into the target branch and delete the workspace. The branch history records what changed and why. For smaller tasks on teams comfortable with the workflow, a single pass and review is typical. On large codebases, constraining the agent to specific files ("only modify `src/api/users.rs` and its test file") reduces unintended side effects and keeps the diff reviewable in one session.
 
-- **Scope**: did it implement only what was asked?
-- **Architecture**: does the approach fit the existing codebase patterns?
-- **Edge cases**: are error paths, empty states, and input validation handled?
-- **Tests**: are the new behaviours covered? Are the tests meaningful or just passing trivially?
+## Engineering Decision Guide
 
-Leave inline comments on specific lines rather than rewriting the task description. Agents act on concrete feedback more reliably than re-stated goals.
+The primary benefit of this workflow is speed: a coding agent can produce a working implementation of a well-defined feature in minutes rather than hours, and it does so consistently across the team regardless of who's available or how loaded the sprint is.
 
-## Step 5 — Iterate
+The trade-offs are real. The workflow requires a human who can evaluate diffs critically — the agent's confidence does not correlate with correctness. Features with implicit constraints that don't appear in the task description are a persistent failure mode: the agent implements what was asked and misses what was assumed. The workflow also front-loads effort onto specification rather than spreading it across implementation, which takes practice to get right.
 
-Send the agent back with your comments. For small feedback (rename a variable, add a missing check), one pass is usually enough. For larger issues (wrong abstraction, missing module), break the feedback into prioritised chunks and iterate.
+This workflow is the right choice when the feature is well-scoped, the acceptance criteria are clear, and the reviewer is comfortable with the codebase. It is not appropriate for exploratory work where the design is still open, for performance-sensitive code where the generated approach needs profiling before committing, or for features that depend heavily on tribal knowledge that isn't written down anywhere in the codebase. In those cases, human implementation with agent assistance on specific subtasks is more reliable.
 
-Limit iterations to what's genuinely needed. If the agent's approach is fundamentally wrong, it's sometimes faster to discard and re-prompt with a clearer constraint than to iterate from a bad foundation.
+The simpler alternative is using an AI code assistant (inline autocomplete or a chat tool) for line-by-line help while the engineer drives the overall implementation. That requires less discipline around task description but produces less leverage. The more complex alternative is running multiple agents on decomposed subtasks in parallel — which scales output further but requires more coordination overhead at review time. The feature development workflow sits in the middle and is the right starting point for most teams.
 
-## Step 6 — Verify and merge
+Clear recommendation: use this workflow for discrete, well-defined features. Write the task description before touching the agent. Review the diff with the same rigour you'd apply to a colleague's code — the agent's output is a starting point, not a finished product.
 
-Once the diff is clean, run the test suite and any manual verification steps. If it passes, merge the workspace into the target branch. The workspace can then be deleted; its history lives in the branch.
+## Scaling & Operational Considerations
 
-## Tips
+The most common failure mode is an underspecified task description. When the description is vague, the agent fills in the gaps with plausible but wrong assumptions. The symptom is a diff that's technically functional but doesn't fit the product or the architecture. The fix is to invest more time in the description before the next run, not to iterate on a bad foundation.
 
-- Keep features small enough to review in one session. A feature that would take a developer two days to implement will produce a diff too large to review meaningfully in one pass.
-- Pin the agent to specific files when the feature is narrow. Telling it "modify only `src/api/users.ts` and its tests" reduces the chance of unintended side effects.
-- Save your task descriptions. A well-written description becomes reusable documentation and a useful reference if the feature needs revisiting.
+A second common mistake is treating agent output as pre-reviewed code. Because the agent produces syntactically clean, well-formatted output, it's easy to merge after a quick glance. This is how subtle bugs ship — edge cases the agent didn't consider, test scenarios that are structured but not meaningful, or patterns that diverge from the codebase and become technical debt over time.
 
-## Related workflows
+At team scale, the workflow compounds both its benefits and its risks. Multiple engineers running agents simultaneously produce more output than a team can review carefully without process. Teams that succeed at scale establish a shared review checklist, rotate review responsibility explicitly, and track how often agent output requires significant rework. A high rework rate is a signal that task descriptions need to be more detailed or that the review bar has slipped.
 
-- [AI Code Review Workflow](./ai-code-review)
-- [Human-in-the-Loop Review Workflow](/learn/workflows/git/human-in-the-loop-review)
-- [Parallel Development Workflow](/learn/workflows/git/parallel-development)
+Performance implications are mild — the bottleneck is review time, not agent execution time. The operational overhead is workspace management: workspaces should be deleted after merge to avoid accumulating stale environments. When the workflow breaks down — the agent produces something unworkable, or a merged feature introduces a regression — the recovery path is clear: roll back the merge commit, discard the workspace, revise the task description, and re-run. The workspace model makes rollback clean and traceable.
+
+Long-term, the discipline that sustains this workflow is maintaining high-quality task descriptions as a team habit. Good descriptions are reusable documentation and become a reference for future maintenance. Teams that save and refine their task descriptions over time build a library that makes future features faster to scope and easier to hand off.
+
+## Next Steps
+
+- [AI Code Review Workflow](./ai-code-review) — use AI review as a structured first pass on the diff the agent produces, before it goes to human reviewers
+- [Human-in-the-Loop Review Workflow](/learn/workflows/git/human-in-the-loop-review) — the complementary human review layer that follows AI review in the pipeline
+- [Parallel Development Workflow](/learn/workflows/git/parallel-development) — run multiple agent workspaces on different features simultaneously
+- [What are Coding Agents?](/learn/concepts/ai-engineering/coding-agents) — foundational concept behind this workflow
+- [What is Human-in-the-Loop Development?](/learn/concepts/ai-engineering/human-in-the-loop-development) — the broader framework this workflow operates within

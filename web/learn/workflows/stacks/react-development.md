@@ -6,72 +6,51 @@ sidebar_position: 2
 
 A workflow for using AI agents to build and iterate on React applications — covering component generation, state management, and the review practices that keep UI code maintainable.
 
-## Overview
+## Introduction
 
-React codebases have predictable structure — components, hooks, context, and tests — which makes them a good fit for AI-assisted development. Agents navigate the component tree effectively, generate typed props interfaces, and produce tests using standard libraries. The main risks are inconsistent component architecture, styling drift from established patterns, and generated hooks that introduce subtle re-render bugs.
+Building React applications with AI agents reduces the time spent on predictable, structural work — scaffolding components, writing prop interfaces, generating tests, and migrating between patterns — so engineers can focus on product decisions and architecture. This workflow is for frontend engineers and full-stack teams working on React TypeScript codebases who want to integrate AI assistance without accumulating hook bugs, styling inconsistencies, or accessibility debt.
 
-## Setting up agents for React work
+React is a natural fit for AI-assisted development because its unit of composition — the component — has a clear, declarative contract: props in, rendered output and events out. That explicitness means agents can generate well-typed components from a brief description, follow an existing component as a reference, and produce React Testing Library tests that exercise real user behaviour. After reading this workflow, you will be able to orient an agent to your codebase's specific conventions before each task, run a structured review pass on generated UI code, and use agents for high-leverage refactoring tasks like class-to-function component migrations and state management library moves.
 
-Before running an agent on a React codebase, give it orientation:
+## Understanding the Concept
 
-- **Component library**: are you using shadcn/ui, Radix, MUI, or custom components? The agent should use existing primitives rather than creating new ones.
-- **Styling approach**: CSS modules, Tailwind, styled-components, or plain CSS? Inconsistency here produces visual debt that's tedious to clean up.
-- **State management**: Zustand, Redux, Jotai, React Query, or local state? Name the pattern for the task at hand so the agent doesn't introduce a different one.
-- **Testing library**: React Testing Library conventions (prefer `getByRole`, `userEvent`) or a different approach?
+React codebases are organised around components, hooks, context, and tests — a structure agents navigate effectively when given enough orientation. The key mental model is that an agent working in React needs to understand four things before it starts: what primitives already exist (component library), how styles are applied (styling approach), where shared state lives (state management), and how code is verified (testing conventions). Without this context, an agent will make locally reasonable choices that drift from the codebase's patterns — creating a new unstyled component when shadcn/ui primitives already cover the use case, or reaching for `useState` where the codebase uses Zustand.
 
-A brief context block at the start of the task prompt saves multiple correction iterations.
+TypeScript helps significantly here. A well-typed codebase gives agents accurate information about what props components accept, what hooks return, and what events emit. Agents read type definitions and use them to generate consistent code; type errors after generation are clear signals about mismatches. This makes TypeScript React codebases more reliable targets for agent work than untyped ones.
 
-## Feature development: new components
+Where React creates friction for agents is in the hooks model. The rules of hooks — referential stability, dependency arrays, cleanup functions — are not enforced by the TypeScript compiler. An agent can generate code that compiles and renders correctly in the happy path but introduces a stale closure, an infinite re-render loop, or a memory leak from a missing cleanup. These bugs require understanding the React rendering model, which agents sometimes approximate rather than apply precisely. Memoization is a related blind spot: agents often add `useMemo` and `useCallback` speculatively, adding complexity without a measurable performance benefit.
 
-When asking an agent to build a new component:
+## Applying It in Practice
 
-1. **Describe the component's contract**: its props, what it renders, and what events it emits. Be specific about types — `onSubmit: (data: FormData) => void` is better than "a submit handler."
-2. **Name an existing component to use as a reference**: "match the pattern used in `UserCard.tsx`" gives the agent a real example of the codebase's conventions.
-3. **Specify co-location**: where does the component file live? Where do its tests live? Does it get a Storybook story?
+Before each task, give the agent a brief orientation block in the prompt. Name the component library in use (shadcn/ui, Radix, MUI, or custom), the styling approach (Tailwind, CSS modules, styled-components), the state management pattern for this task (Zustand store, React Query, local state), and the testing conventions (React Testing Library with `getByRole` and `userEvent`, or otherwise). A few sentences here prevents multiple correction iterations later.
 
-Review the generated component for:
+For a new component, describe its contract precisely: what props it accepts with TypeScript types, what it renders, and what events it emits. `onSubmit: (data: FormData) => void` is more useful than "a submit handler." Then name one existing component in the codebase as a reference — "match the structure of `UserCard.tsx`" gives the agent a real example of how the codebase organises props, handlers, and rendering. Specify co-location explicitly: where the component file lives, where its tests go, whether it needs a Storybook story.
 
-- **Prop drilling**: has the agent passed props through multiple layers that should use context or a state manager?
-- **Effect correctness**: any `useEffect` should have a correct dependency array and a cleanup function if it sets up subscriptions or timers.
-- **Memoisation**: `useMemo` and `useCallback` should be present only where there's a real performance reason, not speculatively.
-- **Key props**: any list rendering should have stable, unique keys — not array indices.
+Once the agent produces a component, apply this review pass in order. Check hook dependency arrays first — any `useEffect` should list every value it reads from the outer scope, and any effect that sets up a subscription or timer must return a cleanup function. Check for prop drilling — if the agent has threaded a prop through three layers to reach a deep child, that is a signal to use context or a state manager instead. Look at key props in any list rendering; array indices as keys cause incorrect reconciliation when items are added, removed, or reordered, and agents reach for them by default. Review memoization use: `useMemo` and `useCallback` are only worth the complexity when there is a measurable render performance problem or a referential-equality requirement, not as a precaution. Finally, audit accessibility — interactive elements need correct ARIA attributes, keyboard navigation, and focus management, which agents frequently produce only partially. Add error boundaries around any new features that might fail at runtime so that a component error does not crash the entire page.
 
-## Bug fixing in React
+For refactoring tasks — converting class components to function components with hooks, migrating from one state management library to another, replacing inline styles with Tailwind — always ensure tests exist before the agent touches the code. React Testing Library tests that drive user behaviour (click, type, submit, navigate) survive implementation changes that break implementation-detail tests, making them the most reliable safety net for agent-driven refactoring.
 
-React bugs often manifest in the UI without an obvious stack trace. Give the agent:
+## Engineering Decision Guide
 
-- The component name and the visible symptom ("the dropdown closes immediately after opening")
-- The relevant component file and any hooks it calls
-- The browser console output if errors are present
+AI assistance adds the most value in React for structural, pattern-following work: generating new components from a spec, scaffolding test files, and performing large but mechanical refactors like class-to-function conversions or state management migrations across many files. These tasks are time-consuming, repetitive, and the feedback loop is fast because TypeScript and the browser provide immediate error signals. Agents are also effective at reviewing existing components for accessibility gaps and suggesting the right ARIA roles — a review task that is tedious to do manually at scale.
 
-Ask the agent to identify the cause before writing a fix. Common React bug categories to watch for:
+The trade-offs are concentrated in hook correctness and styling consistency. An agent can produce a component that looks correct in code review but behaves incorrectly at runtime due to a stale closure or a missing dependency in a `useEffect`. Reviewers who are not fluent in React's rendering model may approve buggy hook code without catching it. Similarly, if the agent is not precisely oriented to the styling approach, it will mix patterns — Tailwind classes in a CSS Modules codebase, inline styles in a Tailwind codebase — creating visual debt that accumulates silently across many PRs.
 
-- **Stale closure**: a callback captures a value from a previous render
-- **Infinite re-render**: a state update in an effect without a proper dependency array
-- **Missing cleanup**: an async operation that updates state after the component unmounts
-- **Identity instability**: an object or array created inline in JSX that causes a child to re-render on every parent render
+AI assistance adds risk when the task involves complex stateful UI behaviour — multi-step forms with cross-field validation, drag-and-drop with optimistic updates, real-time collaboration state — where the interaction between rendering cycles and user events is subtle. In these cases, sketch the state machine or interaction flow yourself before delegating implementation.
 
-## Refactoring React code
+## Scaling & Operational Considerations
 
-Common React refactoring tasks for agents:
+The failure modes that accumulate in AI-generated React code over time are usually not single bugs but patterns: agents that consistently omit cleanup functions in effects, consistently use index keys in lists, or consistently skip accessibility attributes. Establish a code review checklist specific to your codebase and apply it to every agent-generated PR, not just spot checks.
 
-- Extracting a large component into smaller ones
-- Converting class components to function components with hooks
-- Migrating from one state management library to another
-- Replacing inline styles with a CSS module or Tailwind classes
+Stale closures are the hardest to catch in review because the code looks correct. The symptom is a callback that uses a value from a previous render — most often in event handlers passed as props to deeply nested components. The `eslint-plugin-react-hooks` exhaustive-deps rule catches a significant fraction of these automatically; run it as part of CI to convert a human review burden into a lint gate.
 
-For any refactoring, ensure the component has tests before the agent touches it. React Testing Library tests that exercise user behaviour (click, type, submit) are the most reliable safety net — they survive implementation changes that break implementation-detail tests.
+Security in React is a targeted concern around `dangerouslySetInnerHTML`. Agents may use it to render HTML content from an API response without sanitisation. Search generated code for `dangerouslySetInnerHTML` and ensure any content rendered that way is sanitised at the source or with a library like DOMPurify before it reaches the DOM. Also review any dynamic `src` or `href` attributes that could inject a `javascript:` URL from user-controlled data.
 
-## Reviewing AI-generated React code
+Long-term, AI-generated React components are maintainable when they follow the codebase's conventions precisely. Components that introduce a new state management pattern, a new styling approach, or a new test structure create a second set of conventions that subsequent agents and engineers must understand separately from the rest of the codebase. The orientation step at the start of each task is the primary tool for preventing that drift.
 
-Beyond logic review, check:
+## Next Steps
 
-- **Accessibility**: does interactive UI have correct ARIA attributes, keyboard navigation, and focus management?
-- **Error boundaries**: do new features have error boundaries that prevent a component failure from crashing the whole page?
-- **Loading states**: does the component handle loading, empty, and error states gracefully, or does it assume data is always present?
-
-## Related workflows
-
-- [AI Feature Development Workflow](/learn/workflows/ai/ai-feature-development)
-- [AI Refactoring Workflow](/learn/workflows/ai/ai-refactoring)
-- [Human-in-the-Loop Review Workflow](/learn/workflows/git/human-in-the-loop-review)
+- [AI Feature Development Workflow](/learn/workflows/ai/ai-feature-development) — the general framework for running an AI agent on a feature task end to end
+- [AI Refactoring Workflow](/learn/workflows/ai/ai-refactoring) — how to structure large refactoring tasks for agents, including checkpoints and rollback strategies
+- [Human-in-the-Loop Review Workflow](/learn/workflows/git/human-in-the-loop-review) — review process for AI-generated code, including what to delegate and what to inspect manually
+- [Tauri Development Workflow](./tauri-development) — adds the Rust backend and IPC layer for teams building desktop apps on top of a React frontend
