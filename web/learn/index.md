@@ -2,12 +2,13 @@
 sidebar_position: 1
 ---
 
-# User Guides
+# Learn
 
-Treq is an AI code review manager for developers who use coding agents. It gives each task an isolated workspace, keeps those workspaces rebased as the underlying code changes, and lets you review agent output before it reaches your main branch.
+Evergreen reference for AI-assisted development and Git workflows. Use these articles to understand the concepts behind the tools you are using and adopt patterns that hold up at team scale.
 
-Use Treq to inspect diffs like a GitHub PR, leave inline comments, and send those comments back to an agent for changes. If you spot an issue while browsing files or reviewing a specific commit, Treq keeps that feedback tied to the code so the agent can work on it in the background.
+- **[Concepts](/learn/concepts)** — core ideas: coding agents, human-in-the-loop development, AI code review, Git worktrees, stacked PRs, and more.
+- **[Workflows](/learn/workflows)** — goal-oriented guides for AI feature development, bug fixing, refactoring, and tech-stack-specific patterns.
+- **[Tutorials](/learn/tutorials)** — step-by-step walkthroughs for common Treq tasks.
+- **[How-To](/learn/how-to)** — short task-focused guides for specific operations.
 
-Workspaces are separate copies of your codebase, so multiple agents can run in parallel without stepping on each other. Treq automatically rebases dependent workspaces, can hand conflict resolution to AI, and supports stacked workspaces for breaking large features into smaller reviewable branches.
-
-Start with [Installation and Quickstart](/docs/getting-started/installation) to select a repository and create your first workspace.
+For product documentation and getting started, see [Guides](/docs/guides).
