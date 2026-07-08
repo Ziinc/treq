@@ -109,6 +109,11 @@ const config: Config = {
           position: 'left',
           label: 'Docs',
         },
+        {
+          to: '/changelog',
+          label: 'Changelog',
+          position: 'left',
+        },
         ...(featureFlags.pro ? [{
           to: '/dashboard',
           label: 'Dashboard',

@@ -1,0 +1,68 @@
+---
+title: Changelog
+description: Release history for Treq
+hide_table_of_contents: true
+---
+
+# Changelog
+
+> Full release history for [Treq](https://github.com/Ziinc/treq/releases).
+
+## [v0.1.2](https://github.com/Ziinc/treq/releases/tag/v0.1.2)
+
+*v0.1.2 — June 29, 2026*
+
+## What's Changed
+
+This release marks a shift to a PR-based dev cycle as I am now satisfied with the `main` branch stability. Subsequent release notes will be auto-generated from PRs.
+
+* Stacked workspaces now include consider working copy
+* Removal of all jj cli reliance and fully utilize `jj-lib`, removing all subprocess calls for both git and jj
+* Usability and styling tweaks
+* Working copy commits now get rendered inside of the Commits list
+* Added JS integration testing harness based on N-API and JSDom to reliably perform JS-driven unit tests against tauri source code
+* Added benchmarks that can be run and profiled via Samply
+* Added version bumping script
+* Added mutli-agent support, with Codex and Cursor being supported
+* Added Agent-aware CLI, you can now instruct agents to perform workspace changes on your behalf (splitting of branches, moving commits between branches, moving hunks, moving working copy changes). The CLI is non-destructive, meaning that an agent can never delete any branch or commit, only moving changes via the CLI.
+* Improved default branch handling. Default branches can now have their own workspaces, allowing for users to have a completely separate working copy from their main repository for their default branch for experimentation. Note that all stacked branches targeting the default branch will inherit these changes as an ancestor, as working copies are now considered in the auto-rebase
+* Improved performance for all core crate functions, with improvements ranging from 3x to 10x speedups.
+* Improved working copy handling
+
+**Full Changelog**: https://github.com/Ziinc/treq/compare/v0.1.1...v0.1.2
+
+---
+
+## [v0.1.1](https://github.com/Ziinc/treq/releases/tag/v0.1.1)
+
+*v0.1.1 — March 12, 2026*
+
+### Bugfixes
+- New window loading bug where Onboarding page would get unnecessarily shown
+- Fresh app loading bug
+- Unnecessary `.jj` checks when opening a new repository
+- Fix settings cache of last opened repository
+- Other minor fixes
+
+**Full Changelog**: https://github.com/Ziinc/treq/compare/v0.1.0...v0.1.1
+
+---
+
+## [v0.1.0](https://github.com/Ziinc/treq/releases/tag/v0.1.0)
+
+*v0.1.0 — March 12, 2026*
+
+🎉 **First Release** 🎉
+
+Features:
+- Agent isolation via jujitsu workspaces, with in-app terminal
+- Automatic rebasing of workspaces on their target branch
+- Claude Code support for in-app agents
+- File browsing interface for code review
+- Commit reviews, with commit deletion and commit moving between branches
+- Changes reviews, with conflict resolving
+- Stacking of workspace, with automatic rebasing
+- Agent-aware non-destructive CLI for agentic workspace management
+- Workspace splitting, at the commit level, file level, or diff hunk level
+
+**Full Changelog**: https://github.com/Ziinc/treq/commits/v0.1.0
