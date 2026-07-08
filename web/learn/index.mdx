@@ -1,0 +1,93 @@
+---
+sidebar_position: 1
+---
+
+import LearnDirectory from '@site/src/components/LearnDirectory';
+
+export const learnSections = [
+  {
+    title: 'Concepts',
+    description: 'Core ideas behind AI-assisted engineering, human review, and Git collaboration patterns.',
+    links: [
+      {label: 'Concepts overview', href: '/learn/concepts'},
+      {label: 'AI engineering', href: '/learn/concepts/ai-engineering'},
+      {label: 'AI-assisted software engineering', href: '/learn/concepts/ai-engineering/ai-assisted-software-engineering'},
+      {label: 'Human-in-the-loop development', href: '/learn/concepts/ai-engineering/human-in-the-loop-development'},
+      {label: 'Coding agents', href: '/learn/concepts/ai-engineering/coding-agents'},
+      {label: 'AI code review', href: '/learn/concepts/ai-engineering/ai-code-review'},
+      {label: 'Agent orchestration', href: '/learn/concepts/ai-engineering/agent-orchestration'},
+      {label: 'Git and version control', href: '/learn/concepts/git'},
+      {label: 'Git worktrees', href: '/learn/concepts/git/git-worktrees'},
+      {label: 'Stacked PRs', href: '/learn/concepts/git/stacked-prs'},
+      {label: 'Git worktrees vs clones', href: '/learn/concepts/git/git-worktrees-vs-clones'},
+      {label: 'Cherry-pick vs rebase', href: '/learn/concepts/git/cherry-pick-vs-rebase'},
+      {label: 'Merge vs rebase', href: '/learn/concepts/git/merge-vs-rebase'},
+    ],
+  },
+  {
+    title: 'Workflows',
+    description: 'Goal-oriented patterns for AI work, Git collaboration, and stack-specific development.',
+    links: [
+      {label: 'Workflows overview', href: '/learn/workflows'},
+      {label: 'AI workflows', href: '/learn/workflows/ai'},
+      {label: 'AI feature development', href: '/learn/workflows/ai/ai-feature-development'},
+      {label: 'AI bug fix', href: '/learn/workflows/ai/ai-bug-fix'},
+      {label: 'AI refactoring', href: '/learn/workflows/ai/ai-refactoring'},
+      {label: 'AI code review', href: '/learn/workflows/ai/ai-code-review'},
+      {label: 'Git workflows', href: '/learn/workflows/git'},
+      {label: 'Stacked PR workflow', href: '/learn/workflows/git/stacked-pr'},
+      {label: 'Parallel development', href: '/learn/workflows/git/parallel-development'},
+      {label: 'Human-in-the-loop review', href: '/learn/workflows/git/human-in-the-loop-review'},
+      {label: 'Tech stack workflows', href: '/learn/workflows/stacks'},
+      {label: 'React development', href: '/learn/workflows/stacks/react-development'},
+      {label: 'Tauri development', href: '/learn/workflows/stacks/tauri-development'},
+      {label: 'Elixir AI', href: '/learn/workflows/stacks/elixir-ai'},
+      {label: 'Rust refactoring', href: '/learn/workflows/stacks/rust-refactoring'},
+    ],
+  },
+  {
+    title: 'Tutorials',
+    description: 'Step-by-step walkthroughs for common Treq tasks.',
+    links: [
+      {label: 'Tutorials overview', href: '/learn/tutorials'},
+      {label: 'Using Treq with a Git repo', href: '/learn/tutorials/using-treq-with-git-repo'},
+      {label: 'Creating terminal sessions', href: '/learn/tutorials/creating-terminal-sessions'},
+      {label: 'Managing workspaces', href: '/learn/tutorials/managing-workspaces'},
+      {label: 'Committing changes', href: '/learn/tutorials/committing-changes'},
+      {label: 'Code review workflow', href: '/learn/tutorials/code-review-workflow'},
+      {label: 'Merging workspaces', href: '/learn/tutorials/merging-workspaces'},
+    ],
+  },
+  {
+    title: 'How-To',
+    description: 'Short guides for specific operations and settings.',
+    links: [
+      {label: 'How-To overview', href: '/learn/how-to'},
+      {label: 'Pushing to remote', href: '/learn/how-to/pushing-to-remote'},
+      {label: 'Discarding changes', href: '/learn/how-to/discarding-changes'},
+      {label: 'Moving files between workspaces', href: '/learn/how-to/moving-files-between-workspaces'},
+      {label: 'Customizing settings', href: '/learn/how-to/customizing-settings'},
+    ],
+  },
+  {
+    title: 'Troubleshooting',
+    description: 'Use these pages when setup, workflow, or repository state does not behave as expected.',
+    links: [{label: 'Troubleshooting overview', href: '/learn/troubleshooting'}],
+  },
+  {
+    title: 'Product docs',
+    description: 'Use product documentation when you need installation, configuration, or reference material.',
+    links: [
+      {label: 'Guides', href: '/docs/guides'},
+      {label: 'Installation', href: '/docs/getting-started/installation'},
+      {label: 'Keyboard shortcuts', href: '/docs/reference/keyboard-shortcuts'},
+      {label: 'CLI reference', href: '/docs/reference/cli'},
+    ],
+  },
+];
+
+# Learn
+
+Evergreen reference for AI-assisted development and Git workflows. Use this directory to find the concept, workflow, tutorial, or task guide you need.
+
+<LearnDirectory sections={learnSections} />
