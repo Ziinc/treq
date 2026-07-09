@@ -1,0 +1,39 @@
+name: Docs PR Title
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  label-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add docs prefix if only web/ changes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+
+            // Fetch all changed files (paginate to handle large PRs)
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              per_page: 100,
+            });
+
+            const onlyWebChanges = files.every(f => f.filename.startsWith('web/'));
+            if (!onlyWebChanges) return;
+
+            const title = pr.title;
+            if (title.startsWith('docs: ')) return;
+
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              title: `docs: ${title}`,
+            });
