@@ -1,5 +1,7 @@
 import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
 
+const article = (id: string) => ({type: 'doc' as const, id, className: 'hidden-sidebar-article'});
+
 const sidebars: SidebarsConfig = {
   learnSidebar: [
     {
@@ -17,11 +19,11 @@ const sidebars: SidebarsConfig = {
           label: 'AI Engineering',
           link: {type: 'doc', id: 'concepts/ai-engineering/index'},
           items: [
-            'concepts/ai-engineering/ai-assisted-software-engineering',
-            'concepts/ai-engineering/human-in-the-loop-development',
-            'concepts/ai-engineering/coding-agents',
-            'concepts/ai-engineering/ai-code-review',
-            'concepts/ai-engineering/agent-orchestration',
+            article('concepts/ai-engineering/ai-assisted-software-engineering'),
+            article('concepts/ai-engineering/human-in-the-loop-development'),
+            article('concepts/ai-engineering/coding-agents'),
+            article('concepts/ai-engineering/ai-code-review'),
+            article('concepts/ai-engineering/agent-orchestration'),
           ],
         },
         {
@@ -29,11 +31,11 @@ const sidebars: SidebarsConfig = {
           label: 'Git & Version Control',
           link: {type: 'doc', id: 'concepts/git/index'},
           items: [
-            'concepts/git/git-worktrees',
-            'concepts/git/stacked-prs',
-            'concepts/git/git-worktrees-vs-clones',
-            'concepts/git/cherry-pick-vs-rebase',
-            'concepts/git/merge-vs-rebase',
+            article('concepts/git/git-worktrees'),
+            article('concepts/git/stacked-prs'),
+            article('concepts/git/git-worktrees-vs-clones'),
+            article('concepts/git/cherry-pick-vs-rebase'),
+            article('concepts/git/merge-vs-rebase'),
           ],
         },
       ],
@@ -48,10 +50,10 @@ const sidebars: SidebarsConfig = {
           label: 'AI Workflows',
           link: {type: 'doc', id: 'workflows/ai/index'},
           items: [
-            'workflows/ai/ai-feature-development',
-            'workflows/ai/ai-bug-fix',
-            'workflows/ai/ai-refactoring',
-            'workflows/ai/ai-code-review',
+            article('workflows/ai/ai-feature-development'),
+            article('workflows/ai/ai-bug-fix'),
+            article('workflows/ai/ai-refactoring'),
+            article('workflows/ai/ai-code-review'),
           ],
         },
         {
@@ -59,9 +61,9 @@ const sidebars: SidebarsConfig = {
           label: 'Git Workflows',
           link: {type: 'doc', id: 'workflows/git/index'},
           items: [
-            'workflows/git/stacked-pr',
-            'workflows/git/parallel-development',
-            'workflows/git/human-in-the-loop-review',
+            article('workflows/git/stacked-pr'),
+            article('workflows/git/parallel-development'),
+            article('workflows/git/human-in-the-loop-review'),
           ],
         },
         {
@@ -69,10 +71,10 @@ const sidebars: SidebarsConfig = {
           label: 'Tech Stack Workflows',
           link: {type: 'doc', id: 'workflows/stacks/index'},
           items: [
-            'workflows/stacks/react-development',
-            'workflows/stacks/tauri-development',
-            'workflows/stacks/elixir-ai',
-            'workflows/stacks/rust-refactoring',
+            article('workflows/stacks/react-development'),
+            article('workflows/stacks/tauri-development'),
+            article('workflows/stacks/elixir-ai'),
+            article('workflows/stacks/rust-refactoring'),
           ],
         },
       ],
@@ -82,12 +84,12 @@ const sidebars: SidebarsConfig = {
       label: 'Tutorials',
       link: {type: 'doc', id: 'tutorials/index'},
       items: [
-        'tutorials/using-treq-with-git-repo',
-        'tutorials/creating-terminal-sessions',
-        'tutorials/managing-workspaces',
-        'tutorials/committing-changes',
-        'tutorials/code-review-workflow',
-        'tutorials/merging-workspaces',
+        article('tutorials/using-treq-with-git-repo'),
+        article('tutorials/creating-terminal-sessions'),
+        article('tutorials/managing-workspaces'),
+        article('tutorials/committing-changes'),
+        article('tutorials/code-review-workflow'),
+        article('tutorials/merging-workspaces'),
       ],
     },
     {
@@ -95,10 +97,10 @@ const sidebars: SidebarsConfig = {
       label: 'How-To',
       link: {type: 'doc', id: 'how-to/index'},
       items: [
-        'how-to/pushing-to-remote',
-        'how-to/discarding-changes',
-        'how-to/moving-files-between-workspaces',
-        'how-to/customizing-settings',
+        article('how-to/pushing-to-remote'),
+        article('how-to/discarding-changes'),
+        article('how-to/moving-files-between-workspaces'),
+        article('how-to/customizing-settings'),
       ],
     },
     {
