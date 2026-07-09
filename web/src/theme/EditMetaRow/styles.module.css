@@ -4,7 +4,7 @@
   margin-top: 0.2rem;
 }
 
-/* Stack links vertically on mobile with spacing */
+/* Stack groups vertically on mobile */
 .editLinks {
   display: flex;
   flex-direction: column;
@@ -12,7 +12,14 @@
   gap: 0.6rem;
 }
 
-/* Lay links out inline on desktop */
+.editGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+/* Two columns side by side on desktop */
 @media (min-width: 997px) {
   .lastUpdated {
     text-align: right;
@@ -20,8 +27,8 @@
 
   .editLinks {
     flex-direction: row;
-    align-items: center;
-    gap: 1rem;
+    align-items: flex-start;
+    gap: 1.5rem;
   }
 }
 

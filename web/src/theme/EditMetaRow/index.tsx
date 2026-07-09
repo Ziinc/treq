@@ -136,23 +136,27 @@ export default function EditMetaRow({
     <div className={clsx('row', className)}>
       <div className={clsx('col', styles.noPrint)}>
         <div className={styles.editLinks}>
-          {editUrl && <EditThisPage editUrl={editUrl} />}
-          <a href="#" onClick={handleCopy} className="theme-edit-this-page">
-            <IconMarkdown />
-            {copied ? 'Copied!' : 'Copy as Markdown'}
-          </a>
-          <a href={markdownUrl} className="theme-edit-this-page" target="_blank" rel="noopener noreferrer">
-            <IconMarkdown />
-            View as Markdown
-          </a>
-          <a href={chatGptUrl} className="theme-edit-this-page" target="_blank" rel="noopener noreferrer">
-            <IconChatGPT />
-            Ask ChatGPT
-          </a>
-          <a href={claudeUrl} className="theme-edit-this-page" target="_blank" rel="noopener noreferrer">
-            <IconClaude />
-            Ask Claude
-          </a>
+          <div className={styles.editGroup}>
+            {editUrl && <EditThisPage editUrl={editUrl} />}
+            <a href="#" onClick={handleCopy} className="theme-edit-this-page">
+              <IconMarkdown />
+              {copied ? 'Copied!' : 'Copy as Markdown'}
+            </a>
+            <a href={markdownUrl} className="theme-edit-this-page" target="_blank" rel="noopener noreferrer">
+              <IconMarkdown />
+              View as Markdown
+            </a>
+          </div>
+          <div className={styles.editGroup}>
+            <a href={claudeUrl} className="theme-edit-this-page" target="_blank" rel="noopener noreferrer">
+              <IconClaude />
+              Ask Claude
+            </a>
+            <a href={chatGptUrl} className="theme-edit-this-page" target="_blank" rel="noopener noreferrer">
+              <IconChatGPT />
+              Ask ChatGPT
+            </a>
+          </div>
         </div>
       </div>
       <div className={clsx('col', styles.lastUpdated)}>
