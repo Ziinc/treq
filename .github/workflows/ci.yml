@@ -16,6 +16,7 @@ on:
 
 jobs:
   ci:
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -51,6 +52,9 @@ jobs:
           components: rustfmt
           toolchain: stable
 
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+
       - name: install dependencies (ubuntu only)
         if: matrix.platform == 'ubuntu-22.04' # This must match the platform value defined above.
         run: |
@@ -68,7 +72,7 @@ jobs:
       - name: Install jj CLI (ubuntu)
         if: matrix.platform == 'ubuntu-22.04' # This must match the platform value defined above.
         run: |
-          cargo install --locked --force jj-cli
+          cargo binstall --strategies crate-meta-data jj-cli
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Verify pinned tool versions
