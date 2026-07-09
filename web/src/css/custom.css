@@ -214,15 +214,43 @@ main[class*='docMainContainer'] > .container {
 /* Footer improvements */
 .footer {
   background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.02) 100%);
+  /* Light mode: footer background is transparent, so force dark text for readability */
+  --ifm-footer-link-color: #4b5563;
 }
 
 [data-theme='dark'] .footer {
   background: linear-gradient(180deg, transparent 0%, rgba(255, 255, 255, 0.02) 100%);
+  /* Dark mode: background is dark, so use light text */
+  --ifm-footer-link-color: rgba(255, 255, 255, 0.7);
 }
 
 .footer__title {
   font-weight: 700;
   color: var(--ifm-color-primary);
+}
+
+.footer__copyright {
+  color: #4b5563;
+}
+
+[data-theme='dark'] .footer__copyright {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.footer .footer__link-item {
+  color: #4b5563;
+}
+
+.footer .footer__link-item:hover {
+  color: #111827;
+}
+
+[data-theme='dark'] .footer .footer__link-item {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+[data-theme='dark'] .footer .footer__link-item:hover {
+  color: #ffffff;
 }
 
 /* Code block improvements */
