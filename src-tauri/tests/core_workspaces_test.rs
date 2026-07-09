@@ -1660,12 +1660,8 @@ fn test_pull_workspace_from_remote_branch_stack_handles_conflicted_bookmark() {
     let parent_path = repo.workspaces_dir().join(&parent.workspace_path);
     let parent_path_str = parent_path.to_str().expect("utf8 parent path");
 
-    TestRepo::write_workspace_file(
-        parent_path_str,
-        "local-parent.txt",
-        "local parent change\n",
-    )
-    .expect("Failed to write local parent change");
+    TestRepo::write_workspace_file(parent_path_str, "local-parent.txt", "local parent change\n")
+        .expect("Failed to write local parent change");
     treq_lib::core::commit_workspace(&repo.repo_path, parent.id, "Local parent commit")
         .expect("Failed to create local parent commit");
 
@@ -1684,12 +1680,16 @@ fn test_pull_workspace_from_remote_branch_stack_handles_conflicted_bookmark() {
         "Parent bookmark should be conflicted before pull"
     );
 
-    let result = treq_lib::core::pull_workspace_from_remote(&repo.repo_path, Some(parent.id), "git")
-        .expect("pull_workspace_from_remote should succeed for stacked remote branch");
+    let result =
+        treq_lib::core::pull_workspace_from_remote(&repo.repo_path, Some(parent.id), "git")
+            .expect("pull_workspace_from_remote should succeed for stacked remote branch");
 
     assert!(result.success, "Pull should report success");
     assert!(result.was_diverged, "Pull should detect divergence");
-    assert_eq!(result.commits_rebased, 1, "Expected one local commit to be rebased");
+    assert_eq!(
+        result.commits_rebased, 1,
+        "Expected one local commit to be rebased"
+    );
     assert!(
         !treq_lib::jj::jj_is_bookmark_conflicted(parent_path_str, &parent.branch_name),
         "Parent bookmark should be resolved after pull"

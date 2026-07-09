@@ -6141,8 +6141,8 @@ mod tests {
         let expected = resolve_commit_by_revision(&loaded, "@").expect("resolve wc tip");
         let resolved =
             resolve_branch_revision_for_rebase(repo_path, branch).expect("branch should resolve");
-        let resolved_commit =
-            resolve_commit_by_revision(&loaded, &resolved).expect("resolved branch should map to commit");
+        let resolved_commit = resolve_commit_by_revision(&loaded, &resolved)
+            .expect("resolved branch should map to commit");
         assert_eq!(
             resolved_commit.id().hex(),
             expected.id().hex(),
