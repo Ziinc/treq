@@ -17,15 +17,15 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         launchOptions: {
-          // Use the pre-installed Chromium in the CCR environment.
-          // Playwright's bundled revision may differ from what's installed.
-          executablePath: '/opt/pw-browsers/chromium',
+          executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
         },
       },
     },
   ],
   webServer: {
-    command: 'npm run build && npm run serve -- --port 3000',
+    command: process.env.CI
+      ? 'npm run serve -- --port 3000'
+      : 'npm run build && npm run serve -- --port 3000',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 180 * 1000,
