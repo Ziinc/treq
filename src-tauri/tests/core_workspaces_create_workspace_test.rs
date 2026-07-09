@@ -581,13 +581,18 @@ fn test_create_workspace_from_ahead_source_stacks_history_and_working_copy_and_d
         "A workspace_diff should include A committed change content, got:\n{}",
         a_diff_text
     );
+    assert!(
+        a_diff_text.contains("A committed change marker"),
+        "A workspace_diff should include A committed change content, got:\n{}",
+        a_diff_text
+    );
 
     let b_diff = treq_lib::core::workspace_diff(&repo.repo_path, b_workspace.id)
         .expect("workspace_diff should succeed for B");
     let b_diff_text = format!("{:?}", b_diff.hunks_by_file);
     assert!(
-        b_diff_text.contains("A committed change marker"),
-        "B workspace_diff should include descendant A committed change content, got:\n{}",
+        !b_diff_text.contains("A committed change marker"),
+        "B workspace_diff should not include descendant workspace change A committed change content, got:\n{}",
         b_diff_text
     );
     assert!(
