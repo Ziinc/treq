@@ -128,7 +128,7 @@ pub fn run() {
                 "main",
                 tauri::WebviewUrl::App(window_url.into()),
             )
-            .title("Treq - Coding Agent Manager")
+            .title("Treq - AI Workspace Manager")
             .inner_size(1400.0, 900.0)
             .build()?;
 
