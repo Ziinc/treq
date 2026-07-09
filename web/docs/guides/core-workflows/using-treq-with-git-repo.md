@@ -54,4 +54,3 @@ Treq works with one repository at a time. To switch, click the folder icon and s
 ## Maintenance
 
 If workspaces aren't appearing correctly, use Settings → Repository → **Rebuild Workspaces Database** to rescan `.treq/workspaces/`. Delete unused workspaces regularly to save disk space. Each duplicates your repository's files.
-

@@ -6,9 +6,7 @@
 
 # treq
 
-Treq is your AI Code Review Manager, accelerating AI-assisted software development while maintaining high quality code. Treq is an open-source Graphite alternative with a focus on paralleized development using AI agents.
-
-_Treq was used to build Treq._
+Treq is the open-source AI environment and Graphite alternative for parallel development, review, and delivery. It gives teams isolated workspaces, stacked branches, and AI-assisted workflows without giving up control of their code.
 
 ![Code Overview](./assets/screenshots/code.png)
 
@@ -22,6 +20,10 @@ Pre-requisites:
 Download the latest release [here](https://github.com/Ziinc/treq/releases).
 
 ## Features
+
+### Local-first AI coding environment
+
+Treq keeps your code, workspaces, and review flow on your machine by default. It gives you a fast, AI-assisted environment for exploring changes, coordinating multiple agents, and shipping work in parallel.
 
 ### Code Reviews
 
@@ -41,7 +43,7 @@ Coding agents work in isolated copies of the codebase, ensuring changes are inde
 
 <!-- insert gif of worktree creation -->
 
-- Workspaces are isolated but and **automatically rebased**, meaning code never goes stale.
+- Workspaces are isolated and **automatically rebased**, meaning code never goes stale.
 
 - Got a code conflict? Agents can **automatically resolve your conflicts**.
 
