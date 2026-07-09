@@ -24,7 +24,7 @@
   },
   "plugins": {
     "cli": {
-      "description": "Treq - Coding Agent Manager",
+      "description": "Treq - AI Workspace Manager",
       "subcommands": {
         "add": {
           "description": "Create a new workspace",

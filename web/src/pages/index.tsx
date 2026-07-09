@@ -24,11 +24,11 @@ function HomepageHeader() {
 
         <div className={styles.heroMain}>
           <Heading as="h1" className={styles.heroTitle}>
-            <span className={styles.heroAccent}>AI Coding Manager</span>
+            <span className={styles.heroAccent}>AI Workspace Manager</span>
             {' '}for busy developers
           </Heading>
           <p className={styles.heroEyebrow}>
-            The Open Source Graphite Alternative IDE
+            The Open Source Graphite Alternative
           </p>
           <div className={styles.buttons}>
             <Link
