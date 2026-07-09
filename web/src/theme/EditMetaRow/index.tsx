@@ -84,6 +84,8 @@ export default function EditMetaRow({
     }
   };
 
+  const markdownUrl = `${metadata.permalink.replace(/\/$/, '')}.md`;
+
   return (
     <div className={clsx('row', className)}>
       <div className={clsx('col', styles.noPrint)}>
@@ -92,6 +94,10 @@ export default function EditMetaRow({
           <a href="#" onClick={handleCopy} className="theme-edit-this-page">
             <IconMarkdown />
             {copied ? 'Copied!' : 'Copy as Markdown'}
+          </a>
+          <a href={markdownUrl} className="theme-edit-this-page" target="_blank" rel="noopener noreferrer">
+            <IconMarkdown />
+            View as Markdown
           </a>
         </div>
       </div>
