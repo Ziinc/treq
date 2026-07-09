@@ -139,7 +139,7 @@ const config: Config = {
           items: [
             {
               label: 'Installation',
-              href: 'https://github.com/Ziinc/treq/releases',
+              to: '/docs/getting-started/installation',
             },
             {
               label: 'Getting Started',
