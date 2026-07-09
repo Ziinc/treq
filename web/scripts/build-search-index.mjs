@@ -1,0 +1,78 @@
+import { readFileSync, readdirSync, statSync, existsSync, unlinkSync, copyFileSync } from 'fs';
+import { join, relative, extname } from 'path';
+import { fileURLToPath } from 'url';
+import Database from 'sqlite3';
+import matter from 'gray-matter';
+import { remark } from 'remark';
+import stripMarkdown from 'strip-markdown';
+
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
+const webRoot = join(__dirname, '..');
+const dbPath = join(webRoot, 'static', 'site.db');
+
+function walkMd(dir) {
+  const results = [];
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      results.push(...walkMd(full));
+    } else if (extname(entry) === '.md' || extname(entry) === '.mdx') {
+      results.push(full);
+    }
+  }
+  return results;
+}
+
+async function stripMd(content) {
+  const file = await remark().use(stripMarkdown).process(content);
+  return String(file).replace(/\s+/g, ' ').trim();
+}
+
+function fileToUrl(filePath, base, routeBase) {
+  const rel = relative(base, filePath)
+    .replace(/\\/g, '/')
+    .replace(/\.mdx?$/, '');
+  if (rel === 'index' || rel.endsWith('/index')) {
+    return '/' + routeBase + rel.replace(/\/?index$/, '');
+  }
+  return '/' + routeBase + rel;
+}
+
+async function main() {
+  if (existsSync(dbPath)) unlinkSync(dbPath);
+
+  const db = new Database.Database(dbPath);
+
+  db.serialize(() => {
+    db.run('PRAGMA journal_mode = delete');
+    db.run(`CREATE VIRTUAL TABLE docs_fts USING fts5(title, body, url)`);
+  });
+
+  const files = [
+    ...walkMd(join(webRoot, 'docs')).map(f => ({ file: f, base: join(webRoot, 'docs'), route: 'docs/' })),
+    ...walkMd(join(webRoot, 'learn')).map(f => ({ file: f, base: join(webRoot, 'learn'), route: 'learn/' })),
+  ];
+
+  const insert = db.prepare('INSERT INTO docs_fts(title, body, url) VALUES (?, ?, ?)');
+
+  for (const { file, base, route } of files) {
+    const raw = readFileSync(file, 'utf8');
+    const { data: frontmatter, content } = matter(raw);
+    const title = frontmatter.title || content.match(/^#\s+(.+)/m)?.[1] || '';
+    const body = await stripMd(content);
+    const url = fileToUrl(file, base, route);
+    insert.run(title, body, url);
+  }
+
+  insert.finalize();
+  db.run('VACUUM', () => {
+    db.close();
+    // Copy sql.js-httpvfs runtime assets so they're served as static files
+    const sqlJsDist = join(webRoot, 'node_modules', 'sql.js-httpvfs', 'dist');
+    copyFileSync(join(sqlJsDist, 'sqlite.worker.js'), join(webRoot, 'static', 'sqlite.worker.js'));
+    copyFileSync(join(sqlJsDist, 'sql-wasm.wasm'), join(webRoot, 'static', 'sql-wasm.wasm'));
+    console.log(`Search index built: ${dbPath} (${files.length} docs)`);
+  });
+}
+
+main().catch(e => { console.error(e); process.exit(1); });

@@ -22,3 +22,8 @@ yarn-error.log*
 # Playwright
 /test-results/
 /playwright-report/
+
+# Search index (generated at build time)
+/static/site.db
+/static/sqlite.worker.js
+/static/sql-wasm.wasm
