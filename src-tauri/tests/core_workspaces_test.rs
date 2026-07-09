@@ -1635,6 +1635,76 @@ fn test_pull_workspace_resolves_divergence() {
 }
 
 #[test]
+fn test_pull_workspace_from_remote_branch_stack_handles_conflicted_bookmark() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+
+    let parent = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feature-remote",
+        Some("remote parent".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create parent workspace from remote branch");
+    let child = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/stacked-child",
+        Some("stacked child".to_string()),
+        None,
+        Some(&parent.branch_name),
+        None,
+    )
+    .expect("Failed to create stacked child workspace");
+
+    let parent_path = repo.workspaces_dir().join(&parent.workspace_path);
+    let parent_path_str = parent_path.to_str().expect("utf8 parent path");
+
+    TestRepo::write_workspace_file(parent_path_str, "local-parent.txt", "local parent change\n")
+        .expect("Failed to write local parent change");
+    treq_lib::core::commit_workspace(&repo.repo_path, parent.id, "Local parent commit")
+        .expect("Failed to create local parent commit");
+
+    repo.remote_commit_on_branch(
+        &parent.branch_name,
+        "remote-parent.txt",
+        "remote parent change\n",
+        "Remote parent commit",
+    )
+    .expect("Failed to create remote parent commit");
+
+    treq_lib::jj::jj_git_fetch(&repo.repo_path).expect("Failed to fetch remote changes");
+
+    assert!(
+        treq_lib::jj::jj_is_bookmark_conflicted(parent_path_str, &parent.branch_name),
+        "Parent bookmark should be conflicted before pull"
+    );
+
+    let result =
+        treq_lib::core::pull_workspace_from_remote(&repo.repo_path, Some(parent.id), "git")
+            .expect("pull_workspace_from_remote should succeed for stacked remote branch");
+
+    assert!(result.success, "Pull should report success");
+    assert!(result.was_diverged, "Pull should detect divergence");
+    assert_eq!(
+        result.commits_rebased, 1,
+        "Expected one local commit to be rebased"
+    );
+    assert!(
+        !treq_lib::jj::jj_is_bookmark_conflicted(parent_path_str, &parent.branch_name),
+        "Parent bookmark should be resolved after pull"
+    );
+
+    let child_path = repo.workspaces_dir().join(&child.workspace_path);
+    let child_path_str = child_path.to_str().expect("utf8 child path");
+    let _ = treq_lib::jj::jj_workspace_update_stale(child_path_str);
+    assert!(
+        child_path.join("local-parent.txt").exists(),
+        "Child workspace should retain access to stacked parent history"
+    );
+}
+
+#[test]
 fn test_pull_workspace_no_divergence() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
 
