@@ -267,12 +267,6 @@ a:hover {
   background: #4b5563;
 }
 
-/* Hide article lists in sidebar — articles are discovered via DocCardList on section pages.
-   collapsible: false on these categories removes the expand caret; CSS hides the rendered list. */
-.sidebar-articles-in-page .menu__list {
-  display: none;
-}
-
 /* Spinner animation for auth pages */
 @keyframes spin {
   to { transform: rotate(360deg); }
