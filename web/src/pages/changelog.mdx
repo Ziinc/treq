@@ -1,18 +1,27 @@
 ---
 title: Changelog
 description: Release history for Treq
-hide_table_of_contents: true
 ---
+
+import ContentPageLayout from '@site/src/components/ContentPageLayout';
+
+export const toc = [
+  { id: 'v012', value: 'v0.1.2', level: 2 },
+  { id: 'v011', value: 'v0.1.1', level: 2 },
+  { id: 'v010', value: 'v0.1.0', level: 2 },
+];
+
+<ContentPageLayout title="Changelog" description="Release history for Treq" toc={toc}>
 
 # Changelog
 
 > Full release history for [Treq](https://github.com/Ziinc/treq/releases).
 
-## [v0.1.2](https://github.com/Ziinc/treq/releases/tag/v0.1.2)
+<h2 id="v012"><a href="https://github.com/Ziinc/treq/releases/tag/v0.1.2">v0.1.2</a></h2>
 
 *v0.1.2 — June 29, 2026*
 
-## What's Changed
+### What's Changed
 
 This release marks a shift to a PR-based dev cycle as I am now satisfied with the `main` branch stability. Subsequent release notes will be auto-generated from PRs.
 
@@ -31,7 +40,7 @@ This release marks a shift to a PR-based dev cycle as I am now satisfied with th
 
 ---
 
-## [v0.1.1](https://github.com/Ziinc/treq/releases/tag/v0.1.1)
+<h2 id="v011"><a href="https://github.com/Ziinc/treq/releases/tag/v0.1.1">v0.1.1</a></h2>
 
 *v0.1.1 — March 12, 2026*
 
@@ -44,7 +53,7 @@ This release marks a shift to a PR-based dev cycle as I am now satisfied with th
 
 ---
 
-## [v0.1.0](https://github.com/Ziinc/treq/releases/tag/v0.1.0)
+<h2 id="v010"><a href="https://github.com/Ziinc/treq/releases/tag/v0.1.0">v0.1.0</a></h2>
 
 *v0.1.0 — March 12, 2026*
 
@@ -60,3 +69,7 @@ Features:
 - Stacking of workspace, with automatic rebasing
 - Agent-aware non-destructive CLI for agentic workspace management
 - Workspace splitting, at the commit level, file level, or diff hunk level
+
+**Full Changelog**: https://github.com/Ziinc/treq/commits/v0.1.0
+
+</ContentPageLayout>
