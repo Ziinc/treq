@@ -113,6 +113,63 @@ fn test_multiple_workspace_commits() {
 }
 
 #[test]
+fn test_commit_workspace_does_not_overwrite_last_rebased_target_commit() {
+    let repo = TestRepo::new().unwrap();
+    repo.commit_file("base.txt", "base", "base").unwrap();
+    let ws = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/rebased-meta",
+        None,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    let target_commit =
+        treq_lib::jj::jj_get_commit_id(&repo.repo_path, "@").expect("target commit should resolve");
+    treq_lib::local_db::update_workspace_last_rebased_commit(
+        &repo.repo_path,
+        ws.id,
+        &target_commit,
+    )
+    .expect("should seed rebased target metadata");
+
+    workspace_write_file(&repo, &ws, "local.txt", "local change");
+    treq_lib::core::commit_workspace(&repo.repo_path, ws.id, "local change").unwrap();
+
+    let workspace = treq_lib::local_db::get_workspace_by_id(&repo.repo_path, ws.id)
+        .expect("workspace lookup should succeed")
+        .expect("workspace should exist");
+    let workspace_dir = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_dir_str = workspace_dir
+        .to_str()
+        .expect("workspace path should be valid utf-8");
+    let workspace_tip = treq_lib::jj::jj_get_commit_id(workspace_dir_str, &workspace.branch_name)
+        .expect("workspace tip should resolve");
+
+    let last_rebased_target =
+        treq_lib::local_db::get_workspace_last_rebased_commit(&repo.repo_path, ws.id)
+            .expect("should re-read rebased target commit")
+            .expect("rebased target commit should still exist");
+
+    assert!(!last_rebased_target.is_empty());
+    assert!(!workspace_tip.is_empty());
+
+    init_test_app_db(&repo, Some("git"));
+    let diff = treq_lib::core::workspace_diff(&repo.repo_path, ws.id).unwrap();
+    let committed_paths: Vec<_> = diff
+        .committed_files
+        .iter()
+        .map(|f| f.path.as_str())
+        .collect();
+    assert!(
+        committed_paths.contains(&"local.txt"),
+        "workspace_diff should still include committed workspace changes, got {:?}",
+        committed_paths
+    );
+}
+
+#[test]
 fn test_workspace_diff_when_wc_is_merge_commit() {
     let repo = TestRepo::new().unwrap();
     repo.commit_file("shared.txt", "target", "target").unwrap();
@@ -212,6 +269,68 @@ fn test_workspace_diff_includes_uncommitted_changes_and_conflicts() {
         .collect();
     assert!(uncommitted_paths.contains(&"uncommitted.txt"));
     assert!(diff.conflicted_files.is_empty());
+}
+
+#[test]
+fn test_workspace_diff_does_not_pick_up_target_branch_changes_after_force_rebase() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
+
+    let ws = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/rebase-diff-regression",
+        None,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    let workspace_dir = repo.workspaces_dir().join(&ws.workspace_path);
+    let workspace_dir_str = workspace_dir.to_str().unwrap();
+
+    TestRepo::write_workspace_file(workspace_dir_str, "workspace.txt", "workspace change\n")
+        .unwrap();
+    treq_lib::core::commit_workspace(&repo.repo_path, ws.id, "workspace change").unwrap();
+
+    repo.commit_file("upstream.txt", "upstream change\n", "upstream change")
+        .unwrap();
+
+    treq_lib::core::check_and_rebase_workspaces(
+        &repo.repo_path,
+        Some(ws.id),
+        Some(default_branch.to_string()),
+        Some(true),
+        "git",
+    )
+    .expect("force rebase should succeed");
+
+    init_test_app_db(&repo, Some("git"));
+    let diff = treq_lib::core::workspace_diff(&repo.repo_path, ws.id).unwrap();
+
+    let committed_paths: Vec<_> = diff
+        .committed_files
+        .iter()
+        .map(|f| f.path.as_str())
+        .collect();
+    assert!(
+        committed_paths.contains(&"workspace.txt"),
+        "workspace commit should still be shown after force rebase: {:?}",
+        committed_paths
+    );
+    assert!(
+        !committed_paths.contains(&"upstream.txt"),
+        "target-branch commits should not leak into committed changes after force rebase: {:?}",
+        committed_paths
+    );
+
+    let upstream_file = diff
+        .committed_files
+        .iter()
+        .find(|file| file.path == "upstream.txt");
+    assert!(
+        upstream_file.is_none(),
+        "upstream-only file should not appear in committed section after force rebase"
+    );
 }
 
 #[test]
