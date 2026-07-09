@@ -14,8 +14,6 @@ Treq is the open-source AI Workspace Manager and Graphite alternative for parall
 
 Download the latest release [here](https://github.com/Ziinc/treq/releases).
 
-> **Recommended for developers:** Install [Jujitsu (`jj`)](https://docs.jj-vcs.dev/latest/install-and-setup/) and add it to your `PATH`. Treq uses Jujitsu under the hood, and having `jj` available in your environment lets AI agents query repository state directly — useful when debugging workspace or branch behavior.
-
 ## Features
 
 ### Code Reviews
