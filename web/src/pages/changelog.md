@@ -29,8 +29,6 @@ This release marks a shift to a PR-based dev cycle as I am now satisfied with th
 * Improved performance for all core crate functions, with improvements ranging from 3x to 10x speedups.
 * Improved working copy handling
 
-**Full Changelog**: https://github.com/Ziinc/treq/compare/v0.1.1...v0.1.2
-
 ---
 
 ## [v0.1.1](https://github.com/Ziinc/treq/releases/tag/v0.1.1)
@@ -43,8 +41,6 @@ This release marks a shift to a PR-based dev cycle as I am now satisfied with th
 - Unnecessary `.jj` checks when opening a new repository
 - Fix settings cache of last opened repository
 - Other minor fixes
-
-**Full Changelog**: https://github.com/Ziinc/treq/compare/v0.1.0...v0.1.1
 
 ---
 
@@ -64,5 +60,3 @@ Features:
 - Stacking of workspace, with automatic rebasing
 - Agent-aware non-destructive CLI for agentic workspace management
 - Workspace splitting, at the commit level, file level, or diff hunk level
-
-**Full Changelog**: https://github.com/Ziinc/treq/commits/v0.1.0
