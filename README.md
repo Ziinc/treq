@@ -6,9 +6,7 @@
 
 # treq
 
-Treq is your AI Code Review Manager, accelerating AI-assisted software development while maintaining high quality code. Treq is an open-source Graphite alternative with a focus on paralleized development using AI agents.
-
-_Treq was used to build Treq._
+Treq is the open-source AI environment and Graphite alternative for parallel development, review, and delivery. It gives teams isolated workspaces, stacked branches, and AI-assisted workflows without giving up control of their code.
 
 ![Code Overview](./assets/screenshots/code.png)
 
