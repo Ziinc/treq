@@ -1,0 +1,380 @@
+mod e2e_test_helpers;
+use e2e_test_helpers::TestRepo;
+
+fn assert_raw_jj_log_has_working_copy_commit(workspace_path: &str, expected_message: &str) {
+    let raw_log = TestRepo::run_jj(
+        workspace_path,
+        &[
+            "log",
+            "--no-graph",
+            "-T",
+            "description.first_line() ++ \"|\" ++ commit_id.short(12) ++ \"\\n\"",
+            "-n",
+            "15",
+        ],
+    )
+    .expect("jj log failed");
+
+    assert!(
+        raw_log.contains(expected_message),
+        "expected '{expected_message}' in raw jj log, got:\n{raw_log}"
+    );
+    assert!(
+        raw_log.lines().any(|line| line.starts_with('|')),
+        "expected raw jj log to include empty working copy commit, got:\n{raw_log}"
+    );
+}
+
+fn assert_workspace_status_is_clean(workspace_path: &str) {
+    let status = TestRepo::run_jj(workspace_path, &["st"]).expect("jj st failed");
+    assert!(
+        status.contains("The working copy has no changes."),
+        "expected clean workspace status after commit, got:\n{status}"
+    );
+    assert!(
+        status.contains("Working copy  (@)") && status.contains("(empty)"),
+        "expected status to show an empty working copy commit, got:\n{status}"
+    );
+    assert!(
+        status.contains("(no description set)"),
+        "expected status to show no-description working copy commit, got:\n{status}"
+    );
+}
+
+fn assert_workspace_list_commits_hides_working_copy(
+    repo_path: &str,
+    workspace_id: i64,
+    expected_message: Option<&str>,
+) {
+    let log = treq_lib::core::list_commits(repo_path, Some(workspace_id), false, None, None)
+        .expect("list_commits failed");
+
+    if let Some(expected_message) = expected_message {
+        assert!(
+            log.commits
+                .iter()
+                .any(|c| c.description.contains(expected_message)),
+            "expected '{expected_message}' in workspace commit log, got: {:?}",
+            log.commits
+                .iter()
+                .map(|c| &c.description)
+                .collect::<Vec<_>>()
+        );
+    }
+    assert!(
+        log.commits.iter().all(|c| !c.is_working_copy),
+        "expected workspace log to exclude working copy commits, got: {:?}",
+        log.commits
+            .iter()
+            .map(|c| (c.description.clone(), c.is_working_copy))
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        log.commits.iter().all(|c| !c.description.trim().is_empty()),
+        "expected workspace log to exclude empty working copy commits, got: {:?}",
+        log.commits
+            .iter()
+            .map(|c| &c.description)
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        log.tentative_working_copy.is_none(),
+        "expected no tentative working copy after commit, got: {:?}",
+        log.tentative_working_copy
+    );
+}
+
+#[test]
+fn test_create_commit_basic() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/commit-basic",
+        Some("basic commit".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let ws_dir = repo.workspaces_dir().join(&workspace.workspace_path);
+    let ws_dir_str = ws_dir.to_str().expect("utf-8");
+    TestRepo::write_workspace_file(ws_dir_str, "data.txt", "hello\n")
+        .expect("Failed to write file");
+
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "add data")
+        .expect("create_commit failed");
+
+    assert_workspace_status_is_clean(ws_dir_str);
+    assert_raw_jj_log_has_working_copy_commit(ws_dir_str, "add data");
+    assert_workspace_list_commits_hides_working_copy(
+        &repo.repo_path,
+        workspace.id,
+        Some("add data"),
+    );
+}
+
+#[test]
+fn test_create_commit_unknown_workspace_errors() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let err = treq_lib::core::commit_workspace(&repo.repo_path, i64::MAX, "nope")
+        .expect_err("should error on unknown workspace id");
+    assert!(
+        err.contains("Workspace not found"),
+        "expected 'Workspace not found' in error, got: {err}"
+    );
+}
+
+#[test]
+fn test_create_commit_empty_workspace() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/commit-empty",
+        Some("empty commit test".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "empty commit")
+        .expect("create_commit on empty workspace should succeed");
+
+    let ws_dir = repo.workspaces_dir().join(&workspace.workspace_path);
+    let ws_dir_str = ws_dir.to_str().expect("utf-8");
+
+    assert_workspace_status_is_clean(ws_dir_str);
+    assert_raw_jj_log_has_working_copy_commit(ws_dir_str, "empty commit");
+    assert_workspace_list_commits_hides_working_copy(&repo.repo_path, workspace.id, None);
+}
+
+#[test]
+fn test_commit_home_repo_advances_branch() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch();
+
+    let before =
+        e2e_test_helpers::JjVerifier::get_bookmark_commit_id(&repo.repo_path, default_branch)
+            .expect("query bookmark")
+            .expect("main bookmark should exist after init");
+
+    repo.create_file("home.txt", "home\n")
+        .expect("write home file");
+
+    treq_lib::jj::jj_commit(&repo.repo_path, "home repo commit")
+        .expect("jj_commit on home repo failed");
+
+    let after =
+        e2e_test_helpers::JjVerifier::get_bookmark_commit_id(&repo.repo_path, default_branch)
+            .expect("query bookmark")
+            .expect("main bookmark should still exist");
+
+    assert_ne!(before, after, "main bookmark should advance after commit");
+
+    let log = treq_lib::core::list_commits(&repo.repo_path, None, false, None, None)
+        .expect("list_commits failed");
+    assert!(
+        log.commits
+            .iter()
+            .any(|c| c.description.contains("home repo commit")),
+        "expected 'home repo commit' in home repo log, got: {:?}",
+        log.commits
+            .iter()
+            .map(|c| &c.description)
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_commit_workspace_advances_branch() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/commit-advance",
+        Some("advance test".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let ws_dir = repo.workspaces_dir().join(&workspace.workspace_path);
+    let ws_dir_str = ws_dir.to_string_lossy().to_string();
+
+    let before = e2e_test_helpers::JjVerifier::get_bookmark_commit_id(
+        &repo.repo_path,
+        &workspace.branch_name,
+    )
+    .expect("query bookmark")
+    .expect("workspace bookmark should exist after create_workspace");
+
+    e2e_test_helpers::TestRepo::write_workspace_file(&ws_dir_str, "data.txt", "hello\n")
+        .expect("write workspace file");
+
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "workspace advance")
+        .expect("commit_workspace failed");
+
+    let after = e2e_test_helpers::JjVerifier::get_bookmark_commit_id(
+        &repo.repo_path,
+        &workspace.branch_name,
+    )
+    .expect("query bookmark")
+    .expect("workspace bookmark should still exist");
+
+    assert_ne!(
+        before, after,
+        "workspace bookmark should advance after commit"
+    );
+
+    let log = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+        .expect("list_commits failed");
+    assert!(
+        log.commits
+            .iter()
+            .any(|c| c.description.contains("workspace advance")),
+        "expected 'workspace advance' in workspace log, got: {:?}",
+        log.commits
+            .iter()
+            .map(|c| &c.description)
+            .collect::<Vec<_>>()
+    );
+}
+
+// Regression test: committing in a parent workspace must not create divergent changes (??)
+// in stacked child workspaces. jj_commit runs rebase_descendants() which rewrites the WC
+// commits of every descendant workspace, but previously never reconciled those workspaces'
+// on-disk trees to the new commit pointers. The next jj command in the child would then
+// snapshot the stale on-disk tree and record an inverse diff, producing duplicate (divergent)
+// change IDs marked ?? in jj log.
+#[test]
+fn test_create_commit_no_divergence_with_stacked_descendant() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    // --- Set up parent workspace A ---
+    let ws_a = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/parent",
+        Some("parent workspace".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create parent workspace");
+    let ws_a_dir = repo.workspaces_dir().join(&ws_a.workspace_path);
+    let ws_a_dir_str = ws_a_dir.to_str().expect("utf-8");
+
+    // Give A a real committed change so it has a bookmark tip B can stack on.
+    TestRepo::write_workspace_file(ws_a_dir_str, "parent.txt", "parent v1\n")
+        .expect("write parent file");
+    treq_lib::core::commit_workspace(&repo.repo_path, ws_a.id, "parent change")
+        .expect("commit parent workspace");
+
+    // --- Set up stacked child workspace B ---
+    let ws_b = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/child",
+        Some("child workspace".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create child workspace");
+    // B targets A's branch so it is a descendant of A's stack.
+    treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, ws_b.id, &ws_a.branch_name)
+        .expect("Failed to set B's target_branch to A");
+
+    let ws_b_dir = repo.workspaces_dir().join(&ws_b.workspace_path);
+    let ws_b_dir_str = ws_b_dir.to_str().expect("utf-8");
+
+    // Give B its own committed change descending from A's tip.
+    TestRepo::write_workspace_file(ws_b_dir_str, "child.txt", "child v1\n")
+        .expect("write child file");
+    treq_lib::core::commit_workspace(&repo.repo_path, ws_b.id, "child change")
+        .expect("commit child workspace");
+
+    // --- Commit a second change in A ---
+    // This causes jj_commit to call rebase_descendants(), which rewrites the WC pointer
+    // of B (which descends from A). Without reconciliation, the next jj invocation in B
+    // snapshots B's stale on-disk tree and creates divergent (??) change IDs.
+    TestRepo::write_workspace_file(ws_a_dir_str, "parent.txt", "parent v2\n")
+        .expect("write parent v2 file");
+    treq_lib::core::commit_workspace(&repo.repo_path, ws_a.id, "parent change 2")
+        .expect("commit parent workspace v2");
+
+    // --- Assert: no divergent changes anywhere in the repo ---
+    // Divergent changes appear as `??` in jj log output (same change ID on multiple commits).
+    let all_log = TestRepo::run_jj(
+        ws_a_dir_str,
+        &[
+            "log",
+            "--no-graph",
+            "-r",
+            "all()",
+            "-T",
+            "change_id.short() ++ \"\\n\"",
+        ],
+    )
+    .expect("jj log all() failed");
+    // jj appends ?? to change IDs of divergent commits in log output
+    let full_log =
+        TestRepo::run_jj(ws_a_dir_str, &["log", "-r", "all()"]).expect("jj log all() graph failed");
+    assert!(
+        !full_log.contains("??"),
+        "expected no divergent changes (??) after committing in parent, got:\n{full_log}"
+    );
+    drop(all_log);
+
+    // --- Assert: B's working copy is clean (no phantom inverse-diff changes) ---
+    assert_workspace_status_is_clean(ws_b_dir_str);
+}
+
+// Regression test: when a workspace's target_branch equals its own branch_name,
+// the post-commit auto-rebase previously discarded the fresh empty working-copy
+// commit that jj_commit created and re-pinned @ back to the committed commit.
+#[test]
+fn test_create_commit_keeps_empty_working_copy_when_self_targeted() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/sync-clobber",
+        Some("sync clobber test".to_string()),
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    // Set the workspace's target_branch to itself so that post-commit
+    // rebase_after_commit picks it up and exercises the jj_sync_working_copy_if_safe
+    // code path (auto_rebase/mod.rs branch_name == target_branch branch).
+    treq_lib::local_db::update_workspace_target_branch(
+        &repo.repo_path,
+        workspace.id,
+        &workspace.branch_name,
+    )
+    .expect("Failed to set self-targeting target_branch");
+
+    let ws_dir = repo.workspaces_dir().join(&workspace.workspace_path);
+    let ws_dir_str = ws_dir.to_str().expect("utf-8");
+    TestRepo::write_workspace_file(ws_dir_str, "data.txt", "hello\n")
+        .expect("Failed to write file");
+
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "add data")
+        .expect("create_commit failed");
+
+    // @ must have advanced to a new empty working copy — not stayed on "add data".
+    // Use the raw jj assertions: list_commits returns empty for a self-targeted workspace
+    // (target..branch range is empty) so the important checks are via jj directly.
+    assert_workspace_status_is_clean(ws_dir_str);
+    assert_raw_jj_log_has_working_copy_commit(ws_dir_str, "add data");
+
+    // The tentative_working_copy must be absent — that's the UI-visible symptom of the bug.
+    let log = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+        .expect("list_commits failed");
+    assert!(
+        log.tentative_working_copy.is_none(),
+        "expected no tentative working copy after commit, got: {:?}",
+        log.tentative_working_copy
+    );
+}

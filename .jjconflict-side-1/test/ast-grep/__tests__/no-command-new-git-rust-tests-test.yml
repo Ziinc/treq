@@ -1,0 +1,19 @@
+id: no-command-new-git-rust-tests
+valid:
+  - |
+    fn uses_test_repo_helper(repo_path: &str) {
+      let _ = TestRepo::run_git(repo_path, &["status"]);
+    }
+  - |
+    fn allows_non_git_commands() {
+      let _ = Command::new("jj").arg("status").output();
+    }
+invalid:
+  - |
+    fn shells_out_to_git_directly() {
+      let _ = Command::new("git").arg("status").output();
+    }
+  - |
+    fn shells_out_to_git_with_std_path() {
+      let _ = std::process::Command::new("git").arg("status").output();
+    }

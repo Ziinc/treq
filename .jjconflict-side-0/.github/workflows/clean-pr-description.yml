@@ -1,0 +1,32 @@
+name: Clean PR Description
+
+on:
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove chatgpt.com link and divider
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            let body = pr.body || '';
+            body = body
+              .replace(/https?:\/\/chatgpt\.com\S*/g, '')
+              .replace(/^---+$/gm, '')
+              .replace(/\n{2,}/g, '\n')
+              .trim();
+            if (body !== (pr.body || '').trim()) {
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                body
+              });
+            }

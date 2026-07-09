@@ -1,0 +1,32 @@
+.lastUpdated {
+  font-size: smaller;
+  font-style: italic;
+  margin-top: 0.2rem;
+}
+
+/* Stack links vertically on mobile with spacing */
+.editLinks {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+/* Lay links out inline on desktop */
+@media (min-width: 997px) {
+  .lastUpdated {
+    text-align: right;
+  }
+
+  .editLinks {
+    flex-direction: row;
+    align-items: center;
+    gap: 1rem;
+  }
+}
+
+@media print {
+  .noPrint {
+    display: none;
+  }
+}

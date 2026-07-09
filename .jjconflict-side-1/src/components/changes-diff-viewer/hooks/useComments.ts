@@ -1,0 +1,324 @@
+import { useCallback, useState } from "react";
+import { v4 as uuidv4 } from "uuid";
+import type { useToast } from "../../ui/toast";
+import { computeHunkLineNumbers } from "../utils";
+import type {
+	CommentLineQuery,
+	ConflictComment,
+	DiffLineSelection,
+	FileHunksData,
+	LineComment,
+	PendingComment,
+} from "../types";
+
+interface UseCommentsParams {
+	allFileHunks: Map<string, FileHunksData>;
+	diffLineSelection: DiffLineSelection | null;
+	clearSelection: () => void;
+	setContextMenuPosition: (pos: { x: number; y: number } | null) => void;
+	addToast: ReturnType<typeof useToast>["addToast"];
+}
+
+export function useComments({
+	allFileHunks,
+	diffLineSelection,
+	clearSelection,
+	setContextMenuPosition,
+	addToast,
+}: UseCommentsParams) {
+	const [comments, setComments] = useState<LineComment[]>([]);
+	const [conflictComments, setConflictComments] = useState<
+		Map<string, ConflictComment>
+	>(new Map());
+	const [openConflictComments, setOpenConflictComments] = useState<Set<string>>(
+		new Set(),
+	);
+	const [editingConflictCommentId, setEditingConflictCommentId] = useState<
+		string | null
+	>(null);
+	const [showCommentInput, setShowCommentInput] = useState(false);
+	const [pendingComment, setPendingComment] = useState<PendingComment | null>(
+		null,
+	);
+	const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+	const [hasUserAddedComments, setHasUserAddedComments] = useState(false);
+
+	const addComment = useCallback(
+		(text: string) => {
+			if (!text.trim() || !pendingComment) return;
+			const newComment: LineComment = {
+				id: uuidv4(),
+				filePath: pendingComment.filePath,
+				hunkId: pendingComment.hunkId,
+				startLine: pendingComment.startLine,
+				endLine: pendingComment.endLine,
+				lineContent: pendingComment.lineContent,
+				text: text.trim(),
+				createdAt: new Date().toISOString(),
+				lineSide: pendingComment.lineSide,
+			};
+			setComments((prev) => [...prev, newComment]);
+			setHasUserAddedComments(true);
+			setShowCommentInput(false);
+			setPendingComment(null);
+			clearSelection();
+		},
+		[pendingComment, clearSelection],
+	);
+
+	const handleAddCommentFromSelection = useCallback(() => {
+		if (!diffLineSelection || diffLineSelection.lines.length === 0) return;
+		const { filePath } = diffLineSelection;
+		const fileData = allFileHunks.get(filePath);
+		if (!fileData) return;
+		const lineContents: string[] = [];
+		let minLineNum = Infinity;
+		let maxLineNum = -Infinity;
+		let lastHunkId = "";
+		let lastLineIndex = 0;
+		let hasOldLines = false;
+		let hasNewLines = false;
+		for (const line of diffLineSelection.lines) {
+			const hunk = fileData.hunks[line.hunkIndex];
+			if (!hunk) continue;
+			const lineNumbers = computeHunkLineNumbers(hunk);
+			const lineNum =
+				lineNumbers[line.lineIndex]?.new ??
+				lineNumbers[line.lineIndex]?.old ??
+				line.lineIndex + 1;
+			const lineNumObj = lineNumbers[line.lineIndex];
+			minLineNum = Math.min(minLineNum, lineNum);
+			maxLineNum = Math.max(maxLineNum, lineNum);
+			lineContents.push(line.content);
+			lastHunkId = hunk.id;
+			lastLineIndex = line.lineIndex;
+			if (lineNumObj?.old !== undefined) hasOldLines = true;
+			if (lineNumObj?.new !== undefined) hasNewLines = true;
+		}
+		if (hasOldLines && hasNewLines) {
+			setContextMenuPosition(null);
+			return;
+		}
+		const commentLineSide: "old" | "new" = hasOldLines ? "old" : "new";
+		setPendingComment({
+			filePath,
+			hunkId: lastHunkId,
+			displayAtLineIndex: lastLineIndex,
+			startLine: minLineNum,
+			endLine: maxLineNum,
+			lineContent: lineContents,
+			lineSide: commentLineSide,
+		});
+		setShowCommentInput(true);
+		setContextMenuPosition(null);
+	}, [diffLineSelection, allFileHunks, setContextMenuPosition]);
+
+	const cancelComment = useCallback(() => {
+		setShowCommentInput(false);
+		setPendingComment(null);
+	}, []);
+	const deleteComment = useCallback((commentId: string) => {
+		setComments((prev) => prev.filter((c) => c.id !== commentId));
+	}, []);
+	const startEditComment = useCallback((commentId: string) => {
+		setEditingCommentId(commentId);
+	}, []);
+	const cancelEditComment = useCallback(() => {
+		setEditingCommentId(null);
+	}, []);
+	const saveEditComment = useCallback((commentId: string, newText: string) => {
+		if (!newText.trim()) return;
+		setComments((prev) =>
+			prev.map((comment) =>
+				comment.id === commentId
+					? { ...comment, text: newText.trim() }
+					: comment,
+			),
+		);
+		setEditingCommentId(null);
+	}, []);
+
+	const saveConflictComment = useCallback(
+		({
+			conflictId,
+			filePath,
+			conflictNumber,
+			text,
+		}: {
+			conflictId: string;
+			filePath: string;
+			conflictNumber: number;
+			text: string;
+		}) => {
+			if (!text.trim()) return;
+			const comment: ConflictComment = {
+				id: uuidv4(),
+				conflictId,
+				filePath,
+				conflictNumber,
+				text: text.trim(),
+				createdAt: new Date().toISOString(),
+			};
+			setConflictComments((prev) => {
+				const next = new Map(prev);
+				next.set(conflictId, comment);
+				return next;
+			});
+		},
+		[],
+	);
+
+	const clearConflictComment = useCallback((conflictId: string) => {
+		setConflictComments((prev) => {
+			const next = new Map(prev);
+			next.delete(conflictId);
+			return next;
+		});
+	}, []);
+
+	const startEditConflictComment = useCallback((conflictId: string) => {
+		setEditingConflictCommentId(conflictId);
+	}, []);
+	const cancelEditConflictComment = useCallback(() => {
+		setEditingConflictCommentId(null);
+	}, []);
+	const saveEditConflictComment = useCallback(
+		(conflictId: string, newText: string) => {
+			if (!newText.trim()) return;
+			setConflictComments((prev) => {
+				const next = new Map(prev);
+				const existingComment = prev.get(conflictId);
+				if (existingComment)
+					next.set(conflictId, { ...existingComment, text: newText.trim() });
+				return next;
+			});
+			setEditingConflictCommentId(null);
+		},
+		[],
+	);
+
+	const toggleConflictComment = useCallback((conflictId: string) => {
+		setOpenConflictComments((prev) => {
+			if (prev.has(conflictId)) return new Set();
+			return new Set([conflictId]);
+		});
+	}, []);
+
+	const isCommentOutdated = useCallback(
+		(comment: LineComment): boolean => {
+			const fileData = allFileHunks.get(comment.filePath);
+			if (!fileData || fileData.isLoading || !fileData.hunks) return false;
+			const hunk = fileData.hunks.find((h) => h.id === comment.hunkId);
+			if (!hunk) return true;
+			const lineNumbers = computeHunkLineNumbers(hunk);
+			const hasMatchingLine = lineNumbers.some((ln) => {
+				const actualNum = ln.new ?? ln.old;
+				const inRange =
+					actualNum &&
+					actualNum >= comment.startLine &&
+					actualNum <= comment.endLine;
+				if (!inRange) return false;
+				if (comment.lineSide) {
+					const lineSide: "old" | "new" =
+						ln.old !== undefined && ln.new === undefined ? "old" : "new";
+					return comment.lineSide === lineSide;
+				}
+				return true;
+			});
+			return !hasMatchingLine;
+		},
+		[allFileHunks],
+	);
+
+	const getOutdatedCommentsForFile = useCallback(
+		(filePath: string): LineComment[] =>
+			comments.filter((c) => c.filePath === filePath && isCommentOutdated(c)),
+		[comments, isCommentOutdated],
+	);
+
+	const getAllOutdatedComments = useCallback(
+		(): LineComment[] => comments.filter((c) => isCommentOutdated(c)),
+		[comments, isCommentOutdated],
+	);
+
+	const handleCopyOutdatedComments = useCallback(async () => {
+		const outdated = getAllOutdatedComments();
+		if (outdated.length === 0) return;
+		const markdown = outdated
+			.map((c) => {
+				const lineRef =
+					c.startLine === c.endLine
+						? `${c.filePath}:${c.startLine}`
+						: `${c.filePath}:${c.startLine}-${c.endLine}`;
+				const codeBlock =
+					c.lineContent.length > 0
+						? `\n\`\`\`\n${c.lineContent.join("\n")}\n\`\`\`\n`
+						: "";
+				return `**${lineRef}**${codeBlock}${c.text}`;
+			})
+			.join("\n\n");
+		try {
+			await navigator.clipboard.writeText(markdown);
+			addToast({
+				title: "Copied",
+				description: `${outdated.length} outdated comment${outdated.length > 1 ? "s" : ""} copied to clipboard`,
+				type: "success",
+			});
+		} catch {
+			addToast({
+				title: "Copy failed",
+				description: "Could not copy to clipboard",
+				type: "error",
+			});
+		}
+	}, [getAllOutdatedComments, addToast]);
+
+	const getCommentsForLine = useCallback(
+		({ filePath, hunkId, lineNumber, side }: CommentLineQuery) =>
+			comments.filter(
+				(c) =>
+					c.filePath === filePath &&
+					c.hunkId === hunkId &&
+					lineNumber >= c.startLine &&
+					lineNumber <= c.endLine &&
+					!isCommentOutdated(c) &&
+					(c.lineSide === undefined || c.lineSide === side),
+			),
+		[comments, isCommentOutdated],
+	);
+
+	return {
+		comments,
+		setComments,
+		conflictComments,
+		setConflictComments,
+		openConflictComments,
+		setOpenConflictComments,
+		editingConflictCommentId,
+		showCommentInput,
+		setShowCommentInput,
+		pendingComment,
+		setPendingComment,
+		editingCommentId,
+		hasUserAddedComments,
+		setHasUserAddedComments,
+		addComment,
+		handleAddCommentFromSelection,
+		cancelComment,
+		deleteComment,
+		startEditComment,
+		cancelEditComment,
+		saveEditComment,
+		saveConflictComment,
+		clearConflictComment,
+		startEditConflictComment,
+		cancelEditConflictComment,
+		saveEditConflictComment,
+		toggleConflictComment,
+		isCommentOutdated,
+		getOutdatedCommentsForFile,
+		getAllOutdatedComments,
+		handleCopyOutdatedComments,
+		getCommentsForLine,
+	};
+}
