@@ -2,57 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import BrowserOnly from '@docusaurus/BrowserOnly';
 import Link from '@docusaurus/Link';
 import { useHistory } from '@docusaurus/router';
+import { preWarm, queryDocs, type SearchResult } from '@site/src/utils/searchDb';
 import styles from './styles.module.css';
-
-type SearchResult = {
-  title: string;
-  url: string;
-  excerpt: string;
-};
-
-type DbWorker = Awaited<ReturnType<typeof import('sql.js-httpvfs')['createDbWorker']>>;
-
-let workerPromise: Promise<DbWorker> | null = null;
-
-function getWorker(): Promise<DbWorker> {
-  if (!workerPromise) {
-    workerPromise = (async () => {
-      const meta = await fetch('/search-meta.json').then(r => r.json()) as { url: string; fileLength: number };
-      console.log('[SearchBar] loading DB from', meta.url);
-      const { createDbWorker } = await import('sql.js-httpvfs');
-      const worker = await createDbWorker(
-        [{ from: 'inline', config: { serverMode: 'full', url: meta.url, requestChunkSize: 4096, fileLength: meta.fileLength } }],
-        '/sqlite.worker.js',
-        '/sql-wasm.wasm',
-      );
-      console.log('[SearchBar] worker ready');
-      return worker;
-    })().catch(err => { workerPromise = null; throw err; });
-  }
-  return workerPromise;
-}
-
-function execToObjects<T>(res: { columns: string[]; values: unknown[][] }[]): T[] {
-  if (!res.length) return [];
-  const { columns, values } = res[0];
-  return values.map(row => Object.fromEntries(columns.map((c, i) => [c, row[i]])) as T);
-}
-
-async function queryDocs(q: string): Promise<SearchResult[]> {
-  const term = q.trim().split(/\s+/).filter(Boolean).map(w => `${w}*`).join(' ');
-  if (!term) return [];
-  const worker = await getWorker();
-  // exec() is inherited from sql.js Database but not surfaced by Comlink.Remote<T>
-  const exec = (worker.db as unknown as Record<string, unknown>)['exec'] as (sql: string, params: unknown[]) => Promise<{ columns: string[]; values: unknown[][] }[]>;
-  const res = await exec(
-    `SELECT highlight(docs_fts, 0, '<mark>', '</mark>') AS title,
-            url,
-            snippet(docs_fts, 1, '<mark>', '</mark>', '…', 20) AS excerpt
-     FROM docs_fts WHERE docs_fts MATCH ? LIMIT 8`,
-    [term],
-  );
-  return execToObjects<SearchResult>(res);
-}
 
 function SearchBarInner() {
   const [query, setQuery] = useState('');
@@ -69,7 +20,7 @@ function SearchBarInner() {
       setResults(rows);
       setOpen(rows.length > 0);
     } catch (err) {
-      console.error('[SearchBar] query failed:', err instanceof Error ? err.stack : err);
+      console.error('[SearchBar] query failed:', err);
       setResults([]);
       setOpen(false);
     }
@@ -77,7 +28,7 @@ function SearchBarInner() {
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => runQuery(query), 600);
+    debounceRef.current = setTimeout(() => runQuery(query), 300);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [query, runQuery]);
 
@@ -110,7 +61,10 @@ function SearchBarInner() {
         value={query}
         onChange={e => setQuery(e.target.value)}
         onKeyDown={handleKeyDown}
-        onFocus={() => { if (results.length > 0) setOpen(true); }}
+        onFocus={() => {
+          preWarm();
+          if (results.length > 0) setOpen(true);
+        }}
         aria-label="Search..."
       />
       {open && (

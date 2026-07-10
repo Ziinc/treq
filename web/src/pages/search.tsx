@@ -2,35 +2,8 @@ import React, { useState, useEffect } from 'react';
 import Layout from '@theme/Layout';
 import Link from '@docusaurus/Link';
 import BrowserOnly from '@docusaurus/BrowserOnly';
+import { queryDocs, type SearchResult } from '@site/src/utils/searchDb';
 import styles from './search.module.css';
-
-type SearchResult = {
-  title: string;
-  url: string;
-  excerpt: string;
-};
-
-type DbWorker = Awaited<ReturnType<typeof import('sql.js-httpvfs')['createDbWorker']>>;
-
-let workerPromise: Promise<DbWorker> | null = null;
-
-function getWorker(): Promise<DbWorker> {
-  if (!workerPromise) {
-    workerPromise = (async () => {
-      const meta = await fetch('/search-meta.json').then(r => r.json()) as { url: string; fileLength: number };
-      console.log('[Search] loading DB from', meta.url);
-      const { createDbWorker } = await import('sql.js-httpvfs');
-      const worker = await createDbWorker(
-        [{ from: 'inline', config: { serverMode: 'full', url: meta.url, requestChunkSize: 4096, fileLength: meta.fileLength } }],
-        '/sqlite.worker.js',
-        '/sql-wasm.wasm',
-      );
-      console.log('[Search] worker ready');
-      return worker;
-    })().catch(err => { workerPromise = null; throw err; });
-  }
-  return workerPromise;
-}
 
 function SearchResults({ query }: { query: string }) {
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -41,27 +14,8 @@ function SearchResults({ query }: { query: string }) {
     if (!query.trim()) return;
     setLoading(true);
     setSearched(false);
-    const term = query.trim().split(/\s+/).filter(Boolean).map(w => `${w}*`).join(' ');
-    if (!term) { setSearched(true); setLoading(false); return; }
-    getWorker()
-      .then(worker => {
-        // exec() is inherited from sql.js Database but not surfaced by Comlink.Remote<T>
-        const exec = (worker.db as unknown as Record<string, unknown>)['exec'] as (sql: string, params: unknown[]) => Promise<{ columns: string[]; values: unknown[][] }[]>;
-        return exec(
-          `SELECT highlight(docs_fts, 0, '<mark>', '</mark>') AS title,
-                  url,
-                  snippet(docs_fts, 1, '<mark>', '</mark>', '…', 32) AS excerpt
-           FROM docs_fts WHERE docs_fts MATCH ? LIMIT 20`,
-          [term],
-        );
-      })
-      .then(res => {
-        const rows: SearchResult[] = res.length
-          ? res[0].values.map(row => Object.fromEntries(res[0].columns.map((c, i) => [c, row[i]])) as SearchResult)
-          : [];
-        setResults(rows);
-        setSearched(true);
-      })
+    queryDocs(query)
+      .then(rows => { setResults(rows); setSearched(true); })
       .catch(err => { console.error('[Search] query failed:', err); setResults([]); setSearched(true); })
       .finally(() => setLoading(false));
   }, [query]);

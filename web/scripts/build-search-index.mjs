@@ -80,29 +80,17 @@ async function main() {
     }
     renameSync(dbPath, hashedPath);
 
-    // Write manifest so the browser knows which URL and exact byte size to pass to sql.js-httpvfs
-    // (Cloudflare Pages omits Content-Length on HTTP/3; fileSize bypasses that requirement)
-    const fileSize = statSync(hashedPath).size;
+    // Write manifest so the browser knows which URL to fetch
     writeFileSync(
       join(webRoot, 'static', 'search-meta.json'),
-      JSON.stringify({ url: `/${hashedName}`, fileLength: fileSize }),
+      JSON.stringify({ url: `/${hashedName}` }),
     );
 
-    // Copy sql.js-httpvfs runtime assets so they're served as static files
-    const sqlJsDist = join(webRoot, 'node_modules', 'sql.js-httpvfs', 'dist');
-    const workerDest = join(webRoot, 'static', 'sqlite.worker.js');
-    copyFileSync(join(sqlJsDist, 'sqlite.worker.js'), workerDest);
-    // Patch worker: in serverMode:'full' the upstream code hardcodes fileLength:void 0,
-    // preventing the config's fileLength from reaching createLazyFile. Fix it to pass
-    // e.fileLength so Cloudflare's HTTP/3 (no Content-Length on HEAD) doesn't break init.
-    const workerSrc = readFileSync(workerDest, 'utf8');
-    const patched = workerSrc.replace(
-      'fileLength:"chunked"===e.serverMode?e.databaseLengthBytes:void 0',
-      'fileLength:"chunked"===e.serverMode?e.databaseLengthBytes:e.fileLength',
+    // Copy sql.js WASM so the browser can load it at /sql-wasm.wasm
+    copyFileSync(
+      join(webRoot, 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
+      join(webRoot, 'static', 'sql-wasm.wasm'),
     );
-    if (patched === workerSrc) throw new Error('Worker patch failed: target string not found');
-    writeFileSync(workerDest, patched);
-    copyFileSync(join(sqlJsDist, 'sql-wasm.wasm'), join(webRoot, 'static', 'sql-wasm.wasm'));
     console.log(`Search index built: ${hashedPath} (${files.length} docs)`);
   });
   });
