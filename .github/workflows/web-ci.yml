@@ -7,6 +7,7 @@ on:
     paths:
       - "web/**"
       - ".github/workflows/deploy-web.yml"
+      - ".github/scripts/check_readability.py"
 
 defaults:
   run:
@@ -36,3 +37,17 @@ jobs:
         run: |
           npm ci
           npm run lint:e2e
+
+  readability:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ github.workspace }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Check docs readability
+        run: uv run .github/scripts/check_readability.py
