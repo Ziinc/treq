@@ -18,7 +18,7 @@ async function getWorker(): Promise<DbWorker> {
   if (workerInstance) return workerInstance;
   const { createDbWorker } = await import('sql.js-httpvfs');
   workerInstance = await createDbWorker(
-    [{ from: 'jsonconfig', configUrl: '/site-db.json' }],
+    [{ from: 'inline', config: { serverMode: 'full', url: '/site.db', requestChunkSize: 4096 } }],
     '/sqlite.worker.js',
     '/sql-wasm.wasm',
   );
