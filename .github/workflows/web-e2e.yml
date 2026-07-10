@@ -16,6 +16,7 @@ defaults:
 jobs:
   e2e:
     runs-on: ubuntu-latest
+    timeout-minutes: 8
     steps:
       - name: Checkout
         uses: actions/checkout@v3
