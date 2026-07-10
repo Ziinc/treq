@@ -1,6 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from '@docusaurus/Link';
-import Layout from '@theme/Layout';
 import styles from './styles.module.css';
 
 export interface TocItem {
@@ -15,8 +14,6 @@ export interface BreadcrumbItem {
 }
 
 interface ContentPageLayoutProps {
-  title: string;
-  description?: string;
   toc?: TocItem[];
   breadcrumbs?: BreadcrumbItem[];
   children: React.ReactNode;
@@ -99,8 +96,6 @@ function TableOfContents({ items }: { items: TocItem[] }) {
 }
 
 export default function ContentPageLayout({
-  title,
-  description,
   toc = [],
   breadcrumbs = [],
   children,
@@ -108,22 +103,20 @@ export default function ContentPageLayout({
   const hasToc = toc.length > 0;
 
   return (
-    <Layout title={title} description={description}>
-      <div className={styles.pageWrapper}>
-        <div className={styles.card}>
-          {breadcrumbs.length > 0 && <Breadcrumbs items={breadcrumbs} />}
-          <div className={hasToc ? styles.bodyWithToc : styles.body}>
-            <main className={styles.main}>{children}</main>
-            {hasToc && (
-              <aside className={styles.tocAside}>
-                <div className={styles.tocContainer}>
-                  <TableOfContents items={toc} />
-                </div>
-              </aside>
-            )}
-          </div>
+    <div className={styles.pageWrapper}>
+      <div className={styles.card}>
+        {breadcrumbs.length > 0 && <Breadcrumbs items={breadcrumbs} />}
+        <div className={hasToc ? styles.bodyWithToc : styles.body}>
+          <main className={styles.main}>{children}</main>
+          {hasToc && (
+            <aside className={styles.tocAside}>
+              <div className={styles.tocContainer}>
+                <TableOfContents items={toc} />
+              </div>
+            </aside>
+          )}
         </div>
       </div>
-    </Layout>
+    </div>
   );
 }
