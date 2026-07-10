@@ -34,17 +34,25 @@ function SearchResults({ query }: { query: string }) {
     if (!query.trim()) return;
     setLoading(true);
     setSearched(false);
-    const safe = query.trim().replace(/[^a-zA-Z0-9\-_ ]/g, '').trim();
-    const fts = safe.split(/\s+/).filter(Boolean).map(w => `${w}*`).join(' ');
-    if (!fts) { setSearched(true); setLoading(false); return; }
+    const term = query.trim().split(/\s+/).filter(Boolean).map(w => `${w}*`).join(' ');
+    if (!term) { setSearched(true); setLoading(false); return; }
     getWorker()
-      .then(worker =>
-        worker.db.query(
+      .then(worker => {
+        // exec() is inherited from sql.js Database but not surfaced by Comlink.Remote<T>
+        const exec = (worker.db as unknown as Record<string, unknown>)['exec'] as (sql: string, params: unknown[]) => Promise<{ columns: string[]; values: unknown[][] }[]>;
+        return exec(
           `SELECT title, url, snippet(docs_fts, 1, '<mark>', '</mark>', '…', 32) AS excerpt
-           FROM docs_fts WHERE docs_fts MATCH '${fts}' LIMIT 20`,
-        ) as unknown as SearchResult[],
-      )
-      .then(rows => { setResults(rows); setSearched(true); })
+           FROM docs_fts WHERE docs_fts MATCH ? LIMIT 20`,
+          [term],
+        );
+      })
+      .then(res => {
+        const rows: SearchResult[] = res.length
+          ? res[0].values.map(row => Object.fromEntries(res[0].columns.map((c, i) => [c, row[i]])) as SearchResult)
+          : [];
+        setResults(rows);
+        setSearched(true);
+      })
       .catch(() => { setResults([]); setSearched(true); })
       .finally(() => setLoading(false));
   }, [query]);

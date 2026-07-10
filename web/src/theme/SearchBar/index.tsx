@@ -25,21 +25,24 @@ async function getWorker(): Promise<DbWorker> {
   return workerInstance;
 }
 
-function buildFtsQuery(q: string): string {
-  // db.query does not support ? binding against exec — inline with sanitized input
-  const safe = q.trim().replace(/[^a-zA-Z0-9\-_ ]/g, '').trim();
-  return safe.split(/\s+/).filter(Boolean).map(w => `${w}*`).join(' ');
+function execToObjects<T>(res: { columns: string[]; values: unknown[][] }[]): T[] {
+  if (!res.length) return [];
+  const { columns, values } = res[0];
+  return values.map(row => Object.fromEntries(columns.map((c, i) => [c, row[i]])) as T);
 }
 
 async function queryDocs(q: string): Promise<SearchResult[]> {
-  const fts = buildFtsQuery(q);
-  if (!fts) return [];
+  const term = q.trim().split(/\s+/).filter(Boolean).map(w => `${w}*`).join(' ');
+  if (!term) return [];
   const worker = await getWorker();
-  const rows = await worker.db.query(
+  // exec() is inherited from sql.js Database but not surfaced by Comlink.Remote<T>
+  const exec = worker.db.exec as unknown as (sql: string, params: unknown[]) => Promise<{ columns: string[]; values: unknown[][] }[]>;
+  const res = await exec(
     `SELECT title, url, snippet(docs_fts, 1, '<mark>', '</mark>', '…', 20) AS excerpt
-     FROM docs_fts WHERE docs_fts MATCH '${fts}' LIMIT 8`,
+     FROM docs_fts WHERE docs_fts MATCH ? LIMIT 8`,
+    [term],
   );
-  return rows as unknown as SearchResult[];
+  return execToObjects<SearchResult>(res);
 }
 
 function SearchBarInner() {
