@@ -6,6 +6,7 @@ message: >
   Use page.getByRole(), page.getByText(), page.getByLabel(), etc. instead.
 files:
   - "web/e2e/**/*.ts"
+  - "web/e2e/**/*.tsx"
 rule:
   pattern: $_.locator($XPATH)
 constraints:

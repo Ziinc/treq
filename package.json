@@ -22,6 +22,7 @@
     "format": "biome format  --write ./src ./test && cargo fmt",
     "check:format": "biome format ./src ./test",
     "check": "tsc && ast-grep test",
+    "lint:e2e": "ast-grep test --skip-snapshot-tests && ast-grep scan web/e2e",
     "lint": "oxlint ./src ./test/integration && eslint ./src ./test/integration && ast-grep scan --warning",
     "icons:generate": "node scripts/generate-icons.js && npx @tauri-apps/cli icon assets/logo-white.imageset/logo-white-rounded.svg"
   },

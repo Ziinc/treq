@@ -6,5 +6,6 @@ message: >
   Assert on visible page content (headings, text) instead of toHaveURL().
 files:
   - "web/e2e/**/*.ts"
+  - "web/e2e/**/*.tsx"
 rule:
   pattern: $_.toHaveURL($$$)
