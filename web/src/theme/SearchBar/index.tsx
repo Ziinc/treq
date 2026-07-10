@@ -99,15 +99,15 @@ function SearchBarInner() {
       <input
         className={styles.input}
         type="search"
-        placeholder="Search docs…"
+        placeholder="Search..."
         value={query}
         onChange={e => setQuery(e.target.value)}
         onKeyDown={handleKeyDown}
         onFocus={() => { if (results.length > 0) setOpen(true); }}
-        aria-label="Search documentation"
+        aria-label="Search..."
       />
       {open && (
-        <div className={styles.dropdown} data-testid="search-dropdown">
+        <div className={styles.dropdown}>
           {results.map((r, i) => (
             <Link
               key={i}

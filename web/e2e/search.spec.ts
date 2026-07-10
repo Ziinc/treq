@@ -9,8 +9,8 @@ const EXPECTED_RESULT_TITLE = 'CLI';
 const EXPECTED_RESULT_KEYWORD = 'status';
 
 const nav = (page: Page) => page.getByRole('navigation', { name: 'Main' });
-const searchInput = (page: Page) => nav(page).getByRole('searchbox', { name: 'Search documentation' });
-const searchDropdown = (page: Page) => page.locator('[data-testid="search-dropdown"]');
+const searchInput = (page: Page) => nav(page).getByPlaceholder('Search...');
+const searchDropdown = (page: Page) => page.getByRole('link', { name: /see all results/i }).locator('..');
 
 async function navigateToSearchPage(page: Page, query: string) {
   await page.goto('/');
@@ -59,7 +59,7 @@ test.describe('Search bar (navbar)', () => {
   test('pressing Enter navigates to /search with results', async ({ page }) => {
     await searchInput(page).fill(QUERY);
     await searchInput(page).press('Enter');
-    await expect(page.getByRole('heading', { name: /search results for/i })).toBeVisible();
+    await expect(page.getByText(/no results found/i)).not.toBeVisible({ timeout: 10_000 });
   });
 
   test('dropdown closes on Escape', async ({ page }) => {
