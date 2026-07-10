@@ -109,7 +109,7 @@ test.describe('Learn sidebar navigation', () => {
     await page.goto('/');
     await nav(page).getByRole('link', { name: 'Learn' }).click();
     await sidebar(page).getByRole('link', { name: 'Tutorials' }).click();
-    await page.getByRole('main').getByRole('link', { name: 'Committing Changes' }).click();
+    await page.locator('article').getByRole('link', { name: 'Committing Changes' }).click();
     await expect(page.getByRole('heading', { name: 'Committing Changes', level: 1 })).toBeVisible();
   });
 
@@ -124,7 +124,7 @@ test.describe('Learn sidebar navigation', () => {
     await page.goto('/');
     await nav(page).getByRole('link', { name: 'Learn' }).click();
     await sidebar(page).getByRole('link', { name: 'How-To' }).click();
-    await page.getByRole('main').getByRole('link', { name: 'Pushing to Remote' }).click();
+    await page.locator('article').getByRole('link', { name: 'Pushing to Remote' }).click();
     await expect(page.getByRole('heading', { name: 'Pushing to Remote', level: 1 })).toBeVisible();
   });
 });
