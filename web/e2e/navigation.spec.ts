@@ -51,8 +51,8 @@ test.describe('Docs sidebar navigation', () => {
     await expect(page.getByRole('heading', { name: 'Installation and Quickstart', level: 1 })).toBeVisible();
   });
 
-  test('expands Concepts and navigates to Workspaces', async ({ page }) => {
-    await sidebar(page).getByRole('button', { name: 'Concepts' }).click();
+  test('navigates into Concepts and to Workspaces', async ({ page }) => {
+    await sidebar(page).getByRole('link', { name: 'Concepts' }).click();
     await sidebar(page).getByRole('link', { name: 'Workspaces' }).click();
     await expect(page.getByRole('heading', { name: 'Workspaces', level: 1 })).toBeVisible();
   });
@@ -76,14 +76,14 @@ test.describe('Learn sidebar navigation', () => {
     await nav(page).getByRole('link', { name: 'Learn' }).click();
   });
 
-  test('expands Tutorials and navigates to Committing Changes', async ({ page }) => {
-    await sidebar(page).getByRole('button', { name: 'Tutorials' }).click();
+  test('navigates into Tutorials and to Committing Changes', async ({ page }) => {
+    await sidebar(page).getByRole('link', { name: 'Tutorials' }).click();
     await sidebar(page).getByRole('link', { name: 'Committing Changes' }).click();
     await expect(page.getByRole('heading', { name: 'Committing Changes', level: 1 })).toBeVisible();
   });
 
-  test('expands How-To and navigates to Pushing to Remote', async ({ page }) => {
-    await sidebar(page).getByRole('button', { name: 'How-To' }).click();
+  test('navigates into How-To and to Pushing to Remote', async ({ page }) => {
+    await sidebar(page).getByRole('link', { name: 'How-To' }).click();
     await sidebar(page).getByRole('link', { name: 'Pushing to Remote' }).click();
     await expect(page.getByRole('heading', { name: 'Pushing to Remote', level: 1 })).toBeVisible();
   });
