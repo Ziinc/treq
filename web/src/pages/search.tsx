@@ -18,7 +18,7 @@ async function getWorker(): Promise<DbWorker> {
   if (workerInstance) return workerInstance;
   const { createDbWorker } = await import('sql.js-httpvfs');
   workerInstance = await createDbWorker(
-    [{ from: 'inline', config: { serverMode: 'full', url: '/site.db', requestChunkSize: 1024 } }],
+    [{ from: 'inline', config: { serverMode: 'full', url: '/site.db', requestChunkSize: 4096 } }],
     '/sqlite.worker.js',
     '/sql-wasm.wasm',
   );
@@ -34,12 +34,14 @@ function SearchResults({ query }: { query: string }) {
     if (!query.trim()) return;
     setLoading(true);
     setSearched(false);
+    const safe = query.trim().replace(/[^a-zA-Z0-9\-_ ]/g, '').trim();
+    const fts = safe.split(/\s+/).filter(Boolean).map(w => `${w}*`).join(' ');
+    if (!fts) { setSearched(true); setLoading(false); return; }
     getWorker()
       .then(worker =>
         worker.db.query(
           `SELECT title, url, snippet(docs_fts, 1, '<mark>', '</mark>', '…', 32) AS excerpt
-           FROM docs_fts WHERE docs_fts MATCH ? LIMIT 20`,
-          query + '*',
+           FROM docs_fts WHERE docs_fts MATCH '${fts}' LIMIT 20`,
         ) as unknown as SearchResult[],
       )
       .then(rows => { setResults(rows); setSearched(true); })

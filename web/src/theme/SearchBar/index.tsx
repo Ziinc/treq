@@ -18,19 +18,26 @@ async function getWorker(): Promise<DbWorker> {
   if (workerInstance) return workerInstance;
   const { createDbWorker } = await import('sql.js-httpvfs');
   workerInstance = await createDbWorker(
-    [{ from: 'inline', config: { serverMode: 'full', url: '/site.db', requestChunkSize: 1024 } }],
+    [{ from: 'inline', config: { serverMode: 'full', url: '/site.db', requestChunkSize: 4096 } }],
     '/sqlite.worker.js',
     '/sql-wasm.wasm',
   );
   return workerInstance;
 }
 
+function buildFtsQuery(q: string): string {
+  // db.query does not support ? binding against exec — inline with sanitized input
+  const safe = q.trim().replace(/[^a-zA-Z0-9\-_ ]/g, '').trim();
+  return safe.split(/\s+/).filter(Boolean).map(w => `${w}*`).join(' ');
+}
+
 async function queryDocs(q: string): Promise<SearchResult[]> {
+  const fts = buildFtsQuery(q);
+  if (!fts) return [];
   const worker = await getWorker();
   const rows = await worker.db.query(
     `SELECT title, url, snippet(docs_fts, 1, '<mark>', '</mark>', '…', 20) AS excerpt
-     FROM docs_fts WHERE docs_fts MATCH ? LIMIT 8`,
-    q + '*',
+     FROM docs_fts WHERE docs_fts MATCH '${fts}' LIMIT 8`,
   );
   return rows as unknown as SearchResult[];
 }
@@ -49,7 +56,8 @@ function SearchBarInner() {
       const rows = await queryDocs(q);
       setResults(rows);
       setOpen(rows.length > 0);
-    } catch {
+    } catch (err) {
+      console.error('[SearchBar] query failed:', err);
       setResults([]);
       setOpen(false);
     }
@@ -94,7 +102,7 @@ function SearchBarInner() {
         aria-label="Search documentation"
       />
       {open && (
-        <div className={styles.dropdown}>
+        <div className={styles.dropdown} data-testid="search-dropdown">
           {results.map((r, i) => (
             <Link
               key={i}

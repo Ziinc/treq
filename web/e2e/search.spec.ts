@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 
 const nav = (page: Page) => page.getByRole('navigation', { name: 'Main' });
 const searchInput = (page: Page) => nav(page).getByRole('searchbox', { name: 'Search documentation' });
-const searchDropdown = (page: Page) => page.locator('.navbar').locator('[class*="dropdown"]');
+const searchDropdown = (page: Page) => page.locator('[data-testid="search-dropdown"]');
 
 test.describe('Search bar (navbar)', () => {
   test.beforeEach(async ({ page }) => {
@@ -102,6 +102,6 @@ test.describe('Search results page (/search)', () => {
   test('shows result snippets with highlighted terms', async ({ page }) => {
     await page.goto('/search?q=workspace');
     await expect(page.locator('ul li').first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('ul li p mark').first()).toBeVisible();
+    await expect(page.locator('ul li mark').first()).toBeVisible();
   });
 });
