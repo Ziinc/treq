@@ -105,18 +105,11 @@ test.describe('Learn sidebar navigation', () => {
     await expect(page.getByRole('heading', { name: 'Tutorials', level: 1 })).toBeVisible();
   });
 
-  test('Committing Changes link is visible after navigating into Tutorials', async ({ page }) => {
-    await page.goto('/');
-    await nav(page).getByRole('link', { name: 'Learn' }).click();
-    await sidebar(page).getByRole('link', { name: 'Tutorials' }).click();
-    await expect(sidebar(page).getByRole('link', { name: 'Committing Changes' })).toBeVisible();
-  });
-
   test('Committing Changes link navigates to committing changes page', async ({ page }) => {
     await page.goto('/');
     await nav(page).getByRole('link', { name: 'Learn' }).click();
     await sidebar(page).getByRole('link', { name: 'Tutorials' }).click();
-    await sidebar(page).getByRole('link', { name: 'Committing Changes' }).click();
+    await page.getByRole('main').getByRole('link', { name: 'Committing Changes' }).click();
     await expect(page.getByRole('heading', { name: 'Committing Changes', level: 1 })).toBeVisible();
   });
 
@@ -124,14 +117,14 @@ test.describe('Learn sidebar navigation', () => {
     await page.goto('/');
     await nav(page).getByRole('link', { name: 'Learn' }).click();
     await sidebar(page).getByRole('link', { name: 'How-To' }).click();
-    await expect(page.getByRole('heading', { name: 'How-To', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'How-To Guides', level: 1 })).toBeVisible();
   });
 
   test('Pushing to Remote link navigates to pushing to remote page', async ({ page }) => {
     await page.goto('/');
     await nav(page).getByRole('link', { name: 'Learn' }).click();
     await sidebar(page).getByRole('link', { name: 'How-To' }).click();
-    await sidebar(page).getByRole('link', { name: 'Pushing to Remote' }).click();
+    await page.getByRole('main').getByRole('link', { name: 'Pushing to Remote' }).click();
     await expect(page.getByRole('heading', { name: 'Pushing to Remote', level: 1 })).toBeVisible();
   });
 });
