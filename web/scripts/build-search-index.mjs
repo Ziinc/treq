@@ -1,5 +1,6 @@
-import { readFileSync, readdirSync, statSync, existsSync, unlinkSync, copyFileSync } from 'fs';
+import { readFileSync, readdirSync, statSync, existsSync, unlinkSync, copyFileSync, renameSync, writeFileSync } from 'fs';
 import { join, relative, extname } from 'path';
+import { createHash } from 'crypto';
 import { fileURLToPath } from 'url';
 import Database from 'sqlite3';
 import matter from 'gray-matter';
@@ -64,14 +65,33 @@ async function main() {
     insert.run(title, body, url);
   }
 
-  insert.finalize();
+  insert.finalize(() => {
   db.run('VACUUM', () => {
     db.close();
+
+    // Compute md5 hash of the built DB for cache-busting filename
+    const hash = createHash('md5').update(readFileSync(dbPath)).digest('hex');
+    const hashedName = `site-${hash}.db`;
+    const hashedPath = join(webRoot, 'static', hashedName);
+
+    // Remove stale hashed DB files before renaming
+    for (const f of readdirSync(join(webRoot, 'static'))) {
+      if (/^site-[a-f0-9]{32}\.db$/.test(f)) unlinkSync(join(webRoot, 'static', f));
+    }
+    renameSync(dbPath, hashedPath);
+
+    // Write manifest so the browser knows which URL to load
+    writeFileSync(
+      join(webRoot, 'static', 'search-meta.json'),
+      JSON.stringify({ url: `/${hashedName}` }),
+    );
+
     // Copy sql.js-httpvfs runtime assets so they're served as static files
     const sqlJsDist = join(webRoot, 'node_modules', 'sql.js-httpvfs', 'dist');
     copyFileSync(join(sqlJsDist, 'sqlite.worker.js'), join(webRoot, 'static', 'sqlite.worker.js'));
     copyFileSync(join(sqlJsDist, 'sql-wasm.wasm'), join(webRoot, 'static', 'sql-wasm.wasm'));
-    console.log(`Search index built: ${dbPath} (${files.length} docs)`);
+    console.log(`Search index built: ${hashedPath} (${files.length} docs)`);
+  });
   });
 }
 

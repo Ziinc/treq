@@ -16,9 +16,10 @@ let workerInstance: DbWorker | null = null;
 
 async function getWorker(): Promise<DbWorker> {
   if (workerInstance) return workerInstance;
+  const meta = await fetch('/search-meta.json').then(r => r.json()) as { url: string };
   const { createDbWorker } = await import('sql.js-httpvfs');
   workerInstance = await createDbWorker(
-    [{ from: 'inline', config: { serverMode: 'full', url: '/site.db', requestChunkSize: 4096 } }],
+    [{ from: 'inline', config: { serverMode: 'full', url: meta.url, requestChunkSize: 4096 } }],
     '/sqlite.worker.js',
     '/sql-wasm.wasm',
   );
