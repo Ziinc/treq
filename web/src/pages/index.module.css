@@ -124,7 +124,7 @@
 }
 
 .platformIcon {
-  color: #9ca3af;
+  color: #6b7280;
   flex-shrink: 0;
   font-size: 1.25rem;
 }
@@ -147,7 +147,7 @@
 .agentsLabel {
   display: block;
   font-size: 0.95rem;
-  color: #6b7280;
+  color: #4b5563;
   margin-bottom: 1rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -176,7 +176,7 @@
   width: 44px;
   height: 44px;
   font-size: 1.1rem;
-  color: #9ca3af;
+  color: #6b7280;
 }
 
 .cursorIcon {
@@ -199,12 +199,12 @@
 .agentIcon span {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #6b7280;
+  color: #4b5563;
 }
 
 .agentsDescription {
   font-size: 0.95rem;
-  color: #9ca3af;
+  color: #6b7280;
   margin-top: 1rem;
   max-width: 500px;
 }
@@ -508,6 +508,14 @@
   color: #9ca3af;
 }
 
+[data-theme='dark'] .agentIcon span {
+  color: #9ca3af;
+}
+
+[data-theme='dark'] .agentsDescription {
+  color: #9ca3af;
+}
+
 [data-theme='dark'] .workspaceDirectoryViz {
   background: #111827;
   border-color: #374151;
@@ -656,7 +664,7 @@
 
 .featuresSubheading {
   font-size: 1.2rem;
-  color: #6b7280;
+  color: #4b5563;
   max-width: 700px;
   margin: 0 auto;
   line-height: 1.7;
@@ -1117,6 +1125,10 @@
   color: #ffffff;
 }
 
+[data-theme='dark'] .featuresSubheading {
+  color: #9ca3af;
+}
+
 [data-theme='dark'] .featureHeading {
   color: #ffffff;
 }
@@ -1167,7 +1179,7 @@
 
 .closingCTASubheading {
   font-size: 1.25rem;
-  color: #6b7280;
+  color: #4b5563;
   margin-bottom: 3rem;
   line-height: 1.7;
   max-width: 700px;
