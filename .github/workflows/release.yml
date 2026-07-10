@@ -4,7 +4,32 @@ on:
   workflow_dispatch:
 
 jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    outputs:
+      notes: ${{ steps.gen.outputs.notes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install git-cliff
+        uses: taiki-e/install-action@v2
+        with:
+          tool: git-cliff
+
+      - name: Generate release notes
+        id: gen
+        run: |
+          git-cliff --unreleased --strip all > release-notes.md
+          {
+            echo 'notes<<CLIFF_EOF'
+            cat release-notes.md
+            echo 'CLIFF_EOF'
+          } >> "$GITHUB_OUTPUT"
+
   release:
+    needs: changelog
     permissions:
       contents: write
     strategy:
@@ -83,7 +108,8 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: "v__VERSION__"
-          generateReleaseNotes: true
+          releaseBody: ${{ needs.changelog.outputs.notes }}
+          generateReleaseNotes: false
           releaseDraft: true
           prerelease: false
           releaseAssetNamePattern: "[name]-[version]-[platform]-[arch][ext]"
