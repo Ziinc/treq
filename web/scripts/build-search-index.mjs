@@ -85,7 +85,7 @@ async function main() {
     const fileSize = statSync(hashedPath).size;
     writeFileSync(
       join(webRoot, 'static', 'search-meta.json'),
-      JSON.stringify({ url: `/${hashedName}`, fileSize }),
+      JSON.stringify({ url: `/${hashedName}`, fileLength: fileSize }),
     );
 
     // Copy sql.js-httpvfs runtime assets so they're served as static files
