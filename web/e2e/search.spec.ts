@@ -32,11 +32,14 @@ test.describe('Search bar (navbar)', () => {
     await expect(searchDropdown(page).getByRole('link', { name: /see all results/i })).toBeVisible();
   });
 
-  test('clicking a result navigates to the correct page', async ({ page }) => {
+  test('clicking a result navigates to the correct doc page', async ({ page }) => {
     await searchInput(page).fill('workspace');
     await expect(searchDropdown(page)).toBeVisible({ timeout: 10_000 });
-    await searchDropdown(page).locator('a').first().click();
-    await expect(page).not.toHaveURL('/');
+    const firstLink = searchDropdown(page).locator('a').first();
+    const href = await firstLink.getAttribute('href');
+    await firstLink.click();
+    await expect(page).toHaveURL(new RegExp(href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    await expect(page.getByRole('main')).toBeVisible();
   });
 
   test('pressing Enter navigates to /search with q= param', async ({ page }) => {
@@ -85,9 +88,10 @@ test.describe('Search results page (/search)', () => {
     await expect(page.locator('ul li').first()).toBeVisible({ timeout: 10_000 });
     const link = page.locator('ul li a').first();
     const href = await link.getAttribute('href');
-    expect(href).toBeTruthy();
+    expect(href).toMatch(/^\/(docs|learn)\//);
     await link.click();
-    await expect(page).not.toHaveURL('/search');
+    await expect(page).toHaveURL(new RegExp(href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   });
 
   test('shows no-results message for unmatched query', async ({ page }) => {
