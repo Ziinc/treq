@@ -85,7 +85,7 @@ function toEntry(release) {
     date: release.published_at ? release.published_at.slice(0, 10) : null,
     url: release.html_url,
     prerelease: release.prerelease,
-    body: (release.body || '').trim(),
+    body: (release.body || '').replace(/\n\n\*\*Full Changelog\*\*:.*$/s, '').trim(),
   };
 }
 
