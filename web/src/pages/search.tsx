@@ -36,11 +36,11 @@ function SearchResults({ query }: { query: string }) {
     setSearched(false);
     getWorker()
       .then(worker =>
-        worker.db.query<SearchResult>(
+        worker.db.query(
           `SELECT title, url, snippet(docs_fts, 1, '<mark>', '</mark>', '…', 32) AS excerpt
            FROM docs_fts WHERE docs_fts MATCH ? LIMIT 20`,
           query + '*',
-        ),
+        ) as unknown as SearchResult[],
       )
       .then(rows => { setResults(rows); setSearched(true); })
       .catch(() => { setResults([]); setSearched(true); })

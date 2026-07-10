@@ -27,11 +27,11 @@ async function getWorker(): Promise<DbWorker> {
 
 async function queryDocs(q: string): Promise<SearchResult[]> {
   const worker = await getWorker();
-  return worker.db.query<SearchResult>(
+  return worker.db.query(
     `SELECT title, url, snippet(docs_fts, 1, '<mark>', '</mark>', '…', 20) AS excerpt
      FROM docs_fts WHERE docs_fts MATCH ? LIMIT 8`,
     q + '*',
-  );
+  ) as SearchResult[];
 }
 
 function SearchBarInner() {
