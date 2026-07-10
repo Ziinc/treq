@@ -4,13 +4,8 @@
 }
 
 .pageWrapper {
-  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 45%);
   min-height: calc(100vh - var(--ifm-navbar-height));
   padding: 2rem 1rem 3rem;
-}
-
-:global([data-theme='dark']) .pageWrapper {
-  background: linear-gradient(180deg, #111827 0%, #0f0f0f 45%);
 }
 
 .card {
