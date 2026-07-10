@@ -7,6 +7,12 @@
   background: linear-gradient(180deg, #f8fafc 0%, #ffffff 45%);
   min-height: calc(100vh - var(--ifm-navbar-height));
   padding: 2rem 1rem 3rem;
+  /* Break out of MDXPage's container to fill full viewport width */
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  margin-left: -50vw;
+  box-sizing: border-box;
 }
 
 :global([data-theme='dark']) .pageWrapper {
