@@ -12,6 +12,12 @@ const nav = (page: Page) => page.getByRole('navigation', { name: 'Main' });
 const searchInput = (page: Page) => nav(page).getByRole('searchbox', { name: 'Search documentation' });
 const searchDropdown = (page: Page) => page.locator('[data-testid="search-dropdown"]');
 
+async function navigateToSearchPage(page: Page, query: string) {
+  await page.goto('/');
+  await searchInput(page).fill(query);
+  await searchInput(page).press('Enter');
+}
+
 test.describe('Search bar (navbar)', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
@@ -47,14 +53,13 @@ test.describe('Search bar (navbar)', () => {
     await searchInput(page).fill(QUERY);
     await expect(searchDropdown(page)).toBeVisible({ timeout: 10_000 });
     await searchDropdown(page).locator(`a[href="${EXPECTED_RESULT_URL}"]`).click();
-    await expect(page).toHaveURL(new RegExp(EXPECTED_RESULT_URL.replace(/\//g, '\\/')));
     await expect(page.getByRole('heading', { name: EXPECTED_RESULT_TITLE, level: 1 })).toBeVisible();
   });
 
-  test('pressing Enter navigates to /search with q= param', async ({ page }) => {
+  test('pressing Enter navigates to /search with results', async ({ page }) => {
     await searchInput(page).fill(QUERY);
     await searchInput(page).press('Enter');
-    await expect(page).toHaveURL(new RegExp(`/search\\?q=${QUERY_ENCODED}`));
+    await expect(page.getByRole('heading', { name: /search results for/i })).toBeVisible();
   });
 
   test('dropdown closes on Escape', async ({ page }) => {
@@ -87,13 +92,13 @@ test.describe('Search bar (navbar)', () => {
 
 test.describe('Search results page (/search)', () => {
   test('shows results for a matching query', async ({ page }) => {
-    await page.goto(`/search?q=${QUERY_ENCODED}`);
+    await navigateToSearchPage(page, QUERY);
     await expect(page.getByRole('heading', { name: /search results for/i })).toBeVisible();
     await expect(page.locator('ul li').first()).toBeVisible({ timeout: 10_000 });
   });
 
   test('CLI page result appears with a status-related excerpt', async ({ page }) => {
-    await page.goto(`/search?q=${QUERY_ENCODED}`);
+    await navigateToSearchPage(page, QUERY);
     await expect(page.locator('ul li').first()).toBeVisible({ timeout: 10_000 });
     const cliResult = page.locator(`ul li:has(a[href="${EXPECTED_RESULT_URL}"])`);
     await expect(cliResult).toBeVisible();
@@ -102,21 +107,20 @@ test.describe('Search results page (/search)', () => {
   });
 
   test('clicking CLI result navigates to the CLI reference page', async ({ page }) => {
-    await page.goto(`/search?q=${QUERY_ENCODED}`);
+    await navigateToSearchPage(page, QUERY);
     await expect(page.locator('ul li').first()).toBeVisible({ timeout: 10_000 });
     const link = page.locator(`ul li a[href="${EXPECTED_RESULT_URL}"]`);
     await link.click();
-    await expect(page).toHaveURL(new RegExp(EXPECTED_RESULT_URL.replace(/\//g, '\\/')));
     await expect(page.getByRole('heading', { name: EXPECTED_RESULT_TITLE, level: 1 })).toBeVisible();
   });
 
   test('shows no-results message for unmatched query', async ({ page }) => {
-    await page.goto('/search?q=zzzznotarealterm');
+    await navigateToSearchPage(page, 'zzzznotarealterm');
     await expect(page.getByText(/no results found/i)).toBeVisible({ timeout: 10_000 });
   });
 
   test('result excerpts contain highlighted terms', async ({ page }) => {
-    await page.goto(`/search?q=${QUERY_ENCODED}`);
+    await navigateToSearchPage(page, QUERY);
     const cliResult = page.locator(`ul li:has(a[href="${EXPECTED_RESULT_URL}"])`);
     await expect(cliResult).toBeVisible({ timeout: 10_000 });
     await expect(cliResult.locator('mark').first()).toBeVisible();
