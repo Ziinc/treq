@@ -25,10 +25,9 @@ commit_parsers = [
   { message = "^feat", group = "Features" },
   { message = "^fix", group = "Bug Fixes" },
   { message = "^perf", group = "Performance" },
-  { message = "^refactor", group = "Refactoring" },
-  { message = "^docs", group = "Documentation" },
-  { message = "^chore\\(release\\)", skip = true },
-  { message = "^chore", group = "Miscellaneous" },
+  { message = "^refactor", skip = true },
+  { message = "^docs", skip = true },
+  { message = "^chore", skip = true },
   { body = ".*security", group = "Security" },
 ]
 protect_breaking_commits = false
