@@ -154,9 +154,9 @@ test.describe('Cross-section navigation', () => {
 });
 
 test.describe('Footer navigation', () => {
-  test('Getting Started link navigates to installation page', async ({ page }) => {
+  test('Installation link navigates to installation page', async ({ page }) => {
     await page.goto('/');
-    await footer(page).getByRole('link', { name: 'Getting Started' }).click();
+    await footer(page).getByRole('link', { name: 'Installation' }).click();
     await expect(page.getByRole('heading', { name: 'Installation and Quickstart', level: 1 })).toBeVisible();
   });
 
