@@ -6,12 +6,34 @@ on:
 jobs:
   changelog:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       notes: ${{ steps.gen.outputs.notes }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Delete pre-existing draft release for this version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
+          TAG="v${VERSION}"
+
+          RELEASE_ID=$(gh api "repos/${{ github.repository }}/releases" \
+            --jq ".[] | select(.tag_name == \"${TAG}\" and .draft == true) | .id")
+
+          if [ -n "$RELEASE_ID" ]; then
+            echo "Deleting existing draft release for ${TAG}"
+            gh api -X DELETE "repos/${{ github.repository }}/releases/${RELEASE_ID}"
+          fi
+
+          if gh api "repos/${{ github.repository }}/git/refs/tags/${TAG}" > /dev/null 2>&1; then
+            echo "Deleting existing tag ${TAG}"
+            gh api -X DELETE "repos/${{ github.repository }}/git/refs/tags/${TAG}"
+          fi
 
       - name: Install git-cliff
         uses: taiki-e/install-action@v2
