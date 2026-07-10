@@ -23,15 +23,14 @@ jobs:
       - name: Generate changelog
         run: git-cliff --output CHANGELOG.md
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-
-      - name: Update web changelog
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node scripts/generate-changelog.mjs
+      - name: Generate web changelog page
+        run: |
+          {
+            printf -- '---\ntitle: Changelog\ndescription: Release history for Treq\nhide_table_of_contents: true\n---\n\n'
+            printf '# Changelog\n\n'
+            printf '> Full release history for [Treq](https://github.com/Ziinc/treq/releases).\n\n'
+            tail -n +3 CHANGELOG.md
+          } > web/src/pages/changelog.md
 
       - name: Commit and push changelog
         run: |
