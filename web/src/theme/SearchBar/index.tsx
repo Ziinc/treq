@@ -3,6 +3,7 @@ import BrowserOnly from '@docusaurus/BrowserOnly';
 import Link from '@docusaurus/Link';
 import { useHistory } from '@docusaurus/router';
 import { preWarm, getDb, execSearch, type SearchResult } from '@site/src/utils/searchDb';
+import { useSearchDb } from '@site/src/utils/SearchDbContext';
 import styles from './styles.module.css';
 
 function SearchBarInner() {
@@ -11,14 +12,14 @@ function SearchBarInner() {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dbRef = useRef<import('sql.js').Database | null>(null);
+  const db = useSearchDb();
   const history = useHistory();
 
   const runQuery = useCallback(async (q: string) => {
     if (!q.trim()) { setResults([]); setOpen(false); return; }
     try {
-      if (!dbRef.current) dbRef.current = await getDb();
-      const rows = execSearch(dbRef.current, q);
+      const resolvedDb = db ?? await getDb();
+      const rows = execSearch(resolvedDb, q);
       setResults(rows);
       setOpen(rows.length > 0);
     } catch (err) {

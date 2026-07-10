@@ -3,9 +3,11 @@ import Layout from '@theme/Layout';
 import Link from '@docusaurus/Link';
 import BrowserOnly from '@docusaurus/BrowserOnly';
 import { getDb, execSearch, type SearchResult } from '@site/src/utils/searchDb';
+import { useSearchDb } from '@site/src/utils/SearchDbContext';
 import styles from './search.module.css';
 
 function SearchResults({ query }: { query: string }) {
+  const db = useSearchDb();
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(() => !!query.trim());
   const [searched, setSearched] = useState(false);
@@ -14,11 +16,15 @@ function SearchResults({ query }: { query: string }) {
     if (!query.trim()) return;
     setLoading(true);
     setSearched(false);
-    getDb()
-      .then(db => { setResults(execSearch(db, query)); setSearched(true); })
+    const run = async () => {
+      const resolvedDb = db ?? await getDb();
+      return execSearch(resolvedDb, query);
+    };
+    run()
+      .then(rows => { setResults(rows); setSearched(true); })
       .catch(err => { console.error('[Search] query failed:', err); setResults([]); setSearched(true); })
       .finally(() => setLoading(false));
-  }, [query]);
+  }, [query, db]);
 
   if (!query.trim()) return null;
   if (loading) return <p className={styles.status}>Searching…</p>;
