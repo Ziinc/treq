@@ -60,6 +60,7 @@
   margin: 0;
 }
 
+.resultTitle mark,
 .resultExcerpt mark {
   background: none;
   color: var(--ifm-color-primary);

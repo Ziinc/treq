@@ -41,7 +41,9 @@ function SearchResults({ query }: { query: string }) {
         // exec() is inherited from sql.js Database but not surfaced by Comlink.Remote<T>
         const exec = (worker.db as unknown as Record<string, unknown>)['exec'] as (sql: string, params: unknown[]) => Promise<{ columns: string[]; values: unknown[][] }[]>;
         return exec(
-          `SELECT title, url, snippet(docs_fts, 1, '<mark>', '</mark>', '…', 32) AS excerpt
+          `SELECT highlight(docs_fts, 0, '<mark>', '</mark>') AS title,
+                  url,
+                  snippet(docs_fts, 1, '<mark>', '</mark>', '…', 32) AS excerpt
            FROM docs_fts WHERE docs_fts MATCH ? LIMIT 20`,
           [term],
         );
@@ -67,9 +69,11 @@ function SearchResults({ query }: { query: string }) {
     <ul className={styles.results}>
       {results.map((r, i) => (
         <li key={i} className={styles.result}>
-          <Link to={r.url} className={styles.resultTitle}>
-            {r.title || r.url}
-          </Link>
+          <Link
+            to={r.url}
+            className={styles.resultTitle}
+            dangerouslySetInnerHTML={{ __html: r.title || r.url }}
+          />
           <div className={styles.resultUrl}>{r.url}</div>
           {r.excerpt && (
             <p

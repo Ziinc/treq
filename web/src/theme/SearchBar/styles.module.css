@@ -76,6 +76,7 @@
   -webkit-box-orient: vertical;
 }
 
+.resultTitle mark,
 .resultExcerpt mark {
   background: none;
   color: var(--ifm-color-primary);

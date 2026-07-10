@@ -36,9 +36,11 @@ async function queryDocs(q: string): Promise<SearchResult[]> {
   if (!term) return [];
   const worker = await getWorker();
   // exec() is inherited from sql.js Database but not surfaced by Comlink.Remote<T>
-  const exec = worker.db.exec as unknown as (sql: string, params: unknown[]) => Promise<{ columns: string[]; values: unknown[][] }[]>;
+  const exec = (worker.db as unknown as Record<string, unknown>)['exec'] as (sql: string, params: unknown[]) => Promise<{ columns: string[]; values: unknown[][] }[]>;
   const res = await exec(
-    `SELECT title, url, snippet(docs_fts, 1, '<mark>', '</mark>', '…', 20) AS excerpt
+    `SELECT highlight(docs_fts, 0, '<mark>', '</mark>') AS title,
+            url,
+            snippet(docs_fts, 1, '<mark>', '</mark>', '…', 20) AS excerpt
      FROM docs_fts WHERE docs_fts MATCH ? LIMIT 8`,
     [term],
   );
@@ -113,7 +115,10 @@ function SearchBarInner() {
               className={styles.result}
               onClick={() => { setOpen(false); setQuery(''); }}
             >
-              <div className={styles.resultTitle}>{r.title || r.url}</div>
+              <div
+                className={styles.resultTitle}
+                dangerouslySetInnerHTML={{ __html: r.title || r.url }}
+              />
               {r.excerpt && (
                 <div
                   className={styles.resultExcerpt}
