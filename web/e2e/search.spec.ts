@@ -3,6 +3,11 @@ import { test, expect, type Page } from '@playwright/test';
 const QUERY = 'cli workspace status';
 const QUERY_ENCODED = encodeURIComponent(QUERY);
 
+// Known result for QUERY: the CLI reference page whose excerpt contains "workspace status"
+const EXPECTED_RESULT_URL = '/docs/reference/cli';
+const EXPECTED_RESULT_TITLE = 'CLI';
+const EXPECTED_RESULT_KEYWORD = 'status';
+
 const nav = (page: Page) => page.getByRole('navigation', { name: 'Main' });
 const searchInput = (page: Page) => nav(page).getByRole('searchbox', { name: 'Search documentation' });
 const searchDropdown = (page: Page) => page.locator('[data-testid="search-dropdown"]');
@@ -22,11 +27,14 @@ test.describe('Search bar (navbar)', () => {
     await expect(searchDropdown(page).locator('a').first()).toBeVisible();
   });
 
-  test('results contain one of the search terms', async ({ page }) => {
+  test('results include the CLI page with a status-related excerpt', async ({ page }) => {
     await searchInput(page).fill(QUERY);
     await expect(searchDropdown(page)).toBeVisible({ timeout: 10_000 });
-    const text = await searchDropdown(page).locator('a').first().textContent();
-    expect(text?.toLowerCase()).toMatch(/cli|workspace|status/);
+    const cliResult = searchDropdown(page).locator(`a[href="${EXPECTED_RESULT_URL}"]`);
+    await expect(cliResult).toBeVisible();
+    await expect(cliResult.getByText(EXPECTED_RESULT_TITLE)).toBeVisible();
+    const excerptText = await cliResult.textContent();
+    expect(excerptText?.toLowerCase()).toContain(EXPECTED_RESULT_KEYWORD);
   });
 
   test('dropdown shows "See all results" link', async ({ page }) => {
@@ -35,14 +43,12 @@ test.describe('Search bar (navbar)', () => {
     await expect(searchDropdown(page).getByRole('link', { name: /see all results/i })).toBeVisible();
   });
 
-  test('clicking a result navigates to the correct doc page', async ({ page }) => {
+  test('clicking the CLI result navigates to the CLI reference page', async ({ page }) => {
     await searchInput(page).fill(QUERY);
     await expect(searchDropdown(page)).toBeVisible({ timeout: 10_000 });
-    const firstLink = searchDropdown(page).locator('a').first();
-    const href = await firstLink.getAttribute('href');
-    await firstLink.click();
-    await expect(page).toHaveURL(new RegExp(href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-    await expect(page.getByRole('main')).toBeVisible();
+    await searchDropdown(page).locator(`a[href="${EXPECTED_RESULT_URL}"]`).click();
+    await expect(page).toHaveURL(new RegExp(EXPECTED_RESULT_URL.replace(/\//g, '\\/')));
+    await expect(page.getByRole('heading', { name: EXPECTED_RESULT_TITLE, level: 1 })).toBeVisible();
   });
 
   test('pressing Enter navigates to /search with q= param', async ({ page }) => {
@@ -86,15 +92,22 @@ test.describe('Search results page (/search)', () => {
     await expect(page.locator('ul li').first()).toBeVisible({ timeout: 10_000 });
   });
 
-  test('result links navigate to the correct doc page', async ({ page }) => {
+  test('CLI page result appears with a status-related excerpt', async ({ page }) => {
     await page.goto(`/search?q=${QUERY_ENCODED}`);
     await expect(page.locator('ul li').first()).toBeVisible({ timeout: 10_000 });
-    const link = page.locator('ul li a').first();
-    const href = await link.getAttribute('href');
-    expect(href).toMatch(/^\/(docs|learn)\//);
+    const cliResult = page.locator(`ul li:has(a[href="${EXPECTED_RESULT_URL}"])`);
+    await expect(cliResult).toBeVisible();
+    const excerptText = await cliResult.textContent();
+    expect(excerptText?.toLowerCase()).toContain(EXPECTED_RESULT_KEYWORD);
+  });
+
+  test('clicking CLI result navigates to the CLI reference page', async ({ page }) => {
+    await page.goto(`/search?q=${QUERY_ENCODED}`);
+    await expect(page.locator('ul li').first()).toBeVisible({ timeout: 10_000 });
+    const link = page.locator(`ul li a[href="${EXPECTED_RESULT_URL}"]`);
     await link.click();
-    await expect(page).toHaveURL(new RegExp(href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(EXPECTED_RESULT_URL.replace(/\//g, '\\/')));
+    await expect(page.getByRole('heading', { name: EXPECTED_RESULT_TITLE, level: 1 })).toBeVisible();
   });
 
   test('shows no-results message for unmatched query', async ({ page }) => {
@@ -102,9 +115,10 @@ test.describe('Search results page (/search)', () => {
     await expect(page.getByText(/no results found/i)).toBeVisible({ timeout: 10_000 });
   });
 
-  test('shows result snippets with highlighted terms', async ({ page }) => {
+  test('result excerpts contain highlighted terms', async ({ page }) => {
     await page.goto(`/search?q=${QUERY_ENCODED}`);
-    await expect(page.locator('ul li').first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('ul li mark').first()).toBeVisible();
+    const cliResult = page.locator(`ul li:has(a[href="${EXPECTED_RESULT_URL}"])`);
+    await expect(cliResult).toBeVisible({ timeout: 10_000 });
+    await expect(cliResult.locator('mark').first()).toBeVisible();
   });
 });
