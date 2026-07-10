@@ -32,9 +32,9 @@ export function execSearch(db: Database, q: string): SearchResult[] {
   const term = q.trim().split(/\s+/).filter(Boolean).map(w => `${w}*`).join(' ');
   if (!term) return [];
   const res = db.exec(
-    `SELECT highlight(docs_fts, 0, '<mark>', '</mark>') AS title,
+    `SELECT snippet(docs_fts, '<mark>', '</mark>', '', 0, 10) AS title,
             url,
-            snippet(docs_fts, 1, '<mark>', '</mark>', '…', 20) AS excerpt
+            snippet(docs_fts, '<mark>', '</mark>', '…', 1, 20) AS excerpt
      FROM docs_fts WHERE docs_fts MATCH ? LIMIT 8`,
     [term],
   );

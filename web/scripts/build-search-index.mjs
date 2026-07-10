@@ -2,10 +2,10 @@ import { readFileSync, readdirSync, statSync, existsSync, unlinkSync, copyFileSy
 import { join, relative, extname } from 'path';
 import { createHash } from 'crypto';
 import { fileURLToPath } from 'url';
-import Database from 'sqlite3';
 import matter from 'gray-matter';
 import { remark } from 'remark';
 import stripMarkdown from 'strip-markdown';
+import initSqlJs from 'sql.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const webRoot = join(__dirname, '..');
@@ -40,60 +40,55 @@ function fileToUrl(filePath, base, routeBase) {
 }
 
 async function main() {
-  if (existsSync(dbPath)) unlinkSync(dbPath);
+  const SQL = await initSqlJs();
+  const db = new SQL.Database();
 
-  const db = new Database.Database(dbPath);
-
-  db.serialize(() => {
-    db.run('PRAGMA journal_mode = delete');
-    db.run(`CREATE VIRTUAL TABLE docs_fts USING fts5(title, body, url)`);
-  });
+  db.run('PRAGMA journal_mode = delete');
+  db.run('CREATE VIRTUAL TABLE docs_fts USING fts4(title, body, url)');
 
   const files = [
     ...walkMd(join(webRoot, 'docs')).map(f => ({ file: f, base: join(webRoot, 'docs'), route: 'docs/' })),
     ...walkMd(join(webRoot, 'learn')).map(f => ({ file: f, base: join(webRoot, 'learn'), route: 'learn/' })),
   ];
 
-  const insert = db.prepare('INSERT INTO docs_fts(title, body, url) VALUES (?, ?, ?)');
-
+  const stmt = db.prepare('INSERT INTO docs_fts(title, body, url) VALUES (?, ?, ?)');
   for (const { file, base, route } of files) {
     const raw = readFileSync(file, 'utf8');
     const { data: frontmatter, content } = matter(raw);
     const title = frontmatter.title || content.match(/^#\s+(.+)/m)?.[1] || '';
     const body = await stripMd(content);
     const url = fileToUrl(file, base, route);
-    insert.run(title, body, url);
+    stmt.run([title, body, url]);
+  }
+  stmt.free();
+
+  db.run('VACUUM');
+  const buf = db.export();
+  db.close();
+
+  // Remove stale hashed DB files
+  for (const f of readdirSync(join(webRoot, 'static'))) {
+    if (/^site(-[a-f0-9]{32})?\.db$/.test(f)) unlinkSync(join(webRoot, 'static', f));
   }
 
-  insert.finalize(() => {
-  db.run('VACUUM', () => {
-    db.close();
+  writeFileSync(dbPath, buf);
 
-    // Compute md5 hash of the built DB for cache-busting filename
-    const hash = createHash('md5').update(readFileSync(dbPath)).digest('hex');
-    const hashedName = `site-${hash}.db`;
-    const hashedPath = join(webRoot, 'static', hashedName);
+  const hash = createHash('md5').update(buf).digest('hex');
+  const hashedName = `site-${hash}.db`;
+  const hashedPath = join(webRoot, 'static', hashedName);
+  renameSync(dbPath, hashedPath);
 
-    // Remove stale hashed DB files before renaming
-    for (const f of readdirSync(join(webRoot, 'static'))) {
-      if (/^site-[a-f0-9]{32}\.db$/.test(f)) unlinkSync(join(webRoot, 'static', f));
-    }
-    renameSync(dbPath, hashedPath);
+  writeFileSync(
+    join(webRoot, 'static', 'search-meta.json'),
+    JSON.stringify({ url: `/${hashedName}` }),
+  );
 
-    // Write manifest so the browser knows which URL to fetch
-    writeFileSync(
-      join(webRoot, 'static', 'search-meta.json'),
-      JSON.stringify({ url: `/${hashedName}` }),
-    );
-
-    // Copy sql.js browser WASM so the browser can load it at /sql-wasm-browser.wasm
-    copyFileSync(
-      join(webRoot, 'node_modules', 'sql.js', 'dist', 'sql-wasm-browser.wasm'),
-      join(webRoot, 'static', 'sql-wasm-browser.wasm'),
-    );
-    console.log(`Search index built: ${hashedPath} (${files.length} docs)`);
-  });
-  });
+  // Copy sql.js browser WASM so the browser can load it at /sql-wasm-browser.wasm
+  copyFileSync(
+    join(webRoot, 'node_modules', 'sql.js', 'dist', 'sql-wasm-browser.wasm'),
+    join(webRoot, 'static', 'sql-wasm-browser.wasm'),
+  );
+  console.log(`Search index built: ${hashedPath} (${files.length} docs)`);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
