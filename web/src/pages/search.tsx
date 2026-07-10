@@ -17,12 +17,14 @@ let workerInstance: DbWorker | null = null;
 async function getWorker(): Promise<DbWorker> {
   if (workerInstance) return workerInstance;
   const meta = await fetch('/search-meta.json').then(r => r.json()) as { url: string };
+  console.log('[Search] loading DB from', meta.url);
   const { createDbWorker } = await import('sql.js-httpvfs');
   workerInstance = await createDbWorker(
     [{ from: 'inline', config: { serverMode: 'full', url: meta.url, requestChunkSize: 4096 } }],
     '/sqlite.worker.js',
     '/sql-wasm.wasm',
   );
+  console.log('[Search] worker ready');
   return workerInstance;
 }
 
@@ -56,7 +58,7 @@ function SearchResults({ query }: { query: string }) {
         setResults(rows);
         setSearched(true);
       })
-      .catch(() => { setResults([]); setSearched(true); })
+      .catch(err => { console.error('[Search] query failed:', err); setResults([]); setSearched(true); })
       .finally(() => setLoading(false));
   }, [query]);
 

@@ -17,12 +17,14 @@ let workerInstance: DbWorker | null = null;
 async function getWorker(): Promise<DbWorker> {
   if (workerInstance) return workerInstance;
   const meta = await fetch('/search-meta.json').then(r => r.json()) as { url: string };
+  console.log('[SearchBar] loading DB from', meta.url);
   const { createDbWorker } = await import('sql.js-httpvfs');
   workerInstance = await createDbWorker(
     [{ from: 'inline', config: { serverMode: 'full', url: meta.url, requestChunkSize: 4096 } }],
     '/sqlite.worker.js',
     '/sql-wasm.wasm',
   );
+  console.log('[SearchBar] worker ready');
   return workerInstance;
 }
 
@@ -63,7 +65,7 @@ function SearchBarInner() {
       setResults(rows);
       setOpen(rows.length > 0);
     } catch (err) {
-      console.error('[SearchBar] query failed:', err);
+      console.error('[SearchBar] query failed:', err instanceof Error ? err.stack : err);
       setResults([]);
       setOpen(false);
     }
