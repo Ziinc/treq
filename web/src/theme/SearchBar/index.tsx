@@ -12,20 +12,24 @@ type SearchResult = {
 
 type DbWorker = Awaited<ReturnType<typeof import('sql.js-httpvfs')['createDbWorker']>>;
 
-let workerInstance: DbWorker | null = null;
+let workerPromise: Promise<DbWorker> | null = null;
 
-async function getWorker(): Promise<DbWorker> {
-  if (workerInstance) return workerInstance;
-  const meta = await fetch('/search-meta.json').then(r => r.json()) as { url: string; fileLength: number };
-  console.log('[SearchBar] loading DB from', meta.url);
-  const { createDbWorker } = await import('sql.js-httpvfs');
-  workerInstance = await createDbWorker(
-    [{ from: 'inline', config: { serverMode: 'full', url: meta.url, requestChunkSize: 4096, fileLength: meta.fileLength } }],
-    '/sqlite.worker.js',
-    '/sql-wasm.wasm',
-  );
-  console.log('[SearchBar] worker ready');
-  return workerInstance;
+function getWorker(): Promise<DbWorker> {
+  if (!workerPromise) {
+    workerPromise = (async () => {
+      const meta = await fetch('/search-meta.json').then(r => r.json()) as { url: string; fileLength: number };
+      console.log('[SearchBar] loading DB from', meta.url);
+      const { createDbWorker } = await import('sql.js-httpvfs');
+      const worker = await createDbWorker(
+        [{ from: 'inline', config: { serverMode: 'full', url: meta.url, requestChunkSize: 4096, fileLength: meta.fileLength } }],
+        '/sqlite.worker.js',
+        '/sql-wasm.wasm',
+      );
+      console.log('[SearchBar] worker ready');
+      return worker;
+    })().catch(err => { workerPromise = null; throw err; });
+  }
+  return workerPromise;
 }
 
 function execToObjects<T>(res: { columns: string[]; values: unknown[][] }[]): T[] {
