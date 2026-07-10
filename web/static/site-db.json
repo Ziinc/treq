@@ -1,0 +1,5 @@
+{
+  "serverMode": "full",
+  "url": "/site.db",
+  "requestChunkSize": 4096
+}
