@@ -59,3 +59,28 @@ jobs:
               pull_number: pr.number,
               title: `docs: ${title}`,
             });
+
+  check-conventional-title:
+    runs-on: ubuntu-latest
+    needs: docs-prefix-title
+    steps:
+      - name: Enforce conventional commit title
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Re-fetch the PR so we see any title edits made by earlier jobs
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+            });
+
+            // Conventional commits: type(optional scope)!?: description
+            const conventional = /^[a-z]+(\([^)]+\))?!?:\s.+/;
+            if (!conventional.test(pr.title)) {
+              core.setFailed(
+                `PR title does not follow conventional commits format.\n` +
+                `Expected: <type>[(<scope>)][!]: <description>\n` +
+                `Got: "${pr.title}"`
+              );
+            }
