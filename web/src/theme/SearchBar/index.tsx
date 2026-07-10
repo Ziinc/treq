@@ -11,13 +11,14 @@ function SearchBarInner() {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dbRef = useRef<import('sql.js').Database | null>(null);
   const history = useHistory();
 
   const runQuery = useCallback(async (q: string) => {
     if (!q.trim()) { setResults([]); setOpen(false); return; }
     try {
-      const db = await getDb();
-      const rows = execSearch(db, q);
+      if (!dbRef.current) dbRef.current = await getDb();
+      const rows = execSearch(dbRef.current, q);
       setResults(rows);
       setOpen(rows.length > 0);
     } catch (err) {
