@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import Link from '@docusaurus/Link';
 import Layout from '@theme/Layout';
 import styles from './styles.module.css';
 
@@ -8,11 +9,44 @@ export interface TocItem {
   level: number;
 }
 
+export interface BreadcrumbItem {
+  label: string;
+  href?: string;
+}
+
 interface ContentPageLayoutProps {
   title: string;
   description?: string;
   toc?: TocItem[];
+  breadcrumbs?: BreadcrumbItem[];
   children: React.ReactNode;
+}
+
+function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
+  if (items.length === 0) return null;
+  return (
+    <nav aria-label="Breadcrumbs" className={styles.breadcrumbsContainer}>
+      <ul className="breadcrumbs">
+        {items.map((item, idx) => {
+          const isLast = idx === items.length - 1;
+          return (
+            <li
+              key={idx}
+              className={`breadcrumbs__item${isLast ? ' breadcrumbs__item--active' : ''}`}
+            >
+              {item.href && !isLast ? (
+                <Link href={item.href} className="breadcrumbs__link">
+                  {item.label}
+                </Link>
+              ) : (
+                <span className="breadcrumbs__link">{item.label}</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
 }
 
 function TableOfContents({ items }: { items: TocItem[] }) {
@@ -68,6 +102,7 @@ export default function ContentPageLayout({
   title,
   description,
   toc = [],
+  breadcrumbs = [],
   children,
 }: ContentPageLayoutProps) {
   const hasToc = toc.length > 0;
@@ -76,6 +111,7 @@ export default function ContentPageLayout({
     <Layout title={title} description={description}>
       <div className={styles.pageWrapper}>
         <div className={styles.card}>
+          {breadcrumbs.length > 0 && <Breadcrumbs items={breadcrumbs} />}
           <div className={hasToc ? styles.bodyWithToc : styles.body}>
             <main className={styles.main}>{children}</main>
             {hasToc && (
