@@ -1,0 +1,117 @@
+.pageWrapper {
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 45%);
+  min-height: calc(100vh - var(--ifm-navbar-height));
+  padding: 2rem 1rem 3rem;
+}
+
+:global([data-theme='dark']) .pageWrapper {
+  background: linear-gradient(180deg, #111827 0%, #0f0f0f 45%);
+}
+
+.card {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 2.5rem 3rem;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 24px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12);
+}
+
+:global([data-theme='dark']) .card {
+  background: rgba(17, 24, 39, 0.92);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.38);
+}
+
+.body {
+  display: block;
+}
+
+.bodyWithToc {
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  gap: 3rem;
+  align-items: start;
+}
+
+.main {
+  min-width: 0;
+}
+
+.tocAside {
+  position: sticky;
+  top: calc(var(--ifm-navbar-height) + 1.5rem);
+}
+
+.tocContainer {
+  position: relative;
+  padding: 2.75rem 1rem 1rem;
+  background: rgba(59, 156, 255, 0.06);
+  border: 1px solid rgba(59, 156, 255, 0.16);
+  border-left-width: 3px;
+  border-radius: 14px;
+}
+
+.tocContainer::before {
+  content: 'Contents';
+  position: absolute;
+  top: 0.9rem;
+  left: 1rem;
+  color: var(--ifm-color-primary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+:global([data-theme='dark']) .tocContainer {
+  background: rgba(94, 176, 255, 0.08);
+  border-color: rgba(94, 176, 255, 0.22);
+}
+
+.tocList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tocList li {
+  margin: 0;
+}
+
+.tocLink {
+  display: block;
+  padding: 0.35rem 0;
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.86rem;
+  line-height: 1.35;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.tocLink:hover {
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+.tocLinkActive {
+  color: var(--ifm-color-primary);
+  font-weight: 700;
+}
+
+@media screen and (max-width: 996px) {
+  .card {
+    padding: 1.5rem;
+    border-radius: 18px;
+  }
+
+  .bodyWithToc {
+    grid-template-columns: 1fr;
+  }
+
+  .tocAside {
+    position: static;
+    order: -1;
+  }
+}
