@@ -38,7 +38,7 @@ test.describe('Search bar (navbar)', () => {
     await expect(searchDropdown(page)).toBeVisible({ timeout: 10_000 });
     const cliResult = searchDropdown(page).locator(`a[href="${EXPECTED_RESULT_URL}"]`);
     await expect(cliResult).toBeVisible();
-    await expect(cliResult.getByText(EXPECTED_RESULT_TITLE)).toBeVisible();
+    await expect(cliResult.getByText(EXPECTED_RESULT_TITLE).first()).toBeVisible();
     const excerptText = await cliResult.textContent();
     expect(excerptText?.toLowerCase()).toContain(EXPECTED_RESULT_KEYWORD);
   });
