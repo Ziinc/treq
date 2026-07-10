@@ -5,7 +5,6 @@
 
 import os
 import re
-import sys
 from pathlib import Path
 
 import textstat
@@ -61,6 +60,15 @@ def grade_label(score: float) -> str:
     return "Very Difficult"
 
 
+def file_url(rel_path: str) -> str | None:
+    server = os.environ.get("GITHUB_SERVER_URL")
+    repo = os.environ.get("GITHUB_REPOSITORY")
+    sha = os.environ.get("GITHUB_SHA")
+    if not (server and repo and sha):
+        return None
+    return f"{server}/{repo}/blob/{sha}/{rel_path}"
+
+
 def analyze_file(path: Path, workspace: Path) -> dict | None:
     content = path.read_text(encoding="utf-8")
     plain = strip_markdown(content)
@@ -68,11 +76,19 @@ def analyze_file(path: Path, workspace: Path) -> dict | None:
     if words < 30:
         return None
     score = round(textstat.flesch_reading_ease(plain), 1)
+    rel_path = str(path.relative_to(workspace))
     return {
-        "path": str(path.relative_to(workspace)),
+        "path": rel_path,
+        "url": file_url(rel_path),
         "score": score,
         "words": words,
     }
+
+
+def file_cell(r: dict) -> str:
+    if r["url"]:
+        return f"[{r['path']}]({r['url']})"
+    return f"`{r['path']}`"
 
 
 def main() -> None:
@@ -100,25 +116,17 @@ def main() -> None:
         lines.append(
             "Articles with Flesch Reading Ease score below 70 should be simplified.\n"
         )
-        lines.append("| File | Score | Difficulty | Words |")
-        lines.append("|------|------:|------------|------:|")
-        for r in low:
-            lines.append(
-                f"| `{r['path']}` | {r['score']} | {grade_label(r['score'])} | {r['words']} |"
-            )
-        lines.append("")
     else:
         lines.append(
             f"### ✅ All {len(results)} articles meet readability target (Flesch ≥ 70)\n"
         )
 
-    lines.append("### All Articles\n")
-    lines.append("| File | Score | Difficulty |")
-    lines.append("|------|------:|------------|")
-    for r in sorted(results, key=lambda r: r["path"]):
+    lines.append("| File | Score | Difficulty | Words |")
+    lines.append("|------|------:|------------|------:|")
+    for r in results:
         flag = "⚠️ " if r["score"] < 70 else ""
         lines.append(
-            f"| `{r['path']}` | {flag}{r['score']} | {grade_label(r['score'])} |"
+            f"| {file_cell(r)} | {flag}{r['score']} | {grade_label(r['score'])} | {r['words']} |"
         )
 
     output = "\n".join(lines) + "\n"
