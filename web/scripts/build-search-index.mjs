@@ -80,10 +80,12 @@ async function main() {
     }
     renameSync(dbPath, hashedPath);
 
-    // Write manifest so the browser knows which URL to load
+    // Write manifest so the browser knows which URL and exact byte size to pass to sql.js-httpvfs
+    // (Cloudflare Pages omits Content-Length on HTTP/3; fileSize bypasses that requirement)
+    const fileSize = statSync(hashedPath).size;
     writeFileSync(
       join(webRoot, 'static', 'search-meta.json'),
-      JSON.stringify({ url: `/${hashedName}` }),
+      JSON.stringify({ url: `/${hashedName}`, fileSize }),
     );
 
     // Copy sql.js-httpvfs runtime assets so they're served as static files
