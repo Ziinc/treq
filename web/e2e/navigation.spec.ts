@@ -5,65 +5,92 @@ const sidebar = (page: Page) => page.getByRole('navigation', { name: 'Docs sideb
 const footer = (page: Page) => page.getByRole('contentinfo');
 
 test.describe('Navbar navigation', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-  });
-
   test('Learn link navigates to learn section', async ({ page }) => {
+    await page.goto('/');
     await nav(page).getByRole('link', { name: 'Learn' }).click();
     await expect(page.getByRole('heading', { name: 'Learn', level: 1 })).toBeVisible();
   });
 
   test('Docs link navigates to docs section', async ({ page }) => {
+    await page.goto('/');
     await nav(page).getByRole('link', { name: 'Docs' }).click();
     await expect(page.getByRole('heading', { name: 'Treq', level: 1 })).toBeVisible();
   });
 
   test('Get Started button navigates to installation page', async ({ page }) => {
+    await page.goto('/');
     await nav(page).getByRole('link', { name: 'Get Started' }).click();
     await expect(page.getByRole('heading', { name: 'Installation and Quickstart', level: 1 })).toBeVisible();
   });
 
   test('logo navigates home from a docs page', async ({ page }) => {
+    await page.goto('/');
     await nav(page).getByRole('link', { name: 'Learn' }).click();
     await nav(page).getByRole('link', { name: 'Treq Logo' }).click();
     await expect(page.getByRole('heading', { name: 'AI Workspace Manager', level: 1 })).toBeVisible();
   });
 
   test('GitHub link points to the correct repo', async ({ page }) => {
+    await page.goto('/');
     await expect(nav(page).getByRole('link', { name: 'GitHub' }))
       .toHaveAttribute('href', 'https://github.com/Ziinc/treq');
   });
 });
 
 test.describe('Docs sidebar navigation', () => {
-  test.beforeEach(async ({ page }) => {
+  test('Installation link is visible by default on Docs overview', async ({ page }) => {
     await page.goto('/');
     await nav(page).getByRole('link', { name: 'Docs' }).click();
-  });
-
-  test('Getting Started items are visible by default', async ({ page }) => {
     await expect(sidebar(page).getByRole('link', { name: 'Installation' })).toBeVisible();
   });
 
-  test('navigates to Installation page', async ({ page }) => {
+  test('Installation link navigates to installation page', async ({ page }) => {
+    await page.goto('/');
+    await nav(page).getByRole('link', { name: 'Docs' }).click();
     await sidebar(page).getByRole('link', { name: 'Installation' }).click();
     await expect(page.getByRole('heading', { name: 'Installation and Quickstart', level: 1 })).toBeVisible();
   });
 
-  test('navigates into Concepts and to Workspaces', async ({ page }) => {
+  test('Concepts link navigates to concepts overview', async ({ page }) => {
+    await page.goto('/');
+    await nav(page).getByRole('link', { name: 'Docs' }).click();
+    await sidebar(page).getByRole('link', { name: 'Concepts' }).click();
+    await expect(page.getByRole('heading', { name: 'Concepts', level: 1 })).toBeVisible();
+  });
+
+  test('Workspaces link is visible after navigating into Concepts', async ({ page }) => {
+    await page.goto('/');
+    await nav(page).getByRole('link', { name: 'Docs' }).click();
+    await sidebar(page).getByRole('link', { name: 'Concepts' }).click();
+    await expect(sidebar(page).getByRole('link', { name: 'Workspaces' })).toBeVisible();
+  });
+
+  test('Workspaces link navigates to workspaces page', async ({ page }) => {
+    await page.goto('/');
+    await nav(page).getByRole('link', { name: 'Docs' }).click();
     await sidebar(page).getByRole('link', { name: 'Concepts' }).click();
     await sidebar(page).getByRole('link', { name: 'Workspaces' }).click();
     await expect(page.getByRole('heading', { name: 'Workspaces', level: 1 })).toBeVisible();
   });
 
-  test('expands Reference and navigates to CLI', async ({ page }) => {
+  test('Reference expands to show CLI link', async ({ page }) => {
+    await page.goto('/');
+    await nav(page).getByRole('link', { name: 'Docs' }).click();
+    await sidebar(page).getByRole('button', { name: 'Reference' }).click();
+    await expect(sidebar(page).getByRole('link', { name: 'CLI' })).toBeVisible();
+  });
+
+  test('CLI link navigates to CLI page', async ({ page }) => {
+    await page.goto('/');
+    await nav(page).getByRole('link', { name: 'Docs' }).click();
     await sidebar(page).getByRole('button', { name: 'Reference' }).click();
     await sidebar(page).getByRole('link', { name: 'CLI' }).click();
     await expect(page.getByRole('heading', { name: 'CLI', level: 1 })).toBeVisible();
   });
 
-  test('expands Reference and navigates to Keyboard Shortcuts', async ({ page }) => {
+  test('Keyboard Shortcuts link navigates to keyboard shortcuts page', async ({ page }) => {
+    await page.goto('/');
+    await nav(page).getByRole('link', { name: 'Docs' }).click();
     await sidebar(page).getByRole('button', { name: 'Reference' }).click();
     await sidebar(page).getByRole('link', { name: 'Keyboard Shortcuts' }).click();
     await expect(page.getByRole('heading', { name: 'Keyboard Shortcuts', level: 1 })).toBeVisible();
@@ -71,18 +98,38 @@ test.describe('Docs sidebar navigation', () => {
 });
 
 test.describe('Learn sidebar navigation', () => {
-  test.beforeEach(async ({ page }) => {
+  test('Tutorials link navigates to tutorials overview', async ({ page }) => {
     await page.goto('/');
     await nav(page).getByRole('link', { name: 'Learn' }).click();
+    await sidebar(page).getByRole('link', { name: 'Tutorials' }).click();
+    await expect(page.getByRole('heading', { name: 'Tutorials', level: 1 })).toBeVisible();
   });
 
-  test('navigates into Tutorials and to Committing Changes', async ({ page }) => {
+  test('Committing Changes link is visible after navigating into Tutorials', async ({ page }) => {
+    await page.goto('/');
+    await nav(page).getByRole('link', { name: 'Learn' }).click();
+    await sidebar(page).getByRole('link', { name: 'Tutorials' }).click();
+    await expect(sidebar(page).getByRole('link', { name: 'Committing Changes' })).toBeVisible();
+  });
+
+  test('Committing Changes link navigates to committing changes page', async ({ page }) => {
+    await page.goto('/');
+    await nav(page).getByRole('link', { name: 'Learn' }).click();
     await sidebar(page).getByRole('link', { name: 'Tutorials' }).click();
     await sidebar(page).getByRole('link', { name: 'Committing Changes' }).click();
     await expect(page.getByRole('heading', { name: 'Committing Changes', level: 1 })).toBeVisible();
   });
 
-  test('navigates into How-To and to Pushing to Remote', async ({ page }) => {
+  test('How-To link navigates to how-to overview', async ({ page }) => {
+    await page.goto('/');
+    await nav(page).getByRole('link', { name: 'Learn' }).click();
+    await sidebar(page).getByRole('link', { name: 'How-To' }).click();
+    await expect(page.getByRole('heading', { name: 'How-To', level: 1 })).toBeVisible();
+  });
+
+  test('Pushing to Remote link navigates to pushing to remote page', async ({ page }) => {
+    await page.goto('/');
+    await nav(page).getByRole('link', { name: 'Learn' }).click();
     await sidebar(page).getByRole('link', { name: 'How-To' }).click();
     await sidebar(page).getByRole('link', { name: 'Pushing to Remote' }).click();
     await expect(page.getByRole('heading', { name: 'Pushing to Remote', level: 1 })).toBeVisible();
@@ -114,21 +161,20 @@ test.describe('Cross-section navigation', () => {
 });
 
 test.describe('Footer navigation', () => {
-  test.beforeEach(async ({ page }) => {
+  test('Getting Started link navigates to installation page', async ({ page }) => {
     await page.goto('/');
-  });
-
-  test('Getting Started footer link navigates to installation page', async ({ page }) => {
     await footer(page).getByRole('link', { name: 'Getting Started' }).click();
     await expect(page.getByRole('heading', { name: 'Installation and Quickstart', level: 1 })).toBeVisible();
   });
 
-  test('Learn footer link navigates to learn section', async ({ page }) => {
+  test('Learn link navigates to learn section', async ({ page }) => {
+    await page.goto('/');
     await footer(page).getByRole('link', { name: 'Learn' }).click();
     await expect(page.getByRole('heading', { name: 'Learn', level: 1 })).toBeVisible();
   });
 
-  test('GitHub footer link points to the correct repo', async ({ page }) => {
+  test('GitHub link points to the correct repo', async ({ page }) => {
+    await page.goto('/');
     await expect(footer(page).getByRole('link', { name: 'GitHub' }))
       .toHaveAttribute('href', 'https://github.com/Ziinc/treq');
   });
