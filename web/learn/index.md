@@ -11,4 +11,4 @@ AI agents are improving fast. Keeping up with AI-assisted software development, 
 - **[Tutorials](/learn/tutorials)**: step-by-step walkthroughs for common Treq tasks.
 - **[How-To](/learn/how-to)**: short task-focused guides for specific operations.
 
-For product documentation and getting started, see [Guides](/docs/guides).
+To learn more about Treq and how the product works for the software development cycle, refer to the [Product Documentation overview](/docs/).
