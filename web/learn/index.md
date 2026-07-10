@@ -8,7 +8,7 @@ AI agents are improving fast. Keeping up with AI-assisted software development, 
 
 - **[Concepts](/learn/concepts)**: core ideas: coding agents, human-in-the-loop development, AI code review, Git worktrees, stacked PRs, and more.
 - **[Workflows](/learn/workflows)**: goal-oriented guides for the software development workflow, with walkthroughs on how to incorporate AI into your daily work.
-- **[Tutorials](/learn/tutorials)**: step-by-step walkthroughs for common Treq tasks.
+- **[Tutorials](/learn/tutorials)**: guided walkthroughs for setting up AI coding tools and completing your first workflow with them.
 - **[How-To](/learn/how-to)**: short task-focused guides for specific operations.
 
 To learn more about Treq and how the product works for the software development cycle, refer to the [Product Documentation overview](/docs/).
