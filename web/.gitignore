@@ -28,4 +28,4 @@ yarn-error.log*
 /static/site-*.db
 /static/search-meta.json
 /static/sqlite.worker.js
-/static/sql-wasm.wasm
+/static/sql-wasm-browser.wasm

@@ -86,10 +86,10 @@ async function main() {
       JSON.stringify({ url: `/${hashedName}` }),
     );
 
-    // Copy sql.js WASM so the browser can load it at /sql-wasm.wasm
+    // Copy sql.js browser WASM so the browser can load it at /sql-wasm-browser.wasm
     copyFileSync(
-      join(webRoot, 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
-      join(webRoot, 'static', 'sql-wasm.wasm'),
+      join(webRoot, 'node_modules', 'sql.js', 'dist', 'sql-wasm-browser.wasm'),
+      join(webRoot, 'static', 'sql-wasm-browser.wasm'),
     );
     console.log(`Search index built: ${hashedPath} (${files.length} docs)`);
   });
