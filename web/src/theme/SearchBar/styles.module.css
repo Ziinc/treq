@@ -81,3 +81,19 @@
   color: var(--ifm-color-primary);
   font-weight: 600;
 }
+
+.seeAll {
+  display: block;
+  padding: 8px 14px;
+  font-size: 0.8rem;
+  color: var(--ifm-color-primary);
+  text-align: center;
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  text-decoration: none;
+}
+
+.seeAll:hover {
+  background: var(--ifm-color-emphasis-100);
+  text-decoration: none;
+  color: var(--ifm-color-primary);
+}

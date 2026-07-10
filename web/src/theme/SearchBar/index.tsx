@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import BrowserOnly from '@docusaurus/BrowserOnly';
 import Link from '@docusaurus/Link';
+import { useHistory } from '@docusaurus/router';
 import styles from './styles.module.css';
 
 type SearchResult = {
@@ -17,11 +18,20 @@ async function getWorker(): Promise<DbWorker> {
   if (workerInstance) return workerInstance;
   const { createDbWorker } = await import('sql.js-httpvfs');
   workerInstance = await createDbWorker(
-    [{ from: 'url', config: { serverMode: 'full', url: '/site.db', requestChunkSize: 1024 } }],
+    [{ from: 'inline', config: { serverMode: 'full', url: '/site.db', requestChunkSize: 1024 } }],
     '/sqlite.worker.js',
     '/sql-wasm.wasm',
   );
   return workerInstance;
+}
+
+async function queryDocs(q: string): Promise<SearchResult[]> {
+  const worker = await getWorker();
+  return worker.db.query<SearchResult>(
+    `SELECT title, url, snippet(docs_fts, 1, '<mark>', '</mark>', '…', 20) AS excerpt
+     FROM docs_fts WHERE docs_fts MATCH ? LIMIT 8`,
+    q + '*',
+  );
 }
 
 function SearchBarInner() {
@@ -30,21 +40,12 @@ function SearchBarInner() {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const history = useHistory();
 
   const runQuery = useCallback(async (q: string) => {
     if (!q.trim()) { setResults([]); setOpen(false); return; }
     try {
-      const worker = await getWorker();
-      const res = await worker.db.query(
-        `SELECT title, url, snippet(docs_fts, 1, '<mark>', '</mark>', '…', 20) AS excerpt
-         FROM docs_fts WHERE docs_fts MATCH ? LIMIT 8`,
-        [q + '*'],
-      );
-      const rows = (res as { columns: string[]; values: unknown[][] }).values.map(row => ({
-        title: row[0] as string,
-        url: row[1] as string,
-        excerpt: row[2] as string,
-      }));
+      const rows = await queryDocs(q);
       setResults(rows);
       setOpen(rows.length > 0);
     } catch {
@@ -72,6 +73,13 @@ function SearchBarInner() {
     };
   }, []);
 
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' && query.trim()) {
+      setOpen(false);
+      history.push(`/search?q=${encodeURIComponent(query.trim())}`);
+    }
+  }
+
   return (
     <div className={styles.container} ref={containerRef}>
       <input
@@ -80,6 +88,7 @@ function SearchBarInner() {
         placeholder="Search docs…"
         value={query}
         onChange={e => setQuery(e.target.value)}
+        onKeyDown={handleKeyDown}
         onFocus={() => { if (results.length > 0) setOpen(true); }}
         aria-label="Search documentation"
       />
@@ -101,6 +110,15 @@ function SearchBarInner() {
               )}
             </Link>
           ))}
+          {query.trim() && (
+            <Link
+              to={`/search?q=${encodeURIComponent(query.trim())}`}
+              className={styles.seeAll}
+              onClick={() => setOpen(false)}
+            >
+              See all results for "{query}"
+            </Link>
+          )}
         </div>
       )}
     </div>
