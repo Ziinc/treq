@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 /**
- * Fetches GitHub releases for Ziinc/treq and generates:
- *   web/static/changelog.json  — intermediate structured data
+ * Fetches published GitHub releases for Ziinc/treq and generates:
  *   web/src/pages/changelog.md — standalone page served at /changelog
  *
  * Usage:
@@ -9,7 +8,7 @@
  *   GITHUB_TOKEN=ghp_xxx node scripts/generate-changelog.mjs
  */
 
-import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,7 +19,6 @@ const REPO = 'Ziinc/treq';
 const API_BASE = 'https://api.github.com';
 const PER_PAGE = 100;
 
-const JSON_OUT = resolve(ROOT, 'web/static/changelog.json');
 const MD_OUT = resolve(ROOT, 'web/src/pages/changelog.md');
 
 // ── GitHub API ────────────────────────────────────────────────────────────────
@@ -36,17 +34,7 @@ function headers() {
   return h;
 }
 
-function loadKnownVersions() {
-  if (!existsSync(JSON_OUT)) return new Set();
-  try {
-    const existing = JSON.parse(readFileSync(JSON_OUT, 'utf8'));
-    return new Set(existing.map(e => e.version));
-  } catch {
-    return new Set();
-  }
-}
-
-async function fetchReleases(knownVersions) {
+async function fetchReleases() {
   const releases = [];
   let page = 1;
 
@@ -61,15 +49,8 @@ async function fetchReleases(knownVersions) {
 
     const batch = await res.json();
     if (batch.length === 0) break;
-
-    // GitHub returns releases newest-first. Stop as soon as we hit a version
-    // that's already in the JSON so we don't re-fetch the entire history.
-    let done = false;
-    for (const release of batch) {
-      if (knownVersions.has(release.tag_name)) { done = true; break; }
-      releases.push(release);
-    }
-    if (done || batch.length < PER_PAGE) break;
+    releases.push(...batch);
+    if (batch.length < PER_PAGE) break;
     page++;
   }
 
@@ -132,27 +113,16 @@ function buildMarkdown(entries) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const knownVersions = loadKnownVersions();
-  console.log(`Fetching releases for ${REPO}… (${knownVersions.size} already cached)`);
+  console.log(`Fetching releases for ${REPO}…`);
 
-  const existingEntries = knownVersions.size > 0
-    ? JSON.parse(readFileSync(JSON_OUT, 'utf8'))
-    : [];
-
-  const raw = await fetchReleases(knownVersions);
-  const newEntries = raw.filter(r => !r.draft).map(toEntry);
-
-  console.log(`  ${newEntries.length} new release(s) fetched`);
-
-  const entries = [...newEntries, ...existingEntries]
+  const raw = await fetchReleases();
+  const entries = raw
+    .filter(r => !r.draft)
+    .map(toEntry)
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
-  // Write JSON
-  mkdirSync(dirname(JSON_OUT), { recursive: true });
-  writeFileSync(JSON_OUT, JSON.stringify(entries, null, 2) + '\n', 'utf8');
-  console.log(`  Written: ${JSON_OUT}`);
+  console.log(`  ${entries.length} release(s) fetched`);
 
-  // Write markdown
   mkdirSync(dirname(MD_OUT), { recursive: true });
   writeFileSync(MD_OUT, buildMarkdown(entries), 'utf8');
   console.log(`  Written: ${MD_OUT}`);
