@@ -30,7 +30,7 @@ async function getWorker(): Promise<DbWorker> {
 
 function SearchResults({ query }: { query: string }) {
   const [results, setResults] = useState<SearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => !!query.trim());
   const [searched, setSearched] = useState(false);
 
   useEffect(() => {
