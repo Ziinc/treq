@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Layout from '@theme/Layout';
 import Link from '@docusaurus/Link';
 import BrowserOnly from '@docusaurus/BrowserOnly';
-import { queryDocs, type SearchResult } from '@site/src/utils/searchDb';
+import { getDb, execSearch, type SearchResult } from '@site/src/utils/searchDb';
 import styles from './search.module.css';
 
 function SearchResults({ query }: { query: string }) {
@@ -14,8 +14,8 @@ function SearchResults({ query }: { query: string }) {
     if (!query.trim()) return;
     setLoading(true);
     setSearched(false);
-    queryDocs(query)
-      .then(rows => { setResults(rows); setSearched(true); })
+    getDb()
+      .then(db => { setResults(execSearch(db, query)); setSearched(true); })
       .catch(err => { console.error('[Search] query failed:', err); setResults([]); setSearched(true); })
       .finally(() => setLoading(false));
   }, [query]);

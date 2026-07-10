@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import BrowserOnly from '@docusaurus/BrowserOnly';
 import Link from '@docusaurus/Link';
 import { useHistory } from '@docusaurus/router';
-import { preWarm, queryDocs, type SearchResult } from '@site/src/utils/searchDb';
+import { preWarm, getDb, execSearch, type SearchResult } from '@site/src/utils/searchDb';
 import styles from './styles.module.css';
 
 function SearchBarInner() {
@@ -16,7 +16,8 @@ function SearchBarInner() {
   const runQuery = useCallback(async (q: string) => {
     if (!q.trim()) { setResults([]); setOpen(false); return; }
     try {
-      const rows = await queryDocs(q);
+      const db = await getDb();
+      const rows = execSearch(db, q);
       setResults(rows);
       setOpen(rows.length > 0);
     } catch (err) {

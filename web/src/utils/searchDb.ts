@@ -1,9 +1,11 @@
 // Fetch the SQLite DB once as a binary blob and query it with sql.js in-memory.
-// Lazy: init only when preWarm() or query() is first called.
+// Lazy: init only when preWarm() or getDb() is first called.
 
-let dbPromise: Promise<import('sql.js').Database> | null = null;
+import type { Database } from 'sql.js';
 
-function init(): Promise<import('sql.js').Database> {
+let dbPromise: Promise<Database> | null = null;
+
+export function getDb(): Promise<Database> {
   if (!dbPromise) {
     dbPromise = (async () => {
       const [{ url }, initSqlJs] = await Promise.all([
@@ -21,15 +23,14 @@ function init(): Promise<import('sql.js').Database> {
 }
 
 export function preWarm(): void {
-  init().catch(() => {});
+  getDb().catch(() => {});
 }
 
 export type SearchResult = { title: string; url: string; excerpt: string };
 
-export async function queryDocs(q: string): Promise<SearchResult[]> {
+export function execSearch(db: Database, q: string): SearchResult[] {
   const term = q.trim().split(/\s+/).filter(Boolean).map(w => `${w}*`).join(' ');
   if (!term) return [];
-  const db = await init();
   const res = db.exec(
     `SELECT highlight(docs_fts, 0, '<mark>', '</mark>') AS title,
             url,
