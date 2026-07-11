@@ -1,6 +1,7 @@
 import type {ReactNode} from 'react';
 import clsx from 'clsx';
 import Link from '@docusaurus/Link';
+import Head from '@docusaurus/Head';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import Heading from '@theme/Heading';
@@ -12,6 +13,11 @@ import styles from './index.module.css';
 function HomepageHeader() {
   return (
     <header className={styles.heroBanner} aria-label="Hero">
+      <Head>
+        {/* Preload the LCP element so the browser can discover and fetch it
+            before the JS bundle parses, at the highest network priority. */}
+        <link rel="preload" as="image" href={codeScreenshot} fetchPriority="high" />
+      </Head>
       <div className={styles.heroGlow}></div>
       <div className={styles.heroContainer}>
         <div className={styles.heroVisual}>
@@ -19,6 +25,12 @@ function HomepageHeader() {
             className={styles.heroScreenshot}
             src={codeScreenshot}
             alt="Treq code overview screenshot"
+            width={2794}
+            height={1798}
+            // This is the LCP element: eager, high priority, no lazy-loading.
+            loading="eager"
+            decoding="async"
+            fetchPriority="high"
           />
         </div>
 
@@ -138,6 +150,10 @@ function FeaturesSection(): ReactNode {
               className={styles.featureImage}
               src={reviewScreenshot}
               alt="Treq code review screenshot showing comments sent to Claude"
+              width={2382}
+              height={1749}
+              loading="lazy"
+              decoding="async"
             />
           </div>
         </div>

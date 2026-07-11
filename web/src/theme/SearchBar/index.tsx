@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import BrowserOnly from '@docusaurus/BrowserOnly';
 import Link from '@docusaurus/Link';
 import { useHistory } from '@docusaurus/router';
-import { preWarm, getDb, execSearch, type SearchResult } from '@site/src/utils/searchDb';
-import { useSearchDb } from '@site/src/utils/SearchDbContext';
+import { getDb, execSearch, type SearchResult } from '@site/src/utils/searchDb';
+import { useSearchDb, useSetSearchDb } from '@site/src/utils/SearchDbContext';
 import styles from './styles.module.css';
 
 function SearchBarInner() {
@@ -13,12 +13,13 @@ function SearchBarInner() {
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const db = useSearchDb();
+  const setDb = useSetSearchDb();
   const history = useHistory();
 
   const runQuery = useCallback(async (q: string) => {
     if (!q.trim()) { setResults([]); setOpen(false); return; }
     try {
-      const resolvedDb = db ?? await getDb();
+      const resolvedDb = db ?? await getDb().then(loaded => { setDb(loaded); return loaded; });
       const rows = execSearch(resolvedDb, q);
       setResults(rows);
       setOpen(rows.length > 0);
@@ -65,7 +66,7 @@ function SearchBarInner() {
         onChange={e => setQuery(e.target.value)}
         onKeyDown={handleKeyDown}
         onFocus={() => {
-          preWarm();
+          if (!db) getDb().then(setDb).catch(() => {});
           if (results.length > 0) setOpen(true);
         }}
         aria-label="Search..."
