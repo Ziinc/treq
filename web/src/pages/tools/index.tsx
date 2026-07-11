@@ -20,6 +20,14 @@ const tools = [
     icon: '🔀',
     tags: ['ai', 'workflow', 'dag'],
   },
+  {
+    name: 'Gherkin BDD Editor',
+    slug: 'gherkin-editor',
+    description:
+      'Write BDD specs using a structured form. Organise features and scenarios, then export to .feature files. Saved locally in your browser.',
+    icon: '🥒',
+    tags: ['bdd', 'testing', 'gherkin'],
+  },
 ];
 
 export default function ToolsPage() {
