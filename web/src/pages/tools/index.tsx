@@ -53,6 +53,14 @@ const tools = [
     icon: '🦆',
     tags: ['fun', 'debugging', 'rubber-duck'],
   },
+  {
+    name: 'PRD Creator',
+    slug: 'prd-creator',
+    description:
+      'Write structured Product Requirements Documents from a guided template. Autosaved locally, exportable as PNG or Markdown.',
+    icon: '📋',
+    tags: ['product', 'planning', 'prd'],
+  },
 ];
 
 const TOOLS_SCHEMA = {
