@@ -111,6 +111,11 @@ const config: Config = {
           label: 'Docs',
         },
         {
+          to: '/tools',
+          label: 'Tools',
+          position: 'left',
+        },
+        {
           to: '/changelog',
           label: 'Changelog',
           position: 'left',
