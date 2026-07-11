@@ -6,6 +6,6 @@ import DocCardList from '@theme/DocCardList';
 
 # Concepts
 
-Evergreen reference material on the engineering practices and tools that Treq is built around — AI-assisted development and Git workflows.
+Reference material on the engineering practices and tools that Treq is built around — AI-assisted development and Git workflows.
 
 <DocCardList />

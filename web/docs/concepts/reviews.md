@@ -44,5 +44,5 @@ Reviews are local by default. Comments, file review progress, and review status 
 
 ## Learn More
 
-- [Code Review Workflow](/learn/tutorials/code-review-workflow)
+- [Code Review Workflow](/docs/tutorials/code-review-workflow)
 - [Workspaces](/docs/concepts/workspaces)
