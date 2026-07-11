@@ -142,10 +142,6 @@ const config: Config = {
               to: '/docs/getting-started/installation',
             },
             {
-              label: 'Getting Started',
-              to: '/docs/getting-started/installation',
-            },
-            {
               label: 'Learn',
               to: '/learn',
             },
