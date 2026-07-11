@@ -11,6 +11,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 const config: Config = {
   plugins: [
     require.resolve('./plugins/rawMarkdownPlugin'),
+    require.resolve('./plugins/versionPlugin'),
     [
       '@docusaurus/plugin-content-docs',
       {
