@@ -100,3 +100,24 @@ jobs:
                 body,
               });
             }
+
+  lighthouse:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Install lighthouse
+        run: npm install -g lighthouse
+      - name: Run Lighthouse against preview site
+        run: |
+          lighthouse "https://preview-${{ github.event.pull_request.number }}.treq-9zy.pages.dev" \
+            --output html \
+            --output-path /tmp/lighthouse-report.html \
+            --chrome-flags="--headless --no-sandbox --disable-dev-shm-usage" \
+            --quiet
+      - name: Upload Lighthouse report
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-report
+          path: /tmp/lighthouse-report.html
+          retention-days: 30
