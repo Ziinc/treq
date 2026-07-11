@@ -22,12 +22,12 @@ test.describe('Tools index (/tools)', () => {
 
   test('Branch Visualizer card navigates to the tool', async ({ page }) => {
     await page.getByRole('link', { name: /Branch Visualizer/ }).click();
-    await expect(page).toHaveURL(/\/tools\/branch-visualizer/);
+    await expect(page.getByRole('heading', { name: 'Branch Visualizer', level: 1 })).toBeVisible();
   });
 
   test('DAG Visualizer card navigates to the tool', async ({ page }) => {
     await page.getByRole('link', { name: /DAG Visualizer/ }).click();
-    await expect(page).toHaveURL(/\/tools\/dag-visualizer/);
+    await expect(page.getByRole('heading', { name: 'DAG Visualizer', level: 1 })).toBeVisible();
   });
 });
 
