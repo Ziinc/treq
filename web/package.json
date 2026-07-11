@@ -28,6 +28,7 @@
     "prism-react-renderer": "^2.4.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "roughjs": "^4.6.6",
     "sql.js": "^1.14.1",
     "sql.js-httpvfs": "^0.8.12"
   },
