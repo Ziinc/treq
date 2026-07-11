@@ -7,6 +7,7 @@ on:
     paths:
       - "web/**"
       - ".github/workflows/deploy-web.yml"
+      - ".github/workflows/web-ci.yml"
       - ".github/scripts/check_readability.py"
 
 defaults:
