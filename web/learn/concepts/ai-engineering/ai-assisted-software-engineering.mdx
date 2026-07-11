@@ -31,11 +31,19 @@ Read on if you are a developer or vibe-coder looking to integrate more AI toolin
 
 ## Understanding the Concept
 
-The mental model that matters most here is augmentation, not replacement. AI-assisted software engineering works by offloading the mechanical labour of software production — typing out boilerplate, converting a spec into a test, reformatting code to a new convention — to a model, while leaving judgment, architecture, and intent to the human. The human role shifts from producing every line to specifying, directing, reviewing, and integrating.
+The mental model that matters most here is augmentation, not replacement. AI-assisted software engineering works by offloading the mechanical labour of software production to a model, while leaving judgment, architecture, and intent to the human. We can say goodbye to manual work like typing out boilerplate code, implementing glue code for integrations, converting user stories into unit tests, reformatting code to match a style guide or linter... All these are things from the past, so long as your AI-budget has space for the prompts. The developer's role shifts from the actor in the movie to the director orchestrating the AI actors, delegating impleemntation plans, refining and reviewing output, and finally coordinating all in-flight work.
 
-AI code generation works by predicting tokens. A large language model trained on vast amounts of code learns statistical patterns: what tends to follow a function signature, how an API call is typically structured, what a test for a given pattern looks like. When you describe a task, the model generates the most plausible continuation of your prompt. This is powerful but important to understand correctly — the model is not reasoning about correctness, it is predicting plausibility. Code that looks right is not the same as code that is right.
+AI code generation works by predicting text, which to a large language model is referred to as tokens. A large language model trained on vast amounts of code learns statistical patterns, as well as both good and bad patterns. When you describe a task, the model generates the most plausible continuation of your prompt. This is powerful but important to understand correctly — the model is not performing logical reasoning about correctness, it is predicting plausibility. Code that **looks** right is not the same as code that **is** right, and that is where many misunderstand or over-estimate the capabilities of AI as of today. Given the mountains of open-source repositories available for model creators to utilize, it is to be expected that models are also trained on poor quality code, and without sufficient guidance on what not to do, a model will predict based on frequency and semantic association.
 
-The spectrum of AI participation runs across four rough levels. At the least autonomous end, autocomplete tools predict the next token or line as you type — GitHub Copilot inline suggestions are the canonical example. One step up, chat and Q&A tools answer questions about the codebase or generate code on request, but the developer controls integration. Further along, task-execution tools accept a high-level goal and produce a full implementation across multiple files, which the developer then reviews. At the most autonomous end, agents plan, implement, run tests, and iterate without step-by-step human direction. Most teams use several points on this spectrum simultaneously.
+AI intergation into everyday workflows span across runs across four rough levels. 
+
+From least autonomous, we have the autocompletion tooling, where AI predicts the next text or lines to change as you type — GitHub Copilot inline suggestions are the canonical example. 
+
+Next, chat and Q&A tools answer questions about the codebase or generate code on request, but the developer controls integration. 
+
+Further along, task-execution tools accept a high-level goal and produce a full implementation across multiple files, which the developer then reviews. 
+
+At the extreme autonomous end, agents plan, implement, run tests, and iterate without step-by-step human direction. A good example  of this is Claude Code in full-auto mode.
 
 Where AI fits across the development lifecycle:
 
@@ -80,7 +88,7 @@ At larger team sizes, consistency becomes a concern. Different developers prompt
 
 ## Next Steps
 
-- [What are Coding Agents?](./coding-agents) — understand the autonomous end of the spectrum and how agents plan and execute multi-step tasks
-- [What is Human-in-the-Loop Development?](./human-in-the-loop-development) — the review layer that keeps AI output safe to ship
-- [What is AI Code Review?](./ai-code-review) — applying AI to the review phase of the development cycle
-- [AI Feature Development Workflow](/learn/workflows/ai/ai-feature-development) — a practical workflow for using AI agents to build features end to end
+- [What are Coding Agents?](./coding-agents): understand the autonomous end of the spectrum and how agents plan and execute multi-step tasks
+- [What is Human-in-the-Loop Development?](./human-in-the-loop-development): the review layer that keeps AI output safe to ship
+- [What is AI Code Review?](./ai-code-review): applying AI to the review phase of the development cycle
+- [AI Feature Development Workflow](/learn/workflows/ai/ai-feature-development): a practical workflow for using AI agents to build features end to end
