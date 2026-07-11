@@ -217,7 +217,7 @@ function stateToEdges(s: SerializedState): Edge[] {
 
 function WorkflowNode({ data, selected }: NodeProps<WorkflowNode>) {
   return (
-    <div className={`${styles.node} ${selected ? styles.nodeSelected : ''}`}>
+    <div data-testid="dag-node" className={`${styles.node} ${selected ? styles.nodeSelected : ''}`}>
       <Handle type="target" position={Position.Left} className={styles.handle} />
 
       <div className={styles.nodeHeader}>

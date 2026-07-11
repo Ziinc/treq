@@ -4,7 +4,8 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Tools index (/tools)', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/tools');
+    await page.goto('/');
+    await page.getByRole('link', { name: 'Tools' }).click();
   });
 
   test('renders page heading', async ({ page }) => {
@@ -21,12 +22,12 @@ test.describe('Tools index (/tools)', () => {
 
   test('Branch Visualizer card navigates to the tool', async ({ page }) => {
     await page.getByRole('link', { name: /Branch Visualizer/ }).click();
-    await expect(page).toHaveURL(/\/tools\/branch-visualizer/);
+    await expect(page.getByRole('heading', { name: 'Branch Visualizer', level: 1 })).toBeVisible();
   });
 
   test('DAG Visualizer card navigates to the tool', async ({ page }) => {
     await page.getByRole('link', { name: /DAG Visualizer/ }).click();
-    await expect(page).toHaveURL(/\/tools\/dag-visualizer/);
+    await expect(page.getByRole('heading', { name: 'DAG Visualizer', level: 1 })).toBeVisible();
   });
 });
 
@@ -34,7 +35,9 @@ test.describe('Tools index (/tools)', () => {
 
 test.describe('Branch Visualizer (/tools/branch-visualizer)', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/tools/branch-visualizer');
+    await page.goto('/');
+    await page.getByRole('link', { name: 'Tools' }).click();
+    await page.getByRole('link', { name: /Branch Visualizer/ }).click();
   });
 
   test('renders the page title', async ({ page }) => {
@@ -104,9 +107,11 @@ test.describe('Branch Visualizer (/tools/branch-visualizer)', () => {
 
 test.describe('DAG Visualizer (/tools/dag-visualizer)', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/tools/dag-visualizer');
+    await page.goto('/');
+    await page.getByRole('link', { name: 'Tools' }).click();
+    await page.getByRole('link', { name: /DAG Visualizer/ }).click();
     // BrowserOnly renders React Flow on the client; wait for nodes to appear
-    await page.waitForSelector('.react-flow__node', { timeout: 15_000 });
+    await page.getByTestId('dag-node').first().waitFor({ timeout: 15_000 });
   });
 
   test('renders the page title', async ({ page }) => {
@@ -116,7 +121,7 @@ test.describe('DAG Visualizer (/tools/dag-visualizer)', () => {
   });
 
   test('renders the default 6 workflow nodes', async ({ page }) => {
-    await expect(page.locator('.react-flow__node')).toHaveCount(6);
+    await expect(page.getByTestId('dag-node')).toHaveCount(6);
   });
 
   test('shows expected node labels from the default workflow', async ({ page }) => {
@@ -132,18 +137,18 @@ test.describe('DAG Visualizer (/tools/dag-visualizer)', () => {
   });
 
   test('Add node button inserts a new node', async ({ page }) => {
-    const before = await page.locator('.react-flow__node').count();
+    const before = await page.getByTestId('dag-node').count();
     await page.getByRole('button', { name: /Add node/i }).click();
-    await expect(page.locator('.react-flow__node')).toHaveCount(before + 1, { timeout: 5_000 });
+    await expect(page.getByTestId('dag-node')).toHaveCount(before + 1, { timeout: 5_000 });
   });
 
   test('clicking a node opens the detail panel', async ({ page }) => {
-    await page.locator('.react-flow__node').first().click();
+    await page.getByTestId('dag-node').first().click();
     await expect(page.getByText('Edit Node')).toBeVisible();
   });
 
   test('detail panel shows prompt textarea and skill input', async ({ page }) => {
-    await page.locator('.react-flow__node').first().click();
+    await page.getByTestId('dag-node').first().click();
     await expect(page.getByText('Edit Node')).toBeVisible();
     await expect(
       page.getByPlaceholder(/Describe what the AI agent should do/i),
@@ -152,7 +157,7 @@ test.describe('DAG Visualizer (/tools/dag-visualizer)', () => {
   });
 
   test('adding a skill to a node renders it in the panel', async ({ page }) => {
-    await page.locator('.react-flow__node').first().click();
+    await page.getByTestId('dag-node').first().click();
     await expect(page.getByText('Edit Node')).toBeVisible();
     await page.getByPlaceholder('/skill-name').fill('/my-custom-skill');
     // Press Enter to commit — same handler as the Add button, no button ambiguity
@@ -161,7 +166,7 @@ test.describe('DAG Visualizer (/tools/dag-visualizer)', () => {
   });
 
   test('closing the detail panel via the ✕ button hides it', async ({ page }) => {
-    await page.locator('.react-flow__node').first().click();
+    await page.getByTestId('dag-node').first().click();
     await expect(page.getByText('Edit Node')).toBeVisible();
     await page.getByRole('button', { name: 'Close panel' }).click();
     await expect(page.getByText('Edit Node')).not.toBeVisible();
@@ -170,8 +175,8 @@ test.describe('DAG Visualizer (/tools/dag-visualizer)', () => {
   test('Format button re-arranges nodes without crashing', async ({ page }) => {
     await page.getByRole('button', { name: /Format/i }).click();
     // All nodes should still be present after the dagre layout runs
-    await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 5_000 });
-    await expect(page.locator('.react-flow__node')).toHaveCount(6);
+    await expect(page.getByTestId('dag-node').first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('dag-node')).toHaveCount(6);
   });
 
   test('graph state is serialised into the URL', async ({ page }) => {
