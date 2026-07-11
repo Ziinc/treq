@@ -23,6 +23,9 @@ yarn-error.log*
 /test-results/
 /playwright-report/
 
+# Version endpoint (generated at build time)
+/static/version
+
 # Search index (generated at build time)
 /static/site.db
 /static/site-*.db
