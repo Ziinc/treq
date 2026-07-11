@@ -76,6 +76,8 @@ test.describe('Branch Visualizer (/tools/branch-visualizer)', () => {
 
   test('adding a branch increases the branch count', async ({ page }) => {
     const colorInputs = page.locator('input[type="color"]');
+    // Wait for hydration — default state renders color pickers for each branch
+    await colorInputs.first().waitFor();
     const before = await colorInputs.count();
     // First "+ Add" button belongs to the Branch editor
     await page.getByRole('button', { name: '+ Add' }).first().click();
@@ -84,6 +86,8 @@ test.describe('Branch Visualizer (/tools/branch-visualizer)', () => {
 
   test('adding a commit increases the commit count', async ({ page }) => {
     const idInputs = page.locator('input[placeholder="id"]');
+    // Wait for hydration — default state renders id inputs for each commit
+    await idInputs.first().waitFor();
     const before = await idInputs.count();
     // Second "+ Add" button belongs to the Commit editor
     await page.getByRole('button', { name: '+ Add' }).nth(1).click();
