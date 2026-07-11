@@ -269,6 +269,109 @@
   display: block;
 }
 
+/* ── Import panel ────────────────────────────────────────────────────────────── */
+
+.importPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.6rem 0 0.2rem;
+}
+
+.importTabs {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.importTab {
+  font-size: 0.75rem;
+  padding: 3px 10px;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ifm-color-emphasis-600);
+  cursor: pointer;
+  font-family: monospace;
+}
+
+.importTabActive {
+  background: var(--ifm-color-primary);
+  color: white;
+  border-color: var(--ifm-color-primary);
+}
+
+.importHint {
+  font-size: 0.75rem;
+  color: var(--ifm-color-emphasis-600);
+  margin: 0.2rem 0 0.1rem;
+}
+
+.importCommands {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.importCmd {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: var(--ifm-background-color);
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 5px;
+  padding: 3px 6px;
+  overflow: hidden;
+}
+
+.importCmdText {
+  font-size: 0.7rem;
+  font-family: monospace;
+  color: var(--ifm-font-color-base);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.importCmdCopy {
+  font-size: 0.85rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--ifm-color-primary);
+  padding: 0 2px;
+  flex-shrink: 0;
+}
+
+.importCmdCopy:hover {
+  opacity: 0.7;
+}
+
+.importTextarea {
+  width: 100%;
+  font-size: 0.75rem;
+  font-family: monospace;
+  padding: 6px 8px;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 5px;
+  background: var(--ifm-background-color);
+  color: var(--ifm-font-color-base);
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.importTextarea:focus {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 1px;
+}
+
+.importError {
+  font-size: 0.75rem;
+  color: #ef4444;
+  margin: 0;
+}
+
 /* ── Toast ──────────────────────────────────────────────────────────────────── */
 
 .toast {

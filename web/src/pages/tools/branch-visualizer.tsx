@@ -4,6 +4,7 @@ import { useHistory, useLocation } from '@docusaurus/router';
 import rough from 'roughjs';
 import type { RoughSVG } from 'roughjs/bin/svg';
 import styles from './branch-visualizer.module.css';
+import { parseGitLog, parseJjLog } from './branch-visualizer-parser';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -392,6 +393,106 @@ function CommitEditor({
   );
 }
 
+// ── Import from git / jj ─────────────────────────────────────────────────────
+
+type VcsMode = 'git' | 'jj';
+
+const GIT_PIPE_CMD = 'git log --all --format="%h|%P|%D|%s"';
+const GIT_GRAPH_CMD = 'git log --all --oneline --graph --decorate';
+const JJ_PIPE_CMD =
+  'jj log --no-graph -T \'change_id.short() ++ "|" ++ parents.map(|p| p.change_id.short()).join(" ") ++ "|" ++ bookmarks.map(|b| b.name()).join(",") ++ "|" ++ description.first_line() ++ "\\n"\'';
+const JJ_VISUAL_CMD = 'jj log';
+
+function ImportPanel({ onImport }: { onImport: (state: GraphState) => void }) {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<VcsMode>('git');
+  const [text, setText] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const handleImport = () => {
+    setError(null);
+    const { state, warnings } = mode === 'git' ? parseGitLog(text) : parseJjLog(text);
+    if (state.commits.length === 0) {
+      setError(warnings[0] ?? 'No commits found in input.');
+      return;
+    }
+    onImport(state);
+    setOpen(false);
+    setText('');
+  };
+
+  const copyCmd = (cmd: string) => navigator.clipboard.writeText(cmd);
+
+  return (
+    <div className={styles.section}>
+      <div className={styles.sectionHeader}>
+        <span className={styles.sectionTitle}>Import from git / jj</span>
+        <button className={styles.addBtn} onClick={() => setOpen((o) => !o)}>
+          {open ? '▲ Hide' : '▼ Show'}
+        </button>
+      </div>
+
+      {open && (
+        <div className={styles.importPanel}>
+          <div className={styles.importTabs}>
+            {(['git', 'jj'] as VcsMode[]).map((m) => (
+              <button
+                key={m}
+                className={`${styles.importTab} ${mode === m ? styles.importTabActive : ''}`}
+                onClick={() => { setMode(m); setText(''); setError(null); }}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+
+          {mode === 'git' && (
+            <div className={styles.importCommands}>
+              <p className={styles.importHint}>Run one of these commands and paste the output below:</p>
+              {[GIT_PIPE_CMD, GIT_GRAPH_CMD].map((cmd) => (
+                <div key={cmd} className={styles.importCmd}>
+                  <code className={styles.importCmdText}>{cmd}</code>
+                  <button className={styles.importCmdCopy} onClick={() => copyCmd(cmd)} title="Copy command">⎘</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {mode === 'jj' && (
+            <div className={styles.importCommands}>
+              <p className={styles.importHint}>Run one of these commands and paste the output below:</p>
+              {[JJ_PIPE_CMD, JJ_VISUAL_CMD].map((cmd) => (
+                <div key={cmd} className={styles.importCmd}>
+                  <code className={styles.importCmdText}>{cmd}</code>
+                  <button className={styles.importCmdCopy} onClick={() => copyCmd(cmd)} title="Copy command">⎘</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <textarea
+            className={styles.importTextarea}
+            placeholder={`Paste ${mode} log output here…`}
+            value={text}
+            onChange={(e) => { setText(e.target.value); setError(null); }}
+            rows={8}
+          />
+
+          {error && <p className={styles.importError}>{error}</p>}
+
+          <button
+            className={styles.addBtn}
+            onClick={handleImport}
+            disabled={!text.trim()}
+          >
+            Parse &amp; visualize
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Toast ─────────────────────────────────────────────────────────────────────
 
 function useToast() {
@@ -534,6 +635,8 @@ export default function BranchVisualizerPage() {
                 onChange={(e) => setGraphState((s) => ({ ...s, title: e.target.value }))}
               />
             </div>
+
+            <ImportPanel onImport={(state) => setGraphState(state)} />
 
             <BranchEditor
               branches={graphState.branches}
