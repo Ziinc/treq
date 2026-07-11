@@ -12,6 +12,14 @@ const tools = [
     icon: '🌿',
     tags: ['git', 'visualization'],
   },
+  {
+    name: 'DAG Visualizer',
+    slug: 'dag-visualizer',
+    description:
+      'Map AI-aided engineering workflows as interactive DAGs. Edit prompts and slash skills per node.',
+    icon: '🔀',
+    tags: ['ai', 'workflow', 'dag'],
+  },
 ];
 
 export default function ToolsPage() {
