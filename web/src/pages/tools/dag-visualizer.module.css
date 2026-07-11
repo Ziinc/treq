@@ -89,7 +89,7 @@
   border-color: var(--ifm-color-primary);
 }
 
-/* ── Custom Node ────────────────────────────────────────────────────────────── */
+/* ── Custom WorkflowNode ────────────────────────────────────────────────────── */
 
 .node {
   background: var(--ifm-background-surface-color);
@@ -125,6 +125,37 @@
   display: block;
 }
 
+/* ── Agent / model badges inside node header ─────────────────────────────── */
+
+.nodeMeta {
+  display: flex;
+  gap: 4px;
+  margin-top: 5px;
+  flex-wrap: wrap;
+}
+
+.nodeAgent {
+  font-size: 0.6rem;
+  font-family: monospace;
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-weight: 500;
+}
+
+.nodeModel {
+  font-size: 0.6rem;
+  font-family: monospace;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+/* ── Node body ───────────────────────────────────────────────────────────── */
+
 .nodePrompt {
   font-size: 0.75rem;
   color: var(--ifm-color-emphasis-700);
@@ -154,6 +185,44 @@
   height: 10px !important;
   background: #6366f1 !important;
   border: 2px solid #fff !important;
+}
+
+/* ── Group node ──────────────────────────────────────────────────────────── */
+
+.groupNode {
+  width: 100%;
+  height: 100%;
+  border: 2px dashed #6366f1;
+  border-radius: 12px;
+  background: rgba(99, 102, 241, 0.03);
+  box-sizing: border-box;
+  position: relative;
+}
+
+.groupNodeSelected {
+  border-color: #6366f1;
+  background: rgba(99, 102, 241, 0.06);
+}
+
+.groupLabel {
+  position: absolute;
+  top: 8px;
+  left: 14px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #6366f1;
+  pointer-events: none;
+  user-select: none;
+}
+
+.groupHandle {
+  width: 12px !important;
+  height: 12px !important;
+  background: #6366f1 !important;
+  border: 2px solid #fff !important;
+  z-index: 1;
 }
 
 /* ── Detail panel ────────────────────────────────────────────────────────────── */
@@ -270,6 +339,94 @@
 .fieldTextarea:focus {
   outline: 2px solid #6366f1;
   outline-offset: 1px;
+}
+
+.fieldSelect {
+  width: 100%;
+  font-size: 0.88rem;
+  padding: 6px 10px;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 6px;
+  background: var(--ifm-background-color);
+  color: var(--ifm-font-color-base);
+  font-family: inherit;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.fieldSelect:focus {
+  outline: 2px solid #6366f1;
+  outline-offset: 1px;
+}
+
+.fieldHint {
+  font-size: 0.78rem;
+  color: var(--ifm-color-emphasis-600);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ── Delegation toggle ───────────────────────────────────────────────────── */
+
+.toggleRow {
+  display: flex;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.toggleBtn {
+  flex: 1;
+  font-size: 0.83rem;
+  padding: 7px 12px;
+  border: none;
+  background: var(--ifm-background-color);
+  color: var(--ifm-color-emphasis-700);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s, color 0.12s;
+}
+
+.toggleBtn:not(:last-child) {
+  border-right: 1px solid var(--ifm-color-emphasis-300);
+}
+
+.toggleBtn:hover {
+  background: var(--ifm-color-emphasis-100);
+}
+
+.toggleBtnActive {
+  background: #6366f1 !important;
+  color: #fff !important;
+}
+
+.toggleBtnDelegate {
+  background: #f59e0b !important;
+  color: #fff !important;
+}
+
+/* ── Edge legend ─────────────────────────────────────────────────────────── */
+
+.edgeLegend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--ifm-color-emphasis-100);
+  border-radius: 7px;
+  margin-top: 4px;
+}
+
+.edgeLegendRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.78rem;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.edgeLegendRow svg {
+  flex-shrink: 0;
 }
 
 /* ── Skill tags ──────────────────────────────────────────────────────────────── */
@@ -425,7 +582,6 @@
 
 /* ── ReactFlow overrides ─────────────────────────────────────────────────────── */
 
-/* Ensure the flow fills its container */
 .flowContainer :global(.react-flow) {
   height: 100% !important;
 }
