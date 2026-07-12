@@ -10,6 +10,7 @@ import {
 	type WorkspaceDialogDefaults,
 } from "./UnifiedWorkspaceDialog";
 import { CommandPalette } from "./CommandPalette";
+import { GithubHoroscope } from "./GithubHoroscope";
 import { WorkspacePicker } from "./WorkspacePicker";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -94,6 +95,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	);
 	const [mergeWorkspace, setMergeWorkspace] = useState<Workspace | null>(null);
 	const [showCommandPalette, setShowCommandPalette] = useState(false);
+	const [showHoroscope, setShowHoroscope] = useState(false);
 	const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
 	const [showFilePicker, setShowFilePicker] = useState(false);
 	const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
@@ -1252,6 +1254,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				onCreateShellTerminal={() =>
 					terminalPaneRef.current?.createShellSession()
 				}
+				onOpenHoroscope={() => setShowHoroscope(true)}
 				hasSelectedWorkspace={!!selectedWorkspace}
 				showBranchSwitcher={showBranchSwitcher}
 				onBranchSwitcherChange={setShowBranchSwitcher}
@@ -1275,6 +1278,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				sessions={sessions}
 				workspaceChangeCounts={undefined}
 				onSelect={handleOpenSession}
+			/>
+
+			<GithubHoroscope
+				open={showHoroscope}
+				onClose={() => setShowHoroscope(false)}
 			/>
 		</div>
 	);

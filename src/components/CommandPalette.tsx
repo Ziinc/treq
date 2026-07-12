@@ -49,6 +49,7 @@ interface CommandPaletteProps {
 	onMaximizeTerminal?: () => void;
 	onCreateAgentTerminal?: (agent?: "claude" | "codex" | "cursor") => void;
 	onCreateShellTerminal?: () => void;
+	onOpenHoroscope?: () => void;
 	hasSelectedWorkspace: boolean;
 
 	// Branch Switcher
@@ -88,6 +89,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 	onMaximizeTerminal,
 	onCreateAgentTerminal,
 	onCreateShellTerminal,
+	onOpenHoroscope,
 	hasSelectedWorkspace,
 	showBranchSwitcher,
 	onBranchSwitcherChange,
@@ -239,6 +241,17 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 			}
 		}
 
+		if (onOpenHoroscope) {
+			result.push({
+				id: "github-horoscope",
+				type: "action",
+				label: "GitHub Horoscope",
+				description: "Reveal what the stars say about a GitHub profile",
+				icon: <Sparkles className="w-4 h-4" />,
+				onSelect: onOpenHoroscope,
+			});
+		}
+
 		// Wrap all onSelect handlers to close the dialog after execution
 		return result.map((item) => ({
 			...item,
@@ -259,6 +272,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 		onMaximizeTerminal,
 		onCreateAgentTerminal,
 		onCreateShellTerminal,
+		onOpenHoroscope,
 		repoPath,
 		hasSelectedWorkspace,
 		onCommandPaletteChange,
