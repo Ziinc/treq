@@ -28,6 +28,14 @@ const tools = [
     icon: '🥒',
     tags: ['bdd', 'testing', 'gherkin'],
   },
+  {
+    name: 'Vibe Idea Generator',
+    slug: 'vibe-idea-generator',
+    description:
+      'Throw buzzword-packed vibe coding ideas at the wall and see what sticks. A potato helps.',
+    icon: '🥔',
+    tags: ['fun', 'ideas', 'vibes'],
+  },
 ];
 
 export default function ToolsPage() {
