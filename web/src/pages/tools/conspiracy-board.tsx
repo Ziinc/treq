@@ -362,11 +362,11 @@ export default function ConspiracyBoardPage() {
   const [theories,     setTheories]     = useState<TheoryEntry[]>([]);
   const [isDragging,   setIsDragging]   = useState(false);
 
-  // Layout pins on mount / resize
+  // Layout pins on mount / resize — always in CSS pixel space
   const relayout = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    pinsRef.current = layoutPins(TECHS, canvas.width, canvas.height);
+    pinsRef.current = layoutPins(TECHS, canvas.clientWidth, canvas.clientHeight);
   }, []);
 
   useEffect(() => {
@@ -378,8 +378,6 @@ export default function ConspiracyBoardPage() {
       const dpr  = window.devicePixelRatio || 1;
       canvas.width  = rect.width  * dpr;
       canvas.height = rect.height * dpr;
-      const ctx = canvas.getContext('2d');
-      if (ctx) ctx.scale(dpr, dpr);
       relayout();
     };
     resize();
@@ -404,11 +402,9 @@ export default function ConspiracyBoardPage() {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       const dpr = window.devicePixelRatio || 1;
-      const w   = canvas.width  / dpr;
-      const h   = canvas.height / dpr;
-      ctx.save();
-      ctx.scale(1 / dpr * dpr, 1 / dpr * dpr); // reset
-      ctx.restore();
+      const w   = canvas.clientWidth;
+      const h   = canvas.clientHeight;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       drawBoard(ctx, w, h, pinsRef.current, connectionsSnap, hoverSnap, selectedSnap, draggingSnap, TECH_MAP, animOffset.current);
     };
     animRef.current = requestAnimationFrame(loop);
@@ -424,7 +420,6 @@ export default function ConspiracyBoardPage() {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
-    const dpr  = window.devicePixelRatio || 1;
     let cx: number, cy: number;
     if ('touches' in e) {
       cx = e.touches[0].clientX;
@@ -434,8 +429,8 @@ export default function ConspiracyBoardPage() {
       cy = e.clientY;
     }
     return {
-      x: (cx - rect.left) * (canvas.width / dpr / rect.width),
-      y: (cy - rect.top)  * (canvas.height / dpr / rect.height),
+      x: cx - rect.left,
+      y: cy - rect.top,
     };
   };
 
