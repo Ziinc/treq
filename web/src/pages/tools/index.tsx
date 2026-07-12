@@ -44,6 +44,14 @@ const tools = [
     icon: '🦆',
     tags: ['fun', 'debugging', 'rubber-duck'],
   },
+  {
+    name: 'Bingo Card Generator',
+    slug: 'bingo-card',
+    description:
+      'Generate bingo cards for PR reviews, AI slop, and vibe coding. Shuffle to randomise squares, then mark them off as you spot them.',
+    icon: '🎰',
+    tags: ['fun', 'ai', 'vibe-coding'],
+  },
 ];
 
 export default function ToolsPage() {
