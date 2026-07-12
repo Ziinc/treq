@@ -28,84 +28,162 @@ const TECHS: Tech[] = [
 type TheoryEntry = { icon: string; text: string; final?: boolean };
 
 const PAIR_THEORIES: Record<string, string[]> = {
-  'k8s-dns':       ['Your pods can\'t talk to each other because CoreDNS is vibing in a different timezone.', 'Kubernetes asked DNS for directions. DNS lied. Nothing works.'],
-  'k8s-redis':     ['The Redis pod was evicted at 3am. Kubernetes watched, unmoved.', 'Your cache was OOMKilled. Kubernetes filed it under "working as intended."'],
-  'k8s-oauth':     ['The OAuth callback URL points to a pod that was rescheduled 40 seconds ago.', 'Your auth service scaled to zero mid-login. Kubernetes considers this a success.'],
-  'k8s-kafka':     ['Kafka consumer lag is 4 million. Kubernetes just autoscaled to 3 replicas. Good luck.', 'The Kafka pod was placed on a node with 0.5 mCPU. This is load balancing, apparently.'],
-  'k8s-ai':        ['The AI model inference pod was OOMKilled. Kubernetes replaced it with a smaller one. The model is now dumber.', 'Kubernetes decided your GPU node was "underutilized" and removed it mid-training.'],
-  'k8s-docker':    ['The Docker image is 4.2GB. Kubernetes is still pulling it. Your SLA was 4 hours ago.', 'kubectl rollout status: Waiting... Waiting... Waiting... It\'s a Docker layer cache miss.'],
-  'k8s-terraform': ['Terraform created the cluster. Kubernetes destroyed the Terraform state pod. Irony achieved.', 'The Terraform provider and kubectl disagree on what "running" means. Both are right. Both are wrong.'],
-  'dns-redis':     ['Redis is down because someone fat-fingered the DNS entry and it points to a parking page.', 'Your Redis connection string resolves to 127.0.0.1 in prod. DNS has opinions about caching.'],
-  'dns-oauth':     ['The OAuth discovery endpoint has a 4-hour DNS TTL. Your certs rotated 3 hours ago.', 'OAuth redirect URIs are validated against DNS. Your DNS propagated everywhere except the auth server.'],
-  'dns-kafka':     ['Kafka bootstrap servers resolved to the wrong IP for 6 minutes. Nobody knows why. It fixed itself.', 'The Kafka broker is at kafka.internal. DNS says kafka.internal is kafka-old.internal. Events are lost.'],
-  'dns-ai':        ['The AI API gateway is unreachable because the DNS A record has 0 TTL but was still cached for 8 hours.', 'Your AI provider\'s endpoint changed. DNS cached the old one. You blamed the model.'],
-  'dns-docker':    ['The Docker registry DNS entry expired mid-pull. Your CI is stuck. The deploy is at 47%.', 'Docker tried to resolve docker.io. DNS returned NXDOMAIN. This has never happened before and will happen again.'],
-  'dns-terraform': ['Terraform looked up the DNS zone. The zone didn\'t exist yet. Terraform created it. Then looked it up again. Still doesn\'t exist. Race condition achieved.', 'The Terraform state backend is on a hostname that DNS can\'t resolve in this VPC. Classic.'],
-  'redis-oauth':   ['OAuth tokens are stored in Redis. Redis evicted them with LRU. Users are logged out. It\'s Tuesday.', 'The Redis session store has a 5-minute TTL. OAuth access tokens last 1 hour. Users are very confused.'],
-  'redis-kafka':   ['Kafka consumer offsets are in Redis. Redis flushed to disk. Disk was full. You replayed 12 hours of events.', 'Redis is used as a Kafka replacement because "it\'s basically the same thing." It is not the same thing.'],
-  'redis-ai':      ['The AI response is cached in Redis. Forever. The model was updated 3 weeks ago. Users are getting 2023 answers.', 'Redis OOM at 2am. AI requests uncached. Model API rate limit hit. Users experienced "character." '],
-  'redis-docker':  ['Redis is running in a Docker container with no volume mount. Someone restarted it. The cache is gone. This is a feature.', 'The Redis Docker image was updated. The new version deprecates the command your app uses. Silently.'],
-  'redis-terraform': ['Terraform manages the Redis cluster. Terraform destroy was run in staging. Staging was prod.', 'The Redis Terraform module added encryption at rest. All existing keys became unreadable. Plan phase was clean.'],
-  'oauth-kafka':   ['OAuth events are published to Kafka. The consumer validates tokens. The token expired during the lag. Access denied at message 4,000,001.', 'Your Kafka consumer needs OAuth credentials. The OAuth server publishes to Kafka. They are waiting for each other.'],
-  'oauth-ai':      ['The AI assistant is authenticated via OAuth. The refresh token expired. The AI is now confidently hallucinating with no context.', 'OAuth scopes don\'t include "read:everything." The AI interpreted this as "make things up."'],
-  'oauth-docker':  ['The Docker registry requires OAuth. The OAuth server is in the Docker registry. The container can\'t start to authenticate to pull the container that runs authentication.', 'OAuth client secret is baked into the Docker image. The image is public. Congrats on the breach.'],
-  'oauth-terraform': ['Terraform needs OAuth to provision the OAuth server. The OAuth server doesn\'t exist yet. Chicken, meet egg.', 'The OAuth app client ID is hardcoded in Terraform. It\'s in git. It\'s in the logs. It\'s everywhere.'],
-  'kafka-ai':      ['The AI is consuming Kafka events to learn from your users. It has learned that your users hate your product.', 'AI-generated content is published to Kafka at 10,000 events/second. The consumers are just vibes.'],
-  'kafka-docker':  ['The Kafka Docker image requires 4GB heap. Your instance has 3.9GB. Kafka starts fine. Then it doesn\'t.', 'Someone ran docker-compose down on the Kafka cluster. All in-flight messages went with it. "It was just a restart."'],
-  'kafka-terraform': ['Terraform deleted the Kafka topic to recreate it with more partitions. The messages were not moved. They were deleted.', 'The Kafka Terraform module creates topics idempotently. Unless someone manually created one first. Then it explodes.'],
-  'ai-docker':     ['The AI model is 70GB. The Docker image is 71GB. The registry has 70.5GB free. This is a production deploy.', 'The AI container exits with code 0 and no output. The orchestrator marks it healthy. This is correct behavior.'],
-  'ai-terraform':  ['Terraform provisions GPU instances for AI. It scales to zero at night to save money. The AI forgets everything. Every night.', 'The AI Terraform module is 4,000 lines. It was written by the AI. Nobody has read it.'],
-  'docker-terraform': ['Terraform builds the Docker image. Docker builds the Terraform binary. You are in a loop and this is your life now.', 'The Dockerfile calls terraform plan. Terraform calls docker build. The build has been running for 6 days.'],
+  'k8s-dns': [
+    'Inter-pod communication failed at 02:14 UTC. Root cause: CoreDNS pod was scheduled on a node with a clock skew of 4 minutes, causing SERVFAIL responses on all internal lookups. Node time sync had been disabled 11 days prior during a routine maintenance window. No alert was configured for clock skew.',
+    'DNS resolution for internal services began returning NXDOMAIN at 14:31 UTC. Kubernetes had garbage-collected the corresponding Endpoints object 90 seconds earlier following a rolling restart. The DNS TTL of 30 seconds was not honored by all clients. Impact duration: 8 minutes.',
+  ],
+  'k8s-redis': [
+    'Redis pod was evicted at 03:22 UTC due to node memory pressure. The eviction was not surfaced in the primary alerting channel. Service resumed 47 minutes after initial customer-reported impact. The pod\'s memory request was set to 64Mi against an actual working set of 1.2Gi.',
+    'Redis pod OOMKilled at 11:07 UTC. Kubernetes replaced the pod within 12 seconds. The replacement pod started without the pre-loaded key set. Cache hit rate dropped from 94% to 0% for 6 minutes, increasing database query volume by 18x during the recovery window.',
+  ],
+  'k8s-oauth': [
+    'OAuth callback endpoint returned 502 for a 40-second window following a pod rescheduling event at 09:45 UTC. The readiness probe did not cover the /oauth/callback route. 312 in-progress login flows were terminated. Users were not notified; the session was silently invalidated.',
+    'Auth service Deployment was scaled to 0 replicas by the HPA at 01:00 UTC due to zero RPS during the off-peak window. A scheduled token refresh job attempted to run at 01:03 UTC. All requests failed with connection refused. 4,200 background token renewals were not retried.',
+  ],
+  'k8s-kafka': [
+    'Kafka consumer group lag reached 4,200,000 messages at 16:20 UTC. HPA scaled consumer replicas from 1 to 3 over a 5-minute window. Lag did not decrease. The bottleneck was identified as a single-partition topic, which cannot be parallelized beyond one consumer. The HPA target metric was messages/second, not lag.',
+    'Kafka broker pod was scheduled on a node with 0.5 available CPU cores. The broker startup completed successfully. Under production load, broker request handler idle ratio dropped to 0.2%. Message delivery latency increased to 14 seconds. The pod was not flagged by resource monitoring as the CPU limit was not set.',
+  ],
+  'k8s-ai': [
+    'Inference pod OOMKilled at 14:38 UTC. A replacement pod was scheduled on a node with 8GB available memory, down from the original 16GB allocation. The model continued to serve requests. Automated regression tests did not cover output quality. Degraded responses were served for 6 hours before a customer report triggered investigation.',
+    'GPU node was removed from the cluster by the cluster autoscaler at 03:00 UTC, identified as underutilized based on CPU and memory metrics. A model training job in progress on that node was terminated without checkpoint. The autoscaler policy did not account for GPU workloads. Job was restarted manually 4 hours later.',
+  ],
+  'k8s-docker': [
+    'Deployment stalled for 3 hours 17 minutes due to image pull latency on a cold node. Image size: 4.2 GB. Pull policy was set to Always. The node had not previously cached the image. SLA breach threshold of 2 hours was crossed without triggering an alert, as the deployment had not yet transitioned to a failed state.',
+    'Rolling update stalled at 1/3 replicas for 47 minutes. The new pod was waiting on an image pull. The image layer was being concurrently pulled by 6 other nodes, saturating the registry egress bandwidth. No timeout was configured on the pod\'s image pull operation.',
+  ],
+  'k8s-terraform': [
+    'Terraform state pod was evicted by Kubernetes at 22:11 UTC during a planned state file write operation. The state file was partially written at the time of eviction. A subsequent terraform plan reported the cluster as partially created. Manual state recovery required 4 hours. The cluster remained operational throughout.',
+    'Terraform provider and kubectl reported different replica counts for the same Deployment for 12 minutes following an out-of-band manual scaling operation. Both values were accurate at different points in time. A Terraform apply during this window scaled the Deployment back to the declared count, terminating 4 pods that had been manually added.',
+  ],
+  'dns-redis': [
+    'Redis connection failures began at 18:40 UTC. The Redis hostname DNS A record had been updated to an incorrect IP during routine maintenance 22 minutes prior. The change was not reviewed before application. The monitoring system also used the DNS hostname and reported Redis as healthy, as it was resolving to a host that returned TCP ACK on port 6379.',
+    'Redis connection string in the production environment contained a hostname that resolved to 127.0.0.1 due to a split-horizon DNS misconfiguration. The application connected to itself on port 6379. The port was not in use. All cache reads returned connection refused. The configuration had been in this state for 3 weeks without detection.',
+  ],
+  'dns-oauth': [
+    'Following certificate rotation at 10:00 UTC, the OAuth discovery endpoint returned stale TLS configuration to clients that had cached the prior DNS response. The DNS TTL was 14,400 seconds and had not been reduced before the rotation. Clients that had resolved the endpoint within the prior 4 hours continued to present the old certificate. Impact duration: 4 hours 12 minutes.',
+    'OAuth redirect URI validation failed for users on ISPs whose resolvers had not propagated a DNS update made 6 hours prior. The A record had been updated as part of a data center migration. Affected users received an "invalid redirect URI" error. The DNS propagation status was not verified before traffic was migrated.',
+  ],
+  'dns-kafka': [
+    'Kafka bootstrap server DNS records resolved to an incorrect IP for a 6-minute window beginning at 08:17 UTC. No configuration changes were recorded in the change log for this period. The issue did not recur. Root cause was not identified. 14,000 events were not produced during the affected window.',
+    'Kafka broker hostname kafka.internal was updated to point to kafka-v2.internal via CNAME at 15:00 UTC as part of a cluster migration. The CNAME target was not yet resolvable. Producers received UnknownHostException for 9 minutes until the target record was added. 3 producer instances did not reconnect automatically after resolution was restored.',
+  ],
+  'dns-ai': [
+    'AI API gateway was unreachable for 8 hours beginning at 20:00 UTC. The DNS A record TTL was 0. Network-level resolver at the corporate egress point cached the record for 8 hours regardless of TTL. The gateway IP had changed following a provider migration. Workaround applied: direct IP substitution in application configuration.',
+    'AI provider endpoint hostname changed without advance notice. The prior hostname continued to resolve via DNS for 72 hours due to TTL, pointing to the decommissioned address. During this window, all requests to the prior hostname returned connection timeout. The application did not surface the connection error to end users; requests silently returned empty responses.',
+  ],
+  'dns-docker': [
+    'CI pipeline stalled at 47% image layer download following expiration of the Docker registry domain. 14 concurrent build jobs were affected. The domain renewal had lapsed 3 days prior. The registry was not monitored for availability. Estimated cumulative delay across affected jobs: 3 hours 20 minutes.',
+    'Docker daemon was unable to resolve docker.io at 07:32 UTC. The corporate DNS resolver returned NXDOMAIN for external hostnames during a 4-minute reconfiguration window. 8 image pull operations failed non-atomically, leaving partially downloaded layers on disk. The build system did not retry failed pulls.',
+  ],
+  'dns-terraform': [
+    'terraform apply failed during a data source read of a DNS zone that had been created 400 milliseconds earlier in the same apply run. DNS propagation delay caused the zone to be unresolvable at the time of the lookup. The apply was re-run manually after a 2-minute wait and completed successfully. The race condition is reproducible on cold environments.',
+    'Terraform remote state backend hostname was not resolvable within the production VPC. The backend was configured with a public hostname that the internal DNS resolver did not forward. All terraform operations failed with a connection error. The configuration had worked correctly in the staging VPC, which used a different DNS forwarder.',
+  ],
+  'redis-oauth': [
+    'Session token eviction from Redis began at 19:45 UTC under LRU policy during a traffic spike. 1,847 authenticated sessions were invalidated. Users were required to re-authenticate. Root cause: Redis maxmemory-policy was set to allkeys-lru with a limit that had not been adjusted following a 40% increase in active session volume over the prior quarter.',
+    'Redis session TTL was set to 300 seconds. OAuth access tokens issued by the provider had a lifetime of 3,600 seconds. Sessions expired before the token, causing the application to attempt token introspection against an invalidated session record. The error manifested as a successful token validation followed by a missing session error, which was not handled.',
+  ],
+  'redis-kafka': [
+    'Redis AOF persistence failed at 23:41 UTC due to disk exhaustion on the host. Consumer group offsets stored in Redis for 3 Kafka consumers were lost at the point of failure. Upon Redis restart, all three consumers began reading from offset 0. 12 hours of events were replayed. 6 downstream consumers processed duplicate messages during the replay window.',
+    'Redis was introduced as a Kafka replacement to reduce operational overhead. The use case required message ordering guarantees and at-least-once delivery. Redis lists do not provide consumer group semantics. Message ordering was not preserved under concurrent reads. The architectural decision was not reviewed before deployment to production.',
+  ],
+  'redis-ai': [
+    'AI inference responses were cached in Redis without an expiry value set. A model update was deployed 21 days prior to the incident. Cached responses from the previous model version continued to be returned to users. No cache invalidation step was included in the model deployment runbook. The issue was identified when a user submitted a support ticket referencing a feature that had been removed.',
+    'Redis evicted all keys at 02:14 UTC due to memory pressure. All subsequent AI inference requests were forwarded to the model API without cache. The model API rate limit of 60 requests per minute was reached within 4 seconds. Requests began returning 429 errors. The application did not implement backoff or user-facing degradation for rate limit responses.',
+  ],
+  'redis-docker': [
+    'Redis container was restarted at 14:00 UTC following a host-level maintenance event. No persistent volume was mounted to the container. Cache contents were lost on restart. Application servers required 34 minutes to rebuild the working set from the primary database. Database CPU utilization reached 97% during the warm-up period.',
+    'Redis Docker image was updated from 6.2 to 7.0 during a dependency update cycle. The OBJECT ENCODING command behavior changed between versions in a way that caused the application\'s serialization layer to return null for all reads. The change was not covered by integration tests. The issue was not detected until the image reached production.',
+  ],
+  'redis-terraform': [
+    'terraform destroy was executed against the production Redis cluster at 16:23 UTC. The Terraform workspace variable had been set to "staging" by the previous operator and was not verified before execution. The cluster was unavailable for 2 hours 14 minutes. The most recent automated snapshot was 26 hours old. Data created since that snapshot was not recoverable.',
+    'The Redis Terraform module was updated to enable encryption at rest. The module applied the change by replacing the existing cluster. Existing keys were not migrated before replacement. All cache data was lost. The terraform plan output listed the resource as requiring replacement; the output was reviewed and approved.',
+  ],
+  'oauth-kafka': [
+    'OAuth access tokens were embedded in Kafka message headers at publish time. Consumer group lag reached 4 hours due to an upstream processing slowdown. By the time messages reached consumers, 100% of embedded tokens had expired. Token validation failed for all messages at offset 4,000,001 onward. 23,000 events were not retried and were not recoverable from the topic due to retention policy.',
+    'Kafka consumer startup required a valid OAuth token to authenticate against the broker. The OAuth server consumed a Kafka topic to populate its token validation cache. Neither service could start without the other being available. Cold-start recovery required manually pre-populating the OAuth cache via a separate script that was not documented.',
+  ],
+  'oauth-ai': [
+    'AI service OAuth refresh token expired at 08:00 UTC. The token had a 90-day lifetime and had not been rotated. The service continued to process requests using cached context from the prior session. Responses were returned without access to current user data. No error was surfaced to end users. The degraded state persisted for 11 hours before an engineer noticed anomalous response content in logs.',
+    'OAuth scope review reduced the AI service permissions from read:all to read:profile at 10:00 UTC as part of a least-privilege initiative. The AI service did not handle 403 responses from downstream APIs. It continued to generate responses based on data it no longer had access to, returning responses that referenced fields it could not read. The behavior was not detected by automated testing.',
+  ],
+  'oauth-docker': [
+    'A circular dependency was identified during incident recovery: the Docker registry required OAuth authentication to pull images, and the OAuth service container image was stored in the Docker registry. Following a full environment loss, neither service could be started without the other. Recovery required manual credential injection and a temporary unauthenticated registry. Recovery time: 1 hour 40 minutes. The dependency had not been documented.',
+    'OAuth client secret was written into the Dockerfile as a build argument and recorded in the image layer history. The image was published to a public registry as part of an open-source build pipeline. The secret was valid for 18 months. Exposure was identified during a routine security audit 4 months after publication.',
+  ],
+  'oauth-terraform': [
+    'Terraform could not provision the OAuth server because the Terraform provider required an OAuth token for authentication, and no OAuth server existed in the environment. Initial bootstrapping of a new environment required a manual credential issuance step that was not included in the Terraform configuration or the environment setup documentation.',
+    'OAuth application client ID and client secret were hardcoded in the Terraform configuration and committed to the version control repository. The repository was private. It was made public 6 weeks later as part of an open-source initiative. The secrets were rotated 3 days after the repository visibility change, following an automated secret scanning alert.',
+  ],
+  'kafka-ai': [
+    'AI model fine-tuning pipeline consumed 90 days of production Kafka event history. The training window included a 12-day period of known data quality issues caused by a prior incident that had been remediated. The data quality incident had been closed without flagging downstream consumers. Model behavior regression was attributed to the contaminated training window during post-incident review.',
+    'AI-generated content was published to a Kafka topic at an observed rate of 10,000 events per second following a prompt injection in user-submitted input. The downstream consumer processed all events without filtering. The topic retention policy retained all events for 7 days. Consumer lag reached 70,000,000 messages before the producer was paused.',
+  ],
+  'kafka-docker': [
+    'Kafka broker container was configured with a JVM heap of 4 GB. The host had 3.9 GB of available memory at container start time. The container started successfully. Under production message volume, the JVM exceeded available memory after 4 minutes of operation. The container health check, which polled the broker API, passed during the startup window and continued to report healthy until the OOM event.',
+    'docker-compose down was executed on the host running the Kafka cluster at 11:30 UTC by an engineer performing unrelated maintenance. The command terminated all containers on the host, including the Kafka broker. In-flight messages that had been acknowledged but not yet replicated to followers were lost. Estimated message loss: 2,400 events. The Kafka cluster was single-node.',
+  ],
+  'kafka-terraform': [
+    'A Kafka topic was deleted and recreated by Terraform to increase the partition count from 3 to 12. The terraform plan indicated the resource would be replaced. In-flight messages present in the original topic at time of deletion were not migrated prior to the operation. Estimated message loss: 180,000 events. Downstream consumers were not notified before the operation began.',
+    'The Kafka Terraform module used a create-before-destroy lifecycle. A topic with the same name had been created manually outside of Terraform. The module attempted to create a duplicate topic, which Kafka rejected. Terraform then attempted to destroy the existing topic to resolve the conflict. The existing topic contained 6 hours of unprocessed events.',
+  ],
+  'ai-docker': [
+    'Deployment failed at 09:15 UTC due to insufficient storage in the container registry. Image size: 71.2 GB. Available storage at time of push: 70.5 GB. The docker push command exited with a non-zero code. The CI pipeline step was configured to ignore exit codes for push operations. The deployment was marked successful. The prior image version continued to serve traffic without indication of the failure.',
+    'AI inference container exited with code 0 and produced no output at 03:00 UTC. The container orchestrator evaluated the exit code and marked the container as completed successfully. No restart policy was applied to zero-exit containers. The inference service was unavailable for 4 hours until the next scheduled health check triggered an alert.',
+  ],
+  'ai-terraform': [
+    'GPU instances were scheduled for nightly termination by a Terraform-managed cost optimization policy. In-memory model state was not persisted to durable storage before termination. On next-day cold start, model reload from object storage averaged 22 minutes. Inference requests during this window returned 503 errors. The policy had been in place for 6 months. The cold-start latency had not been measured until this incident.',
+    'The Terraform module managing the AI inference infrastructure was 4,200 lines, generated by an AI assistant as part of an infrastructure-as-code migration. The module had not been reviewed in full. A planned module update failed at apply time due to a resource dependency cycle within the generated configuration. The cycle was not present in the plan output.',
+  ],
+  'docker-terraform': [
+    'A mutual build dependency was identified between the Terraform binary and the Docker image used to execute it. The Docker image was built using a Terraform step. Terraform required the Docker image to run. Following a full environment rebuild, neither artifact could be produced without the other. A bootstrapping procedure was developed during the incident. It was not documented before the engineer who performed it left the company.',
+    'The Dockerfile included a RUN terraform plan step to validate infrastructure configuration at build time. The Terraform configuration referenced a Docker image tag that was produced by the current build. The build could not complete because the image it referenced did not yet exist. The dependency had been introduced 3 weeks prior and had not been detected because the image tag was previously cached.',
+  ],
 };
 
 const TRIPLE_THEORIES: string[] = [
-  'Three technologies is where architectures go to die and engineers go to drink.',
-  'At this point you have a distributed system. You had one bug. You now have three.',
-  'This is what a tech lead calls "separation of concerns" and a senior engineer calls "my problem now."',
-  'You\'ve connected three things. Each has its own on-call rotation. None of them talk to each other.',
-  'A monolith would have prevented this. Someone read a Martin Fowler blog post in 2018.',
+  'Three independent systems were involved in the incident. No single team had visibility into the full request path. Time to identify the root cause component: 3 hours 14 minutes. Time to full service restoration: 5 hours 52 minutes.',
+  'Incident spanned three system boundaries. Each system reported healthy to its own monitoring. The failure was only observable at the user-facing layer. A unified tracing solution was listed as a Q3 priority at the time of the incident.',
+  'The incident required on-call escalation to three separate teams. Coordination overhead was identified as a contributing factor to time-to-resolution in the post-mortem. A unified incident channel was created as a follow-up action item.',
+  'Three systems were implicated. Each had been modified in the 48 hours prior to the incident. The change that introduced the failure was not identified with certainty. All three changes were rolled back as a precaution.',
 ];
 
 const QUAD_THEORIES: string[] = [
-  'Four connections means you\'ve invented a new architecture. It will be named after you. In a post-mortem.',
-  'This is microservices. You wanted microservices. This is what microservices feels like from the inside.',
-  'Congratulations: you now need a service mesh. The service mesh will need its own service mesh.',
-  'Your architecture diagram will not fit on a single monitor. This is considered "enterprise-grade."',
-  'Four technologies, one outage. Root cause: all of them. Also DNS.',
+  'Four contributing systems were identified. Each was owned by a separate team. The incident bridge call had 11 participants. The initial hypothesis was incorrect. Time to correct hypothesis: 2 hours 10 minutes.',
+  'The incident affected four systems in sequence. The blast radius was not fully understood until 90 minutes after initial detection. Two of the four systems had no runbook for this failure mode.',
+  'Four teams were paged. Two teams initially reported no anomalies in their systems. The anomalies were identified on second review after the blast radius was established. Monitoring coverage gaps were noted in the post-mortem.',
+  'Root cause was determined to be a change in system A that propagated through systems B, C, and D over a 40-minute window. Each propagation step introduced an additional 8 to 12 minute delay in detection.',
 ];
 
 const QUINTET_THEORIES: string[] = [
-  'Five technologies. This is a Series B startup\'s entire infrastructure. You built it in 40 minutes.',
-  'BREAKING: Local developer connects five technologies, achieves sentience of the cloud.',
-  'This is the part where the CTO gives a conference talk about your "innovative distributed architecture."',
-  'Five is the number where engineers start drawing diagrams with arrows pointing at themselves.',
-  'Your SRE team has requested a meeting. It\'s about this. It\'s always about this.',
+  'Five systems were involved. The incident response runbook did not cover a failure mode spanning more than three systems. A new runbook was authored during the incident. Post-incident action item count: 14. Items closed within 30 days: 3.',
+  'The failure cascade crossed five system boundaries before surfacing as a user-visible error. Each boundary introduced latency in error propagation. Total time from root cause event to first customer report: 23 minutes.',
+  'Five on-call engineers were engaged simultaneously. The incident was not formally declared for 35 minutes after initial detection, as each team believed the issue was isolated to another system.',
+  'Incident timeline reconstruction required correlating logs from five separate systems with incompatible timestamp formats. Three systems used UTC, one used local time, and one used Unix milliseconds without timezone context. Timeline reconstruction took 4 hours.',
 ];
 
 const SEXTET_THEORIES: string[] = [
-  'Six connections. This is a unicorn startup\'s entire platform. You should charge $499/month.',
-  'This monstrosity has been submitted to re:Invent as a reference architecture.',
-  'AWS would like to sponsor this diagram. It perfectly justifies 14 managed services.',
-  'CLASSIFIED: Engineers who connect six technologies are placed in a special Jira project called "tech-debt."',
+  'Six systems were implicated. The dependency graph had not been documented. It was reconstructed from memory during the incident. Gaps in the reconstruction were identified in the post-mortem.',
+  'The incident spanned six teams and six codebases. No engineer had direct familiarity with more than two of the affected systems. Knowledge transfer between teams occurred in real time during the incident bridge call.',
+  'Six contributing factors were identified in the post-mortem. Each factor alone would not have caused an outage. The combination had not been considered in any prior failure mode analysis.',
 ];
 
 const SEPTET_PLUS_THEORIES: string[] = [
-  'MAXIMUM OVERDRAFT REACHED. The board has achieved sentience. It is filing a patent.',
-  'You have connected everything. There is no longer a separation of concerns. There is only The System.',
-  'This architecture will be taught in universities as a cautionary tale. The slide will just be this board.',
-  'The entire engineering organization is now on-call. Permanently.',
-  'Congratulations: your infrastructure has achieved consciousness. It is unhappy.',
+  'All primary systems were involved in the incident. Blast radius assessment was not completed until after service was restored. The incident was escalated to executive leadership at the 3-hour mark. A cross-functional architectural review was scheduled.',
+  'The failure involved every system in this diagram. The post-mortem document was 34 pages. The root cause section was 2 sentences. Seventeen action items were created. The priority of each was listed as P2.',
+  'All systems reported degraded or failed state simultaneously. The order of failure could not be determined from available logs due to gaps in distributed tracing coverage. The incident was classified as a cascading failure with no single root cause.',
 ];
 
 const CONCLUSION_LINES = [
-  'This architecture could have been a monolith.',
-  'A single SQLite file would have handled this workload.',
-  'The original engineer who designed this has been at a different company for 2 years.',
-  'The documentation says "it\'s complicated." This is technically accurate.',
-  'Total monthly cloud bill: $47,000. Original problem: displaying a list of users.',
-  'Time to first byte: 4.2 seconds. Each technology contributes approximately equally.',
-  '"Move fast and break things" was the original philosophy. Mission accomplished.',
-  'This could have been a cron job.',
+  'A simpler architecture was proposed during the original design review. The proposal was not adopted. The decision rationale was not documented.',
+  'The workload was migrated from a single-server deployment 18 months prior. The migration added 4 new failure domains. The original server had 99.97% uptime over 3 years.',
+  'The engineer who designed this system is no longer with the organization. No architecture decision records exist.',
+  'The system documentation describes the architecture as "straightforward." The incident duration was 6 hours.',
+  'Monthly infrastructure cost at time of incident: $47,000. The feature being served: a paginated list of user records.',
+  'Median time to first byte: 4.2 seconds. Each system in this diagram contributes measurably to that latency. The product requirement was sub-500ms.',
+  'The original delivery timeline for this architecture was 2 weeks. Actual time to production-ready state: 7 months.',
+  'An equivalent outcome could have been achieved with a scheduled task and a relational database. This option was not evaluated.',
 ];
 
 function pickRandom<T>(arr: T[]): T {
