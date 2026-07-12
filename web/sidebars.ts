@@ -17,6 +17,19 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Tutorials',
+      link: {type: 'doc', id: 'tutorials/index'},
+      items: [
+        'tutorials/using-treq-with-git-repo',
+        'tutorials/creating-terminal-sessions',
+        'tutorials/managing-workspaces',
+        'tutorials/committing-changes',
+        'tutorials/code-review-workflow',
+        'tutorials/merging-workspaces',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Guides',
       link: {type: 'doc', id: 'guides/index'},
       items: [],
