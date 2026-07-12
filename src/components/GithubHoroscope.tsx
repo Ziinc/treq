@@ -239,7 +239,7 @@ function generateHoroscope(data: HoroscopeData): {
 		);
 	} else if (repoCount <= 5) {
 		paragraphs.push(
-			`📦 With only ${repoCount} original repositories, you believe in quality over quantity. Or you just signed up. Either way, the stars sense potential — or at least a good `README.md`.`,
+			`📦 With only ${repoCount} original repositories, you believe in quality over quantity. Or you just signed up. Either way, the stars sense potential — or at least a good README.md.`,
 		);
 	} else if (repoCount <= 20) {
 		paragraphs.push(
@@ -251,7 +251,7 @@ function generateHoroscope(data: HoroscopeData): {
 		);
 	} else {
 		paragraphs.push(
-			`📦 ${repoCount} repositories. You are physically incapable of stopping. Therapy might help. Or just another `git init`. The stars are both impressed and concerned.`,
+			`📦 ${repoCount} repositories. You are physically incapable of stopping. Therapy might help. Or just another git init. The stars are both impressed and concerned.`,
 		);
 	}
 
