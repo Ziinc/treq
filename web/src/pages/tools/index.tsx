@@ -44,6 +44,14 @@ const tools = [
     icon: '🦆',
     tags: ['fun', 'debugging', 'rubber-duck'],
   },
+  {
+    name: 'LMPTFY',
+    slug: 'lmptfy',
+    description:
+      'Let Me Prompt That For You. Generate a shareable link that types out a prompt and opens it in ChatGPT or Claude.',
+    icon: '🤖',
+    tags: ['fun', 'ai', 'sharing'],
+  },
 ];
 
 export default function ToolsPage() {
