@@ -5,7 +5,7 @@
   flex-direction: column;
   min-height: calc(100vh - var(--ifm-navbar-height));
   padding: 0 1.5rem 4rem;
-  max-width: 720px;
+  max-width: 760px;
   margin: 0 auto;
   width: 100%;
 }
@@ -13,7 +13,7 @@
 /* ── Header ──────────────────────────────────────────────────────────────────── */
 
 .header {
-  padding: 2rem 0 1.5rem;
+  padding: 2rem 0 1.75rem;
 }
 
 .breadcrumb {
@@ -46,76 +46,40 @@
 /* ── Viewer section ──────────────────────────────────────────────────────────── */
 
 .viewerSection {
-  margin-bottom: 2.5rem;
+  margin-bottom: 1rem;
 }
 
-/* ── AI prompt box ───────────────────────────────────────────────────────────── */
+/* ── Chat box (shared between viewer and generator) ──────────────────────────── */
 
-.aiBox {
-  border-radius: 14px;
-  overflow: hidden;
-  border: 1px solid var(--ifm-color-emphasis-200);
+.chatBox {
   background: var(--ifm-background-surface-color);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
-  margin-bottom: 1.5rem;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 20px;
+  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.07);
+  overflow: hidden;
+  transition: box-shadow 0.2s;
 }
 
-[data-theme='dark'] .aiBox {
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+.chatBox:focus-within {
+  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.1), 0 0 0 3px rgba(var(--ifm-color-primary-rgb), 0.1);
 }
 
-.aiBoxHeader {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.65rem 1rem;
-  background: var(--ifm-color-emphasis-100);
-  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+[data-theme='dark'] .chatBox {
+  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.3);
 }
 
-.aiBoxDots {
-  display: flex;
-  gap: 5px;
-  flex-shrink: 0;
-}
+/* ── Chat content area (viewer typed text) ───────────────────────────────────── */
 
-.aiBoxDots span {
-  display: block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--ifm-color-emphasis-300);
-}
-
-.aiBoxDots span:nth-child(1) { background: #ef4444; }
-.aiBoxDots span:nth-child(2) { background: #f59e0b; }
-.aiBoxDots span:nth-child(3) { background: #22c55e; }
-
-.aiBoxTitle {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--ifm-color-emphasis-600);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.aiBoxBody {
-  padding: 1.25rem 1.5rem;
-  min-height: 72px;
-  display: flex;
-  align-items: flex-start;
-  gap: 0.6rem;
+.chatBoxContent {
+  padding: 1.4rem 1.5rem 0.75rem;
+  min-height: 90px;
   font-size: 1.05rem;
-  line-height: 1.55;
-  font-family: var(--ifm-font-family-monospace);
+  line-height: 1.6;
+  color: var(--ifm-font-color-base);
 }
 
-.promptCursor {
-  color: var(--ifm-color-primary);
-  font-weight: 700;
-  font-size: 1.2rem;
-  line-height: 1.55;
-  flex-shrink: 0;
+.chatPlaceholder {
+  color: var(--ifm-color-emphasis-400);
   user-select: none;
 }
 
@@ -128,12 +92,12 @@
 .caret {
   display: inline-block;
   width: 2px;
-  height: 1.1em;
-  background: var(--ifm-color-primary);
+  height: 1em;
+  background: var(--ifm-color-emphasis-500);
   border-radius: 1px;
   vertical-align: text-bottom;
-  animation: caretBlink 0.7s step-start infinite;
-  flex-shrink: 0;
+  margin-left: 1px;
+  animation: caretBlink 0.85s step-start infinite;
 }
 
 @keyframes caretBlink {
@@ -141,72 +105,175 @@
   50%       { opacity: 0; }
 }
 
-/* ── AI buttons ──────────────────────────────────────────────────────────────── */
+/* ── Chat textarea (generator) ───────────────────────────────────────────────── */
 
-.buttons {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  animation: fadeUp 0.3s ease;
+.chatInput {
+  display: block;
+  width: 100%;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 1.4rem 1.5rem 0.5rem;
+  font-size: 1.05rem;
+  font-family: inherit;
+  line-height: 1.6;
+  color: var(--ifm-font-color-base);
+  box-sizing: border-box;
 }
 
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(8px); }
+.chatInput::placeholder {
+  color: var(--ifm-color-emphasis-400);
+}
+
+/* ── Chat box footer (toolbar row) ──────────────────────────────────────────── */
+
+.chatBoxFooter {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--ifm-color-emphasis-100);
+}
+
+.chatBoxFooterRight {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+  animation: fadeIn 0.25s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-.aiBtn {
+/* ── Attach (+) button ───────────────────────────────────────────────────────── */
+
+.attachBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  background: none;
+  color: var(--ifm-color-emphasis-600);
+  cursor: default;
+  flex-shrink: 0;
+}
+
+/* ── Send circle button (generator) ─────────────────────────────────────────── */
+
+.sendCircleBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: #1a1a1a;
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.15s, transform 0.12s;
+}
+
+.sendCircleBtn:hover:not(:disabled) {
+  opacity: 0.8;
+  transform: scale(1.06);
+}
+
+.sendCircleBtn:disabled {
+  background: var(--ifm-color-emphasis-300);
+  color: var(--ifm-color-emphasis-500);
+  cursor: not-allowed;
+  transform: none;
+}
+
+[data-theme='dark'] .sendCircleBtn {
+  background: #e8e8e8;
+  color: #111;
+}
+
+[data-theme='dark'] .sendCircleBtn:disabled {
+  background: var(--ifm-color-emphasis-300);
+  color: var(--ifm-color-emphasis-500);
+}
+
+/* ── AI chip buttons (viewer footer) ────────────────────────────────────────── */
+
+.aiChip {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 1.3rem;
-  border-radius: 9px;
-  border: none;
-  font-size: 0.9rem;
+  gap: 0.4rem;
+  padding: 0.38rem 0.9rem;
+  border-radius: 999px;
+  border: 1.5px solid transparent;
+  font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.15s, transform 0.12s;
   position: relative;
-  color: #fff;
+  white-space: nowrap;
 }
 
-.aiBtn:hover {
-  opacity: 0.88;
+.aiChip:hover {
+  opacity: 0.85;
   transform: translateY(-1px);
 }
 
-.aiBtn:active {
+.aiChip:active {
   transform: translateY(0);
 }
 
-.chatgptBtn {
-  background: #10a37f;
+.chatgptChip {
+  background: #d4f0e8;
+  color: #0a7c5c;
+  border-color: #a3dfc9;
 }
 
-.claudeBtn {
-  background: #c9774a;
+[data-theme='dark'] .chatgptChip {
+  background: rgba(16, 163, 127, 0.18);
+  color: #4ecca3;
+  border-color: rgba(16, 163, 127, 0.35);
+}
+
+.claudeChip {
+  background: #fbe8d8;
+  color: #a0522d;
+  border-color: #f0c4a0;
+}
+
+[data-theme='dark'] .claudeChip {
+  background: rgba(201, 119, 74, 0.18);
+  color: #e8a070;
+  border-color: rgba(201, 119, 74, 0.35);
 }
 
 .aiIcon {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
 }
 
 .copiedBadge {
   position: absolute;
-  top: -2.2rem;
+  bottom: calc(100% + 6px);
   left: 50%;
   transform: translateX(-50%);
   background: #1e293b;
   color: #fff;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 500;
-  padding: 3px 10px;
+  padding: 3px 9px;
   border-radius: 6px;
   white-space: nowrap;
   pointer-events: none;
-  animation: fadeUp 0.18s ease;
+  animation: fadeIn 0.15s ease;
 }
 
 [data-theme='dark'] .copiedBadge {
@@ -233,68 +300,17 @@
   background: var(--ifm-color-emphasis-200);
 }
 
-/* ── Generator ───────────────────────────────────────────────────────────────── */
+/* ── Generator section ───────────────────────────────────────────────────────── */
 
 .generatorSection {
   margin-bottom: 2rem;
 }
 
 .generatorLabel {
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   font-weight: 600;
-  color: var(--ifm-color-emphasis-700);
+  color: var(--ifm-color-emphasis-600);
   margin: 0 0 0.6rem;
-}
-
-.generatorBox {
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-}
-
-.generatorInput {
-  width: 100%;
-  resize: none;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 10px;
-  padding: 0.75rem 1rem;
-  font-size: 0.95rem;
-  font-family: inherit;
-  background: var(--ifm-background-color);
-  color: var(--ifm-font-color-base);
-  line-height: 1.5;
-  box-sizing: border-box;
-  transition: border-color 0.15s;
-}
-
-.generatorInput:focus {
-  outline: none;
-  border-color: var(--ifm-color-primary);
-  box-shadow: 0 0 0 3px rgba(var(--ifm-color-primary-rgb), 0.12);
-}
-
-.generateBtn {
-  align-self: flex-start;
-  background: var(--ifm-color-primary);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 0.55rem 1.3rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.15s, transform 0.12s;
-}
-
-.generateBtn:hover:not(:disabled) {
-  opacity: 0.88;
-  transform: translateY(-1px);
-}
-
-.generateBtn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  transform: none;
 }
 
 /* ── Result box ──────────────────────────────────────────────────────────────── */
@@ -305,16 +321,16 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.65rem 1rem;
-  border-radius: 9px;
+  border-radius: 12px;
   border: 1px solid var(--ifm-color-emphasis-200);
   background: var(--ifm-color-emphasis-100);
-  animation: fadeUp 0.22s ease;
+  animation: fadeIn 0.22s ease;
   flex-wrap: wrap;
 }
 
 .resultUrl {
   flex: 1;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-family: var(--ifm-font-family-monospace);
   color: var(--ifm-color-emphasis-700);
   word-break: break-all;
@@ -326,12 +342,12 @@
   background: none;
   border: 1px solid var(--ifm-color-emphasis-300);
   border-radius: 7px;
-  padding: 0.35rem 0.85rem;
-  font-size: 0.8rem;
+  padding: 0.32rem 0.8rem;
+  font-size: 0.78rem;
   font-weight: 600;
   color: var(--ifm-color-emphasis-700);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
   white-space: nowrap;
 }
 
@@ -346,7 +362,7 @@
 .about {
   border-top: 1px solid var(--ifm-color-emphasis-200);
   padding-top: 1.5rem;
-  margin-top: 1rem;
+  margin-top: 0.5rem;
 }
 
 .about p {
