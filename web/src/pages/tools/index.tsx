@@ -28,6 +28,14 @@ const tools = [
     icon: '🥒',
     tags: ['bdd', 'testing', 'gherkin'],
   },
+  {
+    name: 'Tech Stack Generator',
+    slug: 'tech-stack-generator',
+    description:
+      'Generate a random tech stack of variable size. Frontend, backend, databases, infra, and more — shuffled fresh every click.',
+    icon: '🎲',
+    tags: ['fun', 'random', 'tech'],
+  },
 ];
 
 export default function ToolsPage() {
