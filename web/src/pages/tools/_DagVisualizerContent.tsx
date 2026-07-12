@@ -297,7 +297,7 @@ const DEFAULT_EDGES: Edge[] = [
 
 function WorkflowNode({ data, selected }: NodeProps<WorkflowNode>) {
   return (
-    <div className={`${styles.node} ${selected ? styles.nodeSelected : ''}`}>
+    <div className={`${styles.node} ${selected ? styles.nodeSelected : ''}`} data-testid="flow-node">
       <Handle type="target" position={Position.Left} className={styles.handle} />
 
       <div className={styles.nodeHeader}>
