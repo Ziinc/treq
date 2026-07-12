@@ -49,7 +49,7 @@ function useTypingAnimation(text: string | null, speed = 38) {
   return { displayed, done };
 }
 
-// ── ChatGPT / Claude URLs ─────────────────────────────────────────────────────
+// ── AI URLs ───────────────────────────────────────────────────────────────────
 
 function chatgptUrl(prompt: string) {
   return `https://chatgpt.com/?q=${encodeURIComponent(prompt)}`;
@@ -59,23 +59,410 @@ function claudeUrl(prompt: string) {
   return `https://claude.ai/new?q=${encodeURIComponent(prompt)}`;
 }
 
+// ── Three.js scene ────────────────────────────────────────────────────────────
+
+function buildPotatoScene(canvas: HTMLCanvasElement): { dispose: () => void } {
+  const THREE = require('three') as typeof import('three');
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  const W = canvas.clientWidth || 560;
+  const H = canvas.clientHeight || 420;
+  renderer.setSize(W, H, false);
+
+  // ── Scene ──────────────────────────────────────────────────────────────────
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0d0c14);
+  scene.fog = new THREE.Fog(0x0d0c14, 14, 26);
+
+  // ── Camera ─────────────────────────────────────────────────────────────────
+  const camera = new THREE.PerspectiveCamera(42, W / H, 0.1, 60);
+  camera.position.set(4.2, 4.0, 7.5);
+  camera.lookAt(-0.3, 2.1, 0);
+
+  // ── Lighting ───────────────────────────────────────────────────────────────
+  // Very dim ambient (nearly dark room)
+  scene.add(new THREE.AmbientLight(0x18162a, 2.5));
+
+  // Monitor glow — blue-tinted, primary light source
+  const screenGlow = new THREE.PointLight(0x3a60cc, 5.5, 9);
+  screenGlow.position.set(-0.2, 3.0, -0.9);
+  scene.add(screenGlow);
+
+  // Soft warm backlight (desk lamp suggestion)
+  const backLight = new THREE.PointLight(0xffcc88, 0.6, 8);
+  backLight.position.set(3, 4, 2);
+  scene.add(backLight);
+
+  // ── Materials ──────────────────────────────────────────────────────────────
+  const skinMat   = new THREE.MeshStandardMaterial({ color: 0xc9a96e, roughness: 0.85 });
+  const skinDark  = new THREE.MeshStandardMaterial({ color: 0xaa8445, roughness: 0.9 });
+  const shirtMat  = new THREE.MeshStandardMaterial({ color: 0x1e3060, roughness: 0.75 });
+  const pantsMat  = new THREE.MeshStandardMaterial({ color: 0x18202e, roughness: 0.9 });
+  const hairMat   = new THREE.MeshStandardMaterial({ color: 0x2a1800, roughness: 0.9 });
+  const eyeMat    = new THREE.MeshStandardMaterial({ color: 0x100c06 });
+  const whiteMat  = new THREE.MeshStandardMaterial({ color: 0xffffff });
+  const deskMat   = new THREE.MeshStandardMaterial({ color: 0x5c3d1e, roughness: 0.7 });
+  const deskTopMat = new THREE.MeshStandardMaterial({ color: 0x7a5230, roughness: 0.65 });
+  const monFrameMat = new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.3, metalness: 0.5 });
+  const screenMat = new THREE.MeshStandardMaterial({
+    color: 0x08102a,
+    emissive: 0x1a3888,
+    emissiveIntensity: 0.65,
+    roughness: 0.1,
+  });
+  const kbMat    = new THREE.MeshStandardMaterial({ color: 0x151518, roughness: 0.55 });
+  const keyMat   = new THREE.MeshStandardMaterial({ color: 0x242428, roughness: 0.5 });
+  const chairMat = new THREE.MeshStandardMaterial({ color: 0x1a1a20, roughness: 0.9 });
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0x0e0d16, roughness: 0.98 });
+  const wallMat  = new THREE.MeshStandardMaterial({ color: 0x12101e, roughness: 0.98 });
+
+  // ── Floor & back wall ──────────────────────────────────────────────────────
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(22, 18), floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(18, 10), wallMat);
+  wall.position.set(0, 4.5, -5);
+  wall.receiveShadow = true;
+  scene.add(wall);
+
+  // ── Desk ──────────────────────────────────────────────────────────────────
+  // Surface
+  const deskTop = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.1, 2.4), deskTopMat);
+  deskTop.position.set(-0.2, 1.62, -0.8);
+  deskTop.castShadow = true;
+  deskTop.receiveShadow = true;
+  scene.add(deskTop);
+
+  // Apron (front face of desk)
+  const deskApron = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.55, 0.06), deskMat);
+  deskApron.position.set(-0.2, 1.3, 0.26);
+  scene.add(deskApron);
+
+  // Legs
+  for (const [lx, lz] of [[-2.3, 0.2], [1.9, 0.2], [-2.3, -1.9], [1.9, -1.9]] as [number, number][]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.09, 1.62, 0.09), deskMat);
+    leg.position.set(lx, 0.81, lz);
+    scene.add(leg);
+  }
+
+  // ── Monitor ────────────────────────────────────────────────────────────────
+  const monFrame = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.7, 0.1), monFrameMat);
+  monFrame.position.set(-0.2, 3.05, -1.75);
+  monFrame.castShadow = true;
+  scene.add(monFrame);
+
+  const monScreen = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.52, 0.06), screenMat);
+  monScreen.position.set(-0.2, 3.05, -1.68);
+  scene.add(monScreen);
+
+  // Screen "UI" lines
+  const uiLineMat = new THREE.MeshBasicMaterial({ color: 0x4488ee, transparent: true, opacity: 0.55 });
+  const uiDimMat  = new THREE.MeshBasicMaterial({ color: 0x2244aa, transparent: true, opacity: 0.4 });
+  for (let i = 0; i < 6; i++) {
+    const w = 1.4 + (i % 3) * 0.3;
+    const line = new THREE.Mesh(new THREE.PlaneGeometry(w, 0.045), i < 2 ? uiLineMat : uiDimMat);
+    line.position.set(-0.2 - (2.4 - w) / 2 + 0.15, 3.35 - i * 0.22, -1.64);
+    scene.add(line);
+  }
+
+  // Blinking cursor on screen
+  const cursorMat = new THREE.MeshBasicMaterial({ color: 0xaaccff, transparent: true, opacity: 0.9 });
+  const cursorMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.045, 0.14), cursorMat);
+  cursorMesh.position.set(-1.18, 2.1, -1.64);
+  scene.add(cursorMesh);
+
+  // Monitor stand
+  const monPole = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.38, 0.1), monFrameMat);
+  monPole.position.set(-0.2, 1.9, -1.75);
+  scene.add(monPole);
+  const monBase = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.04, 0.5), monFrameMat);
+  monBase.position.set(-0.2, 1.72, -1.75);
+  scene.add(monBase);
+
+  // ── Keyboard ───────────────────────────────────────────────────────────────
+  const kb = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.045, 0.65), kbMat);
+  kb.position.set(0.1, 1.69, -0.25);
+  kb.castShadow = true;
+  scene.add(kb);
+
+  // Key grid
+  for (let row = 0; row < 4; row++) {
+    const keysPerRow = row === 0 ? 12 : row < 3 ? 11 : 10;
+    for (let col = 0; col < keysPerRow; col++) {
+      const key = new THREE.Mesh(new THREE.BoxGeometry(0.105, 0.025, 0.095), keyMat);
+      key.position.set(-0.73 + col * 0.135, 1.715, -0.47 + row * 0.14);
+      scene.add(key);
+    }
+  }
+
+  // ── Chair ──────────────────────────────────────────────────────────────────
+  const chairSeat = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.1, 1.35), chairMat);
+  chairSeat.position.set(0.5, 1.08, 0.55);
+  chairSeat.castShadow = true;
+  chairSeat.receiveShadow = true;
+  scene.add(chairSeat);
+
+  const chairBack = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.35, 0.08), chairMat);
+  chairBack.position.set(0.5, 1.83, 1.24);
+  chairBack.castShadow = true;
+  scene.add(chairBack);
+
+  const chairArm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.28, 1.0), chairMat);
+  for (const ax of [-0.65, 0.65]) {
+    const ca = chairArm.clone();
+    ca.position.set(0.5 + ax, 1.42, 0.55);
+    scene.add(ca);
+  }
+
+  const chairPole = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.08, 1.02, 8), chairMat);
+  chairPole.position.set(0.5, 0.55, 0.55);
+  scene.add(chairPole);
+
+  const chairBase = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.58, 0.04, 5), chairMat);
+  chairBase.position.set(0.5, 0.06, 0.55);
+  scene.add(chairBase);
+
+  // ── Potato man ─────────────────────────────────────────────────────────────
+  // Man group — offset so he sits on the chair
+  const man = new THREE.Group();
+  scene.add(man);
+
+  // Legs / thighs (horizontal, sitting)
+  const thighGeo = new THREE.CylinderGeometry(0.175, 0.155, 0.9, 12);
+  const leftThigh = new THREE.Mesh(thighGeo, pantsMat);
+  leftThigh.rotation.x = Math.PI / 2;
+  leftThigh.position.set(0.22, 1.17, 0.1);
+  man.add(leftThigh);
+
+  const rightThigh = leftThigh.clone();
+  rightThigh.position.set(0.78, 1.17, 0.1);
+  man.add(rightThigh);
+
+  // Shins (hang down from thighs)
+  const shinGeo = new THREE.CylinderGeometry(0.14, 0.12, 0.75, 12);
+  for (const sx of [0.22, 0.78]) {
+    const shin = new THREE.Mesh(shinGeo, pantsMat);
+    shin.position.set(sx, 0.75, 0.58);
+    man.add(shin);
+
+    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.11, 0.42), new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.7 }));
+    shoe.position.set(sx, 0.37, 0.72);
+    man.add(shoe);
+  }
+
+  // Body (potato torso, seated)
+  const bodyGeo = new THREE.SphereGeometry(0.6, 24, 18);
+  const body = new THREE.Mesh(bodyGeo, shirtMat);
+  body.scale.set(0.92, 1.12, 0.82);
+  body.position.set(0.5, 2.05, 0.42);
+  body.castShadow = true;
+  man.add(body);
+
+  // Belly bulge (potato people always have a belly)
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.38, 16, 14), shirtMat);
+  belly.scale.set(0.88, 0.72, 0.5);
+  belly.position.set(0.5, 1.9, 0.82);
+  man.add(belly);
+
+  // Neck
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.22, 12), skinMat);
+  neck.position.set(0.5, 2.85, 0.44);
+  man.add(neck);
+
+  // Head (potato-shaped)
+  const headGeo = new THREE.SphereGeometry(0.56, 28, 22);
+  const head = new THREE.Mesh(headGeo, skinMat);
+  head.scale.set(1.05, 1.08, 1.0);
+  head.position.set(0.5, 3.47, 0.46);
+  head.castShadow = true;
+  man.add(head);
+
+  // Stubby potato-head ears
+  for (const ex of [-1, 1]) {
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), skinDark);
+    ear.scale.set(0.45, 0.65, 0.55);
+    ear.position.set(0.5 + ex * 0.6, 3.47, 0.46);
+    man.add(ear);
+  }
+
+  // Eyes (wide-set, looking slightly down at screen)
+  const eyeGeo = new THREE.SphereGeometry(0.1, 14, 12);
+  for (const [ex, ez] of [[-0.22, 0.95], [0.22, 0.95]] as [number, number][]) {
+    const eye = new THREE.Mesh(eyeGeo, eyeMat);
+    eye.position.set(0.5 + ex, 3.56, 0.46 + ez);
+    man.add(eye);
+    const gleam = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 8), whiteMat);
+    gleam.position.set(0.5 + ex + 0.04, 3.6, 0.46 + ez + 0.09);
+    man.add(gleam);
+  }
+
+  // Eyebrows (slightly furrowed — concentrating)
+  for (const [ex, rot] of [[-0.22, 0.25], [0.22, -0.25]] as [number, number][]) {
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.055, 0.055), hairMat);
+    brow.position.set(0.5 + ex, 3.69, 0.46 + 0.96);
+    brow.rotation.z = rot;
+    man.add(brow);
+  }
+
+  // Big bulbous potato nose
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.145, 14, 12), skinDark);
+  nose.scale.set(1.1, 0.9, 1.35);
+  nose.position.set(0.5, 3.47, 0.46 + 1.06);
+  man.add(nose);
+
+  // Mustache — two puffy halves + centre
+  const mustMat = new THREE.MeshStandardMaterial({ color: 0x28140a, roughness: 0.85 });
+  for (const mx of [-0.17, 0.17]) {
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), mustMat);
+    puff.scale.set(1.3, 0.65, 0.82);
+    puff.position.set(0.5 + mx, 3.3, 0.46 + 1.02);
+    man.add(puff);
+  }
+  const mustCentre = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), mustMat);
+  mustCentre.scale.set(0.55, 0.5, 0.75);
+  mustCentre.position.set(0.5, 3.33, 0.46 + 1.07);
+  man.add(mustCentre);
+
+  // Hair tuft on top
+  for (let i = 0; i < 4; i++) {
+    const tuft = new THREE.Mesh(new THREE.SphereGeometry(0.1 - i * 0.015, 8, 8), hairMat);
+    tuft.scale.set(0.5, 1.3 - i * 0.2, 0.5);
+    tuft.position.set(0.5 + (i - 1.5) * 0.13, 4.04 - i * 0.03, 0.46 + 0.15 + i * 0.05);
+    man.add(tuft);
+  }
+
+  // ── Arms (shoulder pivots for typing animation) ────────────────────────────
+  // Each pivot is at the shoulder. Rotating pivot.rotation.x makes the hand bob.
+  const leftShoulder = new THREE.Group();
+  leftShoulder.position.set(0.5 - 0.62, 2.1, 0.42);
+  man.add(leftShoulder);
+
+  const rightShoulder = new THREE.Group();
+  rightShoulder.position.set(0.5 + 0.62, 2.1, 0.42);
+  man.add(rightShoulder);
+
+  const armGeo  = new THREE.CylinderGeometry(0.12, 0.1, 0.82, 10);
+  const foreGeo = new THREE.CylinderGeometry(0.09, 0.08, 0.7, 10);
+  const handGeo = new THREE.SphereGeometry(0.13, 12, 10);
+
+  function buildArm(shoulder: typeof leftShoulder, side: -1 | 1) {
+    // Upper arm — hangs slightly outward and forward
+    const upper = new THREE.Mesh(armGeo, shirtMat);
+    upper.rotation.set(0.55, 0, side * 0.4);
+    upper.position.set(side * -0.12, -0.24, -0.25);
+    shoulder.add(upper);
+
+    // Forearm pivot at elbow
+    const elbowPivot = new THREE.Group();
+    elbowPivot.position.set(side * -0.24, -0.55, -0.62);
+    shoulder.add(elbowPivot);
+
+    const fore = new THREE.Mesh(foreGeo, skinMat);
+    fore.rotation.set(0.9, 0, side * 0.15);
+    fore.position.set(side * -0.05, -0.22, -0.28);
+    elbowPivot.add(fore);
+
+    const hand = new THREE.Mesh(handGeo, skinMat);
+    hand.scale.set(1.1, 0.7, 1.2);
+    hand.position.set(side * -0.08, -0.5, -0.6);
+    elbowPivot.add(hand);
+
+    return elbowPivot;
+  }
+
+  const leftElbow  = buildArm(leftShoulder,  -1);
+  const rightElbow = buildArm(rightShoulder,   1);
+
+  // ── Render loop ────────────────────────────────────────────────────────────
+  let frameId = 0;
+  let lastMs  = 0;
+
+  function animate(ms: number) {
+    frameId = requestAnimationFrame(animate);
+    const dt = Math.min((ms - lastMs) / 1000, 0.05);
+    lastMs = ms;
+    const t = ms * 0.001;
+
+    // Typing: arms alternate up/down by rotating shoulders
+    const freq   = 5.8;
+    const amp    = 0.09;
+    leftShoulder.rotation.x  = -0.05 + Math.sin(t * freq)           * amp;
+    rightShoulder.rotation.x = -0.05 + Math.sin(t * freq + Math.PI) * amp;
+
+    // Elbow twitch (slightly out of phase for realism)
+    leftElbow.rotation.x  =  0.06 * Math.sin(t * freq + 0.3);
+    rightElbow.rotation.x =  0.06 * Math.sin(t * freq + Math.PI + 0.3);
+
+    // Head nod (follows the screen slightly)
+    head.rotation.x = -0.18 + Math.sin(t * 1.1) * 0.03;
+
+    // Body micro-sway
+    body.rotation.z = Math.sin(t * 0.7) * 0.012;
+    man.rotation.y  = Math.sin(t * 0.45) * 0.03;
+
+    // Screen pulse
+    screenMat.emissiveIntensity = 0.65 + Math.sin(t * 2.2) * 0.07;
+    screenGlow.intensity        = 5.5  + Math.sin(t * 2.2) * 0.5;
+
+    // Cursor blink
+    cursorMesh.visible = Math.floor(t * 1.5) % 2 === 0;
+    // Cursor "moves" along bottom line occasionally
+    cursorMesh.position.x = -1.18 + ((Math.floor(t * 0.8) * 0.37) % 2.1);
+
+    renderer.render(scene, camera);
+  }
+
+  frameId = requestAnimationFrame(animate);
+
+  // ── Resize ─────────────────────────────────────────────────────────────────
+  const ro = new ResizeObserver(() => {
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  });
+  ro.observe(canvas);
+
+  return {
+    dispose() {
+      cancelAnimationFrame(frameId);
+      ro.disconnect();
+      renderer.dispose();
+    },
+  };
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function LmptfyPage() {
-  const location = useLocation();
-  const history = useHistory();
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const location  = useLocation();
+  const history   = useHistory();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const sceneRef  = useRef<{ dispose: () => void } | null>(null);
+  const inputRef  = useRef<HTMLTextAreaElement>(null);
 
-  const [inputText, setInputText] = useState('');
+  const [inputText,    setInputText]    = useState('');
   const [generatedUrl, setGeneratedUrl] = useState('');
-  const [copied, setCopied] = useState(false);
+  const [copied,       setCopied]       = useState(false);
   const [promptCopied, setPromptCopied] = useState<'chatgpt' | 'claude' | null>(null);
 
-  const params = new URLSearchParams(location.search);
-  const rawQ = params.get('q');
+  const params       = new URLSearchParams(location.search);
+  const rawQ         = params.get('q');
   const sharedPrompt = rawQ ? decodePrompt(rawQ) : null;
-
   const { displayed, done } = useTypingAnimation(sharedPrompt);
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    const api = buildPotatoScene(canvasRef.current);
+    sceneRef.current = api;
+    return () => { api.dispose(); sceneRef.current = null; };
+  }, []);
 
   const handleGenerate = useCallback(() => {
     if (!inputText.trim()) return;
@@ -97,11 +484,9 @@ export default function LmptfyPage() {
     async (target: 'chatgpt' | 'claude') => {
       const prompt = sharedPrompt ?? inputText.trim();
       if (!prompt) return;
-
       await navigator.clipboard.writeText(prompt);
       setPromptCopied(target);
       setTimeout(() => setPromptCopied(null), 2500);
-
       const url = target === 'chatgpt' ? chatgptUrl(prompt) : claudeUrl(prompt);
       window.open(url, '_blank', 'noopener,noreferrer');
     },
@@ -138,112 +523,115 @@ export default function LmptfyPage() {
           </p>
         </div>
 
-        {/* Shared prompt viewer */}
-        {hasSharedPrompt && (
-          <div className={styles.viewerSection}>
-            <div className={styles.chatBox}>
-              <div className={styles.chatBoxContent}>
-                {displayed.length === 0 ? (
-                  <span className={styles.chatPlaceholder}>
-                    How can I help you today?
-                    <span className={styles.caret} />
-                  </span>
-                ) : (
-                  <span className={styles.typedText}>
-                    {displayed}
-                    {!done && <span className={styles.caret} />}
-                  </span>
-                )}
-              </div>
-              <div className={styles.chatBoxFooter}>
-                <button className={styles.attachBtn} aria-label="Attach" tabIndex={-1}>
-                  <PlusIcon />
-                </button>
-                <div className={styles.chatBoxFooterRight}>
-                  {done && (
-                    <>
-                      <button
-                        className={`${styles.aiChip} ${styles.chatgptChip}`}
-                        onClick={() => handleOpenAI('chatgpt')}
-                      >
-                        <ChatGPTIcon />
-                        Ask ChatGPT
-                        {promptCopied === 'chatgpt' && (
-                          <span className={styles.copiedBadge}>Prompt copied!</span>
-                        )}
-                      </button>
-                      <button
-                        className={`${styles.aiChip} ${styles.claudeChip}`}
-                        onClick={() => handleOpenAI('claude')}
-                      >
-                        <ClaudeIcon />
-                        Ask Claude
-                        {promptCopied === 'claude' && (
-                          <span className={styles.copiedBadge}>Prompt copied!</span>
-                        )}
-                      </button>
-                    </>
-                  )}
+        <div className={styles.layout}>
+          {/* Scene */}
+          <div className={styles.sceneWrap}>
+            <canvas ref={canvasRef} className={styles.canvas} />
+          </div>
+
+          {/* Right panel */}
+          <div className={styles.rightPanel}>
+            {/* Shared prompt viewer */}
+            {hasSharedPrompt && (
+              <div className={styles.viewerSection}>
+                <div className={styles.chatBox}>
+                  <div className={styles.chatBoxContent}>
+                    {displayed.length === 0 ? (
+                      <span className={styles.chatPlaceholder}>
+                        How can I help you today?
+                        <span className={styles.caret} />
+                      </span>
+                    ) : (
+                      <span className={styles.typedText}>
+                        {displayed}
+                        {!done && <span className={styles.caret} />}
+                      </span>
+                    )}
+                  </div>
+                  <div className={styles.chatBoxFooter}>
+                    <button className={styles.attachBtn} aria-label="Attach" tabIndex={-1}>
+                      <PlusIcon />
+                    </button>
+                    {done && (
+                      <div className={styles.chipRow}>
+                        <button
+                          className={`${styles.aiChip} ${styles.chatgptChip}`}
+                          onClick={() => handleOpenAI('chatgpt')}
+                        >
+                          <ChatGPTIcon />
+                          Ask ChatGPT
+                          {promptCopied === 'chatgpt' && (
+                            <span className={styles.copiedBadge}>Prompt copied!</span>
+                          )}
+                        </button>
+                        <button
+                          className={`${styles.aiChip} ${styles.claudeChip}`}
+                          onClick={() => handleOpenAI('claude')}
+                        >
+                          <ClaudeIcon />
+                          Ask Claude
+                          {promptCopied === 'claude' && (
+                            <span className={styles.copiedBadge}>Prompt copied!</span>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className={styles.divider}>
+                  <span>or generate your own</span>
                 </div>
               </div>
-            </div>
+            )}
 
-            <div className={styles.divider}>
-              <span>or generate your own</span>
-            </div>
-          </div>
-        )}
-
-        {/* Generator */}
-        <div className={styles.generatorSection}>
-          <p className={styles.generatorLabel}>
-            {hasSharedPrompt
-              ? 'Create a new LMPTFY link'
-              : 'Type a prompt to generate a shareable link'}
-          </p>
-          <div className={styles.chatBox}>
-            <textarea
-              ref={inputRef}
-              className={styles.chatInput}
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="How can I help you today?"
-              rows={3}
-            />
-            <div className={styles.chatBoxFooter}>
-              <button className={styles.attachBtn} aria-label="Attach" tabIndex={-1}>
-                <PlusIcon />
-              </button>
-              <div className={styles.chatBoxFooterRight}>
-                <button
-                  className={styles.sendCircleBtn}
-                  onClick={handleGenerate}
-                  disabled={!inputText.trim()}
-                  title="Generate shareable link"
-                >
-                  <ArrowUpIcon />
-                </button>
+            {/* Generator */}
+            <div className={styles.generatorSection}>
+              <p className={styles.generatorLabel}>
+                {hasSharedPrompt ? 'New LMPTFY link' : 'Type a prompt to generate a shareable link'}
+              </p>
+              <div className={styles.chatBox}>
+                <textarea
+                  ref={inputRef}
+                  className={styles.chatInput}
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="How can I help you today?"
+                  rows={3}
+                />
+                <div className={styles.chatBoxFooter}>
+                  <button className={styles.attachBtn} aria-label="Attach" tabIndex={-1}>
+                    <PlusIcon />
+                  </button>
+                  <button
+                    className={styles.sendCircleBtn}
+                    onClick={handleGenerate}
+                    disabled={!inputText.trim()}
+                    title="Generate shareable link"
+                  >
+                    <ArrowUpIcon />
+                  </button>
+                </div>
               </div>
+
+              {generatedUrl && (
+                <div className={styles.resultBox}>
+                  <span className={styles.resultUrl}>{generatedUrl}</span>
+                  <button className={styles.copyBtn} onClick={handleCopyUrl}>
+                    {copied ? '✓ Copied!' : 'Copy link'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className={styles.about}>
+              <p>
+                <strong>LMPTFY</strong> — share a link, let the typing animation do the
+                passive-aggressive work.
+              </p>
             </div>
           </div>
-
-          {generatedUrl && (
-            <div className={styles.resultBox}>
-              <span className={styles.resultUrl}>{generatedUrl}</span>
-              <button className={styles.copyBtn} onClick={handleCopyUrl}>
-                {copied ? '✓ Copied!' : 'Copy link'}
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className={styles.about}>
-          <p>
-            <strong>LMPTFY</strong> is a playful tool for sending people a hint to just ask an AI
-            themselves. Generate a link, share it, and let the typing animation do the
-            passive-aggressive work for you.
-          </p>
         </div>
       </div>
     </Layout>

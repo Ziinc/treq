@@ -5,7 +5,7 @@
   flex-direction: column;
   min-height: calc(100vh - var(--ifm-navbar-height));
   padding: 0 1.5rem 4rem;
-  max-width: 760px;
+  max-width: 1120px;
   margin: 0 auto;
   width: 100%;
 }
@@ -13,7 +13,7 @@
 /* ── Header ──────────────────────────────────────────────────────────────────── */
 
 .header {
-  padding: 2rem 0 1.75rem;
+  padding: 2rem 0 1.5rem;
 }
 
 .breadcrumb {
@@ -43,37 +43,80 @@
   margin: 0;
 }
 
+/* ── Two-column layout ───────────────────────────────────────────────────────── */
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Scene ───────────────────────────────────────────────────────────────────── */
+
+.sceneWrap {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #0d0c14;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: 460px;
+}
+
+@media (max-width: 860px) {
+  .canvas { height: 300px; }
+}
+
+/* ── Right panel ─────────────────────────────────────────────────────────────── */
+
+.rightPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
 /* ── Viewer section ──────────────────────────────────────────────────────────── */
 
 .viewerSection {
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
 }
 
-/* ── Chat box (shared between viewer and generator) ──────────────────────────── */
+/* ── Chat box ────────────────────────────────────────────────────────────────── */
 
 .chatBox {
   background: var(--ifm-background-surface-color);
   border: 1px solid var(--ifm-color-emphasis-200);
   border-radius: 20px;
-  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.07);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.07);
   overflow: hidden;
   transition: box-shadow 0.2s;
 }
 
 .chatBox:focus-within {
-  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.1), 0 0 0 3px rgba(var(--ifm-color-primary-rgb), 0.1);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1), 0 0 0 3px rgba(var(--ifm-color-primary-rgb), 0.1);
 }
 
 [data-theme='dark'] .chatBox {
-  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
 }
 
-/* ── Chat content area (viewer typed text) ───────────────────────────────────── */
+/* ── Viewer content ──────────────────────────────────────────────────────────── */
 
 .chatBoxContent {
-  padding: 1.4rem 1.5rem 0.75rem;
-  min-height: 90px;
-  font-size: 1.05rem;
+  padding: 1.2rem 1.4rem 0.6rem;
+  min-height: 80px;
+  font-size: 1rem;
   line-height: 1.6;
   color: var(--ifm-font-color-base);
 }
@@ -105,7 +148,7 @@
   50%       { opacity: 0; }
 }
 
-/* ── Chat textarea (generator) ───────────────────────────────────────────────── */
+/* ── Generator textarea ──────────────────────────────────────────────────────── */
 
 .chatInput {
   display: block;
@@ -114,8 +157,8 @@
   border: none;
   outline: none;
   background: transparent;
-  padding: 1.4rem 1.5rem 0.5rem;
-  font-size: 1.05rem;
+  padding: 1.2rem 1.4rem 0.5rem;
+  font-size: 1rem;
   font-family: inherit;
   line-height: 1.6;
   color: var(--ifm-font-color-base);
@@ -126,25 +169,28 @@
   color: var(--ifm-color-emphasis-400);
 }
 
-/* ── Chat box footer (toolbar row) ──────────────────────────────────────────── */
+/* ── Chat box footer ─────────────────────────────────────────────────────────── */
 
 .chatBoxFooter {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.75rem 1rem;
+  gap: 0.5rem;
+  padding: 0.65rem 0.9rem;
   border-top: 1px solid var(--ifm-color-emphasis-100);
 }
 
-.chatBoxFooterRight {
+/* ── Chip row (viewer) ───────────────────────────────────────────────────────── */
+
+.chipRow {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.45rem;
   margin-left: auto;
-  animation: fadeIn 0.25s ease;
+  flex-wrap: wrap;
+  animation: fadeUp 0.25s ease;
 }
 
-@keyframes fadeIn {
+@keyframes fadeUp {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
@@ -155,29 +201,30 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 8px;
   border: 1px solid var(--ifm-color-emphasis-300);
   background: none;
-  color: var(--ifm-color-emphasis-600);
+  color: var(--ifm-color-emphasis-500);
   cursor: default;
   flex-shrink: 0;
 }
 
-/* ── Send circle button (generator) ─────────────────────────────────────────── */
+/* ── Send circle button ──────────────────────────────────────────────────────── */
 
 .sendCircleBtn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 33px;
+  height: 33px;
   border-radius: 50%;
   border: none;
   background: #1a1a1a;
   color: #fff;
   cursor: pointer;
+  margin-left: auto;
   flex-shrink: 0;
   transition: opacity 0.15s, transform 0.12s;
 }
@@ -191,29 +238,23 @@
   background: var(--ifm-color-emphasis-300);
   color: var(--ifm-color-emphasis-500);
   cursor: not-allowed;
-  transform: none;
 }
 
-[data-theme='dark'] .sendCircleBtn {
+[data-theme='dark'] .sendCircleBtn:not(:disabled) {
   background: #e8e8e8;
   color: #111;
 }
 
-[data-theme='dark'] .sendCircleBtn:disabled {
-  background: var(--ifm-color-emphasis-300);
-  color: var(--ifm-color-emphasis-500);
-}
-
-/* ── AI chip buttons (viewer footer) ────────────────────────────────────────── */
+/* ── AI chip buttons ─────────────────────────────────────────────────────────── */
 
 .aiChip {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.38rem 0.9rem;
+  gap: 0.38rem;
+  padding: 0.35rem 0.85rem;
   border-radius: 999px;
   border: 1.5px solid transparent;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.15s, transform 0.12s;
@@ -221,14 +262,8 @@
   white-space: nowrap;
 }
 
-.aiChip:hover {
-  opacity: 0.85;
-  transform: translateY(-1px);
-}
-
-.aiChip:active {
-  transform: translateY(0);
-}
+.aiChip:hover  { opacity: 0.85; transform: translateY(-1px); }
+.aiChip:active { transform: translateY(0); }
 
 .chatgptChip {
   background: #d4f0e8;
@@ -255,8 +290,8 @@
 }
 
 .aiIcon {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   flex-shrink: 0;
 }
 
@@ -267,13 +302,13 @@
   transform: translateX(-50%);
   background: #1e293b;
   color: #fff;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 500;
-  padding: 3px 9px;
+  padding: 3px 8px;
   border-radius: 6px;
   white-space: nowrap;
   pointer-events: none;
-  animation: fadeIn 0.15s ease;
+  animation: fadeUp 0.15s ease;
 }
 
 [data-theme='dark'] .copiedBadge {
@@ -286,10 +321,10 @@
 .divider {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin: 2rem 0 1.5rem;
+  gap: 0.85rem;
+  margin: 1.25rem 0 1rem;
   color: var(--ifm-color-emphasis-500);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
 }
 
 .divider::before,
@@ -303,34 +338,34 @@
 /* ── Generator section ───────────────────────────────────────────────────────── */
 
 .generatorSection {
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
 }
 
 .generatorLabel {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: var(--ifm-color-emphasis-600);
-  margin: 0 0 0.6rem;
+  margin: 0 0 0.5rem;
 }
 
 /* ── Result box ──────────────────────────────────────────────────────────────── */
 
 .resultBox {
-  margin-top: 0.85rem;
+  margin-top: 0.75rem;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.65rem 1rem;
+  gap: 0.65rem;
+  padding: 0.6rem 0.9rem;
   border-radius: 12px;
   border: 1px solid var(--ifm-color-emphasis-200);
   background: var(--ifm-color-emphasis-100);
-  animation: fadeIn 0.22s ease;
+  animation: fadeUp 0.22s ease;
   flex-wrap: wrap;
 }
 
 .resultUrl {
   flex: 1;
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   font-family: var(--ifm-font-family-monospace);
   color: var(--ifm-color-emphasis-700);
   word-break: break-all;
@@ -342,8 +377,8 @@
   background: none;
   border: 1px solid var(--ifm-color-emphasis-300);
   border-radius: 7px;
-  padding: 0.32rem 0.8rem;
-  font-size: 0.78rem;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--ifm-color-emphasis-700);
   cursor: pointer;
@@ -361,12 +396,12 @@
 
 .about {
   border-top: 1px solid var(--ifm-color-emphasis-200);
-  padding-top: 1.5rem;
+  padding-top: 1.25rem;
   margin-top: 0.5rem;
 }
 
 .about p {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: var(--ifm-color-emphasis-600);
   margin: 0;
   line-height: 1.6;
