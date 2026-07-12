@@ -1,24 +1,34 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Layout from '@theme/Layout';
 import { renderGraph } from './_graph-shared';
-import { SCENARIOS, type VcsTag, type SimStep } from './_vcs-simulator-scenarios';
+import {
+  SCENARIOS,
+  type TerminalDef,
+  type VcsTag,
+  type SimStep,
+  type Scenario,
+} from './_vcs-simulator-scenarios';
 import styles from './vcs-simulator.module.css';
 
 // ── VCS badge ─────────────────────────────────────────────────────────────────
 
 function VcsBadge({ vcs }: { vcs: VcsTag }) {
   const cls =
-    vcs === 'git'
-      ? styles.vcsBadgeGit
-      : vcs === 'jj'
-        ? styles.vcsBadgeJj
-        : styles.vcsBadgeShell;
+    vcs === 'git' ? styles.vcsBadgeGit : vcs === 'jj' ? styles.vcsBadgeJj : styles.vcsBadgeShell;
   return <span className={`${styles.vcsBadge} ${cls}`}>{vcs === 'shell' ? '$' : vcs}</span>;
 }
 
 // ── Terminal ───────────────────────────────────────────────────────────────────
 
-function Terminal({ step }: { step: SimStep | null }) {
+function Terminal({
+  step,
+  def,
+  isActive,
+}: {
+  step: SimStep | null;
+  def?: TerminalDef;
+  isActive?: boolean;
+}) {
   const commandClass =
     step?.vcs === 'git'
       ? styles.terminalCommandGit
@@ -26,28 +36,39 @@ function Terminal({ step }: { step: SimStep | null }) {
         ? styles.terminalCommandJj
         : styles.terminalCommand;
 
+  const prompt = def ? `${def.cwd} $ ` : '$ ';
+  const inactive = def && isActive === false;
+
   return (
-    <div className={styles.terminalPanel}>
+    <div className={`${styles.terminalPanel} ${inactive ? styles.terminalInactive : ''}`}>
       <div className={styles.terminalHeader}>
         <div className={styles.terminalDots}>
-          <div className={styles.terminalDot} style={{ background: '#ef4444' }} />
-          <div className={styles.terminalDot} style={{ background: '#f59e0b' }} />
-          <div className={styles.terminalDot} style={{ background: '#10b981' }} />
+          <div className={styles.terminalDot} style={{ background: inactive ? '#475569' : '#ef4444' }} />
+          <div className={styles.terminalDot} style={{ background: inactive ? '#475569' : '#f59e0b' }} />
+          <div className={styles.terminalDot} style={{ background: inactive ? '#475569' : '#10b981' }} />
         </div>
-        <span className={styles.terminalTitle}>terminal</span>
+        <span className={styles.terminalTitle}>
+          {def ? def.label : 'terminal'}
+        </span>
+        {def && (
+          <span className={styles.terminalCwd}>{def.cwd}</span>
+        )}
+        {def && isActive && (
+          <span className={styles.terminalActivePill}>active</span>
+        )}
       </div>
-      <div className={styles.terminalBody}>
+      <div className={`${styles.terminalBody} ${inactive ? styles.terminalBodyInactive : ''}`}>
         {!step ? (
-          <span className={styles.terminalEmpty}>Select a step to execute it...</span>
+          <span className={styles.terminalEmpty}>
+            {def && !isActive ? 'Waiting...' : 'Select a step to execute it...'}
+          </span>
         ) : (
           <>
             <div>
-              <span className={styles.terminalPrompt}>$ </span>
+              <span className={styles.terminalPrompt}>{prompt}</span>
               <span className={commandClass}>{step.command}</span>
             </div>
-            {step.output && (
-              <div className={styles.terminalOutput}>{step.output}</div>
-            )}
+            {step.output && <div className={styles.terminalOutput}>{step.output}</div>}
           </>
         )}
       </div>
@@ -55,15 +76,34 @@ function Terminal({ step }: { step: SimStep | null }) {
   );
 }
 
+// ── Multi-terminal layout ─────────────────────────────────────────────────────
+
+function MultiTerminal({
+  terminals,
+  terminalStates,
+  activeTerminalId,
+}: {
+  terminals: TerminalDef[];
+  terminalStates: Record<string, SimStep | null>;
+  activeTerminalId: string | undefined;
+}) {
+  return (
+    <div className={styles.multiTerminal}>
+      {terminals.map((term) => (
+        <Terminal
+          key={term.id}
+          step={terminalStates[term.id]}
+          def={term}
+          isActive={term.id === activeTerminalId}
+        />
+      ))}
+    </div>
+  );
+}
+
 // ── Graph canvas ───────────────────────────────────────────────────────────────
 
-function GraphCanvas({
-  step,
-  dark,
-}: {
-  step: SimStep | null;
-  dark: boolean;
-}) {
+function GraphCanvas({ step, dark }: { step: SimStep | null; dark: boolean }) {
   const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
@@ -78,9 +118,7 @@ function GraphCanvas({
   return (
     <div className={styles.graphPanel}>
       <div className={styles.graphHeader}>
-        <span className={styles.graphTitle}>
-          {step ? step.graphState.title : 'Commit graph'}
-        </span>
+        <span className={styles.graphTitle}>{step ? step.graphState.title : 'Commit graph'}</span>
         <span className={styles.graphMeta}>
           {step
             ? `${step.graphState.commits.length} commit${step.graphState.commits.length !== 1 ? 's' : ''}`
@@ -94,16 +132,41 @@ function GraphCanvas({
   );
 }
 
+// ── Terminal state helper ──────────────────────────────────────────────────────
+
+function computeTerminalStates(
+  scenario: Scenario,
+  stepIdx: number,
+): Record<string, SimStep | null> {
+  if (!scenario.terminals) return {};
+  const states: Record<string, SimStep | null> = {};
+  for (const t of scenario.terminals) states[t.id] = null;
+  for (let i = 0; i <= stepIdx; i++) {
+    const step = scenario.steps[i];
+    const tid = step.terminalId ?? scenario.terminals[0].id;
+    if (tid in states) states[tid] = step;
+  }
+  return states;
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function VcsSimulatorPage() {
   const [scenarioIdx, setScenarioIdx] = useState(0);
-  const [stepIdx, setStepIdx] = useState(-1); // -1 = before any step
+  const [stepIdx, setStepIdx] = useState(-1);
   const [dark, setDark] = useState(false);
 
   const scenario = SCENARIOS[scenarioIdx];
   const currentStep = stepIdx >= 0 ? scenario.steps[stepIdx] : null;
   const totalSteps = scenario.steps.length;
+  const isMultiTerminal = !!scenario.terminals;
+
+  const terminalStates = useMemo(
+    () => computeTerminalStates(scenario, stepIdx),
+    [scenario, stepIdx],
+  );
+
+  const activeTerminalId = currentStep?.terminalId ?? scenario.terminals?.[0]?.id;
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
@@ -117,20 +180,6 @@ export default function VcsSimulatorPage() {
     setScenarioIdx(idx);
     setStepIdx(-1);
   };
-
-  const handleStep = (idx: number) => {
-    setStepIdx(idx);
-  };
-
-  const handleNext = () => {
-    if (stepIdx < totalSteps - 1) setStepIdx((i) => i + 1);
-  };
-
-  const handleBack = () => {
-    if (stepIdx > -1) setStepIdx((i) => i - 1);
-  };
-
-  const handleReset = () => setStepIdx(-1);
 
   return (
     <Layout
@@ -189,16 +238,14 @@ export default function VcsSimulatorPage() {
               {scenario.steps.map((step, i) => {
                 const isDone = i < stepIdx;
                 const isActive = i === stepIdx;
-                const isPending = i > stepIdx;
-
                 return (
                   <div
                     key={i}
                     className={`${styles.stepItem} ${isActive ? styles.stepItemActive : ''} ${isDone ? styles.stepItemDone : ''}`}
-                    onClick={() => handleStep(i)}
+                    onClick={() => setStepIdx(i)}
                     role="button"
                     tabIndex={0}
-                    onKeyDown={(e) => e.key === 'Enter' && handleStep(i)}
+                    onKeyDown={(e) => e.key === 'Enter' && setStepIdx(i)}
                     aria-label={`Step ${i + 1}: ${step.command}`}
                   >
                     <div
@@ -209,6 +256,11 @@ export default function VcsSimulatorPage() {
                     <div className={styles.stepContent}>
                       <div className={styles.stepCommand}>
                         <VcsBadge vcs={step.vcs} />
+                        {isMultiTerminal && step.terminalId && (
+                          <span className={styles.stepTerminalBadge}>
+                            {scenario.terminals!.find((t) => t.id === step.terminalId)?.label ?? step.terminalId}
+                          </span>
+                        )}
                         <span>{step.command}</span>
                       </div>
                       <div className={styles.stepDesc}>{step.description}</div>
@@ -221,21 +273,21 @@ export default function VcsSimulatorPage() {
             <div className={styles.stepsNav}>
               <button
                 className={styles.navBtn}
-                onClick={handleBack}
+                onClick={() => setStepIdx((i) => Math.max(-1, i - 1))}
                 disabled={stepIdx < 0}
               >
                 ← Back
               </button>
               <button
                 className={`${styles.navBtn} ${styles.navBtnPrimary}`}
-                onClick={handleNext}
+                onClick={() => setStepIdx((i) => Math.min(totalSteps - 1, i + 1))}
                 disabled={stepIdx >= totalSteps - 1}
               >
                 {stepIdx < 0 ? 'Start →' : 'Next →'}
               </button>
               <button
                 className={styles.resetBtn}
-                onClick={handleReset}
+                onClick={() => setStepIdx(-1)}
                 disabled={stepIdx < 0}
                 title="Reset to beginning"
               >
@@ -244,7 +296,7 @@ export default function VcsSimulatorPage() {
             </div>
           </div>
 
-          {/* Right: graph + terminal */}
+          {/* Right: graph + terminal(s) */}
           <div className={styles.rightPanel}>
             {currentStep && (
               <div className={styles.infoBox}>
@@ -254,7 +306,16 @@ export default function VcsSimulatorPage() {
             )}
 
             <GraphCanvas step={currentStep} dark={dark} />
-            <Terminal step={currentStep} />
+
+            {isMultiTerminal ? (
+              <MultiTerminal
+                terminals={scenario.terminals!}
+                terminalStates={terminalStates}
+                activeTerminalId={activeTerminalId}
+              />
+            ) : (
+              <Terminal step={currentStep} />
+            )}
           </div>
         </div>
       </div>
