@@ -886,9 +886,9 @@ export function DagVisualizerContent() {
         <div className={styles.breadcrumb}>
           <a href="/tools">Tools</a>
           <span> / </span>
-          <span>Workflow Builder</span>
+          <span>DAG Visualizer</span>
         </div>
-        <h1 className={styles.pageTitle}>Workflow Builder</h1>
+        <h1 className={styles.pageTitle}>DAG Visualizer</h1>
         <p className={styles.pageSubtitle}>
           Map AI agent workflows as interactive graphs. Click a node to edit its agent, model, prompt, and skills.
           Click a connection to mark it as a delegation flow. Shift-click or drag-select nodes, then click "Group selected" to wrap them in a dotted box.
