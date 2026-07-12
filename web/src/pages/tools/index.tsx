@@ -44,6 +44,14 @@ const tools = [
     icon: '🦆',
     tags: ['fun', 'debugging', 'rubber-duck'],
   },
+  {
+    name: 'The Engineering Conspiracy Board™',
+    slug: 'conspiracy-board',
+    description:
+      'Connect technologies with red string and watch increasingly unhinged theories emerge about why everything is broken.',
+    icon: '📌',
+    tags: ['fun', 'architecture', 'blame'],
+  },
 ];
 
 export default function ToolsPage() {

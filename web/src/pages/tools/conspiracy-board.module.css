@@ -1,0 +1,267 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - var(--ifm-navbar-height));
+  padding: 0 1.5rem 4rem;
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  padding: 2rem 0 1.5rem;
+}
+
+.breadcrumb {
+  font-size: 0.8rem;
+  color: var(--ifm-color-emphasis-600);
+  margin-bottom: 0.5rem;
+}
+
+.breadcrumb a {
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  text-decoration: underline;
+}
+
+.pageTitle {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0 0 0.4rem;
+  font-family: 'Courier New', monospace;
+  letter-spacing: -0.02em;
+}
+
+.pageTitleAccent {
+  color: #dc2626;
+}
+
+.pageSubtitle {
+  font-size: 0.95rem;
+  color: var(--ifm-color-emphasis-600);
+  margin: 0;
+}
+
+/* ── Board ──────────────────────────────────────────────────────────────────── */
+
+.boardWrap {
+  position: relative;
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.45);
+}
+
+.boardCanvas {
+  display: block;
+  width: 100%;
+  height: 520px;
+  cursor: crosshair;
+}
+
+.boardCanvas.dragging {
+  cursor: grabbing;
+}
+
+/* cork texture via CSS */
+.boardWrap::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(ellipse at 20% 30%, rgba(180,120,60,0.07) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 70%, rgba(140,90,40,0.08) 0%, transparent 50%);
+  z-index: 1;
+  border-radius: 12px;
+}
+
+/* ── Connection count badge ─────────────────────────────────────────────────── */
+
+.statsBar {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.6rem 1rem;
+  background: rgba(0,0,0,0.03);
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 8px;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: var(--ifm-color-emphasis-700);
+  flex-wrap: wrap;
+}
+
+.statItem {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.statLabel {
+  font-weight: 600;
+}
+
+.statValue {
+  color: #dc2626;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+}
+
+.resetBtn {
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 6px;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.8rem;
+  color: var(--ifm-color-emphasis-700);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.resetBtn:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+/* ── Theory panel ───────────────────────────────────────────────────────────── */
+
+.theoryPanel {
+  margin-top: 1.5rem;
+  border-radius: 10px;
+  border: 2px solid #dc2626;
+  background: var(--ifm-card-background-color, var(--ifm-background-surface-color));
+  overflow: hidden;
+  animation: fadeSlide 0.4s ease;
+}
+
+@keyframes fadeSlide {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.theoryHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #dc2626;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.9rem;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.theoryHeaderIcon {
+  font-size: 1.1rem;
+}
+
+.theoryBadge {
+  margin-left: auto;
+  background: rgba(255,255,255,0.2);
+  border-radius: 999px;
+  padding: 0.1rem 0.6rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+}
+
+.theoryBody {
+  padding: 1rem 1.2rem;
+}
+
+.theoryList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.theoryItem {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.6rem 0.9rem;
+  border-radius: 7px;
+  background: rgba(220, 38, 38, 0.05);
+  border-left: 3px solid #dc2626;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  animation: slideIn 0.35s ease;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.theoryItem.theoryItemFinal {
+  border-left-color: #f97316;
+  background: rgba(249, 115, 22, 0.08);
+  font-weight: 600;
+}
+
+.theoryIcon {
+  flex-shrink: 0;
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.theoryText {
+  flex: 1;
+}
+
+/* ── Instructions ───────────────────────────────────────────────────────────── */
+
+.instructions {
+  margin-top: 1.5rem;
+  font-size: 0.85rem;
+  color: var(--ifm-color-emphasis-600);
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.instructionStep {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.instructionNum {
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  background: #dc2626;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .boardCanvas {
+    height: 360px;
+  }
+
+  .statsBar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .resetBtn {
+    margin-left: 0;
+  }
+}
