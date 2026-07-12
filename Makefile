@@ -7,9 +7,8 @@ bump:
 	fi; \
 	if [ -z "$$NEW" ]; then echo "No version entered, aborting."; exit 1; fi; \
 	echo "Bumping $$CURRENT -> $$NEW"; \
-	sed -i '' "0,/\"version\": \"[^\"]*\"/s//\"version\": \"$$NEW\"/" package.json; \
-	sed -i '' "0,/\"version\": \"[^\"]*\"/s//\"version\": \"$$NEW\"/" src-tauri/tauri.conf.json; \
-	sed -i '' "0,/^version = \"[^\"]*\"/s//version = \"$$NEW\"/" src-tauri/Cargo.toml; \
+	perl -0pi -e 's/"version": "[^"]*"/"version": "'"$$NEW"'"/' package.json; \
+	perl -0pi -e 's/"version": "[^"]*"/"version": "'"$$NEW"'"/' src-tauri/tauri.conf.json; \
+	perl -0pi -e 's/^version = "[^"]*"/version = "'"$$NEW"'"/m' src-tauri/Cargo.toml; \
 	(cd src-tauri && cargo update -p treq 2>/dev/null) || true; \
 	echo "Done."
-2

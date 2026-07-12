@@ -85,12 +85,7 @@ const sidebars: SidebarsConfig = {
       label: 'Tutorials',
       link: {type: 'doc', id: 'tutorials/index'},
       items: [
-        'tutorials/committing-changes',
-        'tutorials/creating-terminal-sessions',
-        'tutorials/using-treq-with-git-repo',
-        'tutorials/managing-workspaces',
-        'tutorials/merging-workspaces',
-        'tutorials/code-review-workflow',
+        'tutorials/setting-up-claude-code',
       ],
     },
     {
