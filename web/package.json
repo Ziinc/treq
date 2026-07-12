@@ -24,6 +24,7 @@
     "@mdx-js/react": "^3.1.1",
     "@stripe/stripe-js": "^8.11.0",
     "@supabase/supabase-js": "^2.108.2",
+    "@types/three": "^0.185.1",
     "@xyflow/react": "^12.11.2",
     "clsx": "^2.1.1",
     "lucide-react": "^0.563.0",
@@ -32,7 +33,8 @@
     "react-dom": "^19.2.7",
     "roughjs": "^4.6.6",
     "sql.js": "^1.14.1",
-    "sql.js-httpvfs": "^0.8.12"
+    "sql.js-httpvfs": "^0.8.12",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@docusaurus/faster": "^3.10.1",
