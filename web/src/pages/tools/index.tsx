@@ -36,6 +36,14 @@ const tools = [
     icon: '🥔',
     tags: ['fun', 'ideas', 'vibes'],
   },
+  {
+    name: 'Rubber Duck Debugger',
+    slug: 'rubber-duck',
+    description:
+      'Explain your bug to a giant rubber duck. The duck will quack. You will solve it yourself.',
+    icon: '🦆',
+    tags: ['fun', 'debugging', 'rubber-duck'],
+  },
 ];
 
 export default function ToolsPage() {
