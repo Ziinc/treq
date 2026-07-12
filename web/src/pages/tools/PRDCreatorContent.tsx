@@ -125,7 +125,7 @@ interface SectionProps {
 
 function Section({ num, title, collapsed, onToggle, children }: SectionProps) {
   return (
-    <div className={styles.section}>
+    <div className={styles.section} data-testid="prd-section" data-section-title={title}>
       <div className={styles.sectionHead} onClick={onToggle}>
         <span className={styles.sectionNum}>{String(num).padStart(2, '0')}</span>
         <span className={styles.sectionTitle}>{title}</span>
@@ -635,7 +635,7 @@ export function PRDCreatorContent() {
   const sorted = [...prds].sort((a, b) => b.modified - a.modified);
 
   return (
-    <div className={styles.app}>
+    <div className={styles.app} data-testid="prd-app">
       {/* Sidebar */}
       <aside className={styles.sidebar}>
         <div className={styles.sidebarHead}>
@@ -656,6 +656,7 @@ export function PRDCreatorContent() {
           {sorted.map((p) => (
             <div
               key={p.id}
+              data-testid="prd-sidebar-item"
               className={`${styles.sidebarItem} ${p.id === currentId ? styles.sidebarItemActive : ''}`}
               onClick={() => setCurrentId(p.id)}
             >
@@ -980,7 +981,7 @@ export function PRDCreatorContent() {
           </>
         ) : (
           /* Empty state */
-          <div className={styles.contentWrap}>
+          <div className={styles.contentWrap} data-testid="prd-empty-state">
             <div className={styles.empty}>
               <FileText size={52} className={styles.emptyIcon} />
               <h3 className={styles.emptyTitle}>No PRD open</h3>

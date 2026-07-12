@@ -204,3 +204,158 @@ test.describe('DAG Visualizer (/tools/dag-visualizer)', () => {
     expect(names).toContain('Deploy');
   });
 });
+
+// ── PRD Creator ───────────────────────────────────────────────────────────────
+
+test.describe('Tools index lists PRD Creator', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('link', { name: 'Tools' }).click();
+  });
+
+  test('lists the PRD Creator card', async ({ page }) => {
+    await expect(page.getByRole('link', { name: /PRD Creator/ })).toBeVisible();
+  });
+
+  test('PRD Creator card navigates to the tool', async ({ page }) => {
+    await page.getByRole('link', { name: /PRD Creator/ }).click();
+    await expect(page.getByTestId('prd-app')).toBeVisible({ timeout: 10_000 });
+  });
+});
+
+test.describe('PRD Creator (/tools/prd-creator)', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/tools/prd-creator');
+    // Clear any stored PRDs so each test starts fresh
+    await page.evaluate(() => localStorage.removeItem('prd-studio-v1'));
+    await page.reload();
+    await page.getByTestId('prd-app').waitFor({ timeout: 10_000 });
+  });
+
+  test('renders page title in document head', async ({ page }) => {
+    await expect(page).toHaveTitle(/PRD Creator/);
+  });
+
+  test('shows empty state when no PRD is open', async ({ page }) => {
+    await expect(page.getByTestId('prd-empty-state')).toBeVisible();
+  });
+
+  test('New PRD button creates a document with all 7 sections', async ({ page }) => {
+    await page.getByRole('button', { name: /New PRD/ }).first().click();
+    await expect(page.getByTestId('prd-section')).toHaveCount(7, { timeout: 5_000 });
+  });
+
+  test('section headers are visible after creating a PRD', async ({ page }) => {
+    await page.getByRole('button', { name: /New PRD/ }).first().click();
+    await page.getByTestId('prd-section').first().waitFor();
+    await expect(page.getByText('Overview', { exact: true })).toBeVisible();
+    await expect(page.getByText('Competitor Analysis', { exact: true })).toBeVisible();
+    await expect(page.getByText('User Stories', { exact: true })).toBeVisible();
+    await expect(page.getByText('Options', { exact: true })).toBeVisible();
+    await expect(page.getByText('Implementation Plan', { exact: true })).toBeVisible();
+    await expect(page.getByText('Completion Criteria', { exact: true })).toBeVisible();
+    await expect(page.getByText('Follow-up Tasks & Notes', { exact: true })).toBeVisible();
+  });
+
+  test('title input accepts text and appears in sidebar', async ({ page }) => {
+    await page.getByRole('button', { name: /New PRD/ }).first().click();
+    await page.locator('#prd-title-input').fill('My Test PRD');
+    await expect(page.getByTestId('prd-sidebar-item').filter({ hasText: 'My Test PRD' })).toBeVisible({ timeout: 3_000 });
+  });
+
+  test('clicking a section header collapses and expands it', async ({ page }) => {
+    await page.getByRole('button', { name: /New PRD/ }).first().click();
+    const overviewSection = page.getByTestId('prd-section').filter({ has: page.getByText('Overview', { exact: true }) });
+    const textarea = overviewSection.locator('textarea');
+    await expect(textarea).toBeVisible();
+    // Collapse
+    await overviewSection.locator('[class*="sectionHead"]').click();
+    await expect(textarea).not.toBeVisible();
+    // Expand
+    await overviewSection.locator('[class*="sectionHead"]').click();
+    await expect(textarea).toBeVisible();
+  });
+
+  test('can add a competitor row', async ({ page }) => {
+    await page.getByRole('button', { name: /New PRD/ }).first().click();
+    const compSection = page.getByTestId('prd-section').filter({ has: page.getByText('Competitor Analysis', { exact: true }) });
+    const initialRows = await compSection.locator('tbody tr').count();
+    await compSection.getByRole('button', { name: /Add competitor/i }).click();
+    await expect(compSection.locator('tbody tr')).toHaveCount(initialRows + 1);
+  });
+
+  test('can add a user story', async ({ page }) => {
+    await page.getByRole('button', { name: /New PRD/ }).first().click();
+    const storiesSection = page.getByTestId('prd-section').filter({ has: page.getByText('User Stories', { exact: true }) });
+    const initialCards = await storiesSection.locator('[class*="storyCard"]').count();
+    await storiesSection.getByRole('button', { name: /Add user story/i }).click();
+    await expect(storiesSection.locator('[class*="storyCard"]')).toHaveCount(initialCards + 1);
+  });
+
+  test('can add an option with pro and con', async ({ page }) => {
+    await page.getByRole('button', { name: /New PRD/ }).first().click();
+    const optSection = page.getByTestId('prd-section').filter({ has: page.getByText('Options', { exact: true }) });
+    await optSection.getByRole('button', { name: /Add option/i }).click();
+    const optCards = optSection.locator('[class*="optCard"]');
+    await expect(optCards).toHaveCount(2);
+    // Add a pro to the second option
+    await optCards.nth(1).getByRole('button', { name: /Add pro/i }).click();
+    await expect(optCards.nth(1).locator('[placeholder="Advantage…"]')).toHaveCount(2);
+    // Add a con to the second option
+    await optCards.nth(1).getByRole('button', { name: /Add con/i }).click();
+    await expect(optCards.nth(1).locator('[placeholder="Drawback or risk…"]')).toHaveCount(2);
+  });
+
+  test('can add an implementation phase', async ({ page }) => {
+    await page.getByRole('button', { name: /New PRD/ }).first().click();
+    const planSection = page.getByTestId('prd-section').filter({ has: page.getByText('Implementation Plan', { exact: true }) });
+    const initial = await planSection.locator('[class*="phaseCard"]').count();
+    await planSection.getByRole('button', { name: /Add phase/i }).click();
+    await expect(planSection.locator('[class*="phaseCard"]')).toHaveCount(initial + 1);
+  });
+
+  test('can check a completion criterion', async ({ page }) => {
+    await page.getByRole('button', { name: /New PRD/ }).first().click();
+    const criteriaSection = page.getByTestId('prd-section').filter({ has: page.getByText('Completion Criteria', { exact: true }) });
+    const checkbox = criteriaSection.locator('input[type="checkbox"]').first();
+    await expect(checkbox).not.toBeChecked();
+    await checkbox.check();
+    await expect(checkbox).toBeChecked();
+  });
+
+  test('Copy Markdown button is visible', async ({ page }) => {
+    await page.getByRole('button', { name: /New PRD/ }).first().click();
+    await expect(page.getByRole('button', { name: /Copy Markdown/i })).toBeVisible();
+  });
+
+  test('Export dropdown button is visible and opens menu', async ({ page }) => {
+    await page.getByRole('button', { name: /New PRD/ }).first().click();
+    const exportBtn = page.getByRole('button', { name: /Export/i });
+    await expect(exportBtn).toBeVisible();
+    await exportBtn.click();
+    await expect(page.getByText('Export as PNG')).toBeVisible();
+    await expect(page.getByText('Export as JPEG')).toBeVisible();
+  });
+
+  test('PRD persists in sidebar after page reload', async ({ page }) => {
+    await page.getByRole('button', { name: /New PRD/ }).first().click();
+    await page.locator('#prd-title-input').fill('Persistent PRD');
+    // Wait for autosave debounce
+    await page.waitForTimeout(1200);
+    await page.reload();
+    await page.getByTestId('prd-app').waitFor({ timeout: 10_000 });
+    await expect(page.getByTestId('prd-sidebar-item').filter({ hasText: 'Persistent PRD' })).toBeVisible();
+  });
+
+  test('multiple PRDs appear in sidebar and can be switched', async ({ page }) => {
+    await page.getByRole('button', { name: /New PRD/ }).first().click();
+    await page.locator('#prd-title-input').fill('PRD Alpha');
+    await page.waitForTimeout(300);
+    await page.getByRole('button', { name: /New PRD/ }).first().click();
+    await page.locator('#prd-title-input').fill('PRD Beta');
+    await expect(page.getByTestId('prd-sidebar-item')).toHaveCount(2);
+    // Switch to Alpha
+    await page.getByTestId('prd-sidebar-item').filter({ hasText: 'PRD Alpha' }).click();
+    await expect(page.locator('#prd-title-input')).toHaveValue('PRD Alpha');
+  });
+});
