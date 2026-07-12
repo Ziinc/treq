@@ -5,6 +5,14 @@ import styles from './index.module.css';
 
 const tools = [
   {
+    name: 'VCS Simulator',
+    slug: 'vcs-simulator',
+    description:
+      'Step through git and jj commands interactively, watching the commit graph update in real time. Covers branching, rebasing, stacking, and git-jj interop.',
+    icon: '🎮',
+    tags: ['git', 'jj', 'interactive'],
+  },
+  {
     name: 'Branch Visualizer',
     slug: 'branch-visualizer',
     description:
