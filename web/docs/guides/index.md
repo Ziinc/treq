@@ -10,4 +10,4 @@ Use Treq to inspect diffs like a GitHub PR, leave inline comments, and send thos
 
 Workspaces are isolated copies of your codebase. Multiple agents can run in parallel without stepping on each other. Treq automatically rebases dependent workspaces, can hand conflict resolution to AI, and supports stacked workspaces for breaking large features into smaller reviewable branches.
 
-Start with [Installation](/docs/getting-started/installation) to select a repository and create your first workspace. For conceptual background on AI-assisted development and Git workflows, see the [Learn](/learn) section.
+Start with [Installation](/docs/getting-started/installation) to select a repository and create your first workspace. Follow the [Tutorials](/docs/tutorials) for step-by-step Treq workflows. For conceptual background on AI-assisted development and Git workflows, see the [Learn](/learn) section.

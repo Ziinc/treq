@@ -95,6 +95,21 @@ test.describe('Docs sidebar navigation', () => {
     await sidebar(page).getByRole('link', { name: 'Keyboard Shortcuts' }).click();
     await expect(page.getByRole('heading', { name: 'Keyboard Shortcuts', level: 1 })).toBeVisible();
   });
+
+  test('Tutorials link navigates to tutorials overview', async ({ page }) => {
+    await page.goto('/');
+    await nav(page).getByRole('link', { name: 'Docs' }).click();
+    await sidebar(page).getByRole('link', { name: 'Tutorials' }).click();
+    await expect(page.getByRole('heading', { name: 'Tutorials', level: 1 })).toBeVisible();
+  });
+
+  test('Committing Changes link navigates to committing changes page', async ({ page }) => {
+    await page.goto('/');
+    await nav(page).getByRole('link', { name: 'Docs' }).click();
+    await sidebar(page).getByRole('link', { name: 'Tutorials' }).click();
+    await sidebar(page).getByRole('link', { name: 'Committing Changes' }).click();
+    await expect(page.getByRole('heading', { name: 'Committing Changes', level: 1 })).toBeVisible();
+  });
 });
 
 test.describe('Learn sidebar navigation', () => {
@@ -105,12 +120,12 @@ test.describe('Learn sidebar navigation', () => {
     await expect(page.getByRole('heading', { name: 'Tutorials', level: 1 })).toBeVisible();
   });
 
-  test('Committing Changes link navigates to committing changes page', async ({ page }) => {
+  test('Setting Up Claude Code link navigates to Claude Code tutorial', async ({ page }) => {
     await page.goto('/');
     await nav(page).getByRole('link', { name: 'Learn' }).click();
     await sidebar(page).getByRole('link', { name: 'Tutorials' }).click();
-    await page.locator('article').getByRole('link', { name: 'Committing Changes' }).click();
-    await expect(page.getByRole('heading', { name: 'Committing Changes', level: 1 })).toBeVisible();
+    await page.locator('article').getByRole('link', { name: 'Setting Up Claude Code' }).click();
+    await expect(page.getByRole('heading', { name: 'Setting Up Claude Code', level: 1 })).toBeVisible();
   });
 
   test('How-To link navigates to how-to overview', async ({ page }) => {

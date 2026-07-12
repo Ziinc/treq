@@ -18,16 +18,19 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^3.0.0",
     "@docusaurus/core": "3.10.1",
     "@docusaurus/preset-classic": "3.10.1",
     "@mdx-js/react": "^3.1.1",
     "@stripe/stripe-js": "^8.11.0",
     "@supabase/supabase-js": "^2.108.2",
+    "@xyflow/react": "^12.11.2",
     "clsx": "^2.1.1",
     "lucide-react": "^0.563.0",
     "prism-react-renderer": "^2.4.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "roughjs": "^4.6.6",
     "sql.js": "^1.14.1",
     "sql.js-httpvfs": "^0.8.12"
   },
