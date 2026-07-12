@@ -4,7 +4,7 @@ import { useHistory, useLocation } from '@docusaurus/router';
 import rough from 'roughjs';
 import type { RoughSVG } from 'roughjs/bin/svg';
 import styles from './branch-visualizer.module.css';
-import { parseGitLog, parseJjLog } from './branch-visualizer-parser';
+import { parseGitLog, parseJjLog } from '../../lib/branch-visualizer-parser';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
