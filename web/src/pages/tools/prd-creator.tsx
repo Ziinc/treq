@@ -10,7 +10,7 @@ export default function PRDCreatorPage() {
     >
       <BrowserOnly fallback={<div style={{ padding: '4rem', textAlign: 'center' }}>Loading…</div>}>
         {() => {
-          const { PRDCreatorContent } = require('./PRDCreatorContent');
+          const { PRDCreatorContent } = require('../../components/PRDCreatorContent');
           return <PRDCreatorContent />;
         }}
       </BrowserOnly>
