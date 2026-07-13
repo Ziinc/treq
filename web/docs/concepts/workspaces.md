@@ -4,33 +4,34 @@ sidebar_position: 1
 
 # Workspaces
 
-_Technical overview of Treq's workspace management system._
+_How Treq isolates parallel work with Jujutsu workspaces._
 
-Treq enhances Git's native workspace functionality with visual management, metadata storage, and integrated tooling for working across multiple branches simultaneously. Treq uses the `.treq` directory to store and manage local state.
+Treq creates Jujutsu workspaces inside a colocated Git repository. Each workspace has its own working copy and line of commit history. Treq stores workspace files and repository-local metadata under `.treq`.
 
-## Git Fundamentals
+## Jujutsu Workspaces
 
-A Git workspace is an additional working directory linked to the same repository:
+A Jujutsu workspace is an additional working copy linked to the same repository:
 
 ```
-.git/               # Shared git directory
+.git/                       # Colocated Git data
+.jj/                        # Jujutsu repository data
 .treq/workspaces/
-  ├── treq-feature-1/  # Workspace 1 (branch: treq/feature-1)
-  ├── treq-bugfix-2/   # Workspace 2 (branch: treq/bugfix-2)
+  ├── treq-feature-1/        # Workspace for treq/feature-1
+  ├── treq-bugfix-2/         # Workspace for treq/bugfix-2
   └── ...
 ```
 
-All workspaces share the same `.git` directory, with each workspace checking out a different branch. Changes in one workspace don't affect others, while Git objects (commits, refs) are shared across all workspaces. Treq extends this by abstracting away some of the Git complexity and overhead of managing and working with these workspaces.
+Each workspace has an independent working copy. They share commit history through Jujutsu, while the colocated Git repository provides compatibility with Git remotes and tooling. A pending file change in one workspace does not appear in another workspace.
 
 ## Visual Management
 
-Treq provides a dashboard interface showing all workspaces in use, branch names and status, commit divergence (ahead/behind), uncommitted changes indicator, and quick actions (open, merge, delete).
+The dashboard shows workspace names, target relationships, divergence, pending changes, and conflicts. From the dashboard, you can open, merge, or delete a workspace.
 
 ## Automated Workflows
 
-**Branch naming patterns**: You can customize branch naming patterns to maintain consistency across your team. For instance, use a pattern like `treq/{name}` to prefix all branches created through Treq. The system automatically sanitizes branch names to ensure they comply with Git's naming requirements.
+**Bookmark naming patterns** control names created through Treq. The default pattern, `treq/{name}`, prefixes each workspace bookmark. Treq sanitizes the workspace directory name before creating it under `.treq/workspaces`.
 
-**Parallel agent terminals**: Each workspace can have multiple terminal sessions with independent shell environments, persistent session history, and associated plans and metadata.
+**Parallel agent terminals** let you run independent shell and agent processes in each workspace. Treq persists agent session metadata, while live terminal processes and scrollback remain in memory.
 
 ## Storage Structure
 
@@ -40,7 +41,7 @@ Treq provides a dashboard interface showing all workspaces in use, branch names 
 ├── .treq/
 │   ├── workspaces/
 │   │   └── {branch-name}/   # Workspace directories
-│   ├── plans/               # Implementation plans
+│   ├── local.db             # Workspace and review metadata
 │   └── .gitignore           # Ignore .treq folder
 ├── src/                     # Main repo files
 └── ...
@@ -48,44 +49,73 @@ Treq provides a dashboard interface showing all workspaces in use, branch names 
 
 ## Lifecycle Management
 
-**Creation flow**: The user initiates creation from the UI or CLI. Treq validates the branch name and path, creates the workspace, optionally opens a terminal session, and updates the dashboard.
+**Creation flow**: Treq validates the name, creates a Jujutsu workspace and bookmark, records its target, and refreshes the dashboard. You can then open a shell or agent session in the new working copy.
 
-**Update flow**: Treq polls for changes, checks for uncommitted changes, calculates divergence from base, and updates UI indicators.
+**Update flow**: File watching and periodic queries refresh pending changes, divergence, commit history, and conflict indicators.
 
-**Deletion flow**: The user initiates deletion. Treq checks for uncommitted changes, warns if work might be lost, removes the workspace directory, closes associated sessions, and updates the dashboard.
+**Deletion flow**: Treq forgets the Jujutsu workspace, removes its directory and local metadata, then refreshes the dashboard.
+
+<!-- TODO: Document the exact safeguards for pending changes and live terminal processes before recommending workspace deletion as a routine cleanup action. -->
 
 ## Stacks and Rebasing
 
-Stacked workspaces model dependent branches. `PR #2` can build on `PR #1`, and `PR #3` can build on `PR #2`. Treq tracks the target branch for each workspace and uses that relationship when it refreshes or rebases the stack.
+Stacked workspaces model dependent changes. One workspace targets another workspace's bookmark instead of the repository's default branch. Treq records this relationship as `target_branch` and uses it to order stack updates.
 
-When a lower workspace changes, dependent workspaces can become stale. Treq rebases dependents so each branch continues to apply on top of its target. Conflict state is surfaced in the UI as a workspace problem, not hidden as terminal output.
+For example, a database workspace can target the default branch while an API workspace targets the database workspace. A UI workspace can then target the API workspace. Each workspace contains one reviewable part of the larger change.
 
-Rebase behavior has two important quirks:
+When a lower workspace changes, Treq rebases its dependents onto the updated target. A commit can trigger this update for workspaces that target its bookmark. You can also request an update from the workspace interface.
 
 | Behavior | Detail |
 |---|---|
-| Dirty workspaces block some operations | Uncommitted changes can prevent safe rebases or merges. Commit, move, or discard those changes first. |
+| Already current | Treq skips a rebase when the workspace already descends from the target |
+| Pending changes affect synchronization | Treq can skip working-copy synchronization after a rebase when the working copy contains changes |
 | Stack order matters | Updating a lower branch affects every workspace above it. Resolve lower conflicts before reviewing higher workspaces. |
 
-## Performance Optimizations
+Treq records the last target commit used for each rebase. This lets it detect when a target moved and the dependent workspace needs another update.
 
-Treq caches expensive git operations, including file status (staged/unstaged), commit divergence, branch information, and file diffs. The cache invalidates after git operations, on user-triggered refresh, after configuration changes, or after a maximum age of 5 minutes.
+## Bookmark Conflicts
 
-Workspace data loads on-demand, diffs generate only when viewed, and terminal sessions start only when opened. Long-running operations like repository scanning and divergence calculation run in the background.
+Git remote updates can leave a Jujutsu bookmark with multiple possible targets. Treq reports this as a bookmark conflict before it updates the stack.
+
+Resolving the conflict points the local bookmark at the chosen remote target. Treq then rebases local-only commits onto that target. Resolve bookmark conflicts from the bottom of a stack upward because each target affects its dependents.
+
+## Merging Workspaces
+
+Merging integrates a workspace into its target and removes the managed workspace. Treq first abandons empty commits, applies the selected history strategy, and moves the target bookmark to the result.
+
+| Strategy | Result |
+|---|---|
+| Merge | Creates a two-parent merge commit |
+| Squash and merge | Combines the workspace commits into one commit on the target |
+| Rebase and merge | Rebases the workspace commits onto the target for linear history |
+
+After a successful merge, Treq synchronizes the target working copy when needed. It then forgets the Jujutsu workspace, deletes the workspace directory, and removes its local metadata.
+
+Treq blocks the merge when the workspace contains unresolved conflicts. Pending working-copy changes also make history operations harder to reason about. Commit, move, or discard them before merging.
+
+<!-- TODO: Add a strategy selection guide once the merge preview exposes stable guarantees for commit messages and empty commits. -->
+
+## Cached Data
+
+Treq caches workspace file lists and commit diff statistics in the repository-local database. File events and completed repository operations invalidate affected queries so the interface can refresh derived state.
+
+Diffs load when you open them, and terminal processes start when you create a session. This keeps inactive workspaces from paying the full cost of active views and processes.
+
+<!-- TODO: Add cache invalidation and refresh guarantees when they become part of the supported user-facing behavior. -->
 
 ## Settings and Configuration
 
-**Repository settings** are scoped by repository path: branch naming pattern, default base branch, and ignored file patterns.
+**Repository settings** include the bookmark naming pattern, files copied into new workspaces, and the default agent and model.
 
-**Global settings** are application preferences: terminal preferences, UI theme and layout, keyboard shortcuts, and update preferences.
+**Application settings** include the theme, terminal font size, default agent and model, and conflict marker style.
 
 ## Limitations and Constraints
 
-Git limits Treq to one branch checked out per workspace, unique workspace paths, and Git 2.35+ for full features. Treq itself supports one repository at a time and requires workspaces to live in `.treq/workspaces/`.
+Each window opens one repository at a time. Treq creates managed workspaces under `.treq/workspaces/` and requires a Git repository that Jujutsu can initialize as a colocated repository.
 
 ## Best Practices
 
-Delete unused workspaces regularly. Use consistent branch naming patterns. Commit often to preserve work before operations. Monitor size, since large repos produce large workspaces.
+Commit pending changes before rebasing or deleting a workspace. Resolve stack conflicts from the lowest workspace upward. Remove workspaces only after their changes have been merged or intentionally discarded.
 
 ## Learn More
 

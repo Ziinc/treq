@@ -2,12 +2,18 @@
 sidebar_position: 1
 ---
 
-import DocCardList from '@theme/DocCardList';
+import DocCardList from "@theme/DocCardList"
 
 # Tutorials
 
-Guided walkthroughs for setting up AI coding tools and completing your first realistic workflow with them.
+Follow a complete task from tool setup through review. Each tutorial leaves you with a working change and a process you can reuse.
 
-<DocCardList items={[
-  {type: 'link', href: '/learn/tutorials/setting-up-claude-code', label: 'Setting Up Claude Code'},
-]} />
+<DocCardList
+  items={[
+    {
+      type: "link",
+      href: "/learn/tutorials/setting-up-claude-code",
+      label: "Setting Up Claude Code",
+    },
+  ]}
+/>

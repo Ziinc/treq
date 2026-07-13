@@ -1,0 +1,124 @@
+---
+sidebar_position: 1
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard";
+
+# What are Git Worktrees?
+
+_Git worktrees let one repository provide several working directories at the same time._
+
+## Introduction
+
+A **Git worktree** is a directory where Git checks out a commit for editing and testing. Every repository has a main worktree unless it is bare. `git worktree add` creates linked worktrees, so you can keep several branches open without cloning the repository.
+
+<DefinitionCard
+  term="Git Worktree"
+  definition="A working directory associated with a Git repository, containing checked-out files plus its own HEAD and index."
+/>
+
+Worktrees remove the need to stash unfinished work just to review a branch or fix a production issue. They also give concurrent tools and coding agents separate files to edit.
+
+## Understanding the Concept
+
+The main and linked worktrees share one object database and most repository refs. Each worktree has its own `HEAD`, index, and working files. A linked worktree normally contains a `.git` file that points to its administrative directory inside the repository's common Git directory.
+
+<DefinitionCard
+  term="Main Worktree"
+  definition="The working directory created when a non-bare Git repository is initialized or cloned."
+/>
+
+<DefinitionCard
+  term="Linked Worktree"
+  definition="An additional worktree registered with the same Git repository through git worktree add."
+/>
+
+{/* TODO: Add a branch-relationship diagram showing one repository object database connected to a main worktree on main and two linked worktrees on separate feature branches. Label HEAD and index as per-worktree state. */}
+
+The shared repository makes commits immediately visible from every worktree. It also means local branches, tags, remote-tracking refs, the stash, and most repository configuration are shared.
+
+Git normally prevents the same local branch from being checked out in two worktrees. Both directories would otherwise be able to update one branch ref from different working states.
+
+## Applying It in Practice
+
+Create a hotfix branch from the latest remote `main`:
+
+```bash
+git fetch origin
+git worktree add -b hotfix/payment ../repo-hotfix origin/main
+```
+
+Your original directory stays on its current branch with its staged and unstaged changes intact. The new directory has its own index:
+
+```bash
+git worktree list
+git -C ../repo-hotfix status
+```
+
+Remove the worktree after its changes are merged:
+
+```bash
+git worktree remove ../repo-hotfix
+git branch -d hotfix/payment
+```
+
+Removing a worktree does not delete its branch. Keep branch deletion as a separate, deliberate step.
+
+For read-only inspection, use detached `HEAD` and avoid creating a branch:
+
+```bash
+git worktree add --detach ../repo-review origin/feature/payment
+```
+
+For parallel agents, assign one worktree and one branch to each task. Separate working files prevent one process from overwriting another process's edits, but shared repository state still requires coordination around branch names, fetches, and maintenance.
+
+## Git Worktrees and Jujutsu Workspaces
+
+Jujutsu workspaces also attach several working directories to one repository. Their state model is different. Git gives each worktree an index and a `HEAD`, while Jujutsu represents each workspace's working copy as a commit that updates as files change.
+
+<DefinitionCard
+  term="Jujutsu Workspace"
+  definition="A working directory registered with a Jujutsu repository, with its working-copy state represented by a workspace-specific commit."
+/>
+
+```bash
+jj workspace add ../repo-hotfix
+jj workspace list
+jj workspace forget repo-hotfix
+```
+
+`jj workspace forget` removes the workspace record but does not delete its directory. Use Git worktrees in a Git workflow and Jujutsu workspaces in a Jujutsu workflow. Although colocated repositories can expose commits to both tools, mixing their workspace operations without understanding the shared state creates avoidable confusion.
+
+## Engineering Considerations
+
+Use worktrees when you need several checkouts inside one trust boundary. They are well suited to reviews, hotfixes, long-running test processes, and concurrent agent tasks.
+
+Worktrees are not independent repositories. A branch created in one appears in the others. A fetch updates shared remote-tracking refs. Repository-level hooks and configuration normally apply across the repository, although Git supports selected per-worktree configuration through `extensions.worktreeConfig`.
+
+Dependencies and ignored files are not shared. Each worktree may need its own `node_modules`, build directory, generated assets, and local environment files. In many projects these files consume more disk than Git's object database.
+
+## Scaling and Operations
+
+Use stable naming based on a task or pull request ID:
+
+```text
+../repo-pr-1842
+../repo-task-auth-timeout
+```
+
+Always prefer `git worktree remove` over deleting the directory. If external cleanup removes it first, repair the repository's records with:
+
+```bash
+git worktree prune
+```
+
+Automation should handle partial creation and failed cleanup. It should also verify that a branch is not already checked out before assigning it and avoid running repository maintenance while other Git processes are writing shared state.
+
+Use [separate clones](./git-worktrees-vs-clones) when tasks need independent refs, remotes, or repository configuration. Use an operating-system sandbox when they need a security boundary.
+
+## Next Steps
+
+- [Git Worktrees vs Clones](./git-worktrees-vs-clones): choose the required level of repository isolation
+- [What are Stacked PRs?](./stacked-prs): organize dependent branches into reviewable changes
+- [Parallel Development Workflow](/learn/workflows/git/parallel-development): apply worktrees to concurrent tasks
+- [What are Coding Agents?](/learn/concepts/ai-engineering/coding-agents): isolate agent changes in separate directories

@@ -1,0 +1,87 @@
+---
+sidebar_position: 3
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard"
+
+# AI Bug Fix Workflow
+
+_Reproduce the failure, identify its cause, then make the smallest verified fix._
+
+## Introduction
+
+A coding agent can search unfamiliar code, trace call paths, and test possible causes. It can also produce a plausible patch before it understands the failure. This workflow keeps diagnosis ahead of implementation.
+
+Use it when the bug is reproducible or when you can gather enough runtime evidence to make it reproducible.
+
+## Understanding the Workflow
+
+A **reproduction test** demonstrates the reported failure before production code changes. It must fail for the expected reason. A test that fails because setup is broken proves nothing about the bug.
+
+<DefinitionCard
+  term="Reproduction Test"
+  definition="A test that demonstrates a reported defect on the current code and fails for the same reason observed by the user or system."
+/>
+
+The next goal is the **root cause**: the condition in the system that produces the failure. Changing an error message, swallowing an exception, or returning a default may hide the symptom while leaving that condition intact.
+
+<DefinitionCard
+  term="Root Cause"
+  definition="The underlying condition that produces an observed failure and must change to prevent that failure from recurring."
+/>
+
+{/* Diagram: Show bug report, reproduction, root-cause explanation, minimal fix, regression checks, and human review. Include a loop from failed reproduction back to evidence gathering. */}
+
+The agent gathers evidence and proposes a diagnosis. You decide whether the evidence supports that diagnosis and whether the patch preserves adjacent behavior.
+
+## Applying It in Practice
+
+Record the problem before starting:
+
+- exact reproduction steps
+- expected and actual behavior
+- complete error output or stack trace
+- relevant input and environment details
+- the first known affected version
+
+Create an isolated workspace from the affected revision. A bug in a release may not reproduce on current `main`.
+
+Ask the agent to investigate and add a failing test before editing production code. Review that test and run it yourself. Stop if it passes or fails for an unrelated reason.
+
+Once the reproduction is valid, ask for a plain explanation of the cause. The explanation should connect the input, the relevant state changes, and the observed result. Check those claims against the code and runtime evidence.
+
+Then ask for the smallest fix that addresses the cause. Review the diff for symptom suppression, unrelated cleanup, changed error semantics, and similar code paths that may contain the same defect.
+
+Run:
+
+1. the reproduction test
+2. tests for the affected component
+3. the broader regression suite
+4. static checks and the build
+
+Keep the reproduction test as a regression test. It is part of the fix, not temporary debugging code.
+
+## Engineering Considerations
+
+Do not prescribe a solution in the initial report unless you have already proved it. A proposed fix can anchor the investigation and cause the agent to explain evidence around your assumption.
+
+Tests are evidence, not proof of the complete diagnosis. A test can encode the same misunderstanding as the patch. Review whether its setup matches the real failure and whether its assertions distinguish the correct behavior from a convenient workaround.
+
+Intermittent and environment-specific failures need runtime evidence first. Use the agent to identify logging, tracing, assertions, or metrics that separate competing explanations. Do not ship a speculative fix because it appears related.
+
+Security and data-corruption bugs require a wider response. Fix the code, assess affected data and versions, rotate exposed credentials, and follow the incident process.
+
+## Scaling and Operations
+
+Add reproduction-first and root-cause explanation fields to bug-fix pull requests. Reviewers can then compare the report, failing test, diagnosis, and patch as one chain of evidence.
+
+Track recurring defect patterns. If the same API misuse appears in several places, create a separate remediation task after the immediate fix. Keep broad cleanup out of an urgent patch unless leaving it creates immediate risk.
+
+For production incidents, prefer a reversible fix and define rollback criteria before deployment. Monitor the original failure signal and adjacent behavior after release.
+
+## Next Steps
+
+- [AI Feature Development Workflow](./ai-feature-development): implement a defined behavior change
+- [AI Refactoring Workflow](./ai-refactoring): improve structure after the defect is contained
+- [Human-in-the-Loop Review Workflow](/learn/workflows/git/human-in-the-loop-review): review agent changes before merge
+- [What are Coding Agents?](/learn/concepts/ai-engineering/coding-agents): understand how agents inspect and modify code

@@ -1,0 +1,105 @@
+---
+sidebar_position: 3
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard";
+
+# Git Worktrees vs Clones
+
+_Worktrees share one repository. Clones create separate repositories._
+
+## Introduction
+
+Git worktrees and clones both give you another directory in which to check out files. A worktree links that directory to an existing repository. A clone creates a repository with its own object database, refs, configuration, and administrative state.
+
+Choose between them based on the isolation you need, not only setup time or disk use.
+
+## Understanding the Concept
+
+A **linked worktree** has its own working tree, `HEAD`, and index. It shares the repository's object database and most refs with the main worktree. Git stores the linked worktree's administrative files under the common Git directory.
+
+<DefinitionCard
+  term="Linked Worktree"
+  definition="An additional working directory attached to an existing Git repository, with its own HEAD and index but a shared object database and shared refs."
+/>
+
+A **clone** has a separate Git directory. Its local branches, remote-tracking refs, repository configuration, reflogs, stash, and object database can change without changing another clone.
+
+<DefinitionCard
+  term="Clone"
+  definition="A separate Git repository created from another repository, with its own administrative state and object database."
+/>
+
+{/* TODO: Add a diagram showing several worktree directories connected to one common Git directory beside several clone directories, each with its own Git directory. Label shared and per-worktree state. */}
+
+| | Linked worktree | Clone |
+| --- | --- | --- |
+| Object database | Shared | Separate by default |
+| Local branches and tags | Shared | Separate |
+| `HEAD` and index | Per worktree | Per clone |
+| Repository config | Mostly shared | Separate |
+| Reflog and stash | Shared repository state | Separate |
+| Commit visibility | Immediate | Requires fetch or another transfer |
+| Same branch checked out twice | Blocked by default | Allowed |
+| Cleanup | `git worktree remove` | Remove the clone directory |
+
+Worktrees save the cost of copying Git objects, but each checkout still has a full set of working files unless sparse checkout or another filesystem feature reduces it. Clones can also share objects through local clone optimizations or alternates, so their disk cost is not always a full duplicate. Those optimizations do not make their refs or configuration shared.
+
+## Applying It in Practice
+
+Create a temporary worktree for a review:
+
+```bash
+git fetch origin
+git worktree add --detach ../review-hotfix origin/hotfix/payment
+```
+
+Detached `HEAD` is suitable when you only need to inspect or test the commit. Create a branch when you intend to make changes:
+
+```bash
+git worktree add -b fix/payment ../fix-payment origin/main
+```
+
+List and remove linked worktrees through Git:
+
+```bash
+git worktree list
+git worktree remove ../fix-payment
+```
+
+Use a clone when the second checkout needs independent repository settings or lifecycle:
+
+```bash
+git clone git@github.com:org/repo.git ../repo-integration
+git -C ../repo-integration remote set-url origin git@staging.example.com:org/repo.git
+```
+
+Credentials are not simply stored per clone. Git may obtain them from a global credential helper, SSH agent, environment, or operating-system keychain. Separate clones let you configure different remotes and repository-level credential settings, but complete credential isolation also requires process or account isolation.
+
+## Engineering Considerations
+
+Worktrees fit parallel development in one trusted repository. Commits and branches are visible immediately, setup is quick, and one fetch updates remote-tracking refs for every worktree. They are a strong default for local reviews and coding agents that operate under the same trust boundary.
+
+Shared state is the main constraint. A fetch, branch deletion, tag update, stash operation, or repository maintenance command can affect every linked worktree. Hooks are resolved from the common Git directory unless configuration such as `core.hooksPath` says otherwise. Per-worktree configuration is available through Git's `extensions.worktreeConfig`, but it must be enabled deliberately.
+
+Clones fit jobs that need independent refs, configuration, maintenance, or deletion. They do not provide a security boundary by themselves. Two clones running as the same operating-system user can still access the same files, credentials, processes, and network.
+
+## Scaling and Operations
+
+Give every concurrent writer its own branch. Git prevents a local branch from being checked out in more than one linked worktree by default because two working directories could otherwise race to update the same ref.
+
+Do not delete linked worktree directories manually. If a process disappears before cleanup, prune stale administrative records:
+
+```bash
+git worktree prune
+```
+
+For large pools of short-lived jobs, measure both Git object size and working-tree size. Worktrees remove duplicate object storage, but dependency installs, build outputs, and generated files often dominate each workspace.
+
+Use clones or stronger sandboxing when jobs must not share Git refs or repository configuration. Use containers, virtual machines, or separate user accounts when jobs must not share credentials or host access.
+
+## Next Steps
+
+- [What are Git Worktrees?](./git-worktrees): learn the worktree lifecycle and shared-state model
+- [Parallel Development Workflow](/learn/workflows/git/parallel-development): use isolated directories for concurrent work
+- [What are Coding Agents?](/learn/concepts/ai-engineering/coding-agents): understand why agents need separate working directories

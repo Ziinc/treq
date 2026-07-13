@@ -1,0 +1,95 @@
+---
+sidebar_position: 4
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard"
+
+# AI Refactoring Workflow
+
+_Change code structure while preserving observable behavior._
+
+## Introduction
+
+Coding agents handle broad mechanical edits such as moving modules, renaming symbols, and updating call sites. The risk is behavioral drift hidden inside a large structural diff.
+
+This workflow establishes current behavior first, limits the transformation, and verifies equivalence after each step.
+
+## Understanding the Workflow
+
+**Refactoring** changes the internal structure of code without changing its observable behavior. A bug fix or feature belongs in a separate change because it has a different review question.
+
+<DefinitionCard
+  term="Refactoring"
+  definition="A change to code structure that preserves the system's observable behavior."
+/>
+
+A **characterization test** records behavior that the system currently exhibits. It creates a safety net when existing tests do not cover the code being changed.
+
+<DefinitionCard
+  term="Characterization Test"
+  definition="A test written before refactoring to capture current behavior, including behavior whose original intent is uncertain."
+/>
+
+{/* Diagram: Show scope definition, behavior characterization, staged structural changes, equivalence review, and regression validation. Include a stop path when coverage is insufficient. */}
+
+Keep structural changes separate from behavior changes. This makes the diff reviewable and lets you revert the refactor without reverting a feature or fix.
+
+## Applying It in Practice
+
+Define the transformation and its boundary:
+
+```text
+Extract authentication logic from UserController into AuthService.
+Preserve public API signatures and error behavior.
+Do not change authorization rules or response bodies.
+Update callers and tests only where names or imports require it.
+```
+
+Ask the agent to identify affected interfaces, callers, side effects, and existing coverage. Add characterization tests before production edits when important behavior lacks coverage.
+
+Split broad work into stages:
+
+1. add missing behavior coverage
+2. move or extract code without cleanup
+3. update callers and imports
+4. remove obsolete structure
+5. apply names or formatting that improve the new structure
+
+Run relevant tests after every stage. Keep each diff small enough to compare control flow, data flow, and side-effect order with the previous version.
+
+During review, check:
+
+- public and internal contracts
+- error types and timing
+- ordering of writes, events, logs, and cleanup
+- null, empty, and boundary cases
+- concurrency and resource lifetime
+- tests that changed alongside production behavior
+
+Run the complete test suite, static analysis, and build before merge. Benchmark when the refactor touches a measured hot path. Structural intent does not guarantee unchanged performance.
+
+## Engineering Considerations
+
+Tests reduce risk but do not prove equivalence outside their assertions. Use type checking, static analysis, runtime traces, and targeted benchmarks where they cover different failure modes.
+
+Mechanical codemods and language-server refactors are preferable when they can express the transformation exactly. Use an agent when the change requires repository-wide context or different edits at different call sites.
+
+Do not let the agent “clean up nearby code” during the refactor. Record useful follow-up work as separate tasks.
+
+Some test changes are necessary after moving modules or renaming interfaces. Review them separately and confirm that assertions did not weaken.
+
+## Scaling and Operations
+
+Sequence refactors that touch shared interfaces. Parallel agents updating the same callers create conflicts and make equivalence harder to review.
+
+For large migrations, define an intermediate compatibility layer and migrate bounded groups of callers. Keep the repository buildable after each group.
+
+Track the baseline test and benchmark results with the change. When a regression appears after merge, a standalone refactoring change is easier to revert and bisect.
+
+Delete temporary compatibility code under an explicit follow-up criterion. Otherwise an incremental refactor can leave two permanent paths.
+
+## Next Steps
+
+- [AI Feature Development Workflow](./ai-feature-development): add behavior in a separate change
+- [AI Bug Fix Workflow](./ai-bug-fix): reproduce and correct defective behavior
+- [What is AI-Assisted Software Engineering?](/learn/concepts/ai-engineering/ai-assisted-software-engineering): place refactoring within the broader practice

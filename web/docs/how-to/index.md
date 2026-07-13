@@ -6,7 +6,7 @@ import DocCardList from '@theme/DocCardList';
 
 # How-To Guides
 
-Concise, task-focused guides for accomplishing specific development tasks with AI assistance.
+Concise, task-focused guides for accomplishing specific things with Treq.
 
 <DocCardList items={[
   {type: 'link', href: '/learn/how-to/pushing-to-remote', label: 'Pushing to Remote'},

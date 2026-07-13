@@ -1,0 +1,65 @@
+---
+sidebar_position: 4
+---
+
+# Agent Sessions
+
+_How Treq starts coding agents inside a workspace and keeps their work separate._
+
+An agent session connects a coding agent to one Treq workspace. The agent starts in that workspace directory, receives the task as a prompt, and runs in an integrated terminal.
+
+## Supported Agents
+
+Treq can start Claude Code, Codex, and Cursor Agent. The executable must be installed and available on your system path.
+
+Treq resolves the default agent from the repository settings first, then the application settings. It uses Claude Code when neither setting provides a default.
+
+| Agent | Executable | Plan mode | Edit mode |
+|---|---|---|---|
+| Claude Code | `claude` | Uses Claude's plan permission mode | Uses the accept-edits permission mode |
+| Codex | `codex` | Not available | Runs the task with edit access |
+| Cursor Agent | `cursor-agent` | Starts with the plan flag | Starts without the plan flag |
+
+<!-- TODO: Document Codex plan mode if it gains parity with Claude Code and Cursor Agent. -->
+
+## Plan and Edit Modes
+
+**Plan mode** asks the agent to inspect the workspace and propose an approach before it edits files. Use it when the task has unclear requirements, broad scope, or architectural tradeoffs.
+
+**Edit mode** lets the agent apply changes in the workspace. Review handoff uses these same modes, so you can ask an agent to plan around review comments or fix them directly.
+
+The mode controls the agent command that Treq launches. Each agent implements permissions differently, so the exact enforcement comes from the selected agent.
+
+## Workspace Isolation
+
+Treq starts the agent process with the workspace as its working directory. The generated system prompt also tells the agent to read and write files only within that directory.
+
+This boundary separates concurrent tasks at the file-system level. Repository history remains shared through Jujutsu, while each agent sees the working copy for its assigned workspace.
+
+## Creating Sessions
+
+You can create a session from the task input, workspace sidebar, command palette, review handoff, or a Treq agent link. Each current entry point creates a new session record.
+
+A Treq agent link identifies the repository, workspace bookmark, prompt, mode, and agent. The command-line interface uses this link to dispatch work to a running Treq window.
+
+<!-- TODO: Document session reuse if the interface starts exposing the existing reuse path. -->
+
+## Session Metadata
+
+Treq stores the session name, workspace, model, and timestamps in `.treq/local.db`. This record keeps the session visible in the workspace after navigation.
+
+The live process and terminal scrollback stay in memory. Closing Treq ends the process, and reopening the application does not restore its output. See [Terminal Sessions](/docs/concepts/terminal-sessions) for the PTY lifecycle.
+
+## Models
+
+Repository settings override the application-wide default model. Treq stores the resolved model on the session record.
+
+The terminal header exposes model selection for Claude Code sessions. Other agents use their own configuration when Treq does not pass a model.
+
+<!-- TODO: Document model selection for Codex and Cursor Agent when Treq exposes it in the session interface. -->
+
+## Learn More
+
+- [Changes and Reviews](/docs/concepts/changes-and-reviews)
+- [Terminal Sessions](/docs/concepts/terminal-sessions)
+- [Workspaces](/docs/concepts/workspaces)

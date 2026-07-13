@@ -69,13 +69,10 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
-          label: 'Tech Stack Workflows',
-          link: {type: 'doc', id: 'workflows/stacks/index'},
+          label: 'Frontend Workflows',
+          link: {type: 'doc', id: 'workflows/frontend/index'},
           items: [
-            'workflows/stacks/react-development',
-            'workflows/stacks/rust-refactoring',
-            'workflows/stacks/tauri-development',
-            'workflows/stacks/elixir-ai',
+            'workflows/frontend/react-development',
           ],
         },
       ],

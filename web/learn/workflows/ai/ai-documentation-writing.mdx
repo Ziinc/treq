@@ -1,0 +1,89 @@
+---
+sidebar_position: 6
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard"
+
+# AI Documentation Writing Workflow
+
+_Draft from authoritative sources, then verify the document as a reader would use it._
+
+## Introduction
+
+AI can turn code, specifications, and notes into a first draft. It also invents plausible commands, options, and behavior when the source is incomplete. Treat the draft as material for review.
+
+This workflow applies to guides, tutorials, concept articles, runbooks, and architecture records.
+
+## Understanding the Workflow
+
+Begin with an **audience contract**. It states who the reader is, what they already know, and what they should be able to do after reading.
+
+<DefinitionCard
+  term="Audience Contract"
+  definition="A short statement of the intended reader's existing knowledge and the outcome the document must enable."
+/>
+
+The draft must come from **authoritative sources** such as current code, tested commands, API schemas, product behavior, and accepted design records. Search results and an older article can provide leads, but they do not establish current behavior.
+
+<DefinitionCard
+  term="Authoritative Source"
+  definition="The current implementation, specification, or approved decision that determines whether a documentation claim is correct."
+/>
+
+Review the draft against three criteria:
+
+| Criterion | Question |
+| --- | --- |
+| Technical accuracy | Does every factual claim match the source and current version? |
+| Reader fit | Can the intended reader understand the terms and assumptions? |
+| Task completeness | Can the reader reach the stated outcome using this page? |
+
+{/* Diagram: Show sources and audience contract feeding a draft, followed by accuracy review, reader walkthrough, build validation, and publication. */}
+
+## Applying It in Practice
+
+Prepare the prompt with:
+
+- the audience contract
+- the document type and required structure
+- relevant source files or specifications
+- terminology and style rules
+- scope boundaries
+- commands used to validate examples and links
+
+Ask for a complete draft when the sections depend on one another. Ask for a targeted edit when the structure is already sound.
+
+Review technical claims first. Run commands, compile examples, check links, and compare names and defaults with the installed version. Remove claims that lack a source.
+
+Then review from the reader's position. Define unfamiliar terms before using them. Add prerequisites where the reader needs them. Remove implementation detail that does not help the reader reach the outcome.
+
+Complete a walkthrough using only the document. Record missing steps, unclear decisions, and failure cases. A second person from the intended audience provides the strongest check.
+
+Run the documentation formatter, linter, link checker, and production build. Preview the rendered page to catch broken components, heading problems, and unreadable code blocks.
+
+## Engineering Considerations
+
+Fluent prose can hide factual errors. Verify details before polishing sentences, because a clear false statement is still harmful.
+
+Keep generated examples small enough to test. If an example cannot run as written, label it as illustrative and avoid presenting invented output as observed output.
+
+Use source-generated reference documentation for mechanical facts such as function signatures. Use authored guides for task order, decisions, and explanations. Generation does not decide which information a reader needs.
+
+Documentation changes should ship with the behavior they describe when possible. That keeps reviewers close to the source and reduces drift.
+
+## Scaling and Operations
+
+Assign owners to documentation areas and include docs in the definition of done. An automated drafting step cannot compensate for missing ownership.
+
+Store shared audience definitions, terminology, and style rules where both writers and agents can read them. Keep prompt templates short and source-specific.
+
+Track pages that depend on versioned APIs or commands. Test executable examples in CI where the maintenance cost is justified. Flag pages for review when their source files change.
+
+Prioritize trust over volume. Publish fewer verified pages instead of filling gaps with drafts that nobody has checked.
+
+## Next Steps
+
+- [AI Code Review Workflow](./ai-code-review): apply evidence-based triage to code findings
+- [AI Marketing Copy Workflow](./ai-marketing-copy): draft product copy from a controlled brief
+- [AI Feature Development Workflow](./ai-feature-development): document the behavior produced by a feature
+- [Human-in-the-Loop Review Workflow](/learn/workflows/git/human-in-the-loop-review): require human approval for generated work

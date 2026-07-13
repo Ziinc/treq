@@ -1,0 +1,87 @@
+---
+sidebar_position: 3
+---
+
+# Changes and Reviews
+
+_How Treq presents workspace changes and turns them into structured feedback for an agent._
+
+Changes and reviews belong to a workspace. Treq reads its diff, lets you comment on changed lines, and saves the pending review in the repository's local Treq database.
+
+The review produces a prompt that includes your comments and summary. You can copy that prompt or send it to an agent for planning or editing.
+
+## Pending Reviews
+
+Treq saves comments and summary text as a pending review. This state is separate from repository history. Editing a review does not modify the working copy or create a commit.
+
+Pending reviews save automatically while you work. Finishing a review formats the feedback for its next destination instead of setting an approval status.
+
+<!-- TODO: Document review lifecycle states here if Treq adds explicit draft, changes-requested, or approved states. -->
+
+## Changes and Diffs
+
+The default review shows uncommitted changes in the workspace. Treq loads the changed file list first, then requests diff hunks for each file. This keeps the initial view responsive when a workspace contains many changes.
+
+You can switch to committed changes when the workspace has commits above its target. The cumulative view combines those commits into one diff. Commit review narrows the view to a single revision.
+
+| View | What it shows |
+|---|---|
+| Uncommitted | Changes in the working copy |
+| Committed | All workspace commits above the target |
+| Commit | The changes introduced by one commit |
+
+Line selection belongs to the review layer. Selecting lines gives a comment precise context, but it does not stage those lines for a commit. Commit selection works at the file level.
+
+## Conflict Management
+
+Treq detects unresolved conflicts from Jujutsu and marks the affected files in the workspace. Diff hunks identify conflict regions so the review can show them beside the surrounding code.
+
+You can write resolution instructions for a conflict and include them in the review prompt. The agent receives those instructions in a separate conflict-resolution section. Treq disables workspace merging while unresolved conflicts remain.
+
+Conflict comments live in the current review interface. Reloading the page can discard them because Treq does not save them with the pending review.
+
+<!-- TODO: Remove this limitation once conflict comments persist in `.treq/local.db`. -->
+
+When files change during a review, Treq compares the new diff with the saved comment context. It marks stale files and drops comments whose lines no longer match. Re-read those files before finishing the review.
+
+## Comments
+
+Comments attach to changed lines in the rendered diff. Treq records the file path, line context, and comment body so an agent can locate the issue.
+
+Comments use plain text. State whether the agent should fix a defect, answer a question, or consider a suggestion in the comment itself.
+
+## File Review Progress
+
+You can mark changed files as viewed while moving through a large diff. Viewed state is review metadata and does not change repository contents.
+
+<!-- TODO: Clarify the lifetime of viewed-file state after it is restored consistently when a review reopens. Comments and viewed-file markers currently use separate local storage paths. -->
+
+## Commit Review
+
+The review interface can show cumulative workspace changes or an individual commit. Commit-level review helps when a sequence of commits is easier to inspect one step at a time.
+
+Selecting a commit changes the visible diff. Comments still refer to files and changed lines.
+
+Conflict state belongs to the workspace, not a single commit. A commit view can explain where a conflicting change came from, while the current workspace diff shows the conflict that must be resolved.
+
+## Finishing a Review
+
+You can finish a review in four ways:
+
+| Action | Result |
+|---|---|
+| Copy | Copies the formatted feedback for use elsewhere |
+| Plan | Starts an agent session to plan the requested changes |
+| Edit | Starts an agent session to apply the requested changes |
+| Discard | Deletes the pending review |
+
+## Local Storage
+
+Review data stays on your machine. Treq does not publish comments to GitHub or another remote review service.
+
+## Learn More
+
+- [Code Review Workflow](/docs/tutorials/code-review-workflow)
+- [Workspaces](/docs/concepts/workspaces)
+- [Commit Management](/docs/concepts/commit-management)
+- [Agent Sessions](/docs/concepts/agent-sessions)

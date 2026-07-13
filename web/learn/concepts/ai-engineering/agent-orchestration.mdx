@@ -1,0 +1,108 @@
+---
+sidebar_position: 5
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard";
+
+# What is Agent Orchestration?
+
+## Introduction
+
+**Agent orchestration** is the practice of coordinating several AI agents to complete a larger piece of work. It decides which agent handles each task, which tasks can run at the same time, how results are passed between agents, and what happens when something fails.
+
+<DefinitionCard
+  term="Agent Orchestration"
+  definition="The coordination of multiple AI agents, including assigning tasks, managing dependencies, isolating their work, handling failures, and collecting the results for review."
+/>
+
+A single coding agent is often enough for one developer working on one task. The limits become clearer when a team wants to update many independent parts of a codebase, run several investigations at once, or use different agents for planning, implementation, testing, and review. Running more agents can shorten the wait, but only if their work is divided and combined carefully.
+
+This article explains the common ways to coordinate agents, why each agent needs its own workspace, and when the added complexity is worthwhile.
+
+## Understanding the Concept
+
+An orchestrator sits between a task and the agents carrying it out. It breaks the work into smaller tasks, assigns them, tracks their progress, and gathers the results. The agents do the implementation; the orchestrator manages how their work fits together.
+
+<DefinitionCard
+  term="Orchestrator"
+  definition="The part of a system that assigns work to agents, manages the order and dependencies between tasks, tracks execution, and collects the results."
+/>
+
+{/* TODO: Add diagram showing tasks flowing through an orchestrator to isolated agents, then into human review. */}
+
+This helps with three practical limits of a single agent. First, one agent can only work on so much context at once. Second, independent tasks take longer when they are handled one after another. Third, different jobs may suit different models or instructions. A small documentation update and a difficult refactor do not necessarily need the same agent.
+
+There are four common ways to organise the work:
+
+| Pattern | How it works | Useful when |
+| --- | --- | --- |
+| Sequential chain | One agent's result becomes the next agent's input | Work has a fixed order, such as plan, implement, test, then review |
+| Parallel fan-out | Several agents work on independent tasks at the same time | A change can be split across files or modules that do not overlap |
+| Supervisor and workers | One agent divides the work and assigns it to other agents | A large task needs to be broken into smaller, clearly defined parts |
+| Event-driven | An external event starts an agent | A failed CI run, opened pull request, or dependency update needs a response |
+
+{/* TODO: Add diagram comparing sequential chain, parallel fan-out, supervisor-and-worker, and event-driven patterns. */}
+
+These patterns can be combined. A supervisor might divide a migration into independent tasks, run workers in parallel, and then pass their changes to a review agent. The important part is that the dependencies are explicit. If two tasks both depend on an unfinished change, running them at the same time will create rework rather than save time.
+
+Each agent also needs an isolated workspace. Two agents editing the same directory can overwrite each other's changes or leave the working tree in an unexpected state. Give every agent its own Git worktree, branch, sandbox, or clone, then review and merge each result deliberately.
+
+<DefinitionCard
+  term="Workspace Isolation"
+  definition="Giving each agent a separate working copy so that its file changes, commands, and temporary state cannot interfere with another agent's work."
+/>
+
+{/* TODO: Add diagram showing parallel agents working in separate Git worktrees before their changes are reviewed and merged. */}
+
+Event-driven orchestration works slightly differently because a person does not start every task. A failing test might start an agent that investigates the failure, while a new pull request might start an automated review. This can be useful in CI, but the agent must have a narrow scope. An agent that makes a test pass by weakening the assertion has not fixed the problem.
+
+## Applying It in Practice
+
+A good first use case is a change that can be divided without much coordination. Examples include replacing a deprecated API across separate modules, updating tests to follow a new pattern, or correcting the same configuration in several services.
+
+Start by defining:
+
+- the files or modules each agent owns
+- the expected result of each task
+- the checks each agent must run
+- the conditions that require human input
+- how completed changes will be reviewed and merged
+
+Run each task in its own workspace and return a separate diff or pull request. This keeps failures contained and lets reviewers accept or reject one part without affecting the rest.
+
+The supervisor-and-worker pattern needs more care. Its success depends on how well the supervisor divides the work. Subtasks should have clear boundaries and should agree on any shared interfaces before implementation begins. If one worker expects a function to return one shape while another builds against a different shape, the conflict only appears when their work is combined.
+
+For event-driven tasks, decide what the agent is allowed to change before connecting it to CI or pull requests. Limit retries, commands, files, and credentials. When the agent cannot produce a safe result, it should report what it found and ask for human review instead of continuing to make changes.
+
+You do not always need a dedicated framework. A small script that creates worktrees, starts agents with focused instructions, records their status, and gathers their diffs may be easier to understand and maintain. Use a larger orchestration system when you need durable task state, retries, event handling, or coordination across many machines.
+
+## Engineering Considerations
+
+Orchestration is useful when single-agent work is already reliable and waiting for tasks to finish has become a real constraint. The work must be divisible, the team must be able to maintain the coordination code, and reviewers must have enough time to inspect the additional output.
+
+The main benefit is shorter waiting time. Eight independent tasks can often finish sooner on eight agents than on one. This is especially useful for broad migrations, test coverage, documentation updates, and urgent investigations that can be split into separate areas.
+
+The cost is a larger system with more ways to fail. A problem may come from the instructions, the orchestrator, an individual agent, workspace setup, or the step that combines several results. Logs should make it possible to trace each task from its input to its final diff. Time limits, retry limits, and clear failure states prevent stuck or failing agents from consuming resources indefinitely.
+
+Do not add orchestration while the team is still struggling to get useful results from one agent. It is also a poor fit when every task depends on the same files or unfinished decisions. In those cases, parallel work creates conflicts and repeated integration work.
+
+Human review sets the practical limit. Producing ten times as many changes is not useful if reviewers can only inspect the same amount as before. Schedule work at a rate the team can review, group related changes where that makes them easier to understand, and give security-sensitive or architectural changes more attention.
+
+## Scaling and Operations
+
+As the system grows, record which agent received each task, what context and permissions it had, which commands it ran, and what files it changed. This information is needed to investigate failures and decide whether a result can be trusted.
+
+Planning mistakes can spread widely. If a supervisor divides a task incorrectly, every worker may produce valid work for the wrong plan. Validate the task breakdown before starting expensive or wide-ranging changes, and check each result before it enters the review queue.
+
+Ownership matters too. An orchestration system used by a team should not depend on one person knowing how it works. Document how tasks are scheduled, how failures are handled, how workspaces are cleaned up, and who is responsible when the system stops working.
+
+Permissions should be kept as narrow as possible. An agent that only updates documentation does not need deployment credentials or access to every repository. Event-driven agents also need protection from prompt injection: text in an issue, pull request, code comment, or test output may contain instructions intended to change the agent's behaviour. Treat that content as untrusted input and verify the resulting changes rather than trusting the agent's report.
+
+Start with one repeatable task and the simplest pattern that fits it. Measure whether the work finishes sooner, whether the results remain correct, and how much review time it requires. Add more agents only when those results justify the additional complexity.
+
+## Next Steps
+
+- [What are Coding Agents?](./coding-agents): understand how an individual coding agent works
+- [What is Human-in-the-Loop Development?](./human-in-the-loop-development): learn where human review belongs in an automated process
+- [Parallel Development Workflow](/learn/workflows/git/parallel-development): follow a practical workflow for parallel development with Git worktrees
+- [What are Git Worktrees?](/learn/concepts/git/git-worktrees): learn how Git provides isolated working directories

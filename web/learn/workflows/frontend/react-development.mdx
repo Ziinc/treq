@@ -1,0 +1,87 @@
+---
+sidebar_position: 2
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard"
+
+# React Development Workflow
+
+_Give a coding agent the local React rules, then check each render and user action._
+
+## Introduction
+
+Coding agents handle focused React work well when the repo has clear patterns for components, state, styles, and tests. The main risk sits at runtime. A component can pass type checks while holding stale state, leaking a listener, or breaking keyboard use.
+
+Use this workflow to define the component contract, write user-facing tests, and review what static types cannot prove.
+
+## Understanding the Workflow
+
+A **component contract** defines a component's inputs, screen states, events, and access needs. It gives the agent a clear target instead of a visual brief alone.
+
+<DefinitionCard
+  term="Component Contract"
+  definition="The typed inputs, rendered states, events, and accessibility behavior that define a React component's public behavior."
+/>
+
+**Render correctness** means the component still works as state, props, effects, and user actions change. TypeScript checks interfaces. It does not check effect cleanup, dependency lists, focus moves, or stale closures.
+
+<DefinitionCard
+  term="Render Correctness"
+  definition="Correct component behavior across repeated renders, state changes, effects, and user interactions."
+/>
+
+Repo rules narrow the agent's choices. Name the existing UI parts, style system, state boundary, data layer, and test approach before the work starts. Without that context, an agent often creates a second pattern that clashes with the rest of the app.
+
+## Applying It in Practice
+
+Start with a bounded task contract:
+
+```text
+Add UserSearch beside the existing user table.
+Use the Input and Spinner primitives from src/components/ui.
+Keep the query in the URL through the existing useSearchParams helper.
+Render loading, empty, error, and populated states.
+Debounce requests by 250 ms and cancel superseded requests.
+Add React Testing Library coverage for typing, empty results, and errors.
+```
+
+Point the agent to one good component and its tests. Existing code shows where files go and how the team names, builds, styles, and tests UI parts.
+
+Write or approve user-facing tests first when the behavior is clear. Drive the component through roles, labels, and real actions with React Testing Library and `userEvent`. These tests survive code changes because they check what the user can see and do.
+
+Review the result in this order:
+
+1. Confirm every loading, empty, error, and success state.
+2. Inspect effects for complete dependencies and cleanup.
+3. Verify stable keys and state ownership.
+4. Remove speculative `useMemo` and `useCallback`.
+5. Test keyboard navigation, focus movement, names, and roles.
+6. Run type checks, lint, tests, and the release build.
+
+Use the browser for paths that a DOM test cannot copy well. Resize the window, use the keyboard, test slow replies, and repeat actions that span several renders.
+
+## Engineering Considerations
+
+Agents work well when they can follow a pattern. Good tasks include adding a component beside an existing one, writing test cases, and making routine code moves. State the product choices and state boundaries before the work starts.
+
+Hooks need direct review. Check every effect against the values it reads and the work it starts. A missing cleanup or stale closure often appears only after many renders. A green first render proves little.
+
+Keep server state, shared client state, and local UI state in their current layers. Moving data into local state creates two sources of truth. Adding context to avoid a short prop chain can hide what a component needs.
+
+Treat access as behavior. Use the right HTML elements, support the keyboard, show focus, and restore focus. Put these needs in the component contract and tests.
+
+Review `dangerouslySetInnerHTML`, built URLs, and user content as security boundaries. React escapes text by default. Raw HTML skips that guard and needs a set cleaning path.
+
+## Scaling and Operations
+
+Turn repeated review notes into lint rules, tests, and repo guidance. `eslint-plugin-react-hooks` catches many dependency errors. Access linting catches missing HTML roles. User tests cover behavior that lint cannot see.
+
+Split large code moves into small groups and keep the app buildable after each one. Agree on shared interfaces before parallel work starts. Large state or design system moves cause conflicts when several agents edit the same core files.
+
+Group bugs that reach users by type. Repeated stale closures, missing states, or blocked controls show a gap in task contracts or checks. Fix that gap instead of adding one more review note.
+
+## Next Steps
+
+- [AI Feature Development Workflow](/learn/workflows/ai/ai-feature-development): define and verify a bounded feature
+- [AI Refactoring Workflow](/learn/workflows/ai/ai-refactoring): preserve behavior through structural changes
+- [Human-in-the-Loop Review Workflow](/learn/workflows/git/human-in-the-loop-review): place human approval at the right boundaries

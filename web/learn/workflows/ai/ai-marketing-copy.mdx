@@ -1,0 +1,92 @@
+---
+sidebar_position: 7
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard"
+
+# AI Marketing Copy Workflow
+
+_Generate copy from a factual brief, then evaluate it against a specific message and audience._
+
+## Introduction
+
+AI can produce many copy variants quickly. Without a precise brief, those variants repeat familiar marketing patterns and make claims the product cannot support.
+
+Use the model for drafting and revision. Keep positioning, factual approval, and experiment design with people who understand the product and audience.
+
+## Understanding the Workflow
+
+A **copy brief** defines the product truth, audience, message, voice, and desired action for one piece of copy.
+
+<DefinitionCard
+  term="Copy Brief"
+  definition="A written set of facts and constraints that defines the audience, product claim, message, voice, and desired reader action."
+/>
+
+**Product truth** is the evidence the copy may claim. It includes observed behavior, measured results, supported use cases, and approved limitations.
+
+<DefinitionCard
+  term="Product Truth"
+  definition="The verified product behavior and evidence that marketing copy may state or imply."
+/>
+
+Copy quality and copy performance are different. A clear sentence can still address the wrong concern or make the reader doubt the claim. Performance requires a defined outcome and measured reader behavior.
+
+{/* Diagram: Show product evidence and audience research feeding a copy brief, variant generation, factual and brand review, experiment design, measurement, and brief revision. */}
+
+## Applying It in Practice
+
+Prepare a brief with:
+
+- one audience and the problem they recognize
+- one supported product claim
+- evidence for that claim
+- the page's place in the reader journey
+- the action the reader should take
+- voice examples and banned language
+- legal or compliance constraints
+
+Ask for variants that test distinct message hypotheses. Five rewrites of the same claim provide less information than two variants built around different reader concerns.
+
+Evaluate each draft against the brief:
+
+| Check | Question |
+| --- | --- |
+| Truth | Does every explicit and implied claim have evidence? |
+| Audience | Does the copy address a concern this reader has? |
+| Message | Is the main point clear after one reading? |
+| Voice | Does it match approved examples without copying them? |
+| Action | Does the next step fit the page and reader stage? |
+
+Revise with concrete constraints. “Keep the measured deployment result, remove the unsupported cost claim, and shorten the heading to eight words” is testable feedback.
+
+For an existing page, preserve proven structure unless the experiment is designed to test it. Changing the message, layout, and call to action at once makes results hard to interpret.
+
+Measure variants through an agreed experiment or user-research method. A model cannot predict conversion from prose alone.
+
+## Engineering Considerations
+
+Do not ask the model to discover positioning from a feature list. Positioning requires customer evidence, competitive context, and a choice about which audience to serve.
+
+Check implied claims as carefully as explicit ones. Words such as “automatic,” “secure,” and “instant” create expectations even when the copy gives no number.
+
+Protect customer data and unreleased product details in prompts. Use approved tools and sanitize research material before sharing it with a model.
+
+Human review is required for pricing, legal claims, regulated products, testimonials, and comparative statements.
+
+## Scaling and Operations
+
+Maintain briefs as versioned source material. Update them when product behavior, evidence, positioning, or voice changes. Do not reuse a campaign brief where the audience or desired action differs.
+
+Limit generation to the team's evaluation and testing capacity. Unreviewed variants create inventory, not learning.
+
+Record the hypothesis, approved copy, audience, dates, and outcome for each experiment. Feed measured results into later briefs without treating one result as a universal writing rule.
+
+Keep a claim register for important numbers and comparative statements. Link each claim to its evidence, owner, and review date.
+
+## Next Steps
+
+- [AI Documentation Writing Workflow](./ai-documentation-writing): produce factual technical content from source material
+- [AI Feature Development Workflow](./ai-feature-development): implement the product behavior behind the copy
+- [Human-in-the-Loop Review Workflow](/learn/workflows/git/human-in-the-loop-review): require human approval for generated content
+- [What is Human-in-the-Loop Development?](/learn/concepts/ai-engineering/human-in-the-loop-development): match oversight to risk
