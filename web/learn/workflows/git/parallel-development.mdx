@@ -1,0 +1,102 @@
+---
+sidebar_position: 3
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard"
+
+# Parallel Development Workflow
+
+_Run independent tasks in separate working directories and integrate each result through normal review._
+
+## Introduction
+
+Parallel development shortens waiting time when tasks can proceed independently. Each task receives its own branch and working directory, so file edits and local build state do not collide.
+
+Concurrency helps only while review and integration keep pace.
+
+## Understanding the Workflow
+
+A **workstream** is one bounded task with an owner, workspace, and integration path.
+
+<DefinitionCard
+  term="Workstream"
+  definition="A bounded unit of work assigned to one owner and isolated branch or workspace until review and integration."
+/>
+
+**Workspace isolation** gives each workstream separate working files. Git worktrees share repository refs and objects, so they isolate edits but do not provide a security boundary.
+
+<DefinitionCard
+  term="Workspace Isolation"
+  definition="Keeping each task's working files and process state separate so concurrent work cannot overwrite another task's checkout."
+/>
+
+{/* Diagram: Show a task queue assigning independent tasks to separate Git worktrees and branches, then sending each branch through review and merge into main. Mark shared repository state separately from isolated files. */}
+
+Tasks are independent when they can be implemented, reviewed, and merged in any order. Different file names are useful evidence, but shared schemas, interfaces, generated outputs, and deployment order can still create dependencies.
+
+Use a [stacked PR workflow](./stacked-pr) when one task must build on another.
+
+## Applying It in Practice
+
+Check each candidate task for:
+
+- overlapping files or symbols
+- shared database or API contracts
+- common configuration and generated files
+- required merge or deployment order
+- enough review ownership
+
+Create one worktree and branch per task:
+
+```bash
+git fetch origin
+git worktree add -b task/password-reset ../repo-password-reset origin/main
+git worktree add -b task/search-index ../repo-search-index origin/main
+```
+
+Give each owner a clear task contract and file boundary. Agree on shared interfaces before work begins. Do not ask concurrent workers to discover the same interface independently.
+
+Open a pull request when one workstream is ready. Review and merge it without waiting for the others. Update remaining branches before integration:
+
+```bash
+git -C ../repo-search-index fetch origin
+git -C ../repo-search-index rebase origin/main
+```
+
+Rebase only branches whose rewrite is safe. Merge `main` into a shared branch when other people depend on its existing commits.
+
+When conflicts appear, resolve them in the branch that will merge next. Re-run its tests against current `main`. Restarting an agent task can be cheaper than preserving a small obsolete patch, but compare the old and new behavior before discarding work.
+
+Remove finished worktrees through Git:
+
+```bash
+git worktree remove ../repo-search-index
+git branch -d task/search-index
+```
+
+## Engineering Considerations
+
+Start with two or three workstreams. Add more only when reviews remain timely and conflicts stay rare. A fixed universal limit is not useful because task size and review capacity vary.
+
+Separate working directories do not isolate databases, ports, caches, or external services. Give concurrent test processes distinct resources where the application requires them.
+
+Frequent rebasing does not replace dependency analysis. It reduces the distance from `main`, but a clean textual rebase can still combine incompatible behavior.
+
+Feature flags help independent changes merge before the user-facing feature is ready. They move coordination into runtime configuration and require ownership, cleanup, and production testing.
+
+## Scaling and Operations
+
+Track each workstream's task, branch, workspace, owner, review state, and dependencies. Close abandoned work quickly and remove its workspace.
+
+Monitor review queue age and conflict rate. Stop starting work when the queue grows faster than reviewers can clear it.
+
+Automation should allocate unique branch names, directories, ports, and temporary resources. It must clean up after failed or interrupted tasks.
+
+When parallel work breaks down, pause new tasks, finish or close existing work, and revise the dependency boundaries before increasing concurrency again.
+
+## Next Steps
+
+- [What are Git Worktrees?](/learn/concepts/git/git-worktrees): learn how linked working directories share repository state
+- [Stacked PR Workflow](./stacked-pr): handle dependent changes in order
+- [AI Feature Development Workflow](/learn/workflows/ai/ai-feature-development): define tasks for coding agents
+- [What is Agent Orchestration?](/learn/concepts/ai-engineering/agent-orchestration): coordinate several agent tasks

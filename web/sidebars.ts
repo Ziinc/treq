@@ -40,10 +40,16 @@ const sidebars: SidebarsConfig = {
       link: {type: 'doc', id: 'concepts/index'},
       items: [
         'concepts/workspaces',
-        'concepts/reviews',
+        'concepts/changes-and-reviews',
+        'concepts/agent-sessions',
         'concepts/terminal-sessions',
         'concepts/commit-management',
       ],
+    },
+    {
+      type: 'doc',
+      id: 'under-the-hood/index',
+      label: 'Under the Hood',
     },
     {
       type: 'category',

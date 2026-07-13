@@ -1,0 +1,83 @@
+---
+sidebar_position: 5
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard"
+
+# AI Code Review Workflow
+
+_Use AI to find candidate defects, then verify every finding against the code._
+
+## Introduction
+
+AI review can inspect a diff for logic errors, missing tests, unsafe data handling, and inconsistencies. Its findings are hypotheses. A person must confirm each one and still review intent, architecture, and product behavior.
+
+Run deterministic tools first. A compiler, linter, or static analyzer is more reliable for rules it can express.
+
+## Understanding the Workflow
+
+An AI reviewer needs the change's intent, the diff, and enough surrounding code to trace affected behavior. A bare diff often hides contracts defined in callers, schemas, configuration, or tests.
+
+A **review finding** should identify a concrete failure, the conditions that trigger it, and the relevant code location. General advice without an observable consequence is not actionable.
+
+<DefinitionCard
+  term="Review Finding"
+  definition="A specific claim that changed code causes a defect or risk under stated conditions, supported by a code location and technical reasoning."
+/>
+
+Every finding belongs in one of three states:
+
+| State | Meaning | Action |
+| --- | --- | --- |
+| Confirmed | Code and evidence support the finding | Fix it and add coverage where useful |
+| Rejected | The claim is false or outside the change's contract | Record a short reason |
+| Unresolved | Available context cannot prove or dismiss it | Investigate or ask the owner |
+
+{/* Diagram: Show deterministic checks, focused AI passes, finding triage, fixes, and human review. Show rejected and unresolved findings as separate paths. */}
+
+## Applying It in Practice
+
+Start with a clean diff and a one-paragraph change description. Include acceptance criteria, known constraints, and links to relevant code outside the diff.
+
+Run focused passes instead of one broad request. Useful scopes include:
+
+- correctness and error paths
+- authorization, input handling, and data exposure
+- concurrency and resource lifetime
+- migration and compatibility risks
+- test quality and missing cases
+
+Ask the reviewer to return only findings that name a failure mode and cite the affected code. Require it to omit praise, summaries, and speculative style comments.
+
+Triage each finding by reading the cited code. Reproduce the issue with a test or a concrete execution path where practical. Reject findings that depend on an incorrect assumption.
+
+Fix confirmed issues before human review. Then rerun relevant checks and, if the diff changed substantially, rerun the focused AI pass.
+
+Human reviewers should inspect the complete diff. They must decide whether the change solves the right problem, fits the system, and creates operational consequences that are absent from the local code.
+
+## Engineering Considerations
+
+AI review is strongest when a defect is visible in the supplied context. It is weaker when correctness depends on undocumented product rules, production topology, or behavior in code it did not inspect.
+
+The model can produce false positives with detailed explanations. Specific language is not evidence. Verify the triggering conditions and follow the data or control flow yourself.
+
+Do not send secrets, customer data, or restricted source code to a provider without an approved data-handling agreement. Review prompts and outputs may need the same retention controls as source code.
+
+Use dedicated security analysis for high-risk changes. A general AI review does not replace threat modeling, dependency scanning, or review by someone who understands the security boundary.
+
+## Scaling and Operations
+
+Automated review should publish a small number of ranked findings. Large volumes train developers to ignore the system. Limit comments to actionable issues and group repeated instances under one explanation.
+
+Measure confirmed, rejected, and unresolved findings by review type. A high rejection rate means the prompt lacks context or the review scope is too broad. A low finding count does not prove that the review is effective, so compare results with defects found later.
+
+Version prompts and model settings as maintained review configuration. Re-evaluate them when the codebase, threat model, or provider changes.
+
+AI-generated comments should identify themselves as automated. Keep a human accountable for the merge decision.
+
+## Next Steps
+
+- [AI Feature Development Workflow](./ai-feature-development): review a feature produced by a coding agent
+- [AI Bug Fix Workflow](./ai-bug-fix): verify the diagnosis and regression test behind a fix
+- [Human-in-the-Loop Review Workflow](/learn/workflows/git/human-in-the-loop-review): place human approval after automated checks
+- [What is AI Code Review?](/learn/concepts/ai-engineering/ai-code-review): learn the limits of model-based review

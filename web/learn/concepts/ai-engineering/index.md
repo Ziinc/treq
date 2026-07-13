@@ -6,7 +6,7 @@ import DocCardList from '@theme/DocCardList';
 
 # AI Engineering
 
-Foundational concepts behind AI-assisted software development — how coding agents work, how to keep humans in the loop, and how teams are adopting AI throughout the development lifecycle.
+AI engineering covers the tools and practices used to build software with AI. Start with AI-assisted software engineering for an overview, then learn how coding agents carry out tasks, how human review keeps their work safe, and how several agents can work together.
 
 <DocCardList items={[
   {type: 'link', href: '/learn/concepts/ai-engineering/ai-assisted-software-engineering', label: 'What is AI-Assisted Software Engineering?'},

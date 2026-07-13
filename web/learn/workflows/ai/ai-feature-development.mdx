@@ -1,0 +1,95 @@
+---
+sidebar_position: 2
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard"
+
+# AI Feature Development Workflow
+
+_Give a coding agent a bounded contract, then verify the implementation before merge._
+
+## Introduction
+
+A coding agent can inspect a repository, implement a feature, and run checks across several files. It works best when the expected behavior and boundaries are clear. The engineer remains responsible for the design and the accepted diff.
+
+Use this workflow for defined changes with observable acceptance criteria.
+
+## Understanding the Workflow
+
+A **task contract** describes the user-visible behavior, scope, constraints, and verification method. It gives the agent enough information to investigate without prescribing every implementation step.
+
+<DefinitionCard
+  term="Task Contract"
+  definition="A bounded description of required behavior, scope, constraints, and acceptance checks for an implementation task."
+/>
+
+The agent works in an **isolated workspace** with its own files and branch. Isolation protects other in-progress work from edits and commands, but it does not make the agent's output safe to merge.
+
+<DefinitionCard
+  term="Isolated Workspace"
+  definition="A separate worktree, workspace, clone, or sandbox where one task can change files without overwriting another task's working copy."
+/>
+
+{/* Diagram: Show task contract, isolated implementation, automated checks, diff review, revision loop, and merge approval. */}
+
+## Applying It in Practice
+
+Write the task contract before opening the agent session. Include:
+
+- required behavior and acceptance criteria
+- explicit exclusions
+- relevant files, modules, and existing patterns
+- compatibility and security constraints
+- tests and commands that must pass
+
+For example:
+
+```text
+Add an archive endpoint at /api/users/{id}/archive in src/api/users.rs.
+Mark the user as archived and return the updated record.
+Return 404 when the user does not exist.
+Do not delete the user or change the existing response shape.
+Add integration tests for success and missing-user cases.
+```
+
+Ask the agent to inspect the code and state its plan before implementation when the task crosses boundaries or has more than one reasonable design. Correct wrong assumptions before they spread through the diff.
+
+Let the agent implement and run checks in its workspace. Intervene when it leaves scope, duplicates an existing abstraction, or builds against a false assumption. Waiting until completion is costly when the direction is already wrong.
+
+Review the complete diff in this order:
+
+1. required behavior and scope
+2. architecture and existing conventions
+3. errors, empty states, and security boundaries
+4. tests and their failure sensitivity
+5. dependencies, configuration, and generated files
+
+Give feedback against observable behavior or a specific code location. Rerun tests, static checks, and the production build after revisions. Use the normal human review and merge process.
+
+## Engineering Considerations
+
+Do not delegate a change that nobody can review. Passing tests and confident output do not establish correctness.
+
+Narrow tasks reduce the context the agent must discover. They also produce smaller diffs, which lowers review cost and makes incorrect assumptions easier to locate.
+
+Use test-driven development when the repository requires it or when behavior can be specified before implementation. Review the failing test before accepting production changes.
+
+Exploratory product work needs a different process. Resolve the user problem and design choices first, or use the agent for research and prototypes that will not merge directly.
+
+## Scaling and Operations
+
+Review capacity limits parallel agent work. Starting ten tasks does not help when completed diffs wait unreviewed or receive shallow approval.
+
+Give each agent a separate workspace and branch. Define ownership when tasks touch shared interfaces. Sequence dependent tasks or agree on the interface before parallel implementation.
+
+Restrict credentials and commands to the task. Record the prompt, relevant tool output, checks, and final diff when the change has operational or compliance impact.
+
+Track rework by task category. Repeated failures on a class of work mean the task contract, repository guidance, automated checks, or delegation choice needs to change.
+
+## Next Steps
+
+- [AI Code Review Workflow](./ai-code-review): run focused checks on the resulting diff
+- [AI Bug Fix Workflow](./ai-bug-fix): diagnose incorrect existing behavior
+- [Parallel Development Workflow](/learn/workflows/git/parallel-development): isolate concurrent tasks
+- [What are Coding Agents?](/learn/concepts/ai-engineering/coding-agents): understand agent capabilities and limits
+- [What is Human-in-the-Loop Development?](/learn/concepts/ai-engineering/human-in-the-loop-development): choose review checkpoints

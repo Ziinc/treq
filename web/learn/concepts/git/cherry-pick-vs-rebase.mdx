@@ -1,0 +1,114 @@
+---
+sidebar_position: 4
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard";
+
+# Cherry-pick vs Rebase
+
+_Cherry-pick copies selected changes. Rebase moves a line of development to a new base._
+
+## Introduction
+
+`git cherry-pick` and `git rebase` both create new commits from existing changes. The difference is scope. Cherry-pick applies commits you name, while rebase replays a range of commits onto another base.
+
+Use cherry-pick for an isolated change such as a backport. Use rebase when a branch should continue from a different point in history.
+
+## Understanding the Concept
+
+**Cherry-pick** applies the change introduced by a selected commit to `HEAD`. Git creates a new commit with a new object ID. It preserves the original author by default, records the person who performed the cherry-pick as committer, and leaves the source commit untouched.
+
+<DefinitionCard
+  term="Cherry-pick"
+  definition="The Git operation that applies the changes introduced by selected commits to the current branch, creating new commits."
+/>
+
+**Rebase** finds commits reachable from the current branch but not from its chosen upstream, then replays those commits onto a new base. The replay creates new commits and moves the current branch to the rewritten history.
+
+<DefinitionCard
+  term="Rebase"
+  definition="The Git operation that reapplies a range of commits onto a new base and moves the current branch to the resulting history."
+/>
+
+{/* TODO: Add a diagram comparing one selected commit copied to another branch with a feature branch replayed onto a new base. Label all rewritten commits with new object IDs. */}
+
+| | Cherry-pick | Rebase |
+| --- | --- | --- |
+| Input | One or more selected commits | A range derived from branch ancestry |
+| Result | New commits on the current branch | A rewritten line of commits on a new base |
+| Source history | Unchanged | Old commits stop being reachable from the rebased branch |
+| Common use | Backports and misplaced commits | Updating or reorganizing a private branch |
+
+Neither command moves an existing commit object. Git commits include their parent IDs, so changing a commit's parent produces a different commit.
+
+## Applying It in Practice
+
+Backport a fix without taking unrelated work from `main`:
+
+```bash
+git switch release/2.3
+git cherry-pick a3f9c12
+```
+
+If the fix depends on earlier commits, cherry-pick those commits too and apply them in dependency order. A conflict means the selected change does not apply cleanly to the destination branch.
+
+Move a private feature branch onto the current remote `main`:
+
+```bash
+git fetch origin
+git switch feature/my-work
+git rebase origin/main
+```
+
+During a conflict, resolve the files, stage the resolution, and continue:
+
+```bash
+git add <resolved-files>
+git rebase --continue
+```
+
+Use `git rebase --abort` to return to the state from before the rebase.
+
+Interactive rebase lets you reorder, combine, edit, or remove commits before sharing them:
+
+```bash
+git rebase -i origin/main
+```
+
+If the rebased branch already exists on a remote, updating it usually requires a force push. Use `--force-with-lease`, which refuses the update when the remote ref differs from the value your local repository expects:
+
+```bash
+git push --force-with-lease origin feature/my-work
+```
+
+## Engineering Considerations
+
+Cherry-picking the same logical change into several branches is normal for maintained release lines. It does not guarantee conflicts when those branches later meet. Git's merge machinery often recognizes equivalent changes, but later edits around the copied change can still produce confusing history or conflicts. Record backports clearly and avoid cherry-pick as a substitute for merging branches that are meant to converge.
+
+Rebase is safe when nobody else depends on the commits being replaced. That usually means unpushed work or a remote branch owned by one person under an agreed rewrite policy. Do not rebase `main`, release branches, or another shared branch.
+
+Rebase also does not guarantee a clean merge. It exposes conflicts against the new base before integration, but `main` can move again afterward. Tests still need to run against the final result.
+
+## Scaling and Operations
+
+Teams that maintain several release branches should track which fix was backported where. The `-x` option adds the source commit ID to the new commit message and is useful when the source commit is public:
+
+```bash
+git cherry-pick -x a3f9c12
+```
+
+Set branch protection so shared branches reject force pushes. For rewriteable branches, document who owns the branch and whether reviewers may base follow-up work on it.
+
+After any rebase, inspect the range before pushing:
+
+```bash
+git range-diff origin/main...feature/my-work@{1} origin/main...feature/my-work
+```
+
+`git range-diff` compares two versions of a commit series. It catches dropped or unexpectedly changed patches better than checking only the final file diff.
+
+## Next Steps
+
+- [Merge vs Rebase](./merge-vs-rebase): compare two ways to integrate diverged branches
+- [What are Stacked PRs?](./stacked-prs): see how dependent branches create rebase cascades
+- [Stacked PR Workflow](/learn/workflows/git/stacked-pr): maintain a stack in practice

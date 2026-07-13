@@ -17,7 +17,7 @@ const sidebars: SidebarsConfig = {
           label: 'AI Engineering',
           link: {type: 'doc', id: 'concepts/ai-engineering/index'},
           items: [
-            'concepts/ai-engineering/ai-assisted-software-engineering',
+            'concepts/ai-engineering/ai-assisted-software-engineering/index',
             'concepts/ai-engineering/human-in-the-loop-development',
             'concepts/ai-engineering/coding-agents',
             'concepts/ai-engineering/ai-code-review',
@@ -69,13 +69,10 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
-          label: 'Tech Stack Workflows',
-          link: {type: 'doc', id: 'workflows/stacks/index'},
+          label: 'Frontend Workflows',
+          link: {type: 'doc', id: 'workflows/frontend/index'},
           items: [
-            'workflows/stacks/react-development',
-            'workflows/stacks/rust-refactoring',
-            'workflows/stacks/tauri-development',
-            'workflows/stacks/elixir-ai',
+            'workflows/frontend/react-development',
           ],
         },
       ],
@@ -99,7 +96,6 @@ const sidebars: SidebarsConfig = {
         'how-to/customizing-settings',
       ],
     },
-    {type: 'doc', id: 'troubleshooting/index', label: 'Troubleshooting'},
   ],
 };
 
