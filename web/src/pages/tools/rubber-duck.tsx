@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Layout from '@theme/Layout';
+import Head from '@docusaurus/Head';
 import styles from './rubber-duck.module.css';
 
 // ── Duck dialogue ────────────────────────────────────────────────────────────
@@ -612,6 +613,19 @@ export default function RubberDuckPage() {
       title="Rubber Duck Debugger"
       description="Explain your bug to a giant rubber duck. You'll probably figure it out yourself."
     >
+      <Head>
+        <script type="application/ld+json">{JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'WebApplication',
+          name: 'Rubber Duck Debugger',
+          description: "Explain your bug to a giant rubber duck. You'll probably figure it out yourself.",
+          url: 'https://treq.dev/tools/rubber-duck',
+          applicationCategory: 'DeveloperApplication',
+          operatingSystem: 'Any',
+          isAccessibleForFree: true,
+          provider: {'@type': 'Organization', name: 'Treq', url: 'https://treq.dev'},
+        })}</script>
+      </Head>
       <div className={styles.page}>
         <div className={styles.header}>
           <div className={styles.breadcrumb}>

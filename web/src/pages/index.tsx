@@ -314,12 +314,34 @@ function ClosingCTA(): ReactNode {
   );
 }
 
+const SOFTWARE_APP_SCHEMA = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'Treq',
+  description:
+    'AI Workspace Manager for busy developers. The Open Source Graphite Alternative.',
+  url: 'https://treq.dev',
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: 'macOS',
+  offers: {
+    '@type': 'Offer',
+    price: '0',
+    priceCurrency: 'USD',
+  },
+  downloadUrl: 'https://github.com/Ziinc/treq/releases',
+  codeRepository: 'https://github.com/Ziinc/treq',
+  license: 'https://www.apache.org/licenses/LICENSE-2.0',
+};
+
 export default function Home(): ReactNode {
   const {siteConfig} = useDocusaurusContext();
   return (
     <Layout
       title={siteConfig.title}
       description="The Open Source Graphite Alternative">
+      <Head>
+        <script type="application/ld+json">{JSON.stringify(SOFTWARE_APP_SCHEMA)}</script>
+      </Head>
       <HomepageHeader />
       <ProblemSection />
       <FeaturesSection />
