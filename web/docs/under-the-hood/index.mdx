@@ -153,7 +153,7 @@ Treq creates `.treq/local.db` inside each managed repository. This database stay
 
 Deleting a workspace removes its repository-local records. The application database can retain state keyed by a workspace path, such as viewed-file records.
 
-<!-- TODO: Unify viewed-file persistence with pending reviews before documenting one retention guarantee for review progress. -->
+{/* TODO: Unify viewed-file persistence with pending reviews before documenting one retention guarantee for review progress. */}
 
 ## In-Memory State
 
@@ -167,7 +167,7 @@ Repository operations invalidate related query and database cache entries. The i
 
 Cache records are derived data. Deleting them can cause extra work on the next load, but it does not remove commits or working-copy changes.
 
-<!-- TODO: Publish cache lifetime and invalidation guarantees once they become a supported part of Treq's behavior. -->
+{/* TODO: Publish cache lifetime and invalidation guarantees once they become a supported part of Treq's behavior. */}
 
 ## Ownership Boundaries
 
