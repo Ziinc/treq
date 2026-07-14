@@ -91,7 +91,7 @@ const config: Config = {
   ],
 
   title: 'Treq',
-  tagline: 'The Open Source Graphite Alternative',
+  tagline: 'Review and manage agent branch state',
   favicon: 'img/favicon.svg',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future

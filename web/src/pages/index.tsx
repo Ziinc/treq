@@ -36,11 +36,11 @@ function HomepageHeader() {
 
         <div className={styles.heroMain}>
           <Heading as="h1" className={styles.heroTitle}>
-            <span className={styles.heroAccent}>AI Workspace Manager</span>
-            {' '}for busy developers
+            <span className={styles.heroAccent}>Treq</span>
+            {' '}Review and manage agent branch state
           </Heading>
           <p className={styles.heroEyebrow}>
-            The Open Source Graphite Alternative
+            Supervise, review, move, rebase, and merge agent work without losing confidence.
           </p>
           <div className={styles.buttons}>
             <Link
@@ -99,26 +99,26 @@ function ProblemSection(): ReactNode {
     <section className={styles.problemSection} aria-label="The problem">
       <div className={styles.problemContainer}>
         <Heading as="h2" className={styles.problemHeading}>
-          AI agents write code fast. Managing the output is the hard part.
+          Agents write code fast. Review and branch state are still on you.
         </Heading>
 
         <div className={styles.problemList}>
           <div className={styles.problemItem}>
-            You want multiple agents working in parallel, but they&apos;d step on each other&apos;s changes.
+            You have more agent diffs than you can review with confidence.
           </div>
           <div className={styles.problemItem}>
-            Your branches go stale while you&apos;re iterating on reviews, and rebasing is a chore.
+            Parallel work spreads across branches, and the stack state gets hard to track.
           </div>
           <div className={styles.problemItem}>
-            Conflict resolution is grunt work that AI should handle automatically.
+            Moving files between workspaces and reshaping commits is still a VCS chore.
           </div>
           <div className={styles.problemItem}>
-            A large feature needs to be broken into smaller PRs, but keeping them in sync is painful.
+            Stacked changes go stale while you iterate on a review.
           </div>
         </div>
 
         <p className={styles.problemConclusion}>
-          You need a development workflow built for AI-assisted development.
+          Treq centers the workflow on human review and branch-state management.
         </p>
       </div>
     </section>
@@ -135,21 +135,21 @@ function FeaturesSection(): ReactNode {
           </Heading>
         </div>
 
-        {/* Core Feature: Code reviews */}
+        {/* Core Feature: Local reviews */}
         <div className={styles.featureRow}>
           <div className={styles.featureText}>
             <Heading as="h3" className={styles.featureHeading}>
-              Code reviews
+              Local reviews
             </Heading>
             <p className={styles.featureDescription}>
-              Inspect and iterate on every change in a human-in-the-loop agentic workflow. Review diffs like a familiar GitHub PR, annotate code, and send comments back to Claude for changes.
+              Inspect every agent change in a local review. Annotate diffs, mark files viewed, and send comments back to Claude, Codex, or Cursor. Review state stays on your machine. It never depends on a remote PR service.
             </p>
           </div>
           <div className={styles.featureScreenshot}>
             <img
               className={styles.featureImage}
               src={reviewScreenshot}
-              alt="Treq code review screenshot showing comments sent to Claude"
+              alt="Treq local review screenshot showing comments sent to an agent"
               width={2382}
               height={1749}
               loading="lazy"
@@ -158,16 +158,16 @@ function FeaturesSection(): ReactNode {
           </div>
         </div>
 
-        {/* Core Feature: Automatic rebasing */}
+        {/* Core Feature: Move files between workspaces */}
         <div className={clsx(styles.featureRow, styles.featureRowReverse)}>
           <div className={styles.featureText}>
             <Heading as="h3" className={styles.featureHeading}>
-              Auto-rebase and Auto-resolve
+              Move files between workspaces
             </Heading>
             <p className={styles.featureDescription}>
-              Workspaces are isolated but never go stale. When the underlying code changes, Treq rebases dependent workspaces automatically in the background. Got a conflict? Send it to the agent to handle the grunt work.
+              Agent work often lands in the wrong place. Select uncommitted files and move them to another workspace. Split a large change into reviewable commits, then keep each stack piece in the right branch.
             </p>
-            <div className={styles.workspaceDirectoryViz} aria-label="Workspace directory layout">
+            <div className={styles.workspaceDirectoryViz} aria-label="Files selected for move">
               <div className={styles.directoryRow}>
                 <span className={styles.directoryConnector}></span>
                 <span className={styles.directoryIcon}>/</span>
@@ -175,23 +175,18 @@ function FeaturesSection(): ReactNode {
               </div>
               <div className={styles.directoryRow} data-depth="1">
                 <span className={styles.directoryConnector}></span>
-                <span className={styles.directoryIcon}>/</span>
-                <code>components</code>
+                <span className={styles.directoryIcon}>TS</span>
+                <code>auth.ts</code>
               </div>
-              <div className={styles.directoryRow} data-depth="2">
+              <div className={styles.directoryRow} data-depth="1" data-status="conflict">
                 <span className={styles.directoryConnector}></span>
                 <span className={styles.directoryIcon}>TS</span>
-                <code>Dashboard.tsx</code>
+                <code>session.ts</code>
               </div>
-              <div className={styles.directoryRow} data-depth="3">
+              <div className={styles.directoryRow} data-depth="1">
                 <span className={styles.directoryConnector}></span>
                 <span className={styles.directoryIcon}>TS</span>
-                <code>ShowWorkspace.tsx</code>
-              </div>
-              <div className={styles.directoryRow} data-depth="3" data-status="conflict">
-                <span className={styles.directoryConnector}></span>
-                <span className={styles.directoryIcon} aria-hidden="true">!</span>
-                <code>ChangesDiffViewer.tsx</code>
+                <code>billing.ts</code>
               </div>
             </div>
           </div>
@@ -201,7 +196,60 @@ function FeaturesSection(): ReactNode {
                 <span className={styles.windowDot} style={{background: '#ff5f57'}}></span>
                 <span className={styles.windowDot} style={{background: '#febc2e'}}></span>
                 <span className={styles.windowDot} style={{background: '#28c840'}}></span>
-                <span className={styles.windowTitle}>Auto Rebase</span>
+                <span className={styles.windowTitle}>Move to Workspace</span>
+              </div>
+              <div className={styles.screenshotContent} style={{padding: '16px'}}>
+                <div className={styles.mockStackList}>
+                  <div className={styles.mockStackItem} data-level="0">
+                    <div className={styles.mockStackConnector}></div>
+                    <div className={styles.mockStackCard} data-type="pr">
+                      <div className={styles.mockItem} style={{width: '62%'}}></div>
+                      <div className={styles.mockStackPrBadge}>auth</div>
+                    </div>
+                  </div>
+                  <div className={styles.mockStackItem} data-level="1">
+                    <div className={styles.mockStackConnector}></div>
+                    <div className={styles.mockStackCard} data-type="active">
+                      <div className={styles.mockItem} style={{width: '48%'}}></div>
+                      <div className={styles.mockStackPrBadge}>billing</div>
+                    </div>
+                  </div>
+                  <div className={styles.mockStackItem} data-level="0">
+                    <div className={styles.mockStackConnector}></div>
+                    <div className={styles.mockStackCard} data-type="main">
+                      <div className={styles.mockItem} style={{width: '36%'}}></div>
+                      <div className={styles.mockStackPrBadge}>2 files moved</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Core Feature: Stacked workspaces */}
+        <div className={styles.featureRow}>
+          <div className={styles.featureText}>
+            <Heading as="h3" className={styles.featureHeading}>
+              Stacked workspaces
+            </Heading>
+            <p className={styles.featureDescription}>
+              Break a large feature into stacked workspaces that stay rebased on their targets. When a lower branch moves, Treq updates dependents in the background. Send conflicts to an agent when you want help with the grunt work.
+            </p>
+            <div className={styles.inlineStackViz} aria-label="Linear stacked workspaces">
+              <div className={styles.inlineStackNode}>main</div>
+              <div className={styles.inlineStackNode}>PR 1</div>
+              <div className={styles.inlineStackNode}>PR 2</div>
+              <div className={styles.inlineStackNode} data-active="true">PR 3</div>
+            </div>
+          </div>
+          <div className={styles.featureScreenshot}>
+            <div className={styles.screenshotWindow} aria-hidden="true">
+              <div className={styles.screenshotTitlebar}>
+                <span className={styles.windowDot} style={{background: '#ff5f57'}}></span>
+                <span className={styles.windowDot} style={{background: '#febc2e'}}></span>
+                <span className={styles.windowDot} style={{background: '#28c840'}}></span>
+                <span className={styles.windowTitle}>Stacked workspaces</span>
               </div>
               <div className={styles.screenshotContent} style={{padding: '16px'}}>
                 <div className={styles.mockRebaseStack}>
@@ -225,66 +273,6 @@ function FeaturesSection(): ReactNode {
           </div>
         </div>
 
-        {/* Core Feature: Stacked workspaces */}
-        <div className={styles.featureRow}>
-          <div className={styles.featureText}>
-            <Heading as="h3" className={styles.featureHeading}>
-              Stacked workspaces
-            </Heading>
-            <p className={styles.featureDescription}>
-              Got a large feature but need to break it up for easier review? Split development into stacks, where features are built incrementally over smaller branches and shipped in bite-sized chunks. Treq keeps the entire stack rebased and in sync.
-            </p>
-            <div className={styles.inlineStackViz} aria-label="Linear stacked pull requests">
-              <div className={styles.inlineStackNode}>main</div>
-              <div className={styles.inlineStackNode}>PR 1</div>
-              <div className={styles.inlineStackNode}>PR 2</div>
-              <div className={styles.inlineStackNode} data-active="true">PR 3</div>
-            </div>
-          </div>
-          <div className={styles.featureScreenshot}>
-            <div className={styles.screenshotWindow} aria-hidden="true">
-              <div className={styles.screenshotTitlebar}>
-                <span className={styles.windowDot} style={{background: '#ff5f57'}}></span>
-                <span className={styles.windowDot} style={{background: '#febc2e'}}></span>
-                <span className={styles.windowDot} style={{background: '#28c840'}}></span>
-                <span className={styles.windowTitle}>Stacked PRs</span>
-              </div>
-              <div className={styles.screenshotContent} style={{padding: '16px'}}>
-                <div className={styles.mockStackList}>
-                  <div className={styles.mockStackItem} data-level="3">
-                    <div className={styles.mockStackConnector}></div>
-                    <div className={styles.mockStackCard} data-type="active">
-                      <div className={styles.mockItem} style={{width: '74%'}}></div>
-                      <div className={styles.mockStackPrBadge}>PR #3</div>
-                    </div>
-                  </div>
-                  <div className={styles.mockStackItem} data-level="2">
-                    <div className={styles.mockStackConnector}></div>
-                    <div className={styles.mockStackCard} data-type="pr">
-                      <div className={styles.mockItem} style={{width: '58%'}}></div>
-                      <div className={styles.mockStackPrBadge}>PR #2</div>
-                    </div>
-                  </div>
-                  <div className={styles.mockStackItem} data-level="1">
-                    <div className={styles.mockStackConnector}></div>
-                    <div className={styles.mockStackCard} data-type="pr">
-                      <div className={styles.mockItem} style={{width: '42%'}}></div>
-                      <div className={styles.mockStackPrBadge}>PR #1</div>
-                    </div>
-                  </div>
-                  <div className={styles.mockStackItem} data-level="0">
-                    <div className={styles.mockStackConnector}></div>
-                    <div className={styles.mockStackCard} data-type="main">
-                      <div className={styles.mockItem} style={{width: '28%'}}></div>
-                      <div className={styles.mockStackPrBadge}>main</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
       </div>
     </section>
   );
@@ -295,10 +283,10 @@ function ClosingCTA(): ReactNode {
     <section className={styles.closingCTA} aria-label="Download">
       <div className={styles.closingCTAContainer}>
         <Heading as="h2" className={styles.closingCTAHeading}>
-          Ship AI-generated code with confidence.
+          Ship agent work you have actually reviewed.
         </Heading>
         <p className={styles.closingCTASubheading}>
-          Treq runs entirely on your machine and is fully private by default. Treq was used to build Treq.
+          Treq keeps review state local. Desktop and CLI stay on your machine. Treq was used to build Treq.
         </p>
         <div className={styles.closingCTAButtons}>
           <Link
@@ -319,7 +307,7 @@ const SOFTWARE_APP_SCHEMA = {
   '@type': 'SoftwareApplication',
   name: 'Treq',
   description:
-    'AI Workspace Manager for busy developers. The Open Source Graphite Alternative.',
+    'Review and manage agent branch state. Local reviews, stacked workspaces, and desktop plus CLI branch operations.',
   url: 'https://treq.dev',
   applicationCategory: 'DeveloperApplication',
   operatingSystem: 'macOS',
@@ -338,7 +326,7 @@ export default function Home(): ReactNode {
   return (
     <Layout
       title={siteConfig.title}
-      description="The Open Source Graphite Alternative">
+      description="Review and manage agent branch state">
       <Head>
         <script type="application/ld+json">{JSON.stringify(SOFTWARE_APP_SCHEMA)}</script>
       </Head>
