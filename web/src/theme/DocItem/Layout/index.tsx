@@ -5,48 +5,56 @@ import Head from '@docusaurus/Head';
 import {useDoc} from '@docusaurus/plugin-content-docs/client';
 
 const SITE_URL = 'https://treq.dev';
+const ORG = {'@type': 'Organization', name: 'Treq', url: SITE_URL};
+
+function buildSchema(metadata: ReturnType<typeof useDoc>['metadata']) {
+  const {title, description, permalink, lastUpdatedAt} = metadata;
+  const url = `${SITE_URL}${permalink}`;
+  const base = {
+    '@context': 'https://schema.org',
+    ...(description ? {description} : {}),
+    url,
+    ...(lastUpdatedAt
+      ? {dateModified: new Date(lastUpdatedAt * 1000).toISOString()}
+      : {}),
+  };
+
+  if (permalink.includes('/how-to/')) {
+    return {'@type': 'HowTo', name: title, ...base, publisher: ORG};
+  }
+
+  if (permalink.startsWith('/learn/tutorials/')) {
+    return {
+      '@type': 'LearningResource',
+      name: title,
+      ...base,
+      learningResourceType: 'Tutorial',
+      educationalLevel: 'Beginner',
+      provider: ORG,
+    };
+  }
+
+  if (permalink.startsWith('/learn/')) {
+    return {
+      '@type': 'LearningResource',
+      name: title,
+      ...base,
+      educationalLevel: 'Beginner',
+      provider: ORG,
+    };
+  }
+
+  return {'@type': 'TechArticle', headline: title, ...base, publisher: ORG};
+}
 
 export default function DocItemLayoutWrapper(props: Props): JSX.Element {
   const {metadata} = useDoc();
-  const isLearn = metadata.permalink.startsWith('/learn/');
-
-  const schema = isLearn
-    ? {
-        '@context': 'https://schema.org',
-        '@type': 'LearningResource',
-        name: metadata.title,
-        ...(metadata.description ? {description: metadata.description} : {}),
-        url: `${SITE_URL}${metadata.permalink}`,
-        ...(metadata.lastUpdatedAt
-          ? {dateModified: new Date(metadata.lastUpdatedAt * 1000).toISOString()}
-          : {}),
-        educationalLevel: 'Beginner',
-        provider: {
-          '@type': 'Organization',
-          name: 'Treq',
-          url: SITE_URL,
-        },
-      }
-    : {
-        '@context': 'https://schema.org',
-        '@type': 'TechArticle',
-        headline: metadata.title,
-        ...(metadata.description ? {description: metadata.description} : {}),
-        url: `${SITE_URL}${metadata.permalink}`,
-        ...(metadata.lastUpdatedAt
-          ? {dateModified: new Date(metadata.lastUpdatedAt * 1000).toISOString()}
-          : {}),
-        publisher: {
-          '@type': 'Organization',
-          name: 'Treq',
-          url: SITE_URL,
-        },
-      };
-
   return (
     <>
       <Head>
-        <script type="application/ld+json">{JSON.stringify(schema)}</script>
+        <script type="application/ld+json">
+          {JSON.stringify(buildSchema(metadata))}
+        </script>
       </Head>
       <DocItemLayout {...props} />
     </>
