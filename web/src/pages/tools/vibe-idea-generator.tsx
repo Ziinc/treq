@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Layout from '@theme/Layout';
+import Head from '@docusaurus/Head';
 import styles from './vibe-idea-generator.module.css';
 
 // ── Idea generation data ──────────────────────────────────────────────────────
@@ -483,6 +484,19 @@ export default function VibeIdeaGeneratorPage() {
       title="Vibe Idea Generator"
       description="Generate buzzword-packed vibe coding ideas by throwing paper at a wall."
     >
+      <Head>
+        <script type="application/ld+json">{JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'WebApplication',
+          name: 'Vibe Idea Generator',
+          description: 'Generate buzzword-packed vibe coding ideas by throwing paper at a wall.',
+          url: 'https://treq.dev/tools/vibe-idea-generator',
+          applicationCategory: 'DeveloperApplication',
+          operatingSystem: 'Any',
+          isAccessibleForFree: true,
+          provider: {'@type': 'Organization', name: 'Treq', url: 'https://treq.dev'},
+        })}</script>
+      </Head>
       <div className={styles.page}>
         <div className={styles.header}>
           <div className={styles.breadcrumb}>

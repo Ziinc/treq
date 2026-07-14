@@ -12,6 +12,7 @@ const config: Config = {
   plugins: [
     require.resolve('./plugins/rawMarkdownPlugin'),
     require.resolve('./plugins/versionPlugin'),
+    require.resolve('./plugins/jsonLdPlugin'),
     [
       '@docusaurus/plugin-content-docs',
       {

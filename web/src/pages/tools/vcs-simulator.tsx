@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Layout from '@theme/Layout';
+import Head from '@docusaurus/Head';
 import { renderGraph } from './_graph-shared';
 import {
   SCENARIOS,
@@ -186,6 +187,19 @@ export default function VcsSimulatorPage() {
       title="VCS Simulator"
       description="Step through git and jj commands interactively, watching the commit graph update in real time."
     >
+      <Head>
+        <script type="application/ld+json">{JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'WebApplication',
+          name: 'VCS Simulator',
+          description: 'Step through git and jj commands interactively, watching the commit graph update in real time.',
+          url: 'https://treq.dev/tools/vcs-simulator',
+          applicationCategory: 'DeveloperApplication',
+          operatingSystem: 'Any',
+          isAccessibleForFree: true,
+          provider: {'@type': 'Organization', name: 'Treq', url: 'https://treq.dev'},
+        })}</script>
+      </Head>
       <div className={styles.page}>
         {/* Header */}
         <div className={styles.header}>
