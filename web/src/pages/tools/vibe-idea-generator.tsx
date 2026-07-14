@@ -71,9 +71,8 @@ interface SceneHandles {
   dispose: () => void;
 }
 
-function buildScene(canvas: HTMLCanvasElement, onReveal: (idea: string) => void): SceneHandles {
-  // Dynamic import to avoid SSR issues
-  const THREE = require('three') as typeof import('three');
+async function buildScene(canvas: HTMLCanvasElement, onReveal: (idea: string) => void): Promise<SceneHandles> {
+  const THREE = await import('three');
 
   // ── Renderer ────────────────────────────────────────────────────────────────
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -436,16 +435,20 @@ export default function VibeIdeaGeneratorPage() {
 
   useEffect(() => {
     if (!canvasRef.current) return;
-    const handles = buildScene(canvasRef.current, (idea) => {
+    let mounted = true;
+    buildScene(canvasRef.current, (idea) => {
       setIdeas((prev) => [
         { id: ++idCounter.current, text: idea, copied: false },
         ...prev,
       ]);
       setAnimating(false);
+    }).then((handles) => {
+      if (!mounted) { handles.dispose(); return; }
+      sceneRef.current = handles;
     });
-    sceneRef.current = handles;
     return () => {
-      handles.dispose();
+      mounted = false;
+      sceneRef.current?.dispose();
       sceneRef.current = null;
     };
   }, []);

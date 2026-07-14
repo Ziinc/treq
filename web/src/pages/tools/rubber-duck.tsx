@@ -79,8 +79,8 @@ interface SceneAPI {
   dispose: () => void;
 }
 
-function buildDuckScene(canvas: HTMLCanvasElement): SceneAPI {
-  const THREE = require('three') as typeof import('three');
+async function buildDuckScene(canvas: HTMLCanvasElement): Promise<SceneAPI> {
+  const THREE = await import('three');
 
   // ── Renderer ────────────────────────────────────────────────────────────────
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
@@ -421,9 +421,16 @@ export default function RubberDuckPage() {
 
   useEffect(() => {
     if (!canvasRef.current) return;
-    const api = buildDuckScene(canvasRef.current);
-    sceneRef.current = api;
-    return () => { api.dispose(); sceneRef.current = null; };
+    let mounted = true;
+    buildDuckScene(canvasRef.current).then((api) => {
+      if (!mounted) { api.dispose(); return; }
+      sceneRef.current = api;
+    });
+    return () => {
+      mounted = false;
+      sceneRef.current?.dispose();
+      sceneRef.current = null;
+    };
   }, []);
 
   // auto-scroll chat
