@@ -22,6 +22,71 @@ const config: Config = {
         editUrl: 'https://github.com/Ziinc/treq/tree/main/web/',
       },
     ],
+    function chunkSplittingPlugin() {
+      return {
+        name: 'chunk-splitting-plugin',
+        configureWebpack(_config: object, isServer: boolean) {
+          if (isServer) return {};
+          return {
+            optimization: {
+              splitChunks: {
+                chunks: 'all' as const,
+                cacheGroups: {
+                  // three.js — only loaded on rubber-duck and vibe-idea-generator pages
+                  three: {
+                    test: /[\\/]node_modules[\\/]three[\\/]/,
+                    name: 'chunk-three',
+                    chunks: 'all' as const,
+                    priority: 40,
+                    enforce: true,
+                  },
+                  // React Flow — only loaded on dag-visualizer page
+                  reactFlow: {
+                    test: /[\\/]node_modules[\\/]@xyflow[\\/]/,
+                    name: 'chunk-react-flow',
+                    chunks: 'all' as const,
+                    priority: 40,
+                    enforce: true,
+                  },
+                  // Dagre — only loaded on dag-visualizer page
+                  dagre: {
+                    test: /[\\/]node_modules[\\/]@dagrejs[\\/]/,
+                    name: 'chunk-dagre',
+                    chunks: 'all' as const,
+                    priority: 40,
+                    enforce: true,
+                  },
+                  // Rough.js — shared between branch-visualizer and vcs-simulator
+                  roughjs: {
+                    test: /[\\/]node_modules[\\/]roughjs[\\/]/,
+                    name: 'chunk-roughjs',
+                    chunks: 'all' as const,
+                    priority: 40,
+                    enforce: true,
+                  },
+                  // Supabase — only loaded on login/dashboard/auth pages
+                  supabase: {
+                    test: /[\\/]node_modules[\\/]@supabase[\\/]/,
+                    name: 'chunk-supabase',
+                    chunks: 'all' as const,
+                    priority: 40,
+                    enforce: true,
+                  },
+                  // sql.js — only loaded on demand via SearchDbContext
+                  sqljs: {
+                    test: /[\\/]node_modules[\\/]sql\.js[\\/]/,
+                    name: 'chunk-sqljs',
+                    chunks: 'all' as const,
+                    priority: 40,
+                    enforce: true,
+                  },
+                },
+              },
+            },
+          };
+        },
+      };
+    },
   ],
 
   title: 'Treq',
