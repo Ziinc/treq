@@ -8,7 +8,10 @@ import {
 	getWorkspaces,
 	listWorkspaceStatuses,
 } from "../lib/api";
-import type { WorkspaceSidebarStatus, QueueEntryStatus } from "../lib/api-types";
+import type {
+	WorkspaceSidebarStatus,
+	QueueEntryStatus,
+} from "../lib/api-types";
 import { useGitRemoteInfo } from "../hooks/useMergeQueueStatus";
 import { supabase } from "../lib/supabase";
 import {
@@ -123,7 +126,10 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 					p_repo_full_name: remoteInfo!.full_name,
 				});
 				const map = new Map<string, QueueEntryStatus>();
-				for (const row of (data ?? []) as { branch_name: string; status: string }[]) {
+				for (const row of (data ?? []) as {
+					branch_name: string;
+					status: string;
+				}[]) {
 					map.set(row.branch_name, row.status as QueueEntryStatus);
 				}
 				return map;
@@ -380,7 +386,9 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 												onDeleteWorkspace={onDeleteWorkspace}
 												onRenameWorkspace={setRenameTarget}
 												onDoubleClick={handleDoubleClick}
-												queueStatus={branchQueueStatuses?.get(node.status.current.branch_name)}
+												queueStatus={branchQueueStatuses?.get(
+													node.status.current.branch_name,
+												)}
 											/>
 										))}
 										{droppableProvided.placeholder}

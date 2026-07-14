@@ -44,7 +44,8 @@ export function useEnqueueWorkspace(
 
 	const mutate = useCallback(
 		async (action: "enqueue" | "dequeue") => {
-			if (!remoteInfo || !branchName) throw new Error("Repository or branch not detected");
+			if (!remoteInfo || !branchName)
+				throw new Error("Repository or branch not detected");
 			const { error } = await supabase.functions.invoke("enqueue-workspace", {
 				body: {
 					repo_full_name: remoteInfo.full_name,
