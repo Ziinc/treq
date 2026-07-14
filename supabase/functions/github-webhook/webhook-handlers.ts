@@ -157,7 +157,8 @@ export async function handlePullRequest(
       pr.number,
       pr.head.sha,
       pr.title,
-      pr.user?.login ?? null
+      pr.user?.login ?? null,
+      pr.head.ref ?? null
     );
     await processQueue(supabase, queue, installationId, repoPayload.owner.login, repoPayload.name);
     return;

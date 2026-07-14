@@ -321,6 +321,33 @@ export interface PendingReview {
 	updated_at: string;
 }
 
+export interface GitRemoteInfo {
+	owner: string;
+	repo: string;
+	full_name: string;
+}
+
+export type QueueEntryStatus =
+	| "queued"
+	| "testing"
+	| "passed"
+	| "merged"
+	| "failed"
+	| "dequeued";
+
+export interface WorkspaceQueueStatus {
+	entry_id: string;
+	pr_number: number;
+	status: QueueEntryStatus;
+	position: number;
+	target_branch: string;
+	lane_number: number | null;
+	ci_run_status: string | null;
+	failure_reason: string | null;
+	enqueued_at: string;
+	merged_at: string | null;
+}
+
 export type ConflictStyle =
 	| "jj_diff"
 	| "jj_snapshot"
