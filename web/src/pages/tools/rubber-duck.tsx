@@ -80,24 +80,30 @@ interface SceneAPI {
 }
 
 async function buildDuckScene(canvas: HTMLCanvasElement): Promise<SceneAPI> {
-  const THREE = await import('three');
+  const {
+    WebGLRenderer, PCFSoftShadowMap, Scene, Color, FogExp2, PerspectiveCamera,
+    HemisphereLight, DirectionalLight, PointLight,
+    CircleGeometry, RingGeometry, SphereGeometry, CylinderGeometry, BoxGeometry, ConeGeometry,
+    MeshStandardMaterial, MeshBasicMaterial,
+    Mesh, Group,
+  } = await import('three/src/Three.js');
 
   // ── Renderer ────────────────────────────────────────────────────────────────
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+  const renderer = new WebGLRenderer({ canvas, antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = PCFSoftShadowMap;
   const W = canvas.clientWidth || 700;
   const H = canvas.clientHeight || 420;
   renderer.setSize(W, H, false);
 
   // ── Scene ────────────────────────────────────────────────────────────────────
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0ea5e9);
-  scene.fog = new THREE.FogExp2(0x0ea5e9, 0.04);
+  const scene = new Scene();
+  scene.background = new Color(0x0ea5e9);
+  scene.fog = new FogExp2(0x0ea5e9, 0.04);
 
   // ── Camera ───────────────────────────────────────────────────────────────────
-  const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 200);
+  const camera = new PerspectiveCamera(50, W / H, 0.1, 200);
 
   // Camera orbit state
   let camTheta = 0.3;  // horizontal angle
@@ -127,9 +133,9 @@ async function buildDuckScene(canvas: HTMLCanvasElement): Promise<SceneAPI> {
   }
 
   // ── Lighting ─────────────────────────────────────────────────────────────────
-  const sky = new THREE.HemisphereLight(0x87ceeb, 0x4a90d9, 0.8);
+  const sky = new HemisphereLight(0x87ceeb, 0x4a90d9, 0.8);
   scene.add(sky);
-  const sun = new THREE.DirectionalLight(0xfff4cc, 2.0);
+  const sun = new DirectionalLight(0xfff4cc, 2.0);
   sun.position.set(5, 10, 5);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
@@ -140,27 +146,27 @@ async function buildDuckScene(canvas: HTMLCanvasElement): Promise<SceneAPI> {
   sun.shadow.camera.top = 10;
   sun.shadow.camera.bottom = -10;
   scene.add(sun);
-  const rimLight = new THREE.PointLight(0xffd700, 1.5, 20);
+  const rimLight = new PointLight(0xffd700, 1.5, 20);
   rimLight.position.set(-4, 6, -3);
   scene.add(rimLight);
 
   // ── Water ────────────────────────────────────────────────────────────────────
-  const waterGeo = new THREE.CircleGeometry(18, 64);
-  const waterMat = new THREE.MeshStandardMaterial({
+  const waterGeo = new CircleGeometry(18, 64);
+  const waterMat = new MeshStandardMaterial({
     color: 0x1e86c8,
     roughness: 0.1,
     metalness: 0.2,
   });
-  const water = new THREE.Mesh(waterGeo, waterMat);
+  const water = new Mesh(waterGeo, waterMat);
   water.rotation.x = -Math.PI / 2;
   water.receiveShadow = true;
   scene.add(water);
 
   // subtle wave rings
   for (let i = 1; i <= 5; i++) {
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(i * 1.2, i * 1.2 + 0.06, 64),
-      new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.3 - i * 0.04 }),
+    const ring = new Mesh(
+      new RingGeometry(i * 1.2, i * 1.2 + 0.06, 64),
+      new MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.3 - i * 0.04 }),
     );
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.01;
@@ -168,67 +174,67 @@ async function buildDuckScene(canvas: HTMLCanvasElement): Promise<SceneAPI> {
   }
 
   // ── Duck group ───────────────────────────────────────────────────────────────
-  const duckGroup = new THREE.Group();
+  const duckGroup = new Group();
   scene.add(duckGroup);
 
-  const YELLOW = new THREE.MeshStandardMaterial({ color: 0xf5c842, roughness: 0.6, metalness: 0.1 });
-  const ORANGE = new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.5 });
-  const BLACK  = new THREE.MeshStandardMaterial({ color: 0x111827 });
-  const WHITE  = new THREE.MeshStandardMaterial({ color: 0xffffff });
-  const RED    = new THREE.MeshStandardMaterial({ color: 0xef4444 });
+  const YELLOW = new MeshStandardMaterial({ color: 0xf5c842, roughness: 0.6, metalness: 0.1 });
+  const ORANGE = new MeshStandardMaterial({ color: 0xf97316, roughness: 0.5 });
+  const BLACK  = new MeshStandardMaterial({ color: 0x111827 });
+  const WHITE  = new MeshStandardMaterial({ color: 0xffffff });
+  const RED    = new MeshStandardMaterial({ color: 0xef4444 });
 
   // Body — large oval
-  const bodyGeo = new THREE.SphereGeometry(1.6, 32, 24);
-  const body = new THREE.Mesh(bodyGeo, YELLOW);
+  const bodyGeo = new SphereGeometry(1.6, 32, 24);
+  const body = new Mesh(bodyGeo, YELLOW);
   body.scale.set(1, 0.78, 1.1);
   body.position.y = 0.9;
   body.castShadow = true;
   duckGroup.add(body);
 
   // Belly (lighter patch)
-  const bellyMat = new THREE.MeshStandardMaterial({ color: 0xfde68a, roughness: 0.7 });
-  const belly = new THREE.Mesh(new THREE.SphereGeometry(1.1, 24, 20), bellyMat);
+  const bellyMat = new MeshStandardMaterial({ color: 0xfde68a, roughness: 0.7 });
+  const belly = new Mesh(new SphereGeometry(1.1, 24, 20), bellyMat);
   belly.scale.set(0.65, 0.7, 0.4);
   belly.position.set(0, 0.7, 1.1);
   duckGroup.add(belly);
 
   // Neck
-  const neckGeo = new THREE.CylinderGeometry(0.55, 0.7, 0.7, 20);
-  const neck = new THREE.Mesh(neckGeo, YELLOW);
+  const neckGeo = new CylinderGeometry(0.55, 0.7, 0.7, 20);
+  const neck = new Mesh(neckGeo, YELLOW);
   neck.position.set(0, 2.05, 0.4);
   neck.rotation.x = -0.2;
   neck.castShadow = true;
   duckGroup.add(neck);
 
   // Head
-  const headGeo = new THREE.SphereGeometry(0.85, 28, 22);
-  const head = new THREE.Mesh(headGeo, YELLOW);
+  const headGeo = new SphereGeometry(0.85, 28, 22);
+  const head = new Mesh(headGeo, YELLOW);
   head.position.set(0, 2.9, 0.55);
   head.castShadow = true;
   duckGroup.add(head);
 
   // Bill group (so we can animate it)
-  const billGroup = new THREE.Group();
+  const billGroup = new Group();
   billGroup.position.set(0, 2.75, 1.35);
 
   // Upper bill
-  const upperBillGeo = new THREE.BoxGeometry(0.62, 0.2, 0.55);
+  const upperBillGeo = new BoxGeometry(0.62, 0.2, 0.55);
   // taper it slightly
-  const upperBill = new THREE.Mesh(upperBillGeo, ORANGE);
+  const upperBill = new Mesh(upperBillGeo, ORANGE);
   upperBill.position.y = 0.05;
   billGroup.add(upperBill);
 
   // Lower bill
-  const lowerBillGeo = new THREE.BoxGeometry(0.58, 0.14, 0.5);
-  const lowerBill = new THREE.Mesh(lowerBillGeo, ORANGE);
+  const lowerBillGeo = new BoxGeometry(0.58, 0.14, 0.5);
+  const lowerBill = new Mesh(lowerBillGeo, ORANGE);
   lowerBill.position.set(0, -0.08, 0.02);
   billGroup.add(lowerBill);
 
   // Bill nostrils
-  const nostrilGeo = new THREE.CircleGeometry(0.055, 8);
-  const nostrilMat = new THREE.MeshStandardMaterial({ color: 0xc2410c });
+  const nostrilGeo = new CircleGeometry(0.055, 8);
+  const nostrilMat = new MeshStandardMaterial({ color: 0xc2410c });
   for (const sx of [-0.15, 0.15]) {
-    const n = new THREE.Mesh(nostrilGeo, nostrilMat);
+    const n = new Mesh(nostrilGeo, nostrilMat);
     n.position.set(sx, 0.12, 0.26);
     billGroup.add(n);
   }
@@ -236,8 +242,8 @@ async function buildDuckScene(canvas: HTMLCanvasElement): Promise<SceneAPI> {
   duckGroup.add(billGroup);
 
   // Eyes
-  const eyeGeo = new THREE.SphereGeometry(0.17, 14, 12);
-  const eyeL = new THREE.Mesh(eyeGeo, BLACK);
+  const eyeGeo = new SphereGeometry(0.17, 14, 12);
+  const eyeL = new Mesh(eyeGeo, BLACK);
   eyeL.position.set(-0.38, 3.05, 1.1);
   duckGroup.add(eyeL);
   const eyeR = eyeL.clone();
@@ -245,25 +251,25 @@ async function buildDuckScene(canvas: HTMLCanvasElement): Promise<SceneAPI> {
   duckGroup.add(eyeR);
 
   // Eye gleam
-  const gleamGeo = new THREE.SphereGeometry(0.055, 8, 8);
+  const gleamGeo = new SphereGeometry(0.055, 8, 8);
   for (const ex of [-0.38, 0.38]) {
-    const g = new THREE.Mesh(gleamGeo, WHITE);
+    const g = new Mesh(gleamGeo, WHITE);
     g.position.set(ex + 0.06, 3.12, 1.24);
     duckGroup.add(g);
   }
 
   // Eyelids (half-sphere above each eye for cuteness)
-  const lidGeo = new THREE.SphereGeometry(0.19, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2);
-  const lidMat = new THREE.MeshStandardMaterial({ color: 0xe8a900, roughness: 0.7 });
+  const lidGeo = new SphereGeometry(0.19, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+  const lidMat = new MeshStandardMaterial({ color: 0xe8a900, roughness: 0.7 });
   for (const lx of [-0.38, 0.38]) {
-    const lid = new THREE.Mesh(lidGeo, lidMat);
+    const lid = new Mesh(lidGeo, lidMat);
     lid.position.set(lx, 3.1, 1.1);
     duckGroup.add(lid);
   }
 
   // Wing left
-  const wingGeo = new THREE.SphereGeometry(0.85, 20, 14);
-  const wingL = new THREE.Mesh(wingGeo, YELLOW);
+  const wingGeo = new SphereGeometry(0.85, 20, 14);
+  const wingL = new Mesh(wingGeo, YELLOW);
   wingL.scale.set(0.4, 0.55, 0.9);
   wingL.position.set(-1.45, 1.1, 0.1);
   wingL.rotation.z = 0.3;
@@ -277,8 +283,8 @@ async function buildDuckScene(canvas: HTMLCanvasElement): Promise<SceneAPI> {
   duckGroup.add(wingR);
 
   // Tail
-  const tailGeo = new THREE.ConeGeometry(0.45, 0.9, 16);
-  const tail = new THREE.Mesh(tailGeo, YELLOW);
+  const tailGeo = new ConeGeometry(0.45, 0.9, 16);
+  const tail = new Mesh(tailGeo, YELLOW);
   tail.position.set(0, 1.3, -1.5);
   tail.rotation.x = Math.PI / 2 + 0.4;
   tail.castShadow = true;
@@ -286,7 +292,7 @@ async function buildDuckScene(canvas: HTMLCanvasElement): Promise<SceneAPI> {
 
   // Comb (little red crest on head)
   for (let i = 0; i < 3; i++) {
-    const comb = new THREE.Mesh(new THREE.SphereGeometry(0.1 - i * 0.02, 8, 8), RED);
+    const comb = new Mesh(new SphereGeometry(0.1 - i * 0.02, 8, 8), RED);
     comb.position.set((i - 1) * 0.15, 3.75 - i * 0.06, 0.4 + i * 0.08);
     duckGroup.add(comb);
   }

@@ -72,84 +72,90 @@ interface SceneHandles {
 }
 
 async function buildScene(canvas: HTMLCanvasElement, onReveal: (idea: string) => void): Promise<SceneHandles> {
-  const THREE = await import('three');
+  const {
+    WebGLRenderer, PCFSoftShadowMap, Scene, Color, Fog, PerspectiveCamera,
+    AmbientLight, DirectionalLight, PointLight,
+    PlaneGeometry, BoxGeometry, SphereGeometry, IcosahedronGeometry, ConeGeometry, CylinderGeometry,
+    MeshStandardMaterial, Mesh, Group,
+    DoubleSide, MathUtils, Vector3,
+  } = await import('three/src/Three.js');
 
   // ── Renderer ────────────────────────────────────────────────────────────────
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  const renderer = new WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = PCFSoftShadowMap;
 
   const W = canvas.clientWidth || 700;
   const H = canvas.clientHeight || 380;
   renderer.setSize(W, H, false);
 
   // ── Scene + camera ───────────────────────────────────────────────────────────
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0f172a);
-  scene.fog = new THREE.Fog(0x0f172a, 18, 32);
+  const scene = new Scene();
+  scene.background = new Color(0x0f172a);
+  scene.fog = new Fog(0x0f172a, 18, 32);
 
-  const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 100);
+  const camera = new PerspectiveCamera(55, W / H, 0.1, 100);
   camera.position.set(0, 3, 9);
   camera.lookAt(0, 1.5, 0);
 
   // ── Lighting ─────────────────────────────────────────────────────────────────
-  const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+  const ambient = new AmbientLight(0xffffff, 0.4);
   scene.add(ambient);
 
-  const sun = new THREE.DirectionalLight(0xffd9b3, 1.6);
+  const sun = new DirectionalLight(0xffd9b3, 1.6);
   sun.position.set(4, 8, 4);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
   scene.add(sun);
 
-  const fill = new THREE.PointLight(0x6366f1, 1.2, 20);
+  const fill = new PointLight(0x6366f1, 1.2, 20);
   fill.position.set(-4, 4, 2);
   scene.add(fill);
 
   // ── Floor ─────────────────────────────────────────────────────────────────────
-  const floorGeo = new THREE.PlaneGeometry(40, 40);
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
-  const floor = new THREE.Mesh(floorGeo, floorMat);
+  const floorGeo = new PlaneGeometry(40, 40);
+  const floorMat = new MeshStandardMaterial({ color: 0x1e293b });
+  const floor = new Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   scene.add(floor);
 
   // ── Wall ─────────────────────────────────────────────────────────────────────
-  const wallGeo = new THREE.PlaneGeometry(20, 10);
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x334155 });
-  const wall = new THREE.Mesh(wallGeo, wallMat);
+  const wallGeo = new PlaneGeometry(20, 10);
+  const wallMat = new MeshStandardMaterial({ color: 0x334155 });
+  const wall = new Mesh(wallGeo, wallMat);
   wall.position.set(0, 4, -8);
   wall.receiveShadow = true;
   scene.add(wall);
 
   // wall pin strip (subtle horizontal band)
-  const stripGeo = new THREE.PlaneGeometry(20, 0.05);
-  const stripMat = new THREE.MeshStandardMaterial({ color: 0x475569 });
-  const strip = new THREE.Mesh(stripGeo, stripMat);
+  const stripGeo = new PlaneGeometry(20, 0.05);
+  const stripMat = new MeshStandardMaterial({ color: 0x475569 });
+  const strip = new Mesh(stripGeo, stripMat);
   strip.position.set(0, 2.6, -7.98);
   scene.add(strip);
 
   // ── Couch ─────────────────────────────────────────────────────────────────────
   const COUCH_COLOR = 0x7c3aed;
-  const cushionMat = new THREE.MeshStandardMaterial({ color: COUCH_COLOR });
-  const darkMat = new THREE.MeshStandardMaterial({ color: 0x4c1d95 });
+  const cushionMat = new MeshStandardMaterial({ color: COUCH_COLOR });
+  const darkMat = new MeshStandardMaterial({ color: 0x4c1d95 });
 
   // seat
-  const seat = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.5, 1.4), cushionMat);
+  const seat = new Mesh(new BoxGeometry(3.2, 0.5, 1.4), cushionMat);
   seat.position.set(0, 0.5, 1.5);
   seat.castShadow = true;
   seat.receiveShadow = true;
   scene.add(seat);
 
   // back
-  const back = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.2, 0.4), cushionMat);
+  const back = new Mesh(new BoxGeometry(3.2, 1.2, 0.4), cushionMat);
   back.position.set(0, 1.35, 2.1);
   back.castShadow = true;
   scene.add(back);
 
   // left arm
-  const armL = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.9, 1.4), darkMat);
+  const armL = new Mesh(new BoxGeometry(0.4, 0.9, 1.4), darkMat);
   armL.position.set(-1.8, 0.7, 1.5);
   armL.castShadow = true;
   scene.add(armL);
@@ -160,29 +166,29 @@ async function buildScene(canvas: HTMLCanvasElement, onReveal: (idea: string) =>
   scene.add(armR);
 
   // legs
-  const legGeo = new THREE.BoxGeometry(0.15, 0.35, 0.15);
-  const legMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
+  const legGeo = new BoxGeometry(0.15, 0.35, 0.15);
+  const legMat = new MeshStandardMaterial({ color: 0x1e293b });
   [[-1.4, 0.17, 0.9], [1.4, 0.17, 0.9], [-1.4, 0.17, 2.1], [1.4, 0.17, 2.1]].forEach(([x, y, z]) => {
-    const leg = new THREE.Mesh(legGeo, legMat);
+    const leg = new Mesh(legGeo, legMat);
     leg.position.set(x, y, z);
     scene.add(leg);
   });
 
   // ── Potato body ───────────────────────────────────────────────────────────────
-  const potatoGroup = new THREE.Group();
+  const potatoGroup = new Group();
 
   // body — squashed sphere
-  const bodyGeo = new THREE.SphereGeometry(0.55, 20, 16);
-  const bodyMat = new THREE.MeshStandardMaterial({ color: 0xc9a96e, roughness: 0.9, metalness: 0.0 });
-  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  const bodyGeo = new SphereGeometry(0.55, 20, 16);
+  const bodyMat = new MeshStandardMaterial({ color: 0xc9a96e, roughness: 0.9, metalness: 0.0 });
+  const body = new Mesh(bodyGeo, bodyMat);
   body.scale.set(1, 0.85, 1);
   body.castShadow = true;
   potatoGroup.add(body);
 
   // eyes
-  const eyeGeo = new THREE.SphereGeometry(0.07, 8, 8);
-  const eyeMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
-  const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+  const eyeGeo = new SphereGeometry(0.07, 8, 8);
+  const eyeMat = new MeshStandardMaterial({ color: 0x1e293b });
+  const eyeL = new Mesh(eyeGeo, eyeMat);
   eyeL.position.set(-0.18, 0.15, 0.5);
   potatoGroup.add(eyeL);
   const eyeR = eyeL.clone();
@@ -190,9 +196,9 @@ async function buildScene(canvas: HTMLCanvasElement, onReveal: (idea: string) =>
   potatoGroup.add(eyeR);
 
   // pupils (white dot)
-  const pupilGeo = new THREE.SphereGeometry(0.025, 6, 6);
-  const pupilMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
-  const pupilL = new THREE.Mesh(pupilGeo, pupilMat);
+  const pupilGeo = new SphereGeometry(0.025, 6, 6);
+  const pupilMat = new MeshStandardMaterial({ color: 0xffffff });
+  const pupilL = new Mesh(pupilGeo, pupilMat);
   pupilL.position.set(-0.155, 0.17, 0.565);
   potatoGroup.add(pupilL);
   const pupilR = pupilL.clone();
@@ -204,22 +210,22 @@ async function buildScene(canvas: HTMLCanvasElement, onReveal: (idea: string) =>
     const t = (i / 6) * Math.PI;
     const mx = Math.cos(t) * 0.18;
     const my = -0.12 - Math.sin(t) * 0.07;
-    const sm = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 6), eyeMat);
+    const sm = new Mesh(new SphereGeometry(0.025, 6, 6), eyeMat);
     sm.position.set(mx, my, 0.545);
     potatoGroup.add(sm);
   }
 
   // arm (right, throwing)
-  const armGeo = new THREE.CylinderGeometry(0.07, 0.06, 0.55, 8);
-  const armMat = new THREE.MeshStandardMaterial({ color: 0xb8860b });
-  const throwArm = new THREE.Mesh(armGeo, armMat);
+  const armGeo = new CylinderGeometry(0.07, 0.06, 0.55, 8);
+  const armMat = new MeshStandardMaterial({ color: 0xb8860b });
+  const throwArm = new Mesh(armGeo, armMat);
   throwArm.position.set(0.58, 0.0, 0.1);
   throwArm.rotation.z = -Math.PI / 4;
   throwArm.castShadow = true;
   potatoGroup.add(throwArm);
 
   // left arm (resting)
-  const restArm = new THREE.Mesh(armGeo, armMat);
+  const restArm = new Mesh(armGeo, armMat);
   restArm.position.set(-0.58, -0.1, 0.1);
   restArm.rotation.z = Math.PI / 4;
   scene.add(potatoGroup); // add before positioning
@@ -228,10 +234,10 @@ async function buildScene(canvas: HTMLCanvasElement, onReveal: (idea: string) =>
   potatoGroup.position.set(0, 1.28, 1.1);
 
   // ── Crumpled paper ball ───────────────────────────────────────────────────────
-  const paperGroup = new THREE.Group();
+  const paperGroup = new Group();
 
   // main ball
-  const paperGeo = new THREE.IcosahedronGeometry(0.18, 1);
+  const paperGeo = new IcosahedronGeometry(0.18, 1);
   // slightly deform for crumpled look
   const posArr = paperGeo.attributes.position.array as Float32Array;
   for (let i = 0; i < posArr.length; i += 3) {
@@ -241,8 +247,8 @@ async function buildScene(canvas: HTMLCanvasElement, onReveal: (idea: string) =>
   }
   paperGeo.computeVertexNormals();
 
-  const paperMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.95 });
-  const paperBall = new THREE.Mesh(paperGeo, paperMat);
+  const paperMat = new MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.95 });
+  const paperBall = new Mesh(paperGeo, paperMat);
   paperBall.castShadow = true;
   paperGroup.add(paperBall);
 
@@ -251,17 +257,17 @@ async function buildScene(canvas: HTMLCanvasElement, onReveal: (idea: string) =>
   scene.add(paperGroup);
 
   // ── Flat unfolded paper (stuck to wall) ───────────────────────────────────────
-  const flatPaper = new THREE.Group();
-  const sheetGeo = new THREE.PlaneGeometry(1.8, 1.2);
-  const sheetMat = new THREE.MeshStandardMaterial({ color: 0xfffbeb, side: THREE.DoubleSide, roughness: 0.8 });
-  const sheet = new THREE.Mesh(sheetGeo, sheetMat);
+  const flatPaper = new Group();
+  const sheetGeo = new PlaneGeometry(1.8, 1.2);
+  const sheetMat = new MeshStandardMaterial({ color: 0xfffbeb, side: DoubleSide, roughness: 0.8 });
+  const sheet = new Mesh(sheetGeo, sheetMat);
   flatPaper.add(sheet);
 
   // lines on paper (decoration)
   for (let l = 0; l < 6; l++) {
-    const lineGeo = new THREE.PlaneGeometry(1.4, 0.02);
-    const lineMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8 });
-    const line = new THREE.Mesh(lineGeo, lineMat);
+    const lineGeo = new PlaneGeometry(1.4, 0.02);
+    const lineMat = new MeshStandardMaterial({ color: 0x94a3b8 });
+    const line = new Mesh(lineGeo, lineMat);
     line.position.set(0, 0.42 - l * 0.14, 0.001);
     flatPaper.add(line);
   }
@@ -277,8 +283,8 @@ async function buildScene(canvas: HTMLCanvasElement, onReveal: (idea: string) =>
   let frameId = 0;
 
   // Store home positions
-  const paperHome = new THREE.Vector3(0.58, 1.55, 1.1);
-  const wallTarget = new THREE.Vector3(0, 2.6, -7.9);
+  const paperHome = new Vector3(0.58, 1.55, 1.1);
+  const wallTarget = new Vector3(0, 2.6, -7.9);
 
   // ── Easing ────────────────────────────────────────────────────────────────────
   const easeOut = (x: number) => 1 - Math.pow(1 - x, 3);
@@ -301,16 +307,16 @@ async function buildScene(canvas: HTMLCanvasElement, onReveal: (idea: string) =>
     // Wind-up
     if (phase === 'windup') {
       t = Math.min(t + dt * 2.5, 1);
-      throwArm.rotation.z = THREE.MathUtils.lerp(-Math.PI / 4, Math.PI * 0.6, easeInOut(t));
-      potatoGroup.rotation.z = THREE.MathUtils.lerp(0, -0.3, easeInOut(t));
+      throwArm.rotation.z = MathUtils.lerp(-Math.PI / 4, Math.PI * 0.6, easeInOut(t));
+      potatoGroup.rotation.z = MathUtils.lerp(0, -0.3, easeInOut(t));
       if (t >= 1) { phase = 'throw'; t = 0; }
     }
 
     // Throw
     if (phase === 'throw') {
       t = Math.min(t + dt * 4, 1);
-      throwArm.rotation.z = THREE.MathUtils.lerp(Math.PI * 0.6, -Math.PI * 0.2, easeOut(t));
-      potatoGroup.rotation.z = THREE.MathUtils.lerp(-0.3, 0.15, easeOut(t));
+      throwArm.rotation.z = MathUtils.lerp(Math.PI * 0.6, -Math.PI * 0.2, easeOut(t));
+      potatoGroup.rotation.z = MathUtils.lerp(-0.3, 0.15, easeOut(t));
       if (t >= 0.4 && !paperGroup.visible) {
         paperGroup.visible = true;
       }
