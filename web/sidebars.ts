@@ -8,6 +8,11 @@ const sidebars: SidebarsConfig = {
       label: 'Overview',
     },
     {
+      type: 'doc',
+      id: 'security-and-privacy',
+      label: 'Security and Privacy',
+    },
+    {
       type: 'category',
       label: 'Getting Started',
       collapsed: false,
