@@ -47,7 +47,7 @@ function buildSchema(metadata: ReturnType<typeof useDoc>['metadata']) {
   return {'@type': 'TechArticle', headline: title, ...base, publisher: ORG};
 }
 
-export default function DocItemLayoutWrapper(props: Props): JSX.Element {
+export default function DocItemLayoutWrapper(props: Props): React.ReactElement {
   const {metadata} = useDoc();
   return (
     <>
