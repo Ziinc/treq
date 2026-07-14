@@ -47,8 +47,7 @@ pub fn get_git_remote_url(repo_path: String) -> Result<Option<GitRemoteInfo>, St
         return Ok(None);
     }
 
-    let contents =
-        std::fs::read_to_string(&git_config_path).map_err(|e| e.to_string())?;
+    let contents = std::fs::read_to_string(&git_config_path).map_err(|e| e.to_string())?;
 
     // Parse INI-style .git/config: find [remote "origin"] section and its url
     let mut in_origin_remote = false;

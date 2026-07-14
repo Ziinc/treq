@@ -84,7 +84,10 @@ import {
 } from "./TargetBranchSelector";
 import { TaskInput } from "./TaskInput";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
-import { useEnqueueWorkspace, useMergeQueueStatus } from "../hooks/useMergeQueueStatus";
+import {
+	useEnqueueWorkspace,
+	useMergeQueueStatus,
+} from "../hooks/useMergeQueueStatus";
 import type { SessionCreationInfo } from "../types/sessions";
 
 interface ShowWorkspaceProps {
@@ -1514,52 +1517,75 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 										</TooltipProvider>
 									)}
 								{/* Merge queue button */}
-								{workspace && workspace.branch_name !== defaultBranch && !workspace.not_on_remote && (
-									<TooltipProvider delayDuration={200}>
-										<Tooltip>
-											<TooltipTrigger asChild>
-												<Button
-													variant={queueStatus && queueStatus.status !== "dequeued" ? "secondary" : "outline"}
-													size="sm"
-													className="gap-1"
-													disabled={enqueue.isPending || dequeue.isPending}
-													onClick={async () => {
-														const isInQueue = !!queueStatus && !["merged", "failed", "dequeued"].includes(queueStatus.status);
-														try {
-															if (isInQueue) {
-																await dequeue.mutateAsync();
-																addToast({ title: "Removed from merge queue", variant: "default" });
-															} else {
-																await enqueue.mutateAsync();
-																addToast({ title: "Added to merge queue", variant: "default" });
-															}
-														} catch (err) {
-															addToast({ title: "Queue error", description: (err as Error).message, variant: "destructive" });
+								{workspace &&
+									workspace.branch_name !== defaultBranch &&
+									!workspace.not_on_remote && (
+										<TooltipProvider delayDuration={200}>
+											<Tooltip>
+												<TooltipTrigger asChild>
+													<Button
+														variant={
+															queueStatus && queueStatus.status !== "dequeued"
+																? "secondary"
+																: "outline"
 														}
-													}}
-												>
-													<GitMerge className="w-4 h-4" />
-													{queueStatus && !["merged", "failed", "dequeued"].includes(queueStatus.status)
-														? queueStatus.status === "testing"
-															? "Testing…"
-															: `Queue #${queueStatus.position}`
-														: "Add to Queue"}
-												</Button>
-											</TooltipTrigger>
-											<TooltipContent>
-												{queueStatus
-													? queueStatus.status === "merged"
-														? "Merged via queue"
-														: queueStatus.status === "testing"
-															? `CI running in lane ${queueStatus.lane_number ?? "?"}`
-															: queueStatus.status === "failed"
-																? `Failed: ${queueStatus.failure_reason ?? "unknown"}`
-																: `In merge queue at position ${queueStatus.position}`
-													: "Add this branch to the merge queue"}
-											</TooltipContent>
-										</Tooltip>
-									</TooltipProvider>
-								)}
+														size="sm"
+														className="gap-1"
+														disabled={enqueue.isPending || dequeue.isPending}
+														onClick={async () => {
+															const isInQueue =
+																!!queueStatus &&
+																!["merged", "failed", "dequeued"].includes(
+																	queueStatus.status,
+																);
+															try {
+																if (isInQueue) {
+																	await dequeue.mutateAsync();
+																	addToast({
+																		title: "Removed from merge queue",
+																		type: "success",
+																	});
+																} else {
+																	await enqueue.mutateAsync();
+																	addToast({
+																		title: "Added to merge queue",
+																		type: "success",
+																	});
+																}
+															} catch (err) {
+																addToast({
+																	title: "Queue error",
+																	description: (err as Error).message,
+																	type: "error",
+																});
+															}
+														}}
+													>
+														<GitMerge className="w-4 h-4" />
+														{queueStatus &&
+														!["merged", "failed", "dequeued"].includes(
+															queueStatus.status,
+														)
+															? queueStatus.status === "testing"
+																? "Testing…"
+																: `Queue #${queueStatus.position}`
+															: "Add to Queue"}
+													</Button>
+												</TooltipTrigger>
+												<TooltipContent>
+													{queueStatus
+														? queueStatus.status === "merged"
+															? "Merged via queue"
+															: queueStatus.status === "testing"
+																? `CI running in lane ${queueStatus.lane_number ?? "?"}`
+																: queueStatus.status === "failed"
+																	? `Failed: ${queueStatus.failure_reason ?? "unknown"}`
+																	: `In merge queue at position ${queueStatus.position}`
+														: "Add this branch to the merge queue"}
+												</TooltipContent>
+											</Tooltip>
+										</TooltipProvider>
+									)}
 								{/* Merge button moved here */}
 								{workspace && workspace.branch_name !== defaultBranch && (
 									<TooltipProvider delayDuration={200}>

@@ -127,14 +127,26 @@ interface WorkspaceSidebarItemProps {
 	queueStatus?: QueueEntryStatus;
 }
 
-function queueStatusDot(status: QueueEntryStatus): { color: string; label: string } {
+function queueStatusDot(status: QueueEntryStatus): {
+	color: string;
+	label: string;
+} {
 	switch (status) {
-		case "queued": return { color: "bg-yellow-400", label: "In merge queue" };
-		case "testing": return { color: "bg-blue-400 animate-pulse", label: "CI running in merge queue" };
-		case "passed": return { color: "bg-green-400", label: "Passed CI, awaiting merge" };
-		case "merged": return { color: "bg-green-600", label: "Merged via queue" };
-		case "failed": return { color: "bg-red-500", label: "Failed in merge queue" };
-		default: return { color: "bg-muted-foreground", label: status };
+		case "queued":
+			return { color: "bg-yellow-400", label: "In merge queue" };
+		case "testing":
+			return {
+				color: "bg-blue-400 animate-pulse",
+				label: "CI running in merge queue",
+			};
+		case "passed":
+			return { color: "bg-green-400", label: "Passed CI, awaiting merge" };
+		case "merged":
+			return { color: "bg-green-600", label: "Merged via queue" };
+		case "failed":
+			return { color: "bg-red-500", label: "Failed in merge queue" };
+		default:
+			return { color: "bg-muted-foreground", label: status };
 	}
 }
 

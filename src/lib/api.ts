@@ -102,8 +102,9 @@ export const getWindowRepoPath = (): Promise<string | null> =>
 export const detectEditorApps = (): Promise<EditorAppsResponse> =>
 	invoke("detect_editor_apps");
 
-export const getGitRemoteUrl = (repoPath: string): Promise<GitRemoteInfo | null> =>
-	invoke("get_git_remote_url", { repoPath });
+export const getGitRemoteUrl = (
+	repoPath: string,
+): Promise<GitRemoteInfo | null> => invoke("get_git_remote_url", { repoPath });
 
 // JJ Workspace API
 // JJ Diff API
