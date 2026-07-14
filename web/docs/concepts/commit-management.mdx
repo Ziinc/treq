@@ -6,19 +6,21 @@ sidebar_position: 2
 
 _How Treq creates, splits, and reviews commits inside a workspace._
 
-Treq runs commit operations inside the active Jujutsu workspace. A workspace can contain uncommitted changes, one commit, or a stack of commits above its target. Other workspaces keep their own working copies, so pending changes stay isolated.
+Treq runs commit operations inside the active workspace. A workspace can contain uncommitted changes, one commit, or a stack of commits above its target. Other workspaces keep their own working copies, so pending changes stay isolated.
+
+You commit and review through the Treq UI. You do not need Jujutsu commands for this flow.
 
 ## Workspace Scope
 
-The file tree, diff viewer, commit history, and review tools all read from the selected workspace path. Each workspace has an independent working copy and shares repository history through the colocated Jujutsu repository.
+The file tree, diff viewer, commit history, and review tools all read from the selected workspace path. Each workspace has an independent working copy and shares repository history through the colocated Git and Jujutsu store.
 
-Jujutsu has no Git staging index. Treq provides a file selection layer in the interface instead. When you select files, Treq splits those files into a new commit and leaves the other changes in the working copy.
+Treq does not use a Git staging index in the UI. It provides a file selection layer instead. When you select files, Treq splits those files into a new commit and leaves the other changes in the working copy.
 
 {/* TODO: Document hunk-level commit selection here if the commit UI gains support for it. Line selection currently applies to review comments and copying, not commit creation. */}
 
 ## Commit Creation
 
-The commit form requires a message of no more than 500 characters. If you selected files, Treq commits those files through a Jujutsu split operation. If you selected no files, Treq commits every pending change in the working copy.
+The commit form requires a message of no more than 500 characters. If you selected files, Treq commits those files through a split operation. If you selected no files, Treq commits every pending change in the working copy.
 
 File selection lets you divide a large agent change into reviewable commits. Select files that belong to one logical change, commit them, then repeat with the files left behind.
 

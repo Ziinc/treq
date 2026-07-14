@@ -34,7 +34,7 @@ The mode controls the agent command that Treq launches. Each agent implements pe
 
 Treq starts the agent process with the workspace as its working directory. The generated system prompt also tells the agent to read and write files only within that directory.
 
-This boundary separates concurrent tasks at the file-system level. Repository history remains shared through Jujutsu, while each agent sees the working copy for its assigned workspace.
+This boundary separates concurrent tasks at the file-system level. Repository history remains shared across workspaces, while each agent sees the working copy for its assigned workspace.
 
 ## Creating Sessions
 
