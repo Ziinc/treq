@@ -8,7 +8,9 @@ import {
 	getWorkspaces,
 	listWorkspaceStatuses,
 } from "../lib/api";
-import type { WorkspaceSidebarStatus } from "../lib/api-types";
+import type { WorkspaceSidebarStatus, QueueEntryStatus } from "../lib/api-types";
+import { useGitRemoteInfo } from "../hooks/useMergeQueueStatus";
+import { supabase } from "../lib/supabase";
 import {
 	buildWorkspaceTree,
 	flattenWorkspaceTree,
@@ -111,6 +113,23 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 			},
 			enabled: !!repoPath && workspacesLoaded,
 			placeholderData: (previousData) => previousData,
+		});
+
+		const { data: remoteInfo } = useGitRemoteInfo(repoPath);
+		const { data: branchQueueStatuses } = useQuery({
+			queryKey: ["repo-branch-queue-statuses", remoteInfo?.full_name],
+			queryFn: async () => {
+				const { data } = await supabase.rpc("get_repo_branch_queue_statuses", {
+					p_repo_full_name: remoteInfo!.full_name,
+				});
+				const map = new Map<string, QueueEntryStatus>();
+				for (const row of (data ?? []) as { branch_name: string; status: string }[]) {
+					map.set(row.branch_name, row.status as QueueEntryStatus);
+				}
+				return map;
+			},
+			enabled: !!remoteInfo,
+			refetchInterval: 30_000,
 		});
 
 		const statuses = useMemo<WorkspaceSidebarStatus[]>(() => {
@@ -361,6 +380,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 												onDeleteWorkspace={onDeleteWorkspace}
 												onRenameWorkspace={setRenameTarget}
 												onDoubleClick={handleDoubleClick}
+												queueStatus={branchQueueStatuses?.get(node.status.current.branch_name)}
 											/>
 										))}
 										{droppableProvided.placeholder}

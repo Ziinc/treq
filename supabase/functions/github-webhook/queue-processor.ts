@@ -127,7 +127,8 @@ export async function enqueueEntry(
   prNumber: number,
   prSha: string,
   prTitle: string | null,
-  prAuthor: string | null
+  prAuthor: string | null,
+  branchName: string | null = null
 ): Promise<void> {
   const { data: last } = await supabase
     .from("merge_queue_entries")
@@ -147,6 +148,7 @@ export async function enqueueEntry(
       pr_sha: prSha,
       pr_title: prTitle,
       pr_author: prAuthor,
+      branch_name: branchName,
       position,
       status: "queued",
       updated_at: new Date().toISOString(),
