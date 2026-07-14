@@ -1,0 +1,120 @@
+---
+sidebar_position: 7
+slug: /ai-code-review
+description: AI can write code quickly. Shipping it safely still needs a review system. Here is the human-in-the-loop workflow that works.
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard";
+
+# Human in the Loop AI Code Review
+
+_Keep a person responsible for merge while AI drafts code and helps find defects._
+
+## Introduction
+
+Coding agents write patches quickly. Shipping those patches safely still depends on a review system with a human decision at the end. **Human-in-the-loop AI code review** is that system: automated checks and AI review narrow the search for defects, then a person accepts, rejects, or sends the change back.
+
+The common failure mode is skipping the human step because the diff looks plausible and the tests pass. Code that looks right is not the same as code that is right. The model predicts plausible text. It does not own the product outcome.
+
+This article defines the review loop, risk classes, the split between AI review and human review, and the metrics that show whether the loop is working.
+
+## Understanding the Concept
+
+**Human-in-the-loop review** means a required checkpoint where a person decides whether agent output may merge. Tools can advise. They cannot replace ownership of the change.
+
+<DefinitionCard
+  term="Human-in-the-Loop AI Code Review"
+  definition="A review workflow where automated checks and AI findings prepare a change, and a person remains responsible for accepting, rejecting, or requesting revisions before merge."
+/>
+
+Treat each change as belonging to a risk class. The class sets how much attention the human pass needs.
+
+| Risk class | Examples | Review expectation |
+| --- | --- | --- |
+| Low | Docs, comments, narrow test additions | Skim scope, confirm no unexpected files |
+| Medium | Feature work behind clear contracts | Full diff, behavior and tests |
+| High | Auth, payments, migrations, shared libraries | Specialist review, explicit acceptance criteria |
+| Critical | Production data paths, security controls | Slow review, threat model, no rubber-stamping |
+
+AI review and human review solve different problems. AI review is strong at spotting familiar local mistakes: unchecked nulls, missing error paths, obvious injection patterns, and tests that do not cover a changed branch. Human review decides whether the change solves the right problem, fits the architecture, and creates operational risk outside the diff.
+
+<DefinitionCard
+  term="Acceptance Criteria"
+  definition="The explicit conditions a change must satisfy before merge, written so a reviewer can verify them against the diff and tests."
+/>
+
+A useful loop looks like this:
+
+```text
+task + acceptance criteria
+        ↓
+agent implements in an isolated workspace
+        ↓
+deterministic checks (build, lint, tests)
+        ↓
+AI review pass on configured concerns
+        ↓
+human review of intent, design, and residual risk
+        ↓
+approve, request changes, or reject and restart
+```
+
+Passing one stage does not certify the next. Tests prove the cases they cover. AI review proves nothing beyond the findings it can support. Human approval is the merge gate.
+
+## Applying It in Practice
+
+Write acceptance criteria before the agent starts. Include the behavior that must change, the files or modules in scope, and the checks that must pass. Vague prompts produce vague diffs, and vague diffs produce exhausted reviewers.
+
+When the agent finishes, compare three records:
+
+- the original task
+- the agent summary of what changed
+- the actual diff
+
+Disagreement between those records is a scope bug. Stop and correct the task instead of reviewing a solution to the wrong problem.
+
+Run deterministic tools first. Then run a focused AI review pass with a narrow job, such as authorization mistakes or missing error handling. Triage every finding as confirmed, rejected, or unresolved. Fix confirmed issues before the human pass.
+
+Human reviewers should:
+
+1. Confirm the diff matches the acceptance criteria.
+2. Trace main success and failure paths.
+3. Check tests for false confidence, especially tests written by the same agent.
+4. Leave feedback that names a location, a concrete defect, and the required constraint.
+
+In [Treq](/docs/concepts/changes-and-reviews), comments attach to changed lines and become a prompt you can send back to the agent in plan or edit mode. The reviewer stays in the loop. The agent does the mechanical revision.
+
+## Engineering Considerations
+
+AI review reduces time spent on routine defects. It also creates noise when instructions are broad. A short list of usually-correct findings beats a long list that authors learn to dismiss.
+
+Do not present AI review as a pass certificate. No findings means the model did not recognise a problem in the context it received. It does not mean the change is correct.
+
+Silent human rewrites hide process failures. If you frequently rewrite agent output by hand, the task, repository guidance, or model choice is wrong. Prefer precise feedback and a controlled revision round, with a restart rule when the approach is wrong at the root.
+
+Keep merge and deploy permissions away from the agent that wrote the code. Generation and release are different roles.
+
+## Scaling and Operational Considerations
+
+Review capacity caps how many agents you should run. When diffs wait too long, reviewers skim. When reviewers skim, defects ship. Reduce concurrency before you add more agents.
+
+Useful metrics:
+
+| Metric | What it tells you |
+| --- | --- |
+| Time to first human review | Whether agent output is outrunning reviewers |
+| Revision rounds per change | Whether tasks and feedback are clear |
+| AI finding confirmation rate | Whether AI review instructions are tuned |
+| Post-merge defects | Whether the gate is actually catching risk |
+| Restart rate | Whether bad tasks are stopped early enough |
+
+Use metrics to improve prompts, risk classification, and review ownership. Do not use them to reward merge volume.
+
+For AI-generated pull requests on a hosting platform, apply the same loop: checks, AI pass, human approval. See [Review AI-Generated PRs](/learn/how-to/review-ai-generated-prs) for the pull-request-specific checklist.
+
+## Next Steps
+
+- [What is AI Code Review?](/learn/concepts/ai-engineering/ai-code-review): how AI review finds candidate defects
+- [Human-in-the-Loop Review Workflow](/learn/workflows/git/human-in-the-loop-review): step-by-step review practice
+- [Review AI-Generated PRs](/learn/how-to/review-ai-generated-prs): checklist for agent pull requests
+- [Parallel Coding Agents Without Branch Chaos](/learn/parallel-coding-agents): keep concurrent agent work reviewable

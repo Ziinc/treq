@@ -1,0 +1,101 @@
+---
+sidebar_position: 6
+slug: /parallel-coding-agents
+description: Learn how to run multiple coding agents in parallel using git worktrees, stacked workspaces, and a review-first workflow.
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard";
+
+# Parallel Coding Agents Without Branch Chaos
+
+_Run several coding agents at once without shared checkouts, stale branches, or unreviewable diffs._
+
+## Introduction
+
+Parallel coding agents let you assign independent tasks to separate agent processes at the same time. Each agent edits files, runs commands, and produces a diff. The speed gain is real. The cost shows up in Git state: colliding checkouts, overlapping files, and branches that drift while you review something else.
+
+Most teams start with several terminal tabs in one working directory. That works until two agents touch the same file, or until one agent leaves the tree half-finished while another starts a second task. Isolation is the fix. Review capacity is the limit.
+
+This article defines the branch and worktree model for parallel agents, explains where review becomes the bottleneck, and shows how a workspace-based workflow keeps concurrent work mergeable.
+
+## Understanding the Concept
+
+A **parallel coding agent** is one agent process assigned to one task, one branch, and one working directory. Concurrency comes from running several of those assignments together.
+
+<DefinitionCard
+  term="Parallel Coding Agent"
+  definition="A coding agent process that owns one task inside an isolated working directory and branch, so concurrent agents cannot overwrite each other's files."
+/>
+
+The shared-checkout model fails for a mechanical reason. Agents write to the filesystem. Two writers on one checkout race for the same paths. Even when they edit different files, they share `HEAD`, the index, and any local build artifacts. A rebase, stash, or checkout in that directory affects every agent still running there.
+
+The branch and worktree model separates those writers:
+
+```text
+repository (shared objects and refs)
+├── worktree A  →  branch task/auth-timeout     →  agent A
+├── worktree B  →  branch task/search-index     →  agent B
+└── worktree C  →  branch task/docs-api         →  agent C
+```
+
+Each agent sees only its working files. Commits remain visible through shared history. Integration still happens through review and merge, not through hoping concurrent edits reconcile themselves.
+
+Independent tasks can merge in any order. Dependent tasks need a [stack](/learn/stacked-prs). If task B requires the schema from task A, give B a base that includes A, or wait until A lands. Parallelism without dependency planning produces conflicts that look like tooling failures and are usually design failures.
+
+Review is the real bottleneck. Agents can produce diffs faster than people can read them. A review-first workflow sets the acceptance rule before the agent starts: what must be true for the change to merge, who reviews it, and what happens when the diff is wrong. Without that rule, parallel agents increase unfinished work instead of shipping rate.
+
+## Applying It in Practice
+
+Start from one repository and create one worktree per task:
+
+```bash
+git fetch origin
+
+git worktree add -b task/auth-timeout ../repo-auth-timeout origin/main
+git worktree add -b task/search-index ../repo-search-index origin/main
+```
+
+Launch each agent inside its worktree directory. Point the prompt at one outcome, the files it may touch, and the checks it must run. Keep the home checkout free for review, merges, and short human edits.
+
+When an agent finishes, open a pull request from its branch. Review that diff before starting another large task for the same reviewer. Update remaining branches after each merge:
+
+```bash
+git -C ../repo-search-index fetch origin
+git -C ../repo-search-index rebase origin/main
+```
+
+If you currently use ad hoc terminal tabs in one directory, migrate in this order:
+
+1. Stop starting a second agent in a dirty shared checkout.
+2. Create a worktree and branch for every new agent task.
+3. Keep one directory as the review surface.
+4. Merge or discard finished worktrees deliberately with `git worktree remove`.
+
+[Treq](/docs/concepts/workspaces) applies the same model with managed workspaces under `.treq/workspaces/`. Each workspace gets its own working copy, bookmark, and agent session. The dashboard shows divergence and conflicts, so you can see which parallel tasks are still current before you review them.
+
+## Engineering Considerations
+
+Parallel agents help when tasks have clear file or module boundaries and enough review ownership to keep pace. They hurt when several agents guess at the same interface, or when one reviewer faces a queue of large diffs with no priority order.
+
+Prefer smaller tasks. An agent that changes authentication, migrations, and UI in one run produces a diff that is hard to review and hard to rebase. Split that into a stack or into independent workstreams with an agreed contract.
+
+Do not treat passing tests as merge approval. An agent can encode the same false assumption in code and tests. Human review still decides whether the change solves the right problem.
+
+Shared repository state still needs coordination. Branch names, fetches, and maintenance commands affect every linked worktree. Give each agent a unique branch. Avoid repository-wide cleanup while agents are writing.
+
+## Scaling and Operational Considerations
+
+Cap concurrency by review capacity, not by how many agents your machine can start. Two reviewed merges beat five stale branches.
+
+Track each workstream with a task, branch, owner, and risk level. Restart an agent when its approach violates a core constraint or when revision rounds recreate the same defect. Keeping a bad patch alive is often more expensive than regenerating a correct one on current `main`.
+
+As stacks appear, use [auto-rebase](/learn/how-to/auto-rebase-ai-branches) so dependent workspaces do not go stale while lower layers change. Resolve conflicts from the bottom of a stack upward.
+
+Measure revision rounds, time-to-first-review, and defects found after merge. Use those numbers to tighten task scope and repository instructions. Do not use them to reward high agent volume.
+
+## Next Steps
+
+- [Git Worktrees for AI Coding Agents](/learn/git-worktrees-for-ai): set up isolation for Claude Code, Codex, and similar tools
+- [How to Run Multiple Claude Code Sessions](/learn/how-to/how-to-run-multiple-claude-code-sessions): practical session setup
+- [Human in the Loop AI Code Review](/learn/ai-code-review): keep a person responsible for merge
+- [What is Agent Orchestration?](/learn/concepts/ai-engineering/agent-orchestration): coordinate several agents on a larger piece of work
