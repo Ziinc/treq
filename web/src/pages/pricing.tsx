@@ -110,7 +110,8 @@ function PlansSection(): ReactNode {
           <span className={styles.priceUnit}>/user/month</span>
         </p>
         <p className={styles.planSummary}>
-          Unlock GitHub for every repository you work in, and add merge queue.
+          GitHub for every repository you work in, public or private, plus merge
+          queue.
         </p>
         <FeatureList features={PRO_FEATURES} />
         <Link
