@@ -11,6 +11,7 @@ export const toc = [
   { id: 'milestones', value: 'Milestones', level: 2 },
   { id: 'github-integration-with-merge-queue', value: 'GitHub Integration with Merge Queue', level: 2 },
   { id: 'workspace-checks', value: 'Workspace Checks', level: 2 },
+  { id: 'ssh-remote-development', value: 'SSH Remote Development', level: 2 },
   { id: 'how-these-fit-together', value: 'How These Fit Together', level: 2 },
 ];
 
@@ -18,9 +19,9 @@ export const toc = [
 
 # Roadmap
 
-_The next product milestones for Treq: GitHub merge queues and workspace checks._
+_The next product milestones for Treq: GitHub merge queues, workspace checks, and SSH remote development._
 
-Treq already isolates parallel work in stacked [workspaces](/docs/concepts/workspaces) and keeps those stacks rebasing as their targets move. The next milestones close the loop from local workspace to remote merge, then give each workspace assertion-based quality gates that agents can run and repair against.
+Treq already isolates parallel work in stacked [workspaces](/docs/concepts/workspaces) and keeps those stacks rebasing as their targets move. The next milestones close the loop from local workspace to remote merge. They also give each workspace assertion-based quality gates that agents can run and repair against, and let you develop on a remote machine over SSH without leaving the app.
 
 This page is a product plan, not a release schedule. Scope can shift as we learn from early builds.
 
@@ -30,6 +31,7 @@ This page is a product plan, not a release schedule. Scope can shift as we learn
 | --- | --- |
 | **GitHub Integration with Merge Queue** | Open, track, and enqueue stacked pull requests from the Treq app, including one-shot enqueue of a full stack |
 | **Workspace Checks** | Define and run verification workflows per workspace so agents can iterate against hard pass/fail gates |
+| **SSH Remote Development** | Open a remote workspace over SSH and develop there directly from Treq |
 
 ## GitHub Integration with Merge Queue
 
@@ -51,15 +53,24 @@ The goal is an **agentic self-fixing loop**. An agent makes a change, runs the w
 
 These checks live with the workspace, so each stacked layer can verify its own increment before it joins a larger review or merge queue.
 
+## SSH Remote Development
+
+Today, Treq workspaces and [terminal sessions](/docs/concepts/terminal-sessions) run on your local machine. **SSH Remote Development** opens a workspace on a remote host over SSH and lets you develop there directly from the same UI.
+
+You connect to a remote machine, attach to a repository path there, and get the same stacked workspace model: diffs, commits, agents, and checks against that remote working copy. Shell and agent processes run on the remote host. File reads and writes go over the SSH session instead of the local disk.
+
+This matters when the project needs a machine you do not run locally. Examples include more CPU or GPU, a shared build environment, or services that only exist on that host. The goal is one Treq session that feels like local development while the workspace lives elsewhere.
+
 ## How These Fit Together
 
-Workspace Checks decide whether a layer is ready. GitHub Integration with Merge Queue moves ready layers onto the remote merge path.
+Workspace Checks decide whether a layer is ready. GitHub Integration with Merge Queue moves ready layers onto the remote merge path. SSH Remote Development decides where that work runs when local hardware is not enough.
 
-You build in a stacked workspace and run checks until the assertions pass. Then you open or update the PR from Treq and enqueue that PR alone or with the rest of the stack. The same verification story that protects local agent loops also protects what you put into the queue.
+You build in a stacked workspace, locally or over SSH, and run checks until the assertions pass. Then you open or update the PR from Treq and enqueue that PR alone or with the rest of the stack. The same verification story that protects local agent loops also protects what you put into the queue.
 
 ## Learn More
 
 - [Workspaces](/docs/concepts/workspaces)
+- [Terminal Sessions](/docs/concepts/terminal-sessions)
 - [Stacked PRs](/learn/concepts/git/stacked-prs)
 - [Stacked PR Workflow](/learn/workflows/git/stacked-pr)
 - [Coding Agents](/learn/concepts/ai-engineering/coding-agents)
