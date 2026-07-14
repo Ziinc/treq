@@ -188,10 +188,16 @@ const config: Config = {
           position: 'left',
         },
         {
+          to: '/roadmap',
+          label: 'Roadmap',
+          position: 'left',
+        },
+        {
           to: '/changelog',
           label: 'Changelog',
           position: 'left',
         },
+
         ...(featureFlags.pro ? [{
           to: '/dashboard',
           label: 'Dashboard',
@@ -239,6 +245,14 @@ const config: Config = {
             {
               label: 'Pricing',
               to: '/pricing',
+            },
+            {
+              label: 'Roadmap',
+              to: '/roadmap',
+            },
+            {
+              label: 'Changelog',
+              to: '/changelog',
             },
             {
               label: 'GitHub',
