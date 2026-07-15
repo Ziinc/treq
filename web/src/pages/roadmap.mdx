@@ -6,6 +6,7 @@ wrapperClassName: roadmap-page
 ---
 
 import ContentPageLayout from '@site/src/components/ContentPageLayout';
+import RoadmapHero from '@site/src/components/RoadmapHero';
 
 export const toc = [
   { id: 'milestones', value: 'Milestones', level: 2 },
@@ -15,9 +16,9 @@ export const toc = [
   { id: 'how-these-fit-together', value: 'How These Fit Together', level: 2 },
 ];
 
-<ContentPageLayout toc={toc} breadcrumbs={[{label: 'Home', href: '/'}, {label: 'Roadmap'}]}>
+<RoadmapHero />
 
-# Roadmap
+<ContentPageLayout toc={toc} breadcrumbs={[{label: 'Home', href: '/'}, {label: 'Roadmap'}]}>
 
 _The next product milestones for Treq: GitHub merge queues, workspace checks, and SSH remote development._
 

@@ -319,6 +319,16 @@ a:hover {
   max-width: 100% !important;
 }
 
+/* Roadmap hero sits above the content card and needs zero MDX page padding */
+.roadmap-page article {
+  margin: 0;
+}
+
+.roadmap-page .pageWrapper_BrSm,
+.roadmap-page [class*='pageWrapper'] {
+  padding-top: 1.25rem;
+}
+
 /* Spinner animation for auth pages */
 @keyframes spin {
   to { transform: rotate(360deg); }

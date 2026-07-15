@@ -33,7 +33,7 @@ const config: Config = {
               splitChunks: {
                 chunks: 'all' as const,
                 cacheGroups: {
-                  // three.js — only loaded on rubber-duck and vibe-idea-generator pages
+                  // three.js — only loaded on rubber-duck, vibe-idea-generator, and roadmap pages
                   three: {
                     test: /[\\/]node_modules[\\/]three[\\/]/,
                     name: 'chunk-three',
