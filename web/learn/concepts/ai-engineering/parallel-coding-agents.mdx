@@ -14,7 +14,7 @@ _Run several coding agents at once without shared checkouts, stale branches, or 
 
 Parallel coding agents let you assign independent tasks to separate agent processes at the same time. Each agent edits files, runs commands, and produces a diff. The cost shows up in Git state. Checkouts collide, files overlap, and branches drift while you review something else.
 
-Most developers start with several terminal tabs in one working directory. That works until two agents touch the same file, or until one agent leaves the tree half-finished while another starts a second task. Isolation is the fix. Review capacity is the limit.
+Most developers start with several terminal tabs in one working directory. That works until two agents touch the same file, or until one agent leaves the tree half-finished while another starts a second task. Isolation fixes the shared-checkout collision. Review capacity is still the limit on how much parallel work you should start.
 
 Git worktrees remove the shared-checkout collision. They also create a second bottleneck. Each worktree still needs manual rebasing when `main` moves, and conflict resolution when parallel work touches related code. Handing that rebase work to an AI agent is tempting and often wrong. Agents resolve conflict markers by guessing, and a plausible merge can still drop behavior or keep both sides of an incompatible change.
 
@@ -118,7 +118,7 @@ Measure revision rounds, time-to-first-review, and defects found after merge. Us
 
 ## How Treq Fits
 
-Treq applies the same isolation model with managed workspaces under `.treq/workspaces/`. Each workspace gets its own working copy, bookmark, and agent session. The dashboard shows divergence and conflicts, so you can see which parallel tasks are still current before you review them. When workspaces form a stack, Treq can rebase dependents when a lower target moves. See [Workspaces](/docs/concepts/workspaces).
+Treq applies the same isolation model with managed workspaces under `.treq/workspaces/`. Each workspace gets its own working copy, bookmark, and agent session. The dashboard shows divergence and conflicts, so you can see which parallel tasks are still current before you review them. When workspaces form a stack, Treq can rebase dependents when a lower target moves. Full workspace behavior is covered in [Workspaces](/docs/concepts/workspaces).
 
 ## Next Steps
 

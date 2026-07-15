@@ -51,7 +51,7 @@ TIER1 = [
     "tapestry", "testament", "beacon", "realm", "symphony", "boasts",
     "nestled", "renowned for",
     # stiff process language
-    "agreed contract",
+    "agreed contract", "contention",
 ]
 
 # Tier 2: context-dependent. Sometimes legitimate in technical prose. Reported
@@ -141,7 +141,9 @@ def mask(raw):
         if re.match(r"^(import|export)\b", s) or s.startswith(":::") or s.startswith("|"):
             lines.append("")
             continue
-        line = re.sub(r"^#+\s*", "", line)                    # drop heading marks
+        if re.match(r"^#+\s+", line):
+            lines.append("")                       # blank headings; keep line count
+            continue
         line = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", line)  # keep link text
         line = re.sub(r"[*_>]", "", line)                     # emphasis/quote marks
         lines.append(line)
@@ -207,6 +209,43 @@ def long_sentences(prose, limit=30):
         n = len(re.findall(r"[A-Za-z][A-Za-z'’-]*", s))
         if n > limit:
             hits.append((n, s[:80] + ("..." if len(s) > 80 else "")))
+    return hits
+
+
+def short_paragraph_endings(prose, min_words=3):
+    """Flag paragraphs whose final sentence has fewer than min_words words."""
+    hits = []
+    # Reconstruct line offsets so reports stay line-numbered.
+    lines = prose.splitlines()
+    para = []
+    para_start = 1
+
+    def flush(end_line):
+        nonlocal para, para_start
+        text = " ".join(l.strip() for l in para if l.strip())
+        para = []
+        if not text:
+            return
+        # Split into sentences; keep the last non-empty one.
+        parts = [p.strip() for p in SENTENCE_SPLIT.split(text) if p.strip()]
+        if not parts:
+            return
+        last = parts[-1]
+        n = len(re.findall(r"[A-Za-z][A-Za-z'’-]*", last))
+        if 0 < n < min_words:
+            hits.append((end_line, n, last[:80]))
+
+    for i, line in enumerate(lines, 1):
+        if not line.strip():
+            if para:
+                flush(i - 1)
+            para_start = i + 1
+            continue
+        if not para:
+            para_start = i
+        para.append(line)
+    if para:
+        flush(len(lines))
     return hits
 
 
@@ -288,6 +327,7 @@ def check_file(path, strict):
     purpose_hits = [(i, ln.strip()) for i, ln in enumerate(prose.splitlines(), 1)
                     if TRAILING_PURPOSE.search(ln)]
     ls = long_sentences(prose)
+    short_ends = short_paragraph_endings(prose)
 
     r = readability(prose)
     words_total = r["words"] if r else 0
@@ -317,6 +357,8 @@ def check_file(path, strict):
     report("trailing purpose clause", purpose_hits, lambda h: f"L{h[0]}: {h[1][:90]}")
     report("inline-header list rows", inline_hdr, lambda h: f"L{h[0]}: {h[1][:90]}")
     report("long sentences (>30 words)", ls, lambda h: f"{h[0]} words: {h[1]}")
+    report("short paragraph endings (<3 words)", short_ends,
+           lambda h: f"L{h[0]}: {h[1]} words -> '{h[2]}'")
 
     # Soft / review-only signals (do not fail --strict).
     report("Tier 2 vocabulary (review)", tier2_hits,
@@ -331,7 +373,7 @@ def check_file(path, strict):
             print(f"  L{ln}: {h}")
 
     hard_fail = bool(em_hits or semi_hits or caps_hits or tier1_hits) or em_rate > 3
-    if not (hard_fail or tell_hits or tier2_hits or ls or curly_hits):
+    if not (hard_fail or tell_hits or tier2_hits or ls or curly_hits or short_ends):
         print("clean: no hard fails, tells, or overlong sentences.")
 
     if strict and hard_fail:
