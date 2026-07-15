@@ -37,7 +37,7 @@ function HomepageHeader() {
         <div className={styles.heroMain}>
           <Heading as="h1" className={styles.heroTitle}>
             <span className={styles.heroAccent}>Treq</span>
-            {' '}Review and manage agent branch state
+            {' '}Review and manage agent branch diffs
           </Heading>
           <p className={styles.heroEyebrow}>
             Supervise, review, move, rebase, and merge agent work without losing confidence.
@@ -99,7 +99,7 @@ function ProblemSection(): ReactNode {
     <section className={styles.problemSection} aria-label="The problem">
       <div className={styles.problemContainer}>
         <Heading as="h2" className={styles.problemHeading}>
-          Agents write code fast. Review and branch state are still on you.
+          Agents write code fast. Review and branch diffs are still on you.
         </Heading>
 
         <div className={styles.problemList}>
@@ -118,7 +118,7 @@ function ProblemSection(): ReactNode {
         </div>
 
         <p className={styles.problemConclusion}>
-          Treq centers the workflow on human review and branch-state management.
+          Treq centers the workflow on human review of branch diffs.
         </p>
       </div>
     </section>
@@ -307,7 +307,7 @@ const SOFTWARE_APP_SCHEMA = {
   '@type': 'SoftwareApplication',
   name: 'Treq',
   description:
-    'Review and manage agent branch state. Local reviews, stacked workspaces, and desktop plus CLI branch operations.',
+    'Review and manage agent branch diffs. Local reviews, stacked workspaces, and desktop plus CLI branch operations.',
   url: 'https://treq.dev',
   applicationCategory: 'DeveloperApplication',
   operatingSystem: 'macOS',
@@ -326,7 +326,7 @@ export default function Home(): ReactNode {
   return (
     <Layout
       title={siteConfig.title}
-      description="Review and manage agent branch state">
+      description="Review and manage agent branch diffs">
       <Head>
         <script type="application/ld+json">{JSON.stringify(SOFTWARE_APP_SCHEMA)}</script>
       </Head>
