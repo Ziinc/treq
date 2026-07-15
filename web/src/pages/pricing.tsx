@@ -25,7 +25,7 @@ const PRICING_SCHEMA = {
       price: '0',
       priceCurrency: 'USD',
       description:
-        'Desktop app with GitHub integration for public repositories. No other integrations. No merge queue.',
+        'Desktop app with GitHub integration for public repositories. No merge queue.',
     },
     {
       '@type': 'Offer',
@@ -46,7 +46,6 @@ type PlanFeature = {
 
 const FREE_FEATURES: PlanFeature[] = [
   {text: 'Full desktop app', included: true},
-  {text: 'Integrations', included: false},
   {text: 'GitHub integration for public repos only', included: true},
   {text: 'Merge queue', included: false},
 ];
@@ -90,7 +89,7 @@ function PlansSection(): ReactNode {
         </p>
         <p className={styles.planSummary}>
           Use the full desktop app at no cost. Free includes GitHub for public
-          repositories only. Integrations and merge queue are not included.
+          repositories only. Merge queue is not included.
         </p>
         <FeatureList features={FREE_FEATURES} />
         <Link
@@ -150,11 +149,6 @@ function ComparisonSection(): ReactNode {
               <th scope="row">GitHub integration</th>
               <td>Public repos only</td>
               <td>All repos</td>
-            </tr>
-            <tr>
-              <th scope="row">Integrations</th>
-              <td>Not included</td>
-              <td>-</td>
             </tr>
             <tr>
               <th scope="row">Merge queue</th>
