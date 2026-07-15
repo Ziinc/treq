@@ -102,6 +102,27 @@
   line-height: 1.4;
 }
 
+.featureText {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.comingSoonBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--ifm-color-emphasis-100);
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .featureMark {
   flex-shrink: 0;
   width: 1.1rem;
@@ -225,6 +246,13 @@
   font-weight: 600;
   color: var(--ifm-font-color-base);
   width: 44%;
+}
+
+.comparisonFeatureLabel {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .comparisonDataCell {

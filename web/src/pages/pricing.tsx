@@ -42,18 +42,23 @@ const PRICING_SCHEMA = {
 type PlanFeature = {
   text: string;
   included: boolean;
+  comingSoon?: boolean;
 };
 
 const FREE_FEATURES: PlanFeature[] = [
   {text: 'Full desktop app', included: true},
-  {text: 'GitHub integration for public repos only', included: true},
-  {text: 'Merge queue', included: false},
+  {
+    text: 'GitHub integration for public repos only',
+    included: true,
+    comingSoon: true,
+  },
+  {text: 'Merge queue', included: false, comingSoon: true},
 ];
 
 const PRO_FEATURES: PlanFeature[] = [
   {text: 'Full desktop app', included: true},
-  {text: 'GitHub integration for all repos', included: true},
-  {text: 'Merge queue', included: true},
+  {text: 'GitHub integration for all repos', included: true, comingSoon: true},
+  {text: 'Merge queue', included: true, comingSoon: true},
 ];
 
 type ComparisonTone = 'positive' | 'negative' | 'neutral';
@@ -65,6 +70,7 @@ type ComparisonCell = {
 
 type ComparisonRow = {
   feature: string;
+  comingSoon?: boolean;
   free: ComparisonCell;
   pro: ComparisonCell;
 };
@@ -77,11 +83,13 @@ const COMPARISON_ROWS: ComparisonRow[] = [
   },
   {
     feature: 'GitHub integration',
+    comingSoon: true,
     free: {label: 'Public repos only', tone: 'neutral'},
     pro: {label: 'All repos', tone: 'positive'},
   },
   {
     feature: 'Merge queue',
+    comingSoon: true,
     free: {label: 'Not included', tone: 'negative'},
     pro: {label: 'Included', tone: 'positive'},
   },
@@ -91,12 +99,12 @@ const FAQ_ITEMS = [
   {
     question: 'Who is Free for?',
     answer:
-      'Free is for developers who want the desktop workspace manager and only need GitHub on public repositories. Open source projects fit this plan.',
+      'Free is for developers who want the desktop workspace manager and only need GitHub on public repositories. GitHub integration is coming soon. Open source projects fit this plan.',
   },
   {
     question: 'What does Pro add?',
     answer:
-      'Pro adds GitHub access for private repositories and merge queue. Billing is $15 per user each month.',
+      'Pro adds GitHub access for private repositories and merge queue. Both are coming soon. Billing is $15 per user each month.',
   },
   {
     question: 'Is the desktop app still free on Pro?',
@@ -109,6 +117,10 @@ const FAQ_ITEMS = [
       'Create an account, then start a Pro subscription from the dashboard. You can move back to Free if you cancel.',
   },
 ] as const;
+
+function ComingSoonBadge(): ReactNode {
+  return <span className={styles.comingSoonBadge}>Coming soon</span>;
+}
 
 function FeatureList({features}: {features: PlanFeature[]}): ReactNode {
   return (
@@ -124,7 +136,10 @@ function FeatureList({features}: {features: PlanFeature[]}): ReactNode {
           <span className={styles.featureMark} aria-hidden="true">
             {feature.included ? '✓' : '–'}
           </span>
-          <span>{feature.text}</span>
+          <span className={styles.featureText}>
+            <span>{feature.text}</span>
+            {feature.comingSoon ? <ComingSoonBadge /> : null}
+          </span>
         </li>
       ))}
     </ul>
@@ -142,8 +157,9 @@ function PlansSection(): ReactNode {
           <span className={styles.priceAmount}>$0</span>
         </p>
         <p className={styles.planSummary}>
-          Use the full desktop app at no cost. Free includes GitHub for public
-          repositories only. Merge queue is not included.
+          Use the full desktop app at no cost. Free will include GitHub for
+          public repositories only. GitHub integration and merge queue are coming
+          soon.
         </p>
         <FeatureList features={FREE_FEATURES} />
         <Link
@@ -164,7 +180,7 @@ function PlansSection(): ReactNode {
         </p>
         <p className={styles.planSummary}>
           GitHub for every repository you work in, public or private, plus merge
-          queue.
+          queue. Both are coming soon.
         </p>
         <FeatureList features={PRO_FEATURES} />
         <Link
@@ -224,7 +240,10 @@ function ComparisonSection(): ReactNode {
             {COMPARISON_ROWS.map((row) => (
               <tr key={row.feature} className={styles.comparisonRow}>
                 <th scope="row" className={styles.comparisonFeatureCell}>
-                  {row.feature}
+                  <span className={styles.comparisonFeatureLabel}>
+                    <span>{row.feature}</span>
+                    {row.comingSoon ? <ComingSoonBadge /> : null}
+                  </span>
                 </th>
                 <td className={styles.comparisonDataCell}>
                   <ComparisonValue cell={row.free} />
