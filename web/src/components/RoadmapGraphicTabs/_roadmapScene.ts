@@ -1,6 +1,6 @@
 import type { Group, Mesh, MeshStandardMaterial, Object3D } from 'three';
 import type { QuarterIcon, QuarterSlot, YearRoadmap } from './_roadmapData';
-import { firstPlannedIndex, isQuarterPlanned, nextPlannedIndex } from './_roadmapData';
+import { firstPlannedIndex, isQuarterPlanned } from './_roadmapData';
 
 export interface RoadmapSceneAPI {
   setActive: (index: number) => void;
@@ -10,7 +10,6 @@ export interface RoadmapSceneAPI {
 type ThreeModule = typeof import('three/src/Three.js');
 
 const NODE_X = [-3.0, -1.0, 1.0, 3.0] as const;
-const ACTIVE_MS = 4200;
 
 function makeMat(
   THREE: ThreeModule,
@@ -267,7 +266,7 @@ export async function buildRoadmapScene(
   scene.fog = null;
 
   const camera = new PerspectiveCamera(40, 1, 0.1, 100);
-  camera.position.set(0, 2.4, 8.2);
+  camera.position.set(0, 2, 6);
   camera.lookAt(0, 1.0, 0);
 
   scene.add(new AmbientLight(0xffffff, options.dark ? 0.45 : 0.7));
@@ -328,7 +327,6 @@ export async function buildRoadmapScene(
 
   let active = firstPlannedIndex(options.year);
   let disposed = false;
-  let autoTimer: ReturnType<typeof setInterval> | null = null;
   let raf = 0;
   const clock = { t: 0 };
 
@@ -353,7 +351,7 @@ export async function buildRoadmapScene(
     clock.t += 0.016;
 
     camera.position.x = 0;
-    camera.position.y = 2.4 + Math.sin(clock.t * 0.7) * (options.reducedMotion ? 0 : 0.02);
+    camera.position.y = 2 + Math.sin(clock.t * 0.7) * (options.reducedMotion ? 0 : 0.02);
     camera.lookAt(0, 1.0, 0);
 
     pedestals.forEach((m, i) => {
@@ -408,22 +406,13 @@ export async function buildRoadmapScene(
   setActive(active);
   animate();
 
-  if (!options.reducedMotion) {
-    autoTimer = setInterval(() => setActive(nextPlannedIndex(options.year, active)), ACTIVE_MS);
-  }
-
   return {
     setActive: (index: number) => {
       setActive(index);
-      if (autoTimer) {
-        clearInterval(autoTimer);
-        autoTimer = setInterval(() => setActive(nextPlannedIndex(options.year, active)), ACTIVE_MS);
-      }
     },
     dispose: () => {
       disposed = true;
       cancelAnimationFrame(raf);
-      if (autoTimer) clearInterval(autoTimer);
       window.removeEventListener('resize', onResize);
       renderer.dispose();
       scene.traverse((obj) => {
