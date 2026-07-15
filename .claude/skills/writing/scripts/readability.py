@@ -50,6 +50,8 @@ TIER1 = [
     # spatial-metaphor cluster
     "tapestry", "testament", "beacon", "realm", "symphony", "boasts",
     "nestled", "renowned for",
+    # stiff process language
+    "agreed contract",
 ]
 
 # Tier 2: context-dependent. Sometimes legitimate in technical prose. Reported

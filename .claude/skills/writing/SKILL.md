@@ -121,6 +121,7 @@ and keep it only if it carries real meaning.
 | tapestry, realm, landscape (figurative), ecosystem (figurative), symphony, beacon | name the actual thing |
 | testament, boasts, nestled, renowned for, exemplifies, indelible | rewrite plainly |
 | cutting-edge, state-of-the-art, world-class | cut it |
+| agreed contract | plain boundary: shared interface, clear file ownership, or named dependency |
 
 **Tier 2 (review, keep only if earned):** crucial, key, vital, significant,
 essential, comprehensive, holistic, dynamic, innovative, transformative,
