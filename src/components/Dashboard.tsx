@@ -38,7 +38,11 @@ import {
 	getWorkspaces,
 	initRepo,
 	listRepoBranches,
+	listSshHosts,
 	listWorkspaceStatuses,
+	remoteCloneRepo,
+	remoteOpenRepo,
+	remoteProbeRepo,
 	selectFolder,
 	setSessionModel,
 	setSetting,
@@ -360,6 +364,60 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		},
 	});
 
+	const rememberRemoteHost = useCallback(async (host: string) => {
+		const raw = await getSetting("remote_ssh_recent_hosts").catch(() => null);
+		const hosts = raw
+			? (JSON.parse(raw) as string[]).filter((item) => item !== host)
+			: [];
+		await setSetting(
+			"remote_ssh_recent_hosts",
+			JSON.stringify([host, ...hosts].slice(0, 10)),
+		);
+	}, []);
+
+	const handleOpenRemoteSsh = useCallback(async () => {
+		const configuredHosts = await listSshHosts().catch(() => []);
+		const recentRaw = await getSetting("remote_ssh_recent_hosts").catch(
+			() => null,
+		);
+		const recentHosts = recentRaw ? (JSON.parse(recentRaw) as string[]) : [];
+		const suggestedHost = recentHosts[0] ?? configuredHosts[0]?.alias ?? "";
+		const host = window.prompt("SSH host alias", suggestedHost)?.trim();
+		if (!host) return;
+
+		const remotePath = window
+			.prompt("Remote repository directory", "~/src/project")
+			?.trim();
+		if (!remotePath) return;
+
+		try {
+			const probe = await remoteProbeRepo(host, remotePath);
+			let remoteRepo = probe.is_repo
+				? await remoteOpenRepo(host, remotePath)
+				: null;
+			if (!remoteRepo) {
+				const repoUrl = window
+					.prompt("No repository was found there. Git URL to clone")
+					?.trim();
+				if (!repoUrl) return;
+				remoteRepo = await remoteCloneRepo(host, repoUrl, remotePath);
+			}
+			await rememberRemoteHost(host);
+			await setSetting("last_opened_remote_repo", JSON.stringify(remoteRepo));
+			addToast({
+				title: "Remote SSH repository ready",
+				description: `${remoteRepo.display_name} is ready for SSH terminal sessions.`,
+				type: "success",
+			});
+		} catch (error) {
+			addToast({
+				title: "Remote SSH failed",
+				description: error instanceof Error ? error.message : String(error),
+				type: "error",
+			});
+		}
+	}, [addToast, rememberRemoteHost, listSshHosts]);
+
 	const handleOpenRepository = useCallback(async () => {
 		const selected = await selectFolder();
 		if (!selected) return;
@@ -417,6 +475,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 			}),
 			// Menu open repository
 			listen("menu-open-repository", () => handleOpenRepository()),
+			listen("menu-open-ssh", () => handleOpenRemoteSsh()),
 			// Menu factory reset
 			listen("menu-factory-reset", async () => {
 				const confirmed = await ask(
@@ -527,6 +586,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		queryClient,
 		deleteWorkspaceMutation,
 		handleOpenRepository,
+		handleOpenRemoteSsh,
 	]);
 
 	// Note: Git merge functionality removed - using JJ now
@@ -954,7 +1014,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	);
 
 	return !repoPath ? (
-		<Onboarding onOpenRepo={handleOpenRepository} />
+		<Onboarding
+			onOpenRepo={handleOpenRepository}
+			onOpenRemoteSsh={handleOpenRemoteSsh}
+		/>
 	) : (
 		<div className="flex h-screen bg-background">
 			<WorkspaceSidebar
