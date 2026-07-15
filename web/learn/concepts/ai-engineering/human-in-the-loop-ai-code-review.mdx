@@ -12,17 +12,15 @@ _Keep a person responsible for merge while AI drafts code and helps find defects
 
 ## Introduction
 
-Coding agents write patches quickly. Shipping those patches safely still depends on a review system with a human decision at the end. **[Human-in-the-loop](/learn/concepts/ai-engineering/human-in-the-loop-development) AI code review** is that system: automated checks and AI review narrow the search for defects, then a person accepts, rejects, or sends the change back.
+Coding agents write patches quickly. Shipping those patches safely still depends on a review system with a human decision at the end. **[Human-in-the-loop](/learn/concepts/ai-engineering/human-in-the-loop-development) AI code review** uses automated checks and optional AI review to narrow the search for defects, then a person accepts, rejects, or sends the change back.
 
 The common failure mode is skipping the human step because the diff looks plausible and the tests pass.
-
-This article defines the review loop, risk classes, the split between AI review and human review, and the metrics that show whether the loop is working.
 
 ## Understanding the Concept
 
 [Human-in-the-loop development](/learn/concepts/ai-engineering/human-in-the-loop-development) keeps a person responsible for decisions that tools cannot own. Applied to agent output, that means **code review of agent changes** with a required human checkpoint before merge. Tools can advise. They cannot replace ownership of the change.
 
-The practice combines two ideas. Human-in-the-loop sets where judgment stays with a person. Code review is how that judgment is applied to a diff. Together they form a gate for agent-generated patches: prepare the change with checks and optional AI findings, then have a reviewer decide whether it may land.
+Human-in-the-loop sets where judgment stays with a person. Code review is how that judgment is applied to a diff. Together they form a gate for agent-generated patches. Prepare the change with checks and optional AI findings, then have a reviewer decide whether it may land.
 
 Treat each change as belonging to a risk class. The class sets how much attention the human pass needs.
 
@@ -33,7 +31,9 @@ Treat each change as belonging to a risk class. The class sets how much attentio
 | High | Auth, payments, migrations, shared libraries | Specialist review, explicit acceptance criteria |
 | Critical | Production data paths, security controls | Slow review, threat model, no rubber-stamping |
 
-AI review and human review solve different problems. AI review is strong at spotting familiar local mistakes: unchecked nulls, missing error paths, obvious injection patterns, and tests that do not cover a changed branch. Human review of agent output is similar to ordinary human code review. The threshold for "good enough" is substantially different, especially for high and critical risk classes, because plausible agent code can still miss intent, architecture fit, and operational risk outside the diff.
+AI review and human review solve different problems. AI review is strong at spotting familiar local mistakes: unchecked nulls, missing error paths, obvious injection patterns, and tests that do not cover a changed branch. Human review of agent output is similar to ordinary human code review. The threshold for "good enough" is substantially different, especially for high and critical risk classes. Plausible agent code can still miss intent, architecture fit, and operational risk outside the diff.
+
+**Acceptance criteria** set the merge bar for each change.
 
 <DefinitionCard
   term="Acceptance Criteria"
@@ -93,13 +93,13 @@ AI review reduces time spent on routine defects. It also creates noise when inst
 
 Do not present AI review as a pass certificate. No findings means the model did not recognise a problem in the context it received. It does not mean the change is correct.
 
-Silent human rewrites hide process failures. If you frequently rewrite agent output by hand, the task, repository guidance, or model choice is wrong. Prefer precise feedback and a controlled revision round, with a restart rule when the approach is wrong at the root.
+Silent human rewrites hide process failures. If you frequently rewrite agent output by hand, the task, repository guidance, or model choice is wrong. Prefer precise feedback and a controlled revision round. Restart when the approach itself is wrong.
 
 Keep merge and deploy permissions away from the agent that wrote the code. Generation and release are different roles.
 
 ## Scaling and Operational Considerations
 
-Review capacity caps how many agents you should run. Reviewers skim when diffs get too long, and defects get shipped. Prefer small PRs that are easy to digest. Do not compensate with a shotgun stream of tiny PRs that overwhelms the queue.
+Review capacity caps how many agents you should run. Reviewers skim when diffs get too long, and defects get shipped. Prefer small PRs that are easy to digest. Do not compensate with so many tiny PRs that the queue becomes overwhelming.
 
 Useful metrics:
 
