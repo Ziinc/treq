@@ -9,6 +9,7 @@ import ContentPageLayout from '@site/src/components/ContentPageLayout';
 import RoadmapHero from '@site/src/components/RoadmapHero';
 
 export const toc = [
+  { id: 'year-2026', value: '2026', level: 2 },
   { id: 'github-integration-with-merge-queue', value: 'GitHub Integration with Merge Queue', level: 2 },
   { id: 'workspace-checks', value: 'Workspace Checks', level: 2 },
   { id: 'ssh-remote-development', value: 'SSH Remote Development', level: 2 },
@@ -19,11 +20,11 @@ export const toc = [
 
 <ContentPageLayout toc={toc} breadcrumbs={[{label: 'Home', href: '/'}, {label: 'Roadmap'}]}>
 
-_The next product milestones for Treq: GitHub merge queues, workspace checks, and SSH remote development._
+_Year-by-year product milestones for Treq. Newer years are added above older ones._
 
-Treq already isolates parallel work in stacked [workspaces](/docs/concepts/workspaces) and keeps those stacks rebasing as their targets move. The next milestones close the loop from local workspace to remote merge. They also give each workspace assertion-based quality gates that agents can run and repair against, and let you develop on a remote machine over SSH without leaving the app.
+Treq already isolates parallel work in stacked [workspaces](/docs/concepts/workspaces) and keeps those stacks rebasing as their targets move. The timeline above is the planning surface. Quarters with no planned work stay grey.
 
-Targets are by calendar quarter. Scope and timing can shift as we learn from early builds.
+For 2026, Q1 and Q2 have nothing planned. Q3 targets GitHub merge-queue integration and workspace checks. Q4 targets SSH remote development. Targets are by calendar quarter. Scope and timing can shift as we learn from early builds.
 
 ## GitHub Integration with Merge Queue
 

@@ -1,42 +1,6 @@
 import type { Group, Mesh, MeshStandardMaterial, Object3D } from 'three';
-
-export interface MilestoneMeta {
-  id: string;
-  title: string;
-  shortTitle: string;
-  quarter: string;
-  href: string;
-  outcome: string;
-}
-
-export const ROADMAP_MILESTONES: MilestoneMeta[] = [
-  {
-    id: 'merge',
-    title: 'GitHub Integration with Merge Queue',
-    shortTitle: 'Merge Queue',
-    quarter: 'Q3 2026',
-    href: '#github-integration-with-merge-queue',
-    outcome:
-      'Open, track, and enqueue stacked pull requests from the Treq app, including one-shot enqueue of a full stack.',
-  },
-  {
-    id: 'checks',
-    title: 'Workspace Checks',
-    shortTitle: 'Workspace Checks',
-    quarter: 'Q3 2026',
-    href: '#workspace-checks',
-    outcome:
-      'Define and run verification workflows per workspace so agents can iterate against hard pass/fail gates.',
-  },
-  {
-    id: 'ssh',
-    title: 'SSH Remote Development',
-    shortTitle: 'SSH Remote',
-    quarter: 'Q4 2026',
-    href: '#ssh-remote-development',
-    outcome: 'Open a remote workspace over SSH and develop there directly from Treq.',
-  },
-];
+import type { QuarterIcon, QuarterSlot, YearRoadmap } from './_roadmapData';
+import { firstPlannedIndex, isQuarterPlanned, nextPlannedIndex } from './_roadmapData';
 
 export interface RoadmapSceneAPI {
   setActive: (index: number) => void;
@@ -45,7 +9,7 @@ export interface RoadmapSceneAPI {
 
 type ThreeModule = typeof import('three/src/Three.js');
 
-const NODE_X = [-3.4, 0, 3.4] as const;
+const NODE_X = [-3.9, -1.3, 1.3, 3.9] as const;
 const ACTIVE_MS = 4200;
 
 function makeMat(
@@ -122,9 +86,8 @@ function buildChecksIcon(THREE: ThreeModule): Group {
   lintel.castShadow = true;
   group.add(lintel);
 
-  const colors = [passMat, passMat, pendingMat];
   for (let i = 0; i < 3; i++) {
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.55, 0.14), colors[i]);
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.55, 0.14), i < 2 ? passMat : pendingMat);
     bar.position.set(-0.28 + i * 0.28, 0.55, 0);
     bar.castShadow = true;
     bar.userData.kind = 'checkBar';
@@ -143,6 +106,21 @@ function buildChecksIcon(THREE: ThreeModule): Group {
   markHook.position.set(-0.14, 1.42, 0.05);
   markHook.rotation.z = 0.7;
   group.add(markHook);
+
+  return group;
+}
+
+function buildMergeChecksIcon(THREE: ThreeModule): Group {
+  const group = new THREE.Group();
+  const merge = buildMergeIcon(THREE);
+  merge.scale.setScalar(0.55);
+  merge.position.set(-0.55, 0.1, 0);
+  group.add(merge);
+
+  const checks = buildChecksIcon(THREE);
+  checks.scale.setScalar(0.55);
+  checks.position.set(0.6, 0.05, 0);
+  group.add(checks);
 
   return group;
 }
@@ -207,20 +185,51 @@ function buildSshIcon(THREE: ThreeModule): Group {
   return group;
 }
 
-function setGroupDim(root: Object3D, active: boolean) {
+function buildEmptyIcon(THREE: ThreeModule, dark: boolean): Group {
+  const group = new THREE.Group();
+  const muted = dark ? 0x475569 : 0x94a3b8;
+  const mat = makeMat(THREE, muted, { roughness: 0.85, metalness: 0.05 });
+
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.045, 12, 28), mat);
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = 0.7;
+  group.add(ring);
+
+  const stub = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.35, 10), mat);
+  stub.position.y = 0.45;
+  group.add(stub);
+
+  return group;
+}
+
+function buildIcon(THREE: ThreeModule, icon: QuarterIcon, dark: boolean): Group {
+  if (icon === 'mergeChecks') return buildMergeChecksIcon(THREE);
+  if (icon === 'ssh') return buildSshIcon(THREE);
+  return buildEmptyIcon(THREE, dark);
+}
+
+function setGroupDim(root: Object3D, active: boolean, planned: boolean) {
   root.traverse((obj) => {
     const mesh = obj as Mesh;
     if (!mesh.isMesh) return;
     const mat = mesh.material as MeshStandardMaterial;
     if (!mat || typeof mat !== 'object') return;
     mat.transparent = true;
-    mat.opacity = active ? 1 : 0.38;
+    if (!planned) {
+      mat.opacity = active ? 0.55 : 0.28;
+    } else {
+      mat.opacity = active ? 1 : 0.4;
+    }
     if ('emissiveIntensity' in mat) {
       const base = (mesh.userData.baseEmissive as number | undefined) ?? mat.emissiveIntensity ?? 0;
       if (mesh.userData.baseEmissive === undefined) {
         mesh.userData.baseEmissive = mat.emissiveIntensity ?? 0;
       }
-      mat.emissiveIntensity = active ? base : base * 0.15;
+      if (!planned) {
+        mat.emissiveIntensity = 0;
+      } else {
+        mat.emissiveIntensity = active ? base : base * 0.15;
+      }
     }
   });
 }
@@ -228,6 +237,7 @@ function setGroupDim(root: Object3D, active: boolean) {
 export async function buildRoadmapScene(
   canvas: HTMLCanvasElement,
   options: {
+    year: YearRoadmap;
     dark: boolean;
     reducedMotion: boolean;
     onActiveChange: (index: number) => void;
@@ -237,7 +247,6 @@ export async function buildRoadmapScene(
   const {
     WebGLRenderer,
     Scene,
-    Color,
     Fog,
     PerspectiveCamera,
     AmbientLight,
@@ -252,16 +261,17 @@ export async function buildRoadmapScene(
     MathUtils,
   } = THREE;
 
+  const quarters: QuarterSlot[] = options.year.quarters;
   const renderer = new WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setClearColor(0x000000, 0);
 
   const scene = new Scene();
   const fogColor = options.dark ? 0x0b1220 : 0xe8f3ff;
-  scene.fog = new Fog(fogColor, 10, 22);
+  scene.fog = new Fog(fogColor, 11, 24);
 
   const camera = new PerspectiveCamera(38, 1, 0.1, 100);
-  camera.position.set(0, 2.55, 7.2);
+  camera.position.set(0, 2.55, 7.6);
   camera.lookAt(0, 0.95, 0);
 
   scene.add(new AmbientLight(0xffffff, options.dark ? 0.45 : 0.7));
@@ -276,7 +286,7 @@ export async function buildRoadmapScene(
   scene.add(fill);
 
   const ground = new Mesh(
-    new BoxGeometry(14, 0.08, 4.5),
+    new BoxGeometry(16, 0.08, 4.5),
     new MeshStandardMaterial({
       color: options.dark ? 0x111827 : 0xffffff,
       roughness: 0.92,
@@ -288,40 +298,52 @@ export async function buildRoadmapScene(
   ground.position.y = -0.04;
   scene.add(ground);
 
-  const railMat = new MeshStandardMaterial({
-    color: options.dark ? 0x334155 : 0xcbd5e1,
-    roughness: 0.6,
-    metalness: 0.2,
-  });
-  const rail = new Mesh(new CylinderGeometry(0.06, 0.06, 8.2, 16), railMat);
+  const rail = new Mesh(
+    new CylinderGeometry(0.06, 0.06, 9.2, 16),
+    new MeshStandardMaterial({
+      color: options.dark ? 0x334155 : 0xcbd5e1,
+      roughness: 0.6,
+      metalness: 0.2,
+    }),
+  );
   rail.rotation.z = Math.PI / 2;
   rail.position.set(0, 0.18, 0);
   scene.add(rail);
 
-  const progressMat = new MeshStandardMaterial({
-    color: 0x3b9cff,
-    roughness: 0.35,
-    metalness: 0.25,
-    emissive: 0x1d4ed8,
-    emissiveIntensity: options.dark ? 0.45 : 0.25,
-  });
-  const progress = new Mesh(new CylinderGeometry(0.075, 0.075, 1, 16), progressMat);
+  const progress = new Mesh(
+    new CylinderGeometry(0.075, 0.075, 1, 16),
+    new MeshStandardMaterial({
+      color: 0x3b9cff,
+      roughness: 0.35,
+      metalness: 0.25,
+      emissive: 0x1d4ed8,
+      emissiveIntensity: options.dark ? 0.45 : 0.25,
+    }),
+  );
   progress.rotation.z = Math.PI / 2;
   progress.position.set(NODE_X[0], 0.18, 0);
   scene.add(progress);
 
-  const iconBuilders = [buildMergeIcon, buildChecksIcon, buildSshIcon];
-  const milestones: Group[] = [];
+  const pedestals: Group[] = [];
   const nodes: Mesh[] = [];
+  const plannedFlags = quarters.map(isQuarterPlanned);
 
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 4; i++) {
+    const planned = plannedFlags[i];
     const pedestal = new Group();
     pedestal.position.set(NODE_X[i], 0, 0);
+    pedestal.userData.planned = planned;
 
     const disk = new Mesh(
-      new CylinderGeometry(0.55, 0.62, 0.1, 24),
+      new CylinderGeometry(0.48, 0.55, 0.1, 24),
       new MeshStandardMaterial({
-        color: options.dark ? 0x1f2937 : 0xf1f5f9,
+        color: planned
+          ? options.dark
+            ? 0x1f2937
+            : 0xf1f5f9
+          : options.dark
+            ? 0x1e293b
+            : 0xe2e8f0,
         roughness: 0.7,
         metalness: 0.1,
       }),
@@ -330,31 +352,30 @@ export async function buildRoadmapScene(
     pedestal.add(disk);
 
     const node = new Mesh(
-      new SphereGeometry(0.14, 18, 18),
+      new SphereGeometry(0.12, 18, 18),
       new MeshStandardMaterial({
-        color: 0x3b9cff,
+        color: planned ? 0x3b9cff : options.dark ? 0x64748b : 0x94a3b8,
         roughness: 0.3,
         metalness: 0.35,
-        emissive: 0x1d4ed8,
-        emissiveIntensity: 0.2,
+        emissive: planned ? 0x1d4ed8 : 0x000000,
+        emissiveIntensity: planned ? 0.2 : 0,
       }),
     );
     node.position.y = 0.28;
     pedestal.add(node);
     nodes.push(node);
 
-    const icon = iconBuilders[i](THREE);
-    icon.position.y = 0.35;
-    icon.scale.setScalar(0.95);
+    const icon = buildIcon(THREE, quarters[i].icon, options.dark);
+    icon.position.y = 0.32;
+    icon.scale.setScalar(planned ? 0.9 : 0.85);
     pedestal.add(icon);
 
     scene.add(pedestal);
-    milestones.push(pedestal);
-    setGroupDim(pedestal, i === 0);
+    pedestals.push(pedestal);
   }
 
-  let active = 0;
-  let targetCamX: number = NODE_X[0];
+  let active = firstPlannedIndex(options.year);
+  let targetCamX: number = NODE_X[active];
   let disposed = false;
   let autoTimer: ReturnType<typeof setInterval> | null = null;
   let raf = 0;
@@ -370,9 +391,9 @@ export async function buildRoadmapScene(
   resize();
 
   const setActive = (index: number) => {
-    active = ((index % 3) + 3) % 3;
+    active = ((index % 4) + 4) % 4;
     targetCamX = NODE_X[active];
-    milestones.forEach((m, i) => setGroupDim(m, i === active));
+    pedestals.forEach((m, i) => setGroupDim(m, i === active, plannedFlags[i]));
     options.onActiveChange(active);
   };
 
@@ -381,19 +402,20 @@ export async function buildRoadmapScene(
     raf = requestAnimationFrame(animate);
     clock.t += 0.016;
 
-    const camX = MathUtils.damp(camera.position.x, targetCamX * 0.35, 4, 0.016);
+    const camX = MathUtils.damp(camera.position.x, targetCamX * 0.28, 4, 0.016);
     camera.position.x = camX;
     camera.position.y = 2.5 + Math.sin(clock.t * 0.7) * (options.reducedMotion ? 0 : 0.04);
-    camera.lookAt(targetCamX * 0.55, 0.9, 0);
+    camera.lookAt(targetCamX * 0.5, 0.9, 0);
 
-    const span = NODE_X[2] - NODE_X[0];
-    const filled = NODE_X[0] + ((active + 1) / 3) * span;
+    const span = NODE_X[3] - NODE_X[0];
+    const filled = NODE_X[0] + ((active + 1) / 4) * span;
     const length = Math.max(0.2, filled - NODE_X[0]);
     progress.scale.set(1, length, 1);
     progress.position.x = NODE_X[0] + length / 2;
+    progress.visible = plannedFlags[active];
 
-    milestones.forEach((m, i) => {
-      const focus = i === active ? 1 : 0;
+    pedestals.forEach((m, i) => {
+      const focus = i === active && plannedFlags[i] ? 1 : 0;
       const bob = options.reducedMotion ? 0 : Math.sin(clock.t * 2 + i) * 0.03 * focus;
       m.position.y = bob;
       m.rotation.y = options.reducedMotion ? 0 : Math.sin(clock.t * 0.8 + i) * 0.08 * focus;
@@ -425,6 +447,12 @@ export async function buildRoadmapScene(
 
     nodes.forEach((node, i) => {
       const mat = node.material as MeshStandardMaterial;
+      const planned = plannedFlags[i];
+      if (!planned) {
+        mat.emissiveIntensity = 0;
+        node.scale.setScalar(i === active ? 1.05 : 0.9);
+        return;
+      }
       mat.emissiveIntensity = i === active ? 0.65 : 0.12;
       node.scale.setScalar(i === active ? 1.25 : 1);
     });
@@ -435,11 +463,11 @@ export async function buildRoadmapScene(
   const onResize = () => resize();
   window.addEventListener('resize', onResize);
 
-  setActive(0);
+  setActive(active);
   animate();
 
   if (!options.reducedMotion) {
-    autoTimer = setInterval(() => setActive(active + 1), ACTIVE_MS);
+    autoTimer = setInterval(() => setActive(nextPlannedIndex(options.year, active)), ACTIVE_MS);
   }
 
   return {
@@ -447,7 +475,7 @@ export async function buildRoadmapScene(
       setActive(index);
       if (autoTimer) {
         clearInterval(autoTimer);
-        autoTimer = setInterval(() => setActive(active + 1), ACTIVE_MS);
+        autoTimer = setInterval(() => setActive(nextPlannedIndex(options.year, active)), ACTIVE_MS);
       }
     },
     dispose: () => {
