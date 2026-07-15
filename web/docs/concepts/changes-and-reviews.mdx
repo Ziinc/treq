@@ -37,8 +37,6 @@ Treq detects unresolved conflicts in the workspace and marks the affected files.
 
 You can write resolution instructions for a conflict and include them in the review prompt. The agent receives those instructions in a separate conflict-resolution section. Treq disables workspace merging while unresolved conflicts remain.
 
-Conflict comments live in the current review interface. Reloading the page can discard them because Treq does not save them with the pending review.
-
 When files change during a review, Treq compares the new diff with the saved comment context. It marks stale files and drops comments whose lines no longer match. Re-read those files before finishing the review.
 
 ## Comments
