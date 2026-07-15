@@ -39,8 +39,6 @@ You can write resolution instructions for a conflict and include them in the rev
 
 Conflict comments live in the current review interface. Reloading the page can discard them because Treq does not save them with the pending review.
 
-{/* TODO: Remove this limitation once conflict comments persist in `.treq/local.db`. */}
-
 When files change during a review, Treq compares the new diff with the saved comment context. It marks stale files and drops comments whose lines no longer match. Re-read those files before finishing the review.
 
 ## Comments
