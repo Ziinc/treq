@@ -56,6 +56,60 @@ const PRO_FEATURES: PlanFeature[] = [
   {text: 'Merge queue', included: true},
 ];
 
+type ComparisonTone = 'positive' | 'negative' | 'neutral';
+
+type ComparisonCell = {
+  label: string;
+  tone: ComparisonTone;
+};
+
+type ComparisonRow = {
+  feature: string;
+  free: ComparisonCell;
+  pro: ComparisonCell;
+};
+
+const COMPARISON_ROWS: ComparisonRow[] = [
+  {
+    feature: 'Desktop app',
+    free: {label: 'Included', tone: 'positive'},
+    pro: {label: 'Included', tone: 'positive'},
+  },
+  {
+    feature: 'GitHub integration',
+    free: {label: 'Public repos only', tone: 'neutral'},
+    pro: {label: 'All repos', tone: 'positive'},
+  },
+  {
+    feature: 'Merge queue',
+    free: {label: 'Not included', tone: 'negative'},
+    pro: {label: 'Included', tone: 'positive'},
+  },
+];
+
+const FAQ_ITEMS = [
+  {
+    question: 'Who is Free for?',
+    answer:
+      'Free is for developers who want the desktop workspace manager and only need GitHub on public repositories. Open source projects fit this plan.',
+  },
+  {
+    question: 'What does Pro add?',
+    answer:
+      'Pro adds GitHub access for private repositories and merge queue. Billing is $15 per user each month.',
+  },
+  {
+    question: 'Is the desktop app still free on Pro?',
+    answer:
+      'Yes. Pro is a cloud subscription on top of the same open source desktop app. Your local workspaces stay on your machine either way.',
+  },
+  {
+    question: 'How do I upgrade?',
+    answer:
+      'Create an account, then start a Pro subscription from the dashboard. You can move back to Free if you cancel.',
+  },
+] as const;
+
 function FeatureList({features}: {features: PlanFeature[]}): ReactNode {
   return (
     <ul className={styles.featureList}>
@@ -124,37 +178,67 @@ function PlansSection(): ReactNode {
   );
 }
 
+function ComparisonValue({cell}: {cell: ComparisonCell}): ReactNode {
+  return (
+    <span
+      className={clsx(
+        styles.comparisonValue,
+        cell.tone === 'positive' && styles.comparisonValuePositive,
+        cell.tone === 'negative' && styles.comparisonValueNegative,
+        cell.tone === 'neutral' && styles.comparisonValueNeutral,
+      )}
+    >
+      {cell.label}
+    </span>
+  );
+}
+
 function ComparisonSection(): ReactNode {
   return (
     <section className={styles.comparison} aria-label="Feature comparison">
       <Heading as="h2" className={styles.sectionHeading}>
         Feature comparison
       </Heading>
-      <div className={styles.tableWrap}>
-        <table className={styles.table}>
+      <div className={styles.comparisonTableWrap}>
+        <table className={styles.comparisonTable}>
           <thead>
             <tr>
-              <th scope="col">Feature</th>
-              <th scope="col">Free</th>
-              <th scope="col">Pro</th>
+              <th scope="col" className={styles.comparisonFeatureHeader}>
+                Feature
+              </th>
+              <th scope="col" className={styles.comparisonPlanHeader}>
+                Free
+              </th>
+              <th
+                scope="col"
+                className={clsx(
+                  styles.comparisonPlanHeader,
+                  styles.comparisonPlanHeaderPro,
+                )}
+              >
+                Pro
+              </th>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <th scope="row">Desktop app</th>
-              <td>Included</td>
-              <td>Included</td>
-            </tr>
-            <tr>
-              <th scope="row">GitHub integration</th>
-              <td>Public repos only</td>
-              <td>All repos</td>
-            </tr>
-            <tr>
-              <th scope="row">Merge queue</th>
-              <td>Not included</td>
-              <td>Included</td>
-            </tr>
+            {COMPARISON_ROWS.map((row) => (
+              <tr key={row.feature} className={styles.comparisonRow}>
+                <th scope="row" className={styles.comparisonFeatureCell}>
+                  {row.feature}
+                </th>
+                <td className={styles.comparisonDataCell}>
+                  <ComparisonValue cell={row.free} />
+                </td>
+                <td
+                  className={clsx(
+                    styles.comparisonDataCell,
+                    styles.comparisonDataCellPro,
+                  )}
+                >
+                  <ComparisonValue cell={row.pro} />
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -170,46 +254,12 @@ function FaqSection(): ReactNode {
       </Heading>
 
       <div className={styles.faqList}>
-        <div className={styles.faqItem}>
-          <Heading as="h3" className={styles.faqQuestion}>
-            Who is Free for?
-          </Heading>
-          <p className={styles.faqAnswer}>
-            Free is for developers who want the desktop workspace manager and
-            only need GitHub on public repositories. Open source projects fit
-            this plan.
-          </p>
-        </div>
-
-        <div className={styles.faqItem}>
-          <Heading as="h3" className={styles.faqQuestion}>
-            What does Pro add?
-          </Heading>
-          <p className={styles.faqAnswer}>
-            Pro adds GitHub access for private repositories and merge queue.
-            Billing is $15 per user each month.
-          </p>
-        </div>
-
-        <div className={styles.faqItem}>
-          <Heading as="h3" className={styles.faqQuestion}>
-            Is the desktop app still free on Pro?
-          </Heading>
-          <p className={styles.faqAnswer}>
-            Yes. Pro is a cloud subscription on top of the same open source
-            desktop app. Your local workspaces stay on your machine either way.
-          </p>
-        </div>
-
-        <div className={styles.faqItem}>
-          <Heading as="h3" className={styles.faqQuestion}>
-            How do I upgrade?
-          </Heading>
-          <p className={styles.faqAnswer}>
-            Create an account, then start a Pro subscription from the dashboard.
-            You can move back to Free if you cancel.
-          </p>
-        </div>
+        {FAQ_ITEMS.map((item) => (
+          <details key={item.question} className={styles.faqItem}>
+            <summary className={styles.faqQuestion}>{item.question}</summary>
+            <p className={styles.faqAnswer}>{item.answer}</p>
+          </details>
+        ))}
       </div>
     </section>
   );
