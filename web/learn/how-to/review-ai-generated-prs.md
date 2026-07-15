@@ -19,9 +19,9 @@ Collect three inputs:
 2. The agent's summary of what it changed
 3. The pull request diff against the intended base
 
-If the summary and diff disagree with the task, stop. Correct the task or reject the PR. Do not review a solution to the wrong problem.
+If the summary and diff disagree with the task, stop. Correct the task or reject the PR. Do not review a solution to the wrong problem, and do not waste your precious development time.
 
-Confirm CI status for build, lint, and tests. Failing checks are not a substitute for review, but passing checks are not approval either.
+Confirm CI status for build, lint, and tests. These are basic quality checks. Broad failures often reveal a PR that made sweeping changes across too many files or concerns. Failing checks are not a substitute for review, but passing checks are not approval either.
 
 ## Review checklist
 
@@ -33,10 +33,17 @@ Work through the PR in this order:
 - Did the agent add dependencies, config, or generated files?
 - Is there unrelated cleanup or reformatting?
 
+**Success criteria**
+
+- Does the change meet the acceptance criteria from the original task?
+- Can you point to evidence in the diff or tests for each criterion?
+- Is anything marked done that the PR does not actually deliver?
+
 **Behavior**
 
 - Does the main success path match the acceptance criteria?
 - Are authorization, validation, and error paths handled?
+- Are observability paths such as logging present where failures or security events need them?
 - Do migrations or API changes preserve compatibility?
 
 **Tests**
@@ -48,6 +55,7 @@ Work through the PR in this order:
 **Design**
 
 - Does the change reuse existing helpers and patterns?
+- Are conventions such as naming adhered to?
 - Is the size proportionate to the task?
 - Would a maintainer understand this in six months?
 
@@ -66,13 +74,25 @@ Use expires_at from the token record. Add a test for an expired token
 whose created_at is still within the session duration.
 ```
 
+Quote specific lines in markdown when you want the agent to find them with search or a targeted edit:
+
+```markdown
+In `src/auth/token.ts`:
+
+> if (now - token.created_at < SESSION_MS) {
+
+Use `token.expires_at` instead of deriving expiry from `created_at`.
+```
+
+Prefer tooling that automatically includes the file path, line number, and quoted text in the review prompt. That gives the agent exact anchors instead of a vague description.
+
 Avoid vague notes such as "clean this up" or "add better errors." An agent will guess, and the next revision will create new noise.
 
 Send related findings together. Rank correctness and security above style. After the agent revises, review the delta first, then re-read the full final diff before approval.
 
 ## Local review in Treq
 
-Treq can review workspace changes before a remote PR exists. Comment on changed lines, finish the review, and send the prompt back to the agent in plan or edit mode. See [Changes and Reviews](/docs/concepts/changes-and-reviews) and [Human in the Loop AI Code Review](/learn/ai-code-review).
+Treq can review workspace changes before a remote PR exists. Comment on changed lines, finish the review, and send the prompt back to the agent in plan or edit mode. Treq already includes the file path, line context, and quoted text in that prompt automatically. See [Changes and Reviews](/docs/concepts/changes-and-reviews) and [Human in the Loop AI Code Review](/learn/ai-code-review).
 
 ## Common failure cases
 
@@ -80,7 +100,7 @@ Rubber-stamping a large agent PR. Reviewers skim when the diff is too big. Split
 
 **Approving because CI is green.** Agents can satisfy tests they wrote. Trace behavior against the acceptance criteria.
 
-**Editing the PR heavily by hand.** Silent rewrites hide broken prompts and repo guidance. Prefer feedback and a revision round, with a restart when the approach is wrong.
+**Editing the PR heavily by hand.** Silent rewrites hide broken prompts and repo guidance. Prefer feedback and a revision round, with a restart when the approach is wrong. If you must take over, take over the PR entirely, or clear the prompt history before starting a new agent task on that branch so the next run does not inherit a confused thread.
 
 **Leaving the branch stale during review.** Rebase or auto-rebase before final approval so you are not merging against an old base. See [Auto-Rebasing AI Workspaces](/learn/how-to/auto-rebase-ai-branches).
 

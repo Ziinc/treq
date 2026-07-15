@@ -6,10 +6,6 @@ sidebar_position: 1
 
 AI agents move quickly. The Git workflows around them change just as fast. This Learn section is a reference for AI-aided software development.
 
-Treq appears where it helps. The focus stays on the tools themselves and how to use them in practice.
-
-## Pillars
-
 These guides define the category:
 
 - [Parallel Coding Agents](/learn/parallel-coding-agents)
@@ -17,8 +13,6 @@ These guides define the category:
 - [Git Worktrees for AI](/learn/git-worktrees-for-ai)
 - [Stacked PRs for AI Development](/learn/stacked-prs)
 - [Graphite Alternative](/learn/graphite-alternative)
-
-## Clusters
 
 These guides answer specific workflow questions:
 
@@ -28,11 +22,4 @@ These guides answer specific workflow questions:
 - [Fix Merge Conflicts from Coding Agents](/learn/how-to/merge-conflicts-with-coding-agents)
 - [Git Worktrees vs Clones for Agents](/learn/how-to/git-worktrees-vs-clones-for-agents)
 
-## Browse by format
-
-- [Concepts](/learn/concepts)
-- [Workflows](/learn/workflows)
-- [Tutorials](/learn/tutorials)
-- [How-To](/learn/how-to)
-
-For the product itself, see the [Product Documentation overview](/docs/).
+For the Treq product, see the [Product Documentation overview](/docs/).
