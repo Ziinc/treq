@@ -2,6 +2,8 @@ import type {
 	BranchStatus,
 	DirectoryEntry,
 	EditorAppsResponse,
+	GhIssue,
+	GhPullRequest,
 	GitRemoteInfo,
 	PrInfo,
 	HomeRebaseDryRunResult,
@@ -447,6 +449,82 @@ export const dryRunHomeRepoRebase = (
 		repoPath,
 		currentBranch,
 		targetBranch,
+	});
+
+// GitHub CLI API
+export const ghListIssues = (
+	repoFullName: string,
+	state: string,
+): Promise<GhIssue[]> => invoke("gh_list_issues", { repoFullName, state });
+
+export const ghViewIssue = (
+	repoFullName: string,
+	issueNumber: number,
+): Promise<GhIssue> => invoke("gh_view_issue", { repoFullName, issueNumber });
+
+export const ghCreateIssue = (
+	repoFullName: string,
+	title: string,
+	body: string,
+): Promise<number> => invoke("gh_create_issue", { repoFullName, title, body });
+
+export const ghCreateIssueComment = (
+	repoFullName: string,
+	issueNumber: number,
+	body: string,
+): Promise<void> =>
+	invoke("gh_create_issue_comment", { repoFullName, issueNumber, body });
+
+export const ghCloseIssue = (
+	repoFullName: string,
+	issueNumber: number,
+): Promise<void> => invoke("gh_close_issue", { repoFullName, issueNumber });
+
+export const ghReopenIssue = (
+	repoFullName: string,
+	issueNumber: number,
+): Promise<void> => invoke("gh_reopen_issue", { repoFullName, issueNumber });
+
+export const ghListPrs = (
+	repoFullName: string,
+	state: string,
+): Promise<GhPullRequest[]> => invoke("gh_list_prs", { repoFullName, state });
+
+export const ghViewPr = (
+	repoFullName: string,
+	prNumber: number,
+): Promise<GhPullRequest> => invoke("gh_view_pr", { repoFullName, prNumber });
+
+export const ghCreatePrComment = (
+	repoFullName: string,
+	prNumber: number,
+	body: string,
+): Promise<void> =>
+	invoke("gh_create_pr_comment", { repoFullName, prNumber, body });
+
+export const ghClosePr = (
+	repoFullName: string,
+	prNumber: number,
+): Promise<void> => invoke("gh_close_pr", { repoFullName, prNumber });
+
+export const ghReopenPr = (
+	repoFullName: string,
+	prNumber: number,
+): Promise<void> => invoke("gh_reopen_pr", { repoFullName, prNumber });
+
+export const ghCreatePr = (
+	repoFullName: string,
+	title: string,
+	body: string,
+	baseBranch: string,
+	headBranch: string,
+): Promise<number> =>
+	invoke("gh_create_pr", {
+		repoFullName,
+		title,
+		body,
+		baseBranch,
+		headBranch,
 	});
 
 // PTY API

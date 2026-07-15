@@ -1,5 +1,11 @@
 use crate::binary_paths::{detect_binary, get_binary_path, get_extended_path};
-pub use crate::github::{GitRemoteInfo, PrInfo};
+pub use crate::github::{GhIssue, GhPullRequest, GitRemoteInfo, PrInfo};
+
+fn gh_bin() -> Result<String, String> {
+    get_binary_path("gh")
+        .or_else(|| detect_binary("gh"))
+        .ok_or_else(|| "gh CLI not found".to_string())
+}
 
 /// Run `gh pr view` for the given branch in the given repo directory.
 /// Returns None if gh is not installed, not authenticated, or no PR exists.
@@ -20,4 +26,110 @@ pub fn get_pr_info_via_gh(
 #[tauri::command]
 pub fn get_git_remote_url(repo_path: String) -> Result<Option<GitRemoteInfo>, String> {
     crate::github::get_git_remote_url_impl(&repo_path)
+}
+
+#[tauri::command]
+pub fn gh_list_issues(repo_full_name: String, state: String) -> Result<Vec<GhIssue>, String> {
+    let gh = gh_bin()?;
+    crate::github::gh_list_issues_impl(&gh, &repo_full_name, &state, &get_extended_path())
+}
+
+#[tauri::command]
+pub fn gh_view_issue(repo_full_name: String, issue_number: u64) -> Result<GhIssue, String> {
+    let gh = gh_bin()?;
+    crate::github::gh_view_issue_impl(&gh, &repo_full_name, issue_number, &get_extended_path())
+}
+
+#[tauri::command]
+pub fn gh_create_issue(repo_full_name: String, title: String, body: String) -> Result<u64, String> {
+    let gh = gh_bin()?;
+    crate::github::gh_create_issue_impl(&gh, &repo_full_name, &title, &body, &get_extended_path())
+}
+
+#[tauri::command]
+pub fn gh_create_issue_comment(
+    repo_full_name: String,
+    issue_number: u64,
+    body: String,
+) -> Result<(), String> {
+    let gh = gh_bin()?;
+    crate::github::gh_create_issue_comment_impl(
+        &gh,
+        &repo_full_name,
+        issue_number,
+        &body,
+        &get_extended_path(),
+    )
+}
+
+#[tauri::command]
+pub fn gh_close_issue(repo_full_name: String, issue_number: u64) -> Result<(), String> {
+    let gh = gh_bin()?;
+    crate::github::gh_close_issue_impl(&gh, &repo_full_name, issue_number, &get_extended_path())
+}
+
+#[tauri::command]
+pub fn gh_reopen_issue(repo_full_name: String, issue_number: u64) -> Result<(), String> {
+    let gh = gh_bin()?;
+    crate::github::gh_reopen_issue_impl(&gh, &repo_full_name, issue_number, &get_extended_path())
+}
+
+#[tauri::command]
+pub fn gh_list_prs(repo_full_name: String, state: String) -> Result<Vec<GhPullRequest>, String> {
+    let gh = gh_bin()?;
+    crate::github::gh_list_prs_impl(&gh, &repo_full_name, &state, &get_extended_path())
+}
+
+#[tauri::command]
+pub fn gh_view_pr(repo_full_name: String, pr_number: u64) -> Result<GhPullRequest, String> {
+    let gh = gh_bin()?;
+    crate::github::gh_view_pr_impl(&gh, &repo_full_name, pr_number, &get_extended_path())
+}
+
+#[tauri::command]
+pub fn gh_create_pr_comment(
+    repo_full_name: String,
+    pr_number: u64,
+    body: String,
+) -> Result<(), String> {
+    let gh = gh_bin()?;
+    crate::github::gh_create_pr_comment_impl(
+        &gh,
+        &repo_full_name,
+        pr_number,
+        &body,
+        &get_extended_path(),
+    )
+}
+
+#[tauri::command]
+pub fn gh_close_pr(repo_full_name: String, pr_number: u64) -> Result<(), String> {
+    let gh = gh_bin()?;
+    crate::github::gh_close_pr_impl(&gh, &repo_full_name, pr_number, &get_extended_path())
+}
+
+#[tauri::command]
+pub fn gh_reopen_pr(repo_full_name: String, pr_number: u64) -> Result<(), String> {
+    let gh = gh_bin()?;
+    crate::github::gh_reopen_pr_impl(&gh, &repo_full_name, pr_number, &get_extended_path())
+}
+
+#[tauri::command]
+pub fn gh_create_pr(
+    repo_full_name: String,
+    title: String,
+    body: String,
+    base_branch: String,
+    head_branch: String,
+) -> Result<u64, String> {
+    let gh = gh_bin()?;
+    crate::github::gh_create_pr_impl(
+        &gh,
+        &repo_full_name,
+        &title,
+        &body,
+        &base_branch,
+        &head_branch,
+        &get_extended_path(),
+    )
 }

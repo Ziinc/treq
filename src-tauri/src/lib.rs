@@ -505,6 +505,18 @@ pub fn run() {
             commands::dry_run_home_repo_rebase,
             commands::get_git_remote_url,
             commands::get_pr_info_via_gh,
+            commands::gh_list_issues,
+            commands::gh_view_issue,
+            commands::gh_create_issue,
+            commands::gh_create_issue_comment,
+            commands::gh_close_issue,
+            commands::gh_reopen_issue,
+            commands::gh_list_prs,
+            commands::gh_view_pr,
+            commands::gh_create_pr_comment,
+            commands::gh_close_pr,
+            commands::gh_reopen_pr,
+            commands::gh_create_pr,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
