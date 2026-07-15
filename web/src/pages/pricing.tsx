@@ -61,11 +61,9 @@ const PRO_FEATURES: PlanFeature[] = [
   {text: 'Merge queue', included: true, comingSoon: true},
 ];
 
-type ComparisonTone = 'positive' | 'negative' | 'neutral';
-
 type ComparisonCell = {
-  label: string;
-  tone: ComparisonTone;
+  included: boolean;
+  detail?: string;
 };
 
 type ComparisonRow = {
@@ -78,20 +76,20 @@ type ComparisonRow = {
 const COMPARISON_ROWS: ComparisonRow[] = [
   {
     feature: 'Desktop app',
-    free: {label: 'Included', tone: 'positive'},
-    pro: {label: 'Included', tone: 'positive'},
+    free: {included: true},
+    pro: {included: true},
   },
   {
     feature: 'GitHub integration',
     comingSoon: true,
-    free: {label: 'Public repos only', tone: 'neutral'},
-    pro: {label: 'All repos', tone: 'positive'},
+    free: {included: true, detail: 'Public repos only'},
+    pro: {included: true, detail: 'All repos'},
   },
   {
     feature: 'Merge queue',
     comingSoon: true,
-    free: {label: 'Not included', tone: 'negative'},
-    pro: {label: 'Included', tone: 'positive'},
+    free: {included: false},
+    pro: {included: true},
   },
 ];
 
@@ -195,16 +193,27 @@ function PlansSection(): ReactNode {
 }
 
 function ComparisonValue({cell}: {cell: ComparisonCell}): ReactNode {
+  const statusLabel = cell.included ? 'Included' : 'Not included';
+  const ariaLabel = cell.detail
+    ? `${statusLabel}, ${cell.detail}`
+    : statusLabel;
+
   return (
-    <span
-      className={clsx(
-        styles.comparisonValue,
-        cell.tone === 'positive' && styles.comparisonValuePositive,
-        cell.tone === 'negative' && styles.comparisonValueNegative,
-        cell.tone === 'neutral' && styles.comparisonValueNeutral,
-      )}
-    >
-      {cell.label}
+    <span className={styles.comparisonValue} aria-label={ariaLabel}>
+      <span
+        className={clsx(
+          styles.comparisonIcon,
+          cell.included
+            ? styles.comparisonIconYes
+            : styles.comparisonIconNo,
+        )}
+        aria-hidden="true"
+      >
+        {cell.included ? '✓' : '✗'}
+      </span>
+      {cell.detail ? (
+        <span className={styles.comparisonDetail}>{cell.detail}</span>
+      ) : null}
     </span>
   );
 }
