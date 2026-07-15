@@ -4,24 +4,26 @@ sidebar_position: 1
 
 # Workspaces
 
-_How Treq isolates parallel work with Jujutsu workspaces._
+_How Treq isolates parallel work with managed workspaces inside a Git repository._
 
-Treq creates Jujutsu workspaces inside a colocated Git repository. Each workspace has its own working copy and line of commit history. Treq stores workspace files and repository-local metadata under `.treq`.
+Treq creates managed workspaces inside your Git repository. Each workspace has its own working copy and line of commit history. Treq stores workspace files and repository-local metadata under `.treq`.
 
-## Jujutsu Workspaces
+You stay on Git for remotes and day-to-day VCS identity. Under the hood, Treq places [Jujutsu](https://jj-vcs.github.io/jj/latest/) beside Git in the same repo so it can rebase workspace branches when targets move. That automatic rebase is the reason Treq uses Jujutsu. Git worktrees cannot do it. You do not need to learn Jujutsu to use workspaces. Dropping to the `jj` CLI is a power-user option and is not recommended for normal use.
 
-A Jujutsu workspace is an additional working copy linked to the same repository:
+## Workspace Layout
+
+A managed workspace is an additional working copy linked to the same repository:
 
 ```
-.git/                       # Colocated Git data
-.jj/                        # Jujutsu repository data
+.git/                       # Git data (native VCS and remotes)
+.jj/                        # Colocated Jujutsu state (managed by Treq)
 .treq/workspaces/
   ├── treq-feature-1/        # Workspace for treq/feature-1
   ├── treq-bugfix-2/         # Workspace for treq/bugfix-2
   └── ...
 ```
 
-Each workspace has an independent working copy. They share commit history through Jujutsu, while the colocated Git repository provides compatibility with Git remotes and tooling. A pending file change in one workspace does not appear in another workspace.
+Each workspace has an independent working copy. They share commit history through the colocated repository. The Git store keeps remote compatibility and tooling that expects `.git`. A pending file change in one workspace does not appear in another workspace.
 
 ## Visual Management
 
@@ -49,11 +51,11 @@ The dashboard shows workspace names, target relationships, divergence, pending c
 
 ## Lifecycle Management
 
-**Creation flow**: Treq validates the name, creates a Jujutsu workspace and bookmark, records its target, and refreshes the dashboard. You can then open a shell or agent session in the new working copy.
+**Creation flow**: Treq validates the name, creates a workspace and branch-like bookmark, records its target, and refreshes the dashboard. You can then open a shell or agent session in the new working copy.
 
 **Update flow**: File watching and periodic queries refresh pending changes, divergence, commit history, and conflict indicators.
 
-**Deletion flow**: Treq forgets the Jujutsu workspace, removes its directory and local metadata, then refreshes the dashboard.
+**Deletion flow**: Treq removes the managed workspace, its directory, and local metadata, then refreshes the dashboard.
 
 {/* TODO: Document the exact safeguards for pending changes and live terminal processes before recommending workspace deletion as a routine cleanup action. */}
 
@@ -73,9 +75,11 @@ When a lower workspace changes, Treq rebases its dependents onto the updated tar
 
 Treq records the last target commit used for each rebase. This lets it detect when a target moved and the dependent workspace needs another update.
 
+This is the product reason for colocated Jujutsu. Automatic rebasing of workspace branches across a stack is not something Git worktrees can provide.
+
 ## Bookmark Conflicts
 
-Git remote updates can leave a Jujutsu bookmark with multiple possible targets. Treq reports this as a bookmark conflict before it updates the stack.
+Git remote updates can leave a local bookmark with multiple possible targets. Treq reports this as a bookmark conflict before it updates the stack.
 
 Resolving the conflict points the local bookmark at the chosen remote target. Treq then rebases local-only commits onto that target. Resolve bookmark conflicts from the bottom of a stack upward because each target affects its dependents.
 
@@ -89,7 +93,7 @@ Merging integrates a workspace into its target and removes the managed workspace
 | Squash and merge | Combines the workspace commits into one commit on the target |
 | Rebase and merge | Rebases the workspace commits onto the target for linear history |
 
-After a successful merge, Treq synchronizes the target working copy when needed. It then forgets the Jujutsu workspace, deletes the workspace directory, and removes its local metadata.
+After a successful merge, Treq synchronizes the target working copy when needed. It then removes the managed workspace, deletes the workspace directory, and removes its local metadata.
 
 Treq blocks the merge when the workspace contains unresolved conflicts. Pending working-copy changes also make history operations harder to reason about. Commit, move, or discard them before merging.
 
@@ -111,11 +115,11 @@ Diffs load when you open them, and terminal processes start when you create a se
 
 ## Limitations and Constraints
 
-Each window opens one repository at a time. Treq creates managed workspaces under `.treq/workspaces/` and requires a Git repository that Jujutsu can initialize as a colocated repository.
+Each window opens one repository at a time. Treq creates managed workspaces under `.treq/workspaces/` and requires a Git repository it can open in colocated mode.
 
 ## Best Practices
 
-Commit pending changes before rebasing or deleting a workspace. Resolve stack conflicts from the lowest workspace upward. Remove workspaces only after their changes have been merged or intentionally discarded.
+Commit pending changes before rebasing or deleting a workspace. Resolve stack conflicts from the lowest workspace upward. Remove workspaces only after their changes have been merged or intentionally discarded. Prefer Treq's UI for repository operations. Treat the `jj` CLI as optional debugging, not the primary workflow.
 
 ## Learn More
 
@@ -123,3 +127,4 @@ Commit pending changes before rebasing or deleting a workspace. Resolve stack co
 - [Managing Workspaces](/docs/tutorials/managing-workspaces)
 - [Merging Workspaces](/docs/tutorials/merging-workspaces)
 - [Using with Git Repo](/docs/tutorials/using-treq-with-git-repo)
+- [Under the Hood](/docs/under-the-hood)

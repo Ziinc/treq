@@ -4,9 +4,9 @@ sidebar_position: 1
 
 # Under the Hood
 
-_How Treq connects its interface, Rust backend, Jujutsu repository, and local state._
+_How Treq connects its interface, Rust backend, colocated Git and Jujutsu store, and local state._
 
-Treq is a Tauri desktop application built around Jujutsu workspaces. React renders the interface, while Rust owns repository access, local databases, file updates, and terminal processes.
+Treq is a Tauri desktop application for Git repositories. React renders the interface, while Rust owns repository access, local databases, file updates, and terminal processes. Users work with Git remotes and managed workspaces. They do not need Jujutsu knowledge. Colocated Jujutsu is the implementation that makes automatic workspace rebasing possible.
 
 ## Architecture
 
@@ -19,12 +19,12 @@ Command handler
   ↓
 Rust core
   ↓
-Jujutsu integration, SQLite, file watcher, or PTY manager
+Repository integration, SQLite, file watcher, or PTY manager
 ```
 
 The frontend calls typed wrappers in `src/lib/api.ts`. Tauri routes each request to a handler in `src-tauri/src/commands`. Handlers validate input, acquire application state, and delegate work to `src-tauri/src/core`.
 
-Core modules own workspace, commit, repository, and change behavior. Infrastructure modules handle Jujutsu, SQLite, file events, and terminal processes.
+Core modules own workspace, commit, repository, and change behavior. Infrastructure modules handle colocated Git and Jujutsu access, SQLite, file events, and terminal processes.
 
 ## Frontend State
 
@@ -40,18 +40,18 @@ Command handlers stay thin because the same core behavior serves more than the d
 
 ## Repository Model
 
-Treq opens an existing Git repository and initializes Jujutsu in colocated mode. Git keeps remote compatibility, Jujutsu owns workspace and commit operations, and Treq adds application state under `.treq`.
+Treq opens an existing Git repository and initializes Jujutsu in colocated mode. Git is the native VCS boundary for remotes and hosted compatibility. Jujutsu supplies the revision model Treq uses for workspaces, stacks, and automatic rebases. Treq adds application state under `.treq`.
 
 ```
 {repo}/
 ├── .git/                   # Git objects, refs, and remote configuration
-├── .jj/                    # Jujutsu repository state
+├── .jj/                    # Colocated Jujutsu repository state
 └── .treq/
     ├── local.db            # Treq repository-local metadata
-    └── workspaces/         # Managed Jujutsu working copies
+    └── workspaces/         # Managed working copies
 ```
 
-Jujutsu reads and writes the colocated Git store. This lets Treq use Jujutsu's revision model while preserving Git remote workflows.
+Jujutsu reads and writes the colocated Git store. That is why Treq can rebase dependent workspace branches when a target moves. Git worktrees share objects and refs, but they do not provide that automatic stack rebase behavior. Users stay in Treq or ordinary Git commands for day-to-day work. The `jj` CLI is optional debugging, not the supported product path.
 
 ## Home and Managed Workspaces
 
@@ -67,19 +67,19 @@ That target relationship defines a stack. It also determines the revision range 
 
 ## Repository Operations
 
-The Rust backend calls `jj-lib` through Treq's Jujutsu integration layer. It does not start `jj` or `git` subprocesses for repository operations.
+The Rust backend calls `jj-lib` through Treq's repository integration layer. It does not start `jj` or `git` subprocesses for repository operations.
 
 Treq serializes commit operations for each repository path. The lock prevents two commands from changing the same repository state at the same time.
 
 ## Remote Compatibility
 
-Git remains the transport boundary for hosted repositories. Fetch and push operations update colocated state, then Treq asks Jujutsu to read the resulting bookmarks and revisions.
+Git remains the transport boundary for hosted repositories. Fetch and push operations update colocated state, then Treq reads the resulting bookmarks and revisions through its repository layer.
 
 Remote changes can produce ahead, behind, diverged, or bookmark-conflict states. Treq resolves those states through workspace synchronization.
 
 ## Workspace Synchronization
 
-Synchronization has two layers. Interface refreshes load current repository data into React. Repository synchronization updates Jujutsu bookmarks, revisions, and working copies.
+Synchronization has two layers. Interface refreshes load current repository data into React. Repository synchronization updates bookmarks, revisions, and working copies so dependent workspaces stay rebased onto their targets.
 
 ## Interface Refresh
 
@@ -117,7 +117,7 @@ Resolution points the bookmark at that target and rebases local-only commits ont
 
 After a merge, Treq can synchronize the home working copy with the target bookmark. It performs this step only when the home workspace is editing that bookmark.
 
-The merge flow then forgets the source Jujutsu workspace and removes its Treq metadata.
+The merge flow then forgets the source managed workspace and removes its Treq metadata.
 
 ## Local State and Persistence
 
@@ -171,7 +171,7 @@ Cache records are derived data. Deleting them can cause extra work on the next l
 
 ## Ownership Boundaries
 
-Git and Jujutsu own repository history. Treq's databases own interface metadata and cached views of that history. React and the PTY manager own the current application session.
+Git owns remote transport and the object store users authenticate against. Colocated Jujutsu owns the revision operations that power workspace stacks and automatic rebases. Treq's databases own interface metadata and cached views of that history. React and the PTY manager own the current application session.
 
 This boundary determines recovery. Repository history survives without Treq, local review data requires `.treq/local.db`, and live terminal state ends with the process.
 
@@ -185,7 +185,7 @@ Agent sessions use the same terminal path. Treq builds an agent command, injects
 
 The `treq-napi` crate exposes the Rust backend as a Node native addon. Frontend integration tests replace Tauri dispatch with this bridge.
 
-The tests render the real React application and call the same Rust core against temporary Jujutsu repositories. They exercise repository behavior without launching a desktop window.
+The tests render the real React application and call the same Rust core against temporary colocated repositories. They exercise repository behavior without launching a desktop window.
 
 ## Concurrency Boundaries
 
@@ -195,6 +195,7 @@ Long-running repository work stays behind asynchronous commands. The frontend re
 
 ## Learn More
 
+- [Using Treq with a Git Repository](/docs/tutorials/using-treq-with-git-repo)
 - [Workspaces](/docs/concepts/workspaces)
 - [Commit Management](/docs/concepts/commit-management)
 - [Agent Sessions](/docs/concepts/agent-sessions)

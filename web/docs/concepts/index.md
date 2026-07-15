@@ -6,7 +6,7 @@ sidebar_position: 1
 
 _How Treq keeps each task separate and gives it commits, reviews, and terminals._
 
-Treq organizes work around Jujutsu workspaces. Each workspace has its own files, commit history, review, and terminal sessions.
+Treq organizes work around workspaces inside your Git repository. Each workspace has its own files, commit history, review, and terminal sessions. You manage that work through Treq. You do not need Jujutsu knowledge for the day-to-day flow.
 
 ## Core Concepts
 

@@ -6,19 +6,31 @@ sidebar_position: 2
 
 _How Treq creates, splits, and reviews commits inside a workspace._
 
-Treq runs commit operations inside the active Jujutsu workspace. A workspace can contain uncommitted changes, one commit, or a stack of commits above its target. Other workspaces keep their own working copies, so pending changes stay isolated.
+Treq runs commit operations inside the active workspace. A workspace can contain uncommitted changes, one commit, or a stack of commits above its target. Other workspaces keep their own working copies, so pending changes stay isolated.
+
+You commit and review through the Treq UI. You do not need Jujutsu commands for this flow.
 
 ## Workspace Scope
 
-The file tree, diff viewer, commit history, and review tools all read from the selected workspace path. Each workspace has an independent working copy and shares repository history through the colocated Jujutsu repository.
-
-Jujutsu has no Git staging index. Treq provides a file selection layer in the interface instead. When you select files, Treq splits those files into a new commit and leaves the other changes in the working copy.
+The file tree, diff viewer, commit history, and review tools all read from the selected workspace path. Each workspace has an independent working copy.
 
 {/* TODO: Document hunk-level commit selection here if the commit UI gains support for it. Line selection currently applies to review comments and copying, not commit creation. */}
 
+## Git and Jujutsu
+
+Treq opens a Git repository and places [Jujutsu](https://jj-vcs.github.io/jj/latest/) beside it in colocated mode. Commits you create in the UI are Git-compatible revisions. They appear in `git log` and travel through normal Git remotes when you push.
+
+Jujutsu supplies the revision operations Treq uses for commits, splits, and stack updates. Treq runs those operations for you. You do not need `jj` commands to commit from the app.
+
+Treq does not expose a Git staging index. File selection in the commit form maps to a Jujutsu split when you commit selected files only. Unselected changes stay in the working copy.
+
+You can still run `git` in a workspace terminal. Those commands see the same object store Treq writes to. Mixing manual Git or `jj` commands with Treq in the same workspace is possible but harder to reason about. Prefer Treq for commits and stack updates. Reserve the `jj` CLI for intentional debugging.
+
+When a target branch moves, Treq rebases dependent workspace commits through Jujutsu. See [Workspaces](/docs/concepts/workspaces) for stack and rebase behavior.
+
 ## Commit Creation
 
-The commit form requires a message of no more than 500 characters. If you selected files, Treq commits those files through a Jujutsu split operation. If you selected no files, Treq commits every pending change in the working copy.
+The commit form requires a message of no more than 500 characters. If you selected files, Treq commits those files through a split operation. If you selected no files, Treq commits every pending change in the working copy.
 
 File selection lets you divide a large agent change into reviewable commits. Select files that belong to one logical change, commit them, then repeat with the files left behind.
 
@@ -26,7 +38,13 @@ File selection lets you divide a large agent change into reviewable commits. Sel
 
 Treq shows commits relative to the workspace target. This makes the current stack visible without requiring you to inspect bookmarks or revisions from the command line. The history separates committed work from pending file changes.
 
-The review interface can show the cumulative workspace diff or one commit. Comments attach to files and line ranges in the visible diff.
+## Commit-Level Diff
+
+Treq can show the diff for one commit instead of the cumulative workspace changes above the target. Use this when a stack is easier to inspect one revision at a time.
+
+Selecting a commit changes the visible diff in the review interface. Comments attach to files and line ranges in that view.
+
+Conflict state belongs to the workspace, not a single commit. A commit view can explain where a conflicting change came from, while the workspace diff shows the conflict that must be resolved.
 
 ## Manipulation Model
 
@@ -36,7 +54,6 @@ Commit operations update the workspace history. Treq then refreshes derived stat
 |---|---|---|
 | Create commit | Save selected changes with a message | Adds a new commit above the workspace target |
 | Split changes | Commit selected files | Leaves unselected files in the working copy |
-| Review commit | Inspect one commit instead of the cumulative diff | Changes the visible diff context |
 | Merge workspace | Integrate workspace commits into the target | Moves completed work out of the workspace flow |
 
 ## Safety Boundaries
@@ -51,4 +68,6 @@ Pending changes can prevent Treq from synchronizing a working copy after a rebas
 
 - [Committing Changes](/docs/tutorials/committing-changes)
 - [Code Review Workflow](/docs/tutorials/code-review-workflow)
+- [Changes and Reviews](/docs/concepts/changes-and-reviews)
 - [Workspaces](/docs/concepts/workspaces)
+- [Under the Hood](/docs/under-the-hood)
