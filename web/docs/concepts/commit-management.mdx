@@ -12,11 +12,21 @@ You commit and review through the Treq UI. You do not need Jujutsu commands for 
 
 ## Workspace Scope
 
-The file tree, diff viewer, commit history, and review tools all read from the selected workspace path. Each workspace has an independent working copy and shares repository history through the colocated Git and Jujutsu store.
-
-Treq does not use a Git staging index in the UI. It provides a file selection layer instead. When you select files, Treq splits those files into a new commit and leaves the other changes in the working copy.
+The file tree, diff viewer, commit history, and review tools all read from the selected workspace path. Each workspace has an independent working copy.
 
 {/* TODO: Document hunk-level commit selection here if the commit UI gains support for it. Line selection currently applies to review comments and copying, not commit creation. */}
+
+## Git and Jujutsu
+
+Treq opens a Git repository and places [Jujutsu](https://jj-vcs.github.io/jj/latest/) beside it in colocated mode. Commits you create in the UI are Git-compatible revisions. They appear in `git log` and travel through normal Git remotes when you push.
+
+Jujutsu supplies the revision operations Treq uses for commits, splits, and stack updates. Treq runs those operations for you. You do not need `jj` commands to commit from the app.
+
+Treq does not expose a Git staging index. File selection in the commit form maps to a Jujutsu split when you commit selected files only. Unselected changes stay in the working copy.
+
+You can still run `git` in a workspace terminal. Those commands see the same object store Treq writes to. Mixing manual Git or `jj` commands with Treq in the same workspace is possible but harder to reason about. Prefer Treq for commits and stack updates. Reserve the `jj` CLI for intentional debugging.
+
+When a target branch moves, Treq rebases dependent workspace commits through Jujutsu. See [Workspaces](/docs/concepts/workspaces) for stack and rebase behavior.
 
 ## Commit Creation
 
@@ -60,3 +70,4 @@ Pending changes can prevent Treq from synchronizing a working copy after a rebas
 - [Code Review Workflow](/docs/tutorials/code-review-workflow)
 - [Changes and Reviews](/docs/concepts/changes-and-reviews)
 - [Workspaces](/docs/concepts/workspaces)
+- [Under the Hood](/docs/under-the-hood)
