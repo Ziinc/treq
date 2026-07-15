@@ -272,9 +272,9 @@ export async function buildRoadmapScene(
   const scene = new Scene();
   scene.fog = null;
 
-  const camera = new PerspectiveCamera(28, 1, 0.1, 100);
-  camera.position.set(0, 1.45, 4.15);
-  camera.lookAt(0, 0.7, 0);
+  const camera = new PerspectiveCamera(26, 1, 0.1, 100);
+  camera.position.set(0, 1.25, 3.7);
+  camera.lookAt(0, 0.65, 0);
 
   scene.add(new AmbientLight(0xffffff, options.dark ? 0.45 : 0.7));
   scene.add(new HemisphereLight(options.dark ? 0x1e3a5f : 0xdbeafe, options.dark ? 0x0f172a : 0xf8fafc, 0.7));
@@ -359,8 +359,8 @@ export async function buildRoadmapScene(
     clock.t += 0.016;
 
     camera.position.x = 0;
-    camera.position.y = 1.45 + Math.sin(clock.t * 0.7) * (options.reducedMotion ? 0 : 0.02);
-    camera.lookAt(0, 0.7, 0);
+    camera.position.y = 1.25 + Math.sin(clock.t * 0.7) * (options.reducedMotion ? 0 : 0.02);
+    camera.lookAt(0, 0.65, 0);
 
     pedestals.forEach((m, i) => {
       const focus = i === active && plannedFlags[i] ? 1 : 0;
