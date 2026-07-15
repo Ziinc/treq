@@ -2,7 +2,7 @@
 
 ## Overview
 
-Treq is a full-stack **Tauri v2 desktop application** — a Git-native workspace and review manager. Colocated Jujutsu under the hood enables automatic rebasing of workspace stacks. The frontend is React/TypeScript rendered in a WebView; the backend is Rust, exposed to the frontend via Tauri commands. A native Node addon (NAPI) bridges the two sides for testing.
+Treq is a full-stack **Tauri v2 desktop application** — a Jujutsu (jj) VCS workspace manager. The frontend is React/TypeScript rendered in a WebView; the backend is Rust, exposed to the frontend via Tauri commands. A native Node addon (NAPI) bridges the two sides for testing.
 
 ---
 
