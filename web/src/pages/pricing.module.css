@@ -255,6 +255,18 @@
   gap: 0.5rem;
 }
 
+.comparisonFeaturePill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: var(--ifm-color-emphasis-100);
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ifm-font-color-base);
+}
+
 .comparisonDataCell {
   text-align: center;
 }
