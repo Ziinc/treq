@@ -12,7 +12,7 @@ const PRICING_SCHEMA = {
   '@type': 'Product',
   name: 'Treq',
   description:
-    'AI workspace manager for developers. Free for public GitHub repos. Pro adds private repos and merge queue.',
+    'AI workspace manager for developers. Free for open source developers on public GitHub repos. Pro adds private repos and merge queue.',
   url: 'https://treq.dev/pricing',
   brand: {
     '@type': 'Brand',
@@ -25,7 +25,7 @@ const PRICING_SCHEMA = {
       price: '0',
       priceCurrency: 'USD',
       description:
-        'Desktop app with GitHub integration for public repositories. No merge queue.',
+        'Desktop app for open source developers, with GitHub integration for public repositories. No merge queue.',
     },
     {
       '@type': 'Offer',
@@ -97,7 +97,7 @@ const FAQ_ITEMS = [
   {
     question: 'Who is Free for?',
     answer:
-      'Free is for developers who want the desktop workspace manager and only need GitHub on public repositories. GitHub integration is coming soon. Open source projects fit this plan.',
+      'Free covers open source developers. You get the full desktop workspace manager and GitHub integration for public repositories. GitHub integration is coming soon.',
   },
   {
     question: 'What does Pro add?',
@@ -151,13 +151,14 @@ function PlansSection(): ReactNode {
         <Heading as="h2" className={styles.planName}>
           Free
         </Heading>
+        <p className={styles.planAudience}>For open source developers</p>
         <p className={styles.planPrice}>
           <span className={styles.priceAmount}>$0</span>
         </p>
         <p className={styles.planSummary}>
-          Use the full desktop app at no cost. Free will include GitHub for
-          public repositories only. GitHub integration and merge queue are coming
-          soon.
+          Free covers open source developers. You get the full desktop app and
+          GitHub for public repositories only. GitHub integration and merge queue
+          are coming soon.
         </p>
         <FeatureList features={FREE_FEATURES} />
         <Link
@@ -299,7 +300,7 @@ export default function PricingPage(): ReactNode {
   return (
     <Layout
       title="Pricing"
-      description="Treq pricing. Free for public GitHub repos. Pro is $15/user/month for all repos and merge queue."
+      description="Treq pricing. Free for open source developers on public GitHub repos. Pro is $15/user/month for all repos and merge queue."
     >
       <Head>
         <script type="application/ld+json">
@@ -316,8 +317,9 @@ export default function PricingPage(): ReactNode {
             queue.
           </p>
           <p className={styles.intro}>
-            The Treq desktop app is free and open source. You run it on your
-            machine. Cloud features are optional and billed per user.
+            The Treq desktop app is free and open source. The Free plan covers
+            open source developers on public GitHub repos. Pro is for private
+            repos and merge queue.
           </p>
         </header>
 
