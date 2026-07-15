@@ -263,7 +263,6 @@ export async function buildRoadmapScene(
     CylinderGeometry,
     SphereGeometry,
     MeshStandardMaterial,
-    MathUtils,
   } = THREE;
 
   const quarters: QuarterSlot[] = options.year.quarters;
@@ -275,9 +274,9 @@ export async function buildRoadmapScene(
   const fogColor = options.dark ? 0x0b1220 : 0xe8f3ff;
   scene.fog = new Fog(fogColor, 14, 28);
 
-  const camera = new PerspectiveCamera(32, 1, 0.1, 100);
-  camera.position.set(0, 2.05, 5.4);
-  camera.lookAt(0, 0.85, 0);
+  const camera = new PerspectiveCamera(30, 1, 0.1, 100);
+  camera.position.set(0, 1.75, 4.6);
+  camera.lookAt(0, 0.75, 0);
 
   scene.add(new AmbientLight(0xffffff, options.dark ? 0.45 : 0.7));
   scene.add(new HemisphereLight(options.dark ? 0x1e3a5f : 0xdbeafe, options.dark ? 0x0f172a : 0xf8fafc, 0.7));
@@ -336,7 +335,6 @@ export async function buildRoadmapScene(
   }
 
   let active = firstPlannedIndex(options.year);
-  let targetCamX: number = NODE_X[active];
   let disposed = false;
   let autoTimer: ReturnType<typeof setInterval> | null = null;
   let raf = 0;
@@ -353,7 +351,6 @@ export async function buildRoadmapScene(
 
   const setActive = (index: number) => {
     active = ((index % 4) + 4) % 4;
-    targetCamX = NODE_X[active];
     pedestals.forEach((m, i) => setGroupDim(m, i === active, plannedFlags[i]));
     options.onActiveChange(active);
   };
@@ -363,16 +360,15 @@ export async function buildRoadmapScene(
     raf = requestAnimationFrame(animate);
     clock.t += 0.016;
 
-    const camX = MathUtils.damp(camera.position.x, targetCamX * 0.22, 4, 0.016);
-    camera.position.x = camX;
-    camera.position.y = 2.0 + Math.sin(clock.t * 0.7) * (options.reducedMotion ? 0 : 0.03);
-    camera.lookAt(targetCamX * 0.4, 0.8, 0);
+    camera.position.x = 0;
+    camera.position.y = 1.75 + Math.sin(clock.t * 0.7) * (options.reducedMotion ? 0 : 0.025);
+    camera.lookAt(0, 0.75, 0);
 
     pedestals.forEach((m, i) => {
       const focus = i === active && plannedFlags[i] ? 1 : 0;
       const bob = options.reducedMotion ? 0 : Math.sin(clock.t * 2 + i) * 0.03 * focus;
       m.position.y = bob;
-      m.rotation.y = options.reducedMotion ? 0 : Math.sin(clock.t * 0.8 + i) * 0.08 * focus;
+      m.rotation.y = options.reducedMotion ? 0 : Math.sin(clock.t * 0.8 + i) * 0.06 * focus;
 
       m.traverse((obj) => {
         const mesh = obj as Mesh;
@@ -404,11 +400,11 @@ export async function buildRoadmapScene(
       const planned = plannedFlags[i];
       if (!planned) {
         mat.emissiveIntensity = 0;
-        node.scale.setScalar(i === active ? 1.15 : 0.95);
+        node.scale.setScalar(i === active ? 1.2 : 0.95);
         return;
       }
-      mat.emissiveIntensity = i === active ? 0.75 : 0.12;
-      node.scale.setScalar(i === active ? 1.35 : 1);
+      mat.emissiveIntensity = i === active ? 0.8 : 0.1;
+      node.scale.setScalar(i === active ? 1.4 : 1);
     });
 
     renderer.render(scene, camera);
