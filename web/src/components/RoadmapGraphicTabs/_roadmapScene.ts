@@ -272,9 +272,9 @@ export async function buildRoadmapScene(
   const scene = new Scene();
   scene.fog = null;
 
-  const camera = new PerspectiveCamera(26, 1, 0.1, 100);
-  camera.position.set(0, 1.25, 3.7);
-  camera.lookAt(0, 0.65, 0);
+  const camera = new PerspectiveCamera(32, 1, 0.1, 100);
+  camera.position.set(0, 1.85, 5.5);
+  camera.lookAt(0, 0.95, 0);
 
   scene.add(new AmbientLight(0xffffff, options.dark ? 0.45 : 0.7));
   scene.add(new HemisphereLight(options.dark ? 0x1e3a5f : 0xdbeafe, options.dark ? 0x0f172a : 0xf8fafc, 0.7));
