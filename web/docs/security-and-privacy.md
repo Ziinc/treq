@@ -16,9 +16,9 @@ Treq does not collect **telemetry**. The application does not send **feature usa
 
 ## Local Data
 
-The base Treq application stores nothing on remote servers. Workspace checkouts, review comments, terminal session metadata, and app preferences live in local files on your computer.
+The base Treq app stores nothing on remote servers. Workspace checkouts, review comments, terminal session metadata, and app preferences live in local files on your computer.
 
-Repository history remains in your Git and Jujutsu stores. Treq metadata lives under `.treq` inside the repository and in the application data directory. See [Under the Hood](/docs/under-the-hood) for the storage layout.
+Repository history remains in your Git and Jujutsu stores. Treq metadata lives under `.treq` inside the repository and in the app data directory. See [Under the Hood](/docs/under-the-hood) for the storage layout.
 
 When Treq connects to a remote, the connection goes directly to that host. Traffic does not pass through Treq servers.
 
@@ -38,7 +38,7 @@ This analytics applies only to the website. Visiting the docs does not connect t
 
 Treq is fully open source. You can read every line of the desktop app, CLI, and documentation site in the [public repository](https://github.com/Ziinc/treq).
 
-Audit the code yourself, or follow the public history of changes. Claims about local storage, telemetry, and CLI behavior are verifiable in source.
+Audit the code yourself, or follow the public history of changes. Claims about local storage, telemetry, and CLI behavior are checkable in source.
 
 ## Learn More
 
