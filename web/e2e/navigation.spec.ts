@@ -62,7 +62,7 @@ test.describe('Navbar navigation', () => {
     await page.goto('/');
     await nav(page).getByRole('link', { name: 'Learn' }).click();
     await nav(page).getByRole('link', { name: 'Treq Logo' }).click();
-    await expect(page.getByRole('heading', { name: 'AI Workspace Manager', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Stacking Agent Development Environment/, level: 1 })).toBeVisible();
   });
 
   test('GitHub link points to the correct repo', async ({ page }) => {
@@ -213,7 +213,7 @@ test.describe('Cross-section navigation', () => {
     await nav(page).getByRole('link', { name: 'Docs' }).click();
     await sidebar(page).getByRole('link', { name: 'Installation' }).click();
     await nav(page).getByRole('link', { name: 'Treq Logo' }).click();
-    await expect(page.getByRole('heading', { name: 'AI Workspace Manager', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Stacking Agent Development Environment/, level: 1 })).toBeVisible();
   });
 });
 

@@ -36,7 +36,7 @@ function HomepageHeader() {
 
         <div className={styles.heroMain}>
           <Heading as="h1" className={styles.heroTitle}>
-            <span className={styles.heroAccent}>AI Workspace Manager</span>
+            <span className={styles.heroAccent}>Stacking Agent Development Environment</span>
             {' '}for busy developers
           </Heading>
           <p className={styles.heroEyebrow}>
@@ -319,7 +319,7 @@ const SOFTWARE_APP_SCHEMA = {
   '@type': 'SoftwareApplication',
   name: 'Treq',
   description:
-    'AI Workspace Manager for busy developers. The Open Source Graphite Alternative.',
+    'Stacking Agent Development Environment (ADE) for busy developers. The Open Source Graphite Alternative.',
   url: 'https://treq.dev',
   applicationCategory: 'DeveloperApplication',
   operatingSystem: 'macOS',
