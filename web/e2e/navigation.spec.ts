@@ -35,6 +35,14 @@ test.describe('Navbar navigation', () => {
     await expect(nav(page).getByRole('link', { name: 'GitHub' }))
       .toHaveAttribute('href', 'https://github.com/Ziinc/treq');
   });
+
+  test('Pricing link navigates to pricing page', async ({ page }) => {
+    await page.goto('/');
+    await nav(page).getByRole('link', { name: 'Pricing' }).click();
+    await expect(page.getByRole('heading', { name: 'Pricing', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Free', level: 2 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Pro', level: 2 })).toBeVisible();
+  });
 });
 
 test.describe('Docs sidebar navigation', () => {
@@ -185,5 +193,11 @@ test.describe('Footer navigation', () => {
     await page.goto('/');
     await expect(footer(page).getByRole('link', { name: 'GitHub' }))
       .toHaveAttribute('href', 'https://github.com/Ziinc/treq');
+  });
+
+  test('Pricing link navigates to pricing page', async ({ page }) => {
+    await page.goto('/');
+    await footer(page).getByRole('link', { name: 'Pricing' }).click();
+    await expect(page.getByRole('heading', { name: 'Pricing', level: 1 })).toBeVisible();
   });
 });

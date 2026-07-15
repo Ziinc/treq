@@ -183,6 +183,11 @@ const config: Config = {
           position: 'left',
         },
         {
+          to: '/pricing',
+          label: 'Pricing',
+          position: 'left',
+        },
+        {
           to: '/changelog',
           label: 'Changelog',
           position: 'left',
@@ -227,6 +232,10 @@ const config: Config = {
         {
           title: 'More',
           items: [
+            {
+              label: 'Pricing',
+              to: '/pricing',
+            },
             {
               label: 'GitHub',
               href: 'https://github.com/Ziinc/treq',
