@@ -12,20 +12,17 @@ _Keep a person responsible for merge while AI drafts code and helps find defects
 
 ## Introduction
 
-Coding agents write patches quickly. Shipping those patches safely still depends on a review system with a human decision at the end. **Human-in-the-loop AI code review** is that system: automated checks and AI review narrow the search for defects, then a person accepts, rejects, or sends the change back.
+Coding agents write patches quickly. Shipping those patches safely still depends on a review system with a human decision at the end. **[Human-in-the-loop](/learn/concepts/ai-engineering/human-in-the-loop-development) AI code review** is that system: automated checks and AI review narrow the search for defects, then a person accepts, rejects, or sends the change back.
 
-The common failure mode is skipping the human step because the diff looks plausible and the tests pass. Code that looks right is not the same as code that is right. The model predicts plausible text. It does not own the product outcome.
+The common failure mode is skipping the human step because the diff looks plausible and the tests pass.
 
 This article defines the review loop, risk classes, the split between AI review and human review, and the metrics that show whether the loop is working.
 
 ## Understanding the Concept
 
-**Human-in-the-loop review** means a required checkpoint where a person decides whether agent output may merge. Tools can advise. They cannot replace ownership of the change.
+[Human-in-the-loop development](/learn/concepts/ai-engineering/human-in-the-loop-development) keeps a person responsible for decisions that tools cannot own. Applied to agent output, that means **code review of agent changes** with a required human checkpoint before merge. Tools can advise. They cannot replace ownership of the change.
 
-<DefinitionCard
-  term="Human-in-the-Loop AI Code Review"
-  definition="A review workflow where automated checks and AI findings prepare a change, and a person remains responsible for accepting, rejecting, or requesting revisions before merge."
-/>
+The practice combines two ideas. Human-in-the-loop sets where judgment stays with a person. Code review is how that judgment is applied to a diff. Together they form a gate for agent-generated patches: prepare the change with checks and optional AI findings, then have a reviewer decide whether it may land.
 
 Treat each change as belonging to a risk class. The class sets how much attention the human pass needs.
 
@@ -36,7 +33,7 @@ Treat each change as belonging to a risk class. The class sets how much attentio
 | High | Auth, payments, migrations, shared libraries | Specialist review, explicit acceptance criteria |
 | Critical | Production data paths, security controls | Slow review, threat model, no rubber-stamping |
 
-AI review and human review solve different problems. AI review is strong at spotting familiar local mistakes: unchecked nulls, missing error paths, obvious injection patterns, and tests that do not cover a changed branch. Human review decides whether the change solves the right problem, fits the architecture, and creates operational risk outside the diff.
+AI review and human review solve different problems. AI review is strong at spotting familiar local mistakes: unchecked nulls, missing error paths, obvious injection patterns, and tests that do not cover a changed branch. Human review of agent output is similar to ordinary human code review. The threshold for "good enough" is substantially different, especially for high and critical risk classes, because plausible agent code can still miss intent, architecture fit, and operational risk outside the diff.
 
 <DefinitionCard
   term="Acceptance Criteria"
@@ -52,12 +49,18 @@ agent implements in an isolated workspace
         ↓
 deterministic checks (build, lint, tests)
         ↓
-AI review pass on configured concerns
+AI review pass on configured concerns (optional)
         ↓
 human review of intent, design, and residual risk
         ↓
 approve, request changes, or reject and restart
 ```
+
+{/* TODO: Convert the review loop above into a diagram. */}
+
+Deterministic checks matter more than they look. Build, lint, and tests remove whole classes of defects before a person opens the diff. That lowers cognitive load in human review and shrinks the residual risk the reviewer must catch by hand.
+
+AI review is optional. When you run it, configure a different model from the one that wrote the code. Different models have different blind spots, so a second model is more likely to notice mistakes the authoring model missed.
 
 Passing one stage does not certify the next. Tests prove the cases they cover. AI review proves nothing beyond the findings it can support. Human approval is the merge gate.
 
@@ -73,7 +76,7 @@ When the agent finishes, compare three records:
 
 Disagreement between those records is a scope bug. Stop and correct the task instead of reviewing a solution to the wrong problem.
 
-Run deterministic tools first. Then run a focused AI review pass with a narrow job, such as authorization mistakes or missing error handling. Triage every finding as confirmed, rejected, or unresolved. Fix confirmed issues before the human pass.
+Run deterministic tools first. Then, if you use AI review, run a focused pass with a narrow job such as authorization mistakes or missing error handling. Triage every finding as confirmed, rejected, or unresolved. Fix confirmed issues before the human pass.
 
 Human reviewers should:
 
@@ -96,7 +99,7 @@ Keep merge and deploy permissions away from the agent that wrote the code. Gener
 
 ## Scaling and Operational Considerations
 
-Review capacity caps how many agents you should run. When diffs wait too long, reviewers skim. When reviewers skim, defects ship. Reduce concurrency before you add more agents.
+Review capacity caps how many agents you should run. Reviewers skim when diffs get too long, and defects get shipped. Prefer small PRs that are easy to digest. Do not compensate with a shotgun stream of tiny PRs that overwhelms the queue.
 
 Useful metrics:
 
@@ -110,10 +113,11 @@ Useful metrics:
 
 Use metrics to improve prompts, risk classification, and review ownership. Do not use them to reward merge volume.
 
-For AI-generated pull requests on a hosting platform, apply the same loop: checks, AI pass, human approval. See [Review AI-Generated PRs](/learn/how-to/review-ai-generated-prs) for the pull-request-specific checklist.
+For [AI-generated pull requests](/learn/how-to/review-ai-generated-prs) on a hosting platform, apply the same loop: checks, optional AI pass, human approval.
 
 ## Next Steps
 
+- [What is Human-in-the-Loop Development?](/learn/concepts/ai-engineering/human-in-the-loop-development): where human judgment stays in the loop
 - [What is AI Code Review?](/learn/concepts/ai-engineering/ai-code-review): how AI review finds candidate defects
 - [Human-in-the-Loop Review Workflow](/learn/workflows/git/human-in-the-loop-review): step-by-step review practice
 - [Review AI-Generated PRs](/learn/how-to/review-ai-generated-prs): checklist for agent pull requests
