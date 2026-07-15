@@ -253,7 +253,6 @@ export async function buildRoadmapScene(
   const {
     WebGLRenderer,
     Scene,
-    Fog,
     PerspectiveCamera,
     AmbientLight,
     DirectionalLight,
@@ -271,12 +270,11 @@ export async function buildRoadmapScene(
   renderer.setClearColor(0x000000, 0);
 
   const scene = new Scene();
-  const fogColor = options.dark ? 0x0b1220 : 0xe8f3ff;
-  scene.fog = new Fog(fogColor, 14, 28);
+  scene.fog = null;
 
-  const camera = new PerspectiveCamera(30, 1, 0.1, 100);
-  camera.position.set(0, 1.75, 4.6);
-  camera.lookAt(0, 0.75, 0);
+  const camera = new PerspectiveCamera(28, 1, 0.1, 100);
+  camera.position.set(0, 1.45, 4.15);
+  camera.lookAt(0, 0.7, 0);
 
   scene.add(new AmbientLight(0xffffff, options.dark ? 0.45 : 0.7));
   scene.add(new HemisphereLight(options.dark ? 0x1e3a5f : 0xdbeafe, options.dark ? 0x0f172a : 0xf8fafc, 0.7));
@@ -290,15 +288,15 @@ export async function buildRoadmapScene(
   scene.add(fill);
 
   const rail = new Mesh(
-    new CylinderGeometry(0.055, 0.055, 9.2, 16),
+    new CylinderGeometry(0.045, 0.045, 9.2, 16),
     new MeshStandardMaterial({
-      color: options.dark ? 0x334155 : 0xcbd5e1,
-      roughness: 0.6,
-      metalness: 0.2,
+      color: options.dark ? 0x475569 : 0x94a3b8,
+      roughness: 0.65,
+      metalness: 0.15,
     }),
   );
   rail.rotation.z = Math.PI / 2;
-  rail.position.set(0, 0.18, 0);
+  rail.position.set(0, 0.35, 0);
   scene.add(rail);
 
   const pedestals: Group[] = [];
@@ -312,7 +310,7 @@ export async function buildRoadmapScene(
     pedestal.userData.planned = planned;
 
     const node = new Mesh(
-      new SphereGeometry(0.14, 18, 18),
+      new SphereGeometry(0.13, 18, 18),
       new MeshStandardMaterial({
         color: planned ? 0x3b9cff : options.dark ? 0x64748b : 0x94a3b8,
         roughness: 0.3,
@@ -321,12 +319,12 @@ export async function buildRoadmapScene(
         emissiveIntensity: planned ? 0.2 : 0,
       }),
     );
-    node.position.y = 0.18;
+    node.position.y = 0.35;
     pedestal.add(node);
     nodes.push(node);
 
     const icon = buildIcon(THREE, quarters[i].icon, options.dark);
-    icon.position.y = 0.28;
+    icon.position.y = 0.48;
     icon.scale.setScalar(planned ? 0.95 : 0.85);
     pedestal.add(icon);
 
@@ -361,8 +359,8 @@ export async function buildRoadmapScene(
     clock.t += 0.016;
 
     camera.position.x = 0;
-    camera.position.y = 1.75 + Math.sin(clock.t * 0.7) * (options.reducedMotion ? 0 : 0.025);
-    camera.lookAt(0, 0.75, 0);
+    camera.position.y = 1.45 + Math.sin(clock.t * 0.7) * (options.reducedMotion ? 0 : 0.02);
+    camera.lookAt(0, 0.7, 0);
 
     pedestals.forEach((m, i) => {
       const focus = i === active && plannedFlags[i] ? 1 : 0;
