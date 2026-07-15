@@ -27,6 +27,28 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             Ok(Value::String(dir))
         }
 
+        // ── GitHub helpers ────────────────────────────────────────────────
+        "get_git_remote_url" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let info = treq_lib::github::get_git_remote_url_impl(&repo_path)?;
+            serde_json::to_value(info).map_err(|e| e.to_string())
+        }
+
+        "get_pr_info_via_gh" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let branch_name = get_str(&args, "branchName")?;
+            let gh = treq_lib::binary_paths::detect_binary("gh")
+                .ok_or_else(|| "gh CLI not found".to_string())?;
+            let extended_path = treq_lib::binary_paths::get_extended_path();
+            let info = treq_lib::github::get_pr_info_via_gh_impl(
+                &gh,
+                &repo_path,
+                &branch_name,
+                &extended_path,
+            )?;
+            serde_json::to_value(info).map_err(|e| e.to_string())
+        }
+
         // ── Settings ──────────────────────────────────────────────────────
         "get_setting" => {
             let key = get_str(&args, "key")?;

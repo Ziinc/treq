@@ -8,6 +8,7 @@ pub mod conflict_markers;
 pub mod core;
 pub mod db;
 pub mod file_indexer;
+pub mod github;
 pub mod jj;
 pub mod local_db;
 pub mod pty;
