@@ -503,6 +503,7 @@ pub fn run() {
             commands::rebase_home_repo_branch,
             commands::dry_run_home_repo_rebase,
             commands::get_git_remote_url,
+            commands::get_pr_info_via_gh,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

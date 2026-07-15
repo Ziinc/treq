@@ -327,6 +327,17 @@ export interface GitRemoteInfo {
 	full_name: string;
 }
 
+export interface PrInfo {
+	number: number;
+	title: string;
+	/** "OPEN" | "CLOSED" | "MERGED" */
+	state: string;
+	url: string;
+	head_ref_name: string;
+	base_ref_name: string;
+	merge_state_status: string | null;
+}
+
 export type QueueEntryStatus =
 	| "queued"
 	| "testing"
