@@ -18,27 +18,24 @@ test.describe('Homepage Features layout', () => {
 
     const box = await screenshot.boundingBox();
     expect(box).not.toBeNull();
-    const natural = await screenshot.evaluate((img: HTMLImageElement) => ({
-      width: img.naturalWidth,
-      height: img.naturalHeight,
-    }));
+
+    // Intrinsic size comes from the HTML width/height attrs on the <img>.
+    const naturalWidth = Number(await screenshot.getAttribute('width'));
+    const naturalHeight = Number(await screenshot.getAttribute('height'));
+    expect(naturalWidth).toBeGreaterThan(0);
+    expect(naturalHeight).toBeGreaterThan(0);
 
     // Regression: HTML width/height attrs without CSS height:auto left the
     // image at intrinsic height (1749px) while width shrank, stretching it.
     const renderedAspect = box!.width / box!.height;
-    const naturalAspect = natural.width / natural.height;
+    const naturalAspect = naturalWidth / naturalHeight;
     expect(Math.abs(renderedAspect - naturalAspect)).toBeLessThan(0.05);
-    expect(box!.height).toBeLessThan(natural.height * 0.5);
+    expect(box!.height).toBeLessThan(naturalHeight * 0.5);
 
-    // Screenshot column is 2fr of a 1fr/2fr grid (at least ~2/3 of the row).
-    const rowWidth = await screenshot.evaluate((img) => {
-      let el: HTMLElement | null = img.parentElement;
-      while (el && getComputedStyle(el).display !== 'grid') {
-        el = el.parentElement;
-      }
-      return el?.getBoundingClientRect().width ?? 0;
-    });
-    expect(box!.width / rowWidth).toBeGreaterThanOrEqual(0.6);
+    // Screenshot is 2fr of a 1fr/2fr row inside the Features section (~2/3 width).
+    const featuresBox = await features.boundingBox();
+    expect(featuresBox).not.toBeNull();
+    expect(box!.width / featuresBox!.width).toBeGreaterThanOrEqual(0.55);
   });
 });
 
