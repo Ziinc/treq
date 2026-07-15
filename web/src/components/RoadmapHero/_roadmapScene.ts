@@ -12,6 +12,12 @@ type ThreeModule = typeof import('three/src/Three.js');
 const NODE_X = [-3.9, -1.3, 1.3, 3.9] as const;
 const ACTIVE_MS = 4200;
 
+/** Horizontal positions for HTML quarter labels, matching NODE_X. */
+export const QUARTER_LABEL_LEFT = NODE_X.map((x) => {
+  const t = (x - NODE_X[0]) / (NODE_X[3] - NODE_X[0]);
+  return `${12 + t * 76}%`;
+});
+
 function makeMat(
   THREE: ThreeModule,
   color: number,
@@ -254,7 +260,6 @@ export async function buildRoadmapScene(
     HemisphereLight,
     Group,
     Mesh,
-    BoxGeometry,
     CylinderGeometry,
     SphereGeometry,
     MeshStandardMaterial,
@@ -268,11 +273,11 @@ export async function buildRoadmapScene(
 
   const scene = new Scene();
   const fogColor = options.dark ? 0x0b1220 : 0xe8f3ff;
-  scene.fog = new Fog(fogColor, 11, 24);
+  scene.fog = new Fog(fogColor, 14, 28);
 
-  const camera = new PerspectiveCamera(38, 1, 0.1, 100);
-  camera.position.set(0, 2.55, 7.6);
-  camera.lookAt(0, 0.95, 0);
+  const camera = new PerspectiveCamera(32, 1, 0.1, 100);
+  camera.position.set(0, 2.05, 5.4);
+  camera.lookAt(0, 0.85, 0);
 
   scene.add(new AmbientLight(0xffffff, options.dark ? 0.45 : 0.7));
   scene.add(new HemisphereLight(options.dark ? 0x1e3a5f : 0xdbeafe, options.dark ? 0x0f172a : 0xf8fafc, 0.7));
@@ -285,21 +290,8 @@ export async function buildRoadmapScene(
   fill.position.set(-5, 3, -2);
   scene.add(fill);
 
-  const ground = new Mesh(
-    new BoxGeometry(16, 0.08, 4.5),
-    new MeshStandardMaterial({
-      color: options.dark ? 0x111827 : 0xffffff,
-      roughness: 0.92,
-      metalness: 0.05,
-      transparent: true,
-      opacity: options.dark ? 0.55 : 0.65,
-    }),
-  );
-  ground.position.y = -0.04;
-  scene.add(ground);
-
   const rail = new Mesh(
-    new CylinderGeometry(0.06, 0.06, 9.2, 16),
+    new CylinderGeometry(0.055, 0.055, 9.2, 16),
     new MeshStandardMaterial({
       color: options.dark ? 0x334155 : 0xcbd5e1,
       roughness: 0.6,
@@ -309,20 +301,6 @@ export async function buildRoadmapScene(
   rail.rotation.z = Math.PI / 2;
   rail.position.set(0, 0.18, 0);
   scene.add(rail);
-
-  const progress = new Mesh(
-    new CylinderGeometry(0.075, 0.075, 1, 16),
-    new MeshStandardMaterial({
-      color: 0x3b9cff,
-      roughness: 0.35,
-      metalness: 0.25,
-      emissive: 0x1d4ed8,
-      emissiveIntensity: options.dark ? 0.45 : 0.25,
-    }),
-  );
-  progress.rotation.z = Math.PI / 2;
-  progress.position.set(NODE_X[0], 0.18, 0);
-  scene.add(progress);
 
   const pedestals: Group[] = [];
   const nodes: Mesh[] = [];
@@ -334,25 +312,8 @@ export async function buildRoadmapScene(
     pedestal.position.set(NODE_X[i], 0, 0);
     pedestal.userData.planned = planned;
 
-    const disk = new Mesh(
-      new CylinderGeometry(0.48, 0.55, 0.1, 24),
-      new MeshStandardMaterial({
-        color: planned
-          ? options.dark
-            ? 0x1f2937
-            : 0xf1f5f9
-          : options.dark
-            ? 0x1e293b
-            : 0xe2e8f0,
-        roughness: 0.7,
-        metalness: 0.1,
-      }),
-    );
-    disk.position.y = 0.12;
-    pedestal.add(disk);
-
     const node = new Mesh(
-      new SphereGeometry(0.12, 18, 18),
+      new SphereGeometry(0.14, 18, 18),
       new MeshStandardMaterial({
         color: planned ? 0x3b9cff : options.dark ? 0x64748b : 0x94a3b8,
         roughness: 0.3,
@@ -361,13 +322,13 @@ export async function buildRoadmapScene(
         emissiveIntensity: planned ? 0.2 : 0,
       }),
     );
-    node.position.y = 0.28;
+    node.position.y = 0.18;
     pedestal.add(node);
     nodes.push(node);
 
     const icon = buildIcon(THREE, quarters[i].icon, options.dark);
-    icon.position.y = 0.32;
-    icon.scale.setScalar(planned ? 0.9 : 0.85);
+    icon.position.y = 0.28;
+    icon.scale.setScalar(planned ? 0.95 : 0.85);
     pedestal.add(icon);
 
     scene.add(pedestal);
@@ -402,17 +363,10 @@ export async function buildRoadmapScene(
     raf = requestAnimationFrame(animate);
     clock.t += 0.016;
 
-    const camX = MathUtils.damp(camera.position.x, targetCamX * 0.28, 4, 0.016);
+    const camX = MathUtils.damp(camera.position.x, targetCamX * 0.22, 4, 0.016);
     camera.position.x = camX;
-    camera.position.y = 2.5 + Math.sin(clock.t * 0.7) * (options.reducedMotion ? 0 : 0.04);
-    camera.lookAt(targetCamX * 0.5, 0.9, 0);
-
-    const span = NODE_X[3] - NODE_X[0];
-    const filled = NODE_X[0] + ((active + 1) / 4) * span;
-    const length = Math.max(0.2, filled - NODE_X[0]);
-    progress.scale.set(1, length, 1);
-    progress.position.x = NODE_X[0] + length / 2;
-    progress.visible = plannedFlags[active];
+    camera.position.y = 2.0 + Math.sin(clock.t * 0.7) * (options.reducedMotion ? 0 : 0.03);
+    camera.lookAt(targetCamX * 0.4, 0.8, 0);
 
     pedestals.forEach((m, i) => {
       const focus = i === active && plannedFlags[i] ? 1 : 0;
@@ -450,11 +404,11 @@ export async function buildRoadmapScene(
       const planned = plannedFlags[i];
       if (!planned) {
         mat.emissiveIntensity = 0;
-        node.scale.setScalar(i === active ? 1.05 : 0.9);
+        node.scale.setScalar(i === active ? 1.15 : 0.95);
         return;
       }
-      mat.emissiveIntensity = i === active ? 0.65 : 0.12;
-      node.scale.setScalar(i === active ? 1.25 : 1);
+      mat.emissiveIntensity = i === active ? 0.75 : 0.12;
+      node.scale.setScalar(i === active ? 1.35 : 1);
     });
 
     renderer.render(scene, camera);

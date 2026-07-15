@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
   ROADMAP_YEARS,
   firstPlannedIndex,
@@ -6,7 +6,11 @@ import {
   quarterLabel,
   type YearRoadmap,
 } from './_roadmapData';
-import { buildRoadmapScene, type RoadmapSceneAPI } from './_roadmapScene';
+import {
+  buildRoadmapScene,
+  QUARTER_LABEL_LEFT,
+  type RoadmapSceneAPI,
+} from './_roadmapScene';
 import styles from './styles.module.css';
 
 function useIsDark(): boolean {
@@ -34,6 +38,14 @@ function YearBlock({ year }: { year: YearRoadmap }): React.ReactElement {
   const dark = useIsDark();
   const [active, setActive] = useState(() => firstPlannedIndex(year));
   const [ready, setReady] = useState(false);
+
+  const plannedTabs = useMemo(
+    () =>
+      year.quarters
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => isQuarterPlanned(item)),
+    [year],
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -86,31 +98,48 @@ function YearBlock({ year }: { year: YearRoadmap }): React.ReactElement {
       </div>
 
       <div className={styles.stage}>
-        <canvas
-          ref={canvasRef}
-          className={`${styles.canvas}${ready ? ` ${styles.canvasReady}` : ''}`}
-          aria-hidden="true"
-        />
+        <div className={styles.viz}>
+          <canvas
+            ref={canvasRef}
+            className={`${styles.canvas}${ready ? ` ${styles.canvasReady}` : ''}`}
+            aria-hidden="true"
+          />
 
-        <div className={styles.table} role="tablist" aria-label={`${year.year} quarters`}>
-          {year.quarters.map((item, index) => {
-            const hasPlan = isQuarterPlanned(item);
-            const label = hasPlan
-              ? item.milestones.map((m) => m.shortTitle).join(', ')
-              : 'Nothing planned';
+          <div className={styles.markerLabels} aria-hidden="true">
+            {year.quarters.map((item, index) => {
+              const hasPlan = isQuarterPlanned(item);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  tabIndex={-1}
+                  className={[
+                    styles.markerLabel,
+                    index === active ? styles.markerLabelActive : '',
+                    !hasPlan ? styles.markerLabelEmpty : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  style={{ left: QUARTER_LABEL_LEFT[index] }}
+                  onClick={() => select(index)}
+                >
+                  {quarterLabel(year.year, item.id)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className={styles.table} role="tablist" aria-label={`${year.year} planned quarters`}>
+          {plannedTabs.map(({ item, index }) => {
+            const label = item.milestones.map((m) => m.shortTitle).join(', ');
             return (
               <button
                 key={item.id}
                 type="button"
                 role="tab"
                 aria-selected={index === active}
-                className={[
-                  styles.row,
-                  index === active ? styles.rowActive : '',
-                  !hasPlan ? styles.rowEmpty : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
+                className={`${styles.row}${index === active ? ` ${styles.rowActive}` : ''}`}
                 onClick={() => select(index)}
               >
                 <span className={styles.rowQuarter}>{quarterLabel(year.year, item.id)}</span>
