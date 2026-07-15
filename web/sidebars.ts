@@ -8,11 +8,6 @@ const sidebars: SidebarsConfig = {
       label: 'Overview',
     },
     {
-      type: 'doc',
-      id: 'security-and-privacy',
-      label: 'Security and Privacy',
-    },
-    {
       type: 'category',
       label: 'Getting Started',
       collapsed: false,
@@ -70,6 +65,11 @@ const sidebars: SidebarsConfig = {
       label: 'Troubleshooting',
       link: {type: 'doc', id: 'troubleshooting/index'},
       items: [],
+    },
+    {
+      type: 'doc',
+      id: 'security-and-privacy',
+      label: 'Security and Privacy',
     },
   ],
 };
