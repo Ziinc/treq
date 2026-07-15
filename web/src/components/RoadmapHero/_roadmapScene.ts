@@ -3,32 +3,38 @@ import type { Group, Mesh, MeshStandardMaterial, Object3D } from 'three';
 export interface MilestoneMeta {
   id: string;
   title: string;
+  shortTitle: string;
   quarter: string;
   href: string;
-  summary: string;
+  outcome: string;
 }
 
 export const ROADMAP_MILESTONES: MilestoneMeta[] = [
   {
     id: 'merge',
     title: 'GitHub Integration with Merge Queue',
+    shortTitle: 'Merge Queue',
     quarter: 'Q3 2026',
     href: '#github-integration-with-merge-queue',
-    summary: 'Enqueue stacked PRs from the app, one layer or the full stack.',
+    outcome:
+      'Open, track, and enqueue stacked pull requests from the Treq app, including one-shot enqueue of a full stack.',
   },
   {
     id: 'checks',
     title: 'Workspace Checks',
+    shortTitle: 'Workspace Checks',
     quarter: 'Q3 2026',
     href: '#workspace-checks',
-    summary: 'Assertion-based quality gates for agentic self-fixing loops.',
+    outcome:
+      'Define and run verification workflows per workspace so agents can iterate against hard pass/fail gates.',
   },
   {
     id: 'ssh',
     title: 'SSH Remote Development',
+    shortTitle: 'SSH Remote',
     quarter: 'Q4 2026',
     href: '#ssh-remote-development',
-    summary: 'Open a remote workspace over SSH and develop there directly.',
+    outcome: 'Open a remote workspace over SSH and develop there directly from Treq.',
   },
 ];
 
@@ -254,9 +260,9 @@ export async function buildRoadmapScene(
   const fogColor = options.dark ? 0x0b1220 : 0xe8f3ff;
   scene.fog = new Fog(fogColor, 10, 22);
 
-  const camera = new PerspectiveCamera(42, 1, 0.1, 100);
-  camera.position.set(0, 3.2, 8.2);
-  camera.lookAt(0, 1.1, 0);
+  const camera = new PerspectiveCamera(38, 1, 0.1, 100);
+  camera.position.set(0, 2.55, 7.2);
+  camera.lookAt(0, 0.95, 0);
 
   scene.add(new AmbientLight(0xffffff, options.dark ? 0.45 : 0.7));
   scene.add(new HemisphereLight(options.dark ? 0x1e3a5f : 0xdbeafe, options.dark ? 0x0f172a : 0xf8fafc, 0.7));
@@ -377,8 +383,8 @@ export async function buildRoadmapScene(
 
     const camX = MathUtils.damp(camera.position.x, targetCamX * 0.35, 4, 0.016);
     camera.position.x = camX;
-    camera.position.y = 3.15 + Math.sin(clock.t * 0.7) * (options.reducedMotion ? 0 : 0.05);
-    camera.lookAt(targetCamX * 0.55, 1.05, 0);
+    camera.position.y = 2.5 + Math.sin(clock.t * 0.7) * (options.reducedMotion ? 0 : 0.04);
+    camera.lookAt(targetCamX * 0.55, 0.9, 0);
 
     const span = NODE_X[2] - NODE_X[0];
     const filled = NODE_X[0] + ((active + 1) / 3) * span;

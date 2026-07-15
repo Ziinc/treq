@@ -70,14 +70,14 @@ export default function RoadmapHero(): React.ReactElement {
   const milestone = ROADMAP_MILESTONES[active];
 
   return (
-    <section className={styles.hero} aria-label="Roadmap timeline visualization">
+    <section className={styles.hero} aria-label="Roadmap timeline">
       <div className={styles.atmosphere} aria-hidden="true" />
       <div className={styles.inner}>
         <div className={styles.copy}>
           <p className={styles.eyebrow}>Product plan</p>
           <h1 className={styles.title}>Roadmap</h1>
           <p className={styles.lede}>
-            Three milestones on one timeline: merge queues, workspace checks, then SSH remote development.
+            Merge queues and workspace checks in Q3 2026. SSH remote development in Q4 2026.
           </p>
         </div>
 
@@ -88,28 +88,27 @@ export default function RoadmapHero(): React.ReactElement {
             aria-hidden="true"
           />
 
-          <div className={styles.caption} aria-live="polite" key={milestone.id}>
-            <span className={styles.quarter}>{milestone.quarter}</span>
-            <a className={styles.captionTitle} href={milestone.href}>
-              {milestone.title}
-            </a>
-            <p className={styles.captionSummary}>{milestone.summary}</p>
-          </div>
-
-          <div className={styles.controls} role="tablist" aria-label="Roadmap milestones">
+          <div className={styles.table} role="tablist" aria-label="Milestones">
             {ROADMAP_MILESTONES.map((item, index) => (
               <button
                 key={item.id}
                 type="button"
                 role="tab"
                 aria-selected={index === active}
-                className={`${styles.tab}${index === active ? ` ${styles.tabActive}` : ''}`}
+                className={`${styles.row}${index === active ? ` ${styles.rowActive}` : ''}`}
                 onClick={() => select(index)}
               >
-                <span className={styles.tabQuarter}>{item.quarter}</span>
-                <span className={styles.tabLabel}>{item.title}</span>
+                <span className={styles.rowQuarter}>{item.quarter}</span>
+                <span className={styles.rowTitle}>{item.shortTitle}</span>
               </button>
             ))}
+          </div>
+
+          <div className={styles.outcome} aria-live="polite" key={milestone.id}>
+            <a className={styles.outcomeTitle} href={milestone.href}>
+              {milestone.title}
+            </a>
+            <p className={styles.outcomeText}>{milestone.outcome}</p>
           </div>
         </div>
       </div>
