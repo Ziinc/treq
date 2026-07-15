@@ -12,12 +12,6 @@ type ThreeModule = typeof import('three/src/Three.js');
 const NODE_X = [-3.0, -1.0, 1.0, 3.0] as const;
 const ACTIVE_MS = 4200;
 
-/** Horizontal positions for HTML quarter labels, matching NODE_X. */
-export const QUARTER_LABEL_LEFT = NODE_X.map((x) => {
-  const t = (x - NODE_X[0]) / (NODE_X[3] - NODE_X[0]);
-  return `${14 + t * 72}%`;
-});
-
 function makeMat(
   THREE: ThreeModule,
   color: number,

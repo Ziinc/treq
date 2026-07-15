@@ -31,62 +31,6 @@
   opacity: 1;
 }
 
-.markerLabels {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0.55rem;
-  height: 0;
-  pointer-events: none;
-}
-
-.markerLabel {
-  pointer-events: auto;
-  position: absolute;
-  top: 0;
-  transform: translate(-50%, 0);
-  appearance: none;
-  cursor: pointer;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: #334155;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  white-space: nowrap;
-  transition: color 0.18s ease;
-}
-
-.markerLabel:hover {
-  color: var(--ifm-color-primary);
-}
-
-.markerLabelActive {
-  color: var(--ifm-color-primary-darkest);
-}
-
-.markerLabelEmpty {
-  color: #94a3b8;
-  font-weight: 600;
-}
-
-.markerLabelEmpty.markerLabelActive {
-  color: #64748b;
-}
-
-:global([data-theme='dark']) .markerLabel {
-  color: #cbd5e1;
-}
-
-:global([data-theme='dark']) .markerLabelActive {
-  color: var(--ifm-color-primary-lightest);
-}
-
-:global([data-theme='dark']) .markerLabelEmpty {
-  color: #64748b;
-}
-
 .table {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(0, 1fr));

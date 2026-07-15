@@ -7,7 +7,6 @@ import {
 } from './_roadmapData';
 import {
   buildRoadmapScene,
-  QUARTER_LABEL_LEFT,
   type RoadmapSceneAPI,
 } from './_roadmapScene';
 import styles from './styles.module.css';
@@ -114,30 +113,6 @@ export default function RoadmapGraphicTabs({
           className={`${styles.canvas}${ready ? ` ${styles.canvasReady}` : ''}`}
           aria-hidden="true"
         />
-
-        <div className={styles.markerLabels} aria-hidden="true">
-          {year.quarters.map((item, index) => {
-            const hasPlan = isQuarterPlanned(item);
-            return (
-              <button
-                key={item.id}
-                type="button"
-                tabIndex={-1}
-                className={[
-                  styles.markerLabel,
-                  index === active ? styles.markerLabelActive : '',
-                  !hasPlan ? styles.markerLabelEmpty : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                style={{ left: QUARTER_LABEL_LEFT[index] }}
-                onClick={() => select(index)}
-              >
-                {quarterLabel(year.year, item.id)}
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       <div className={styles.table} role="tablist" aria-label={`${year.year} planned quarters`}>
