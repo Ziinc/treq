@@ -6,25 +6,31 @@ wrapperClassName: roadmap-page
 ---
 
 import ContentPageLayout from '@site/src/components/ContentPageLayout';
-import RoadmapHero from '@site/src/components/RoadmapHero';
+import RoadmapGraphicTabs from '@site/src/components/RoadmapGraphicTabs';
 
 export const toc = [
-  { id: 'year-2026', value: '2026', level: 2 },
+  { id: '2026', value: '2026', level: 2 },
   { id: 'github-integration-with-merge-queue', value: 'GitHub Integration with Merge Queue', level: 2 },
   { id: 'workspace-checks', value: 'Workspace Checks', level: 2 },
   { id: 'ssh-remote-development', value: 'SSH Remote Development', level: 2 },
   { id: 'how-these-fit-together', value: 'How These Fit Together', level: 2 },
 ];
 
-<RoadmapHero />
-
 <ContentPageLayout toc={toc} breadcrumbs={[{label: 'Home', href: '/'}, {label: 'Roadmap'}]}>
+
+# Roadmap
 
 _Year-by-year product milestones for Treq. Newer years are added above older ones._
 
-Treq already isolates parallel work in stacked [workspaces](/docs/concepts/workspaces) and keeps those stacks rebasing as their targets move. The timeline above is the planning surface. Quarters with no planned work stay grey.
+Treq already isolates parallel work in stacked [workspaces](/docs/concepts/workspaces) and keeps those stacks rebasing as their targets move. Each year section below owns its timeline. Quarters with no planned work stay grey on the rail and stay out of the tabs.
 
-For 2026, Q1 and Q2 have nothing planned. Q3 targets GitHub merge-queue integration and workspace checks. Q4 targets SSH remote development. Targets are by calendar quarter. Scope and timing can shift as we learn from early builds.
+Targets are by calendar quarter. Scope and timing can shift as we learn from early builds.
+
+## 2026
+
+<RoadmapGraphicTabs version="2026" />
+
+Q1 and Q2 have nothing planned. Q3 targets GitHub merge-queue integration and workspace checks. Q4 targets SSH remote development.
 
 ## GitHub Integration with Merge Queue
 

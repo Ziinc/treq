@@ -91,3 +91,8 @@ export function nextPlannedIndex(year: YearRoadmap, from: number): number {
   }
   return from;
 }
+
+export function getYearRoadmap(version: string | number): YearRoadmap | undefined {
+  const year = typeof version === 'number' ? version : Number.parseInt(version, 10);
+  return ROADMAP_YEARS.find((entry) => entry.year === year);
+}
