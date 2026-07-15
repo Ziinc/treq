@@ -16,7 +16,7 @@ module.exports = function jsonLdPlugin() {
               '@type': 'WebSite',
               name: 'Treq',
               url: SITE_URL,
-              description: 'Review and manage agent branch diffs',
+              description: 'The Open Source Graphite Alternative',
               potentialAction: {
                 '@type': 'SearchAction',
                 target: {

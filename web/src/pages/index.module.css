@@ -94,7 +94,7 @@
   margin-bottom: 1.5rem;
   color: #07111f;
   letter-spacing: -0.02em;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .heroAccent {
