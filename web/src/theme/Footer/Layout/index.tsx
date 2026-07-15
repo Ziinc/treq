@@ -23,7 +23,7 @@ export default function FooterLayout({
             <img src="/assets/combined-horizontal.png" alt="Treq" />
           </div>
           <p>
-            Treq is a desktop AI workspace manager.
+            Treq is a desktop Agent Development Environment (ADE).
           </p>
         </div>
         <div className={styles.footerLinks}>{links}</div>
