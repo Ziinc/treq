@@ -28,7 +28,13 @@ File selection lets you divide a large agent change into reviewable commits. Sel
 
 Treq shows commits relative to the workspace target. This makes the current stack visible without requiring you to inspect bookmarks or revisions from the command line. The history separates committed work from pending file changes.
 
-The review interface can show the cumulative workspace diff or one commit. Comments attach to files and line ranges in the visible diff.
+## Commit-Level Diff
+
+Treq can show the diff for one commit instead of the cumulative workspace changes above the target. Use this when a stack is easier to inspect one revision at a time.
+
+Selecting a commit changes the visible diff in the review interface. Comments attach to files and line ranges in that view.
+
+Conflict state belongs to the workspace, not a single commit. A commit view can explain where a conflicting change came from, while the workspace diff shows the conflict that must be resolved.
 
 ## Manipulation Model
 
@@ -38,7 +44,6 @@ Commit operations update the workspace history. Treq then refreshes derived stat
 |---|---|---|
 | Create commit | Save selected changes with a message | Adds a new commit above the workspace target |
 | Split changes | Commit selected files | Leaves unselected files in the working copy |
-| Review commit | Inspect one commit instead of the cumulative diff | Changes the visible diff context |
 | Merge workspace | Integrate workspace commits into the target | Moves completed work out of the workspace flow |
 
 ## Safety Boundaries
@@ -53,4 +58,5 @@ Pending changes can prevent Treq from synchronizing a working copy after a rebas
 
 - [Committing Changes](/docs/tutorials/committing-changes)
 - [Code Review Workflow](/docs/tutorials/code-review-workflow)
+- [Changes and Reviews](/docs/concepts/changes-and-reviews)
 - [Workspaces](/docs/concepts/workspaces)

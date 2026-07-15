@@ -22,15 +22,14 @@ Pending reviews save automatically while you work.
 
 The default review shows uncommitted changes in the workspace. Treq loads the changed file list first, then requests diff hunks for each file. This keeps the initial view responsive when a workspace contains many changes.
 
-You can switch to committed changes when the workspace has commits above its target. The cumulative view combines those commits into one diff. Commit review narrows the view to a single revision.
+You can switch to committed changes when the workspace has commits above its target. The cumulative view combines those commits into one diff.
 
 | View | What it shows |
 |---|---|
 | Uncommitted | Changes in the working copy |
 | Committed | All workspace commits above the target |
-| Commit | The changes introduced by one commit |
 
-Line selection belongs to the review layer. Selecting lines gives a comment precise context, but it does not stage those lines for a commit. Commit selection works at the file level.
+Line selection belongs to the review layer. Selecting lines gives a comment precise context, but it does not stage those lines for a commit. Commit selection works at the file level. To review one commit at a time, see [Commit Management](/docs/concepts/commit-management#commit-level-diff).
 
 ## Conflict Management
 
@@ -55,14 +54,6 @@ Comments use plain text. State whether the agent should fix a defect, answer a q
 You can mark changed files as viewed while moving through a large diff. Viewed state is review metadata and does not change repository contents.
 
 {/* TODO: Clarify the lifetime of viewed-file state after it is restored consistently when a review reopens. Comments and viewed-file markers currently use separate local storage paths. */}
-
-## Commit Review
-
-The review interface can show cumulative workspace changes or an individual commit. Commit-level review helps when a sequence of commits is easier to inspect one step at a time.
-
-Selecting a commit changes the visible diff. Comments still refer to files and changed lines.
-
-Conflict state belongs to the workspace, not a single commit. A commit view can explain where a conflicting change came from, while the current workspace diff shows the conflict that must be resolved.
 
 ## Finishing a Review
 
