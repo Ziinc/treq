@@ -3,6 +3,7 @@ import type {
 	DirectoryEntry,
 	EditorAppsResponse,
 	GitRemoteInfo,
+	PrInfo,
 	HomeRebaseDryRunResult,
 	JjBranch,
 	JjCommitsAhead,
@@ -105,6 +106,12 @@ export const detectEditorApps = (): Promise<EditorAppsResponse> =>
 export const getGitRemoteUrl = (
 	repoPath: string,
 ): Promise<GitRemoteInfo | null> => invoke("get_git_remote_url", { repoPath });
+
+export const getPrInfoViaGh = (
+	repoPath: string,
+	branchName: string,
+): Promise<PrInfo | null> =>
+	invoke("get_pr_info_via_gh", { repoPath, branchName });
 
 // JJ Workspace API
 // JJ Diff API
