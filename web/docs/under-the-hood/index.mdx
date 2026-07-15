@@ -40,7 +40,7 @@ Command handlers stay thin because the same core behavior serves more than the d
 
 ## Repository Model
 
-Treq opens an existing Git repository and initializes Jujutsu in colocated mode. Git handles remotes and hosted compatibility. Jujutsu supplies the revision model Treq uses for workspaces, stacks, and automatic rebases. Treq adds application state under `.treq`.
+Treq opens an existing Git repository and initializes Jujutsu in colocated mode. Git is the native VCS boundary for remotes and hosted compatibility. Jujutsu supplies the revision model Treq uses for workspaces, stacks, and automatic rebases. Treq adds application state under `.treq`.
 
 ```
 {repo}/

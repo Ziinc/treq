@@ -23,7 +23,7 @@ export default function FooterLayout({
             <img src="/assets/combined-horizontal.png" alt="Treq" />
           </div>
           <p>
-            Treq is a workspace and review manager for Git repositories.
+            Treq is a Git-native workspace and review manager for AI-assisted development.
           </p>
         </div>
         <div className={styles.footerLinks}>{links}</div>
