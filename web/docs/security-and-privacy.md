@@ -6,7 +6,13 @@ sidebar_position: 2
 
 _How Treq handles your data, what it never sends, and which operations the CLI refuses to perform._
 
-Treq is a local desktop application. Repository data, workspace metadata, and settings stay on your machine. The base application does not upload your code or usage data to Treq servers.
+Treq is privacy-focused by default. It is a local desktop application. Repository data, workspace metadata, and settings stay on your machine. The base application does not upload your code or usage data to Treq servers.
+
+## Telemetry
+
+Treq does not collect **telemetry**. The application does not send **feature usage**, **crash reports**, or **performance metrics** to Treq or any third party.
+
+**Local logs** can exist on disk for debugging. They stay on your machine and are not uploaded.
 
 ## Local Data
 
@@ -14,19 +20,13 @@ The base Treq application stores nothing on remote servers. Workspace checkouts,
 
 Repository history remains in your Git and Jujutsu stores. Treq metadata lives under `.treq` inside the repository and in the application data directory. See [Under the Hood](/docs/under-the-hood) for the storage layout.
 
-If you push or fetch through Treq, Git talks to your configured remotes. That traffic goes to those hosts, not to Treq.
-
-## Telemetry
-
-Treq does not collect telemetry. The application does not send feature usage, crash reports, or performance metrics to Treq or any third party.
-
-Local logs can exist on disk for debugging. They stay on your machine and are not uploaded.
+When Treq connects to a remote, the connection goes directly to that host. Traffic does not pass through Treq servers.
 
 ## CLI Safety
 
 The `treq` CLI is non-destructive. It can create and inspect workspaces, move changes, and start agent sessions. It does not delete workspaces. It does not force-push to remotes.
 
-Workspace deletion stays in the desktop UI, where you confirm context before removing local state. Push behavior through the app follows normal Git remote rules. The CLI has no force-push path.
+Workspace deletion stays in the desktop UI, where you confirm context before removing local state. The CLI has no force-push path.
 
 ## Website Analytics
 
