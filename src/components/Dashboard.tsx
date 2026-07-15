@@ -22,6 +22,7 @@ import type { ClaudeSessionData } from "./terminal/types";
 
 import { SettingsPage } from "./SettingsPage";
 import { MergePreviewPage } from "./MergePreviewPage";
+import { GitHubPanel } from "./GitHubPanel";
 import { useToast } from "./ui/toast";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { useWorkspaceHierarchy } from "../hooks/useWorkspaceHierarchy";
@@ -62,7 +63,12 @@ import {
 import { Onboarding } from "./Onboarding";
 import type { BranchListItem } from "./TargetBranchSelector";
 
-type ViewMode = "session" | "show-workspace" | "settings" | "merge-preview";
+type ViewMode =
+	| "session"
+	| "show-workspace"
+	| "settings"
+	| "merge-preview"
+	| "github";
 
 type SessionOpenOptions = {
 	initialPrompt?: string;
@@ -136,6 +142,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	const openSettings = useCallback((tab?: string) => {
 		void tab;
 		setViewMode("settings");
+	}, []);
+
+	const openGitHub = useCallback(() => {
+		setViewMode("github");
 	}, []);
 
 	const handleOpenMergePreview = useCallback(() => {
@@ -978,12 +988,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
 					handleCreateSessionFromSidebar(workspace.id)
 				}
 				onStartShell={handleStartShellFromSidebar}
+				onOpenGitHub={openGitHub}
 				currentPage={
 					viewMode === "settings"
 						? "settings"
-						: viewMode === "session" || viewMode === "show-workspace"
-							? "session"
-							: undefined
+						: viewMode === "github"
+							? "github"
+							: viewMode === "session" || viewMode === "show-workspace"
+								? "session"
+								: undefined
 				}
 			/>
 
@@ -1149,6 +1162,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
 							repoPath={repoPath}
 							onClose={handleReturnToDashboard}
 							currentBranch={effectiveDefaultBranch}
+						/>
+					)}
+
+					{/* GitHub Panel */}
+					{viewMode === "github" && (
+						<GitHubPanel
+							repoPath={repoPath}
+							onClose={handleReturnToDashboard}
 						/>
 					)}
 

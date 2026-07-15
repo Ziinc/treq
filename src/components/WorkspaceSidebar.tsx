@@ -1,7 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { memo, useCallback, useMemo, useState } from "react";
 import { DragDropContext, type DropResult, Droppable } from "@hello-pangea/dnd";
-import { GitBranch, Home, Search, Settings, Trash2 } from "lucide-react";
+import {
+	GitBranch,
+	Github,
+	Home,
+	Search,
+	Settings,
+	Trash2,
+} from "lucide-react";
 import {
 	type Workspace,
 	getWorkspaceStatus,
@@ -56,6 +63,7 @@ interface WorkspaceSidebarProps {
 	navigateToDashboard?: () => void;
 	onOpenCommandPalette?: () => void;
 	onOpenBranchSwitcher?: () => void;
+	onOpenGitHub?: () => void;
 	currentPage?: string;
 	onAddBefore?: (workspace: Workspace) => void;
 	onAddAfter?: (workspace: Workspace) => void;
@@ -78,6 +86,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 		openSettings,
 		onOpenCommandPalette,
 		onOpenBranchSwitcher,
+		onOpenGitHub,
 		currentPage,
 		onAddAfter,
 		onMoveWorkspace,
@@ -244,6 +253,29 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 								<Kbd>⌘ + K</Kbd>
 							</KbdGroup>
 						</button>
+						{onOpenGitHub && (
+							<Tooltip>
+								<TooltipTrigger asChild>
+									<button
+										type="button"
+										onClick={onOpenGitHub}
+										className={`h-9 w-9 rounded-lg hover:bg-muted flex items-center justify-center transition-colors border border-border ${
+											currentPage === "github" ? "bg-primary/20" : "bg-muted/50"
+										}`}
+										aria-label="GitHub"
+									>
+										<Github
+											className={`w-4 h-4 ${
+												currentPage === "github"
+													? "text-primary"
+													: "text-muted-foreground"
+											}`}
+										/>
+									</button>
+								</TooltipTrigger>
+								<TooltipContent side="bottom">GitHub</TooltipContent>
+							</Tooltip>
+						)}
 						{openSettings && (
 							<Tooltip>
 								<TooltipTrigger asChild>

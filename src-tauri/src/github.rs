@@ -83,6 +83,362 @@ pub fn get_git_remote_url_impl(repo_path: &str) -> Result<Option<GitRemoteInfo>,
     Ok(None)
 }
 
+// ── GitHub Issues / PRs ─────────────────────────────────────────────────────
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct GhLabel {
+    pub name: String,
+    pub color: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct GhAuthor {
+    pub login: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[serde(rename_all(deserialize = "camelCase"))]
+pub struct GhIssueComment {
+    pub id: String,
+    pub body: String,
+    pub author: GhAuthor,
+    pub created_at: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[serde(rename_all(deserialize = "camelCase"))]
+pub struct GhIssue {
+    pub number: u64,
+    pub title: String,
+    pub state: String,
+    pub url: String,
+    pub body: Option<String>,
+    pub author: GhAuthor,
+    pub labels: Vec<GhLabel>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub comments: Option<Vec<GhIssueComment>>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[serde(rename_all(deserialize = "camelCase"))]
+pub struct GhPullRequest {
+    pub number: u64,
+    pub title: String,
+    pub state: String,
+    pub url: String,
+    pub body: Option<String>,
+    pub author: GhAuthor,
+    pub labels: Vec<GhLabel>,
+    pub head_ref_name: String,
+    pub base_ref_name: String,
+    pub merge_state_status: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub comments: Option<Vec<GhIssueComment>>,
+}
+
+fn run_gh(
+    gh_path: &str,
+    args: &[&str],
+    extended_path: &str,
+) -> Result<std::process::Output, String> {
+    std::process::Command::new(gh_path)
+        .args(args)
+        .env("PATH", extended_path)
+        .output()
+        .map_err(|e| e.to_string())
+}
+
+fn check_gh_output(output: std::process::Output) -> Result<Vec<u8>, String> {
+    if output.status.success() {
+        Ok(output.stdout)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("gh exited with error: {stderr}"))
+    }
+}
+
+fn parse_number_from_url(url: &str) -> Option<u64> {
+    url.trim().rsplit('/').next()?.parse().ok()
+}
+
+pub fn gh_list_issues_impl(
+    gh_path: &str,
+    repo_full_name: &str,
+    state: &str,
+    extended_path: &str,
+) -> Result<Vec<GhIssue>, String> {
+    let out = run_gh(
+        gh_path,
+        &[
+            "issue",
+            "list",
+            "--repo",
+            repo_full_name,
+            "--state",
+            state,
+            "--json",
+            "number,title,state,url,author,labels,createdAt,updatedAt",
+            "--limit",
+            "100",
+        ],
+        extended_path,
+    )?;
+    let bytes = check_gh_output(out)?;
+    serde_json::from_slice(&bytes).map_err(|e| format!("Failed to parse gh output: {e}"))
+}
+
+pub fn gh_view_issue_impl(
+    gh_path: &str,
+    repo_full_name: &str,
+    issue_number: u64,
+    extended_path: &str,
+) -> Result<GhIssue, String> {
+    let num = issue_number.to_string();
+    let out = run_gh(
+        gh_path,
+        &[
+            "issue",
+            "view",
+            &num,
+            "--repo",
+            repo_full_name,
+            "--json",
+            "number,title,state,url,body,author,labels,createdAt,updatedAt,comments",
+        ],
+        extended_path,
+    )?;
+    let bytes = check_gh_output(out)?;
+    serde_json::from_slice(&bytes).map_err(|e| format!("Failed to parse gh output: {e}"))
+}
+
+pub fn gh_create_issue_impl(
+    gh_path: &str,
+    repo_full_name: &str,
+    title: &str,
+    body: &str,
+    extended_path: &str,
+) -> Result<u64, String> {
+    let out = run_gh(
+        gh_path,
+        &[
+            "issue",
+            "create",
+            "--repo",
+            repo_full_name,
+            "--title",
+            title,
+            "--body",
+            body,
+        ],
+        extended_path,
+    )?;
+    let bytes = check_gh_output(out)?;
+    let text = String::from_utf8_lossy(&bytes);
+    for line in text.lines() {
+        if let Some(n) = parse_number_from_url(line) {
+            return Ok(n);
+        }
+    }
+    Err(format!("Could not parse issue number from output: {text}"))
+}
+
+pub fn gh_create_issue_comment_impl(
+    gh_path: &str,
+    repo_full_name: &str,
+    issue_number: u64,
+    body: &str,
+    extended_path: &str,
+) -> Result<(), String> {
+    let num = issue_number.to_string();
+    let out = run_gh(
+        gh_path,
+        &[
+            "issue",
+            "comment",
+            &num,
+            "--repo",
+            repo_full_name,
+            "--body",
+            body,
+        ],
+        extended_path,
+    )?;
+    check_gh_output(out).map(|_| ())
+}
+
+pub fn gh_close_issue_impl(
+    gh_path: &str,
+    repo_full_name: &str,
+    issue_number: u64,
+    extended_path: &str,
+) -> Result<(), String> {
+    let num = issue_number.to_string();
+    let out = run_gh(
+        gh_path,
+        &["issue", "close", &num, "--repo", repo_full_name],
+        extended_path,
+    )?;
+    check_gh_output(out).map(|_| ())
+}
+
+pub fn gh_reopen_issue_impl(
+    gh_path: &str,
+    repo_full_name: &str,
+    issue_number: u64,
+    extended_path: &str,
+) -> Result<(), String> {
+    let num = issue_number.to_string();
+    let out = run_gh(
+        gh_path,
+        &["issue", "reopen", &num, "--repo", repo_full_name],
+        extended_path,
+    )?;
+    check_gh_output(out).map(|_| ())
+}
+
+pub fn gh_list_prs_impl(
+    gh_path: &str,
+    repo_full_name: &str,
+    state: &str,
+    extended_path: &str,
+) -> Result<Vec<GhPullRequest>, String> {
+    let out = run_gh(
+        gh_path,
+        &[
+            "pr",
+            "list",
+            "--repo",
+            repo_full_name,
+            "--state",
+            state,
+            "--json",
+            "number,title,state,url,author,labels,headRefName,baseRefName,createdAt,updatedAt",
+            "--limit",
+            "100",
+        ],
+        extended_path,
+    )?;
+    let bytes = check_gh_output(out)?;
+    serde_json::from_slice(&bytes).map_err(|e| format!("Failed to parse gh output: {e}"))
+}
+
+pub fn gh_view_pr_impl(
+    gh_path: &str,
+    repo_full_name: &str,
+    pr_number: u64,
+    extended_path: &str,
+) -> Result<GhPullRequest, String> {
+    let num = pr_number.to_string();
+    let out = run_gh(
+        gh_path,
+        &[
+            "pr",
+            "view",
+            &num,
+            "--repo",
+            repo_full_name,
+            "--json",
+            "number,title,state,url,body,author,labels,headRefName,baseRefName,mergeStateStatus,createdAt,updatedAt,comments",
+        ],
+        extended_path,
+    )?;
+    let bytes = check_gh_output(out)?;
+    serde_json::from_slice(&bytes).map_err(|e| format!("Failed to parse gh output: {e}"))
+}
+
+pub fn gh_create_pr_comment_impl(
+    gh_path: &str,
+    repo_full_name: &str,
+    pr_number: u64,
+    body: &str,
+    extended_path: &str,
+) -> Result<(), String> {
+    let num = pr_number.to_string();
+    let out = run_gh(
+        gh_path,
+        &[
+            "pr",
+            "comment",
+            &num,
+            "--repo",
+            repo_full_name,
+            "--body",
+            body,
+        ],
+        extended_path,
+    )?;
+    check_gh_output(out).map(|_| ())
+}
+
+pub fn gh_close_pr_impl(
+    gh_path: &str,
+    repo_full_name: &str,
+    pr_number: u64,
+    extended_path: &str,
+) -> Result<(), String> {
+    let num = pr_number.to_string();
+    let out = run_gh(
+        gh_path,
+        &["pr", "close", &num, "--repo", repo_full_name],
+        extended_path,
+    )?;
+    check_gh_output(out).map(|_| ())
+}
+
+pub fn gh_reopen_pr_impl(
+    gh_path: &str,
+    repo_full_name: &str,
+    pr_number: u64,
+    extended_path: &str,
+) -> Result<(), String> {
+    let num = pr_number.to_string();
+    let out = run_gh(
+        gh_path,
+        &["pr", "reopen", &num, "--repo", repo_full_name],
+        extended_path,
+    )?;
+    check_gh_output(out).map(|_| ())
+}
+
+pub fn gh_create_pr_impl(
+    gh_path: &str,
+    repo_full_name: &str,
+    title: &str,
+    body: &str,
+    base_branch: &str,
+    head_branch: &str,
+    extended_path: &str,
+) -> Result<u64, String> {
+    let out = run_gh(
+        gh_path,
+        &[
+            "pr",
+            "create",
+            "--repo",
+            repo_full_name,
+            "--title",
+            title,
+            "--body",
+            body,
+            "--base",
+            base_branch,
+            "--head",
+            head_branch,
+        ],
+        extended_path,
+    )?;
+    let bytes = check_gh_output(out)?;
+    let text = String::from_utf8_lossy(&bytes);
+    for line in text.lines() {
+        if let Some(n) = parse_number_from_url(line) {
+            return Ok(n);
+        }
+    }
+    Err(format!("Could not parse PR number from output: {text}"))
+}
+
 /// Run `gh pr view` for the given branch in the given repo directory.
 /// Returns None if gh is not installed, not authenticated, or no PR exists.
 /// The `gh_path` argument is the resolved path to the gh binary.

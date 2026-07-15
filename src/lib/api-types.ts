@@ -327,6 +327,51 @@ export interface GitRemoteInfo {
 	full_name: string;
 }
 
+export interface GhLabel {
+	name: string;
+	color: string;
+}
+
+export interface GhAuthor {
+	login: string;
+}
+
+export interface GhIssueComment {
+	id: string;
+	body: string;
+	author: GhAuthor;
+	created_at: string;
+}
+
+export interface GhIssue {
+	number: number;
+	title: string;
+	state: string;
+	url: string;
+	body: string | null;
+	author: GhAuthor;
+	labels: GhLabel[];
+	created_at: string;
+	updated_at: string;
+	comments: GhIssueComment[] | null;
+}
+
+export interface GhPullRequest {
+	number: number;
+	title: string;
+	state: string;
+	url: string;
+	body: string | null;
+	author: GhAuthor;
+	labels: GhLabel[];
+	head_ref_name: string;
+	base_ref_name: string;
+	merge_state_status: string | null;
+	created_at: string;
+	updated_at: string;
+	comments: GhIssueComment[] | null;
+}
+
 export interface PrInfo {
 	number: number;
 	title: string;
