@@ -215,18 +215,15 @@ def long_sentences(prose, limit=30):
 def short_paragraph_endings(prose, min_words=3):
     """Flag paragraphs whose final sentence has fewer than min_words words."""
     hits = []
-    # Reconstruct line offsets so reports stay line-numbered.
     lines = prose.splitlines()
     para = []
-    para_start = 1
 
     def flush(end_line):
-        nonlocal para, para_start
+        nonlocal para
         text = " ".join(l.strip() for l in para if l.strip())
         para = []
-        if not text:
+        if not text or not re.search(r"[.!?]\s*$", text):
             return
-        # Split into sentences; keep the last non-empty one.
         parts = [p.strip() for p in SENTENCE_SPLIT.split(text) if p.strip()]
         if not parts:
             return
@@ -239,10 +236,7 @@ def short_paragraph_endings(prose, min_words=3):
         if not line.strip():
             if para:
                 flush(i - 1)
-            para_start = i + 1
             continue
-        if not para:
-            para_start = i
         para.append(line)
     if para:
         flush(len(lines))
