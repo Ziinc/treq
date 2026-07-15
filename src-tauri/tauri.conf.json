@@ -24,7 +24,7 @@
   },
   "plugins": {
     "cli": {
-      "description": "Treq - Stacking Agent Development Environment (ADE)",
+      "description": "Treq - Stacking ADE",
       "subcommands": {
         "add": {
           "description": "Create a new workspace",

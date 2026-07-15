@@ -40,7 +40,7 @@ function HomepageHeader() {
             {' '}for busy developers
           </Heading>
           <p className={styles.heroEyebrow}>
-            An IDE was built for one developer typing code. A stacking ADE is built for a developer plus a team of coding agents.
+            The Open Source Graphite Alternative
           </p>
           <div className={styles.buttons}>
             <Link
