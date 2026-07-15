@@ -258,10 +258,6 @@ const config: Config = {
               label: 'GitHub',
               href: 'https://github.com/Ziinc/treq',
             },
-            {
-              label: 'Issues',
-              href: 'https://github.com/Ziinc/treq/issues',
-            },
           ],
         },
       ],

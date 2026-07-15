@@ -30,13 +30,13 @@ Q1 and Q2 have nothing planned. Q3 targets GitHub merge-queue integration and wo
 
 ## GitHub Integration with Merge Queue
 
-Treq workspaces already model stacked branches. The missing piece is first-class GitHub pull request and [merge queue](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue) control from the same place you review diffs and drive agents.
+[Treq workspaces](/docs/concepts/workspaces) already model stacked branches. The missing piece is first-class GitHub pull request and merge queue control from the same place you review diffs and drive agents.
 
 **App integration** connects each workspace to its remote pull request. You will see PR status, checks, and queue position without leaving Treq. Creating or updating a pull request from a stacked workspace will keep the GitHub base branch aligned with the stack parent, matching the [stacked PR](/learn/concepts/git/stacked-prs) model.
 
-**Merge queue integration** lets you enqueue stacked PRs the way you already manage stacks locally. You can load an entire stack into the merge queue in one action, or enqueue layers one by one when a lower PR still needs review. The app will respect dependency order so a higher layer does not jump ahead of its required base.
+**Merge queue integration** is a Treq-managed merge queue, not [GitHub's native merge queue](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue). GitHub's built-in queue requires GitHub Enterprise Cloud for private repositories. Treq's queue does not. You enqueue stacked PRs the way you already manage stacks locally: load an entire stack in one action, or enqueue layers one by one when a lower PR still needs review. The app respects dependency order so a higher layer does not jump ahead of its required base.
 
-This milestone turns the stack you already build in Treq into a path that ends on `main` through GitHub's merge queue, without hand-managing each PR's base and queue entry.
+This milestone turns the stack you already build in Treq into a path that ends on `main` through a Treq-managed merge queue, without hand-managing each PR's base and queue entry.
 
 ## Workspace Checks
 
@@ -44,13 +44,13 @@ This milestone turns the stack you already build in Treq into a path that ends o
 
 A check workflow is a named set of jobs and steps: install, lint, typecheck, unit tests, integration tests, or any shell-backed assertion you care about. Each step passes or fails. Soft advice is not enough here. The gate is the assertion result.
 
-The goal is an **agentic self-fixing loop**. An agent makes a change, runs the workspace checks, reads the failures, and retries until the gates pass or it stops with a clear failure. Strict assertion-based guardrails keep that loop grounded in observable outcomes instead of the model's confidence.
+The longer-term goal is an **agentic self-fixing loop**. An agent makes a change, runs the workspace checks, reads the failures, and retries until the gates pass or it stops with a clear failure. Strict assertion-based guardrails keep that loop grounded in observable outcomes instead of the model's confidence. Full agentic self-fixing loops are a stretch goal and are not scheduled for the initial feature release. The first ship is the check gates themselves: run them, see pass or fail, and decide what to do next.
 
 These checks live with the workspace, so each stacked layer can verify its own increment before it joins a larger review or merge queue.
 
 ## SSH Remote Development
 
-Today, Treq workspaces and [terminal sessions](/docs/concepts/terminal-sessions) run on your local machine. **SSH Remote Development** opens a workspace on a remote host over SSH and lets you develop there directly from the same UI.
+Today, [Treq workspaces](/docs/concepts/workspaces) and [terminal sessions](/docs/concepts/terminal-sessions) run on your local machine. **SSH Remote Development** opens a workspace on a remote host over SSH and lets you develop there directly from the same UI.
 
 You connect to a remote machine, attach to a repository path there, and get the same stacked workspace model: diffs, commits, agents, and checks against that remote working copy. Shell and agent processes run on the remote host. File reads and writes go over the SSH session instead of the local disk.
 
