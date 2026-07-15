@@ -4,6 +4,33 @@ const nav = (page: Page) => page.getByRole('navigation', { name: 'Main' });
 const sidebar = (page: Page) => page.getByRole('navigation', { name: 'Docs sidebar' });
 const footer = (page: Page) => page.getByRole('contentinfo');
 
+test.describe('Homepage Features layout', () => {
+  test('review screenshot keeps its intrinsic aspect ratio', async ({ page }) => {
+    await page.goto('/');
+    const features = page.getByRole('region', { name: 'Features' });
+    await expect(features.getByRole('heading', { name: 'Features', level: 2 })).toBeVisible();
+
+    const screenshot = features.getByRole('img', {
+      name: 'Treq code review screenshot showing comments sent to Claude',
+    });
+    await screenshot.scrollIntoViewIfNeeded();
+
+    const box = await screenshot.boundingBox();
+    expect(box).not.toBeNull();
+    const natural = await screenshot.evaluate((img: HTMLImageElement) => ({
+      width: img.naturalWidth,
+      height: img.naturalHeight,
+    }));
+
+    // Regression: HTML width/height attrs without CSS height:auto left the
+    // image at intrinsic height (1749px) while width shrank, stretching it.
+    const renderedAspect = box!.width / box!.height;
+    const naturalAspect = natural.width / natural.height;
+    expect(Math.abs(renderedAspect - naturalAspect)).toBeLessThan(0.05);
+    expect(box!.height).toBeLessThan(natural.height * 0.5);
+  });
+});
+
 test.describe('Navbar navigation', () => {
   test('Learn link navigates to learn section', async ({ page }) => {
     await page.goto('/');
