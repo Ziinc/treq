@@ -9,13 +9,13 @@ export interface RoadmapSceneAPI {
 
 type ThreeModule = typeof import('three/src/Three.js');
 
-const NODE_X = [-3.9, -1.3, 1.3, 3.9] as const;
+const NODE_X = [-3.0, -1.0, 1.0, 3.0] as const;
 const ACTIVE_MS = 4200;
 
 /** Horizontal positions for HTML quarter labels, matching NODE_X. */
 export const QUARTER_LABEL_LEFT = NODE_X.map((x) => {
   const t = (x - NODE_X[0]) / (NODE_X[3] - NODE_X[0]);
-  return `${12 + t * 76}%`;
+  return `${14 + t * 72}%`;
 });
 
 function makeMat(
@@ -272,9 +272,9 @@ export async function buildRoadmapScene(
   const scene = new Scene();
   scene.fog = null;
 
-  const camera = new PerspectiveCamera(32, 1, 0.1, 100);
-  camera.position.set(0, 1.85, 5.5);
-  camera.lookAt(0, 0.95, 0);
+  const camera = new PerspectiveCamera(40, 1, 0.1, 100);
+  camera.position.set(0, 2.4, 8.2);
+  camera.lookAt(0, 1.0, 0);
 
   scene.add(new AmbientLight(0xffffff, options.dark ? 0.45 : 0.7));
   scene.add(new HemisphereLight(options.dark ? 0x1e3a5f : 0xdbeafe, options.dark ? 0x0f172a : 0xf8fafc, 0.7));
@@ -288,7 +288,7 @@ export async function buildRoadmapScene(
   scene.add(fill);
 
   const rail = new Mesh(
-    new CylinderGeometry(0.045, 0.045, 9.2, 16),
+    new CylinderGeometry(0.045, 0.045, 7.2, 16),
     new MeshStandardMaterial({
       color: options.dark ? 0x475569 : 0x94a3b8,
       roughness: 0.65,
@@ -325,7 +325,7 @@ export async function buildRoadmapScene(
 
     const icon = buildIcon(THREE, quarters[i].icon, options.dark);
     icon.position.y = 0.48;
-    icon.scale.setScalar(planned ? 0.95 : 0.85);
+    icon.scale.setScalar(planned ? 0.72 : 0.65);
     pedestal.add(icon);
 
     scene.add(pedestal);
@@ -359,8 +359,8 @@ export async function buildRoadmapScene(
     clock.t += 0.016;
 
     camera.position.x = 0;
-    camera.position.y = 1.85 + Math.sin(clock.t * 0.7) * (options.reducedMotion ? 0 : 0.02);
-    camera.lookAt(0, 0.95, 0);
+    camera.position.y = 2.4 + Math.sin(clock.t * 0.7) * (options.reducedMotion ? 0 : 0.02);
+    camera.lookAt(0, 1.0, 0);
 
     pedestals.forEach((m, i) => {
       const focus = i === active && plannedFlags[i] ? 1 : 0;
