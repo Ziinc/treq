@@ -46,6 +46,7 @@ Terminal state belongs to the workspace. Closing a workspace session can termina
 
 ## Learn More
 
+- [Security and Privacy](/docs/security-and-privacy)
 - [Workspaces](/docs/concepts/workspaces)
 - [Using Treq with a Git Repository](/docs/tutorials/using-treq-with-git-repo)
 - [Changes and Reviews](/docs/concepts/changes-and-reviews)

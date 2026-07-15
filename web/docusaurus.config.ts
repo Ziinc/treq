@@ -227,6 +227,10 @@ const config: Config = {
               label: 'Concepts',
               to: '/learn/concepts',
             },
+            {
+              label: 'Security and Privacy',
+              to: '/docs/security-and-privacy',
+            },
           ],
         },
         {

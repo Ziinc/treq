@@ -189,6 +189,12 @@ test.describe('Footer navigation', () => {
     await expect(page.getByRole('heading', { name: 'Learn', level: 1 })).toBeVisible();
   });
 
+  test('Security and Privacy link navigates to security page', async ({ page }) => {
+    await page.goto('/');
+    await footer(page).getByRole('link', { name: 'Security and Privacy' }).click();
+    await expect(page.getByRole('heading', { name: 'Security and Privacy', level: 1 })).toBeVisible();
+  });
+
   test('GitHub link points to the correct repo', async ({ page }) => {
     await page.goto('/');
     await expect(footer(page).getByRole('link', { name: 'GitHub' }))
