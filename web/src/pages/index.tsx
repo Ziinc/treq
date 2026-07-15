@@ -36,11 +36,11 @@ function HomepageHeader() {
 
         <div className={styles.heroMain}>
           <Heading as="h1" className={styles.heroTitle}>
-            <span className={styles.heroAccent}>Agent Development Environment</span>
+            <span className={styles.heroAccent}>Stacking Agent Development Environment</span>
             {' '}for busy developers
           </Heading>
           <p className={styles.heroEyebrow}>
-            An IDE was built for one developer typing code. An ADE is built for a developer plus a team of coding agents.
+            An IDE was built for one developer typing code. A stacking ADE is built for a developer plus a team of coding agents.
           </p>
           <div className={styles.buttons}>
             <Link
@@ -319,7 +319,7 @@ const SOFTWARE_APP_SCHEMA = {
   '@type': 'SoftwareApplication',
   name: 'Treq',
   description:
-    'Agent Development Environment (ADE) for busy developers. The Open Source Graphite Alternative.',
+    'Stacking Agent Development Environment (ADE) for busy developers. The Open Source Graphite Alternative.',
   url: 'https://treq.dev',
   applicationCategory: 'DeveloperApplication',
   operatingSystem: 'macOS',

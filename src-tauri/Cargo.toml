@@ -1,7 +1,7 @@
 [package]
 name = "treq"
 version = "0.1.3"
-description = "An Agent Development Environment (ADE)"
+description = "A Stacking Agent Development Environment (ADE)"
 authors = ["Ziinc"]
 edition = "2021"
 

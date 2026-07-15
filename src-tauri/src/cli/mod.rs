@@ -98,7 +98,7 @@ pub(super) fn is_supported_cli_command(name: &str) -> bool {
 }
 
 fn print_cli_help() {
-    println!("Treq - Agent Development Environment (ADE)");
+    println!("Treq - Stacking Agent Development Environment (ADE)");
     println!();
     println!("Usage:");
     println!("  treq add <branch_name> [-d description] [-l title] [-s source_branch]");
