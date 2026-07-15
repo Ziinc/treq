@@ -250,7 +250,9 @@ function ComparisonSection(): ReactNode {
               <tr key={row.feature} className={styles.comparisonRow}>
                 <th scope="row" className={styles.comparisonFeatureCell}>
                   <span className={styles.comparisonFeatureLabel}>
-                    <span>{row.feature}</span>
+                    <span className={styles.comparisonFeaturePill}>
+                      {row.feature}
+                    </span>
                     {row.comingSoon ? <ComingSoonBadge /> : null}
                   </span>
                 </th>
