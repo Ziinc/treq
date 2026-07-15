@@ -100,11 +100,6 @@ const FAQ_ITEMS = [
       'Free covers open source developers. You get the full desktop workspace manager and GitHub integration for public repositories. GitHub integration is coming soon.',
   },
   {
-    question: 'What does Pro add?',
-    answer:
-      'Pro adds GitHub access for private repositories and merge queue. Both are coming soon. Billing is $15 per user each month.',
-  },
-  {
     question: 'Is the desktop app still free on Pro?',
     answer:
       'Yes. Pro is a cloud subscription on top of the same open source desktop app. Your local workspaces stay on your machine either way.',
