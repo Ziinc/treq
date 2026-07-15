@@ -71,8 +71,10 @@ jobs:
 
       - name: Install jj CLI (ubuntu)
         if: matrix.platform == 'ubuntu-22.04' # This must match the platform value defined above.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cargo binstall --strategies crate-meta-data jj-cli
+          cargo binstall --no-confirm --disable-telemetry --strategies crate-meta-data,quick-install jj-cli
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Verify pinned tool versions
