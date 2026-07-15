@@ -5,7 +5,8 @@ const sidebar = (page: Page) => page.getByRole('navigation', { name: 'Docs sideb
 const footer = (page: Page) => page.getByRole('contentinfo');
 
 test.describe('Homepage Features layout', () => {
-  test('review screenshot keeps its intrinsic aspect ratio', async ({ page }) => {
+  test('review screenshot keeps aspect ratio and takes most of the row', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/');
     const features = page.getByRole('region', { name: 'Features' });
     await expect(features.getByRole('heading', { name: 'Features', level: 2 })).toBeVisible();
@@ -28,6 +29,16 @@ test.describe('Homepage Features layout', () => {
     const naturalAspect = natural.width / natural.height;
     expect(Math.abs(renderedAspect - naturalAspect)).toBeLessThan(0.05);
     expect(box!.height).toBeLessThan(natural.height * 0.5);
+
+    // Screenshot column is 2fr of a 1fr/2fr grid (at least ~2/3 of the row).
+    const rowWidth = await screenshot.evaluate((img) => {
+      let el: HTMLElement | null = img.parentElement;
+      while (el && getComputedStyle(el).display !== 'grid') {
+        el = el.parentElement;
+      }
+      return el?.getBoundingClientRect().width ?? 0;
+    });
+    expect(box!.width / rowWidth).toBeGreaterThanOrEqual(0.6);
   });
 });
 

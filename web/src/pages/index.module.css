@@ -646,11 +646,11 @@
   line-height: 1.7;
 }
 
-/* Feature rows — alternating text + screenshot */
+/* Feature rows — text ~1/3, screenshot ~2/3 */
 .featureRow {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4rem;
+  grid-template-columns: 1fr 2fr;
+  gap: 3rem;
   align-items: center;
   padding: 4rem 0;
   border-bottom: 1px solid #f3f4f6;
