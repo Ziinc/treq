@@ -6,7 +6,7 @@
 
 # treq
 
-Treq is the open-source AI Workspace Manager and Graphite alternative for parallel development, review, and delivery. It gives teams isolated workspaces, stacked branches, and AI-assisted workflows without giving up control of their code.
+Treq is the open-source AI workspace manager and Graphite alternative for parallel development, review, and delivery on Git repositories. It gives teams isolated workspaces with automatic stack rebasing, stacked branches, and AI-assisted workflows without giving up Git remotes or requiring Jujutsu knowledge.
 
 ![Code Overview](./assets/screenshots/code.png)
 

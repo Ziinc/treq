@@ -1,15 +1,15 @@
 # Treq
 
-> Treq is an open-source macOS app for managing parallel AI development: create isolated Git workspaces per branch, run coding agents inside them, then review, commit, and merge changes without leaving the app.
+> Treq is an open-source macOS app for managing parallel AI development on Git repositories. Create isolated workspaces per branch, run coding agents inside them, then review, commit, and push through normal Git remotes. You do not need Jujutsu knowledge. Treq runs Git and colocated Jujutsu operations under the hood so workspace stacks auto-rebase when targets move.
 
 ## Getting Started
 
-- [Installation and Quickstart](https://treq.dev/docs/getting-started/installation.md): Download Treq for macOS, open a repository, create a workspace, launch an agent, and commit and push changes.
+- [Installation and Quickstart](https://treq.dev/docs/getting-started/installation.md): Download Treq for macOS, open a Git repository, create a workspace, launch an agent, and commit and push changes. Jujutsu CLI install is optional debugging only.
 
 ## Concepts
 
-- [Overview](https://treq.dev/docs/intro.md): Treq's four-layer architecture (Interface, Core runtime, Repository-local storage, Global app storage) and how workspaces, reviews, and terminals compose into the Treq model.
-- [Workspaces](https://treq.dev/docs/concepts/workspaces.md): Git worktrees under `.treq/workspaces/` — lifecycle management, stacked workspaces, automatic rebasing, branch naming patterns, and caching behavior.
+- [Overview](https://treq.dev/docs/intro.md): Git-native workspace and review manager. Four-layer architecture (Interface, Core runtime, Repository-local storage, Global app storage) and how workspaces, reviews, and terminals compose into the Treq model.
+- [Workspaces](https://treq.dev/docs/concepts/workspaces.md): Managed workspaces under `.treq/workspaces/` (not Git worktrees). Lifecycle management, stacked workspaces, automatic rebasing, branch naming patterns, and caching behavior.
 - [Agent Sessions](https://treq.dev/docs/concepts/agent-sessions.md): How Treq starts Claude Code, Codex, or Cursor Agent inside a workspace — plan vs edit mode, workspace isolation, session metadata, and model selection.
 - [Changes and Reviews](https://treq.dev/docs/concepts/changes-and-reviews.md): Workspace diff views (uncommitted, committed, per-commit), inline comments, conflict management, and the four ways to finish a review (copy, plan, edit, discard).
 - [Terminal Sessions](https://treq.dev/docs/concepts/terminal-sessions.md): PTY-backed terminal sessions scoped per workspace; sessions run independently and persist in the background when switching workspaces.
@@ -35,5 +35,5 @@
 
 - [CLI](https://treq.dev/docs/reference/cli.md): `treq add`, `treq set`, `treq st`, `treq mv`, and `treq agent` — command syntax and flags for creating, inspecting, and operating on workspaces from the terminal.
 - [Keyboard Shortcuts](https://treq.dev/docs/reference/keyboard-shortcuts.md): Global shortcuts (`Cmd+N` new workspace, `Cmd+K` command palette), terminal shortcuts (`Cmd+J` toggle, `Cmd+]` new agent terminal), and file browser shortcuts.
-- [Under the Hood](https://treq.dev/docs/under-the-hood.md): Tauri/React/Rust architecture, Jujutsu integration, repository model, stack synchronization, local database layout, and concurrency boundaries.
+- [Under the Hood](https://treq.dev/docs/under-the-hood.md): Tauri/React/Rust architecture, colocated Git and Jujutsu repository model, stack synchronization, local database layout, and concurrency boundaries. Git is the native VCS boundary. Jujutsu is the under-the-hood implementation for automatic workspace rebasing.
 - [Contributing](https://treq.dev/docs/reference/contributing.md): Repository layout by layer, development setup, test strategy, implementation rules, and documentation style guide.

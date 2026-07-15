@@ -16,7 +16,7 @@ module.exports = function jsonLdPlugin() {
               '@type': 'WebSite',
               name: 'Treq',
               url: SITE_URL,
-              description: 'The Open Source Graphite Alternative',
+              description: 'Git-native workspace and review manager for AI-assisted development. The Open Source Graphite Alternative.',
               potentialAction: {
                 '@type': 'SearchAction',
                 target: {

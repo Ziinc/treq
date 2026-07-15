@@ -15,7 +15,7 @@ Treq is split into a React interface, a Rust core runtime, and a test bridge use
 | `src/` | React interface, hooks, shared frontend utilities, and app state providers. |
 | `src-tauri/src/commands/` | Thin command handlers. Keep business logic out of this layer. |
 | `src-tauri/src/core/` | Workspace, commit, repository, and change-management logic. |
-| `src-tauri/src/jj.rs` | Jujutsu and Git repository integration. |
+| `src-tauri/src/jj.rs` | Colocated Git and Jujutsu repository integration (`jj-lib`). |
 | `crates/treq-napi/` | Native test bridge used by frontend integration tests. |
 | `test/` | Vitest unit and integration tests. |
 | `web/` | Documentation site. |

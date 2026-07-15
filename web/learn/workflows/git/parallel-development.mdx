@@ -12,6 +12,8 @@ _Run independent tasks in separate working directories and integrate each result
 
 Parallel development shortens waiting time when tasks can proceed independently. Each task receives its own branch and working directory, so file edits and local build state do not collide.
 
+This article teaches the Git worktree pattern. [Treq](/docs/concepts/workspaces) uses managed workspaces under `.treq/workspaces/` instead of `git worktree add`. Treq handles repository operations in the app and auto-rebases stacks when targets move. You do not need Jujutsu knowledge for that workflow.
+
 Concurrency helps only while review and integration keep pace.
 
 ## Understanding the Workflow

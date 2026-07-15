@@ -89,6 +89,12 @@ jj workspace forget repo-hotfix
 
 `jj workspace forget` removes the workspace record but does not delete its directory. Use Git worktrees in a Git workflow and Jujutsu workspaces in a Jujutsu workflow. Although colocated repositories can expose commits to both tools, mixing their workspace operations without understanding the shared state creates avoidable confusion.
 
+:::tip Treq workspaces
+
+[Treq](/docs/concepts/workspaces) is a Git-native workspace manager. Its managed workspaces live under `.treq/workspaces/`. They are not Git worktrees. Treq colocates Jujutsu with Git so workspace stacks auto-rebase when targets move. You do not need Jujutsu knowledge to use Treq.
+
+:::
+
 ## Engineering Considerations
 
 Use worktrees when you need several checkouts inside one trust boundary. They are well suited to reviews, hotfixes, long-running test processes, and concurrent agent tasks.
