@@ -319,7 +319,7 @@ const SOFTWARE_APP_SCHEMA = {
   '@type': 'SoftwareApplication',
   name: 'Treq',
   description:
-    'Git-native workspace and review manager for AI-assisted development. The Open Source Graphite Alternative.',
+    'Workspace and review manager for Git repositories and AI-assisted development. The Open Source Graphite Alternative.',
   url: 'https://treq.dev',
   applicationCategory: 'DeveloperApplication',
   operatingSystem: 'macOS',
@@ -338,7 +338,7 @@ export default function Home(): ReactNode {
   return (
     <Layout
       title={siteConfig.title}
-      description="Git-native workspace and review manager for AI-assisted development. The Open Source Graphite Alternative.">
+      description="Workspace and review manager for Git repositories and AI-assisted development. The Open Source Graphite Alternative.">
       <Head>
         <script type="application/ld+json">{JSON.stringify(SOFTWARE_APP_SCHEMA)}</script>
       </Head>

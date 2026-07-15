@@ -6,7 +6,7 @@ sidebar_position: 1
 
 _How to set up Treq with your Git repository and understand the relationship between the repo and Treq workspaces._
 
-Treq is a Git-native workspace and review manager. You select a Git repository, create workspaces for parallel work, and continue using Git remotes for fetch and push. You do not need to know [Jujutsu](https://jj-vcs.github.io/jj/latest/) to work with Treq.
+Treq is a workspace and review manager for Git repositories. You select a Git repository, create workspaces for parallel work, and continue using Git remotes for fetch and push. You do not need to know [Jujutsu](https://jj-vcs.github.io/jj/latest/) to work with Treq.
 
 When you open a repository, Treq creates a `.treq/` folder for workspaces and local metadata. It also initializes colocated `.jj/` state. Both folders are added to `.gitignore` so they are never committed.
 
@@ -16,7 +16,7 @@ Colocation is the under-the-hood implementation. It lets Treq rebase workspace b
 
 ```text
 your-project/
-├── .git/                    # Your Git repository (native VCS)
+├── .git/                    # Your Git repository
 ├── .jj/                     # Colocated Jujutsu state (managed by Treq, git-ignored)
 ├── .treq/                   # Treq's data (git-ignored)
 │   ├── workspaces/           # All workspaces stored here

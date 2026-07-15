@@ -24,7 +24,7 @@ Treq has four main layers.
 | Repository-local storage | Stores workspace metadata, repository settings, review comments, terminal session state, and plan history under `.treq`. This state belongs to the selected repository. |
 | Global app storage | Stores app-level preferences and cross-repository state in the application database. This state follows the local app install, not a specific repository. |
 
-Git is the native VCS you work with. Remotes, authentication, and push or pull stay on the Git side. Jujutsu beside Git supplies the revision model that makes automatic workspace rebasing possible. The interface refreshes status after user actions, file watcher events, terminal activity, and explicit refreshes. Expensive repository reads are cached and invalidated after operations that can change branch or file state.
+Git is what you work with for remotes, authentication, and push or pull. Jujutsu beside Git supplies the revision model that makes automatic workspace rebasing possible. The interface refreshes status after user actions, file watcher events, terminal activity, and explicit refreshes. Expensive repository reads are cached and invalidated after operations that can change branch or file state.
 
 ## Workspace Behavior
 
