@@ -359,8 +359,8 @@ export async function buildRoadmapScene(
     clock.t += 0.016;
 
     camera.position.x = 0;
-    camera.position.y = 1.25 + Math.sin(clock.t * 0.7) * (options.reducedMotion ? 0 : 0.02);
-    camera.lookAt(0, 0.65, 0);
+    camera.position.y = 1.85 + Math.sin(clock.t * 0.7) * (options.reducedMotion ? 0 : 0.02);
+    camera.lookAt(0, 0.95, 0);
 
     pedestals.forEach((m, i) => {
       const focus = i === active && plannedFlags[i] ? 1 : 0;
