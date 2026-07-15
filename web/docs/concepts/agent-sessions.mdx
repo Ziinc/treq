@@ -14,13 +14,11 @@ Treq can start Claude Code, Codex, and Cursor Agent. The executable must be inst
 
 Treq resolves the default agent from the repository settings first, then the application settings. It uses Claude Code when neither setting provides a default.
 
-| Agent | Executable | Plan mode | Edit mode |
-|---|---|---|---|
-| Claude Code | `claude` | Uses Claude's plan permission mode | Uses the accept-edits permission mode |
-| Codex | `codex` | Not available | Runs the task with edit access |
-| Cursor Agent | `cursor-agent` | Starts with the plan flag | Starts without the plan flag |
-
-{/* TODO: Document Codex plan mode if it gains parity with Claude Code and Cursor Agent. */}
+| Agent | Plan mode | Edit mode |
+|---|---|---|
+| Claude Code | Uses Claude's plan permission mode | Uses the accept-edits permission mode |
+| Codex | Not available | Runs the task with edit access |
+| Cursor Agent | Starts with the plan flag | Starts without the plan flag |
 
 ## Plan and Edit Modes
 
