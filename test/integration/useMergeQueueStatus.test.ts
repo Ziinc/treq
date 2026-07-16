@@ -151,7 +151,7 @@ describe("useEnqueueWorkspace", () => {
 		const { result } = renderHook(() => useEnqueueWorkspace(repoPath, "feat"), {
 			wrapper: makeWrapper(),
 		});
-		await waitFor(() => result.current.remoteInfo != null);
+		await waitFor(() => expect(result.current.remoteInfo).toBeTruthy());
 
 		await result.current.enqueue.mutateAsync();
 
@@ -172,11 +172,10 @@ describe("useEnqueueWorkspace", () => {
 		const { result } = renderHook(() => useEnqueueWorkspace(repoPath, "feat"), {
 			wrapper: makeWrapper(),
 		});
-		await waitFor(
-			() =>
-				result.current.remoteInfo != null &&
-				result.current.prInfoGh !== undefined,
-		);
+		await waitFor(() => {
+			expect(result.current.remoteInfo).toBeTruthy();
+			expect(result.current.prInfoGh).not.toBeUndefined();
+		});
 
 		await expect(result.current.enqueue.mutateAsync()).rejects.toThrow(
 			"No open PR found",
@@ -193,7 +192,7 @@ describe("useEnqueueWorkspace", () => {
 		const { result } = renderHook(() => useEnqueueWorkspace(repoPath, "feat"), {
 			wrapper: makeWrapper(),
 		});
-		await waitFor(() => result.current.remoteInfo != null);
+		await waitFor(() => expect(result.current.remoteInfo).toBeTruthy());
 
 		await result.current.dequeue.mutateAsync();
 
@@ -214,7 +213,7 @@ describe("useEnqueueWorkspace", () => {
 		const { result } = renderHook(() => useEnqueueWorkspace(repoPath, "feat"), {
 			wrapper: makeWrapper(),
 		});
-		await waitFor(() => result.current.remoteInfo != null);
+		await waitFor(() => expect(result.current.remoteInfo).toBeTruthy());
 
 		await result.current.enqueue.mutateAsync();
 		expect(mockEdgeFn).toHaveBeenCalled();
