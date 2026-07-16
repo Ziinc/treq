@@ -13,7 +13,7 @@ import {
 import type { PrInfo } from "../../src/lib/api-types";
 import { createTestRepo } from "../utils";
 
-const mockEdgeFn = vi.fn();
+const { mockEdgeFn } = vi.hoisted(() => ({ mockEdgeFn: vi.fn() }));
 vi.mock("../../src/lib/supabase", () => ({
 	supabase: {
 		rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
