@@ -8,6 +8,7 @@ export default defineConfig({
     setupFiles: ["./test/setup.integration.ts"],
     include: [
       "test/integration/**/*.test.{ts,tsx}",
+      "test/merge-queue/**/*.test.ts",
       "src/**/*.test.{ts,tsx}",
     ],
     globals: true,
