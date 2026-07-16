@@ -80,16 +80,18 @@
 }
 
 .heroEyebrow {
+  font-family: var(--font-sans);
   font-size: 1.05rem;
   color: #334155;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.6;
   margin-bottom: 1rem;
 }
 
 .heroTitle {
+  font-family: var(--font-marketing);
   font-size: 4rem;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.1;
   margin-bottom: 1.5rem;
   color: #07111f;
@@ -98,6 +100,8 @@
 }
 
 .heroAccent {
+  font-family: var(--font-marketing);
+  font-weight: 600;
   background: linear-gradient(135deg, var(--ifm-color-primary) 0%, var(--ifm-color-primary-dark) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
