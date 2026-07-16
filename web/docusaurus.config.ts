@@ -93,19 +93,6 @@ const config: Config = {
   title: 'Treq',
   tagline: 'The Open Source Graphite Alternative',
   favicon: 'img/favicon.svg',
-  headTags: [
-    {
-      tagName: 'link',
-      attributes: {
-        rel: 'preload',
-        href: 'https://cdn.jsdelivr.net/fontsource/fonts/inter:vf@5.2.8/latin-wght-normal.woff2',
-        as: 'font',
-        type: 'font/woff2',
-        crossorigin: 'anonymous',
-      },
-    },
-  ],
-
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
     v4: true, // Improve compatibility with the upcoming Docusaurus v4
