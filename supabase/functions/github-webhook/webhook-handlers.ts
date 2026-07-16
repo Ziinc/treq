@@ -1,42 +1,38 @@
+// Translates verified GitHub webhook payloads into merge queue commands.
+//
+// The webhook layer performs no orchestration: apart from upserting directly
+// observable GitHub facts (installation/repository rows — fast, idempotent DB
+// writes), every state change is expressed as a PGMQ command executed by the
+// merge-queue-worker.
+
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { GitHubClient } from "./github-client.ts";
-import {
-  enqueueEntry,
-  dequeueEntry,
-  getOrCreateQueue,
-  handleCICompletion,
-  processQueue,
-} from "./queue-processor.ts";
+import type { MergeQueueCommand } from "../_shared/merge-queue/messages.ts";
+import { isQueueTestBranch } from "../_shared/merge-queue/scheduler.ts";
 
-// ── installation / installation_repositories ─────────────────────────────────
+function newCommandId(): string {
+  return crypto.randomUUID();
+}
 
-export async function handleInstallation(
+// ── Directly observable GitHub facts ─────────────────────────────────────────
+
+export async function applyInstallationFacts(
   supabase: SupabaseClient,
+  event: string,
   // deno-lint-ignore no-explicit-any
   payload: Record<string, any>,
-  event: string
 ): Promise<void> {
   const installation = payload.installation;
   const action = payload.action as string;
+  if (!installation) return;
 
   if (event === "installation") {
-    if (action === "deleted" || action === "unsuspend") {
-      if (action === "deleted") {
-        await supabase
-          .from("github_app_installations")
-          .delete()
-          .eq("id", installation.id);
-        return;
-      }
-      if (action === "unsuspend") {
-        await supabase
-          .from("github_app_installations")
-          .update({ suspended_at: null, updated_at: new Date().toISOString() })
-          .eq("id", installation.id);
-        return;
-      }
+    if (action === "deleted") {
+      await supabase
+        .from("github_app_installations")
+        .delete()
+        .eq("id", installation.id);
+      return;
     }
-
     if (action === "suspend") {
       await supabase
         .from("github_app_installations")
@@ -47,8 +43,17 @@ export async function handleInstallation(
         .eq("id", installation.id);
       return;
     }
+    if (action === "unsuspend") {
+      await supabase
+        .from("github_app_installations")
+        .update({ suspended_at: null, updated_at: new Date().toISOString() })
+        .eq("id", installation.id);
+      return;
+    }
 
-    // created / new_permissions_accepted
+    // created / new_permissions_accepted. Deliberately NOT setting
+    // linked_user_id here: linking to a Treq user happens only through the
+    // authenticated installation-intent flow.
     await supabase.from("github_app_installations").upsert(
       {
         id: installation.id,
@@ -58,25 +63,15 @@ export async function handleInstallation(
         app_id: installation.app_id,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "id" }
+      { onConflict: "id" },
     );
-
-    // Upsert repos included in the installation event
-    const repos = payload.repositories ?? [];
-    await upsertRepos(supabase, installation.id, repos);
+    await upsertRepos(supabase, installation.id, payload.repositories ?? []);
   }
 
   if (event === "installation_repositories") {
-    const added = payload.repositories_added ?? [];
-    const removed = payload.repositories_removed ?? [];
-
-    await upsertRepos(supabase, installation.id, added);
-
-    for (const r of removed as { id: number }[]) {
-      await supabase
-        .from("github_repositories")
-        .delete()
-        .eq("id", r.id);
+    await upsertRepos(supabase, installation.id, payload.repositories_added ?? []);
+    for (const r of (payload.repositories_removed ?? []) as { id: number }[]) {
+      await supabase.from("github_repositories").delete().eq("id", r.id);
     }
   }
 }
@@ -85,7 +80,7 @@ async function upsertRepos(
   supabase: SupabaseClient,
   installationId: number,
   // deno-lint-ignore no-explicit-any
-  repos: any[]
+  repos: any[],
 ): Promise<void> {
   if (repos.length === 0) return;
   await supabase.from("github_repositories").upsert(
@@ -99,37 +94,87 @@ async function upsertRepos(
       default_branch: r.default_branch ?? "main",
       updated_at: new Date().toISOString(),
     })),
-    { onConflict: "id" }
+    { onConflict: "id" },
   );
 }
 
-// ── pull_request ──────────────────────────────────────────────────────────────
+// ── Command builders ──────────────────────────────────────────────────────────
 
-export async function handlePullRequest(
+export async function commandsForEvent(
+  supabase: SupabaseClient,
+  event: string,
+  // deno-lint-ignore no-explicit-any
+  payload: Record<string, any>,
+  deliveryId: string,
+): Promise<MergeQueueCommand[]> {
+  switch (event) {
+    case "installation":
+    case "installation_repositories":
+      return commandsForInstallation(event, payload, deliveryId);
+    case "pull_request":
+      return commandsForPullRequest(supabase, payload, deliveryId);
+    case "check_suite":
+      return commandsForCheckSuite(supabase, payload, deliveryId);
+    default:
+      return [];
+  }
+}
+
+function commandsForInstallation(
+  event: string,
+  // deno-lint-ignore no-explicit-any
+  payload: Record<string, any>,
+  deliveryId: string,
+): MergeQueueCommand[] {
+  const installation = payload.installation;
+  if (!installation) return [];
+
+  const action: "created" | "repositories_changed" | "deleted" | null =
+    event === "installation_repositories"
+      ? "repositories_changed"
+      : payload.action === "created"
+        ? "created"
+        : payload.action === "deleted"
+          ? "deleted"
+          : null;
+  if (!action) return [];
+
+  return [
+    {
+      version: 1,
+      type: "installation.sync",
+      commandId: newCommandId(),
+      deliveryId,
+      installationId: installation.id,
+      action,
+      occurredAt: new Date().toISOString(),
+    },
+  ];
+}
+
+async function commandsForPullRequest(
   supabase: SupabaseClient,
   // deno-lint-ignore no-explicit-any
-  payload: Record<string, any>
-): Promise<void> {
+  payload: Record<string, any>,
+  deliveryId: string,
+): Promise<MergeQueueCommand[]> {
   const action = payload.action as string;
   const pr = payload.pull_request;
   const repoPayload = payload.repository;
-  const installationId: number = payload.installation?.id;
+  if (!payload.installation?.id || !pr || !repoPayload) return [];
 
-  if (!installationId) return;
+  const relevant = ["labeled", "unlabeled", "closed", "synchronize"];
+  if (!relevant.includes(action)) return [];
 
-  // Resolve repo in our DB
   const { data: repoRow } = await supabase
     .from("github_repositories")
-    .select("id, default_branch")
+    .select("id")
     .eq("id", repoPayload.id)
     .maybeSingle();
+  if (!repoRow) return []; // repo not tracked
 
-  if (!repoRow) return; // repo not tracked
-
-  // Determine target branch (base ref of the PR)
+  // Queue configuration is keyed by the PR's actual target branch.
   const targetBranch: string = pr.base.ref;
-
-  // Get queue config to know the trigger label
   const { data: configRow } = await supabase
     .from("merge_queue_configs")
     .select("queue_trigger_label, enabled")
@@ -137,189 +182,130 @@ export async function handlePullRequest(
     .eq("target_branch", targetBranch)
     .maybeSingle();
 
-  // Default trigger label if no config exists yet
   const triggerLabel: string = configRow?.queue_trigger_label ?? "merge-queue";
   const queueEnabled: boolean = configRow?.enabled ?? true;
-
-  if (!queueEnabled) return;
+  if (!queueEnabled) return [];
 
   const labelName: string | undefined =
     action === "labeled" || action === "unlabeled"
       ? payload.label?.name
       : undefined;
 
-  if (action === "labeled" && labelName === triggerLabel) {
-    // Enqueue the PR
-    const queue = await getOrCreateQueue(supabase, repoRow.id, targetBranch);
-    await enqueueEntry(
-      supabase,
-      queue.id,
-      pr.number,
-      pr.head.sha,
-      pr.title,
-      pr.user?.login ?? null,
-      pr.head.ref ?? null
-    );
-    await processQueue(supabase, queue, installationId, repoPayload.owner.login, repoPayload.name);
-    return;
+  if (action === "labeled") {
+    if (labelName !== triggerLabel) return [];
+    const { data: queue, error } = await supabase.rpc("get_or_create_merge_queue", {
+      p_repo_id: repoRow.id,
+      p_target_branch: targetBranch,
+    });
+    if (error || !queue) {
+      throw new Error(`failed to resolve queue: ${error?.message}`);
+    }
+    return [
+      {
+        version: 1,
+        type: "entry.enqueue",
+        commandId: newCommandId(),
+        deliveryId,
+        repositoryId: String(repoRow.id),
+        queueId: queue.id,
+        pullRequestNumber: pr.number,
+        headSha: pr.head.sha,
+        baseBranch: targetBranch,
+        prTitle: pr.title ?? null,
+        prAuthor: pr.user?.login ?? null,
+        headRefName: pr.head.ref ?? null,
+        occurredAt: new Date().toISOString(),
+      },
+    ];
   }
 
-  if (
-    (action === "unlabeled" && labelName === triggerLabel) ||
-    action === "closed"
-  ) {
-    // Dequeue the PR
-    const { data: queueRow } = await supabase
-      .from("merge_queues")
-      .select("id, paused, bisect_mode")
-      .eq("repo_id", repoRow.id)
-      .eq("target_branch", targetBranch)
-      .maybeSingle();
+  // unlabeled / closed / synchronize only matter for PRs already queued.
+  const { data: queueRow } = await supabase
+    .from("merge_queues")
+    .select("id")
+    .eq("repo_id", repoRow.id)
+    .eq("target_branch", targetBranch)
+    .maybeSingle();
+  if (!queueRow) return [];
 
-    if (!queueRow) return;
+  const { data: entryRow } = await supabase
+    .from("merge_queue_entries")
+    .select("id, status")
+    .eq("queue_id", queueRow.id)
+    .eq("pr_number", pr.number)
+    .maybeSingle();
+  if (!entryRow) return [];
+  if (["merged", "failed", "dequeued"].includes(entryRow.status)) return [];
 
-    await dequeueEntry(
-      supabase,
-      queueRow.id,
-      pr.number,
-      action === "closed"
-        ? pr.merged
-          ? "PR merged outside the queue"
-          : "PR closed"
-        : "Label removed"
-    );
-    return;
-  }
+  if (action === "unlabeled" && labelName !== triggerLabel) return [];
 
   if (action === "synchronize") {
-    // PR's HEAD changed while in the queue — update SHA and restart CI for its lane
-    const { data: queueRow } = await supabase
-      .from("merge_queues")
-      .select("id, paused, bisect_mode")
-      .eq("repo_id", repoRow.id)
-      .eq("target_branch", targetBranch)
-      .maybeSingle();
-
-    if (!queueRow) return;
-
-    const { data: entryRow } = await supabase
-      .from("merge_queue_entries")
-      .select("id, status")
-      .eq("queue_id", queueRow.id)
-      .eq("pr_number", pr.number)
-      .maybeSingle();
-
-    if (!entryRow) return;
-    if (["merged", "failed", "dequeued"].includes(entryRow.status)) return;
-
-    // Update SHA
-    await supabase
-      .from("merge_queue_entries")
-      .update({ pr_sha: pr.head.sha, updated_at: new Date().toISOString() })
-      .eq("id", entryRow.id);
-
-    if (entryRow.status === "testing") {
-      // Cancel the CI run containing this entry and restart
-      const { data: ciRuns } = await supabase
-        .from("ci_runs")
-        .select("*")
-        .eq("queue_id", queueRow.id)
-        .in("status", ["pending", "running"])
-        .contains("entry_ids", [entryRow.id]);
-
-      const gh = await GitHubClient.forInstallation(
-        installationId,
-        repoPayload.owner.login,
-        repoPayload.name
-      );
-
-      for (const run of ciRuns ?? []) {
-        // cancelRunAndHigherLanes is not exported; we replicate the logic inline
-        const { data: toCancel } = await supabase
-          .from("ci_runs")
-          .select("*")
-          .eq("queue_id", queueRow.id)
-          .gte("lane_number", run.lane_number)
-          .in("status", ["pending", "running"]);
-
-        for (const r of toCancel ?? []) {
-          await supabase
-            .from("ci_runs")
-            .update({ status: "cancelled", completed_at: new Date().toISOString() })
-            .eq("id", r.id);
-          await supabase
-            .from("merge_queue_entries")
-            .update({ status: "queued", updated_at: new Date().toISOString() })
-            .in("id", r.entry_ids)
-            .eq("status", "testing");
-          try {
-            await gh.deleteBranch(r.test_branch);
-          } catch {
-            // ignore
-          }
-        }
-      }
-
-      await processQueue(
-        supabase,
-        queueRow,
-        installationId,
-        repoPayload.owner.login,
-        repoPayload.name
-      );
-    }
+    return [
+      {
+        version: 1,
+        type: "entry.dequeue",
+        commandId: newCommandId(),
+        deliveryId,
+        repositoryId: String(repoRow.id),
+        queueId: queueRow.id,
+        pullRequestNumber: pr.number,
+        reason: "synchronized",
+        headSha: pr.head.sha,
+        occurredAt: new Date().toISOString(),
+      },
+    ];
   }
+
+  return [
+    {
+      version: 1,
+      type: "entry.dequeue",
+      commandId: newCommandId(),
+      deliveryId,
+      repositoryId: String(repoRow.id),
+      queueId: queueRow.id,
+      pullRequestNumber: pr.number,
+      reason: action === "closed" ? "closed" : "label_removed",
+      merged: action === "closed" ? Boolean(pr.merged) : undefined,
+      occurredAt: new Date().toISOString(),
+    },
+  ];
 }
 
-// ── check_suite ───────────────────────────────────────────────────────────────
-
-export async function handleCheckSuite(
+async function commandsForCheckSuite(
   supabase: SupabaseClient,
   // deno-lint-ignore no-explicit-any
-  payload: Record<string, any>
-): Promise<void> {
-  const action = payload.action as string;
-  if (action !== "completed") return;
+  payload: Record<string, any>,
+  deliveryId: string,
+): Promise<MergeQueueCommand[]> {
+  if (payload.action !== "completed") return [];
 
   const suite = payload.check_suite;
-  const headSha: string = suite.head_sha;
-  const headBranch: string | null = suite.head_branch;
-  const conclusion: string | null = suite.conclusion;
-  const installationId: number = payload.installation?.id;
+  const conclusion: string | null = suite?.conclusion;
+  const headBranch: string | null = suite?.head_branch;
+  const headSha: string | null = suite?.head_sha;
+  if (!conclusion || !headSha) return [];
+  if (!headBranch || !isQueueTestBranch(headBranch)) return [];
 
-  if (!installationId) return;
-  if (!conclusion) return; // null means still in progress
-
-  // Only handle our test branches
-  if (!headBranch?.startsWith("treq-queue/")) return;
-
-  // Look up the CI run by head SHA
   const { data: ciRun } = await supabase
     .from("ci_runs")
-    .select("*")
+    .select("id, queue_id, head_sha")
     .eq("head_sha", headSha)
-    .eq("status", "running")
+    .in("status", ["pending", "running"])
     .maybeSingle();
+  if (!ciRun) return [];
 
-  if (!ciRun) return;
-
-  const repoPayload = payload.repository;
-  const owner: string = repoPayload.owner.login;
-  const repo: string = repoPayload.name;
-
-  // Map GitHub conclusions to pass/fail
-  // GitHub conclusions: success | failure | neutral | cancelled | skipped | timed_out | action_required
-  const normalizedConclusion =
-    conclusion === "success" || conclusion === "neutral" || conclusion === "skipped"
-      ? "success"
-      : conclusion;
-
-  await handleCICompletion(
-    supabase,
-    ciRun,
-    normalizedConclusion,
-    installationId,
-    owner,
-    repo
-  );
+  return [
+    {
+      version: 1,
+      type: "ci.completed",
+      commandId: newCommandId(),
+      deliveryId,
+      queueId: ciRun.queue_id,
+      ciRunId: ciRun.id,
+      testedSha: headSha,
+      conclusion,
+      occurredAt: new Date().toISOString(),
+    },
+  ];
 }
