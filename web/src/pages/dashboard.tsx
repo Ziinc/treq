@@ -309,6 +309,22 @@ function RepoConfigPanel({
 function IntegrationsTab() {
   const [repos, setRepos] = useState<GithubRepo[]>([]);
   const [loadingRepos, setLoadingRepos] = useState(true);
+  const [installError, setInstallError] = useState<string | null>(null);
+
+  // Installation linking requires a server-created single-use intent; the
+  // opaque state travels through GitHub's install flow back to our callback.
+  const startInstall = useCallback(async () => {
+    setInstallError(null);
+    const { data, error } = await supabase.functions.invoke(
+      "create-github-install-intent",
+      { body: {} }
+    );
+    if (error || !data?.state) {
+      setInstallError(error?.message ?? "Failed to start installation");
+      return;
+    }
+    window.location.href = `${GITHUB_APP_INSTALL_URL}?state=${encodeURIComponent(data.state)}`;
+  }, []);
 
   const loadRepos = useCallback(async () => {
     setLoadingRepos(true);
@@ -350,17 +366,22 @@ function IntegrationsTab() {
             {isConnected ? (
               <span style={styles.connectedBadge}>Connected</span>
             ) : (
-              <a
-                href={GITHUB_APP_INSTALL_URL}
-                style={styles.primaryButton}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={startInstall}
+                style={{ ...styles.primaryButton, border: "none", cursor: "pointer" }}
               >
                 Install GitHub App
-              </a>
+              </button>
             )}
           </div>
         </div>
+
+        {installError && (
+          <div style={{ color: "#ef4444", fontSize: "0.85rem", marginTop: "0.5rem" }}>
+            {installError}
+          </div>
+        )}
 
         {isConnected && (
           <div style={styles.repoSection}>

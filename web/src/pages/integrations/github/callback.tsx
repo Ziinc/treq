@@ -14,7 +14,7 @@ function CallbackContent() {
     const run = async () => {
       const params = new URLSearchParams(window.location.search);
       const installationId = params.get("installation_id");
-      const setupAction = params.get("setup_action");
+      const installState = params.get("state");
 
       if (!installationId) {
         setState("error");
@@ -29,18 +29,34 @@ function CallbackContent() {
       if (!session) {
         setState("unauthenticated");
         setMessage(
-          `Please sign in and then visit: /integrations/github/callback?installation_id=${installationId}&setup_action=${setupAction ?? "install"}`
+          "Please sign in, then restart the installation from the dashboard."
         );
         return;
       }
 
-      const { error } = await supabase.rpc("link_github_installation", {
-        p_installation_id: parseInt(installationId, 10),
-      });
+      if (!installState) {
+        // Returning from "manage access" on an already-linked installation:
+        // there is nothing to link without a fresh install intent.
+        window.location.href = "/dashboard?tab=integrations";
+        return;
+      }
 
-      if (error) {
+      // Linking is completed server-side: the single-use state must match an
+      // unexpired intent created by this user, and the installation is
+      // verified against GitHub before it is linked.
+      const { data, error } = await supabase.functions.invoke(
+        "complete-github-installation",
+        {
+          body: {
+            installation_id: parseInt(installationId, 10),
+            state: installState,
+          },
+        }
+      );
+
+      if (error || data?.error) {
         setState("error");
-        setMessage(error.message);
+        setMessage(data?.error ?? error?.message ?? "Unknown error");
         return;
       }
 
