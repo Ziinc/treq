@@ -80,19 +80,6 @@ Deno.serve(async (req) => {
     return json({ error: "Forbidden" }, 403);
   }
 
-  // Get the queue config to know the trigger label (fall back to "merge-queue")
-  const { data: configRow } = await supabase
-    .from("merge_queue_configs")
-    .select("queue_trigger_label, enabled")
-    .eq("repo_id", repoRow.id)
-    .maybeSingle();
-
-  if (configRow && !configRow.enabled && action === "enqueue") {
-    return json({ error: "Merge queue is disabled for this repository" }, 409);
-  }
-
-  const triggerLabel: string = configRow?.queue_trigger_label ?? "merge-queue";
-
   // Get an installation token to make GitHub API calls
   let token: string;
   try {
@@ -111,7 +98,8 @@ Deno.serve(async (req) => {
 
   const apiBase = `https://api.github.com/repos/${repoRow.owner}/${repoRow.name}`;
 
-  // Find the open PR for this branch
+  // Find the open PR for this branch first: its base branch determines which
+  // merge queue configuration applies.
   const prRes = await fetch(
     `${apiBase}/pulls?head=${encodeURIComponent(repoRow.owner + ":" + branch_name)}&state=open&per_page=5`,
     { headers: ghHeaders }
@@ -122,7 +110,8 @@ Deno.serve(async (req) => {
     return json({ error: `GitHub API error looking up PR: ${prRes.status} ${text}` }, 502);
   }
 
-  const prs: { number: number; head: { ref: string } }[] = await prRes.json();
+  const prs: { number: number; head: { ref: string }; base: { ref: string } }[] =
+    await prRes.json();
   const pr = prs.find((p) => p.head.ref === branch_name);
 
   if (!pr) {
@@ -131,6 +120,23 @@ Deno.serve(async (req) => {
       404
     );
   }
+
+  // Queue config is keyed by (repo, target branch) — use the PR's actual base.
+  const { data: configRow } = await supabase
+    .from("merge_queue_configs")
+    .select("queue_trigger_label, enabled")
+    .eq("repo_id", repoRow.id)
+    .eq("target_branch", pr.base.ref)
+    .maybeSingle();
+
+  if (configRow && !configRow.enabled && action === "enqueue") {
+    return json(
+      { error: `Merge queue is disabled for target branch '${pr.base.ref}'` },
+      409
+    );
+  }
+
+  const triggerLabel: string = configRow?.queue_trigger_label ?? "merge-queue";
 
   if (action === "enqueue") {
     const labelRes = await fetch(`${apiBase}/issues/${pr.number}/labels`, {
