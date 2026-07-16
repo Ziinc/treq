@@ -5,7 +5,7 @@
 // Auth: user JWT in Authorization header (passed automatically by supabase.functions.invoke)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getInstallationToken } from "../github-webhook/github-client.ts";
+import { getInstallationToken } from "../_shared/merge-queue/github-adapter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

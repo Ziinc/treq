@@ -283,6 +283,18 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+[functions.github-webhook]
+# GitHub calls this endpoint directly; authentication is the HMAC signature
+# check inside the function, not a Supabase JWT.
+verify_jwt = false
+
+[functions.merge-queue-worker]
+# Invoked by cron / the webhook nudge with the service-role key.
+verify_jwt = true
+
+[functions.merge-queue-reconciler]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
