@@ -33,7 +33,7 @@ const config: Config = {
               splitChunks: {
                 chunks: 'all' as const,
                 cacheGroups: {
-                  // three.js — only loaded on rubber-duck and vibe-idea-generator pages
+                  // three.js — only loaded on rubber-duck, vibe-idea-generator, and roadmap pages
                   three: {
                     test: /[\\/]node_modules[\\/]three[\\/]/,
                     name: 'chunk-three',
@@ -188,10 +188,16 @@ const config: Config = {
           position: 'left',
         },
         {
+          to: '/roadmap',
+          label: 'Roadmap',
+          position: 'left',
+        },
+        {
           to: '/changelog',
           label: 'Changelog',
           position: 'left',
         },
+
         ...(featureFlags.pro ? [{
           to: '/dashboard',
           label: 'Dashboard',
@@ -227,6 +233,10 @@ const config: Config = {
               label: 'Concepts',
               to: '/learn/concepts',
             },
+            {
+              label: 'Security and Privacy',
+              to: '/docs/security-and-privacy',
+            },
           ],
         },
         {
@@ -237,12 +247,16 @@ const config: Config = {
               to: '/pricing',
             },
             {
-              label: 'GitHub',
-              href: 'https://github.com/Ziinc/treq',
+              label: 'Roadmap',
+              to: '/roadmap',
             },
             {
-              label: 'Issues',
-              href: 'https://github.com/Ziinc/treq/issues',
+              label: 'Changelog',
+              to: '/changelog',
+            },
+            {
+              label: 'GitHub',
+              href: 'https://github.com/Ziinc/treq',
             },
           ],
         },
