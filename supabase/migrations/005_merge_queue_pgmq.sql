@@ -279,6 +279,10 @@ grant execute on function public.acquire_merge_queue_lease(uuid, uuid, int) to s
 grant execute on function public.renew_merge_queue_lease(uuid, uuid, int) to service_role;
 grant execute on function public.release_merge_queue_lease(uuid, uuid) to service_role;
 
+-- A lane whose entries have all been merged into the target branch is
+-- 'merged' — distinct from 'passed' (CI green, still waiting on lower lanes).
+alter type public.ci_run_status add value if not exists 'merged';
+
 -- ── Relational CI-run membership ─────────────────────────────────────────────
 -- Replaces ci_runs.entry_ids uuid[] as the source of truth for lane
 -- membership. entry_ids continues to be written for the compatibility read
