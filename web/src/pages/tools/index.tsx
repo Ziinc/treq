@@ -1,5 +1,6 @@
 import React from 'react';
 import Layout from '@theme/Layout';
+import Head from '@docusaurus/Head';
 import Link from '@docusaurus/Link';
 import styles from './index.module.css';
 
@@ -54,9 +55,25 @@ const tools = [
   },
 ];
 
+const TOOLS_SCHEMA = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'Tools',
+  description: 'Developer tools built by the Treq team.',
+  url: 'https://treq.dev/tools',
+  publisher: {
+    '@type': 'Organization',
+    name: 'Treq',
+    url: 'https://treq.dev',
+  },
+};
+
 export default function ToolsPage() {
   return (
     <Layout title="Tools" description="Developer tools built by the Treq team.">
+      <Head>
+        <script type="application/ld+json">{JSON.stringify(TOOLS_SCHEMA)}</script>
+      </Head>
       <div className={styles.page}>
         <div className={styles.header}>
           <h1 className={styles.title}>Tools</h1>

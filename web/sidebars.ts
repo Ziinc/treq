@@ -66,6 +66,11 @@ const sidebars: SidebarsConfig = {
       link: {type: 'doc', id: 'troubleshooting/index'},
       items: [],
     },
+    {
+      type: 'doc',
+      id: 'security-and-privacy',
+      label: 'Security and Privacy',
+    },
   ],
 };
 

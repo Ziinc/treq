@@ -6,12 +6,13 @@ import pkg from '../package.json';
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const featureFlags = pkg.featureFlags;
-const isProduction = process.env.NODE_ENV === 'production';
+const shouldLoadGoogleTag = process.env.DOCUSAURUS_ENABLE_GTAG === 'true';
 
 const config: Config = {
   plugins: [
     require.resolve('./plugins/rawMarkdownPlugin'),
     require.resolve('./plugins/versionPlugin'),
+    require.resolve('./plugins/jsonLdPlugin'),
     [
       '@docusaurus/plugin-content-docs',
       {
@@ -32,7 +33,7 @@ const config: Config = {
               splitChunks: {
                 chunks: 'all' as const,
                 cacheGroups: {
-                  // three.js — only loaded on rubber-duck and vibe-idea-generator pages
+                  // three.js — only loaded on rubber-duck, vibe-idea-generator, and roadmap pages
                   three: {
                     test: /[\\/]node_modules[\\/]three[\\/]/,
                     name: 'chunk-three',
@@ -137,9 +138,9 @@ const config: Config = {
         },
         blog: false,
         theme: {
-          customCss: './src/css/custom.css',
+          customCss: ['./src/css/fonts.css', './src/css/custom.css'],
         },
-        ...(isProduction ? {
+        ...(shouldLoadGoogleTag ? {
           gtag: {
             trackingID: 'G-V9MPP2ZWZF',
             anonymizeIP: true,
@@ -182,10 +183,21 @@ const config: Config = {
           position: 'left',
         },
         {
+          to: '/pricing',
+          label: 'Pricing',
+          position: 'left',
+        },
+        {
+          to: '/roadmap',
+          label: 'Roadmap',
+          position: 'left',
+        },
+        {
           to: '/changelog',
           label: 'Changelog',
           position: 'left',
         },
+
         ...(featureFlags.pro ? [{
           to: '/dashboard',
           label: 'Dashboard',
@@ -221,18 +233,30 @@ const config: Config = {
               label: 'Concepts',
               to: '/learn/concepts',
             },
+            {
+              label: 'Security and Privacy',
+              to: '/docs/security-and-privacy',
+            },
           ],
         },
         {
           title: 'More',
           items: [
             {
-              label: 'GitHub',
-              href: 'https://github.com/Ziinc/treq',
+              label: 'Pricing',
+              to: '/pricing',
             },
             {
-              label: 'Issues',
-              href: 'https://github.com/Ziinc/treq/issues',
+              label: 'Roadmap',
+              to: '/roadmap',
+            },
+            {
+              label: 'Changelog',
+              to: '/changelog',
+            },
+            {
+              label: 'GitHub',
+              href: 'https://github.com/Ziinc/treq',
             },
           ],
         },

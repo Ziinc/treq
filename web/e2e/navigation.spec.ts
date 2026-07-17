@@ -4,6 +4,41 @@ const nav = (page: Page) => page.getByRole('navigation', { name: 'Main' });
 const sidebar = (page: Page) => page.getByRole('navigation', { name: 'Docs sidebar' });
 const footer = (page: Page) => page.getByRole('contentinfo');
 
+test.describe('Homepage Features layout', () => {
+  test('review screenshot keeps aspect ratio and takes most of the row', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/');
+    const features = page.getByRole('region', { name: 'Features' });
+    await expect(features.getByRole('heading', { name: 'Features', level: 2 })).toBeVisible();
+
+    const screenshot = features.getByRole('img', {
+      name: 'Treq code review screenshot showing comments sent to Claude',
+    });
+    await screenshot.scrollIntoViewIfNeeded();
+
+    const box = await screenshot.boundingBox();
+    expect(box).not.toBeNull();
+
+    // Intrinsic size comes from the HTML width/height attrs on the <img>.
+    const naturalWidth = Number(await screenshot.getAttribute('width'));
+    const naturalHeight = Number(await screenshot.getAttribute('height'));
+    expect(naturalWidth).toBeGreaterThan(0);
+    expect(naturalHeight).toBeGreaterThan(0);
+
+    // Regression: HTML width/height attrs without CSS height:auto left the
+    // image at intrinsic height (1749px) while width shrank, stretching it.
+    const renderedAspect = box!.width / box!.height;
+    const naturalAspect = naturalWidth / naturalHeight;
+    expect(Math.abs(renderedAspect - naturalAspect)).toBeLessThan(0.05);
+    expect(box!.height).toBeLessThan(naturalHeight * 0.5);
+
+    // Screenshot is 2fr of a 1fr/2fr row inside the Features section (~2/3 width).
+    const featuresBox = await features.boundingBox();
+    expect(featuresBox).not.toBeNull();
+    expect(box!.width / featuresBox!.width).toBeGreaterThanOrEqual(0.55);
+  });
+});
+
 test.describe('Navbar navigation', () => {
   test('Learn link navigates to learn section', async ({ page }) => {
     await page.goto('/');
@@ -27,13 +62,27 @@ test.describe('Navbar navigation', () => {
     await page.goto('/');
     await nav(page).getByRole('link', { name: 'Learn' }).click();
     await nav(page).getByRole('link', { name: 'Treq Logo' }).click();
-    await expect(page.getByRole('heading', { name: 'AI Workspace Manager', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Stacking Agent Development Environment/, level: 1 })).toBeVisible();
   });
 
   test('GitHub link points to the correct repo', async ({ page }) => {
     await page.goto('/');
     await expect(nav(page).getByRole('link', { name: 'GitHub' }))
       .toHaveAttribute('href', 'https://github.com/Ziinc/treq');
+  });
+
+  test('Pricing link navigates to pricing page', async ({ page }) => {
+    await page.goto('/');
+    await nav(page).getByRole('link', { name: 'Pricing' }).click();
+    await expect(page.getByRole('heading', { name: 'Pricing', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Free', level: 2 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Pro', level: 2 })).toBeVisible();
+  });
+
+  test('Roadmap link navigates to roadmap page', async ({ page }) => {
+    await page.goto('/');
+    await nav(page).getByRole('link', { name: 'Roadmap' }).click();
+    await expect(page.getByRole('heading', { name: 'Roadmap', level: 1 })).toBeVisible();
   });
 });
 
@@ -164,7 +213,7 @@ test.describe('Cross-section navigation', () => {
     await nav(page).getByRole('link', { name: 'Docs' }).click();
     await sidebar(page).getByRole('link', { name: 'Installation' }).click();
     await nav(page).getByRole('link', { name: 'Treq Logo' }).click();
-    await expect(page.getByRole('heading', { name: 'AI Workspace Manager', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Stacking Agent Development Environment/, level: 1 })).toBeVisible();
   });
 });
 
@@ -181,9 +230,27 @@ test.describe('Footer navigation', () => {
     await expect(page.getByRole('heading', { name: 'Learn', level: 1 })).toBeVisible();
   });
 
+  test('Security and Privacy link navigates to security page', async ({ page }) => {
+    await page.goto('/');
+    await footer(page).getByRole('link', { name: 'Security and Privacy' }).click();
+    await expect(page.getByRole('heading', { name: 'Security and Privacy', level: 1 })).toBeVisible();
+  });
+
   test('GitHub link points to the correct repo', async ({ page }) => {
     await page.goto('/');
     await expect(footer(page).getByRole('link', { name: 'GitHub' }))
       .toHaveAttribute('href', 'https://github.com/Ziinc/treq');
+  });
+
+  test('Pricing link navigates to pricing page', async ({ page }) => {
+    await page.goto('/');
+    await footer(page).getByRole('link', { name: 'Pricing' }).click();
+    await expect(page.getByRole('heading', { name: 'Pricing', level: 1 })).toBeVisible();
+  });
+
+  test('Roadmap link navigates to roadmap page', async ({ page }) => {
+    await page.goto('/');
+    await footer(page).getByRole('link', { name: 'Roadmap' }).click();
+    await expect(page.getByRole('heading', { name: 'Roadmap', level: 1 })).toBeVisible();
   });
 });

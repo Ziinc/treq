@@ -4,11 +4,22 @@ sidebar_position: 1
 
 # Learn
 
-AI agents are improving fast. Keeping up with AI-assisted software development, and the Git workflows that support it, is the next challenge for developers at every level, from newcomers to seasoned engineers. Workflows and tooling change quickly; it's easy to fall behind. The Learn section is a reference across experience levels for AI-aided software development and workflow discussion. It is broader than Treq: Treq comes up where relevant, but the focus is on the wider AI tooling landscape, new tools as they launch, and how to incorporate each into your workflow.
+AI agents move quickly. The Git workflows around them change just as fast. This Learn section is a reference for AI-aided software development.
 
-- **[Concepts](/learn/concepts)**: core ideas: coding agents, human-in-the-loop development, AI code review, Git worktrees, stacked PRs, and more.
-- **[Workflows](/learn/workflows)**: goal-oriented guides for the software development workflow, with walkthroughs on how to incorporate AI into your daily work.
-- **[Tutorials](/learn/tutorials)**: guided walkthroughs for setting up AI coding tools and completing your first workflow with them.
-- **[How-To](/learn/how-to)**: short task-focused guides for specific operations.
+These guides define the category:
 
-To learn more about Treq and how the product works for the software development cycle, refer to the [Product Documentation overview](/docs/).
+- [Parallel Coding Agents](/learn/parallel-coding-agents)
+- [Human in the Loop AI Code Review](/learn/ai-code-review)
+- [Git Worktrees for AI](/learn/git-worktrees-for-ai)
+- [Stacked PRs for AI Development](/learn/stacked-prs)
+- [Graphite Alternative](/learn/graphite-alternative)
+
+These guides answer specific workflow questions:
+
+- [Run Multiple Claude Code Sessions](/learn/how-to/how-to-run-multiple-claude-code-sessions)
+- [Auto-Rebasing AI Workspaces](/learn/how-to/auto-rebase-ai-branches)
+- [Review AI-Generated PRs](/learn/how-to/review-ai-generated-prs)
+- [Fix Merge Conflicts from Coding Agents](/learn/how-to/merge-conflicts-with-coding-agents)
+- [Git Worktrees vs Clones for Agents](/learn/how-to/git-worktrees-vs-clones-for-agents)
+
+For the Treq product, see the [Product Documentation overview](/docs/).

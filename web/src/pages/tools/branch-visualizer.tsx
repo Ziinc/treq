@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Layout from '@theme/Layout';
+import Head from '@docusaurus/Head';
 import { useHistory, useLocation } from '@docusaurus/router';
 import {
   type Commit,
@@ -186,6 +187,23 @@ function useToast() {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+const SCHEMA = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Branch Visualizer',
+  description:
+    'Sketch git branch diagrams with a hand-drawn aesthetic. Shareable via URL.',
+  url: 'https://treq.dev/tools/branch-visualizer',
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: 'Any',
+  isAccessibleForFree: true,
+  provider: {
+    '@type': 'Organization',
+    name: 'Treq',
+    url: 'https://treq.dev',
+  },
+};
+
 export default function BranchVisualizerPage() {
   const location = useLocation();
   const history = useHistory();
@@ -288,6 +306,9 @@ export default function BranchVisualizerPage() {
       title="Branch Visualizer"
       description="Visualize git branch structures with a hand-drawn aesthetic. Shareable via URL."
     >
+      <Head>
+        <script type="application/ld+json">{JSON.stringify(SCHEMA)}</script>
+      </Head>
       <div className={styles.page}>
         {toast && <div className={styles.toast}>{toast}</div>}
 

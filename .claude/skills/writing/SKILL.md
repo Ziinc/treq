@@ -84,6 +84,10 @@ Same facts, no hype, no semicolon, and it now leads with what the reader gains.
 - No apologetic openers: "it should be noted that", "it is worth mentioning".
 - Paragraphs 3 to 4 sentences. Longer means break it up or use a list.
 - Headings organize the doc. Do not use prose to transition between sections.
+- Do not end a paragraph with a sentence shorter than three words. Fragments like
+  "Coordinate those operations." or "Isolation is the fix." read as abrupt
+  commands, not natural prose. Fold the point into the previous sentence or
+  expand it.
 
 ## Hard bans: formatting
 
@@ -121,6 +125,8 @@ and keep it only if it carries real meaning.
 | tapestry, realm, landscape (figurative), ecosystem (figurative), symphony, beacon | name the actual thing |
 | testament, boasts, nestled, renowned for, exemplifies, indelible | rewrite plainly |
 | cutting-edge, state-of-the-art, world-class | cut it |
+| agreed contract | plain boundary: shared interface, clear file ownership, or named dependency |
+| contention | name the concrete collision: shared files, same checkout, or competing writers |
 
 **Tier 2 (review, keep only if earned):** crucial, key, vital, significant,
 essential, comprehensive, holistic, dynamic, innovative, transformative,
@@ -262,8 +268,8 @@ It masks frontmatter, code, and JSX (preserving line numbers), then reports:
 - Every **AI tell**: rhetorical framing, mechanical transitions, vague
   attribution, copula avoidance, and the rest of the banlist.
 - **Curly quotes**, **trailing purpose clauses**, **inline-header list rows**,
-  possibly-excessive **bold spans**, **Title Case headings**, and **long
-  sentences** over 30 words.
+  possibly-excessive **bold spans**, **Title Case headings**, **long
+  sentences** over 30 words, and **short paragraph endings** under 3 words.
 
 A clean draft reports no hard fails, no AI tells, and a Flesch Reading Ease at or
 above 50. Tier 2 words and Title Case headings are review-only signals: the house
