@@ -88,7 +88,6 @@
 }
 
 .heroTitle {
-  font-family: var(--font-accent);
   font-size: 4rem;
   font-weight: 600;
   line-height: 1.1;
@@ -99,8 +98,6 @@
 }
 
 .heroAccent {
-  font-family: var(--font-accent);
-  font-weight: 600;
   background: linear-gradient(135deg, var(--ifm-color-primary) 0%, var(--ifm-color-primary-dark) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
