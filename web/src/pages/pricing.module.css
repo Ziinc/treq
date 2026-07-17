@@ -17,13 +17,6 @@
   letter-spacing: -0.02em;
 }
 
-.subtitle {
-  font-size: 1.15rem;
-  color: var(--ifm-color-emphasis-700);
-  margin: 0 0 1rem;
-  line-height: 1.45;
-}
-
 .intro {
   font-size: 1rem;
   color: var(--ifm-color-emphasis-600);
@@ -58,7 +51,7 @@
   margin: 0 0 0.25rem;
 }
 
-.planAudience {
+.planSeats {
   margin: 0 0 0.75rem;
   font-size: 0.88rem;
   font-weight: 600;
@@ -84,14 +77,6 @@
   color: var(--ifm-color-emphasis-600);
 }
 
-.planSummary {
-  font-size: 0.95rem;
-  color: var(--ifm-color-emphasis-700);
-  margin: 0 0 1.25rem;
-  line-height: 1.5;
-  flex: 1;
-}
-
 .featureList {
   list-style: none;
   margin: 0 0 1.5rem;
@@ -99,6 +84,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
+  flex: 1;
 }
 
 .featureItem {
@@ -185,6 +171,19 @@
   background: rgba(59, 156, 255, 0.08);
 }
 
+.planButtonDisabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.planButtonNote {
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+  color: var(--ifm-color-emphasis-600);
+  text-align: center;
+}
+
 .comparison,
 .faq {
   margin-bottom: 3rem;
@@ -210,6 +209,7 @@
 .comparisonTable {
   width: 100%;
   margin: 0;
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 0.95rem;
@@ -232,6 +232,10 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--ifm-color-emphasis-600);
+}
+
+.comparisonFeatureHeader {
+  width: 44%;
 }
 
 .comparisonPlanHeader {
@@ -260,18 +264,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-}
-
-.comparisonFeaturePill {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.35rem 0.75rem;
-  border-radius: 999px;
-  background: var(--ifm-color-emphasis-100);
-  font-size: 0.84rem;
-  font-weight: 600;
-  line-height: 1.2;
-  color: var(--ifm-font-color-base);
 }
 
 .comparisonDataCell {
