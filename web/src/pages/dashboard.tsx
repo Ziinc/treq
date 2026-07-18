@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Layout from "@theme/Layout";
+import Head from "@docusaurus/Head";
 import BrowserOnly from "@docusaurus/BrowserOnly";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 import { supabase } from "../lib/supabase";
@@ -493,6 +494,9 @@ export default function DashboardPage(): React.ReactNode {
 
   return (
     <Layout title="Dashboard" description="Manage your Treq account">
+      <Head>
+        <meta name="robots" content="noindex, nofollow" />
+      </Head>
       <BrowserOnly>{() => <DashboardContent />}</BrowserOnly>
     </Layout>
   );

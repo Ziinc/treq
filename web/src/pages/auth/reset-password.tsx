@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Layout from "@theme/Layout";
+import Head from "@docusaurus/Head";
 import BrowserOnly from "@docusaurus/BrowserOnly";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 import { supabase } from "../../lib/supabase";
@@ -234,6 +235,9 @@ export default function ResetPasswordPage(): React.ReactNode {
 
   return (
     <Layout title="Reset Password" noFooter>
+      <Head>
+        <meta name="robots" content="noindex, nofollow" />
+      </Head>
       <BrowserOnly>{() => <ResetPasswordContent />}</BrowserOnly>
     </Layout>
   );
