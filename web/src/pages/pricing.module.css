@@ -172,16 +172,16 @@
 }
 
 .planButtonDisabled {
+  flex-direction: column;
+  gap: 0.15rem;
   cursor: not-allowed;
   opacity: 0.5;
   pointer-events: none;
 }
 
 .planButtonNote {
-  margin: 0.5rem 0 0;
-  font-size: 0.82rem;
-  color: var(--ifm-color-emphasis-600);
-  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 500;
 }
 
 .comparison,
@@ -196,23 +196,35 @@
   letter-spacing: -0.01em;
 }
 
+.comparisonHeading {
+  text-align: center;
+}
+
 .comparisonTableWrap {
   overflow-x: auto;
+  overflow-y: hidden;
   border: 1px solid var(--ifm-color-emphasis-200);
   border-radius: 14px;
-  background:
-    linear-gradient(180deg, rgba(59, 156, 255, 0.05) 0%, transparent 42%),
-    var(--ifm-background-surface-color, var(--ifm-background-color));
+  background: var(--ifm-background-surface-color, var(--ifm-background-color));
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
 }
 
 .comparisonTable {
   width: 100%;
+  min-width: 36rem;
   margin: 0;
   table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 0.95rem;
+}
+
+.comparisonFeatureCol {
+  width: 46%;
+}
+
+.comparisonPlanCol {
+  width: 27%;
 }
 
 .comparisonFeatureHeader,
@@ -234,13 +246,8 @@
   color: var(--ifm-color-emphasis-600);
 }
 
-.comparisonFeatureHeader {
-  width: 44%;
-}
-
 .comparisonPlanHeader {
   text-align: center;
-  width: 28%;
 }
 
 .comparisonPlanHeaderPro {
@@ -256,7 +263,6 @@
 .comparisonFeatureCell {
   font-weight: 600;
   color: var(--ifm-font-color-base);
-  width: 44%;
 }
 
 .comparisonFeatureLabel {
@@ -398,10 +404,5 @@
 
   .priceAmount {
     font-size: 2.1rem;
-  }
-
-  .comparisonPlanHeader,
-  .comparisonDataCell {
-    width: auto;
   }
 }

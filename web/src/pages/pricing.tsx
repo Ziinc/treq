@@ -176,9 +176,9 @@ function PlansSection(): ReactNode {
           )}
           aria-disabled="true"
         >
-          Upgrade to Pro
+          <span>Upgrade to Pro</span>
+          <span className={styles.planButtonNote}>Coming soon</span>
         </span>
-        <p className={styles.planButtonNote}>Coming soon</p>
       </article>
     </section>
   );
@@ -213,11 +213,19 @@ function ComparisonValue({cell}: {cell: ComparisonCell}): ReactNode {
 function ComparisonSection(): ReactNode {
   return (
     <section className={styles.comparison} aria-label="Feature comparison">
-      <Heading as="h2" className={styles.sectionHeading}>
+      <Heading
+        as="h2"
+        className={clsx(styles.sectionHeading, styles.comparisonHeading)}
+      >
         Feature comparison
       </Heading>
       <div className={styles.comparisonTableWrap}>
         <table className={styles.comparisonTable}>
+          <colgroup>
+            <col className={styles.comparisonFeatureCol} />
+            <col className={styles.comparisonPlanCol} />
+            <col className={styles.comparisonPlanCol} />
+          </colgroup>
           <thead>
             <tr>
               <th scope="col" className={styles.comparisonFeatureHeader}>
