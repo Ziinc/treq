@@ -48,11 +48,10 @@ type PlanFeature = {
 const FREE_FEATURES: PlanFeature[] = [
   {text: 'Full desktop app', included: true},
   {
-    text: 'GitHub integration for public repos only',
+    text: 'GitHub integration (public repos only)',
     included: true,
     comingSoon: true,
   },
-  {text: 'Merge queue', included: false, comingSoon: true},
 ];
 
 const PRO_FEATURES: PlanFeature[] = [
@@ -146,14 +145,8 @@ function PlansSection(): ReactNode {
         <Heading as="h2" className={styles.planName}>
           Free
         </Heading>
-        <p className={styles.planAudience}>For open source developers</p>
         <p className={styles.planPrice}>
           <span className={styles.priceAmount}>$0</span>
-        </p>
-        <p className={styles.planSummary}>
-          Free covers open source developers. You get the full desktop app and
-          GitHub for public repositories only. GitHub integration and merge queue
-          are coming soon.
         </p>
         <FeatureList features={FREE_FEATURES} />
         <Link
@@ -168,21 +161,24 @@ function PlansSection(): ReactNode {
         <Heading as="h2" className={styles.planName}>
           Pro
         </Heading>
+        <p className={styles.planSeats}>1 user</p>
         <p className={styles.planPrice}>
           <span className={styles.priceAmount}>$15</span>
-          <span className={styles.priceUnit}>/user/month</span>
-        </p>
-        <p className={styles.planSummary}>
-          GitHub for every repository you work in, public or private, plus merge
-          queue. Both are coming soon.
+          <span className={styles.priceUnit}>/month</span>
         </p>
         <FeatureList features={PRO_FEATURES} />
-        <Link
-          className={clsx('button', styles.planButton, styles.planButtonPrimary)}
-          to="/login"
+        <span
+          className={clsx(
+            'button',
+            styles.planButton,
+            styles.planButtonPrimary,
+            styles.planButtonDisabled,
+          )}
+          aria-disabled="true"
         >
-          Upgrade to Pro
-        </Link>
+          <span>Upgrade to Pro</span>
+          <span className={styles.planButtonNote}>Coming soon</span>
+        </span>
       </article>
     </section>
   );
@@ -217,11 +213,19 @@ function ComparisonValue({cell}: {cell: ComparisonCell}): ReactNode {
 function ComparisonSection(): ReactNode {
   return (
     <section className={styles.comparison} aria-label="Feature comparison">
-      <Heading as="h2" className={styles.sectionHeading}>
+      <Heading
+        as="h2"
+        className={clsx(styles.sectionHeading, styles.comparisonHeading)}
+      >
         Feature comparison
       </Heading>
       <div className={styles.comparisonTableWrap}>
         <table className={styles.comparisonTable}>
+          <colgroup>
+            <col className={styles.comparisonFeatureCol} />
+            <col className={styles.comparisonPlanCol} />
+            <col className={styles.comparisonPlanCol} />
+          </colgroup>
           <thead>
             <tr>
               <th scope="col" className={styles.comparisonFeatureHeader}>
@@ -246,9 +250,7 @@ function ComparisonSection(): ReactNode {
               <tr key={row.feature} className={styles.comparisonRow}>
                 <th scope="row" className={styles.comparisonFeatureCell}>
                   <span className={styles.comparisonFeatureLabel}>
-                    <span className={styles.comparisonFeaturePill}>
-                      {row.feature}
-                    </span>
+                    <span>{row.feature}</span>
                     {row.comingSoon ? <ComingSoonBadge /> : null}
                   </span>
                 </th>
@@ -307,14 +309,8 @@ export default function PricingPage(): ReactNode {
           <Heading as="h1" className={styles.title}>
             Pricing
           </Heading>
-          <p className={styles.subtitle}>
-            Local by default. Pay when you need private GitHub repos and merge
-            queue.
-          </p>
           <p className={styles.intro}>
-            The Treq desktop app is free and open source. The Free plan covers
-            open source developers on public GitHub repos. Pro is for private
-            repos and merge queue.
+            The Treq desktop app is free and open source.
           </p>
         </header>
 
