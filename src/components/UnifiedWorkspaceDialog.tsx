@@ -64,6 +64,7 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
 	// ── form state ──────────────────────────────────────────────────────────────
 	const [description, setIntent] = useState("");
 	const [title, setTitle] = useState("");
+	const [sparsePaths, setSparsePaths] = useState("");
 	const [branchName, setBranchName] = useState("");
 	const [branchPattern, setBranchPattern] = useState("treq/{name}");
 	const [isEditingBranch, setIsEditingBranch] = useState(false);
@@ -340,6 +341,7 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
 		repoPath,
 		description,
 		title,
+		sparsePaths,
 		branchName,
 		moveToExisting,
 		isHomeRepo,
@@ -422,6 +424,8 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
 						onSetDescription={setIntent}
 						title={title}
 						onSetTitle={setTitle}
+						sparsePaths={sparsePaths}
+						onSetSparsePaths={setSparsePaths}
 						branchName={branchName}
 						onSetBranchName={setBranchName}
 						onSetIsEditingBranch={setIsEditingBranch}

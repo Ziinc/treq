@@ -1135,10 +1135,7 @@ pub fn create_workspace(
 ) -> Result<String, JjError> {
     let repo_path_buf = Path::new(repo_path);
 
-    // Validate sparse patterns before any side effect so a bad pattern can't
-    // leave a partially created workspace behind. None and an empty list both
-    // mean a full checkout (jj treats an empty pattern set as "materialize
-    // nothing", which is never what a caller wants here).
+    // Validate before any side effect; None and empty both mean a full checkout.
     let parsed_sparse_patterns: Option<Vec<RepoPathBuf>> = match sparse_patterns {
         Some(patterns) if !patterns.is_empty() => Some(parse_sparse_patterns(patterns)?),
         _ => None,
@@ -1378,14 +1375,11 @@ pub fn create_workspace(
     ))
     .map_err(|e| JjError::GitWorkspaceError(format!("Failed to init workspace: {}", e)))?;
 
-    // Apply sparse patterns in their own working-copy mutation, mirroring
-    // `jj workspace add --sparse-patterns`. The working copy is still at the
-    // empty tree here, so nothing is materialized or removed yet; the final
-    // check_out below then only materializes paths matching the patterns.
+    // Set sparse patterns while the wc is still empty so check_out below only materializes matching paths (mirrors `jj workspace add --sparse-patterns`).
     if let Some(patterns) = parsed_sparse_patterns {
-        let mut locked_ws = new_workspace
-            .start_working_copy_mutation()
-            .map_err(|e| JjError::GitWorkspaceError(format!("Failed to lock working copy: {}", e)))?;
+        let mut locked_ws = new_workspace.start_working_copy_mutation().map_err(|e| {
+            JjError::GitWorkspaceError(format!("Failed to lock working copy: {}", e))
+        })?;
         block_on(locked_ws.locked_wc().set_sparse_patterns(patterns)).map_err(|e| {
             JjError::GitWorkspaceError(format!("Failed to set sparse patterns: {}", e))
         })?;

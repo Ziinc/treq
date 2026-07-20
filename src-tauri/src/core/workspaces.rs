@@ -151,8 +151,7 @@ pub struct WorkspaceMetadata {
 /// Unknown fields are ignored; empty arrays are normalized to `None`.
 /// Invalid or missing JSON yields an all-`None` metadata.
 pub fn parse_workspace_metadata(metadata: Option<&str>) -> WorkspaceMetadata {
-    let parsed: Option<WorkspaceMetadata> =
-        metadata.and_then(|m| serde_json::from_str(m).ok());
+    let parsed: Option<WorkspaceMetadata> = metadata.and_then(|m| serde_json::from_str(m).ok());
     let mut parsed = parsed.unwrap_or_default();
     parsed.moved_files = parsed.moved_files.filter(|v| !v.is_empty());
     parsed.sparse_patterns = parsed.sparse_patterns.filter(|v| !v.is_empty());
@@ -309,8 +308,7 @@ pub fn create_workspace(
     // None and an empty list both mean a full checkout.
     let sparse_patterns = sparse_patterns.filter(|patterns| !patterns.is_empty());
 
-    // Moved files must be visible inside the sparse cone; otherwise they would
-    // land in the workspace commit but be invisible on disk.
+    // Moved files outside the sparse cone would land in the commit but be invisible on disk.
     if let (Some(patterns), Some(files)) = (&sparse_patterns, &moved_files) {
         for file in files {
             let file = file.trim_end_matches('/');

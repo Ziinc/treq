@@ -93,7 +93,8 @@ fn test_create_commit_basic() {
         Some("basic commit".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -134,7 +135,8 @@ fn test_create_commit_empty_workspace() {
         Some("empty commit test".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -195,7 +197,8 @@ fn test_commit_workspace_advances_branch() {
         Some("advance test".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -258,7 +261,8 @@ fn test_create_commit_no_divergence_with_stacked_descendant() {
         Some("parent workspace".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create parent workspace");
     let ws_a_dir = repo.workspaces_dir().join(&ws_a.workspace_path);
@@ -277,7 +281,8 @@ fn test_create_commit_no_divergence_with_stacked_descendant() {
         Some("child workspace".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create child workspace");
     // B targets A's branch so it is a descendant of A's stack.
@@ -341,7 +346,8 @@ fn test_create_commit_keeps_empty_working_copy_when_self_targeted() {
         Some("sync clobber test".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 

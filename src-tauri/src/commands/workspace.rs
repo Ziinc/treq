@@ -604,7 +604,8 @@ mod tests {
             "test_workspace".to_string(),
             "test-branch".to_string(),
             None,
-            None, None,
+            None,
+            None,
         )
         .unwrap();
 
@@ -652,7 +653,8 @@ mod tests {
             "nonexistent_workspace".to_string(),
             "test-branch".to_string(),
             None,
-            None, None,
+            None,
+            None,
         )
         .unwrap();
 

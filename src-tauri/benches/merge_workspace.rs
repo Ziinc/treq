@@ -16,7 +16,8 @@ fn create_workspace(repo: &TestRepo) -> treq_lib::local_db::Workspace {
         Some("merge workspace benchmark".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("failed to create workspace")
 }

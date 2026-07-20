@@ -400,7 +400,8 @@ fn test_commit_repo_after_create_workspace() {
         Some("feature-x".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
     let before = JjVerifier::get_bookmark_commit_id(&repo.repo_path, default_branch)

@@ -20,7 +20,8 @@ fn setup_workspace_with_target(
         Some(format!("test workspace for {}", branch)),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .unwrap_or_else(|e| panic!("Failed to create workspace '{}': {}", branch, e));
 
@@ -43,7 +44,8 @@ fn setup_workspace_with_source(
         Some(format!("test workspace for {}", branch)),
         None,
         Some(source_branch),
-        None, None,
+        None,
+        None,
     )
     .unwrap_or_else(|e| panic!("Failed to create workspace '{}': {}", branch, e))
 }
@@ -236,7 +238,8 @@ fn test_can_update_workspace() {
         Some("initial feature".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -272,7 +275,8 @@ fn test_update_workspace_target_branch_perform_rebase() {
         Some("initial feature".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -343,7 +347,8 @@ fn test_update_workspace_target_branch_rebases_workspace_bookmark_lineage() {
         Some("bookmark rebase test".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -424,7 +429,8 @@ fn test_can_list_workspaces() {
         Some("feature-a".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
     treq_lib::core::create_workspace(
@@ -433,7 +439,8 @@ fn test_can_list_workspaces() {
         Some("feature-b".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
     treq_lib::core::create_workspace(
@@ -442,7 +449,8 @@ fn test_can_list_workspaces() {
         Some("feature-c".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -489,7 +497,8 @@ fn test_push_workspace_to_remote() {
         Some("test workspace".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -550,7 +559,8 @@ fn test_push_home_repo_to_remote() {
         Some("test".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -589,7 +599,8 @@ fn test_rename_workspace_dry_run_valid_name() {
         Some("original feature".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -633,7 +644,8 @@ fn test_rename_workspace_dry_run_clashes_with_existing_branch() {
         Some("feature a".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace A");
 
@@ -643,7 +655,8 @@ fn test_rename_workspace_dry_run_clashes_with_existing_branch() {
         Some("feature b".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace B");
 
@@ -673,7 +686,8 @@ fn test_rename_workspace_dry_run_same_name() {
         Some("original feature".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -698,7 +712,8 @@ fn test_rename_workspace_success() {
         Some("original feature".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -748,7 +763,8 @@ fn test_rename_workspace_updates_child_target_branches() {
         Some("parent feature".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create parent workspace");
 
@@ -759,7 +775,8 @@ fn test_rename_workspace_updates_child_target_branches() {
         None,
         None,
         Some(&parent.branch_name),
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create child workspace");
 
@@ -803,7 +820,8 @@ fn test_rename_workspace_sets_not_on_remote() {
         Some("original feature".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -835,7 +853,8 @@ fn test_sync_workspaces_forget_deleted_directories() {
         Some("recovery test".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -884,7 +903,8 @@ fn test_sync_workspaces_delete_forgotten_directories() {
         Some("forgotten test".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -952,7 +972,8 @@ fn test_jj_get_changed_files_ignores_gitignored_noise_in_workspace() {
         None,
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -997,7 +1018,8 @@ fn test_jj_get_changed_files_honors_nested_gitignore() {
         None,
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1034,7 +1056,8 @@ fn test_jj_get_changed_files_keeps_tracked_files_visible_after_ignore_rule_added
         None,
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1105,7 +1128,8 @@ fn test_empty_commits_excluded_from_commits_ahead() {
         Some("empty filter test".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1159,7 +1183,8 @@ fn test_merge_abandons_empty_commits() {
         Some("merge empty test".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1228,7 +1253,8 @@ fn test_squash_merge_with_empty_commits() {
         Some("squash empty test".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1283,7 +1309,8 @@ fn test_rebase_merge_with_empty_commits() {
         Some("rebase empty test".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1333,7 +1360,8 @@ fn test_workspace_status_not_on_remote() {
         Some("test not on remote".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1362,7 +1390,8 @@ fn test_workspace_status_in_sync() {
         Some("test in sync".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1398,7 +1427,8 @@ fn test_workspace_status_ahead_of_remote() {
         Some("test ahead".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1439,7 +1469,8 @@ fn test_workspace_status_behind_remote() {
         Some("test behind".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1507,7 +1538,8 @@ fn test_workspace_status_diverged() {
         Some("test diverged".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1563,7 +1595,8 @@ fn test_pull_workspace_resolves_divergence() {
         Some("test pull diverged".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1644,7 +1677,8 @@ fn test_pull_workspace_from_remote_branch_stack_handles_conflicted_bookmark() {
         Some("remote parent".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create parent workspace from remote branch");
     let child = treq_lib::core::create_workspace(
@@ -1653,7 +1687,8 @@ fn test_pull_workspace_from_remote_branch_stack_handles_conflicted_bookmark() {
         Some("stacked child".to_string()),
         None,
         Some(&parent.branch_name),
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create stacked child workspace");
 
@@ -1714,7 +1749,8 @@ fn test_pull_workspace_no_divergence() {
         Some("test pull no divergence".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1758,7 +1794,8 @@ fn test_jj_get_sync_status_baseline_in_sync() {
         Some("sync status baseline test".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1819,7 +1856,8 @@ fn test_jj_get_sync_status_ahead_after_local_commit() {
         Some("sync status ahead test".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1867,7 +1905,8 @@ fn test_jj_get_sync_status_returns_to_sync_after_push() {
         Some("sync status push test".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1939,7 +1978,8 @@ fn test_jj_get_sync_status_multiple_commits_ahead() {
         Some("sync status multiple ahead test".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1992,7 +2032,8 @@ fn test_workspace_push_pull_with_workspace_status() {
         Some("workspace status sync test".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -2203,7 +2244,8 @@ fn test_workspace_status_ignores_gitignored_noise() {
         None,
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -2249,7 +2291,8 @@ fn test_workspace_status_with_workspace_id() {
         Some("workspace status test".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 

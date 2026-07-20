@@ -24,7 +24,8 @@ fn setup_workspace_with_pushed_commit(
         Some(branch_name.to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -201,7 +202,8 @@ fn test_auto_rebase_no_conflict_still_works() {
         Some("feat/no-conflict".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -252,7 +254,8 @@ fn test_force_rebase_rooted_subtree_handles_conflicted_local_main_target() {
         Some("root main workspace".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create main workspace");
 
@@ -262,7 +265,8 @@ fn test_force_rebase_rooted_subtree_handles_conflicted_local_main_target() {
         Some("force main child".to_string()),
         None,
         Some(default_branch),
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create child workspace");
 

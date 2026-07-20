@@ -8,6 +8,7 @@ import {
 	setWorkspaceTargetBranch,
 } from "../lib/api";
 import { getFullWorkspacePath } from "../lib/utils";
+import { buildCreateMetadata } from "../lib/workspaceMetadata";
 import { useCreateStackedWorkspace } from "./useCreateStackedWorkspace";
 import { useToast } from "../components/ui/toast";
 
@@ -15,6 +16,7 @@ export interface UseWorkspaceDialogSubmitParams {
 	repoPath: string;
 	title: string;
 	description: string;
+	sparsePaths: string;
 	branchName: string;
 	moveToExisting: boolean;
 	isHomeRepo: boolean;
@@ -43,6 +45,7 @@ export function useWorkspaceDialogSubmit(
 		repoPath,
 		title,
 		description,
+		sparsePaths,
 		branchName,
 		moveToExisting,
 		isHomeRepo,
@@ -237,10 +240,12 @@ export function useWorkspaceDialogSubmit(
 			}
 
 			if (isHomeRepo && selectedHunks.size > 0) {
-				const metadata = JSON.stringify({
-					title: title.trim() || undefined,
-					description: description.trim() || undefined,
-					moved_files: selectedFilePaths,
+				// The backend rejects moved files outside sparse_patterns; that error surfaces verbatim.
+				const metadata = buildCreateMetadata({
+					title,
+					description,
+					movedFiles: selectedFilePaths,
+					sparsePaths,
 				});
 				const workspaceId = await createWorkspace(
 					repoPath,
@@ -296,12 +301,11 @@ export function useWorkspaceDialogSubmit(
 					}
 				}
 
-				const metadata = description.trim()
-					? JSON.stringify({
-							title: title.trim() || undefined,
-							description: description.trim(),
-						})
-					: JSON.stringify({});
+				const metadata = buildCreateMetadata({
+					title,
+					description,
+					sparsePaths,
+				});
 
 				let effectiveSourceBranch: string | undefined;
 				if (branchStatusData?.remote_exists && branchStatusData.remote_ref) {

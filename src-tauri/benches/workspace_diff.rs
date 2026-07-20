@@ -30,7 +30,8 @@ fn setup_workspace_diff() -> (TestRepo, i64) {
         None,
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("failed to create workspace");
 
@@ -69,7 +70,8 @@ fn setup_workspace_diff_ten_files_fifty_added_lines() -> (TestRepo, i64) {
         None,
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("failed to create workspace");
 

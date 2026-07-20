@@ -35,7 +35,8 @@ fn bench_create_workspace(c: &mut Criterion) {
                     std::hint::black_box(Some("bench workspace".to_string())),
                     std::hint::black_box(None),
                     std::hint::black_box(None),
-                    std::hint::black_box(None), None,
+                    std::hint::black_box(None),
+                    None,
                 )
                 .expect("create_workspace failed");
             },
@@ -65,7 +66,8 @@ fn bench_create_workspace_with_moved_files(c: &mut Criterion) {
                     std::hint::black_box(Some("bench workspace".to_string())),
                     std::hint::black_box(Some(moved_files)),
                     std::hint::black_box(None),
-                    std::hint::black_box(None), None,
+                    std::hint::black_box(None),
+                    None,
                 )
                 .expect("create_workspace failed");
             },

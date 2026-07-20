@@ -11,7 +11,8 @@ fn test_ls_workspace_lists_top_level_entries_and_respects_gitignore() {
         None,
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -67,9 +68,16 @@ fn test_ls_workspace_lists_top_level_entries_and_respects_gitignore() {
 #[test]
 fn test_get_workspace_readme_returns_top_level_readme_contents() {
     let repo = TestRepo::new().expect("Failed to create test repo");
-    let workspace =
-        treq_lib::core::create_workspace(&repo.repo_path, "feat/readme", None, None, None, None, None)
-            .expect("Failed to create workspace");
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/readme",
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
     let expected = "# Workspace README\n\nThis is the workspace overview.\n";
@@ -85,9 +93,16 @@ fn test_get_workspace_readme_returns_top_level_readme_contents() {
 #[test]
 fn test_get_workspace_readme_returns_none_when_missing() {
     let repo = TestRepo::new().expect("Failed to create test repo");
-    let workspace =
-        treq_lib::core::create_workspace(&repo.repo_path, "feat/no-readme", None, None, None, None, None)
-            .expect("Failed to create workspace");
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/no-readme",
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
 
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
     TestRepo::remove_file_path(workspace_path.join("README.md"))

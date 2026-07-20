@@ -12,7 +12,8 @@ fn setup_delete_workspace() -> (TestRepo, i64) {
         Some("delete bench workspace".to_string()),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .expect("failed to create workspace");
 

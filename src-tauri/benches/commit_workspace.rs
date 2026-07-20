@@ -20,7 +20,8 @@ fn bench_commit_workspace(c: &mut Criterion) {
                     Some("bench workspace".to_string()),
                     None,
                     None,
-                    None, None,
+                    None,
+                    None,
                 )
                 .expect("failed to create workspace");
                 let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);

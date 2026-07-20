@@ -1428,7 +1428,8 @@ mod tests {
             workspace_path.clone(),
             "test-branch".to_string(),
             Some("test description".to_string()),
-            None, None,
+            None,
+            None,
         )
         .expect("add_workspace should succeed");
 
@@ -1471,7 +1472,8 @@ mod tests {
             format!("{}/.treq/workspaces/workspace-1", repo_path),
             "branch-a".to_string(),
             None,
-            None, None,
+            None,
+            None,
         )
         .expect("add_workspace 1 should succeed");
 
@@ -1481,7 +1483,8 @@ mod tests {
             format!("{}/.treq/workspaces/workspace-2", repo_path),
             "branch-b".to_string(),
             None,
-            None, None,
+            None,
+            None,
         )
         .expect("add_workspace 2 should succeed");
 
@@ -1509,7 +1512,8 @@ mod tests {
             format!("{}/.treq/workspaces/test-workspace", repo_path),
             "test-branch".to_string(),
             None,
-            None, None,
+            None,
+            None,
         )
         .expect("add_workspace should succeed");
 
@@ -1547,7 +1551,8 @@ mod tests {
             format!("{}/.treq/workspaces/workspace-1", repo_path),
             "branch-a".to_string(),
             None,
-            None, None,
+            None,
+            None,
         )
         .expect("add_workspace 1 should succeed");
         update_workspace_target_branch(repo_path, id1, "main")
@@ -1559,7 +1564,8 @@ mod tests {
             format!("{}/.treq/workspaces/workspace-2", repo_path),
             "branch-b".to_string(),
             None,
-            None, None,
+            None,
+            None,
         )
         .expect("add_workspace 2 should succeed");
         update_workspace_target_branch(repo_path, id2, "develop")
@@ -1571,7 +1577,8 @@ mod tests {
             format!("{}/.treq/workspaces/workspace-3", repo_path),
             "branch-c".to_string(),
             None,
-            None, None,
+            None,
+            None,
         )
         .expect("add_workspace 3 should succeed");
         update_workspace_target_branch(repo_path, id3, "main")
@@ -1602,7 +1609,8 @@ mod tests {
             "workspace-refresh".to_string(),
             "branch-refresh".to_string(),
             None,
-            None, None,
+            None,
+            None,
         )
         .expect("add_workspace should succeed");
 
@@ -1628,7 +1636,8 @@ mod tests {
             "workspace-upsert".to_string(),
             "branch-before".to_string(),
             Some("keep me".to_string()),
-            Some(vec!["src/main.rs".to_string()]), None,
+            Some(vec!["src/main.rs".to_string()]),
+            None,
         )
         .expect("add_workspace should succeed");
         update_workspace_target_branch(repo_path, id, "main")
@@ -1681,7 +1690,8 @@ mod tests {
             format!("{}/.treq/workspaces/test", repo_path),
             "test-branch".to_string(),
             None,
-            None, None,
+            None,
+            None,
         )
         .expect("add_workspace should succeed");
 
@@ -1728,7 +1738,8 @@ mod tests {
             format!("{}/.treq/workspaces/test", repo_path),
             "test-branch".to_string(),
             None,
-            None, None,
+            None,
+            None,
         )
         .expect("add_workspace should succeed");
 
@@ -1773,7 +1784,8 @@ mod tests {
             format!("{}/.treq/workspaces/test", repo_path),
             "test-branch".to_string(),
             None,
-            None, None,
+            None,
+            None,
         )
         .expect("add_workspace should succeed");
 
@@ -1809,7 +1821,8 @@ mod tests {
             format!("{}/.treq/workspaces/test", repo_path),
             "test-branch".to_string(),
             None,
-            None, None,
+            None,
+            None,
         )
         .expect("add_workspace should succeed");
 
@@ -1848,7 +1861,8 @@ mod tests {
             format!("{}/.treq/workspaces/test", repo_path),
             "test-branch".to_string(),
             None,
-            None, None,
+            None,
+            None,
         )
         .expect("add_workspace should succeed");
 

@@ -13,7 +13,12 @@ describe("Sparse checkout workspace creation", () => {
 
 	beforeEach(async () => {
 		({ repoPath } = createTestRepo(false));
-		await gitCommitRepoFile(repoPath, "src/lib.ts", "export {};", "add src/lib.ts");
+		await gitCommitRepoFile(
+			repoPath,
+			"src/lib.ts",
+			"export {};",
+			"add src/lib.ts",
+		);
 		await gitCommitRepoFile(repoPath, "docs/guide.md", "# Guide", "add docs");
 	});
 

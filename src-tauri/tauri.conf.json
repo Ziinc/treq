@@ -53,6 +53,13 @@
               "short": "s",
               "takesValue": true,
               "description": "Source branch to stack on"
+            },
+            {
+              "name": "sparse",
+              "short": "p",
+              "takesValue": true,
+              "multiple": true,
+              "description": "Sparse checkout path prefix; repeatable, only matching paths are materialized"
             }
           ]
         },

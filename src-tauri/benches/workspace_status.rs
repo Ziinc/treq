@@ -16,7 +16,8 @@ fn create_remote_workspace(
         Some(format!("bench workspace for {branch}")),
         None,
         None,
-        None, None,
+        None,
+        None,
     )
     .unwrap_or_else(|e| panic!("failed to create workspace '{branch}': {e}"));
 

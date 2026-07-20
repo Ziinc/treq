@@ -31,6 +31,8 @@ export interface WorkspaceLeftPanelProps {
 	onSetDescription: (val: string) => void;
 	title: string;
 	onSetTitle: (val: string) => void;
+	sparsePaths: string;
+	onSetSparsePaths: (val: string) => void;
 	branchName: string;
 	onSetBranchName: (val: string) => void;
 	onSetIsEditingBranch: (val: boolean) => void;
@@ -61,6 +63,8 @@ export const WorkspaceLeftPanel: React.FC<WorkspaceLeftPanelProps> = ({
 	onSetDescription,
 	title,
 	onSetTitle,
+	sparsePaths,
+	onSetSparsePaths,
 	branchName,
 	onSetBranchName,
 	onSetIsEditingBranch,
@@ -233,6 +237,23 @@ export const WorkspaceLeftPanel: React.FC<WorkspaceLeftPanelProps> = ({
 					className="resize-none text-sm"
 					autoFocus={!hasSourceWorkspace}
 					tabIndex={1}
+				/>
+			</div>
+		)}
+
+		{/* Sparse checkout paths (only for plain creation, where they are applied) */}
+		{!moveToExisting && !hasSourceWorkspace && (
+			<div className="grid gap-1.5">
+				<Label htmlFor="sparse-paths" className="text-xs">
+					Sparse paths (optional, one per line)
+				</Label>
+				<Textarea
+					id="sparse-paths"
+					value={sparsePaths}
+					onChange={(e) => onSetSparsePaths(e.target.value)}
+					placeholder={"e.g., src/api\ndocs"}
+					rows={2}
+					className="resize-none text-sm"
 				/>
 			</div>
 		)}

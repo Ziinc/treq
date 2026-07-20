@@ -265,8 +265,13 @@ fn stacked_workspace_respects_sparse_patterns() {
         None,
     )
     .expect("Failed to create parent workspace");
-    repo.commit_workspace_file(&parent, "src/parent.rs", "pub fn parent() {}\n", "add parent")
-        .expect("Failed to commit in parent workspace");
+    repo.commit_workspace_file(
+        &parent,
+        "src/parent.rs",
+        "pub fn parent() {}\n",
+        "add parent",
+    )
+    .expect("Failed to commit in parent workspace");
 
     let child = treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -342,8 +347,8 @@ fn sparse_patterns_persisted_in_db() {
         .expect("workspace should exist");
     assert_eq!(by_id.sparse_patterns, Some(vec!["src".to_string()]));
 
-    let all = treq_lib::local_db::get_workspaces(&repo.repo_path)
-        .expect("get_workspaces should succeed");
+    let all =
+        treq_lib::local_db::get_workspaces(&repo.repo_path).expect("get_workspaces should succeed");
     let listed = all
         .iter()
         .find(|w| w.id == sparse.id)
@@ -377,8 +382,7 @@ fn files_outside_sparse_patterns_are_not_snapshotted() {
     TestRepo::write_workspace_file(ws_str, "docs/new.md", "# stray\n")
         .expect("Failed to write docs/new.md");
 
-    let changes =
-        treq_lib::jj::jj_get_changed_files(ws_str).expect("Failed to get changed files");
+    let changes = treq_lib::jj::jj_get_changed_files(ws_str).expect("Failed to get changed files");
     let changed_paths: Vec<&str> = changes.iter().map(|c| c.path.as_str()).collect();
     assert!(
         changed_paths.contains(&"src/new.rs"),
