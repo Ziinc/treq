@@ -161,7 +161,7 @@ fn test_workspace_list_statuses_excludes_default_workspace_and_ignores_stale_db_
         "stale".to_string(),
         "stale-branch".to_string(),
         None,
-        None,
+        None, None,
     )
     .expect("Failed to insert stale workspace");
     set_workspace_refreshed_at(&repo.repo_path, stale_id, "2000-01-01T00:00:00Z");

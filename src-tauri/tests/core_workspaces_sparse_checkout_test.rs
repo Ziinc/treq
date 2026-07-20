@@ -150,6 +150,115 @@ fn sparse_pattern_single_file() {
     );
 }
 
+/// Sparse patterns round-trip through the workspace database record.
+#[test]
+fn sparse_patterns_persisted_in_db() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    repo.commit_file("src/lib.rs", "pub fn lib() {}\n", "add src/lib.rs")
+        .expect("Failed to commit src/lib.rs");
+
+    let sparse = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/sparse-db",
+        None,
+        None,
+        None,
+        None,
+        Some(vec!["src".to_string()]),
+    )
+    .expect("Failed to create sparse workspace");
+    let full = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/full-db",
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create full workspace");
+
+    assert_eq!(
+        sparse.sparse_patterns,
+        Some(vec!["src".to_string()]),
+        "sparse workspace record should carry its patterns"
+    );
+    assert_eq!(
+        full.sparse_patterns, None,
+        "full workspace record should have no sparse patterns"
+    );
+
+    let by_id = treq_lib::local_db::get_workspace_by_id(&repo.repo_path, sparse.id)
+        .expect("db query should succeed")
+        .expect("workspace should exist");
+    assert_eq!(by_id.sparse_patterns, Some(vec!["src".to_string()]));
+
+    let all = treq_lib::local_db::get_workspaces(&repo.repo_path)
+        .expect("get_workspaces should succeed");
+    let listed = all
+        .iter()
+        .find(|w| w.id == sparse.id)
+        .expect("sparse workspace should be listed");
+    assert_eq!(listed.sparse_patterns, Some(vec!["src".to_string()]));
+}
+
+/// Files written outside the sparse patterns are neither reported as changes
+/// nor swept into commits — jj's snapshotting respects the sparse matcher.
+#[test]
+fn files_outside_sparse_patterns_are_not_snapshotted() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    repo.commit_file("src/lib.rs", "pub fn lib() {}\n", "add src/lib.rs")
+        .expect("Failed to commit src/lib.rs");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/sparse-snapshot",
+        None,
+        None,
+        None,
+        None,
+        Some(vec!["src".to_string()]),
+    )
+    .expect("Failed to create sparse workspace");
+
+    let ws = repo.workspaces_dir().join(&workspace.workspace_path);
+    let ws_str = ws.to_str().unwrap();
+    TestRepo::write_workspace_file(ws_str, "src/new.rs", "pub fn new() {}\n")
+        .expect("Failed to write src/new.rs");
+    TestRepo::write_workspace_file(ws_str, "docs/new.md", "# stray\n")
+        .expect("Failed to write docs/new.md");
+
+    let changes =
+        treq_lib::jj::jj_get_changed_files(ws_str).expect("Failed to get changed files");
+    let changed_paths: Vec<&str> = changes.iter().map(|c| c.path.as_str()).collect();
+    assert!(
+        changed_paths.contains(&"src/new.rs"),
+        "src/new.rs should be reported as changed, got: {:?}",
+        changed_paths
+    );
+    assert!(
+        !changed_paths.contains(&"docs/new.md"),
+        "docs/new.md is outside the sparse patterns and should not be snapshotted, got: {:?}",
+        changed_paths
+    );
+
+    // Committing must not sweep the out-of-pattern file into the commit tree.
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "sparse commit")
+        .expect("Failed to commit workspace");
+    let tree_files = TestRepo::run_jj(ws_str, &["file", "list", "-r", "feat/sparse-snapshot"])
+        .expect("Failed to list files at branch");
+    assert!(
+        tree_files.lines().any(|l| l.trim() == "src/new.rs"),
+        "committed tree should contain src/new.rs, got: {}",
+        tree_files
+    );
+    assert!(
+        !tree_files.lines().any(|l| l.trim() == "docs/new.md"),
+        "committed tree should not contain docs/new.md, got: {}",
+        tree_files
+    );
+}
+
 /// Sparse patterns are registered in jj's working-copy state, not just a disk effect.
 #[test]
 fn sparse_patterns_registered_in_jj() {

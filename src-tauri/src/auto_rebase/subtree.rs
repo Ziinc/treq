@@ -200,6 +200,7 @@ mod tests {
             description: None,
             moved_files: None,
             not_on_remote: false,
+            sparse_patterns: None,
         }
     }
 

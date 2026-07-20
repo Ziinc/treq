@@ -394,6 +394,7 @@ pub fn create_workspace(
         branch_name.to_string(),
         description,
         moved_files.clone(),
+        sparse_patterns.clone(),
     )
     .map_err(|e| format!("Failed to add workspace to db: {}", e))?;
 
@@ -705,6 +706,7 @@ pub fn workspace_status(
                 description: None,
                 moved_files: None,
                 not_on_remote: false,
+                sparse_patterns: None,
             };
 
             return Ok(WorkspaceStatus {
