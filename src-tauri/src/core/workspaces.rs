@@ -295,6 +295,26 @@ pub fn create_workspace(
     // None and an empty list both mean a full checkout.
     let sparse_patterns = sparse_patterns.filter(|patterns| !patterns.is_empty());
 
+    // Moved files must be visible inside the sparse cone; otherwise they would
+    // land in the workspace commit but be invisible on disk.
+    if let (Some(patterns), Some(files)) = (&sparse_patterns, &moved_files) {
+        for file in files {
+            let file = file.trim_end_matches('/');
+            let visible = patterns.iter().any(|pattern| {
+                let pattern = pattern.trim_end_matches('/');
+                file == pattern
+                    || file.starts_with(&format!("{}/", pattern))
+                    || pattern.starts_with(&format!("{}/", file))
+            });
+            if !visible {
+                return Err(format!(
+                    "Moved file '{}' is outside the sparse patterns {:?}; add a covering pattern or deselect the file",
+                    file, patterns
+                ));
+            }
+        }
+    }
+
     let stacked_source_workspace = source_branch
         .map(|src_branch| {
             local_db::get_workspace_by_branch(repo_path, src_branch)

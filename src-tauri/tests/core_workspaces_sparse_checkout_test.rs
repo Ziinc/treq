@@ -150,6 +150,155 @@ fn sparse_pattern_single_file() {
     );
 }
 
+/// moved_files that fall outside the sparse patterns are rejected up front —
+/// otherwise they would land in the commit but be invisible on disk.
+#[test]
+fn moved_files_outside_sparse_patterns_error() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    repo.commit_file("src/lib.rs", "pub fn lib() {}\n", "add src/lib.rs")
+        .expect("Failed to commit src/lib.rs");
+    repo.create_file("docs/x.md", "# uncommitted\n")
+        .expect("Failed to create docs/x.md");
+
+    let err = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/sparse-moved",
+        None,
+        Some(vec!["docs/x.md".to_string()]),
+        None,
+        None,
+        Some(vec!["src".to_string()]),
+    )
+    .expect_err("moved file outside sparse patterns should be rejected");
+    assert!(
+        err.contains("docs/x.md"),
+        "error should name the moved file, got: {}",
+        err
+    );
+    assert!(
+        !repo.workspaces_dir().join("feat-sparse-moved").exists(),
+        "no workspace directory should be left behind"
+    );
+}
+
+/// A moved file inside the sparse patterns is accepted.
+#[test]
+fn moved_files_inside_sparse_patterns_accepted() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    repo.commit_file("src/lib.rs", "pub fn lib() {}\n", "add src/lib.rs")
+        .expect("Failed to commit src/lib.rs");
+    repo.create_file("src/wip.rs", "// wip\n")
+        .expect("Failed to create src/wip.rs");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/sparse-moved-ok",
+        None,
+        Some(vec!["src/wip.rs".to_string()]),
+        None,
+        None,
+        Some(vec!["src".to_string()]),
+    )
+    .expect("moved file inside sparse patterns should be accepted");
+
+    let ws = repo.workspaces_dir().join(&workspace.workspace_path);
+    assert!(
+        ws.join("src/wip.rs").exists(),
+        "moved file should be materialized in the sparse workspace"
+    );
+}
+
+/// included_copy_files are copied into the workspace regardless of sparse
+/// patterns — they are typically gitignored config files needed for builds.
+#[test]
+fn included_copy_files_copied_regardless_of_sparse() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    repo.commit_file(".gitignore", ".env\n", "add gitignore")
+        .expect("Failed to commit .gitignore");
+    repo.commit_file("src/lib.rs", "pub fn lib() {}\n", "add src/lib.rs")
+        .expect("Failed to commit src/lib.rs");
+    repo.create_file(".env", "SECRET=1\n")
+        .expect("Failed to create .env");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/sparse-env",
+        None,
+        None,
+        None,
+        Some(vec![".env".to_string()]),
+        Some(vec!["src".to_string()]),
+    )
+    .expect("Failed to create sparse workspace");
+
+    let ws = repo.workspaces_dir().join(&workspace.workspace_path);
+    assert!(
+        ws.join(".env").exists(),
+        ".env should be copied into the sparse workspace"
+    );
+    let changes = treq_lib::jj::jj_get_changed_files(ws.to_str().unwrap())
+        .expect("Failed to get changed files");
+    assert!(
+        changes.is_empty(),
+        "gitignored copied file should not appear as a change, got: {:?}",
+        changes.iter().map(|c| &c.path).collect::<Vec<_>>()
+    );
+}
+
+/// A stacked workspace (created from another workspace's branch) respects
+/// sparse patterns while still starting from the parent's head.
+#[test]
+fn stacked_workspace_respects_sparse_patterns() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    repo.commit_file("src/lib.rs", "pub fn lib() {}\n", "add src/lib.rs")
+        .expect("Failed to commit src/lib.rs");
+    repo.commit_file("docs/guide.md", "# Guide\n", "add docs/guide.md")
+        .expect("Failed to commit docs/guide.md");
+
+    let parent = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/parent",
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create parent workspace");
+    repo.commit_workspace_file(&parent, "src/parent.rs", "pub fn parent() {}\n", "add parent")
+        .expect("Failed to commit in parent workspace");
+
+    let child = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/child",
+        None,
+        None,
+        Some("feat/parent"),
+        None,
+        Some(vec!["src".to_string()]),
+    )
+    .expect("Failed to create stacked sparse workspace");
+
+    let ws = repo.workspaces_dir().join(&child.workspace_path);
+    assert!(
+        ws.join("src/parent.rs").exists(),
+        "parent's committed file under the pattern should be materialized"
+    );
+    assert!(
+        ws.join("src/lib.rs").exists(),
+        "base file under the pattern should be materialized"
+    );
+    assert!(
+        !ws.join("docs").exists(),
+        "docs/ is outside the pattern and should not be materialized"
+    );
+    assert_eq!(
+        child.target_branch.as_deref(),
+        Some("feat/parent"),
+        "stacked workspace should target the parent branch"
+    );
+}
+
 /// Sparse patterns round-trip through the workspace database record.
 #[test]
 fn sparse_patterns_persisted_in_db() {
