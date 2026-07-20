@@ -97,7 +97,7 @@ fn test_init_triggers_workspaces_sync() {
         Some("recovery test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -127,7 +127,7 @@ fn returns_false_when_workspace_is_descendant_of_target() {
         Some("descendant".to_string()),
         None,
         Some(default_branch),
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
     treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, ws.id, "feat/descendant")
@@ -148,7 +148,7 @@ fn returns_true_and_rebases_when_workspace_diverged_from_target() {
         Some("diverged".to_string()),
         None,
         Some(default_branch),
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -169,7 +169,7 @@ fn returns_false_when_target_branch_missing() {
         Some("missing target".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -190,7 +190,7 @@ fn returns_false_for_self_target_workspace() {
         Some("self target".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
     treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, ws.id, "feat/self-target")
@@ -212,7 +212,7 @@ fn init_checks_all_workspaces_and_rebases_only_diverged_ones() {
         Some("init diverged".to_string()),
         None,
         Some(default_branch),
-        None,
+        None, None,
     )
     .expect("Failed to create diverged workspace");
     let ws_descendant = treq_lib::core::create_workspace(
@@ -221,7 +221,7 @@ fn init_checks_all_workspaces_and_rebases_only_diverged_ones() {
         Some("init descendant".to_string()),
         None,
         Some(default_branch),
-        None,
+        None, None,
     )
     .expect("Failed to create descendant workspace");
     treq_lib::local_db::update_workspace_target_branch(
@@ -236,7 +236,7 @@ fn init_checks_all_workspaces_and_rebases_only_diverged_ones() {
         Some("init missing target".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create missing-target workspace");
     treq_lib::local_db::update_workspace_target_branch(
@@ -277,7 +277,7 @@ fn setup_workspace_with_pushed_commit(
         Some(branch_name.to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
     let full_path = workspace_full_path(repo, &ws);
@@ -342,7 +342,7 @@ fn ensure_workspace_rebased_errors_on_missing_bookmark() {
         Some("missing bookmark".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -374,7 +374,7 @@ fn sync_workspaces_healthy_bookmark_is_untouched() {
         Some("healthy".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -400,7 +400,7 @@ fn sync_workspaces_does_not_delete_on_missing_bookmark() {
         Some("missing safe".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -432,7 +432,7 @@ fn ensure_workspace_rebased_errors_but_preserves_on_truly_missing_bookmark() {
         Some("truly missing".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 

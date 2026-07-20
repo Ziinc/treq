@@ -290,7 +290,11 @@ pub fn create_workspace(
     moved_files: Option<Vec<String>>,
     source_branch: Option<&str>,
     included_copy_files: Option<Vec<String>>,
+    sparse_patterns: Option<Vec<String>>,
 ) -> Result<local_db::Workspace, String> {
+    // None and an empty list both mean a full checkout.
+    let sparse_patterns = sparse_patterns.filter(|patterns| !patterns.is_empty());
+
     let stacked_source_workspace = source_branch
         .map(|src_branch| {
             local_db::get_workspace_by_branch(repo_path, src_branch)
@@ -343,6 +347,7 @@ pub fn create_workspace(
         new_branch,
         resolved_source_branch.as_deref(),
         Some(&effective_target_branch),
+        sparse_patterns.as_deref(),
     )
     .map_err(|e| format!("Failed to create workspace: {}", e))?;
 

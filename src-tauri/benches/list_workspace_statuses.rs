@@ -23,7 +23,7 @@ fn setup_five_flat_workspaces() -> TestRepo {
             Some(format!("flat workspace {index}")),
             None,
             None,
-            None,
+            None, None,
         )
         .expect("failed to create flat workspace");
 
@@ -43,7 +43,7 @@ fn setup_five_hierarchies_three_levels() -> TestRepo {
             Some(format!("hierarchy {group} level 1")),
             None,
             None,
-            None,
+            None, None,
         )
         .expect("failed to create hierarchy root");
         write_workspace_file(&repo, &root, &format!("h{group}-l1.txt"));
@@ -54,7 +54,7 @@ fn setup_five_hierarchies_three_levels() -> TestRepo {
             None,
             None,
             Some(&root.branch_name),
-            None,
+            None, None,
         )
         .expect("failed to create hierarchy level 2");
         write_workspace_file(&repo, &level2, &format!("h{group}-l2.txt"));
@@ -65,7 +65,7 @@ fn setup_five_hierarchies_three_levels() -> TestRepo {
             None,
             None,
             Some(&level2.branch_name),
-            None,
+            None, None,
         )
         .expect("failed to create hierarchy level 3");
         write_workspace_file(&repo, &level3, &format!("h{group}-l3.txt"));

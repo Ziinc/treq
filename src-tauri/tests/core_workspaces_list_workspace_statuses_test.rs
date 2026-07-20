@@ -25,7 +25,7 @@ fn test_workspace_list_statuses_show_conflict_state() {
         Some("sidebar conflict test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -93,7 +93,7 @@ fn test_workspace_list_statuses_ignore_untracked_noise() {
         Some("ignored noise".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -126,7 +126,7 @@ fn test_workspace_list_statuses_discovers_and_persists_workspace_when_db_is_empt
         Some("discovered workspace".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -200,7 +200,7 @@ fn test_workspace_list_statuses_preserves_existing_workspace_metadata_on_upsert(
         Some("initial description".to_string()),
         Some(vec!["src/lib.rs".to_string()]),
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -257,7 +257,7 @@ fn test_workspace_list_statuses_conflict_bit_matches_workspace_status_for_diverg
         Some("base".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create base workspace");
     let base_path = repo.workspaces_dir().join(&base_workspace.workspace_path);
@@ -269,7 +269,7 @@ fn test_workspace_list_statuses_conflict_bit_matches_workspace_status_for_diverg
         Some("stacked".to_string()),
         None,
         Some("feature-base"),
-        None,
+        None, None,
     )
     .expect("Failed to create stacked workspace");
     let stacked_path = repo
@@ -317,7 +317,7 @@ fn test_workspace_list_statuses_does_not_cross_assign_sibling_branch_name_when_e
         Some("checks".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create checks workspace");
 
@@ -327,7 +327,7 @@ fn test_workspace_list_statuses_does_not_cross_assign_sibling_branch_name_when_e
         Some("logging".to_string()),
         None,
         Some("treq/feat-checks"),
-        None,
+        None, None,
     )
     .expect("Failed to create logging workspace");
 

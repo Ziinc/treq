@@ -38,7 +38,7 @@ fn test_list_conflicted_files_no_conflicts() {
         Some("no conflicts test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -71,7 +71,7 @@ fn test_list_conflicted_files_with_conflicts() {
         Some("conflict test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -123,7 +123,7 @@ fn test_workspace_status_invariant_no_conflicts_for_divergent_non_conflicting_ed
         Some("base".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create base workspace");
     let base_path = repo.workspaces_dir().join(&base_workspace.workspace_path);
@@ -135,7 +135,7 @@ fn test_workspace_status_invariant_no_conflicts_for_divergent_non_conflicting_ed
         Some("stacked".to_string()),
         None,
         Some("feature-base"),
-        None,
+        None, None,
     )
     .expect("Failed to create stacked workspace");
     let stacked_path = repo
@@ -176,7 +176,7 @@ fn test_workspace_status_invariant_unresolved_conflicts_require_conflicted_files
         Some("conflict".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
@@ -233,7 +233,7 @@ fn test_list_conflicted_files_preserves_deleted_side_conflict_path() {
         Some("deleted side conflict".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
@@ -274,7 +274,7 @@ fn test_list_conflicted_files_is_deterministic_and_deduped() {
         Some("multi conflict test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
@@ -319,7 +319,7 @@ fn test_list_conflicted_files_none_target_defaults_to_repo_default_branch() {
         Some("default main target".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);

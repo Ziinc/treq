@@ -13,7 +13,7 @@ fn test_jj_get_log_diff_stats_with_multiline_output() {
         Some("diff stats test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -70,7 +70,7 @@ fn test_jj_get_log_diff_stats_with_modifications() {
         Some("diff modifications test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -139,7 +139,7 @@ fn test_list_commits_includes_tentative_working_copy_for_dirty_workspace() {
         Some("tentative working copy test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -199,7 +199,7 @@ fn test_list_commits_includes_stacked_working_copies_for_dirty_chain() {
         Some("root workspace".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create root workspace");
     let child = treq_lib::core::create_workspace(
@@ -208,7 +208,7 @@ fn test_list_commits_includes_stacked_working_copies_for_dirty_chain() {
         Some("child workspace".to_string()),
         None,
         Some(&root.branch_name),
-        None,
+        None, None,
     )
     .expect("Failed to create child workspace");
     let grandchild = treq_lib::core::create_workspace(
@@ -217,7 +217,7 @@ fn test_list_commits_includes_stacked_working_copies_for_dirty_chain() {
         Some("grandchild workspace".to_string()),
         None,
         Some(&child.branch_name),
-        None,
+        None, None,
     )
     .expect("Failed to create grandchild workspace");
 
@@ -301,7 +301,7 @@ fn test_list_commits_skips_clean_branches_in_stacked_chain() {
         Some("root clean workspace".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create root workspace");
     let child = treq_lib::core::create_workspace(
@@ -310,7 +310,7 @@ fn test_list_commits_skips_clean_branches_in_stacked_chain() {
         Some("child clean workspace".to_string()),
         None,
         Some(&root.branch_name),
-        None,
+        None, None,
     )
     .expect("Failed to create child workspace");
     let grandchild = treq_lib::core::create_workspace(
@@ -319,7 +319,7 @@ fn test_list_commits_skips_clean_branches_in_stacked_chain() {
         Some("grandchild clean workspace".to_string()),
         None,
         Some(&child.branch_name),
-        None,
+        None, None,
     )
     .expect("Failed to create grandchild workspace");
 
@@ -383,7 +383,7 @@ fn test_list_commits_non_stacked_workspace_keeps_single_working_copy() {
         Some("solo workspace".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -427,7 +427,7 @@ fn test_move_commit_to_existing_workspace() {
         Some("source workspace".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create source workspace");
 
@@ -456,7 +456,7 @@ fn test_move_commit_to_existing_workspace() {
         Some("target workspace".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create target workspace");
 
@@ -490,7 +490,7 @@ fn test_abandon_commit() {
         Some("abandon test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -542,7 +542,7 @@ fn test_commit_diff_added_files() {
         Some("commit diff add test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -621,7 +621,7 @@ fn test_commit_diff_modified_files() {
         Some("commit diff mod test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -682,7 +682,7 @@ fn test_commit_diff_deleted_files() {
         Some("commit diff del test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -738,7 +738,7 @@ fn test_commit_diff_defers_large_file_diffs() {
         Some("commit diff large test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -793,7 +793,7 @@ fn test_commit_diff_blocks_rendering_when_commit_is_too_large() {
         Some("commit diff too large test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -845,7 +845,7 @@ fn test_commit_file_diff_fetches_deferred_file_on_demand() {
         Some("commit file diff test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -901,7 +901,7 @@ fn test_commit_diff_invalid_change_id() {
         Some("commit diff invalid test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -934,7 +934,7 @@ fn test_list_commits() {
         Some("list commits test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -1012,7 +1012,7 @@ fn test_list_commits_includes_base_branch_commits_for_non_default_workspace() {
         Some("test base exclusion".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 

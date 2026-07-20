@@ -48,7 +48,7 @@ fn test_only_shows_workspace_changes() {
     let repo = TestRepo::new().unwrap();
     repo.commit_file("base.txt", "base", "base").unwrap();
     let ws =
-        treq_lib::core::create_workspace(&repo.repo_path, "feat/ws-only", None, None, None, None)
+        treq_lib::core::create_workspace(&repo.repo_path, "feat/ws-only", None, None, None, None, None)
             .unwrap();
     workspace_write_file(&repo, &ws, "new.txt", "new");
     treq_lib::core::commit_workspace(&repo.repo_path, ws.id, "add new").unwrap();
@@ -66,7 +66,7 @@ fn test_excludes_unmodified_target_files() {
         repo.commit_file(f, f, f).unwrap();
     }
     let ws =
-        treq_lib::core::create_workspace(&repo.repo_path, "feat/mod-one", None, None, None, None)
+        treq_lib::core::create_workspace(&repo.repo_path, "feat/mod-one", None, None, None, None, None)
             .unwrap();
     workspace_write_file(&repo, &ws, "b.txt", "modified");
     treq_lib::core::commit_workspace(&repo.repo_path, ws.id, "mod b").unwrap();
@@ -80,7 +80,7 @@ fn test_empty_when_no_commits() {
     let repo = TestRepo::new().unwrap();
     repo.commit_file("x.txt", "x", "x").unwrap();
     let ws =
-        treq_lib::core::create_workspace(&repo.repo_path, "feat/empty", None, None, None, None)
+        treq_lib::core::create_workspace(&repo.repo_path, "feat/empty", None, None, None, None, None)
             .unwrap();
 
     init_test_app_db(&repo, Some("git"));
@@ -99,7 +99,7 @@ fn test_multiple_workspace_commits() {
     let repo = TestRepo::new().unwrap();
     repo.commit_file("target.txt", "t", "t").unwrap();
     let ws =
-        treq_lib::core::create_workspace(&repo.repo_path, "feat/multi", None, None, None, None)
+        treq_lib::core::create_workspace(&repo.repo_path, "feat/multi", None, None, None, None, None)
             .unwrap();
     workspace_write_file(&repo, &ws, "f1.txt", "1");
     treq_lib::core::commit_workspace(&repo.repo_path, ws.id, "add f1").unwrap();
@@ -122,7 +122,7 @@ fn test_commit_workspace_does_not_overwrite_last_rebased_target_commit() {
         None,
         None,
         None,
-        None,
+        None, None,
     )
     .unwrap();
     let target_commit =
@@ -175,7 +175,7 @@ fn test_workspace_diff_when_wc_is_merge_commit() {
     repo.commit_file("shared.txt", "target", "target").unwrap();
 
     let ws =
-        treq_lib::core::create_workspace(&repo.repo_path, "feat/merge-wc", None, None, None, None)
+        treq_lib::core::create_workspace(&repo.repo_path, "feat/merge-wc", None, None, None, None, None)
             .unwrap();
     workspace_write_file(&repo, &ws, "shared.txt", "workspace");
     treq_lib::core::commit_workspace(&repo.repo_path, ws.id, "workspace shared change").unwrap();
@@ -240,7 +240,7 @@ fn test_workspace_diff_includes_uncommitted_changes_and_conflicts() {
         None,
         None,
         None,
-        None,
+        None, None,
     )
     .unwrap();
     let workspace_dir = repo.workspaces_dir().join(&ws.workspace_path);
@@ -282,7 +282,7 @@ fn test_workspace_diff_does_not_pick_up_target_branch_changes_after_force_rebase
         None,
         None,
         None,
-        None,
+        None, None,
     )
     .unwrap();
     let workspace_dir = repo.workspaces_dir().join(&ws.workspace_path);
@@ -344,7 +344,7 @@ fn test_workspace_diff_reports_delete_modify_conflicts_from_jj_lib() {
         None,
         None,
         None,
-        None,
+        None, None,
     )
     .unwrap();
     let workspace_dir = repo.workspaces_dir().join(&ws.workspace_path);
@@ -410,7 +410,7 @@ fn test_workspace_diff_empty_uncommitted_and_conflicts_for_clean_workspace() {
     repo.commit_file("clean.txt", "clean", "base").unwrap();
 
     let ws =
-        treq_lib::core::create_workspace(&repo.repo_path, "feat/clean", None, None, None, None)
+        treq_lib::core::create_workspace(&repo.repo_path, "feat/clean", None, None, None, None, None)
             .unwrap();
     workspace_write_file(&repo, &ws, "committed.txt", "committed");
     treq_lib::core::commit_workspace(&repo.repo_path, ws.id, "add committed").unwrap();
@@ -428,10 +428,10 @@ fn test_workspace_diff_does_not_leak_sibling_workspace_commits() {
     repo.commit_file("base.txt", "base", "base").unwrap();
 
     let main_workspace =
-        treq_lib::core::create_workspace(&repo.repo_path, "treq/root", None, None, None, None)
+        treq_lib::core::create_workspace(&repo.repo_path, "treq/root", None, None, None, None, None)
             .unwrap();
     let sibling_workspace =
-        treq_lib::core::create_workspace(&repo.repo_path, "treq/chicken", None, None, None, None)
+        treq_lib::core::create_workspace(&repo.repo_path, "treq/chicken", None, None, None, None, None)
             .unwrap();
 
     let sibling_dir = repo
@@ -497,7 +497,7 @@ fn test_workspace_diff_does_not_leak_sibling_workspace_commits() {
 #[test]
 fn test_excludes_uncommitted_changes() {
     let repo = TestRepo::new().unwrap();
-    let ws = treq_lib::core::create_workspace(&repo.repo_path, "feat/wc", None, None, None, None)
+    let ws = treq_lib::core::create_workspace(&repo.repo_path, "feat/wc", None, None, None, None, None)
         .unwrap();
     workspace_write_file(&repo, &ws, "committed.txt", "c");
     treq_lib::core::commit_workspace(&repo.repo_path, ws.id, "add committed").unwrap();
@@ -514,7 +514,7 @@ fn test_reports_rename_with_previous_path() {
     repo.commit_file("old.txt", "hello", "add old on main")
         .unwrap();
     let ws =
-        treq_lib::core::create_workspace(&repo.repo_path, "feat/rename", None, None, None, None)
+        treq_lib::core::create_workspace(&repo.repo_path, "feat/rename", None, None, None, None, None)
             .unwrap();
     let workspace_dir = repo.workspaces_dir().join(&ws.workspace_path);
     TestRepo::rename_path(
@@ -540,7 +540,7 @@ fn test_workspace_diff_reports_copy_status() {
     let repo = TestRepo::new().unwrap();
     repo.commit_file("source.txt", "hello", "add source on main")
         .unwrap();
-    let ws = treq_lib::core::create_workspace(&repo.repo_path, "feat/copy", None, None, None, None)
+    let ws = treq_lib::core::create_workspace(&repo.repo_path, "feat/copy", None, None, None, None, None)
         .unwrap();
     let workspace_dir = repo.workspaces_dir().join(&ws.workspace_path);
     TestRepo::copy_path(

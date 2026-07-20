@@ -103,7 +103,7 @@ pub async fn create_workspace(
             description,
             moved_files,
             source_branch.as_deref(),
-            included_copy_files,
+            included_copy_files, None,
         )?;
         if let Some(t) = title {
             local_db::update_workspace_title(&repo_path_for_task, workspace.id, &t)?;

@@ -57,7 +57,7 @@ fn home_commit_on_branch_syncs_matching_workspace_branch() {
         Some("prop sync workspace".to_string()),
         None,
         Some(PROP_BRANCH),
-        None,
+        None, None,
     )
     .expect("Failed to create branch workspace");
     TestRepo::run_git(&repo.repo_path, &["checkout", PROP_BRANCH])
@@ -94,7 +94,7 @@ fn workspace_commit_on_branch_syncs_home_when_home_on_same_branch() {
         Some("prop sync workspace".to_string()),
         None,
         Some(PROP_BRANCH),
-        None,
+        None, None,
     )
     .expect("Failed to create branch workspace");
     TestRepo::run_git(&repo.repo_path, &["checkout", PROP_BRANCH])
@@ -137,7 +137,7 @@ fn home_pull_on_branch_syncs_matching_workspace_branch() {
         Some("prop sync workspace".to_string()),
         None,
         Some(PROP_BRANCH),
-        None,
+        None, None,
     )
     .expect("Failed to create branch workspace");
     TestRepo::run_git(&repo.repo_path, &["checkout", PROP_BRANCH])
@@ -178,7 +178,7 @@ fn workspace_pull_on_branch_syncs_home_when_home_on_same_branch() {
         Some("prop sync workspace".to_string()),
         None,
         Some(PROP_BRANCH),
-        None,
+        None, None,
     )
     .expect("Failed to create branch workspace");
     TestRepo::run_git(&repo.repo_path, &["checkout", PROP_BRANCH])
@@ -221,7 +221,7 @@ fn workspace_merge_same_branch_syncs_home_branch_tip_and_working_copy() {
         Some("branch workspace".to_string()),
         None,
         Some(PROP_BRANCH),
-        None,
+        None, None,
     )
     .expect("Failed to create branch workspace");
     treq_lib::local_db::update_workspace_target_branch(
@@ -237,7 +237,7 @@ fn workspace_merge_same_branch_syncs_home_branch_tip_and_working_copy() {
         Some("feature merge target prop branch".to_string()),
         None,
         Some(PROP_BRANCH),
-        None,
+        None, None,
     )
     .expect("Failed to create feature workspace");
     let feature_workspace_root = workspace_path(&repo.repo_path, &feature_workspace.workspace_path);
@@ -285,7 +285,7 @@ fn no_sync_when_home_on_different_branch() {
         Some("branch workspace".to_string()),
         None,
         Some(default_branch),
-        None,
+        None, None,
     )
     .expect("Failed to create branch workspace");
 
@@ -327,7 +327,7 @@ fn workspace_main_uncommitted_changes_take_precedence_when_rebasing_children() {
         Some("root main workspace".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create main workspace");
     treq_lib::local_db::update_workspace_target_branch(
@@ -353,7 +353,7 @@ fn workspace_main_uncommitted_changes_take_precedence_when_rebasing_children() {
         Some("child of main".to_string()),
         None,
         Some(default_branch),
-        None,
+        None, None,
     )
     .expect("Failed to create child workspace");
     let child_workspace_root = workspace_path(&repo.repo_path, &child_workspace.workspace_path);
@@ -440,7 +440,7 @@ fn home_pull_syncs_workspace_working_copy_to_new_tip() {
         Some("sync wc workspace".to_string()),
         None,
         Some(PROP_BRANCH),
-        None,
+        None, None,
     )
     .expect("Failed to create branch workspace");
     TestRepo::run_git(&repo.repo_path, &["checkout", PROP_BRANCH])

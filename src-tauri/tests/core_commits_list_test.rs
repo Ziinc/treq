@@ -23,7 +23,7 @@ fn test_list_commits_working_copy_diff_stats() {
         Some("working copy diff stats test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -122,7 +122,7 @@ fn test_list_commits_workspace_after_home_repo_jj_commits() {
         Some("home regression".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -184,7 +184,7 @@ fn test_list_commits_with_target_branch_history() {
         Some("target history test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -260,7 +260,7 @@ fn test_list_commits_keeps_workspace_and_target_histories_disjoint() {
         Some("disjoint history test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -349,7 +349,7 @@ fn test_list_commits_target_branch_history_limits_to_10() {
         Some("limit test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -378,7 +378,7 @@ fn test_list_commits_without_target_branch_history() {
         Some("no history test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -429,7 +429,7 @@ fn test_list_commits_caches_commit_info_in_local_db() {
         Some("cache commit info test".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -504,7 +504,7 @@ fn test_list_commits_target_branch_history_uses_local_bookmark_only() {
         Some("local target history".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -560,7 +560,7 @@ fn test_default_branch_workspace_returns_full_history() {
         Some("root main workspace".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create main workspace");
 
@@ -602,7 +602,7 @@ fn test_non_default_workspace_includes_target_history() {
         Some("ahead only workspace".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -673,7 +673,7 @@ fn test_non_default_workspace_empty_ahead_includes_target_history() {
         Some("no ahead workspace".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -726,7 +726,7 @@ fn test_non_default_workspace_combined_history_has_no_duplicate_commit_ids() {
         Some("dedupe workspace".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 
@@ -800,7 +800,7 @@ fn test_no_main_assumption_for_non_main_default() {
         Some("root trunk workspace".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create trunk workspace");
 
@@ -868,7 +868,7 @@ fn test_non_default_workspace_uses_non_main_default_target_history() {
         Some("feature on trunk default".to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .expect("Failed to create workspace");
 

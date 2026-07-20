@@ -70,7 +70,7 @@ pub(super) fn handle_workspace_add(matches: &Matches) {
         description,
         None,
         source_branch.as_deref(),
-        None,
+        None, None,
     ) {
         Ok(workspace) => {
             println!("Created workspace: {}", workspace.branch_name);

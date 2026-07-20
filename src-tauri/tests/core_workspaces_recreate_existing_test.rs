@@ -27,7 +27,7 @@ fn test_create_workspace_recovers_orphaned_jj_dir() {
         Some(branch.to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .unwrap_or_else(|e| panic!("Initial create_workspace failed: {}", e));
 
@@ -47,7 +47,7 @@ fn test_create_workspace_recovers_orphaned_jj_dir() {
         Some(branch.to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .unwrap_or_else(|e| {
         panic!(
@@ -91,7 +91,7 @@ fn test_create_workspace_replaces_fully_tracked_workspace() {
         Some(branch.to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .unwrap_or_else(|e| panic!("First create_workspace failed: {}", e));
 
@@ -105,7 +105,7 @@ fn test_create_workspace_replaces_fully_tracked_workspace() {
         Some(branch.to_string()),
         None,
         None,
-        None,
+        None, None,
     )
     .unwrap_or_else(|e| {
         panic!(

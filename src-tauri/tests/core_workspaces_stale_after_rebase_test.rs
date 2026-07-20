@@ -61,7 +61,7 @@ fn create_workspace_with_commit(
         Some(branch_name.to_string()),
         None,
         source_branch,
-        None,
+        None, None,
     )
     .unwrap_or_else(|e| panic!("Failed to create workspace '{}': {}", branch_name, e));
 
