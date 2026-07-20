@@ -10,6 +10,7 @@ export interface Workspace {
 	title: string;
 	description?: string | null;
 	not_on_remote: boolean;
+	sparse_patterns?: string[] | null;
 }
 
 export type RemoteSyncStatus =
