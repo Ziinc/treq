@@ -1,7 +1,15 @@
 .page {
+  width: 100%;
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem 1.5rem 3rem;
+  box-sizing: border-box;
+  /* Docusaurus's sticky-footer wrapper is a flex column, making this a flex
+     item whose cross-axis stretch sizing otherwise refuses to shrink below
+     the widest unwrapped descendant (e.g. a long fenced code line) — an
+     explicit width, not min-width alone, is what actually pins it to the
+     container's size instead of stretching the whole page. */
+  min-width: 0;
 }
 
 .breadcrumbs {
