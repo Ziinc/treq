@@ -183,6 +183,11 @@ const config: Config = {
           position: 'left',
         },
         {
+          to: '/skills',
+          label: 'Skills',
+          position: 'left',
+        },
+        {
           to: '/pricing',
           label: 'Pricing',
           position: 'left',
@@ -242,6 +247,10 @@ const config: Config = {
         {
           title: 'More',
           items: [
+            {
+              label: 'Skills',
+              to: '/skills',
+            },
             {
               label: 'Pricing',
               to: '/pricing',
