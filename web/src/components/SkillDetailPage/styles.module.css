@@ -88,6 +88,24 @@
   border-color: var(--ifm-color-primary);
 }
 
+/* Hidden on desktop — the file tree in .browser is the primary way to pick a
+   file. Below the mobile breakpoint this swaps places with .tree. */
+.mobilePicker {
+  display: none;
+  margin-bottom: 0.75rem;
+}
+
+.mobileSelect {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.85rem;
+  font-family: var(--ifm-font-family-monospace);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  background: var(--ifm-background-surface-color);
+  color: var(--ifm-font-color-base);
+}
+
 .browser {
   display: flex;
   border: 1px solid var(--ifm-color-emphasis-200);
@@ -200,9 +218,49 @@
   text-decoration: underline !important;
 }
 
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.4rem 1rem 0;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.tab,
+.tabActive {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.4rem 0.75rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--ifm-color-emphasis-600);
+  border-bottom: 2px solid transparent;
+}
+
+.tab:hover {
+  color: var(--ifm-font-color-base);
+}
+
+.tabActive {
+  color: var(--ifm-color-primary);
+  border-bottom-color: var(--ifm-color-primary);
+}
+
 .viewerBody {
   flex: 1;
   overflow: auto;
+}
+
+.markdownPreview {
+  padding: 1.25rem 1.5rem;
+}
+
+.markdownPreview :global(pre) {
+  overflow-x: auto;
+}
+
+.markdownPreview :global(img) {
+  max-width: 100%;
 }
 
 .notice {
@@ -232,4 +290,36 @@
   color: var(--ifm-color-emphasis-400);
   width: 1%;
   white-space: nowrap;
+}
+
+/* Below this width the two-pane tree/viewer layout doesn't fit — swap the
+   sidebar tree for a dropdown above the file preview. */
+@media (max-width: 768px) {
+  .page {
+    padding: 1.25rem 1rem 2rem;
+  }
+
+  .title {
+    font-size: 1.5rem;
+  }
+
+  .mobilePicker {
+    display: block;
+  }
+
+  .tree {
+    display: none;
+  }
+
+  .browser {
+    height: 70vh;
+  }
+
+  .viewerHeader {
+    flex-wrap: wrap;
+  }
+
+  .viewerGithub {
+    margin-left: 0;
+  }
 }

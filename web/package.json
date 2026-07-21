@@ -30,9 +30,15 @@
     "prism-react-renderer": "^2.4.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "rehype-sanitize": "^6.0.0",
+    "rehype-stringify": "^10.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "remark-rehype": "^11.1.2",
     "roughjs": "^4.6.6",
     "sql.js": "^1.14.1",
-    "three": "^0.185.1"
+    "three": "^0.185.1",
+    "unified": "^11.0.5"
   },
   "devDependencies": {
     "@docusaurus/faster": "^3.10.1",

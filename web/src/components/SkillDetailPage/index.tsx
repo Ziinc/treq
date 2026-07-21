@@ -5,6 +5,8 @@ import Link from '@docusaurus/Link';
 import { useColorMode } from '@docusaurus/theme-common';
 import { Highlight, themes } from 'prism-react-renderer';
 import { FileTree } from './FileTree';
+import { MobileFileSelect } from './MobileFileSelect';
+import { MarkdownPreview } from './MarkdownPreview';
 import type { Skill, SkillFile } from './types';
 import { formatBytes, getPrismLanguage } from './utils';
 import styles from './styles.module.css';
@@ -41,12 +43,17 @@ function SkillDetailContent({ skill }: { skill: Skill }) {
   const [selected, setSelected] = useState<SkillFile | null>(() => pickDefaultFile(skill.files));
   const [content, setContent] = useState<string | null>(null);
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [tab, setTab] = useState<'preview' | 'code'>('preview');
   const { colorMode } = useColorMode();
+
+  const language = selected ? getPrismLanguage(selected.path) : null;
+  const isMarkdown = language === 'markdown';
 
   // File contents are fetched live from GitHub's raw CDN when a file is
   // selected — never bundled into the site or indexed for search.
   useEffect(() => {
     setContent(null);
+    setTab('preview');
     if (!selected || selected.binary || selected.size > MAX_PREVIEW_BYTES) {
       setStatus('idle');
       return;
@@ -72,7 +79,6 @@ function SkillDetailContent({ skill }: { skill: Skill }) {
     };
   }, [selected]);
 
-  const language = selected ? getPrismLanguage(selected.path) : null;
   const sourceLabel = SOURCE_LABELS[skill.source] ?? skill.source;
 
   return (
@@ -92,7 +98,9 @@ function SkillDetailContent({ skill }: { skill: Skill }) {
           <div className={styles.meta}>
             <span className={styles.badge} data-source={skill.source}>{sourceLabel}</span>
             {skill.category && <span className={styles.badge}>{skill.category}</span>}
-            {skill.license && <span className={styles.badge}>{skill.license}</span>}
+            {skill.license && (
+              <span className={styles.badge} data-testid="license-badge">{skill.license}</span>
+            )}
           </div>
         </div>
         <a
@@ -104,6 +112,10 @@ function SkillDetailContent({ skill }: { skill: Skill }) {
         >
           View on GitHub ↗
         </a>
+      </div>
+
+      <div className={styles.mobilePicker}>
+        <MobileFileSelect files={skill.files} selectedPath={selected?.path ?? null} onSelect={setSelected} />
       </div>
 
       <div className={styles.browser} data-testid="skill-file-browser">
@@ -128,6 +140,28 @@ function SkillDetailContent({ skill }: { skill: Skill }) {
                   View on GitHub ↗
                 </a>
               </div>
+              {isMarkdown && content !== null && (
+                <div className={styles.tabs} role="tablist">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === 'preview'}
+                    className={tab === 'preview' ? styles.tabActive : styles.tab}
+                    onClick={() => setTab('preview')}
+                  >
+                    Preview
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === 'code'}
+                    className={tab === 'code' ? styles.tabActive : styles.tab}
+                    onClick={() => setTab('code')}
+                  >
+                    Code
+                  </button>
+                </div>
+              )}
               <div className={styles.viewerBody} data-testid="viewer-body">
                 {selected.binary ? (
                   <p className={styles.notice}>Binary file — preview isn't available. View it on GitHub instead.</p>
@@ -138,7 +172,11 @@ function SkillDetailContent({ skill }: { skill: Skill }) {
                 ) : status === 'error' ? (
                   <p className={styles.notice}>Failed to load this file. View it on GitHub instead.</p>
                 ) : content !== null ? (
-                  <CodeView content={content} language={language} dark={colorMode === 'dark'} />
+                  isMarkdown && tab === 'preview' ? (
+                    <MarkdownPreview content={content} />
+                  ) : (
+                    <CodeView content={content} language={language} dark={colorMode === 'dark'} />
+                  )
                 ) : null}
               </div>
             </>

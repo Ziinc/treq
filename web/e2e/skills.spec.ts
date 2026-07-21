@@ -85,4 +85,54 @@ test.describe('Skill detail page', () => {
     await page.getByRole('link', { name: 'Skills Library' }).click();
     await expect(page.getByRole('heading', { name: 'Skills Library', level: 1 })).toBeVisible();
   });
+
+  test('detects the license instead of showing the raw frontmatter pointer', async ({ page }) => {
+    await expect(page.getByRole('heading', { name: 'pdf', level: 1 })).toBeVisible();
+    await expect(page.getByTestId('license-badge')).toHaveText('Proprietary');
+    await expect(page.getByText('Complete terms in LICENSE.txt')).toHaveCount(0);
+  });
+
+  test('markdown files default to a Preview tab, with Code as a second tab', async ({ page }) => {
+    test.setTimeout(30_000);
+    const tabs = page.getByRole('tablist');
+    await expect(tabs.getByRole('tab', { name: 'Preview' })).toHaveAttribute('aria-selected', 'true');
+    await expect(tabs.getByRole('tab', { name: 'Code' })).toHaveAttribute('aria-selected', 'false');
+    // Rendered preview produces a real heading element, not literal "#" markdown source.
+    const viewerBody = page.getByTestId('viewer-body');
+    await expect(viewerBody.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 20_000 });
+  });
+
+  test('switching to the Code tab shows the raw markdown source', async ({ page }) => {
+    test.setTimeout(30_000);
+    const viewerBody = page.getByTestId('viewer-body');
+    await expect(viewerBody.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 20_000 });
+    await page.getByRole('tab', { name: 'Code' }).click();
+    await expect(page.getByRole('tab', { name: 'Code' })).toHaveAttribute('aria-selected', 'true');
+    await expect(viewerBody.getByRole('heading', { level: 1 })).toHaveCount(0);
+    await expect(viewerBody).toContainText('#');
+  });
+});
+
+// ── Skill detail page — mobile ──────────────────────────────────────────────
+
+test.describe('Skill detail page on mobile', () => {
+  test.use({ viewport: { width: 375, height: 667 } });
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Toggle navigation bar' }).click();
+    await page.getByRole('navigation').getByRole('link', { name: 'Skills' }).click();
+    await page.getByRole('link', { name: /^pdf/ }).first().click();
+  });
+
+  test('shows a file dropdown instead of the folder tree', async ({ page }) => {
+    await expect(page.getByLabel('Choose a file')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'SKILL.md' })).not.toBeVisible();
+  });
+
+  test('picking a file from the dropdown updates the preview', async ({ page }) => {
+    await expect(page.getByTestId('viewer-path')).toHaveText('SKILL.md');
+    await page.getByLabel('Choose a file').selectOption('reference.md');
+    await expect(page.getByTestId('viewer-path')).toHaveText('reference.md');
+  });
 });

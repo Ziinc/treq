@@ -64,6 +64,43 @@ function isBinaryFile(path) {
   return BINARY_EXTENSIONS.some((ext) => lower.endsWith(ext));
 }
 
+// Detects a short SPDX-ish label from license file text. Skill folders often
+// ship a LICENSE.txt whose SKILL.md frontmatter only says "see LICENSE.txt" —
+// this reads the actual text so the UI can show "Apache-2.0" / "MIT" /
+// "Proprietary" instead of that unhelpful pointer.
+function detectLicense(text) {
+  const head = text.slice(0, 3000);
+  if (/Apache License[\s\S]{0,60}Version 2\.0/i.test(head)) return 'Apache-2.0';
+  if (
+    /\bMIT License\b/i.test(head) ||
+    /Permission is hereby granted, free of charge, to any person obtaining a copy/i.test(head)
+  ) return 'MIT';
+  if (/BSD 3-Clause/i.test(head) || (/Redistribution and use in source and binary forms/i.test(head) && /neither the name/i.test(head))) {
+    return 'BSD-3-Clause';
+  }
+  if (/BSD 2-Clause/i.test(head)) return 'BSD-2-Clause';
+  if (/GNU GENERAL PUBLIC LICENSE[\s\S]{0,60}Version 3/i.test(head)) return 'GPL-3.0';
+  if (/GNU GENERAL PUBLIC LICENSE[\s\S]{0,60}Version 2/i.test(head)) return 'GPL-2.0';
+  if (/Mozilla Public License/i.test(head)) return 'MPL-2.0';
+  if (/\bISC License\b/i.test(head)) return 'ISC';
+  if (/\bThe Unlicense\b/i.test(head)) return 'Unlicense';
+  if (/all rights reserved/i.test(head) && /(commercial terms|consumer terms|additional restrictions|proprietary)/i.test(head)) {
+    return 'Proprietary';
+  }
+  return 'Custom';
+}
+
+function findLicenseFile(dir) {
+  const match = readdirSync(dir).find((entry) => /^license(\.(txt|md))?$/i.test(entry));
+  return match ? join(dir, match) : null;
+}
+
+function detectDirLicense(dir) {
+  const file = findLicenseFile(dir);
+  if (!file) return null;
+  return detectLicense(readFileSync(file, 'utf8'));
+}
+
 function humanize(segment) {
   return segment
     .replace(/^\./, '')
@@ -125,7 +162,7 @@ function buildFileManifest(source, skillDir, repoRelPath) {
     });
 }
 
-function extractSkills(source, cloneDir) {
+function extractSkills(source, cloneDir, rootLicense) {
   const skillsRoot = join(cloneDir, source.skillsRoot);
   const skills = [];
 
@@ -150,7 +187,7 @@ function extractSkills(source, cloneDir) {
       description: String(frontmatter.description).trim(),
       source: source.id,
       category: category ? humanize(category) : null,
-      license: frontmatter.license ? String(frontmatter.license).trim() : null,
+      license: detectDirLicense(skillDir) ?? rootLicense,
       path: repoRelPath,
       url: `https://github.com/${source.org}/${source.repo}/tree/${source.branch}/${repoRelPath}`,
       route: `/skills/${source.id}/${routeSlug}`,
@@ -170,7 +207,8 @@ async function main() {
     for (const source of SOURCES) {
       console.log(`Fetching ${source.org}/${source.repo}...`);
       const cloneDir = cloneSource(source, scratchDir);
-      const skills = extractSkills(source, cloneDir);
+      const rootLicense = detectDirLicense(cloneDir);
+      const skills = extractSkills(source, cloneDir, rootLicense);
       allSkills.push(...skills);
       sourceMeta.push({
         id: source.id,
