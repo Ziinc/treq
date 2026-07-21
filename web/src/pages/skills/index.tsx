@@ -14,6 +14,7 @@ type Skill = {
   license: string | null;
   path: string;
   url: string;
+  route: string;
 };
 
 const skills = catalog.skills as Skill[];
@@ -78,8 +79,8 @@ export default function SkillsPage() {
             <a href="https://github.com/anthropics/skills" target="_blank" rel="noopener noreferrer">
               Agent Skills
             </a>{' '}
-            curated from {sources.map((s) => s.name).join(', ')}. Every card links to the original source
-            repository — clone from there to use a skill.
+            curated from {sources.map((s) => s.name).join(', ')}. Open a skill to browse its files, or jump
+            straight to the source repository.
           </p>
         </div>
 
@@ -143,13 +144,7 @@ export default function SkillsPage() {
         ) : (
           <div className={styles.grid}>
             {filtered.map((skill) => (
-              <Link
-                key={skill.id}
-                to={skill.url}
-                className={styles.card}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <Link key={skill.id} to={skill.route} className={styles.card}>
                 <div className={styles.cardHead}>
                   <h2 className={styles.cardTitle}>{skill.name}</h2>
                   <span className={styles.sourceBadge} data-source={skill.source}>

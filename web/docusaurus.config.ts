@@ -13,6 +13,7 @@ const config: Config = {
     require.resolve('./plugins/rawMarkdownPlugin'),
     require.resolve('./plugins/versionPlugin'),
     require.resolve('./plugins/jsonLdPlugin'),
+    require.resolve('./plugins/skillsPlugin'),
     [
       '@docusaurus/plugin-content-docs',
       {

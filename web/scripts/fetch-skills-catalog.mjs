@@ -1,5 +1,8 @@
 // Regenerates web/src/data/skills.json by cloning curated Agent Skill repos
-// (shallow, to a scratch dir) and parsing each SKILL.md's frontmatter.
+// (shallow, to a scratch dir), parsing each SKILL.md's frontmatter, and
+// indexing the rest of each skill folder's files (path + size only — file
+// *contents* are fetched live from GitHub when a user browses a skill, never
+// stored here or fed into the sitewide search index).
 //
 // Run manually with `npm run build:skills-catalog`, or automatically by the
 // "Update Skills Catalog" GitHub Action (see .github/workflows).
@@ -48,11 +51,28 @@ const SOURCES = [
   },
 ];
 
+// Mirrors the isBinaryFile() extension list in src/components/FileBrowser.tsx
+// so the web skills browser treats files the same way the desktop app does.
+const BINARY_EXTENSIONS = [
+  '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.svg', '.pdf',
+  '.zip', '.tar', '.gz', '.rar', '.7z', '.exe', '.dll', '.so', '.dylib',
+  '.mp3', '.mp4', '.avi', '.mov', '.wmv', '.woff', '.woff2', '.ttf', '.eot',
+];
+
+function isBinaryFile(path) {
+  const lower = path.toLowerCase();
+  return BINARY_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
 function humanize(segment) {
   return segment
     .replace(/^\./, '')
     .replace(/[-_]/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function slugifySegment(segment) {
+  return segment.replace(/^\./, '');
 }
 
 function findSkillFiles(dir, results = []) {
@@ -68,6 +88,18 @@ function findSkillFiles(dir, results = []) {
   return results;
 }
 
+function walkFiles(dir, base, results = []) {
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      walkFiles(full, base, results);
+    } else {
+      results.push(relative(base, full).replace(/\\/g, '/'));
+    }
+  }
+  return results;
+}
+
 function cloneSource(source, scratchDir) {
   const dest = join(scratchDir, source.id);
   execFileSync(
@@ -76,6 +108,21 @@ function cloneSource(source, scratchDir) {
     { stdio: 'inherit' },
   );
   return dest;
+}
+
+function buildFileManifest(source, skillDir, repoRelPath) {
+  return walkFiles(skillDir, skillDir)
+    .sort()
+    .map((relPath) => {
+      const repoPath = `${repoRelPath}/${relPath}`;
+      return {
+        path: relPath,
+        size: statSync(join(skillDir, relPath)).size,
+        binary: isBinaryFile(relPath),
+        githubUrl: `https://github.com/${source.org}/${source.repo}/blob/${source.branch}/${repoPath}`,
+        rawUrl: `https://raw.githubusercontent.com/${source.org}/${source.repo}/${source.branch}/${repoPath}`,
+      };
+    });
 }
 
 function extractSkills(source, cloneDir) {
@@ -95,6 +142,7 @@ function extractSkills(source, cloneDir) {
     if (!frontmatter.name || !frontmatter.description) continue;
 
     const repoRelPath = relative(cloneDir, skillDir).replace(/\\/g, '/');
+    const routeSlug = segments.map(slugifySegment).join('/');
 
     skills.push({
       id: `${source.id}/${relDir}`,
@@ -105,6 +153,8 @@ function extractSkills(source, cloneDir) {
       license: frontmatter.license ? String(frontmatter.license).trim() : null,
       path: repoRelPath,
       url: `https://github.com/${source.org}/${source.repo}/tree/${source.branch}/${repoRelPath}`,
+      route: `/skills/${source.id}/${routeSlug}`,
+      files: buildFileManifest(source, skillDir, repoRelPath),
     });
   }
 

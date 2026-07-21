@@ -35,9 +35,54 @@ test.describe('Skills Library (/skills)', () => {
     await expect(page.getByRole('link', { name: /^pdf/ })).toHaveCount(0);
   });
 
-  test('skill cards link to the GitHub source', async ({ page }) => {
+  test('skill cards navigate to the skill detail page', async ({ page }) => {
     const card = page.getByRole('link', { name: /^pdf/ }).first();
-    await expect(card).toHaveAttribute('href', 'https://github.com/anthropics/skills/tree/main/skills/pdf');
-    await expect(card).toHaveAttribute('target', '_blank');
+    await expect(card).toHaveAttribute('href', '/skills/anthropic/pdf');
+    await expect(card).not.toHaveAttribute('target', '_blank');
+  });
+});
+
+// ── Skill detail page (file browser) ────────────────────────────────────────
+
+test.describe('Skill detail page', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('navigation').getByRole('link', { name: 'Skills' }).click();
+    await page.getByRole('link', { name: /^pdf/ }).first().click();
+  });
+
+  test('renders skill heading and repo GitHub link', async ({ page }) => {
+    await expect(page.getByRole('heading', { name: 'pdf', level: 1 })).toBeVisible();
+    await expect(page.getByTestId('repo-github-link')).toHaveAttribute(
+      'href',
+      'https://github.com/anthropics/skills/tree/main/skills/pdf',
+    );
+  });
+
+  test('file tree lists the skill files', async ({ page }) => {
+    await expect(page.getByRole('button', { name: 'SKILL.md' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'reference.md' })).toBeVisible();
+  });
+
+  test('SKILL.md is selected by default and its content loads', async ({ page }) => {
+    // Content is fetched live from GitHub's raw CDN, so give the network
+    // request more headroom than the default UI-interaction assertions.
+    test.setTimeout(30_000);
+    await expect(page.getByTestId('viewer-path')).toHaveText('SKILL.md');
+    await expect(page.getByTestId('viewer-body')).toContainText('PDF', { timeout: 20_000 });
+  });
+
+  test('clicking another file swaps the preview and its GitHub link', async ({ page }) => {
+    await page.getByRole('button', { name: 'reference.md' }).click();
+    await expect(page.getByTestId('viewer-path')).toHaveText('reference.md');
+    await expect(page.getByTestId('viewer-github-link')).toHaveAttribute(
+      'href',
+      'https://github.com/anthropics/skills/blob/main/skills/pdf/reference.md',
+    );
+  });
+
+  test('breadcrumb link returns to the Skills Library', async ({ page }) => {
+    await page.getByRole('link', { name: 'Skills Library' }).click();
+    await expect(page.getByRole('heading', { name: 'Skills Library', level: 1 })).toBeVisible();
   });
 });
