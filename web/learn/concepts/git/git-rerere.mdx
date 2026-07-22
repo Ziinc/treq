@@ -48,19 +48,32 @@ Merge and rebase invoke rerere for you once it is enabled. You do not need to ca
 
 ## Applying It in Practice
 
-Confirm which conflicted paths rerere will record:
+Rebase a long-lived feature branch onto current `main`:
+
+```bash
+git fetch origin
+git switch feature/long-lived
+git rebase origin/main
+```
+
+When the rebase stops on a conflict, list the paths whose preimages rerere recorded:
 
 ```bash
 git rerere status
 ```
 
-While you edit, inspect the delta from the recorded conflict to your current working resolution:
+Inspect the delta from the recorded conflict to your current working resolution before you stage:
 
 ```bash
 git rerere diff
 ```
 
-A typical first encounter prints `Recorded preimage for FILE`. After you stage and commit the merge, Git prints `Recorded resolution for FILE`. On a later merge or rebase with a matching conflict, Git prints `Resolved FILE using previous resolution` and removes the conflict markers from the working tree.
+A typical first encounter prints `Recorded preimage for FILE`. After you resolve, stage, and continue, Git prints `Recorded resolution for FILE`. On a later rebase that hits a matching conflict, Git prints `Resolved FILE using previous resolution` and removes the conflict markers from the working tree. You still verify and `git add` before continuing:
+
+```bash
+git add path/to/file
+git rebase --continue
+```
 
 If you abort a merge or rebase, Git clears the in-progress rerere metadata for that attempt. To drop a bad recorded resolution for selected paths, use:
 
@@ -76,9 +89,9 @@ git rerere remaining
 
 ## Engineering Considerations
 
-Rerere shines when the same textual conflict returns. A common pattern for a long-lived topic branch is a test merge into current `main`. You resolve, verify, then reset the merge so the branch history stays free of intermediate merge commits. When the final merge arrives, the earlier postimage often applies again.
+Rerere pays off when the same textual conflict returns across many updates. A long-lived feature branch rebased against a moving `main` often replays older commits through the same overlapped hunks. Without a cache, you resolve those hunks on every rebase. With rerere enabled, you resolve each recurring conflict once and let later rebases reuse the postimage.
 
-The same cache helps repeated rebases. If you resolve a conflict during a merge and later rebase the same branch instead, Git can reuse the recorded resolution while replaying commits.
+A common alternative to repeated merges is a test merge into current `main`. You resolve, verify, then reset the merge so the branch history stays free of intermediate merge commits. When you later rebase onto `main` or perform the final merge, the earlier postimage often applies again. That is how a conflicted merge can become a linear rebase without redoing the same hand edits.
 
 Treat an autoresolved file like any other conflict resolution. Read the combined diff, run the tests that cover the overlapped code, and only then stage. A reused postimage is a prior judgment applied to new parents. The surrounding code may have changed enough that the old answer is wrong.
 
