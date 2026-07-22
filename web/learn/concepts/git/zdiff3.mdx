@@ -1,0 +1,148 @@
+---
+sidebar_position: 55
+description: Git's zdiff3 conflict style shows the merge base and shrinks conflict markers by moving shared prefix and suffix lines outside the conflict.
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard";
+
+# What is zdiff3?
+
+_Zealous Diff3 shows the merge base and pulls identical boundary lines out of the conflict markers._
+
+When a merge or rebase stops on conflicting edits, Git writes conflict markers into the file. The default layout shows only your side and the incoming side. **zdiff3** keeps the three-way view from `diff3` and then shrinks the marked region so you resolve the lines that actually disagree.
+
+## Introduction
+
+Git's `merge.conflictStyle` setting controls how conflicted files look while you resolve them. It does not change how Git computes the merge result. It only changes how much history Git prints between the conflict markers.
+
+The default style is `merge`. It shows `ours` and `theirs`. That is enough when you already know both edits. It fails when you need the pre-divergence text to decide which lines to keep, combine, or rewrite.
+
+## Understanding the Concept
+
+A **three-way merge** compares three snapshots: your tip, the tip being merged, and their common ancestor. When both tips changed the same region differently, Git cannot auto-combine them and leaves a conflict for you to resolve.
+
+<DefinitionCard
+  term="Three-way Merge"
+  definition="A merge that compares yours, theirs, and the common ancestor so shared history can guide automatic combination and conflict presentation."
+/>
+
+The **`diff3`** conflict style adds that ancestor as a middle section marked with `|||||||`. You see what the file looked like before either branch edited it. That context is often the difference between guessing and reconstructing intent.
+
+<DefinitionCard
+  term="diff3"
+  definition="A conflict presentation that inserts the common-ancestor version between yours and theirs so you can see how each side diverged."
+/>
+
+**zdiff3** (Zealous Diff3) extends that layout. After Git builds the three sections, it finds identical lines at the start or end of the conflicting hunk and moves those shared boundaries outside the markers. Think of the markers as a highlighter that covers only the disputed middle, not the surrounding lines both sides already agree on.
+
+<DefinitionCard
+  term="zdiff3"
+  definition="A conflict presentation, available since Git 2.35, that shows the merge base like diff3 and moves identical prefix and suffix lines outside the conflict markers."
+/>
+
+| Style | Shows base? | Conflict region |
+| --- | --- | --- |
+| `merge` | No | Full overlapping edit from yours and theirs |
+| `diff3` | Yes | Full overlapping edit, including shared edges |
+| `zdiff3` | Yes | Overlap trimmed of identical prefix and suffix lines |
+
+`diff3` and `zdiff3` present the same three sides. The difference is which lines sit inside the markers. `diff3` leaves the whole contiguous block marked. `zdiff3` strips the agreed edges so the markers surround the minimal divergent core.
+
+## Applying It in Practice
+
+Require Git 2.35 or later, then set the style globally:
+
+```bash
+git config --global merge.conflictStyle zdiff3
+```
+
+Or set it for one repository:
+
+```bash
+git config merge.conflictStyle zdiff3
+```
+
+If a conflict is already written with another style, regenerate one file:
+
+```bash
+git checkout --conflict=zdiff3 path/to/file
+```
+
+Compare the three presentations on the same conflict. Suppose both branches keep the same surrounding lines and only disagree in the middle:
+
+Default `merge`:
+
+```text
+1,
+foo,
+bar,
+<<<<<<< HEAD
+=======
+quux,
+woot,
+>>>>>>> side
+baz,
+3,
+```
+
+`diff3` adds the ancestor, but still marks the shared edges:
+
+```text
+1,
+<<<<<<< HEAD
+foo,
+bar,
+baz,
+||||||| 60c6bd0
+# add more here
+=======
+foo,
+bar,
+quux,
+woot,
+baz,
+>>>>>>> side
+3,
+```
+
+`zdiff3` keeps the base and moves `foo`, `bar`, and `baz` outside the markers:
+
+```text
+1,
+foo,
+bar,
+<<<<<<< HEAD
+||||||| 60c6bd0
+# add more here
+=======
+quux,
+woot,
+>>>>>>> side
+baz,
+3,
+```
+
+You still decide how to combine the middle. The shared frame no longer looks like part of the dispute.
+
+## Engineering Considerations
+
+`zdiff3` is a presentation choice. It does not auto-resolve conflicts, change merge strategies, or replace tests after you finish editing. Resolve the markers, stage the files, and continue the merge or rebase as usual.
+
+Prefer `zdiff3` when conflicts span multi-line regions with identical wrappers on both sides: shared imports, braces, trailing returns, or list delimiters. Prefer plain `diff3` only when you want every line of the overlapping block kept inside the markers for inspection. Prefer `merge` when you already know both sides and want the shortest marker text.
+
+Editors and merge tools may reformat or hide conflict sections. Confirm that your tool still shows the `|||||||` base section when you rely on three-way context. If a GUI collapses the base, fall back to the working-tree file or regenerate with `git checkout --conflict=zdiff3`.
+
+## Scaling and Operations
+
+Set `merge.conflictStyle` in a shared team docs page or onboarding checklist so local clones agree on conflict presentation. Mismatched styles do not break merges, but they change what reviewers see when they open a conflicted file.
+
+CI and bots that parse conflict markers should accept both two-section and three-section layouts. Scripts that assume only `<<<<<<<`, `=======`, and `>>>>>>>` will miss the `|||||||` base section under `diff3` and `zdiff3`.
+
+Agent-driven parallel work raises conflict volume. Better markers do not replace isolation. Use separate worktrees, rebase early, and keep shared contracts owned by one branch. See [How to Fix Merge Conflicts Created by Coding Agents](/learn/how-to/merge-conflicts-with-coding-agents).
+
+## Next Steps
+
+- [Merge vs Rebase](./merge-vs-rebase): choose how branches integrate before conflicts appear
+- [How to Fix Merge Conflicts Created by Coding Agents](/learn/how-to/merge-conflicts-with-coding-agents): prevent and resolve conflicts from parallel agent work
+- [Parallel Development Workflow](/learn/workflows/git/parallel-development): run concurrent branches without shared-checkout collisions
+- [What are Git Worktrees?](./git-worktrees): isolate checkouts so agents do not invent false conflicts
