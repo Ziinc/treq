@@ -67,11 +67,15 @@ git reflog
 git reset --hard HEAD@{1}
 ```
 
-Create a branch at an orphaned tip you still need:
+Create a branch at an orphaned tip you still need, including after `git branch -D`:
 
 ```bash
-git branch recover-work abc1234
+git reflog
+# find checkout: moving from feature/login to main
+git branch feature/login abc1234
 ```
+
+Deletion removes the name under `.git/refs/heads/`. It does not remove the commits. The `HEAD` reflog keeps tip hashes from earlier checkouts, so you can [recreate the branch](/learn/how-to/recover-deleted-git-branch) while those entries and objects remain.
 
 Use `ORIG_HEAD` when you know the last rewrite was the mistake:
 
@@ -85,7 +89,9 @@ Message search such as `HEAD^{/fix login}` walks ancestors of `HEAD` by commit m
 
 The reflog recovers commits that were once referenced locally. It does not recover uncommitted working-tree edits or deleted untracked files, because those states never entered the object database.
 
-It also cannot recover history rewritten only on a remote by someone else. Another clone's reflog never reaches you. Keep protected branches free of unexpected force pushes, and coordinate when a shared tip must move.
+It also cannot recover history rewritten only on a remote by someone else. Another clone's reflog never reaches you. A branch that was never checked out in this clone leaves no local `HEAD` footprint, so remote pull-request metadata or another clone must supply the tip hash.
+
+Keep protected branches free of unexpected force pushes, and coordinate when a shared tip must move.
 
 Treat recovery as a race against retention. Once an entry expires and `git gc` prunes the unreachable objects, the tip is gone from that clone.
 
@@ -113,6 +119,7 @@ Do that only after you have rotated credentials and confirmed no remaining local
 
 ## Next Steps
 
+- [Recover a Deleted Git Branch](/learn/how-to/recover-deleted-git-branch): recreate a branch tip found in the `HEAD` reflog
 - [What is Version Control?](./version-control): review commits, branches, and recovery basics
 - [Merge vs Rebase](./merge-vs-rebase): understand rewrite operations that move refs
 - [Cherry-pick vs Rebase](./cherry-pick-vs-rebase): compare selective replay with branch rewriting
