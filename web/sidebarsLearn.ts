@@ -35,6 +35,7 @@ const sidebars: SidebarsConfig = {
             'concepts/git/git-worktrees',
             'concepts/git/git-worktrees-for-ai',
             'concepts/git/git-worktrees-vs-clones',
+            'concepts/git/git-submodules',
             'concepts/git/merge-vs-rebase',
             'concepts/git/cherry-pick-vs-rebase',
             'concepts/git/stacked-prs',
