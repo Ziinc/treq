@@ -7,7 +7,7 @@
 // Run manually with `npm run build:skills-catalog`, or automatically by the
 // "Update Skills Catalog" GitHub Action (see .github/workflows).
 import { execFileSync } from 'child_process';
-import { mkdtempSync, readdirSync, statSync, readFileSync, writeFileSync, rmSync } from 'fs';
+import { mkdtempSync, readdirSync, statSync, readFileSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join, relative, dirname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
@@ -17,9 +17,43 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const webRoot = join(__dirname, '..');
 const outPath = join(webRoot, 'src', 'data', 'skills.json');
 
-// Curated sources. Each repo is expected to hold its skills under
-// `skillsRoot`, one `SKILL.md` per skill folder, per the Agent Skills spec:
-// https://github.com/anthropics/skills
+// Reads star counts from the previously-generated catalog so a regen in an
+// environment that can't reach api.github.com (e.g. behind a restrictive
+// egress proxy) preserves them instead of wiping them to null.
+function readPreviousStars() {
+  if (!existsSync(outPath)) return {};
+  try {
+    const prev = JSON.parse(readFileSync(outPath, 'utf8'));
+    return Object.fromEntries((prev.sources ?? []).map((s) => [s.id, s.stars ?? null]));
+  } catch {
+    return {};
+  }
+}
+
+// Live GitHub star count for a repo. Returns null on any failure (rate limit,
+// network, blocked host) so the build never fails over stars. In CI, set
+// GITHUB_TOKEN to raise the unauthenticated rate limit.
+async function fetchStars(source) {
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'treq-skills-catalog',
+  };
+  if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  try {
+    const res = await fetch(`https://api.github.com/repos/${source.org}/${source.repo}`, { headers });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return typeof data.stargazers_count === 'number' ? data.stargazers_count : null;
+  } catch {
+    return null;
+  }
+}
+
+// Curated sources. `id` is the stable provider key used in routes and the
+// provider filter; `org`/`repo` locate the GitHub repo; `skillsRoot` is the
+// path within the repo that holds one `SKILL.md` per skill folder (per the
+// Agent Skills spec https://github.com/anthropics/skills) — use '' when skills
+// live at the repo root.
 const SOURCES = [
   {
     id: 'anthropic',
@@ -48,6 +82,52 @@ const SOURCES = [
     skillsRoot: 'skills',
     // Skills the author has explicitly marked as superseded/unfinished.
     excludeCategories: ['deprecated'],
+  },
+  {
+    id: 'vercel',
+    name: 'Vercel',
+    org: 'vercel-labs',
+    repo: 'agent-browser',
+    branch: 'main',
+    skillsRoot: 'skills',
+    excludeCategories: [],
+  },
+  {
+    id: 'microsoft',
+    name: 'Microsoft',
+    org: 'microsoft',
+    repo: 'azure-skills',
+    branch: 'main',
+    skillsRoot: 'skills',
+    excludeCategories: [],
+  },
+  {
+    id: 'superpowers',
+    name: 'Superpowers',
+    org: 'obra',
+    repo: 'superpowers',
+    branch: 'main',
+    skillsRoot: 'skills',
+    excludeCategories: [],
+  },
+  {
+    id: 'caveman',
+    name: 'Caveman',
+    org: 'JuliusBrussee',
+    repo: 'caveman',
+    branch: 'main',
+    skillsRoot: 'skills',
+    excludeCategories: [],
+  },
+  {
+    id: 'prisma',
+    name: 'Prisma',
+    org: 'prisma',
+    repo: 'skills',
+    branch: 'main',
+    // Prisma keeps each skill folder at the repo root, not under skills/.
+    skillsRoot: '',
+    excludeCategories: [],
   },
 ];
 
@@ -125,10 +205,17 @@ function findSkillFiles(dir, results = []) {
   return results;
 }
 
+function dirHasSkillFile(dir) {
+  return readdirSync(dir).includes('SKILL.md');
+}
+
 function walkFiles(dir, base, results = []) {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) {
+      // A subdirectory with its own SKILL.md is a separate (nested) skill —
+      // its files belong to that skill, not this one, so don't descend.
+      if (dirHasSkillFile(full)) continue;
       walkFiles(full, base, results);
     } else {
       results.push(relative(base, full).replace(/\\/g, '/'));
@@ -180,18 +267,27 @@ function extractSkills(source, cloneDir, rootLicense) {
 
     const repoRelPath = relative(cloneDir, skillDir).replace(/\\/g, '/');
     const routeSlug = segments.map(slugifySegment).join('/');
+    const license = detectDirLicense(skillDir) ?? rootLicense;
+
+    // Proprietary/source-available skills (e.g. Anthropic's docx/pdf/pptx/xlsx)
+    // don't permit us to reproduce their contents, so we still list them but
+    // withhold the description and file manifest — the UI shows a notice and a
+    // link to GitHub instead. This also keeps their text out of the search
+    // index (which only reads description/name).
+    const proprietary = license === 'Proprietary';
 
     skills.push({
       id: `${source.id}/${relDir}`,
       name: frontmatter.name,
-      description: String(frontmatter.description).trim(),
+      description: proprietary ? null : String(frontmatter.description).trim(),
       source: source.id,
       category: category ? humanize(category) : null,
-      license: detectDirLicense(skillDir) ?? rootLicense,
+      license,
+      proprietary,
       path: repoRelPath,
       url: `https://github.com/${source.org}/${source.repo}/tree/${source.branch}/${repoRelPath}`,
       route: `/skills/${source.id}/${routeSlug}`,
-      files: buildFileManifest(source, skillDir, repoRelPath),
+      files: proprietary ? [] : buildFileManifest(source, skillDir, repoRelPath),
     });
   }
 
@@ -200,6 +296,7 @@ function extractSkills(source, cloneDir, rootLicense) {
 
 async function main() {
   const scratchDir = mkdtempSync(join(tmpdir(), 'skills-catalog-'));
+  const previousStars = readPreviousStars();
   const allSkills = [];
   const sourceMeta = [];
 
@@ -210,13 +307,15 @@ async function main() {
       const rootLicense = detectDirLicense(cloneDir);
       const skills = extractSkills(source, cloneDir, rootLicense);
       allSkills.push(...skills);
+      const stars = (await fetchStars(source)) ?? previousStars[source.id] ?? null;
       sourceMeta.push({
         id: source.id,
         name: source.name,
         url: `https://github.com/${source.org}/${source.repo}`,
         skillCount: skills.length,
+        stars,
       });
-      console.log(`  found ${skills.length} skills`);
+      console.log(`  found ${skills.length} skills (${stars ?? '?'} stars)`);
     }
   } finally {
     rmSync(scratchDir, { recursive: true, force: true });

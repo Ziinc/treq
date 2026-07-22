@@ -9,10 +9,11 @@ export interface SkillFile {
 export interface Skill {
   id: string;
   name: string;
-  description: string;
+  description: string | null;
   source: string;
   category: string | null;
   license: string | null;
+  proprietary?: boolean;
   path: string;
   url: string;
   route: string;

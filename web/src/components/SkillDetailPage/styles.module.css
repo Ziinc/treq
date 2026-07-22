@@ -96,6 +96,28 @@
   border-color: var(--ifm-color-primary);
 }
 
+.callout {
+  border: 1px solid var(--ifm-color-warning-dark);
+  background: color-mix(in srgb, var(--ifm-color-warning) 12%, transparent);
+  border-radius: 12px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.calloutTitle {
+  font-size: 1rem;
+}
+
+.calloutBody {
+  margin: 0;
+  color: var(--ifm-color-emphasis-800);
+  line-height: 1.5;
+  max-width: 65ch;
+}
+
 /* Hidden on desktop — the file tree in .browser is the primary way to pick a
    file. Below the mobile breakpoint this swaps places with .tree. */
 .mobilePicker {

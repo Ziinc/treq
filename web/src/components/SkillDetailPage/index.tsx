@@ -15,6 +15,11 @@ const SOURCE_LABELS: Record<string, string> = {
   anthropic: 'Anthropic',
   openai: 'OpenAI',
   mattpocock: 'Matt Pocock',
+  vercel: 'Vercel',
+  microsoft: 'Microsoft',
+  superpowers: 'Superpowers',
+  caveman: 'Caveman',
+  prisma: 'Prisma',
 };
 
 // Files above this size aren't fetched for inline preview — the GitHub link
@@ -94,7 +99,7 @@ function SkillDetailContent({ skill }: { skill: Skill }) {
       <div className={styles.header}>
         <div>
           <h1 className={styles.title}>{skill.name}</h1>
-          <p className={styles.description}>{skill.description}</p>
+          {skill.description && <p className={styles.description}>{skill.description}</p>}
           <div className={styles.meta}>
             <span className={styles.badge} data-source={skill.source}>{sourceLabel}</span>
             {skill.category && <span className={styles.badge}>{skill.category}</span>}
@@ -114,13 +119,76 @@ function SkillDetailContent({ skill }: { skill: Skill }) {
         </a>
       </div>
 
+      {skill.proprietary ? (
+        <div className={styles.callout} data-testid="proprietary-callout" role="note">
+          <strong className={styles.calloutTitle}>Proprietary license</strong>
+          <p className={styles.calloutBody}>
+            This skill is distributed under a proprietary, source-available license
+            {skill.license && skill.license !== 'Proprietary' ? ` (${skill.license})` : ''} that
+            doesn't permit us to reproduce its description or file contents here. Browse the
+            skill on GitHub instead.
+          </p>
+          <a
+            className={styles.githubButton}
+            href={skill.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            View on GitHub ↗
+          </a>
+        </div>
+      ) : (
+        <SkillFileBrowser
+          skill={skill}
+          selected={selected}
+          onSelect={setSelected}
+          content={content}
+          status={status}
+          tab={tab}
+          onTabChange={setTab}
+          language={language}
+          isMarkdown={isMarkdown}
+          dark={colorMode === 'dark'}
+        />
+      )}
+    </div>
+  );
+}
+
+interface SkillFileBrowserProps {
+  skill: Skill;
+  selected: SkillFile | null;
+  onSelect: (file: SkillFile) => void;
+  content: string | null;
+  status: 'idle' | 'loading' | 'error';
+  tab: 'preview' | 'code';
+  onTabChange: (tab: 'preview' | 'code') => void;
+  language: string | null;
+  isMarkdown: boolean;
+  dark: boolean;
+}
+
+function SkillFileBrowser({
+  skill,
+  selected,
+  onSelect,
+  content,
+  status,
+  tab,
+  onTabChange,
+  language,
+  isMarkdown,
+  dark,
+}: SkillFileBrowserProps) {
+  return (
+    <>
       <div className={styles.mobilePicker}>
-        <MobileFileSelect files={skill.files} selectedPath={selected?.path ?? null} onSelect={setSelected} />
+        <MobileFileSelect files={skill.files} selectedPath={selected?.path ?? null} onSelect={onSelect} />
       </div>
 
       <div className={styles.browser} data-testid="skill-file-browser">
         <div className={styles.tree}>
-          <FileTree files={skill.files} selectedPath={selected?.path ?? null} onSelect={setSelected} />
+          <FileTree files={skill.files} selectedPath={selected?.path ?? null} onSelect={onSelect} />
         </div>
         <div className={styles.viewer}>
           {!selected ? (
@@ -147,7 +215,7 @@ function SkillDetailContent({ skill }: { skill: Skill }) {
                     role="tab"
                     aria-selected={tab === 'preview'}
                     className={tab === 'preview' ? styles.tabActive : styles.tab}
-                    onClick={() => setTab('preview')}
+                    onClick={() => onTabChange('preview')}
                   >
                     Preview
                   </button>
@@ -156,7 +224,7 @@ function SkillDetailContent({ skill }: { skill: Skill }) {
                     role="tab"
                     aria-selected={tab === 'code'}
                     className={tab === 'code' ? styles.tabActive : styles.tab}
-                    onClick={() => setTab('code')}
+                    onClick={() => onTabChange('code')}
                   >
                     Code
                   </button>
@@ -175,7 +243,7 @@ function SkillDetailContent({ skill }: { skill: Skill }) {
                   isMarkdown && tab === 'preview' ? (
                     <MarkdownPreview content={content} />
                   ) : (
-                    <CodeView content={content} language={language} dark={colorMode === 'dark'} />
+                    <CodeView content={content} language={language} dark={dark} />
                   )
                 ) : null}
               </div>
@@ -183,7 +251,7 @@ function SkillDetailContent({ skill }: { skill: Skill }) {
           )}
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

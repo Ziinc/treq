@@ -19,7 +19,7 @@ test.describe('Skills Library (/skills)', () => {
   test('searching narrows the results', async ({ page }) => {
     const search = page.getByRole('searchbox', { name: 'Search skills' });
     await search.fill('tdd');
-    await expect(page.getByText('of 98 skills')).toBeVisible();
+    await expect(page.getByText('of 161 skills')).toBeVisible();
     await expect(page.getByRole('link', { name: /^tdd/ })).toBeVisible();
   });
 
@@ -28,9 +28,12 @@ test.describe('Skills Library (/skills)', () => {
     await expect(page.getByText('No skills match your search.')).toBeVisible();
   });
 
-  test('filtering by source shows only that source', async ({ page }) => {
-    await page.getByRole('button', { name: /^Matt Pocock/ }).click();
-    await expect(page.getByText(/of 98 skills/)).toBeVisible();
+  test('the provider dropdown multi-selects and filters', async ({ page }) => {
+    await page.getByRole('button', { name: /All providers/ }).click();
+    await page.getByRole('checkbox', { name: /Matt Pocock/ }).check();
+    // Close the dropdown so it doesn't overlay the results.
+    await page.getByRole('heading', { name: 'Skills Library', level: 1 }).click();
+    await expect(page.getByText('37 of 161 skills')).toBeVisible();
     await expect(page.getByRole('link', { name: /^tdd/ })).toBeVisible();
     await expect(page.getByRole('link', { name: /^pdf/ })).toHaveCount(0);
   });
@@ -40,6 +43,34 @@ test.describe('Skills Library (/skills)', () => {
     await expect(card).toHaveAttribute('href', '/skills/anthropic/pdf');
     await expect(card).not.toHaveAttribute('target', '_blank');
   });
+
+  test('proprietary skills show a notice on their card instead of a description', async ({ page }) => {
+    const card = page.getByRole('link', { name: /^pdf/ }).first();
+    await expect(card).toContainText('Proprietary license');
+    await expect(card).toContainText('Proprietary');
+  });
+});
+
+// ── Ranked source-repos aside ───────────────────────────────────────────────
+
+test.describe('Source repos aside', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('navigation').getByRole('link', { name: 'Skills' }).click();
+  });
+
+  test('lists source repos ranked by stars', async ({ page }) => {
+    const aside = page.getByRole('complementary', { name: /Source repositories by stars/ });
+    await expect(aside.getByText('Source repos')).toBeVisible();
+    await expect(aside.getByRole('button', { name: /Superpowers/ })).toBeVisible();
+    await expect(aside.getByText('258.8k')).toBeVisible();
+  });
+
+  test('clicking a repo in the aside filters the catalog by that provider', async ({ page }) => {
+    const aside = page.getByRole('complementary', { name: /Source repositories by stars/ });
+    await aside.getByRole('button', { name: /Microsoft/ }).click();
+    await expect(page.getByText('32 of 161 skills')).toBeVisible();
+  });
 });
 
 // ── Skill detail page (file browser) ────────────────────────────────────────
@@ -48,20 +79,20 @@ test.describe('Skill detail page', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await page.getByRole('navigation').getByRole('link', { name: 'Skills' }).click();
-    await page.getByRole('link', { name: /^pdf/ }).first().click();
+    await page.getByRole('link', { name: /^mcp-builder/ }).first().click();
   });
 
   test('renders skill heading and repo GitHub link', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: 'pdf', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'mcp-builder', level: 1 })).toBeVisible();
     await expect(page.getByTestId('repo-github-link')).toHaveAttribute(
       'href',
-      'https://github.com/anthropics/skills/tree/main/skills/pdf',
+      'https://github.com/anthropics/skills/tree/main/skills/mcp-builder',
     );
   });
 
   test('file tree lists the skill files', async ({ page }) => {
     await expect(page.getByRole('button', { name: 'SKILL.md' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'reference.md' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'mcp_best_practices.md' })).toBeVisible();
   });
 
   test('SKILL.md is selected by default and its content loads', async ({ page }) => {
@@ -69,15 +100,15 @@ test.describe('Skill detail page', () => {
     // request more headroom than the default UI-interaction assertions.
     test.setTimeout(30_000);
     await expect(page.getByTestId('viewer-path')).toHaveText('SKILL.md');
-    await expect(page.getByTestId('viewer-body')).toContainText('PDF', { timeout: 20_000 });
+    await expect(page.getByTestId('viewer-body')).toContainText('MCP', { timeout: 20_000 });
   });
 
   test('clicking another file swaps the preview and its GitHub link', async ({ page }) => {
-    await page.getByRole('button', { name: 'reference.md' }).click();
-    await expect(page.getByTestId('viewer-path')).toHaveText('reference.md');
+    await page.getByRole('button', { name: 'mcp_best_practices.md' }).click();
+    await expect(page.getByTestId('viewer-path')).toHaveText('reference/mcp_best_practices.md');
     await expect(page.getByTestId('viewer-github-link')).toHaveAttribute(
       'href',
-      'https://github.com/anthropics/skills/blob/main/skills/pdf/reference.md',
+      'https://github.com/anthropics/skills/blob/main/skills/mcp-builder/reference/mcp_best_practices.md',
     );
   });
 
@@ -86,10 +117,9 @@ test.describe('Skill detail page', () => {
     await expect(page.getByRole('heading', { name: 'Skills Library', level: 1 })).toBeVisible();
   });
 
-  test('detects the license instead of showing the raw frontmatter pointer', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: 'pdf', level: 1 })).toBeVisible();
-    await expect(page.getByTestId('license-badge')).toHaveText('Proprietary');
-    await expect(page.getByText('Complete terms in LICENSE.txt')).toHaveCount(0);
+  test('shows a detected license label', async ({ page }) => {
+    await expect(page.getByRole('heading', { name: 'mcp-builder', level: 1 })).toBeVisible();
+    await expect(page.getByTestId('license-badge')).toHaveText('Apache-2.0');
   });
 
   test('markdown files default to a Preview tab, with Code as a second tab', async ({ page }) => {
@@ -97,7 +127,6 @@ test.describe('Skill detail page', () => {
     const tabs = page.getByRole('tablist');
     await expect(tabs.getByRole('tab', { name: 'Preview' })).toHaveAttribute('aria-selected', 'true');
     await expect(tabs.getByRole('tab', { name: 'Code' })).toHaveAttribute('aria-selected', 'false');
-    // Rendered preview produces a real heading element, not literal "#" markdown source.
     const viewerBody = page.getByTestId('viewer-body');
     await expect(viewerBody.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 20_000 });
   });
@@ -113,6 +142,26 @@ test.describe('Skill detail page', () => {
   });
 });
 
+// ── Proprietary skill detail page ───────────────────────────────────────────
+
+test.describe('Proprietary skill detail page', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('navigation').getByRole('link', { name: 'Skills' }).click();
+    await page.getByRole('link', { name: /^pdf/ }).first().click();
+  });
+
+  test('shows a proprietary callout, no file browser, but keeps the GitHub link', async ({ page }) => {
+    await expect(page.getByRole('heading', { name: 'pdf', level: 1 })).toBeVisible();
+    await expect(page.getByTestId('proprietary-callout')).toBeVisible();
+    await expect(page.getByTestId('skill-file-browser')).toHaveCount(0);
+    await expect(page.getByTestId('repo-github-link')).toHaveAttribute(
+      'href',
+      'https://github.com/anthropics/skills/tree/main/skills/pdf',
+    );
+  });
+});
+
 // ── Skill detail page — mobile ──────────────────────────────────────────────
 
 test.describe('Skill detail page on mobile', () => {
@@ -120,9 +169,10 @@ test.describe('Skill detail page on mobile', () => {
 
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: 'Toggle navigation bar' }).click();
-    await page.getByRole('navigation').getByRole('link', { name: 'Skills' }).click();
-    await page.getByRole('link', { name: /^pdf/ }).first().click();
+    // The navbar collapses to a hamburger at this width.
+    await page.getByLabel('Toggle navigation bar').click();
+    await page.getByRole('link', { name: 'Skills' }).filter({ visible: true }).first().click();
+    await page.getByRole('link', { name: /^mcp-builder/ }).first().click();
   });
 
   test('shows a file dropdown instead of the folder tree', async ({ page }) => {
@@ -132,7 +182,7 @@ test.describe('Skill detail page on mobile', () => {
 
   test('picking a file from the dropdown updates the preview', async ({ page }) => {
     await expect(page.getByTestId('viewer-path')).toHaveText('SKILL.md');
-    await page.getByLabel('Choose a file').selectOption('reference.md');
-    await expect(page.getByTestId('viewer-path')).toHaveText('reference.md');
+    await page.getByLabel('Choose a file').selectOption('reference/mcp_best_practices.md');
+    await expect(page.getByTestId('viewer-path')).toHaveText('reference/mcp_best_practices.md');
   });
 });
