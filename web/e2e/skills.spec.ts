@@ -128,13 +128,15 @@ test.describe('Skill detail page', () => {
     await expect(tabs.getByRole('tab', { name: 'Preview' })).toHaveAttribute('aria-selected', 'true');
     await expect(tabs.getByRole('tab', { name: 'Code' })).toHaveAttribute('aria-selected', 'false');
     const viewerBody = page.getByTestId('viewer-body');
-    await expect(viewerBody.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 20_000 });
+    // The rendered SKILL.md has several h1s; any one being visible proves the
+    // markdown was rendered rather than shown as raw source.
+    await expect(viewerBody.getByRole('heading', { level: 1 }).first()).toBeVisible({ timeout: 20_000 });
   });
 
   test('switching to the Code tab shows the raw markdown source', async ({ page }) => {
     test.setTimeout(30_000);
     const viewerBody = page.getByTestId('viewer-body');
-    await expect(viewerBody.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 20_000 });
+    await expect(viewerBody.getByRole('heading', { level: 1 }).first()).toBeVisible({ timeout: 20_000 });
     await page.getByRole('tab', { name: 'Code' }).click();
     await expect(page.getByRole('tab', { name: 'Code' })).toHaveAttribute('aria-selected', 'true');
     await expect(viewerBody.getByRole('heading', { level: 1 })).toHaveCount(0);
