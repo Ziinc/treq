@@ -51,6 +51,7 @@ class Doc:
         self.root_dir = root_dir
         self.raw = path.read_text(encoding="utf-8")
         self.doc_id = self._doc_id()
+        self.slug = extract_slug(self.raw)
         self.route = self._route()
         self.title = ""
         self.keywords = set()
@@ -68,7 +69,17 @@ class Doc:
         return "/".join(parts)
 
     def _route(self):
-        return "/" + self.root_label + (("/" + self.doc_id) if self.doc_id else "")
+        doc_id = self.doc_id
+        if self.slug is not None:
+            # Docusaurus `slug:` frontmatter overrides the route. An absolute
+            # slug (leading /) replaces the whole path under the plugin's
+            # routeBasePath; a relative slug replaces only the last segment.
+            if self.slug.startswith("/"):
+                doc_id = self.slug.strip("/")
+            else:
+                parts = self.doc_id.split("/")[:-1]
+                doc_id = "/".join(parts + [self.slug.strip("/")]) if parts else self.slug.strip("/")
+        return "/" + self.root_label + (("/" + doc_id) if doc_id else "")
 
     def _addressable_keys(self):
         no_ext = norm_path(self.path.with_suffix(""))
@@ -91,6 +102,21 @@ def strip_frontmatter(text: str):
         if m:
             return text[m.end():], text[: m.end()].count("\n")
     return text, 0
+
+
+def extract_slug(text: str):
+    """Return the Docusaurus `slug:` frontmatter value, or None if absent.
+    A doc with a custom slug is reachable at that route instead of its
+    filesystem-derived one, and absolute links must resolve against it."""
+    if not text.startswith("---"):
+        return None
+    m = re.match(r"^---\n(.*?)\n---\n", text, re.S)
+    if not m:
+        return None
+    fm = re.search(r"^slug:\s*(.+)$", m.group(1), re.M)
+    if not fm:
+        return None
+    return fm.group(1).strip().strip("'\"")
 
 
 def extract_title(text: str) -> str:
@@ -154,24 +180,33 @@ def split_body_and_next(text: str):
     return text[: m.start()], text[m.start():]
 
 
-def resolve_target(source: Doc, target: str, roots: dict, index_by_key: dict):
+def resolve_target(source: Doc, target: str, roots: dict, index_by_key: dict, route_index: dict):
     """Resolve a link target to a Doc, or None if it can't be resolved.
     Returns (Doc_or_None, in_scope) where in_scope is False for targets we
     intentionally don't judge (external URLs, mailto, unrelated absolute
-    routes like /pricing)."""
-    if target.startswith(("http://", "https://", "mailto:", "#")):
+    routes like /pricing, or a same-page anchor).
+
+    Absolute /learn/... and /docs/... links are resolved against each doc's
+    actual route (route_index), not a filesystem path, because a doc's route
+    can be overridden by Docusaurus `slug:` frontmatter and no longer match
+    its file location. Relative links (./, ../) are resolved against the
+    filesystem since Docusaurus matches those to the source file, not slugs.
+    """
+    if target.startswith(("http://", "https://", "mailto:")):
         return None, False
+    target = target.split("#", 1)[0].split("?", 1)[0]
+    if not target:
+        return None, False  # same-page anchor
     if target.startswith("./") or target.startswith("../") or (
         not target.startswith("/") and "/" not in target[:1]
     ):
         joined = norm_path(Path(source.path.parent, target))
         return index_by_key.get(joined), True
-    for label, root_dir in roots.items():
+    for label in roots:
         prefix = "/" + label
         if target == prefix or target.startswith(prefix + "/"):
-            remainder = target[len(prefix):].lstrip("/")
-            joined = norm_path(Path(root_dir, remainder)) if remainder else norm_path(root_dir)
-            return index_by_key.get(joined), True
+            route = target.rstrip("/") or prefix
+            return route_index.get(route), True
     return None, False
 
 
@@ -191,6 +226,7 @@ def analyze(docs, roots, min_body_links, max_suggestions, keyword_min_len):
     for d in docs:
         for k in d.addressable_keys:
             index_by_key[k] = d
+    route_index = {d.route: d for d in docs}
 
     broken = []
     for d in docs:
@@ -203,7 +239,7 @@ def analyze(docs, roots, min_body_links, max_suggestions, keyword_min_len):
         for m in LINK_RE.finditer(d.raw):
             anchor, target = m.group(1), m.group(2)
             line_no = d.raw.count("\n", 0, m.start()) + 1
-            resolved, in_scope = resolve_target(d, target, roots, index_by_key)
+            resolved, in_scope = resolve_target(d, target, roots, index_by_key, route_index)
             in_body = m.start() < (len(d.raw) - len(next_text)) if next_text else True
             d.outbound.append((line_no, anchor, target, resolved, in_body))
             if in_scope and resolved is None:
