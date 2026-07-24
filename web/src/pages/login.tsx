@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Layout from "@theme/Layout";
+import Head from "@docusaurus/Head";
 import BrowserOnly from "@docusaurus/BrowserOnly";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 import { supabase } from "../lib/supabase";
@@ -407,6 +408,9 @@ export default function LoginPage(): React.ReactNode {
 
   return (
     <Layout title="Sign In" description="Sign in to your Treq account">
+      <Head>
+        <meta name="robots" content="noindex, nofollow" />
+      </Head>
       <BrowserOnly>{() => <LoginContent />}</BrowserOnly>
     </Layout>
   );

@@ -35,6 +35,17 @@ export default function DagVisualizerPage() {
       <Head>
         <script type="application/ld+json">{JSON.stringify(SCHEMA)}</script>
       </Head>
+      <noscript>
+        <div style={{ padding: '2rem 2rem 0', maxWidth: '960px', margin: '0 auto' }}>
+          <h1>DAG Visualizer</h1>
+          <p>
+            The DAG Visualizer turns AI-aided engineering workflows into interactive,
+            shareable directed-acyclic-graph diagrams. Map out multi-step agent
+            workflows, branching decision points, and parallel task pipelines, then
+            share the resulting diagram via a URL — no account or install required.
+          </p>
+        </div>
+      </noscript>
       <BrowserOnly fallback={loadingFallback}>
         {() => (
           <Suspense fallback={loadingFallback}>
