@@ -6,45 +6,74 @@ sidebar_position: 2
 
 _Personalize Treq to match your preferences and workflow._
 
-Open settings with the gear icon (⚙️) in the sidebar. Settings are split into **repository-level** (specific to the current Git repository) and **application-level** (applies globally). Both persist after saving. If the `.treq` directory is deleted, repository-level settings are lost.
+Open settings with the gear icon (⚙️) in the sidebar. Settings split into two levels. Repository settings apply to the current Git repository. Application settings apply everywhere. Both are saved when you save them, but repository settings live in the `.treq` directory and are lost if you delete it.
 
 ## Repository Settings
 
-**Branch naming pattern**: Construct branch names using variables like `{name}` (intent from plan), `{user}` (git username), and `{date}` (`YYYY-MM-DD`). Examples: `feature/{name}`, `dev/{user}`, `bugfix/{name}-{date}`.
+**Branch naming pattern** builds branch names from variables.
 
-**Copy files**: If dependencies are already present in the repository, use this to copy specific files or directories from `.gitignore` (like `node_modules/`) to new workspaces instead of reinstalling.
+| Variable | Value |
+| --- | --- |
+| `{name}` | The intent taken from your plan |
+| `{user}` | Your git username |
+| `{date}` | Today's date as `YYYY-MM-DD` |
+
+Common patterns are `feature/{name}`, `dev/{user}`, and `bugfix/{name}-{date}`.
+
+**Copy files** copies specific files or directories listed in `.gitignore`, such as `node_modules/`, into each new workspace. Use it when the dependencies are already in the repository and you would rather not install them again.
 
 ## Terminal Settings
 
-Configure **font size** (12-16px recommended), **default shell** (auto-detect, bash, zsh, fish, or custom path), **scrollback buffer** (1000-10000 lines), **cursor style** (block, underline, or bar), and **cursor blink**. Shell arguments like `--login` or `-i` can be added for interactive sessions.
+| Setting | Options |
+| --- | --- |
+| Font size | 12-16px recommended |
+| Default shell | Auto-detect, `bash`, `zsh`, `fish`, or a custom path |
+| Scrollback buffer | 1000-10000 lines |
+| Cursor style | Block, underline, or bar |
+| Cursor blink | On or off |
+
+Add shell arguments such as `--login` or `-i` for interactive sessions.
 
 ## Appearance
 
-Choose **theme** (light, dark, or system), **UI density** (compact, normal, or comfortable), and **font scaling** (12-18px for UI elements, not terminal). Custom themes are planned for a future release.
+| Setting | Options |
+| --- | --- |
+| Theme | Light, dark, or system |
+| UI density | Compact, normal, or comfortable |
+| Font scaling | 12-18px, for interface elements only |
+
+Font scaling does not affect the terminal. Custom themes are planned for a future release.
 
 ## Diff Viewer
 
-Toggle **line numbers**, **minimap**, **word wrap**, and **whitespace visibility**. Choose a syntax highlighting theme: GitHub, VS Code, Monokai, or Solarized variants.
+Toggle line numbers, the minimap, word wrap, and whitespace visibility. Pick a syntax highlighting theme from GitHub, VS Code, Monokai, or the Solarized variants.
 
 ## Git Preferences
 
-**Commit settings**: Enable auto-stage (not recommended), set commit message templates, and configure validation rules like max length or requiring conventional commits.
+**Commit settings** turn on auto-stage, which we do not recommend, set a commit message template, and add validation rules such as a maximum length or a requirement for conventional commits.
 
-**Merge settings**: Set default strategy (regular, squash, no-ff, or ff-only), conflict style (standard or diff3), and auto-stash before operations. [Merge vs Rebase](/learn/concepts/git/merge-vs-rebase) explains what each strategy does to history.
+**Merge settings** choose the default strategy, the conflict style, and whether Treq stashes your work before an operation.
+
+| Setting | Options |
+| --- | --- |
+| Default strategy | Regular, squash, no-ff, or ff-only |
+| Conflict style | Standard or diff3 |
+| Auto-stash | On or off |
+
+[Merge vs Rebase](/learn/concepts/git/merge-vs-rebase) explains what each strategy does to your history.
 
 ## Performance
 
-Configure **file watching** with ignored patterns (`node_modules/`, `.git/`, `dist/`) and polling interval (100-1000ms). Adjust **git cache size** (100-1000 entries) and clear cache to force refresh. For large repositories, consider shallow [clones](/learn/concepts/git/git-worktrees-vs-clones), sparse checkout, or LFS support.
+Set **file watching** to ignore the paths you never need, such as `node_modules/`, `.git/`, and `dist/`, and set the polling interval between 100 and 1000ms. The **git cache** holds 100 to 1000 entries, and you can clear it to force a refresh. For large repositories, consider shallow [clones](/learn/concepts/git/git-worktrees-vs-clones), sparse checkout, or LFS support.
 
 ## Privacy
 
-Anonymous usage data (feature statistics, error reports, performance metrics) can be disabled in Privacy settings. Plan history is stored in `.treq/plans/`. Use **Clear All Data** to reset everything. This cannot be undone.
+Anonymous usage data covers feature statistics, error reports, and performance metrics. You can turn it off in Privacy settings. Plan history is stored in `.treq/plans/`. **Clear All Data** resets everything, and it cannot be undone.
 
 ## Advanced
 
-Enable **developer mode** for debug logs and experimental features (may be unstable). Choose **update channel**: stable (recommended), beta (early features), or nightly (latest, unstable). Database operations include backup, restore, and rebuild.
+**Developer mode** turns on debug logs and experimental features, which may be unstable. The **update channel** is stable, beta for early features, or nightly for the latest and least tested build. Database operations cover backup, restore, and rebuild.
 
 ## Import/Export
 
-Export settings as JSON via Settings → Advanced → Export to share with team members or back up. Import by selecting a JSON file and choosing which settings to apply. Reset individual categories or all settings to defaults in Advanced settings.
-
+Export your settings as JSON from Settings → Advanced → Export to share them with the team or keep a backup. To import, select a JSON file and choose which settings to apply. You can reset one category or all of them from Advanced settings.
