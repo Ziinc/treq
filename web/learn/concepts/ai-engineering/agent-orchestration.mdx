@@ -15,7 +15,7 @@ import DefinitionCard from "@site/src/components/DefinitionCard";
   definition="The coordination of multiple AI agents, including assigning tasks, managing dependencies, isolating their work, handling failures, and collecting the results for review."
 />
 
-A single coding agent is often enough for one developer working on one task. The limits become clearer at team scale. You start updating many independent parts of a codebase, running several investigations at once, or assigning different agents to planning, implementation, testing, and review. Running more agents can shorten the wait, but only if their work is divided and combined carefully.
+A single [coding agent](./coding-agents) is often enough for one developer working on one task. The limits become clearer at team scale. You start updating many independent parts of a codebase, running several investigations at once, or assigning different agents to planning, implementation, testing, and review. Running more agents can shorten the wait, but only if their work is divided and combined carefully.
 
 This article explains the common ways to coordinate agents, why each agent needs its own workspace, and when the added complexity is worthwhile.
 
@@ -45,7 +45,7 @@ There are four common ways to organise the work:
 
 These patterns can be combined. A supervisor might divide a migration into independent tasks, run workers in parallel, and then pass their changes to a review agent. The important part is that the dependencies are explicit. If two tasks both depend on an unfinished change, running them at the same time creates rework and saves nothing.
 
-Each agent also needs an isolated workspace. Two agents editing the same directory can overwrite each other's changes or leave the working tree in an unexpected state. Give every agent its own Git worktree, branch, sandbox, or clone, then review and merge each result deliberately.
+Each agent also needs an isolated workspace. Two agents editing the same directory can overwrite each other's changes or leave the working tree in an unexpected state. Give every agent its own [Git worktree](/learn/concepts/git/git-worktrees), branch, sandbox, or clone, then review and merge each result deliberately.
 
 <DefinitionCard
   term="Workspace Isolation"
@@ -58,7 +58,7 @@ Event-driven orchestration works slightly differently because a person does not 
 
 ## Applying It in Practice
 
-A good first use case is a change that can be divided without much coordination. Examples include replacing a deprecated API across separate modules, updating tests to follow a new pattern, or correcting the same configuration in several services.
+A good first use case is a change that can be divided without much coordination. Examples include replacing a deprecated API across separate modules, updating tests to follow a new pattern, or correcting the same configuration in several services. [Running coding agents in parallel](/learn/parallel-coding-agents) covers the mechanics of splitting that work.
 
 Start by defining:
 

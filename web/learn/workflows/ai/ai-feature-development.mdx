@@ -23,7 +23,7 @@ A **task contract** sets out the user-visible behavior, the scope, the constrain
   definition="A bounded description of required behavior, scope, constraints, and acceptance checks for an implementation task."
 />
 
-The agent works in an **isolated workspace** with its own files and branch. That keeps your other work safe from its edits and commands. It does not make the output safe to merge.
+The agent works in an **isolated workspace** with its own files and branch, usually a [Git worktree](/learn/concepts/git/git-worktrees). That keeps your other work safe from its edits and commands. It does not make the output safe to merge.
 
 <DefinitionCard
   term="Isolated Workspace"
@@ -80,7 +80,7 @@ Exploratory product work needs a different process. Settle the user problem and 
 
 Review capacity is what caps parallel agent work. Starting ten tasks helps nobody when the finished diffs sit unread or get waved through.
 
-Give each agent its own workspace and branch. Say who owns what when tasks touch shared interfaces. Run dependent tasks in order, or settle the interface before they start in parallel.
+Give each agent its own workspace and branch, as in [running coding agents in parallel](/learn/parallel-coding-agents). Say who owns what when tasks touch shared interfaces. Run dependent tasks in order, or settle the interface before they start in parallel.
 
 Limit credentials and commands to what the task needs. Keep the prompt, the tool output that mattered, the checks, and the final diff when a change carries operational or compliance weight.
 

@@ -72,7 +72,7 @@ Run the full test suite, static analysis, and build before merge. Benchmark when
 
 Tests lower the risk, but they only prove what they assert. Add type checking, static analysis, runtime traces, and targeted benchmarks where each one catches a failure the others miss.
 
-Prefer a codemod or a language-server refactor when it can express the change exactly. Use an agent when the change needs context from the whole repository, or when call sites need different edits.
+Prefer a codemod or a language-server refactor when it can express the change exactly. Use a [coding agent](/learn/concepts/ai-engineering/coding-agents) when the change needs context from the whole repository, or when call sites need different edits.
 
 Do not let the agent "clean up nearby code" during the refactor. Record useful follow-up work as separate tasks.
 
@@ -80,7 +80,7 @@ Moving modules or renaming interfaces forces some test changes. Review those on 
 
 ## Scaling and Operations
 
-Run refactors that touch shared interfaces one after another. Parallel agents editing the same callers create conflicts and make the diff harder to review.
+Run refactors that touch shared interfaces one after another. [Parallel agents](/learn/parallel-coding-agents) editing the same callers create conflicts and make the diff harder to review.
 
 For large migrations, add a temporary shim layer and move callers in small groups. Keep the repository building after each group.
 

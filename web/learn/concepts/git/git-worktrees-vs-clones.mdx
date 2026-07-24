@@ -78,7 +78,7 @@ Credentials are not stored per clone. Git can pull them from a global credential
 
 ## Engineering Considerations
 
-Worktrees fit parallel work in one trusted repository. Commits and branches show up at once, setup is quick, and a single fetch updates remote-tracking refs for every worktree. They are a good default for local reviews and for coding agents that run under the same trust boundary.
+Worktrees fit parallel work in one trusted repository. Commits and branches show up at once, setup is quick, and a single fetch updates remote-tracking refs for every worktree. They are a good default for local reviews and for [coding agents](/learn/git-worktrees-for-ai) that run under the same trust boundary.
 
 Shared state is the catch. A fetch, a branch deletion, a tag update, a stash, or a maintenance command can hit every linked worktree. Hooks come from the common Git directory unless something like `core.hooksPath` says otherwise. Git can hold some config per worktree through `extensions.worktreeConfig`, but you have to turn that on yourself.
 
@@ -96,7 +96,7 @@ git worktree prune
 
 For large pools of short-lived jobs, measure Git object size and working-tree size separately. Worktrees cut duplicate object storage, but installed dependencies, build output, and generated files usually take up far more space.
 
-Use clones or a stronger sandbox when jobs must not share Git refs or config. Use containers, virtual machines, or separate user accounts when they must not share credentials or host access.
+Use clones or a stronger sandbox when jobs must not share Git refs or config. [Choosing between them for agents](/learn/how-to/git-worktrees-vs-clones-for-agents) walks through the decision. Use containers, virtual machines, or separate user accounts when they must not share credentials or host access.
 
 ## Next Steps
 

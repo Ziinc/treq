@@ -78,7 +78,7 @@ git branch -d task/search-index
 
 Start with two or three workstreams. Add more only when reviews remain timely and conflicts stay rare. A fixed universal limit is not useful because task size and review capacity vary.
 
-Separate working directories do not isolate databases, ports, caches, or external services. Give concurrent test processes distinct resources where the application requires them.
+Separate working directories do not isolate databases, ports, caches, or external services. [Separate clones](/learn/concepts/git/git-worktrees-vs-clones) do not either. Give concurrent test processes distinct resources where the application requires them.
 
 Frequent rebasing does not replace dependency analysis. It reduces the distance from `main`, but a clean textual rebase can still combine incompatible behavior.
 
@@ -90,7 +90,7 @@ Track each workstream's task, branch, workspace, owner, review state, and depend
 
 Monitor review queue age and conflict rate. Stop starting work when the queue grows faster than reviewers can clear it.
 
-Automation should allocate unique branch names, directories, ports, and temporary resources. It must clean up after failed or interrupted tasks.
+Automation should allocate unique branch names, directories, ports, and temporary resources. A [branch naming pattern](/learn/how-to/customizing-settings) keeps those names predictable. [Running coding agents in parallel](/learn/parallel-coding-agents) covers how that allocation works in practice. It must clean up after failed or interrupted tasks.
 
 When parallel work breaks down, pause new tasks, finish or close existing work, and revise the dependency boundaries before increasing concurrency again.
 

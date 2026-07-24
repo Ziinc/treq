@@ -15,7 +15,7 @@ import DefinitionCard from "@site/src/components/DefinitionCard";
   definition="The use of an AI model to examine code changes and report possible defects, security risks, missing tests, and departures from agreed coding practices."
 />
 
-Code review depends on limited human attention. Reviewers can spend so much time finding missing null checks or forgotten error handling that they have less time to consider the design and product behaviour. AI can perform a quick first pass over every change, but it cannot replace a reviewer who understands why the change exists.
+Code review depends on limited human attention. Reviewers can spend so much time finding missing null checks or forgotten error handling that they have less time to consider the design and product behaviour. AI can perform a quick first pass over every change, but it cannot replace a reviewer who understands why the change exists. That division of labour is the basis of a [human-in-the-loop review system](/learn/ai-code-review).
 
 This article explains what AI review can find, what it tends to miss, and how to introduce it without filling pull requests with unhelpful comments.
 
@@ -83,7 +83,7 @@ Decide how AI comments affect merging. Requiring authors to resolve or explicitl
 
 Review the data policy of any external service before sending it private code. Diffs may contain proprietary logic, internal architecture, personal data, or credentials committed by mistake. Check how the provider stores prompts, retains code, and uses submitted data.
 
-Keep human ownership explicit. The person approving the change remains responsible for understanding it, regardless of how many automated checks ran first.
+Keep human ownership explicit. The person approving the change remains responsible for understanding it, regardless of how many automated checks ran first. This matters most when a [coding agent](./coding-agents) wrote the change under review.
 
 ## Next Steps
 

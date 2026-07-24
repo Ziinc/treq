@@ -30,11 +30,11 @@ Toggle **line numbers**, **minimap**, **word wrap**, and **whitespace visibility
 
 **Commit settings**: Enable auto-stage (not recommended), set commit message templates, and configure validation rules like max length or requiring conventional commits.
 
-**Merge settings**: Set default strategy (regular, squash, no-ff, or ff-only), conflict style (standard or diff3), and auto-stash before operations.
+**Merge settings**: Set default strategy (regular, squash, no-ff, or ff-only), conflict style (standard or diff3), and auto-stash before operations. [Merge vs Rebase](/learn/concepts/git/merge-vs-rebase) explains what each strategy does to history.
 
 ## Performance
 
-Configure **file watching** with ignored patterns (`node_modules/`, `.git/`, `dist/`) and polling interval (100-1000ms). Adjust **git cache size** (100-1000 entries) and clear cache to force refresh. For large repositories, consider shallow clones, sparse checkout, or LFS support.
+Configure **file watching** with ignored patterns (`node_modules/`, `.git/`, `dist/`) and polling interval (100-1000ms). Adjust **git cache size** (100-1000 entries) and clear cache to force refresh. For large repositories, consider shallow [clones](/learn/concepts/git/git-worktrees-vs-clones), sparse checkout, or LFS support.
 
 ## Privacy
 

@@ -57,13 +57,13 @@ Human reviewers should inspect the complete diff. They must decide whether the c
 
 ## Engineering Considerations
 
-AI review is strongest when a defect is visible in the supplied context. It is weaker when correctness depends on undocumented product rules, production topology, or behavior in code it did not inspect.
+AI review is strongest when a defect is visible in the supplied context. It is weaker when correctness depends on undocumented product rules, production topology, or behavior in code it did not inspect. Runtime behavior is the clearest gap, which is why the [React development workflow](/learn/workflows/frontend/react-development) leans on user-facing tests instead of static checks.
 
 The model can produce false positives with detailed explanations. Specific language is not evidence. Verify the triggering conditions and follow the data or control flow yourself.
 
 Do not send secrets, customer data, or restricted source code to a provider without an approved data-handling agreement. Review prompts and outputs may need the same retention controls as source code.
 
-Use dedicated security analysis for high-risk changes. A general AI review does not replace threat modeling, dependency scanning, or review by someone who understands the security boundary.
+Use dedicated security analysis for high-risk changes. A general AI review does not replace threat modeling, dependency scanning, or review by someone who understands the security boundary. Pair it with a [human-in-the-loop review system](/learn/ai-code-review) instead of treating it as the gate.
 
 ## Scaling and Operations
 
@@ -73,7 +73,7 @@ Measure confirmed, rejected, and unresolved findings by review type. A high reje
 
 Version prompts and model settings as maintained review configuration. Re-evaluate them when the codebase, threat model, or provider changes.
 
-AI-generated comments should identify themselves as automated. Keep a human accountable for the merge decision.
+AI-generated comments should identify themselves as automated. Keep a human accountable for the merge decision, especially when a [coding agent](/learn/concepts/ai-engineering/coding-agents) wrote the change as well as the review.
 
 ## Next Steps
 

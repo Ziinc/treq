@@ -10,7 +10,7 @@ _Give a coding agent the local React rules, then check each render and user acti
 
 ## Introduction
 
-Coding agents handle focused React work well when the repo has clear patterns for components, state, styles, and tests. The main risk sits at runtime. A component can pass type checks while holding stale state, leaking a listener, or breaking keyboard use.
+[Coding agents](/learn/concepts/ai-engineering/coding-agents) handle focused React work well when the repo has clear patterns for components, state, styles, and tests. The main risk sits at runtime. A component can pass type checks while holding stale state, leaking a listener, or breaking keyboard use.
 
 Use this workflow to define the component contract, write user-facing tests, and review what static types cannot prove.
 
@@ -30,7 +30,7 @@ A **component contract** defines a component's inputs, screen states, events, an
   definition="Correct component behavior across repeated renders, state changes, effects, and user interactions."
 />
 
-Repo rules narrow the agent's choices. Name the existing UI parts, style system, state boundary, data layer, and test approach before the work starts. Without that context, an agent often creates a second pattern that clashes with the rest of the app.
+Repo rules narrow the agent's choices, the same way a [task contract](/learn/workflows/ai/ai-feature-development) does. Name the existing UI parts, style system, state boundary, data layer, and test approach before the work starts. Without that context, an agent often creates a second pattern that clashes with the rest of the app.
 
 ## Applying It in Practice
 

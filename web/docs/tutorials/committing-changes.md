@@ -6,11 +6,11 @@ sidebar_position: 4
 
 _How to select and commit changes using Treq's visual tools._
 
-Treq has no separate staging area. You select the files or hunks you want in a commit, then commit them directly. Treq's diff viewer makes this process visual, showing which changes are selected for the next commit and which aren't.
+Treq has no separate staging area. You select the files or hunks you want in a [commit](/docs/concepts/commit-management), then commit them directly. Anything you do not want can be [discarded](/docs/how-to/discarding-changes). Treq's diff viewer makes this process visual, showing which changes are selected for the next commit and which aren't.
 
 ## Accessing the Diff Viewer
 
-Open the diff viewer from the dashboard by clicking any changed file in the Git Changes section, or from a workspace session by clicking the Changes tab. The top section shows your file tree with selection checkboxes. The bottom section displays the diff with Monaco Editor syntax highlighting.
+Open the diff viewer from the dashboard by clicking any [changed file](/docs/concepts/changes-and-reviews) in the Git Changes section, or from a workspace session by clicking the Changes tab. The top section shows your file tree with selection checkboxes. The bottom section displays the diff with Monaco Editor syntax highlighting.
 
 ## Creating Commits
 

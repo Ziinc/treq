@@ -65,7 +65,7 @@ Keep the reproduction test as a regression test. It is part of the fix, not temp
 
 Do not prescribe a solution in the initial report unless you have already proved it. A proposed fix can anchor the investigation and cause the agent to explain evidence around your assumption.
 
-Tests are evidence, not proof of the complete diagnosis. A test can encode the same misunderstanding as the patch. Review whether its setup matches the real failure and whether its assertions distinguish the correct behavior from a convenient workaround.
+Tests are evidence, not proof of the complete diagnosis. A test can encode the same misunderstanding as the patch, which is why the [human-in-the-loop review](/learn/ai-code-review) still has to read the diagnosis. Review whether its setup matches the real failure and whether its assertions distinguish the correct behavior from a convenient workaround.
 
 Intermittent and environment-specific failures need runtime evidence first. Use the agent to identify logging, tracing, assertions, or metrics that separate competing explanations. Do not ship a speculative fix because it appears related.
 
@@ -75,7 +75,7 @@ Security and data-corruption bugs require a wider response. Fix the code, assess
 
 Add reproduction-first and root-cause explanation fields to bug-fix pull requests. Reviewers can then compare the report, failing test, diagnosis, and patch as one chain of evidence.
 
-Track recurring defect patterns. If the same API misuse appears in several places, create a separate remediation task after the immediate fix. Keep broad cleanup out of an urgent patch unless leaving it creates immediate risk.
+Track recurring defect patterns. If the same API misuse appears in several places, create a separate remediation task after the immediate fix, and consider [running agents in parallel](/learn/parallel-coding-agents) across the independent call sites. Keep broad cleanup out of an urgent patch unless leaving it creates immediate risk.
 
 For production incidents, prefer a reversible fix and define rollback criteria before deployment. Monitor the original failure signal and adjacent behavior after release.
 

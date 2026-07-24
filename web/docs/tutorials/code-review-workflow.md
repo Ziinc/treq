@@ -6,7 +6,7 @@ sidebar_position: 5
 
 _How to review code using Treq's built-in review tools._
 
-Treq's review interface lets you examine changes in a dedicated workspace without disrupting your current work. You can add inline comments, test changes locally, and export review summaries for pull requests.
+Treq's review interface lets you examine [changes](/docs/concepts/changes-and-reviews) in a dedicated [workspace](/docs/concepts/workspaces) without disrupting your current work. You can add inline comments, test changes locally, and export review summaries for pull requests.
 
 ## Starting a Review
 

@@ -16,14 +16,14 @@ Git is the default version control system for most software projects. Jujutsu pr
 
 ## Understanding the Concept
 
-A **repository** contains versioned files and the history needed to reconstruct their recorded states. In a distributed system such as Git, each normal clone contains repository history and can create commits without contacting a central server.
+A **repository** contains versioned files and the history needed to reconstruct their recorded states. In a distributed system such as Git, each normal [clone](./git-worktrees-vs-clones) contains repository history and can create commits without contacting a central server.
 
 <DefinitionCard
   term="Repository"
   definition="The stored history and metadata for a versioned set of files, usually paired with a working directory where those files are edited."
 />
 
-A **commit** records a project snapshot plus metadata and parent commit IDs. Those parent links form a directed acyclic graph. A commit with one parent continues a line of history, while a merge commit has multiple parents.
+A **commit** records a project snapshot plus metadata and parent commit IDs. Those parent links form a directed acyclic graph. A commit with one parent continues a line of history, while a [merge commit](./merge-vs-rebase) has multiple parents.
 
 <DefinitionCard
   term="Commit"
@@ -71,7 +71,7 @@ git diff
 git diff --staged
 ```
 
-Use `git log` to inspect ancestry, `git show` to inspect one commit, and `git blame` to trace lines to commits. Use `git revert` to undo a published change with a new commit. History-rewriting commands such as rebase and reset require more care because other work may depend on the old commit IDs.
+Use `git log` to inspect ancestry, `git show` to inspect one commit, and `git blame` to trace lines to commits. Use `git revert` to undo a published change with a new commit. [Discarding uncommitted changes](/learn/how-to/discarding-changes) is a different operation and cannot be undone. History-rewriting commands such as rebase and reset require more care because other work may depend on the old commit IDs.
 
 ## Git and Jujutsu
 
@@ -99,7 +99,7 @@ Choose Jujutsu because its working-copy, conflict, and history-editing model fit
 
 Commits should represent coherent changes and include messages that explain intent. Small, buildable commits improve review and make tools such as `git bisect` more useful.
 
-Treat published history as an interface. Rewriting a private branch is routine. Rewriting a branch that others use changes commit IDs beneath their work and requires coordination.
+Treat published history as an interface. Rewriting a private branch is routine. Rewriting a branch that others use changes commit IDs beneath their work and requires coordination, which is the problem [stacked PRs](./stacked-prs) are built to manage.
 
 Version control does not replace backups. A clone may omit unreachable objects, local-only refs, server settings, issue data, release assets, and large-file objects. Protect the hosting service and any external artifact stores separately.
 

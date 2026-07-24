@@ -6,7 +6,7 @@ sidebar_position: 2
 
 _How to create and manage terminal sessions across workspaces._
 
-Terminal sessions in Treq are full PTY shells bound to a workspace's directory. Each workspace can have multiple sessions for running parallel processes like dev servers, tests, and builds. Sessions support copy/paste, clickable URLs, and your default shell.
+[Terminal sessions](/docs/concepts/terminal-sessions) in Treq are full PTY shells bound to a [workspace's](/docs/concepts/workspaces) directory. Each workspace can have multiple sessions for running parallel processes like dev servers, tests, and builds. Sessions support copy/paste, clickable URLs, and your default shell.
 
 ## Creating Sessions
 

@@ -6,7 +6,7 @@ sidebar_position: 3
 
 _How to safely discard unwanted changes._
 
-**Deselecting** a file removes it from the next commit without losing changes. **Discarding** permanently deletes changes and cannot be undone.
+**Deselecting** a file removes it from the next [commit](/learn/concepts/git/version-control) without losing changes. **Discarding** permanently deletes changes and cannot be undone.
 
 ## Discarding Files
 
@@ -22,7 +22,7 @@ Treq doesn't support discarding specific lines directly. As a workaround, commit
 
 There's no direct undo for discarded changes. Check your editor's local history (VS Code, IntelliJ), look for auto-save copies, or check git reflog if changes were previously committed.
 
-Before discarding uncertain changes, create a safety net with `git stash push -m "backup"` or commit to a temporary branch.
+Before discarding uncertain changes, create a safety net with `git stash push -m "backup"` or commit to a temporary branch. [Version control](/learn/concepts/git/version-control) explains why a commit is the more reliable of the two.
 
 ## Best Practices
 

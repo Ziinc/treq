@@ -15,7 +15,7 @@ import DefinitionCard from "@site/src/components/DefinitionCard";
   definition="A development process in which people review, guide, or approve work produced by AI before it advances to the next important stage."
 />
 
-The need for review comes from how AI fails. Generated code is often syntactically valid and may pass its tests while still misunderstanding a business rule, weakening security, or conflicting with an earlier design decision. A deliberate approval step catches mistakes that automated checks cannot.
+The need for review comes from how AI fails. Generated code is often syntactically valid and may pass its tests while still misunderstanding a business rule, weakening security, or conflicting with an earlier design decision. This is the [AI slop](/learn/concepts/ai-engineering/ai-assisted-software-engineering) problem that review exists to catch. A deliberate approval step catches mistakes that automated checks cannot.
 
 This article explains how the feedback loop works, where to place review checkpoints, and how to adjust oversight to the risk of the task.
 
@@ -88,7 +88,7 @@ Route work to someone who understands the affected area. A careful reviewer with
 
 Track how often changes are approved, revised, and rejected for each kind of task. This helps the team identify where lighter review is justified and where agents continue to need close supervision.
 
-Security-sensitive changes need explicit checks for authentication, authorization, input handling, secrets, and data storage. General code review does not automatically cover these concerns. Keep permissions narrow and verify what the agent changed. Its summary is not a substitute for reading the diff.
+Security-sensitive changes need explicit checks for authentication, authorization, input handling, secrets, and data storage. A general [code review](/learn/ai-code-review) does not automatically cover these concerns. Keep permissions narrow and verify what the agent changed. Its summary is not a substitute for reading the diff.
 
 The goal is not to remove people from development. It is to spend human attention on the decisions where it changes the outcome.
 

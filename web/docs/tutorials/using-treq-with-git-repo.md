@@ -10,7 +10,7 @@ Treq works with Git repositories. You select a repository, create workspaces for
 
 When you open a repository, Treq creates a `.treq/` folder for workspaces and local metadata. It also initializes colocated `.jj/` state. Both folders are added to `.gitignore` so they are never committed.
 
-Colocation is the under-the-hood implementation. It lets Treq rebase workspace branches when targets move, which Git worktrees cannot do. Treq runs those Git and Jujutsu operations for you. Dropping to the `jj` CLI is a power-user option and is not recommended for normal use.
+Colocation is the [under-the-hood](/docs/under-the-hood) implementation. It lets Treq rebase [workspace](/docs/concepts/workspaces) branches when targets move, which [Git worktrees](/learn/concepts/git/git-worktrees) cannot do. Treq runs those Git and Jujutsu operations for you. Dropping to the `jj` CLI is a power-user option and is not recommended for normal use.
 
 ## Repository Structure
 

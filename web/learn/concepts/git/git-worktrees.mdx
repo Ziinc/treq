@@ -70,7 +70,7 @@ For read-only inspection, use detached `HEAD` and avoid creating a branch:
 git worktree add --detach ../repo-review origin/feature/payment
 ```
 
-For parallel agents, give each task one worktree and one branch. Separate working files stop one process from overwriting another's edits. Shared repository state still needs care around branch names, fetches, and maintenance.
+For [parallel agents](/learn/git-worktrees-for-ai), give each task one worktree and one branch. Separate working files stop one process from overwriting another's edits. Shared repository state still needs care around branch names, fetches, and maintenance.
 
 ## Git Worktrees and Jujutsu Workspaces
 

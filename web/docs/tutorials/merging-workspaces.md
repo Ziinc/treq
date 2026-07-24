@@ -6,13 +6,13 @@ sidebar_position: 6
 
 _How to bring completed workspace changes back into your main branch._
 
-Merge a workspace after its changes are committed, reviewed, and ready to land. Treq keeps each workspace on its own branch, so merging is the point where that isolated work becomes part of your main repository history.
+Merge a workspace after its changes are [committed](/docs/concepts/commit-management), [reviewed](/docs/concepts/changes-and-reviews), and ready to land. Treq keeps each [workspace](/docs/concepts/workspaces) on its own branch, so merging is the point where that isolated work becomes part of your main repository history.
 
 ## Before You Merge
 
 Open the workspace and confirm there are no unexpected uncommitted changes. Commit anything that should be included, then run the relevant tests from the workspace terminal.
 
-If the branch is shared with a remote, push it before review or merge so collaborators can see the same commits.
+If the branch is shared with a remote, [push it](/docs/how-to/pushing-to-remote) before review or merge so collaborators can see the same commits.
 
 ## Merging From Treq
 

@@ -58,7 +58,7 @@ Next, chat and Q&A tools answer questions about the codebase or generate code on
 
 Further along, task-execution tools accept a high-level goal and produce a full implementation across multiple files, which the developer then reviews.
 
-At the autonomous end, agents plan, implement, run tests, and iterate without step-by-step human direction. Claude Code in full-auto mode is a good example.
+At the autonomous end, [coding agents](../coding-agents) plan, implement, run tests, and iterate without step-by-step human direction. Claude Code in full-auto mode is a good example.
 
 Where AI fits across the development lifecycle:
 
@@ -99,7 +99,7 @@ As teams generate more code, review becomes the slowest part of the process. Rev
 
 Common mistakes include accepting a change without reading the full diff, leaving architectural decisions to the model, and using AI for work nobody on the team can evaluate. Passing tests are not enough either. When the same model writes both the implementation and its tests, it can carry the same mistaken assumption into both.
 
-Larger teams also need shared rules. Two developers can ask the same tool for the same change and receive very different code. Agree early on which tasks AI should handle, how its changes get reviewed, and when generated work should be rejected. Security-sensitive changes need a separate, deliberate review, because models repeat unsafe patterns found in public code. Sharing agent skills through a common library lets agents use the same prompts and build the same context on different machines.
+Larger teams also need shared rules, especially once they are [running several agents in parallel](/learn/parallel-coding-agents). Two developers can ask the same tool for the same change and receive very different code. Agree early on which tasks AI should handle, how its changes get reviewed, and when generated work should be rejected. Security-sensitive changes need a separate, deliberate review, because models repeat unsafe patterns found in public code. Sharing agent skills through a common library lets agents use the same prompts and build the same context on different machines.
 
 ## Next Steps
 

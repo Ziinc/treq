@@ -63,13 +63,13 @@ Run the documentation formatter, linter, link checker, and production build. Pre
 
 ## Engineering Considerations
 
-Fluent prose can hide factual errors. Verify details before polishing sentences, because a clear false statement is still harmful.
+Fluent prose can hide factual errors, the documentation form of [AI slop](/learn/concepts/ai-engineering/ai-assisted-software-engineering). Verify details before polishing sentences, because a clear false statement is still harmful.
 
 Keep generated examples small enough to test. If an example cannot run as written, label it as illustrative and avoid presenting invented output as observed output.
 
 Use source-generated reference documentation for mechanical facts such as function signatures. Use authored guides for task order, decisions, and explanations. Generation does not decide which information a reader needs.
 
-Documentation changes should ship with the behavior they describe when possible. That keeps reviewers close to the source and reduces drift.
+Documentation changes should ship with the behavior they describe when possible. That keeps reviewers close to the source and reduces drift, and it fits naturally into an [AI feature development workflow](./ai-feature-development).
 
 ## Scaling and Operations
 

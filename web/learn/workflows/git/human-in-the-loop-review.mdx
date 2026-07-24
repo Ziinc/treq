@@ -70,7 +70,7 @@ Precise feedback helps the agent revise the right code. It also creates a review
 
 Do not fix substantial agent mistakes silently. Direct edits hide whether the task or repository guidance caused the error. Small editorial changes are different, but the final diff still needs review.
 
-Passing tests do not prove that the task was implemented correctly. The agent can encode the same false assumption in code and tests.
+Passing tests do not prove that the task was implemented correctly. The agent can encode the same false assumption in code and tests, which is why an [AI review pass](/learn/ai-code-review) sits before human approval, not in place of it.
 
 Set restart criteria before review becomes an open-ended repair session. Restart when the approach violates a core constraint, repeated revisions recreate the same defect, or the reviewer can no longer explain the current diff.
 
@@ -78,7 +78,7 @@ Set restart criteria before review becomes an open-ended repair session. Restart
 
 Review capacity limits agent throughput. Reduce concurrent work when diffs wait too long or reviewers begin skimming.
 
-Track review state with the task, branch, owner, risk level, and current checkpoint. Assign security-sensitive or architectural changes to reviewers who know that area.
+Track review state with the task, branch, owner, risk level, and current checkpoint. Reviewing a [stack of dependent changes](/learn/concepts/git/stacked-prs) means tracking each layer separately. Assign security-sensitive or architectural changes to reviewers who know that area.
 
 Measure revision rounds, review time, rejected changes, and defects found after merge. Use the results to improve task scope and repository instructions. Do not use them to reward high merge volume.
 

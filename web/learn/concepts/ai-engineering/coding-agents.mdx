@@ -30,7 +30,7 @@ A coding agent combines a language model with tools such as code search, a file 
 
 {/* TODO: Add diagram showing the agent loop: observe, decide, act, verify, then repeat or finish. */}
 
-The underlying model may be the same one used in a chat tool. The difference is that the agent can take actions and keep working across several steps.
+The underlying model may be the same one used in a chat tool. The difference is that the agent can take actions and keep working across several steps. Chat tools and agents sit at different points on the [AI-assisted software engineering](/learn/concepts/ai-engineering/ai-assisted-software-engineering) spectrum.
 
 | | Chat tool | Coding agent |
 | --- | --- | --- |
@@ -63,7 +63,7 @@ A capable agent will usually:
 
 Watch for a wrong assumption early in the run. If the agent is reading unrelated files, rebuilding an existing helper, or repeatedly trying the same failed approach, give it the missing context or narrow the remaining task.
 
-Always review the complete diff. Tests may pass because the agent made the same incorrect assumption in both the code and the tests. Check for unrequested changes, new dependencies, missed edge cases, security-sensitive behaviour, and code that departs from established project patterns.
+Always review the complete diff, which is the heart of a working [human-in-the-loop review system](/learn/ai-code-review). Tests may pass because the agent made the same incorrect assumption in both the code and the tests. Check for unrequested changes, new dependencies, missed edge cases, security-sensitive behaviour, and code that departs from established project patterns.
 
 ## Engineering Considerations
 
@@ -81,7 +81,7 @@ A mistaken assumption can spread through every later step. An agent may misunder
 
 Agents may also invent methods, options, or library behaviour that look valid but do not exist in the installed version. Running tests, type checks, and builds catches many of these errors. Reviewing unfamiliar API calls against local documentation or the actual dependency catches the rest.
 
-Parallel agents need separate workspaces. If several agents edit the same directory, their changes can conflict or overwrite each other. Give each agent its own worktree, branch, sandbox, or clone, then merge changes only after review.
+[Parallel agents](/learn/parallel-coding-agents) need separate workspaces. If several agents edit the same directory, their changes can conflict or overwrite each other. Give each agent its own worktree, branch, sandbox, or clone, then merge changes only after review.
 
 {/* TODO: Add diagram showing several coding agents working in isolated worktrees and submitting separate changes for review. */}
 

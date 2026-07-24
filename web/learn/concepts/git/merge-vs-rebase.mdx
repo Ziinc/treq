@@ -23,7 +23,7 @@ A **merge commit** has two or more parents. For a typical two-branch merge, the 
   definition="A commit with two or more parents that records the point where separate lines of history were combined."
 />
 
-A **rebase** computes patches from commits on the current branch, applies them to a new base in order, and moves the branch ref to the new commits. Their object IDs change because their parent history changes.
+A **rebase** computes patches from commits on the current branch, applies them to a new base in order, and moves the [branch ref](./version-control) to the new commits. Their object IDs change because their parent history changes.
 
 <DefinitionCard
   term="Fast-forward"
@@ -60,7 +60,7 @@ git switch feature/my-work
 git rebase origin/main
 ```
 
-If that branch already exists on a remote and its rewrite is agreed, update it with:
+If that branch already exists on a remote and its rewrite is agreed, [force push](/learn/how-to/pushing-to-remote) it with a lease:
 
 ```bash
 git push --force-with-lease origin feature/my-work
@@ -81,7 +81,7 @@ git merge --squash feature/my-work
 git commit -m "Add user authentication"
 ```
 
-Hosting platforms also offer rebase-and-merge. That option replays pull-request commits onto the target branch and usually creates new object IDs. Check the platform's exact behavior before making policy depend on it.
+Hosting platforms also offer rebase-and-merge. That option [replays](./cherry-pick-vs-rebase) pull-request commits onto the target branch and usually creates new object IDs. Check the platform's exact behavior before making policy depend on it.
 
 ## Engineering Considerations
 
@@ -91,7 +91,7 @@ Merge is the conservative choice for shared branches because it does not replace
 git log --first-parent --oneline main
 ```
 
-Rebase is useful for reorganizing private work and for moving a branch onto its intended base. A linear history can be easier to scan, but it removes the original branch topology. Do not rewrite commits that colleagues have based work on unless everyone coordinates the recovery.
+Rebase is useful for reorganizing private work and for moving a branch onto its intended base. A linear history can be easier to scan, but it removes the original branch topology. Do not rewrite commits that colleagues have based work on unless everyone coordinates the recovery. A [stack of dependent branches](./stacked-prs) needs that coordination on every rebase.
 
 `git bisect` works on both linear and merged histories. Merge commits can make a regression harder to interpret when neither parent alone reproduces the merged result, while a squash can hide which internal step introduced the bug. History quality depends more on buildable, focused commits than on graph shape alone.
 

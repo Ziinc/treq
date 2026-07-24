@@ -39,7 +39,7 @@ main
         └── auth/api  PR 3: auth/api -> auth/service
 ```
 
-If `auth/schema` changes during review, the branches above it still contain commits based on the old version. Rebasing each dependent branch in order is a **restack**.
+If `auth/schema` changes during review, the branches above it still contain commits based on the old version. [Rebasing](./merge-vs-rebase) each dependent branch in order is a **restack**.
 
 <DefinitionCard
   term="Restack"
@@ -101,9 +101,9 @@ After the bottom pull request merges, retarget the next pull request to `main` i
 
 Use a stack when the feature has ordered layers with clear review boundaries. Schema, domain logic, and API changes can form a useful stack when each layer is testable and leaves the target branch in a valid state.
 
-Do not create a stack for a small change or split code at arbitrary file boundaries. Reviewers should be able to explain what one layer does without reading all later layers.
+Do not create a stack for a small change or split code at arbitrary file boundaries. That mistake is common with [AI-generated features](/learn/stacked-prs), where the whole diff arrives at once and gets split after the fact. Reviewers should be able to explain what one layer does without reading all later layers.
 
-Keep stacks shallow. Two or three stable layers are manageable by hand. Deep stacks with frequent changes near the root create repeated conflict resolution and force pushes. Stack-aware tools can automate branch bookkeeping and pull-request retargeting, but they cannot choose sound boundaries or resolve semantic conflicts.
+Keep stacks shallow. Two or three stable layers are manageable by hand. Deep stacks with frequent changes near the root create repeated conflict resolution and force pushes. [Stack-aware tools](/learn/graphite-alternative) can automate branch bookkeeping and pull-request retargeting, but they cannot choose sound boundaries or resolve semantic conflicts.
 
 Merge order matters. Land layers from the root upward. If a project uses squash merge, expect the lower layer's commit identity to change on `main` and restack the remaining branches.
 
