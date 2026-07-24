@@ -10,20 +10,20 @@ _Run independent tasks in separate working directories and integrate each result
 
 ## Introduction
 
-Parallel development shortens waiting time when tasks can proceed independently. Each task receives its own branch and working directory, so file edits and local build state do not collide.
+Parallel development cuts waiting time when tasks do not depend on each other. Each task gets its own branch and working directory, so edits and local build state never collide.
 
-Concurrency helps only while review and integration keep pace.
+Running work in parallel only helps while review and merging keep up.
 
 ## Understanding the Workflow
 
-A **workstream** is one bounded task with an owner, workspace, and integration path.
+A **workstream** is one bounded task with an owner, a workspace, and a clear way in.
 
 <DefinitionCard
   term="Workstream"
   definition="A bounded unit of work assigned to one owner and isolated branch or workspace until review and integration."
 />
 
-**Workspace isolation** gives each workstream separate working files. Git worktrees share repository refs and objects, so they isolate edits but do not provide a security boundary.
+**Workspace isolation** gives each workstream its own working files. [Git worktrees](/learn/concepts/git/git-worktrees) share refs and objects, so they keep edits apart but give you no security boundary.
 
 <DefinitionCard
   term="Workspace Isolation"
@@ -32,7 +32,7 @@ A **workstream** is one bounded task with an owner, workspace, and integration p
 
 {/* Diagram: Show a task queue assigning independent tasks to separate Git worktrees and branches, then sending each branch through review and merge into main. Mark shared repository state separately from isolated files. */}
 
-Tasks are independent when they can be implemented, reviewed, and merged in any order. Different file names are useful evidence, but shared schemas, interfaces, generated outputs, and deployment order can still create dependencies.
+Tasks are independent when you can build, review, and merge them in any order. Different file names are a hint, not proof: shared schemas, interfaces, generated output, and deploy order all tie tasks together.
 
 Use a [stacked PR workflow](./stacked-pr) when one task must build on another.
 
@@ -54,18 +54,18 @@ git worktree add -b task/password-reset ../repo-password-reset origin/main
 git worktree add -b task/search-index ../repo-search-index origin/main
 ```
 
-Give each owner a clear task contract and file boundary. Agree on shared interfaces before work begins. Do not ask concurrent workers to discover the same interface independently.
+Give each owner a clear task contract and a file boundary. Settle any shared interface before work starts, so two people are not left to invent the same one apart.
 
-Open a pull request when one workstream is ready. Review and merge it without waiting for the others. Update remaining branches before integration:
+Open a pull request as soon as one workstream is ready, then review and merge it without waiting for the rest. Bring the other branches up to date before they land:
 
 ```bash
 git -C ../repo-search-index fetch origin
 git -C ../repo-search-index rebase origin/main
 ```
 
-Rebase only branches whose rewrite is safe. Merge `main` into a shared branch when other people depend on its existing commits.
+Only rebase a branch when rewriting it is safe. If other people are building on its commits, merge `main` into it instead.
 
-When conflicts appear, resolve them in the branch that will merge next. Re-run its tests against current `main`. Restarting an agent task can be cheaper than preserving a small obsolete patch, but compare the old and new behavior before discarding work.
+When conflicts show up, fix them in whichever branch merges next and re-run its tests against current `main`. Restarting an agent task is often cheaper than saving a small stale patch, but compare the old and new behavior before you throw anything away.
 
 Remove finished worktrees through Git:
 
@@ -76,23 +76,23 @@ git branch -d task/search-index
 
 ## Engineering Considerations
 
-Start with two or three workstreams. Add more only when reviews remain timely and conflicts stay rare. A fixed universal limit is not useful because task size and review capacity vary.
+Start with two or three workstreams. Add more only while reviews stay quick and conflicts stay rare. There is no single right number, because task size and review capacity differ from team to team.
 
-Separate working directories do not isolate databases, ports, caches, or external services. [Separate clones](/learn/concepts/git/git-worktrees-vs-clones) do not either. Give concurrent test processes distinct resources where the application requires them.
+Separate working directories do not separate databases, ports, caches, or outside services, and [separate clones](/learn/concepts/git/git-worktrees-vs-clones) do not either. Give each concurrent test process its own resources wherever the app needs them.
 
-Frequent rebasing does not replace dependency analysis. It reduces the distance from `main`, but a clean textual rebase can still combine incompatible behavior.
+Rebasing often is not a substitute for thinking about dependencies. It keeps you close to `main`, but a rebase with no text conflicts can still merge two behaviors that do not work together.
 
-Feature flags help independent changes merge before the user-facing feature is ready. They move coordination into runtime configuration and require ownership, cleanup, and production testing.
+Feature flags let independent changes land before the feature is ready for users. They shift the coordination into runtime config, which then needs an owner, a cleanup plan, and testing in production.
 
 ## Scaling and Operations
 
-Track each workstream's task, branch, workspace, owner, review state, and dependencies. Close abandoned work quickly and remove its workspace.
+Track each workstream's task, branch, workspace, owner, review state, and dependencies. Close dead work quickly and delete its workspace.
 
-Monitor review queue age and conflict rate. Stop starting work when the queue grows faster than reviewers can clear it.
+Watch how old the review queue gets and how often conflicts appear. Stop starting work once the queue grows faster than reviewers can clear it.
 
-Automation should allocate unique branch names, directories, ports, and temporary resources. A [branch naming pattern](/learn/how-to/customizing-settings) keeps those names predictable. [Running coding agents in parallel](/learn/parallel-coding-agents) covers how that allocation works in practice. It must clean up after failed or interrupted tasks.
+Automation should hand out unique branch names, directories, ports, and temporary resources, and clean them all up after a task fails or is interrupted. A [branch naming pattern](/learn/how-to/customizing-settings) keeps those names predictable, and [running coding agents in parallel](/learn/parallel-coding-agents) covers how the rest of that allocation works.
 
-When parallel work breaks down, pause new tasks, finish or close existing work, and revise the dependency boundaries before increasing concurrency again.
+When parallel work stops paying off, pause new tasks, finish or close what is open, and redraw the dependency boundaries before you scale back up.
 
 ## Next Steps
 

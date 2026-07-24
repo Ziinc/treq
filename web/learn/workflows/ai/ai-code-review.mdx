@@ -10,15 +10,15 @@ _Use AI to find candidate defects, then verify every finding against the code._
 
 ## Introduction
 
-AI review can inspect a diff for logic errors, missing tests, unsafe data handling, and inconsistencies. Its findings are hypotheses. A person must confirm each one and still review intent, architecture, and product behavior.
+AI review can scan a diff for logic errors, missing tests, unsafe data handling, and things that do not line up. Its findings are guesses. A person has to confirm each one, and still judge intent, design, and how the product behaves.
 
-Run deterministic tools first. A compiler, linter, or static analyzer is more reliable for rules it can express.
+Run the deterministic tools first. A compiler, linter, or static analyzer beats a model on any rule it can state.
 
 ## Understanding the Workflow
 
-An AI reviewer needs the change's intent, the diff, and enough surrounding code to trace affected behavior. A bare diff often hides contracts defined in callers, schemas, configuration, or tests.
+An AI reviewer needs to know why the change exists, see the diff, and read enough of the code around it to follow what the change touches. A bare diff hides the rules set by callers, schemas, config, and tests.
 
-A **review finding** should identify a concrete failure, the conditions that trigger it, and the relevant code location. General advice without an observable consequence is not actionable.
+A **review finding** should name a real failure, say what triggers it, and point at the line. Advice with no visible consequence is not something anyone can act on.
 
 <DefinitionCard
   term="Review Finding"
@@ -37,7 +37,7 @@ Every finding belongs in one of three states:
 
 ## Applying It in Practice
 
-Start with a clean diff and a one-paragraph change description. Include acceptance criteria, known constraints, and links to relevant code outside the diff.
+Start with a clean diff and a one-paragraph description of the change. Add the acceptance criteria, the constraints you know about, and links to related code outside the diff.
 
 Run focused passes instead of one broad request. Useful scopes include:
 
@@ -47,31 +47,31 @@ Run focused passes instead of one broad request. Useful scopes include:
 - migration and compatibility risks
 - test quality and missing cases
 
-Ask the reviewer to return only findings that name a failure mode and cite the affected code. Require it to omit praise, summaries, and speculative style comments.
+Ask for findings that name a way the code fails and cite the affected line. Tell it to skip praise, summaries, and style opinions.
 
-Triage each finding by reading the cited code. Reproduce the issue with a test or a concrete execution path where practical. Reject findings that depend on an incorrect assumption.
+Work through each finding by reading the code it cites. Reproduce the problem with a test or a real execution path where you can. Throw out anything that rests on a wrong assumption.
 
-Fix confirmed issues before human review. Then rerun relevant checks and, if the diff changed substantially, rerun the focused AI pass.
+Fix the confirmed issues before a human looks at it. Rerun the relevant checks, and run the focused AI pass again if the diff moved much.
 
-Human reviewers should inspect the complete diff. They must decide whether the change solves the right problem, fits the system, and creates operational consequences that are absent from the local code.
+A human reviewer should read the whole diff. They decide whether the change solves the right problem, fits the system, and creates trouble that the local code does not show.
 
 ## Engineering Considerations
 
-AI review is strongest when a defect is visible in the supplied context. It is weaker when correctness depends on undocumented product rules, production topology, or behavior in code it did not inspect. Runtime behavior is the clearest gap, which is why the [React development workflow](/learn/workflows/frontend/react-development) leans on user-facing tests instead of static checks.
+AI review works best when the bug is visible in the code you handed it. It gets weak when the answer depends on unwritten product rules, how production is wired, or code it never read. Runtime behavior is the biggest blind spot, which is why the [React development workflow](/learn/workflows/frontend/react-development) leans on user-facing tests instead of static checks.
 
-The model can produce false positives with detailed explanations. Specific language is not evidence. Verify the triggering conditions and follow the data or control flow yourself.
+A model can be wrong at length and in detail. Precise wording is not evidence. Check what it says triggers the bug, and trace the data or control flow yourself.
 
-Do not send secrets, customer data, or restricted source code to a provider without an approved data-handling agreement. Review prompts and outputs may need the same retention controls as source code.
+Do not send secrets, customer data, or restricted source to a provider without an approved data-handling agreement. The prompts and replies may need the same retention rules as the code itself.
 
-Use dedicated security analysis for high-risk changes. A general AI review does not replace threat modeling, dependency scanning, or review by someone who understands the security boundary. Pair it with a [human-in-the-loop review system](/learn/ai-code-review) instead of treating it as the gate.
+Run a real security analysis on high-risk changes. A general AI pass is no substitute for threat modeling, dependency scanning, or a reviewer who knows the security boundary. Pair it with a [human-in-the-loop review system](/learn/ai-code-review) instead of treating it as the gate.
 
 ## Scaling and Operations
 
-Automated review should publish a small number of ranked findings. Large volumes train developers to ignore the system. Limit comments to actionable issues and group repeated instances under one explanation.
+Automated review should post a short, ranked list. Flood people with comments and they learn to ignore the whole thing. Keep it to issues someone can act on, and fold repeats into one explanation.
 
-Measure confirmed, rejected, and unresolved findings by review type. A high rejection rate means the prompt lacks context or the review scope is too broad. A low finding count does not prove that the review is effective, so compare results with defects found later.
+Count confirmed, rejected, and unresolved findings for each kind of review. A high rejection rate means the prompt is short on context or the scope is too wide. Few findings does not mean the review is good, so compare it against the bugs you find later.
 
-Version prompts and model settings as maintained review configuration. Re-evaluate them when the codebase, threat model, or provider changes.
+Keep prompts and model settings in version control like any other config. Revisit them when the codebase, the threat model, or the provider changes.
 
 AI-generated comments should identify themselves as automated. Keep a human accountable for the merge decision, especially when a [coding agent](/learn/concepts/ai-engineering/coding-agents) wrote the change as well as the review.
 
