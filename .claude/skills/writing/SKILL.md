@@ -229,6 +229,78 @@ Opening paragraph, 2 to 3 sentences. No lists here.
   `:::tip Added in v1.8.0` ... `:::`.
 - `## Next Steps` is a short list of links to sibling docs.
 
+## Interlinking across the content site
+
+Treat every article as a node in the site, not a standalone page. Readers
+land on one doc from search and decide whether to keep reading the site from
+whether it points them somewhere else useful. Search engines read the same
+signal: an article whose key terms link to the other articles that cover them
+is what makes the site's internal link graph work for SEO. An article with no
+outbound links and no inbound links is dead weight in that graph, regardless
+of how good the prose is.
+
+### Where links go
+
+**Inline, in prose, at first meaningful mention.** When you name a concept,
+tool, or workflow that has its own article elsewhere on the site, link it the
+first time it appears in the body, not every time it recurs.
+
+> Use [separate clones](./git-worktrees-vs-clones) when tasks need
+> independent refs, remotes, or repository configuration.
+
+This is a real sentence doing real work. The link is not bolted on. Do not
+add a second link to the same target later in the same doc, and do not
+interrupt a sentence's flow just to fit a link in: if no natural mention
+exists, wait for the `## Next Steps` list instead of forcing one.
+
+**`## Next Steps` (or `## Related`) at the end.** A short list, 3 to 5 items,
+each a link plus a one-clause description of what the reader gets:
+
+```markdown
+## Next Steps
+
+- [What are Stacked PRs?](./stacked-prs): manage branches that depend on one another
+- [Stacked PR Workflow](/learn/workflows/git/stacked-pr): apply rebasing to a pull-request stack
+```
+
+This section is a map, not a repeat of the body. Do not just relist links
+already made in prose, add the adjacent articles a reader would want next.
+
+### Link syntax
+
+- Same directory or a near sibling: relative, no extension:
+  `[text](./git-worktrees-vs-clones)`.
+- Anywhere else on the site: absolute from the content root, no extension:
+  `[text](/learn/concepts/git/git-worktrees)`, `[text](/docs/concepts/workspaces)`.
+- Never link a bare URL or write "click here". The anchor text is the term or
+  phrase itself, exactly as it reads in the sentence.
+- Verify the target actually exists (check the file under `web/learn/` or
+  `web/docs/`, or run the audit-interlinking skill's checker) before writing
+  the path. A guessed path that is close but wrong is a broken link.
+
+### What earns a link
+
+Link a term the first time you use it if, and only if, another article on the
+site is the definitive treatment of that term. Do not link:
+
+- A word that merely resembles another doc's title in a different sense.
+- Your own doc's own subject (do not link a concept article to itself).
+- A tangential mention that is not what the sentence is actually about.
+
+Every new or revised article should end up with at least 2 to 3 in-body links
+to genuinely relevant existing articles, plus a `## Next Steps` list. If you
+cannot find that many relevant targets honestly, write fewer rather than
+padding with weak matches. A forced link reads exactly like the AI tells this
+skill already bans: decoration instead of information.
+
+### Auditing across the whole site
+
+For a bulk check across many articles (broken links, orphaned pages, articles
+that are under-linked, or finding where an article's key terms should link
+out) use the `audit-interlinking` skill. It runs a link-graph checker and
+turns the results into a worklist you still verify by reading, since keyword
+matches are candidates, not verdicts.
+
 ## Revision and de-slop pass
 
 Run this against any draft before you return it.
@@ -243,6 +315,9 @@ Run this against any draft before you return it.
    claim checks out against the source), reader appropriateness (the intended
    reader understands it at first read), and task completeness (a reader can act
    on it using only this text).
+6. Check interlinking: at least 2 to 3 in-body links to genuinely relevant
+   existing articles, a `## Next Steps` list, and every link target verified
+   to exist. See the Interlinking section above.
 
 ## Readability checker script
 
