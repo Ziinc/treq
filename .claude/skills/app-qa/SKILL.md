@@ -38,33 +38,58 @@ and treq's own focus/keyboard-shortcut handling key off that full sequence. A sp
 that drives state with `fireEvent.click` can look green while the real app is broken
 for a real user clicking the same button — it defeats the point of this skill.
 
+This extends to *setup*, not just the behavior under test: if the scenario's
+narrative includes "the user creates a workspace" (or renames one, deletes one,
+etc.) as a step, create it by clicking through the real dialog (the "Stack" button
+on the home repo header, or "Stack" on an existing workspace's header to create a
+stacked child) rather than calling `createWorkspace()` from `src/lib/api` directly.
+The API helper is still fine for *incidental background state* a spec needs but
+isn't itself testing (e.g. two throwaway workspaces just so a branch-switcher
+dropdown has something to list). `scripts/screenshot/specs/commits-tab-after-push.spec.tsx`
+is the worked example: it drives the whole "Stack" dialog (open it, type a branch
+name, submit) with `userEvent`, not the API helper, because workspace creation is
+part of the scenario being verified.
+
 ## How the harness works
 
 1. `createTestRepo()` (from `test/utils`, backed by the `treq-napi` addon) creates a
    real jj repository on disk, exactly like an integration test.
 2. `render(<Dashboard/>)` (from `test/test-utils`) mounts the real React tree in
    jsdom, with Tauri's `invoke` replaced by real Rust dispatch
-   (`test/setup.integration.ts`) — no mocked backend, no mocked ShowWorkspace,
+   (`test/setup.screenshot.ts`) — no mocked backend, no mocked ShowWorkspace,
    FileBrowser, ChangesDiffViewer, etc.
-3. `captureDocument(document, { name })` (`scripts/screenshot/capture.ts`) serializes
-   the live DOM, inlines the app's real compiled Tailwind CSS
+3. `captureDocument(document, { name, expectations })` (`scripts/screenshot/capture.ts`)
+   serializes the live DOM, inlines the app's real compiled Tailwind CSS
    (`scripts/screenshot/build-css.mjs` output), and hands the resulting static HTML to
    headless Chromium (`playwright-core`, pinned to the pre-installed browser) purely
    to rasterize it into a PNG. jsdom itself never paints a pixel — Chromium is only
-   there for the pixels.
+   there for the pixels. It also writes `<name>.json` next to the PNG recording the
+   `expectations` you passed (see step 4 below).
 
-Full background and design rationale for this harness live in the git history of
-`scripts/screenshot/` and `vitest.screenshot.config.ts` — read those files if you need
-more context than this skill gives.
+`test/setup.screenshot.ts` is a near-duplicate of `test/setup.integration.ts` with one
+difference: `test/integration/**` fails a run the moment any still-un-migrated `jj_*`
+command is invoked (an ongoing tracker for code that should call `core::*` instead).
+The screenshot harness exists to show current real behavior, debt included, so it
+only logs which `jj_*` commands fired instead of failing the spec. If driving a real
+flow hits a command the NAPI bridge has stubbed out as `not_implemented` (see the
+bucket of commands in `crates/treq-napi/src/dispatch.rs` marked "Direct jj::*
+commands"), that's a genuine gap in the test bridge, not a reason to fall back to an
+API-helper workaround — implement the missing dispatch case for real (it's almost
+always a thin call into an existing `treq_lib::jj::*` or `core::*` function; see the
+`set_workspace_target_branch`, `jj_git_fetch_background`, and `jj_check_branch_exists`
+cases in `dispatch.rs` for the pattern). That's a test-bridge-only change
+(`crates/treq-napi/`), not a production Rust change — treat touching production
+command code as a separate, bigger decision and check with the user first.
 
 ## Steps
 
 1. **Identify the behavior to verify.** From the user's ask, or from the changed
    file(s) named in the hook's `additionalContext`, work out which user-facing flow
    changed. Search `test/integration/**` and `test/*.test.tsx` for a scenario that
-   already sets up the right repo/workspace state (`createTestRepo`, `createWorkspace`,
-   `commitRepoFile`, etc.) and reuse that setup instead of inventing your own — it's
-   already proven to work against the real backend.
+   already sets up the right repo/workspace state (`createTestRepo`, `commitRepoFile`,
+   etc.) and reuse that setup instead of inventing your own — it's already proven to
+   work against the real backend. Remember the rule above: if workspace creation is
+   part of the scenario, drive it through the real UI, not `createWorkspace()`.
 
 2. **Write or extend a spec** under `scripts/screenshot/specs/<slug>.spec.tsx`. One
    spec per behavior/flow. If an existing spec already covers this flow, add capture
@@ -82,29 +107,53 @@ more context than this skill gives.
    it("captures <the behavior>", async () => {
      const { repoPath } = createTestRepo(false);
      openRepo(repoPath);
-     // ... real repo/workspace setup via test/utils + src/lib/api ...
+     // ... real repo setup via test/utils + src/lib/api; drive workspace
+     // creation/deletion/etc. through the real UI if it's part of the scenario ...
 
      const user = userEvent.setup();
      render(<Dashboard />);
 
-     await screen.findByTestId("show-workspace-header"); // or whatever signals "settled"
-     await captureDocument(document, { name: "<slug>-01-before" });
+     // Real DOM assertions -- these prove the state is correct BEFORE capturing.
+     // Separate from `expectations` below, which are about the picture, not the DOM.
+     await screen.findByTestId("show-workspace-header");
+     await captureDocument(document, {
+       name: "<slug>-01-before",
+       expectations: [
+         "Plain-English claim about what this screenshot should show visually.",
+         "A second claim, if there's more than one thing worth checking in the image.",
+       ],
+     });
 
-     // Drive the flow — ONLY user.* calls, never fireEvent.
+     // Drive the flow -- ONLY user.* calls, never fireEvent.
      await user.click(await screen.findByRole("button", { name: "..." }));
      await screen.findByText("..."); // wait for the resulting DOM change
-     await captureDocument(document, { name: "<slug>-02-after" });
+     await captureDocument(document, {
+       name: "<slug>-02-after",
+       expectations: ["What changed, stated as a visual claim about the after image."],
+     });
    }, 60000);
    ```
 
-   `scripts/screenshot/specs/workspace-branch-switch.spec.tsx` is a worked example:
-   opens the branch-switch modal via `user.click`, captures it open, clicks a branch,
-   and captures the switched state. Copy its shape for new flows.
+   `scripts/screenshot/specs/workspace-branch-switch.spec.tsx` is a worked example of
+   the userEvent + multi-step-capture shape. `commits-tab-after-push.spec.tsx` is the
+   worked example of driving workspace creation through the real "Stack" dialog. Copy
+   whichever shape fits.
 
    Give every capture a numbered, descriptive `name` — that string becomes the PNG
-   filename, so name it as `<slug>-<NN>-<what-it-shows>`.
+   (and manifest JSON) filename, so name it as `<slug>-<NN>-<what-it-shows>`.
 
-3. **Run it.**
+3. **`expectations` are for the picture, not the DOM.** `captureDocument` requires a
+   non-empty `expectations: string[]` — plain-English claims about what a viewer
+   should be able to confirm by *looking at the screenshot* (colors, layout, which
+   button is visible, what a toast says, whether a list has the right items). These
+   are not code assertions and `captureDocument` does not execute them; they're
+   written to `<name>.json` next to the PNG specifically so that step 4 has a
+   concrete, per-screenshot checklist instead of "eyeball it and hope you notice
+   something wrong." Keep the real `screen.findBy*`/`expect` calls in the spec body
+   too (still required, still what proves the DOM reached that state) — the two are
+   complementary, not a replacement for each other.
+
+4. **Run it.**
    - First run in a session, or after touching `src-tauri` / `crates/treq-napi`, or
      adding new Tailwind classes: `npm run screenshot` (rebuilds the NAPI addon,
      recompiles CSS, runs every spec — slow but complete).
@@ -113,14 +162,18 @@ more context than this skill gives.
    - If only Tailwind classes changed (no Rust change): `npm run screenshot:css` first,
      then the targeted vitest run above.
 
-4. **Look at the PNGs before saying the task is done.** They land in
-   `scripts/screenshot/.generated/<name>.png` (gitignored, regenerated each run). Read
-   each one with the Read tool (it's multimodal) and actually look — a spec whose
-   assertions pass can still render a visibly broken layout, a missing state, or wrong
-   copy. That's a real bug to fix, not a false alarm.
+5. **Verify each screenshot against its expectations before saying the task is done.**
+   For every capture: read `scripts/screenshot/.generated/<name>.json` for its
+   expectations list, then read `scripts/screenshot/.generated/<name>.png` (multimodal
+   Read) and go through the list confirming or refuting each one against what the
+   image actually shows. A spec whose `expect`/`findBy*` calls all passed can still
+   render a visibly broken layout, a missing state, or wrong copy — that's a real bug
+   to fix, not a false alarm, and the expectations checklist is what catches it
+   instead of a cursory glance.
 
-5. **Show the result.** Use SendUserFile to deliver the before/after PNGs together,
-   with a short caption naming what changed and what to look at.
+6. **Show the result.** Use SendUserFile to deliver the before/after PNGs together,
+   with a short caption naming what changed and what to look at, and call out any
+   expectation that didn't hold.
 
 ## Keep specs around
 

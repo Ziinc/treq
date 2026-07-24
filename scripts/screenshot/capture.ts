@@ -6,6 +6,14 @@
  * document, inlines the app's compiled Tailwind CSS, and hands the resulting
  * static HTML to a real headless browser (Chromium via playwright-core) just
  * to rasterize it.
+ *
+ * Every capture also carries `expectations`: plain-English claims about what
+ * the rendered image should show (not DOM/testing-library assertions -- the
+ * spec's own screen.findBy and expect calls already prove the DOM state
+ * before capture). These are written to a `<name>.json` manifest next to the
+ * PNG so an agent doing visual QA has a concrete checklist to verify against
+ * the picture -- read the PNG, then confirm or refute each expectation by
+ * looking at it.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -18,16 +26,32 @@ const CHROMIUM_EXECUTABLE =
 	"/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 
 export type CaptureOptions = {
-	/** Base file name (no extension) for the .html/.png written under .generated/ */
+	/** Base file name (no extension) for the .html/.png/.json written under .generated/ */
 	name: string;
 	viewport?: { width: number; height: number };
+	/**
+	 * Non-empty: what a viewer should be able to confirm by looking at this
+	 * screenshot, e.g. "The 'Push to remote' button is not visible in the
+	 * header" or "A green toast reading 'Pushed to remote' is shown". These
+	 * are checked visually against the PNG, not against the DOM.
+	 */
+	expectations: string[];
 };
 
 export async function captureDocument(
 	doc: Document,
 	options: CaptureOptions,
 ): Promise<string> {
-	const { name, viewport = { width: 1440, height: 900 } } = options;
+	const { name, viewport = { width: 1440, height: 900 }, expectations } =
+		options;
+
+	if (!expectations || expectations.length === 0) {
+		throw new Error(
+			`captureDocument("${name}") requires a non-empty "expectations" list -- ` +
+				"plain-English claims about what this screenshot should show, for an " +
+				"agent to verify visually. See the app-qa skill.",
+		);
+	}
 
 	if (!fs.existsSync(CSS_PATH)) {
 		throw new Error(
@@ -54,6 +78,7 @@ ${css}
 	fs.mkdirSync(GENERATED_DIR, { recursive: true });
 	const htmlPath = path.join(GENERATED_DIR, `${name}.html`);
 	const pngPath = path.join(GENERATED_DIR, `${name}.png`);
+	const manifestPath = path.join(GENERATED_DIR, `${name}.json`);
 	fs.writeFileSync(htmlPath, html);
 
 	const browser = await chromium.launch({ executablePath: CHROMIUM_EXECUTABLE });
@@ -64,6 +89,19 @@ ${css}
 	} finally {
 		await browser.close();
 	}
+
+	fs.writeFileSync(
+		manifestPath,
+		JSON.stringify(
+			{
+				name,
+				capturedAt: new Date().toISOString(),
+				expectations,
+			},
+			null,
+			2,
+		),
+	);
 
 	return pngPath;
 }

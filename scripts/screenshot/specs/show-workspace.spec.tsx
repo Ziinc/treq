@@ -29,10 +29,19 @@ it("captures the ShowWorkspace component", async () => {
 	render(<Dashboard />);
 
 	await screen.findByTestId("show-workspace-header");
+	await screen.findByText("feat/screenshot-demo");
+	await screen.findByRole("heading", { name: "Test Repository" });
 	// Let async queries triggered by the initial render (branch list, file
 	// tree, README preview, etc.) settle before snapshotting the DOM.
 	await new Promise((resolve) => setTimeout(resolve, 500));
 
-	const pngPath = await captureDocument(document, { name: "show-workspace" });
+	const pngPath = await captureDocument(document, {
+		name: "show-workspace",
+		expectations: [
+			"The header shows the home repo's default branch, with a 'Stack' button next to it.",
+			"The sidebar lists one workspace: feat/screenshot-demo.",
+			"The Code tab is active and shows the file tree (README.md at least) plus a rendered README preview with the heading 'Test Repository'.",
+		],
+	});
 	console.log(`Saved screenshot -> ${pngPath}`);
 }, 60000);
