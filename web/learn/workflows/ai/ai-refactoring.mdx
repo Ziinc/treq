@@ -16,7 +16,7 @@ This workflow pins down current behavior first, limits the scope of the change, 
 
 ## Understanding the Workflow
 
-**Refactoring** changes the internal structure of code without changing its observable behavior. A bug fix or feature belongs in a separate change, because it asks the reviewer a different question.
+**Refactoring** changes how code is built inside without changing what it does. A bug fix or a feature belongs in its own change, because it asks the reviewer a different question.
 
 <DefinitionCard
   term="Refactoring"
@@ -32,11 +32,11 @@ A **characterization test** records how the system behaves today. It gives you a
 
 {/* Diagram: Show scope definition, behavior characterization, staged structural changes, equivalence review, and regression validation. Include a stop path when coverage is insufficient. */}
 
-Keep structural changes separate from behavior changes. This keeps the diff readable and lets you revert the refactor without also reverting a feature or a fix.
+Keep structural changes apart from behavior changes. The diff stays readable, and you can undo the refactor without also undoing a feature or a fix.
 
 ## Applying It in Practice
 
-Define the transformation and its boundary:
+Write down what you are changing and where it stops:
 
 ```text
 Extract authentication logic from UserController into AuthService.
@@ -55,7 +55,7 @@ Split broad work into stages:
 4. remove obsolete structure
 5. rename and reformat to fit the new structure
 
-Run the relevant tests after every stage. Keep each diff small enough to compare control flow, data flow, and the order of side effects against the previous version.
+Run the relevant tests after every stage. Keep each diff small enough that you can compare control flow, data flow, and the order of side effects against what was there before.
 
 During review, check:
 
@@ -66,7 +66,7 @@ During review, check:
 - concurrency and resource lifetime
 - tests that changed alongside production behavior
 
-Run the full test suite, static analysis, and build before merge. Benchmark when the refactor touches a hot path you measure. A change meant to be structural can still slow things down.
+Run the full test suite, static analysis, and the build before you merge. Benchmark when the refactor touches a hot path you measure, because a change meant to be structural can still slow things down.
 
 ## Engineering Considerations
 

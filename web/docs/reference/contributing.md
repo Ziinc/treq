@@ -6,7 +6,7 @@ sidebar_position: 4
 
 _Developer documentation for working on Treq locally._
 
-Treq is split into a React interface, a Rust core runtime, and a test bridge used by integration tests. Most changes should start by identifying which layer owns the behavior, then adding the smallest test that proves the change.
+Treq splits into a React interface, a Rust core runtime, and a test bridge the integration tests use. Start any change by working out which layer owns the behavior, then write the smallest test that proves your change.
 
 ## Repository Layout
 
@@ -42,9 +42,9 @@ npm start
 
 ## Test Strategy
 
-Backend changes use test-driven development. Add a failing Rust test first, make the smallest implementation change, then rerun the test.
+Backend changes are test-first. Write a failing Rust test, make the smallest change that passes it, then run it again.
 
-Frontend integration tests should exercise the real backend through the native test bridge. Do not mock repository behavior when the feature depends on workspace state, file status, commits, or rebasing.
+Frontend integration tests should hit the real backend through the native test bridge. Do not mock repository behavior when the feature leans on workspace state, file status, commits, or rebasing.
 
 | Change type | Test location |
 |---|---|
@@ -66,17 +66,17 @@ Run `npm run build:napi` after Rust changes that integration tests depend on.
 
 ## Implementation Rules
 
-Keep command handlers thin. Validate inputs, acquire state, and delegate to `src-tauri/src/core/`.
+Keep command handlers thin. Check the input, take the state you need, and hand the work to `src-tauri/src/core/`.
 
-Prefer repository libraries over subprocess calls from Rust. Path-taking repository functions must handle missing workspace paths by returning an empty or default result where that behavior is part of the app contract.
+Call repository libraries instead of shelling out from Rust. A repository function that takes a path must cope with a workspace path that is not there, returning an empty or default result wherever the app promises that.
 
-Do not mix unrelated cleanup into feature work. Treq has several layers with different ownership boundaries, and broad refactors make regressions harder to review.
+Do not fold unrelated tidying into feature work. Treq has several layers with different owners, and a wide refactor makes a regression much harder to spot.
 
 ## Documentation Rules
 
-Docs follow the local style guide in `web/STYLE_GUIDE.md`. Write direct technical prose. Avoid marketing language. Use tables for dense reference data.
+Docs follow the style guide in `web/STYLE_GUIDE.md`. Write plain technical prose, skip the marketing language, and use tables for dense reference data.
 
-Public docs should describe supported macOS behavior unless another platform is explicitly documented. Avoid exposing implementation details that users cannot act on.
+Public docs describe macOS behavior unless another platform is spelled out. Leave out implementation details a reader cannot act on.
 
 ## Learn More
 

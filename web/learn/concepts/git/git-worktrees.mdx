@@ -17,11 +17,11 @@ A **Git worktree** is a directory where Git checks out a commit so you can edit 
   definition="A working directory associated with a Git repository, containing checked-out files plus its own HEAD and index."
 />
 
-Worktrees mean you no longer stash unfinished work just to review a branch or fix a production issue. They also give tools and coding agents running at the same time their own files to edit.
+With worktrees you stop stashing unfinished work just to review a branch or patch production. Tools and coding agents running at the same time also get their own files to edit.
 
 ## Understanding the Concept
 
-The main and linked worktrees share one object database and most refs. Each worktree gets its own `HEAD`, index, and working files. A linked worktree usually holds a `.git` file that points at its admin directory inside the repository's common Git directory.
+The main and linked worktrees share one object database and most refs. Each worktree gets its own `HEAD`, index, and working files. A linked worktree holds a `.git` file that points at its own admin directory, tucked inside the repository's common Git directory.
 
 <DefinitionCard
   term="Main Worktree"
@@ -48,7 +48,7 @@ git fetch origin
 git worktree add -b hotfix/payment ../repo-hotfix origin/main
 ```
 
-Your original directory stays on its current branch with its staged and unstaged changes intact. The new directory has its own index:
+Your first directory stays on its branch, with staged and unstaged changes untouched. The new one has an index of its own:
 
 ```bash
 git worktree list
@@ -64,7 +64,7 @@ git branch -d hotfix/payment
 
 Removing a worktree does not delete its branch. Deleting the branch stays a separate, deliberate step.
 
-For read-only inspection, use detached `HEAD` and avoid creating a branch:
+To look without changing anything, use a detached `HEAD` and skip the branch:
 
 ```bash
 git worktree add --detach ../repo-review origin/feature/payment
@@ -91,7 +91,7 @@ jj workspace forget repo-hotfix
 
 ## Engineering Considerations
 
-Use worktrees when you need several checkouts inside one trust boundary. They suit reviews, hotfixes, long test runs, and agent tasks running side by side.
+Use worktrees when you want several checkouts inside one trust boundary. They fit reviews, hotfixes, long test runs, and agent tasks running side by side.
 
 Worktrees are not separate repositories. A branch made in one shows up in the others, and a fetch updates the shared remote-tracking refs. Hooks and config apply across the whole repository, though Git lets you set some values per worktree through `extensions.worktreeConfig`.
 
@@ -99,7 +99,7 @@ Dependencies and ignored files are not shared. Each worktree may need its own `n
 
 ## Scaling and Operations
 
-Use stable naming based on a task or pull request ID:
+Name them after a task or pull request ID so the names stay stable:
 
 ```text
 ../repo-pr-1842
@@ -114,7 +114,7 @@ git worktree prune
 
 Automation has to cope with half-created worktrees and failed cleanup. Check that a branch is not already checked out before you assign it, and do not run repository maintenance while other Git processes are writing shared state.
 
-Use [separate clones](./git-worktrees-vs-clones) when tasks need independent refs, remotes, or repository configuration. Use an operating-system sandbox when they need a security boundary.
+Use [separate clones](./git-worktrees-vs-clones) when tasks need their own refs, remotes, or config. Use an OS sandbox when they need a real security boundary.
 
 ## Next Steps
 

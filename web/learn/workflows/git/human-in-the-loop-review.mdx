@@ -10,13 +10,13 @@ _Compare an agent's change with its task, give precise feedback, and keep a pers
 
 ## Introduction
 
-Agent-generated code needs review before it enters a shared branch. The reviewer checks scope, behavior, architecture, and risk. Automated checks support that decision but do not make it.
+Agent-written code needs a review before it lands on a shared branch. The reviewer checks scope, behavior, design, and risk. Automated checks feed that decision, they do not make it.
 
 This workflow keeps review focused as the agent revises its work.
 
 ## Understanding the Workflow
 
-A **review checkpoint** is a required point where a person decides whether work should continue, change, or stop.
+A **review checkpoint** is a point where a person has to decide whether the work goes on, changes, or stops.
 
 <DefinitionCard
   term="Review Checkpoint"
@@ -29,9 +29,9 @@ Review starts with three records:
 - the agent summary says what the agent believes changed
 - the diff shows what changed
 
-Disagreement between them is evidence of a scope or understanding problem.
+Where those three disagree, the agent has either drifted out of scope or misread the task.
 
-A **delta review** examines changes made since the previous review round. It confirms that feedback was addressed without rereading unchanged code.
+A **delta review** looks only at what moved since the last round. It confirms your feedback landed without making you reread code that did not change.
 
 <DefinitionCard
   term="Delta Review"
@@ -50,9 +50,9 @@ Read the task before the summary or diff. Then scan the diff at the file level:
 - Does new code duplicate an existing helper?
 - Did unrelated cleanup enter the change?
 
-Stop when the structure shows that the agent solved a different problem. Rewriting a bad implementation through comments costs more than restarting with a corrected task.
+Stop as soon as the shape of the diff tells you the agent solved a different problem. Fixing a wrong implementation through review comments costs more than starting again with a better task.
 
-Once scope is sound, trace the main behavior and important failure paths. Check authorization, data handling, resource lifetime, compatibility, and side effects where relevant. Read the tests and confirm that they fail when the implementation is wrong.
+Once the scope holds up, follow the main behavior and the failure paths that matter. Check authorization, data handling, resource lifetime, compatibility, and side effects where they apply. Read the tests, and make sure they actually fail when the code is wrong.
 
 Write feedback with a location, a concrete problem, and the required constraint. For example:
 
@@ -66,23 +66,23 @@ Send related findings together and rank correctness or security issues first. Af
 
 ## Engineering Considerations
 
-Precise feedback helps the agent revise the right code. It also creates a review record that another engineer can evaluate.
+Precise feedback points the agent at the right code. It also leaves a record another engineer can judge.
 
-Do not fix substantial agent mistakes silently. Direct edits hide whether the task or repository guidance caused the error. Small editorial changes are different, but the final diff still needs review.
+Do not quietly patch a big agent mistake yourself. Editing it directly hides whether the task or the repository guidance caused it. Small wording fixes are fine, but the final diff still needs a review.
 
-Passing tests do not prove that the task was implemented correctly. The agent can encode the same false assumption in code and tests, which is why an [AI review pass](/learn/ai-code-review) sits before human approval, not in place of it.
+Passing tests do not prove the task was done right. The agent can bake the same wrong assumption into the code and the tests, which is why an [AI review pass](/learn/ai-code-review) sits before human approval rather than instead of it.
 
-Set restart criteria before review becomes an open-ended repair session. Restart when the approach violates a core constraint, repeated revisions recreate the same defect, or the reviewer can no longer explain the current diff.
+Agree when to restart before review turns into an open-ended repair job. Start over when the approach breaks a core constraint, when the same bug keeps coming back, or when the reviewer can no longer explain what the diff does.
 
 ## Scaling and Operations
 
-Review capacity limits agent throughput. Reduce concurrent work when diffs wait too long or reviewers begin skimming.
+Review capacity is what caps agent output. Cut the number of tasks running at once when diffs sit too long or reviewers start skimming.
 
-Track review state with the task, branch, owner, risk level, and current checkpoint. Reviewing a [stack of dependent changes](/learn/concepts/git/stacked-prs) means tracking each layer separately. Assign security-sensitive or architectural changes to reviewers who know that area.
+Track review state next to the task, branch, owner, risk level, and current checkpoint. A [stack of dependent changes](/learn/concepts/git/stacked-prs) needs that tracking per layer. Send security and architecture work to reviewers who know the area.
 
-Measure revision rounds, review time, rejected changes, and defects found after merge. Use the results to improve task scope and repository instructions. Do not use them to reward high merge volume.
+Measure revision rounds, review time, rejected changes, and bugs found after merge. Use what you learn to sharpen task scope and repository instructions, not to reward whoever merges the most.
 
-Keep permissions narrow until approval. An agent that writes code does not need permission to merge or deploy it.
+Keep permissions narrow until someone approves the work. An agent that writes code has no need to merge or deploy it.
 
 ## Next Steps
 

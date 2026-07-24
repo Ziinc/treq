@@ -8,14 +8,14 @@ import DefinitionCard from "@site/src/components/DefinitionCard";
 
 ## Introduction
 
-**Human-in-the-loop development** is a way of working in which AI produces or changes code, but a person reviews the result at defined points before it moves forward. The human can approve it, reject it, or send it back with feedback.
+In **human-in-the-loop development**, AI writes or changes the code, but a person checks the result at set points before it goes any further. You can approve it, reject it, or send it back with notes.
 
 <DefinitionCard
   term="Human-in-the-Loop Development"
   definition="A development process in which people review, guide, or approve work produced by AI before it advances to the next important stage."
 />
 
-The need for review comes from how AI fails. Generated code is often syntactically valid and may pass its tests while still misunderstanding a business rule, weakening security, or conflicting with an earlier design decision. This is the [AI slop](/learn/concepts/ai-engineering/ai-assisted-software-engineering) problem that review exists to catch. A deliberate approval step catches mistakes that automated checks cannot.
+Review exists because of the way AI fails. Generated code usually compiles and often passes its tests while still getting a business rule wrong, weakening security, or cutting against a design decision made months ago. That is the [AI slop](/learn/concepts/ai-engineering/ai-assisted-software-engineering) problem. A deliberate approval step catches what automated checks miss.
 
 This article explains how the feedback loop works, where to place review checkpoints, and how to adjust oversight to the risk of the task.
 
@@ -30,18 +30,18 @@ The loop is simple: an agent produces a change, a person evaluates it, and the a
 
 {/* TODO: Add diagram showing the loop between agent work, human review, feedback, revision, and approval. */}
 
-AI and people contribute different strengths. An agent can search files, write routine code, run tests, and repeat mechanical steps quickly. A developer understands product intent, architecture, security, and the consequences of a change beyond the visible diff.
+AI and people are good at different things. An agent searches files, writes routine code, runs tests, and repeats dull steps fast. A developer knows what the product is for, how the system fits together, where the security lines are, and what a change will do beyond the diff in front of them.
 
-Reviewing generated code requires the same care as reviewing a colleague's pull request. The reviewer must understand what changed and decide whether it is safe to ship. Approval is not meaningful if it only confirms that tests passed.
+Read generated code as carefully as you would read a colleague's pull request. You have to understand what changed and decide whether it is safe to ship. An approval that only means the tests went green is worth nothing.
 
-The work should remain isolated until it is approved. A branch, Git worktree, sandbox, or separate clone lets the agent make and revise changes without affecting the shared codebase.
+Keep the work isolated until it is approved. A branch, a [Git worktree](/learn/concepts/git/git-worktrees), a sandbox, or a separate clone lets the agent write and rewrite without touching the shared codebase.
 
 <DefinitionCard
   term="Workspace Isolation"
   definition="Keeping an agent's files and changes separate from the shared codebase until a person has reviewed and accepted them."
 />
 
-The amount of oversight should match the risk. A documentation correction may need only a final diff review. A change to authentication or payments may need agreement on the plan, observation during implementation, security checks, and a detailed final review.
+Match the oversight to the risk. A docs fix may need nothing more than a look at the final diff. A change to authentication or payments may need an agreed plan, someone watching as it is built, security checks, and a close read at the end.
 
 ## Applying It in Practice
 
@@ -68,29 +68,29 @@ During review, ask:
 - Could the change affect security, privacy, or access control?
 - What behaviour is not covered by the tests?
 
-Intervene before completion when the agent is clearly following a bad approach. Early correction is cheaper than reviewing a large diff built on the wrong assumption.
+Step in before it finishes when the agent is clearly going the wrong way. Correcting early costs far less than reviewing a big diff built on a bad assumption.
 
 ## Engineering Considerations
 
-Human review keeps responsibility clear: a person, not the model, decides which code is accepted. This allows teams to use agents for implementation while retaining control over correctness, security, and design.
+Human review keeps responsibility where it belongs, with a person rather than a model. That lets a team hand implementation to agents and still own correctness, security, and design.
 
-The process only saves time when the agent's work is usually close enough to correct that review costs less than writing it. If every task needs extensive revision, use a more hands-on form of AI assistance or do the work directly.
+This only saves time while the agent's work lands close enough that reviewing it beats writing it. If every task comes back needing heavy rework, drop to a more hands-on form of AI help, or write the code yourself.
 
-Human-in-the-loop development should be the default for meaningful agent changes. Full autonomy is better reserved for narrow, reversible work with strong automated checks and a small effect if something goes wrong.
+Make this the default for any agent change that matters. Save full autonomy for narrow, reversible work that has strong automated checks and does little damage when it goes wrong.
 
-Oversight can become too strict. Requiring approval for every file read or command turns the process into manual development with extra steps. Choose checkpoints based on possible harm and uncertainty, not simply because an agent is involved.
+Oversight can also go too far. Demand approval for every file read and every command and you have manual development with extra paperwork. Put checkpoints where the harm or the uncertainty is, not everywhere an agent appears.
 
 ## Scaling and Operations
 
-Review capacity sets the limit on agent output. When agents produce more changes than people can properly inspect, approval becomes a formality. Reduce the number of concurrent tasks or narrow their size instead of asking reviewers to process changes faster.
+Review capacity is the ceiling on agent output. Once agents produce more than people can actually read, approval turns into a rubber stamp. Run fewer tasks at once, or make them smaller, instead of asking reviewers to go faster.
 
-Route work to someone who understands the affected area. A careful reviewer without the relevant domain knowledge may still miss a broken business rule or an architectural conflict.
+Send work to someone who knows the area it touches. A careful reviewer without that knowledge will still miss a broken business rule or a design conflict.
 
-Track how often changes are approved, revised, and rejected for each kind of task. This helps the team identify where lighter review is justified and where agents continue to need close supervision.
+Track how often each kind of task gets approved, revised, or rejected. That shows you where you can review more lightly and where agents still need watching.
 
 Security-sensitive changes need explicit checks for authentication, authorization, input handling, secrets, and data storage. A general [code review](/learn/ai-code-review) does not automatically cover these concerns. Keep permissions narrow and verify what the agent changed. Its summary is not a substitute for reading the diff.
 
-The goal is not to remove people from development. It is to spend human attention on the decisions where it changes the outcome.
+The point is not to take people out of development. It is to spend their attention where it actually changes the outcome.
 
 ## Next Steps
 

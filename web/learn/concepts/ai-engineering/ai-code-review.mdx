@@ -8,20 +8,20 @@ import DefinitionCard from "@site/src/components/DefinitionCard";
 
 ## Introduction
 
-**AI code review** uses a language model to inspect code changes for likely bugs, security problems, missing tests, and violations of project conventions. It can run before a human opens the diff or alongside the human review.
+**AI code review** puts a language model over a code change to look for likely bugs, security problems, missing tests, and breaks from project convention. It can run before a human opens the diff, or beside them while they read.
 
 <DefinitionCard
   term="AI Code Review"
   definition="The use of an AI model to examine code changes and report possible defects, security risks, missing tests, and departures from agreed coding practices."
 />
 
-Code review depends on limited human attention. Reviewers can spend so much time finding missing null checks or forgotten error handling that they have less time to consider the design and product behaviour. AI can perform a quick first pass over every change, but it cannot replace a reviewer who understands why the change exists. That division of labour is the basis of a [human-in-the-loop review system](/learn/ai-code-review).
+Code review runs on limited human attention. A reviewer can burn so much of it on missing null checks and forgotten error handling that little is left for the design or the product. AI can take a fast first pass over every change, but it cannot stand in for someone who knows why the change exists. Splitting the work that way is the basis of a [human-in-the-loop review system](/learn/ai-code-review).
 
 This article explains what AI review can find, what it tends to miss, and how to introduce it without filling pull requests with unhelpful comments.
 
 ## Understanding the Concept
 
-An AI reviewer receives a diff, instructions, and sometimes related files from the codebase. It compares the change with patterns learned from code and previous review examples. This works well for familiar mistakes, but less well when the answer depends on business rules, undocumented decisions, or context outside the files it can see.
+An AI reviewer gets a diff, some instructions, and sometimes the files around the change. It matches what it sees against patterns learned from code and past reviews. That works well on familiar mistakes. It works badly when the answer turns on a business rule, a decision nobody wrote down, or code it was never shown.
 
 AI review is good at finding:
 
@@ -31,7 +31,7 @@ AI review is good at finding:
 - changed behaviour without matching tests
 - duplicated code and departures from visible project patterns
 
-It is less reliable at deciding whether the feature solves the right problem, whether the design will still make sense in a year, or whether a trade-off is acceptable for the product. Those decisions still belong to people with knowledge of the system.
+It is far weaker at judging whether the feature solves the right problem, whether the design will still hold up in a year, or whether a trade-off suits the product. Those calls stay with people who know the system.
 
 <DefinitionCard
   term="False Positive"
@@ -40,11 +40,11 @@ It is less reliable at deciding whether the feature solves the right problem, wh
 
 {/* TODO: Add diagram showing code moving from author or coding agent, through AI review, then to human review and merge. */}
 
-The useful model is a sequence of filters. Tests check known behaviour, AI review looks for recognisable mistakes, and human review checks intent, design, and risks that require wider context. Passing one filter does not make the others unnecessary.
+Think of it as a row of filters. Tests catch known behaviour, AI review catches mistakes it recognises, and a human checks intent, design, and the risks that need wider context. Getting through one filter does not excuse you from the rest.
 
 ## Applying It in Practice
 
-Start with a narrow review goal. Asking an AI reviewer to find every possible improvement usually produces vague or low-value comments. Asking it to inspect changed input-handling code for security problems and missing error paths gives it a clearer job.
+Start with a narrow goal. Ask an AI reviewer for every possible improvement and you get vague, low-value comments. Ask it to check the changed input-handling code for security holes and missing error paths and it has a real job.
 
 Useful findings point to a specific line, explain the failure, and describe when it occurs. "`user.id` is read before `user` is checked for null" can be verified and fixed. "Consider better error handling" leaves the author to rediscover the issue.
 
@@ -56,32 +56,32 @@ A common pull request flow is:
 4. The author fixes or explicitly dismisses each finding.
 5. A human reviews the complete change and decides whether to approve it.
 
-When AI reviews AI-generated code, use different instructions for generation and review. A reviewer asked to look for security and correctness problems approaches the change differently from an agent asked to implement a feature. The two models can still share the same mistaken assumptions, so human review remains necessary.
+When AI reviews AI-written code, write different instructions for each. A reviewer hunting for security and correctness bugs comes at the change from somewhere else than an agent trying to ship a feature. The two can still hold the same wrong assumption, so you still need a human.
 
-For a first rollout, choose one valuable category such as unsafe input handling or missing error handling. Run it on real pull requests for a few weeks, then remove rules that produce noise before adding more.
+For a first rollout, pick one category worth having, such as unsafe input handling or missing error paths. Run it on real pull requests for a few weeks, cut the rules that only make noise, then add more.
 
 ## Engineering Considerations
 
-The benefit is earlier feedback on routine problems. Authors can fix simple issues before a human spends time on the change, while human reviewers can focus on behaviour and design.
+The gain is earlier feedback on routine problems. Authors clear the simple issues before a human spends time on the change, and the human gets to think about behaviour and design instead.
 
-The main cost is noise. If the reviewer posts too many irrelevant comments, authors learn to dismiss all of them. A small number of findings that are usually correct is more useful than a long list intended to be comprehensive.
+The main cost is noise. Post enough irrelevant comments and authors learn to wave through all of them. A few findings that are usually right beat a long list that tries to cover everything.
 
 <DefinitionCard
   term="Review Fatigue"
   definition="The loss of attention that occurs when reviewers receive so many low-value findings that they begin dismissing comments without evaluating them carefully."
 />
 
-No findings does not mean the code is correct. It only means the reviewer did not recognise a problem within the categories and context it was given. The interface and team process should avoid presenting AI review as a pass or certification.
+No findings does not mean the code is right. It means the reviewer saw nothing it recognised, inside the categories and context you handed it. Neither the interface nor the team process should dress that up as a pass.
 
-Manual use may be enough for a small team. A developer can ask for a second pass on a risky diff without installing a pull request bot or maintaining a CI integration. Automate it only when repeated use justifies the setup and tuning.
+A small team may not need to automate this at all. Anyone can ask for a second pass on a risky diff without a pull request bot or a CI integration to maintain. Automate once you are doing it often enough to be worth the setup and tuning.
 
 ## Scaling and Operations
 
-Track which findings are fixed, dismissed, or ignored. A high dismissal rate usually means the instructions are too broad, the reviewer lacks project context, or a rule is not useful for that codebase.
+Track which findings get fixed, dismissed, or ignored. A high dismissal rate usually means the instructions are too broad, the reviewer is short on project context, or a rule does not suit this codebase.
 
-Decide how AI comments affect merging. Requiring authors to resolve or explicitly dismiss each finding keeps the process clear. Sending findings to a separate dashboard usually makes them easier to ignore.
+Decide what AI comments do to a merge. Making authors resolve or explicitly dismiss each one keeps things honest. Pushing findings to a separate dashboard mostly makes them easy to ignore.
 
-Review the data policy of any external service before sending it private code. Diffs may contain proprietary logic, internal architecture, personal data, or credentials committed by mistake. Check how the provider stores prompts, retains code, and uses submitted data.
+Read the data policy of any outside service before you send it private code. A diff can carry proprietary logic, internal architecture, personal data, or a credential someone committed by mistake. Check how the provider stores prompts, how long it keeps code, and what it does with what you send.
 
 Keep human ownership explicit. The person approving the change remains responsible for understanding it, regardless of how many automated checks ran first. This matters most when a [coding agent](./coding-agents) wrote the change under review.
 
