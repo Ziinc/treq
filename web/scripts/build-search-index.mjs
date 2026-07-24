@@ -60,6 +60,15 @@ async function main() {
     const url = fileToUrl(file, base, route);
     stmt.run([title, body, url]);
   }
+
+  const skillsPath = join(webRoot, 'src', 'data', 'skills.json');
+  if (existsSync(skillsPath)) {
+    const { skills } = JSON.parse(readFileSync(skillsPath, 'utf8'));
+    for (const skill of skills) {
+      const body = [skill.description, skill.category, skill.source].filter(Boolean).join(' — ');
+      stmt.run([skill.name, body, `/skills?q=${encodeURIComponent(skill.name)}`]);
+    }
+  }
   stmt.free();
 
   db.run('VACUUM');
