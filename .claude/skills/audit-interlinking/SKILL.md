@@ -25,17 +25,27 @@ rules. This skill is about finding what to fix.
 ## The tool only finds candidates
 
 `scripts/link_audit.py` is a dependency-free static scan. It knows the link
-graph, not the content. It reports three kinds of *mechanical* fact:
+graph and corpus term statistics, not the content. It reports three kinds of
+*mechanical* fact:
 
 1. A link target does not resolve to a real doc (broken).
 2. A doc has zero inbound links from other docs, or fewer than N in-body
    links to other docs (orphan / thin).
-3. A doc's prose contains another doc's title or a defined term, but does not
-   link to it (keyword-relevancy suggestion).
+3. A doc's own most important keywords, ranked by TF-IDF across the corpus,
+   are not covered by an in-body link to whichever other doc actually owns
+   that term (keyword coverage gap).
 
-None of this is a verdict. A keyword match is not proof of relevance, and an
-existing link is not proof it still belongs. Every finding gets read and
-judged before you touch a file. Treat the report as a worklist, not a diff.
+TF-IDF (term frequency times inverse document frequency) is what makes item 3
+"important keywords" rather than just any word: it ranks a term high for a
+doc when that doc uses it often and the rest of the corpus barely does. That
+screens out words common to every article in this domain (agent, review, git)
+in favor of terms that are actually distinctive to the one doc, which is a
+reasonable proxy for the on-page keywords SEO interlinking cares about.
+
+None of this is a verdict. A high TF-IDF score is not proof the suggested
+target is the right link, and an existing link is not proof it still belongs.
+Every finding gets read and judged before you touch a file. Treat the report
+as a worklist, not a diff.
 
 ## Step 1: run the audit
 
@@ -46,10 +56,11 @@ python3 .claude/skills/audit-interlinking/scripts/link_audit.py
 Useful flags:
 
 - `--root learn=web/learn --root docs=web/docs --root blog=web/blog` to widen
-  or narrow the scan (repeatable; default is `web/learn` and `web/docs`).
+  or narrow the scan. Repeatable, defaults to `web/learn` and `web/docs`.
 - `--min-body-links N` to change the thin-doc threshold (default 2, counted
   before any `## Next Steps` / `## Related` heading).
-- `--max-suggestions N` to cap keyword-relevancy candidates per doc (default 6).
+- `--top-keywords N` to change how many of a doc's top TF-IDF terms get
+  checked for link coverage (default 8).
 - `--json` for a machine-readable version of the same report.
 
 ## Step 2: fix broken links first
@@ -104,35 +115,41 @@ A doc with fewer than the threshold of in-body links is under-linked outward,
 which is the other half of the SEO problem: it never passes link equity to
 related articles and gives readers no path onward mid-read. For each one:
 
-1. Read the doc and list its 3-5 key terms or concepts mentioned but not
-   defined in depth (candidates for "this is covered elsewhere").
-2. Check the keyword-relevancy suggestions for that same doc in the report.
-   They are the same signal, already computed.
+1. Read the doc and check its TF-IDF keyword coverage line in the report
+   (`N/M important keywords interlinked`).
+2. For each listed gap, that keyword is already the signal: the script found
+   it is one of this doc's most distinctive terms relative to the corpus.
 3. For each real match, add an in-body link at the point that term is first
    used, per the writing skill's rules. Do not force a link if the only
    candidate is a weak or tangential match. A doc with 1 genuinely relevant
    link beats a doc with 3 padded ones.
 
-## Step 6: work the keyword-relevancy suggestions
+## Step 6: work the TF-IDF keyword coverage gaps
 
 This is the direct SEO lever: an article's important keywords should link to
-the other articles that are actually about them. For each suggestion:
+the other articles that are actually about them. For each gap:
 
-1. Open the source doc at the sentence containing the keyword.
+1. Open the source doc at the sentence(s) containing the keyword.
 2. Open the suggested target doc's title, description, and opening
    paragraph.
 3. Confirm the target is genuinely what that keyword means in this context.
-   Common false positives: a generic index page matching a plain English
-   word (`"Learn"` matching the site's homepage), a word used in a different
-   sense than the target doc's subject, or a target that is tangential
-   rather than the definitive article on that term.
+   Common false positives: a single generic word that survived the corpus
+   filter anyway (a word used in a different sense than the target doc's
+   subject), a generic index page, or a target that is tangential rather than
+   the definitive article on that term. A high tfidf score means the term is
+   distinctive for the source doc, not that the suggested owner is correct:
+   the owner is picked by which other doc scores highest for that same term,
+   which is sometimes a doc that only mentions it in passing.
 4. If it holds up, add the link at that mention, not at every occurrence of
    the keyword in the doc. Once per doc per target is enough.
 5. If it does not hold up, skip it. Do not lower your bar to clear more items
    off the list.
 
-Ignore suggestions pointing at bare category index pages unless the source
-doc genuinely has nowhere more specific to point.
+Multi-word phrases ("git worktree", "human-in-the-loop development") are
+better link candidates than single common words ("agent", "review") even
+when both surface as gaps: prefer the phrase as anchor text when both point
+to the same target. Ignore gaps pointing at bare category index pages unless
+the source doc genuinely has nowhere more specific to point.
 
 ## Step 7: re-run and report
 
