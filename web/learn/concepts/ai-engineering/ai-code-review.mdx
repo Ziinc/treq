@@ -46,7 +46,7 @@ The useful model is a sequence of filters. Tests check known behaviour, AI revie
 
 Start with a narrow review goal. Asking an AI reviewer to find every possible improvement usually produces vague or low-value comments. Asking it to inspect changed input-handling code for security problems and missing error paths gives it a clearer job.
 
-Useful findings point to a specific line, explain the failure, and describe when it occurs. “`user.id` is read before `user` is checked for null” can be verified and fixed. “Consider better error handling” leaves the author to rediscover the issue.
+Useful findings point to a specific line, explain the failure, and describe when it occurs. "`user.id` is read before `user` is checked for null" can be verified and fixed. "Consider better error handling" leaves the author to rediscover the issue.
 
 A common pull request flow is:
 

@@ -8,7 +8,7 @@ import DefinitionCard from "@site/src/components/DefinitionCard";
 
 ## Introduction
 
-A **coding agent** is an AI system that can inspect a codebase, edit files, run commands, and respond to the results. You give it a goal rather than every individual step, and it works through the task until it finishes or needs help.
+A **coding agent** is an AI system that can inspect a codebase, edit files, run commands, and respond to the results. You give it a goal instead of every individual step, and it works through the task until it finishes or needs help.
 
 <DefinitionCard
   term="Coding Agent"
@@ -39,18 +39,18 @@ The underlying model may be the same one used in a chat tool. The difference is 
 | Work | Guided one response at a time | Continues through a multi-step task |
 | Mistakes | Remain in the response until copied | Can change files or run commands immediately |
 
-Agents cannot read an entire large codebase at once. They search for what appears relevant and bring a limited amount of it into the model's context. If the search misses an existing helper, an important convention, or a related code path, the agent may produce a locally reasonable change that does not fit the rest of the system.
+Agents cannot read an entire large codebase at once. They search for what appears relevant and bring a limited amount of it into the model's context. The search can miss an existing helper, an important convention, or a related code path. When it does, the agent produces a change that looks reasonable on its own but does not fit the rest of the system.
 
 <DefinitionCard
   term="Context Window"
   definition="The limited amount of instructions, code, and tool output that a model can consider at one time."
 />
 
-Narrow tasks are easier because they require less context. Clear file references and project rules help the agent find the right starting point, but it should still inspect the code rather than blindly following the prompt.
+Narrow tasks are easier because they require less context. Clear file references and project rules help the agent find the right starting point, but it should still inspect the code before acting on the prompt.
 
 ## Applying It in Practice
 
-Give the agent one clear outcome and enough context to begin. For example: “Add pagination to the user list endpoint in `api/users.py`. Reuse the helper in `utils/pagination.py`, preserve the current response shape, and add tests for the first and final pages.”
+Give the agent one clear outcome and enough context to begin. For example: "Add pagination to the user list endpoint in `api/users.py`. Reuse the helper in `utils/pagination.py`, preserve the current response shape, and add tests for the first and final pages."
 
 A capable agent will usually:
 

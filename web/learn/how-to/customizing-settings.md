@@ -10,7 +10,7 @@ Open settings with the gear icon (⚙️) in the sidebar. Settings are split int
 
 ## Repository Settings
 
-**Branch naming pattern**: Construct branch names using variables like `{name}` (intent from plan), `{user}` (git username), and `{date}` (YYYY-MM-DD). Examples: `feature/{name}`, `dev/{user}`, `bugfix/{name}-{date}`.
+**Branch naming pattern**: Construct branch names using variables like `{name}` (intent from plan), `{user}` (git username), and `{date}` (`YYYY-MM-DD`). Examples: `feature/{name}`, `dev/{user}`, `bugfix/{name}-{date}`.
 
 **Copy files**: If dependencies are already present in the repository, use this to copy specific files or directories from `.gitignore` (like `node_modules/`) to new workspaces instead of reinstalling.
 

@@ -24,7 +24,7 @@ The workspace card shows status indicators: commits ahead/behind the base branch
 
 ## Branch Naming Patterns
 
-Configure patterns in Settings → Repository → Branch Pattern. Examples: `treq/{name}` (default), `feature/{name}`, `dev/{user}/{name}`, or just `{name}` for no prefix. Available variables include `{name}` (your input), `{user}` (git username), and `{date}` (YYYY-MM-DD).
+Configure patterns in Settings → Repository → Branch Pattern. Examples: `treq/{name}` (default), `feature/{name}`, `dev/{user}/{name}`, or just `{name}` for no prefix. Available variables include `{name}` (your input), `{user}` (git username), and `{date}` (`YYYY-MM-DD`).
 
 ## Working with Remote Branches
 

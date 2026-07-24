@@ -15,13 +15,13 @@ import DefinitionCard from "@site/src/components/DefinitionCard";
   definition="The coordination of multiple AI agents, including assigning tasks, managing dependencies, isolating their work, handling failures, and collecting the results for review."
 />
 
-A single coding agent is often enough for one developer working on one task. The limits become clearer when a team wants to update many independent parts of a codebase, run several investigations at once, or use different agents for planning, implementation, testing, and review. Running more agents can shorten the wait, but only if their work is divided and combined carefully.
+A single coding agent is often enough for one developer working on one task. The limits become clearer at team scale. You start updating many independent parts of a codebase, running several investigations at once, or assigning different agents to planning, implementation, testing, and review. Running more agents can shorten the wait, but only if their work is divided and combined carefully.
 
 This article explains the common ways to coordinate agents, why each agent needs its own workspace, and when the added complexity is worthwhile.
 
 ## Understanding the Concept
 
-An orchestrator sits between a task and the agents carrying it out. It breaks the work into smaller tasks, assigns them, tracks their progress, and gathers the results. The agents do the implementation; the orchestrator manages how their work fits together.
+An orchestrator sits between a task and the agents carrying it out. It breaks the work into smaller tasks, assigns them, tracks their progress, and gathers the results. The agents do the implementation. The orchestrator manages how their work fits together.
 
 <DefinitionCard
   term="Orchestrator"
@@ -43,7 +43,7 @@ There are four common ways to organise the work:
 
 {/* TODO: Add diagram comparing sequential chain, parallel fan-out, supervisor-and-worker, and event-driven patterns. */}
 
-These patterns can be combined. A supervisor might divide a migration into independent tasks, run workers in parallel, and then pass their changes to a review agent. The important part is that the dependencies are explicit. If two tasks both depend on an unfinished change, running them at the same time will create rework rather than save time.
+These patterns can be combined. A supervisor might divide a migration into independent tasks, run workers in parallel, and then pass their changes to a review agent. The important part is that the dependencies are explicit. If two tasks both depend on an unfinished change, running them at the same time creates rework and saves nothing.
 
 Each agent also needs an isolated workspace. Two agents editing the same directory can overwrite each other's changes or leave the working tree in an unexpected state. Give every agent its own Git worktree, branch, sandbox, or clone, then review and merge each result deliberately.
 
@@ -96,7 +96,7 @@ Planning mistakes can spread widely. If a supervisor divides a task incorrectly,
 
 Ownership matters too. An orchestration system used by a team should not depend on one person knowing how it works. Document how tasks are scheduled, how failures are handled, how workspaces are cleaned up, and who is responsible when the system stops working.
 
-Permissions should be kept as narrow as possible. An agent that only updates documentation does not need deployment credentials or access to every repository. Event-driven agents also need protection from prompt injection: text in an issue, pull request, code comment, or test output may contain instructions intended to change the agent's behaviour. Treat that content as untrusted input and verify the resulting changes rather than trusting the agent's report.
+Permissions should be kept as narrow as possible. An agent that only updates documentation does not need deployment credentials or access to every repository. Event-driven agents also need protection from prompt injection: text in an issue, pull request, code comment, or test output may contain instructions intended to change the agent's behaviour. Treat that content as untrusted input and verify the resulting changes yourself. The agent's own report is not evidence.
 
 Start with one repeatable task and the simplest pattern that fits it. Measure whether the work finishes sooner, whether the results remain correct, and how much review time it requires. Add more agents only when those results justify the additional complexity.
 

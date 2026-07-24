@@ -45,7 +45,7 @@ The Graphite-style model adds tooling around that chain: create dependent branch
 
 AI-generated stacks fail when the agent treats the whole feature as one blob and someone splits the diff afterward by file count. Boundaries should follow contracts: schema before service, service before API, API before UI. Each layer should leave its base buildable and testable.
 
-Treq models the same idea as **stacked workspaces**. One workspace targets another workspace's bookmark instead of the default branch. When the lower workspace changes, Treq rebases dependents onto the new target. See [Workspaces](/docs/concepts/workspaces).
+Treq models the same idea as **stacked workspaces**. One workspace targets another workspace's bookmark instead of the default branch. When the lower workspace changes, Treq rebases dependents onto the new target, which [Workspaces](/docs/concepts/workspaces) covers in detail.
 
 ## Applying It in Practice
 

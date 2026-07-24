@@ -32,7 +32,7 @@ Once you're done, send your comments to the **Agent Terminal**. The agent picks 
 
 Open the commit history at the bottom of the review interface and click a commit to load its individual diff. Review the commit the same way you'd review a file: click a line number and leave a comment.
 
-This is useful when an agent produced a sequence of commits and you want to review each step rather than the cumulative diff. Once you're done, send your comments to the **Agent Terminal** the same way as in the file browser.
+This is useful when an agent produced a sequence of commits and you want to review each step on its own, not the cumulative diff. Once you're done, send your comments to the **Agent Terminal** the same way as in the file browser.
 
 ## Completing the Review
 

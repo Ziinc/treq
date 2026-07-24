@@ -57,7 +57,7 @@ A basic workflow is:
 
 {/* TODO: Add diagram showing review checkpoints at planning, implementation, automated checks, and merge. */}
 
-Good feedback identifies the problem and the expected behaviour. “This fails when the list is empty; preserve the existing empty response shape” gives the agent something precise to correct. Restarting with the entire original prompt wastes context and makes the next result harder to compare.
+Good feedback identifies the problem and the expected behaviour. "This fails when the list is empty. Preserve the existing empty response shape" gives the agent something precise to correct. Restarting with the entire original prompt wastes context and makes the next result harder to compare.
 
 During review, ask:
 
@@ -88,7 +88,7 @@ Route work to someone who understands the affected area. A careful reviewer with
 
 Track how often changes are approved, revised, and rejected for each kind of task. This helps the team identify where lighter review is justified and where agents continue to need close supervision.
 
-Security-sensitive changes need explicit checks for authentication, authorization, input handling, secrets, and data storage. General code review does not automatically cover these concerns. Keep permissions narrow and verify what the agent changed rather than trusting its summary.
+Security-sensitive changes need explicit checks for authentication, authorization, input handling, secrets, and data storage. General code review does not automatically cover these concerns. Keep permissions narrow and verify what the agent changed. Its summary is not a substitute for reading the diff.
 
 The goal is not to remove people from development. It is to spend human attention on the decisions where it changes the outcome.
 

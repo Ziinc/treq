@@ -26,5 +26,5 @@ Before discarding uncertain changes, create a safety net with `git stash push -m
 
 ## Best Practices
 
-Review the diff before discarding. Prefer stashing over discarding when unsure. You can always drop the stash later. Discard files individually when possible rather than all at once. Commit often so discards are less risky.
+Review the diff before discarding. Prefer stashing over discarding when unsure. You can always drop the stash later. Discard files individually when possible instead of clearing everything at once. Commit often so discards are less risky.
 
