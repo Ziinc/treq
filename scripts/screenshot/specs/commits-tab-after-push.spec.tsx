@@ -71,23 +71,14 @@ it("captures the Commits tab before and after pushing a workspace to remote", as
 	await user.click(pushButton);
 	await screen.findByText("Pushed to remote");
 
-	// Known staleness bug: Dashboard's `selectedWorkspace` is a useState
-	// snapshot that isn't re-synced when the `workspaces` query refetches
-	// after a push, so the "Push to remote" button doesn't disappear on its
-	// own even though not_on_remote flipped to false server-side. Re-selecting
-	// the workspace from the sidebar (a real, ordinary user action) picks up
-	// the fresh object and reveals the correct post-push UI. See the app-qa
-	// run notes for the underlying fix.
-	await user.click(await findSidebarBranchElement("feat/commits-tab-demo"));
-	await user.click(await screen.findByRole("tab", { name: "Commits" }));
-	await waitFor(
-		() => {
-			expect(
-				screen.queryByRole("button", { name: /push to remote/i }),
-			).not.toBeInTheDocument();
-		},
-		{ timeout: 15000 },
-	);
+	// Dashboard keeps `selectedWorkspace` synced to the `workspaces` query, so
+	// the "Push to remote" button disappears on its own once the post-push
+	// refetch lands -- no re-navigation required.
+	await waitFor(() => {
+		expect(
+			screen.queryByRole("button", { name: /push to remote/i }),
+		).not.toBeInTheDocument();
+	});
 	// Let the post-push status/toast settle before snapshotting.
 	await new Promise((resolve) => setTimeout(resolve, 500));
 
