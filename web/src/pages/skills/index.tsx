@@ -109,8 +109,7 @@ export default function SkillsPage() {
             <a href="https://github.com/anthropics/skills" target="_blank" rel="noopener noreferrer">
               Agent Skills
             </a>{' '}
-            curated from trusted sources. Open a skill to browse its files, or jump straight to the
-            source repository.
+            curated from trusted sources.
           </p>
         </div>
 
