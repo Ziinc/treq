@@ -2352,14 +2352,52 @@ pub fn jj_is_working_copy_empty(workspace_path: &str) -> Result<bool, JjError> {
     Ok(changed_files.is_empty())
 }
 
-/// Checks if working copy needs syncing with bookmark
+/// Checks if working copy needs syncing with bookmark.
+///
+/// A sync is only needed when `@` has fallen *behind* the bookmark — i.e. the
+/// bookmark tip is not an ancestor of `@`. Plain inequality is not enough: right
+/// after a commit, `@` is a fresh empty child of the bookmark, which is the
+/// normal, desired state. Treating that as "needs sync" would move `@` back onto
+/// the bookmark and discard the working-copy commit.
 pub fn jj_working_copy_needs_sync(
     workspace_path: &str,
     branch_name: &str,
 ) -> Result<bool, JjError> {
-    let bookmark_commit = jj_get_commit_id(workspace_path, branch_name)?;
-    let working_copy_commit = jj_get_commit_id(workspace_path, "@")?;
-    Ok(bookmark_commit != working_copy_commit)
+    let loaded = load_workspace_repo(workspace_path)?;
+    let bookmark_commit = resolve_commit_by_revision(&loaded, branch_name)?;
+    let working_copy_commit = resolve_commit_by_revision(&loaded, "@")?;
+    if bookmark_commit.id() == working_copy_commit.id() {
+        return Ok(false);
+    }
+    // `@` already contains the bookmark tip (e.g. an empty commit on top of it).
+    let bookmark_is_ancestor = loaded
+        .repo
+        .index()
+        .is_ancestor(bookmark_commit.id(), working_copy_commit.id())
+        .map_err(|e| JjError::IoError(format!("Failed ancestry check: {}", e)))?;
+    Ok(!bookmark_is_ancestor)
+}
+
+/// Resolves the commit a branch bookmark should point at for this workspace.
+///
+/// Returns `@` normally, but `@-` when `@` is the usual empty, undescribed
+/// working-copy commit — pointing a bookmark at that commit would push an empty
+/// commit to the remote and leave the workspace without a working-copy commit.
+pub fn jj_resolve_bookmark_tip(workspace_path: &str) -> Result<String, JjError> {
+    let wc_commit = {
+        let loaded = load_workspace_repo(workspace_path)?;
+        resolve_commit_by_revision(&loaded, "@")?
+    };
+
+    // Only a plain, single-parent, undescribed commit is a throwaway working copy.
+    if wc_commit.parent_ids().len() != 1 || !wc_commit.description().trim().is_empty() {
+        return jj_get_commit_id(workspace_path, "@");
+    }
+    if !jj_is_working_copy_empty(workspace_path)? {
+        return jj_get_commit_id(workspace_path, "@");
+    }
+
+    jj_get_commit_id(workspace_path, "@-")
 }
 
 /// Safely syncs working copy to bookmark (only if empty)

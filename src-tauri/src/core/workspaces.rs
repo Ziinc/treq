@@ -1077,7 +1077,8 @@ fn sync_home_and_workspace_for_branch(
         SyncSource::WorkspaceToHome => workspace_path_str,
     };
     let _ = jj::jj_workspace_update_stale(source_path);
-    let source_tip = jj::jj_get_commit_id(source_path, "@")
+    // Use `@-` when `@` is the empty working copy, so no empty commit gets pushed.
+    let source_tip = jj::jj_resolve_bookmark_tip(source_path)
         .map_err(|e| format!("Failed to resolve source tip: {}", e))?;
 
     let destination_path = match source {
