@@ -10,20 +10,20 @@ _Change code structure while preserving observable behavior._
 
 ## Introduction
 
-Coding agents handle broad mechanical edits such as moving modules, renaming symbols, and updating call sites. The risk is behavioral drift hidden inside a large structural diff.
+Coding agents are good at broad mechanical edits: moving modules, renaming symbols, and updating call sites. The risk is a change in behavior hidden inside a large structural diff.
 
-This workflow establishes current behavior first, limits the transformation, and verifies equivalence after each step.
+This workflow pins down current behavior first, limits the scope of the change, and checks after each step that behavior still matches.
 
 ## Understanding the Workflow
 
-**Refactoring** changes the internal structure of code without changing its observable behavior. A bug fix or feature belongs in a separate change because it has a different review question.
+**Refactoring** changes how code is built inside without changing what it does. A bug fix or a feature belongs in its own change, because it asks the reviewer a different question.
 
 <DefinitionCard
   term="Refactoring"
   definition="A change to code structure that preserves the system's observable behavior."
 />
 
-A **characterization test** records behavior that the system currently exhibits. It creates a safety net when existing tests do not cover the code being changed.
+A **characterization test** records how the system behaves today. It gives you a safety net when existing tests do not cover the code you are about to change.
 
 <DefinitionCard
   term="Characterization Test"
@@ -32,11 +32,11 @@ A **characterization test** records behavior that the system currently exhibits.
 
 {/* Diagram: Show scope definition, behavior characterization, staged structural changes, equivalence review, and regression validation. Include a stop path when coverage is insufficient. */}
 
-Keep structural changes separate from behavior changes. This makes the diff reviewable and lets you revert the refactor without reverting a feature or fix.
+Keep structural changes apart from behavior changes. The diff stays readable, and you can undo the refactor without also undoing a feature or a fix.
 
 ## Applying It in Practice
 
-Define the transformation and its boundary:
+Write down what you are changing and where it stops:
 
 ```text
 Extract authentication logic from UserController into AuthService.
@@ -45,7 +45,7 @@ Do not change authorization rules or response bodies.
 Update callers and tests only where names or imports require it.
 ```
 
-Ask the agent to identify affected interfaces, callers, side effects, and existing coverage. Add characterization tests before production edits when important behavior lacks coverage.
+Ask the agent to list the affected interfaces, callers, side effects, and existing tests. Where important behavior has no test, add characterization tests before you touch production code.
 
 Split broad work into stages:
 
@@ -53,9 +53,9 @@ Split broad work into stages:
 2. move or extract code without cleanup
 3. update callers and imports
 4. remove obsolete structure
-5. apply names or formatting that improve the new structure
+5. rename and reformat to fit the new structure
 
-Run relevant tests after every stage. Keep each diff small enough to compare control flow, data flow, and side-effect order with the previous version.
+Run the relevant tests after every stage. Keep each diff small enough that you can compare control flow, data flow, and the order of side effects against what was there before.
 
 During review, check:
 
@@ -66,27 +66,27 @@ During review, check:
 - concurrency and resource lifetime
 - tests that changed alongside production behavior
 
-Run the complete test suite, static analysis, and build before merge. Benchmark when the refactor touches a measured hot path. Structural intent does not guarantee unchanged performance.
+Run the full test suite, static analysis, and the build before you merge. Benchmark when the refactor touches a hot path you measure, because a change meant to be structural can still slow things down.
 
 ## Engineering Considerations
 
-Tests reduce risk but do not prove equivalence outside their assertions. Use type checking, static analysis, runtime traces, and targeted benchmarks where they cover different failure modes.
+Tests lower the risk, but they only prove what they assert. Add type checking, static analysis, runtime traces, and targeted benchmarks where each one catches a failure the others miss.
 
-Mechanical codemods and language-server refactors are preferable when they can express the transformation exactly. Use an agent when the change requires repository-wide context or different edits at different call sites.
+Prefer a codemod or a language-server refactor when it can express the change exactly. Use a [coding agent](/learn/concepts/ai-engineering/coding-agents) when the change needs context from the whole repository, or when call sites need different edits.
 
-Do not let the agent “clean up nearby code” during the refactor. Record useful follow-up work as separate tasks.
+Do not let the agent "clean up nearby code" during the refactor. Record useful follow-up work as separate tasks.
 
-Some test changes are necessary after moving modules or renaming interfaces. Review them separately and confirm that assertions did not weaken.
+Moving modules or renaming interfaces forces some test changes. Review those on their own and confirm no assertion got weaker.
 
 ## Scaling and Operations
 
-Sequence refactors that touch shared interfaces. Parallel agents updating the same callers create conflicts and make equivalence harder to review.
+Run refactors that touch shared interfaces one after another. [Parallel agents](/learn/parallel-coding-agents) editing the same callers create conflicts and make the diff harder to review.
 
-For large migrations, define an intermediate compatibility layer and migrate bounded groups of callers. Keep the repository buildable after each group.
+For large migrations, add a temporary shim layer and move callers in small groups. Keep the repository building after each group.
 
-Track the baseline test and benchmark results with the change. When a regression appears after merge, a standalone refactoring change is easier to revert and bisect.
+Record the baseline test and benchmark results with the change. When a regression shows up after merge, a refactor that stands alone is easier to revert and bisect.
 
-Delete temporary compatibility code under an explicit follow-up criterion. Otherwise an incremental refactor can leave two permanent paths.
+Set an explicit condition for deleting the shim layer. Without one, a staged refactor leaves two code paths in place for good.
 
 ## Next Steps
 

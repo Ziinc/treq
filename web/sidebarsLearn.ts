@@ -95,10 +95,6 @@ const sidebars: SidebarsConfig = {
       label: 'How-To',
       link: {type: 'doc', id: 'how-to/index'},
       items: [
-        'how-to/pushing-to-remote',
-        'how-to/discarding-changes',
-        'how-to/moving-files-between-workspaces',
-        'how-to/customizing-settings',
         'how-to/how-to-run-multiple-claude-code-sessions',
         'how-to/auto-rebase-ai-branches',
         'how-to/review-ai-generated-prs',

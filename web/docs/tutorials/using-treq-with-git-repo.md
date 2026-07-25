@@ -6,11 +6,11 @@ sidebar_position: 1
 
 _How to set up Treq with your Git repository and understand the relationship between the repo and Treq workspaces._
 
-Treq works with Git repositories. You select a repository, create workspaces for parallel work, and continue using Git remotes for fetch and push. You do not need to know [Jujutsu](https://jj-vcs.github.io/jj/latest/) to work with Treq.
+Treq works with Git repositories. You pick a repository, create workspaces for parallel work, and keep using Git remotes to fetch and push. You never need to know [Jujutsu](https://jj-vcs.github.io/jj/latest/) to use Treq.
 
-When you open a repository, Treq creates a `.treq/` folder for workspaces and local metadata. It also initializes colocated `.jj/` state. Both folders are added to `.gitignore` so they are never committed.
+When you open a repository, Treq adds a `.treq/` folder for workspaces and local metadata, and sets up colocated `.jj/` state beside it. Both go into `.gitignore`, so neither is ever committed.
 
-Colocation is the under-the-hood implementation. It lets Treq rebase workspace branches when targets move, which Git worktrees cannot do. Treq runs those Git and Jujutsu operations for you. Dropping to the `jj` CLI is a power-user option and is not recommended for normal use.
+Colocation is the [under-the-hood](/docs/under-the-hood) part. It lets Treq rebase [workspace](/docs/concepts/workspaces) branches when a target moves, which [Git worktrees](/learn/concepts/git/git-worktrees) cannot do. Treq runs those Git and Jujutsu commands for you, and the `jj` CLI is a power-user escape hatch rather than the normal path.
 
 ## Repository Structure
 
@@ -27,23 +27,23 @@ your-project/
 └── ...
 ```
 
-Your selected repository stays at the root. All workspaces live in `.treq/workspaces/`, each checking out a different branch while sharing the same repository history.
+Your repository stays at the root. Every workspace sits in `.treq/workspaces/`, each on a different branch but sharing the same history.
 
 ## Repository vs Workspaces
 
-The **repository** is your original directory. Use it for quick fixes, merging workspaces back, and pulling remote updates. It appears on the left side of the dashboard.
+The **repository** is your original directory. Use it for quick fixes, for merging workspaces back, and for pulling remote updates. It sits on the left of the dashboard.
 
-**Workspaces** are separate working directories linked to the same repository. Each has its own branch and independent working tree. Create workspaces for features, bug fixes, PR reviews, or testing different implementations side-by-side. They appear as cards on the right side of the dashboard.
+**Workspaces** are separate directories tied to the same repository, each with its own branch and its own working tree. Make one for a feature, a bug fix, a PR review, or to try two approaches side by side. They show up as cards on the right of the dashboard.
 
 ## Why Treq Uses Jujutsu
 
-Git remains the VCS you authenticate to remotes with and the identity of the repository you open. Jujutsu sits beside Git in colocated mode so Treq can update dependent workspace branches automatically when a target moves.
+Git is still what you authenticate to remotes with, and it is still what the repository is. Jujutsu sits beside it in colocated mode so Treq can update dependent workspace branches on its own when a target moves.
 
-That automatic rebase is the product reason for Jujutsu. Stay in Treq for workspace create, commit, stack update, merge, and sync. Use Git in the terminal when you need familiar commands against the working copy. Reserve `jj` for intentional debugging only.
+That automatic rebase is the whole reason Jujutsu is there. Stay in Treq to create workspaces, commit, update a stack, merge, and sync. Drop to Git in the terminal when you want the commands you already know. Save `jj` for deliberate debugging.
 
 ## Git Configuration
 
-Ensure your repository has a remote configured for push/pull operations and commit tracking:
+Make sure your repository has a remote set up, so push, pull, and commit tracking work:
 
 ```bash
 git remote -v
@@ -51,16 +51,16 @@ git remote -v
 git remote add origin https://github.com/user/repo.git
 ```
 
-Treq uses your system's Git authentication. Configure credential helpers for HTTPS or add SSH keys as you normally would.
+Treq uses whatever Git authentication your system already has. Set up a credential helper for HTTPS or add SSH keys the way you normally would.
 
 ## Large Repositories
 
-For repositories over 1GB, consider sparse checkout for workspaces (only checkout needed files), shallow clones (`--depth 1`), or Git LFS for large binaries. Add build artifacts and dependencies (`dist/`, `node_modules/`, `venv/`) to `.gitignore` to speed up file watching and reduce workspace sizes.
+For a repository over 1GB, consider sparse checkout so a workspace only pulls the files it needs, shallow clones with `--depth 1`, or Git LFS for large binaries. Put build output and dependencies such as `dist/`, `node_modules/`, and `venv/` in `.gitignore` to speed up file watching and keep workspaces small.
 
 ## Switching Repositories
 
-Treq works with one repository at a time. To switch, click the folder icon and select a different repository. Each repository has its own workspaces, sessions, and settings stored in its `.treq/` folder.
+Treq holds one repository at a time. To switch, click the folder icon and pick another. Each repository keeps its own workspaces, sessions, and settings in its `.treq/` folder.
 
 ## Maintenance
 
-If workspaces aren't appearing correctly, use Settings → Repository → **Rebuild Workspaces Database** to rescan `.treq/workspaces/`. Delete unused workspaces regularly to save disk space. Each duplicates your repository's files.
+If workspaces are not showing up right, use Settings → Repository → **Rebuild Workspaces Database** to rescan `.treq/workspaces/`. Delete the ones you are done with, since each holds a full copy of your files.

@@ -42,6 +42,34 @@ screens out words common to every article in this domain (agent, review, git)
 in favor of terms that are actually distinctive to the one doc, which is a
 reasonable proxy for the on-page keywords SEO interlinking cares about.
 
+### What the script already filters for you
+
+Two classes of noise are removed before you ever see the report, so do not
+spend review time re-deriving them:
+
+**Generic single words are excluded from TF-IDF.** A word like "review",
+"directory", or "approved" can score well for one doc and still make
+useless anchor text. The script drops a unigram when it is ordinary prose or
+generic technical vocabulary (the `GENERIC_UNIGRAMS` stoplist), or when it
+appears in more than `--generic-df-ratio` of the corpus (default 0.18).
+Multi-word phrases are never dropped, because "version control" and "merge
+commit" are exactly the anchors you want even when their component words are
+generic alone. The report prints how many were excluded.
+
+If a genuinely linkable term is being filtered, add it to the exception list
+in the script's comment or raise the ratio. If new noise appears in the gap
+list, add it to `GENERIC_UNIGRAMS`. The stoplist is meant to be extended as
+the corpus grows. Use `--include-generic-unigrams` to see what the filter is
+removing.
+
+**DocCardList category index pages are excluded from orphans.** A Docusaurus
+category landing page that renders `<DocCardList/>` is linked from the
+sidebar, and its card list is generated at build time, so neither edge exists
+in the Markdown link graph this script builds. Reporting those as orphans
+buries the real ones. The count of excluded pages is printed under the orphan
+list. An index page that is a true orphan, with no card list, is still
+reported.
+
 None of this is a verdict. A high TF-IDF score is not proof the suggested
 target is the right link, and an existing link is not proof it still belongs.
 Every finding gets read and judged before you touch a file. Treat the report
@@ -61,6 +89,10 @@ Useful flags:
   before any `## Next Steps` / `## Related` heading).
 - `--top-keywords N` to change how many of a doc's top TF-IDF terms get
   checked for link coverage (default 8).
+- `--generic-df-ratio F` to change the corpus frequency ceiling above which a
+  single word counts as generic (default 0.18). Set to 1.0 to disable it.
+- `--include-generic-unigrams` to switch the generic-word filter off entirely,
+  which is how you check what it is removing.
 - `--json` for a machine-readable version of the same report.
 
 ## Step 2: fix broken links first
@@ -98,7 +130,9 @@ do not leave one in "just in case."
 ## Step 4: fix orphans
 
 A doc with zero inbound links is invisible to internal PageRank flow and hard
-for readers to discover outside the sidebar. For each orphan:
+for readers to discover outside the sidebar. Category index pages that render
+`<DocCardList/>` are already excluded, so everything still listed here is a
+real content page that nothing points at. For each orphan:
 
 1. Read the doc to know its actual subject and the key terms it owns (title,
    defined terms).
@@ -133,10 +167,11 @@ the other articles that are actually about them. For each gap:
 2. Open the suggested target doc's title, description, and opening
    paragraph.
 3. Confirm the target is genuinely what that keyword means in this context.
-   Common false positives: a single generic word that survived the corpus
-   filter anyway (a word used in a different sense than the target doc's
-   subject), a generic index page, or a target that is tangential rather than
-   the definitive article on that term. A high tfidf score means the term is
+   Generic single words are filtered before scoring, so the remaining false
+   positives are mostly wrong *owners*: the term is real but the doc the
+   script picked only mentions it in passing. Also watch for a word used in a
+   different sense than the target doc's subject, a generic index page, or a
+   target that is tangential rather than the definitive article on that term. A high tfidf score means the term is
    distinctive for the source doc, not that the suggested owner is correct:
    the owner is picked by which other doc scores highest for that same term,
    which is sometimes a doc that only mentions it in passing.

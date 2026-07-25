@@ -93,7 +93,7 @@ In Treq, conflicted files appear in the workspace review UI. You can attach reso
 
 Treq reduces avoidable conflicts through workspace isolation and auto-rebase of dependent workspaces. It does not remove semantic conflicts when two tasks change the same contract. Those still need a human decision about which behavior wins.
 
-When a bookmark conflict appears after remote updates, resolve it from the bottom of the stack upward, then let dependents rebase. See [Workspaces](/docs/concepts/workspaces).
+When a bookmark conflict appears after remote updates, resolve it from the bottom of the stack upward, then let dependents rebase onto the settled base. [Workspaces](/docs/concepts/workspaces) describes how Treq tracks those dependencies.
 
 ## Common failure cases
 

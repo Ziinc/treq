@@ -6,7 +6,7 @@ sidebar_position: 1
 
 _Install Claude Code in VS Code, give it project context, and use it to build a tested TypeScript utility._
 
-This tutorial takes you through one complete coding task. You will plan the change, review the plan, let Claude edit the files, run tests, and inspect the final diff.
+This tutorial takes you through one complete coding task. You will plan the change, review the plan, let Claude edit the files, run tests, and inspect the final diff. That review loop is [human-in-the-loop development](/learn/concepts/ai-engineering/human-in-the-loop-development) in miniature.
 
 ## What You Will Build
 
@@ -35,7 +35,7 @@ If the panel does not appear, run **Developer: Reload Window** from the Command 
 
 ## Add Project Instructions
 
-Create `AGENTS.md` at the repo root. Keep shared commands and team rules here so other coding agents can use the same source.
+Create `AGENTS.md` at the repo root. Keep shared commands and team rules here so other [coding agents](/learn/concepts/ai-engineering/coding-agents) can use the same source.
 
 ```markdown
 # Project instructions

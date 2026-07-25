@@ -10,7 +10,7 @@ Download the latest version for macOS from the GitHub Releases page.
 
 [View Releases](https://github.com/Ziinc/treq/releases)
 
-Treq works with ordinary Git repositories. You do not need to install or learn [Jujutsu](https://docs.jj-vcs.dev/latest/install-and-setup/) to use it. Treq initializes colocated Jujutsu metadata itself when you open a repo, and it runs Git and Jujutsu operations under the hood.
+Treq works with ordinary Git repositories. You do not need to install or learn [Jujutsu](https://docs.jj-vcs.dev/latest/install-and-setup/) to use it. Treq initializes colocated Jujutsu metadata itself when you open a repo, and it runs Git and Jujutsu operations [under the hood](/docs/under-the-hood).
 
 :::tip[Optional: install `jj` only for power-user debugging]
 
@@ -20,9 +20,11 @@ Installing [Jujutsu (`jj`)](https://docs.jj-vcs.dev/latest/install-and-setup/) a
 
 ## Initial Setup
 
-Click **Select Repository** or the folder icon, and navigate to a Git repository, selecting the folder containing `.git`.
+Click **Select Repository** or the folder icon, and navigate to a Git repository, selecting the folder containing `.git`. [Using Treq with a Git repository](/docs/tutorials/using-treq-with-git-repo) covers what Treq writes to that folder.
 
 ## Creating Your First Workspace
+
+A [workspace](/docs/concepts/workspaces) is where each piece of parallel work lives.
 
 1. Click **New Workspace** (or press `Cmd+N`) to open the creation dialog.
 2. Fill in a plan title describing what you're working on.
