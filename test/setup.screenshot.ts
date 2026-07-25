@@ -31,10 +31,7 @@ const napi = require("../crates/treq-napi");
 
 // ── Initialize state ─────────────────────────────────────────────────────────
 
-const testDbPath = path.join(
-	os.tmpdir(),
-	`treq-screenshot-${Date.now()}.db`,
-);
+const testDbPath = path.join(os.tmpdir(), `treq-screenshot-${Date.now()}.db`);
 
 beforeAll(() => {
 	napi.initState(testDbPath);
