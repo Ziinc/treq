@@ -25,6 +25,41 @@ description: >-
   code — don't wait to be asked. If you see `additionalContext` from
   `post-edit-app-qa.sh` naming a changed file, that *is* the request.
 
+## Delegate grunt work and discovery to cheaper subagents
+
+Most of the cost of an app-qa run is search and mechanical legwork, not judgement. Push
+that to subagents on a cheaper model (`Agent` with `model: "haiku"`, or `"sonnet"` when
+the answer needs some reasoning) and keep the expensive context for the parts that
+actually need it. Run independent delegations in parallel in a single message.
+
+Good candidates — hand these off:
+
+- **Finding prior art.** Which `test/integration/**` or `test/*.test.tsx` scenario
+  already builds the repo/workspace state this spec needs; whether a spec under
+  `scripts/screenshot/specs/` already covers this flow; which spec is the closest
+  shape to copy. Use `Explore` — it's read-only and returns the conclusion instead of
+  dumping files.
+- **Locating selectors and wiring.** The `data-testid`, accessible role, or button
+  label to drive; which component renders a given piece of copy; which UI flow a
+  changed `src-tauri/` or `src/lib/` file actually backs.
+- **Tracing dispatch gaps.** When a flow hits a `not_implemented` stub, have a
+  subagent find the corresponding `treq_lib::jj::*` / `core::*` function and the
+  nearest existing `dispatch.rs` case to model the new one on.
+- **Mechanical sweeps.** Reading a batch of `<name>.json` manifests, chasing down
+  which spec produced which capture, diffing a spec against the one you're copying.
+
+Ask for the specific fact you need ("which test file creates a repo with a conflicted
+merge, and what does the setup look like") rather than "look into the test setup" —
+a subagent starts cold and pays to re-derive whatever you don't tell it.
+
+Keep these yourself — they are the skill, not the legwork:
+
+- Deciding what behavior to verify and what the `expectations` should claim.
+- Writing the spec and driving the flow with `userEvent`.
+- **Step 5 verification.** Read the PNGs yourself. The whole point is that the agent
+  shipping the change looks at the pixels; a subagent's "looks fine" is not that.
+- The final report to the user.
+
 ## Ground rule: userEvent only, never fireEvent
 
 Every interaction inside a spec must go through `@testing-library/user-event`
@@ -88,8 +123,10 @@ command code as a separate, bigger decision and check with the user first.
    changed. Search `test/integration/**` and `test/*.test.tsx` for a scenario that
    already sets up the right repo/workspace state (`createTestRepo`, `commitRepoFile`,
    etc.) and reuse that setup instead of inventing your own — it's already proven to
-   work against the real backend. Remember the rule above: if workspace creation is
-   part of the scenario, drive it through the real UI, not `createWorkspace()`.
+   work against the real backend. Delegate that search to an `Explore` subagent per the
+   section above; do the "which behavior matters" call yourself. Remember the rule
+   above: if workspace creation is part of the scenario, drive it through the real UI,
+   not `createWorkspace()`.
 
 2. **Write or extend a spec** under `scripts/screenshot/specs/<slug>.spec.tsx`. One
    spec per behavior/flow. If an existing spec already covers this flow, add capture
@@ -174,6 +211,22 @@ command code as a separate, bigger decision and check with the user first.
 6. **Show the result.** Use SendUserFile to deliver the before/after PNGs together,
    with a short caption naming what changed and what to look at, and call out any
    expectation that didn't hold.
+
+7. **Pull requests get screenshots automatically.** Don't hand-attach PNGs to a PR.
+   `.github/workflows/pr-screenshots.yml` re-runs the specs the PR touches and posts a
+   single sticky comment with an artifact link — see "How PR screenshots work" below.
+
+## How PR screenshots work
+
+`.github/workflows/pr-screenshots.yml` handles this; you don't. On every push to a PR it
+runs *only* the specs under `scripts/screenshot/specs/` that the PR's diff adds or
+modifies — that's how it shows the flows relevant to this change instead of the whole
+library — uploads the PNGs and manifests as a run artifact, and edits one sticky comment
+in place with the link and the per-capture expectations.
+
+The consequence for you: a UI change whose spec you never wrote or extended produces no
+screenshots on its PR. Following step 2 (write or extend the spec for the behavior you
+changed) is what puts them there.
 
 ## Keep specs around
 

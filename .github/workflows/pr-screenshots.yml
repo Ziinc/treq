@@ -1,0 +1,205 @@
+name: PR Screenshots
+
+# Runs the app-qa screenshot harness (scripts/screenshot/) for a PR and posts the
+# resulting PNGs as an artifact link in a single sticky comment.
+#
+# Only the flows relevant to the PR run: the spec files the diff adds or modifies,
+# not the whole scripts/screenshot/specs/ library. A UI change whose spec was never
+# written or extended therefore produces no screenshots — writing the spec is what
+# opts the flow in (see .claude/skills/app-qa/SKILL.md).
+on:
+  pull_request:
+    paths:
+      - "scripts/screenshot/specs/**"
+      - "scripts/screenshot/capture.ts"
+      - ".github/workflows/pr-screenshots.yml"
+
+# One run per PR; a new push cancels the in-flight run so the sticky comment always
+# reflects the newest commit rather than whichever run happened to finish last.
+concurrency:
+  group: pr-screenshots-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  screenshots:
+    # Fork PRs get a read-only GITHUB_TOKEN, so the comment step can't run. Skip the
+    # whole job rather than burn ~10 minutes producing an artifact nobody is told about.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    timeout-minutes: 20
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need the base commit present to diff against it.
+          fetch-depth: 0
+
+      - name: Select the specs this PR touches
+        id: select
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # Three-dot: what this PR changed relative to the merge base, so specs that
+          # only moved on main don't get pulled in. ACMR skips deletions.
+          specs=$(git diff --name-only --diff-filter=ACMR "$BASE_SHA...$HEAD_SHA" \
+            -- 'scripts/screenshot/specs/*.spec.tsx' || true)
+          echo "Selected specs:"
+          echo "${specs:-(none)}"
+          {
+            echo "specs<<EOF"
+            echo "$specs"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          if [ -z "$specs" ]; then
+            echo "any=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "any=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node.js
+        if: steps.select.outputs.any == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install Rust stable
+        if: steps.select.outputs.any == 'true'
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Install cargo-binstall
+        if: steps.select.outputs.any == 'true'
+        uses: cargo-bins/cargo-binstall@main
+
+      - name: Install system dependencies
+        if: steps.select.outputs.any == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install jj CLI
+        if: steps.select.outputs.any == 'true'
+        run: |
+          cargo binstall --strategies crate-meta-data jj-cli
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - uses: Swatinem/rust-cache@v2
+        if: steps.select.outputs.any == 'true'
+        with:
+          cache-on-failure: true
+          workspaces: "./crates/treq-napi -> target"
+
+      - name: Install dependencies
+        if: steps.select.outputs.any == 'true'
+        run: npm ci
+
+      - name: Install Chromium
+        if: steps.select.outputs.any == 'true'
+        run: |
+          # capture.ts rasterizes through playwright-core; point it at the browser
+          # playwright just downloaded instead of its hardcoded local default.
+          npx playwright-core install --with-deps chromium
+          echo "PLAYWRIGHT_CHROMIUM_PATH=$(node -e "console.log(require('playwright-core').chromium.executablePath())")" >> "$GITHUB_ENV"
+
+      - name: Build NAPI addon and CSS
+        if: steps.select.outputs.any == 'true'
+        run: |
+          npm run build:napi
+          npm run screenshot:css
+
+      - name: Capture screenshots
+        if: steps.select.outputs.any == 'true'
+        id: capture
+        env:
+          SPECS: ${{ steps.select.outputs.specs }}
+        run: |
+          set -uo pipefail
+          gen=scripts/screenshot/.generated
+          mkdir -p "$gen/_captures"
+          failed=0
+          # One vitest invocation per spec so each capture can be attributed to the
+          # flow that produced it (build-pr-comment.mjs groups the comment by flow).
+          # A spec that fails still leaves its captures behind and is reported as
+          # failed rather than silently dropped.
+          while IFS= read -r spec; do
+            [ -n "$spec" ] || continue
+            slug=$(basename "$spec" .spec.tsx)
+            find "$gen" -maxdepth 1 -name '*.png' -printf '%f\n' 2>/dev/null | sort > /tmp/before.txt
+            if ! npx vitest run --config vitest.screenshot.config.ts "$spec"; then
+              echo "::warning::screenshot spec failed: $spec"
+              touch "$gen/_captures/$slug.failed"
+              failed=1
+            fi
+            find "$gen" -maxdepth 1 -name '*.png' -printf '%f\n' 2>/dev/null | sort > /tmp/after.txt
+            comm -13 /tmp/before.txt /tmp/after.txt > "$gen/_captures/$slug.txt"
+          done <<< "$SPECS"
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
+
+      - name: Upload screenshots
+        if: steps.select.outputs.any == 'true'
+        id: artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-qa-screenshots-${{ github.event.pull_request.number }}
+          path: |
+            scripts/screenshot/.generated/*.png
+            scripts/screenshot/.generated/*.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Build comment body
+        if: steps.select.outputs.any == 'true'
+        env:
+          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/screenshot/build-pr-comment.mjs > /tmp/pr-comment.md
+
+      - name: Post or update the sticky comment
+        if: steps.select.outputs.any == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const body = fs.readFileSync('/tmp/pr-comment.md', 'utf8');
+            const marker = '<!-- app-qa-screenshots -->';
+
+            // Overwrite this workflow's previous comment instead of adding a new one,
+            // so a PR never accumulates one screenshot comment per push.
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              per_page: 100,
+            });
+            const existing = comments.find((c) => (c.body || '').includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body,
+              });
+            }
+
+      - name: Fail if a spec failed
+        if: steps.select.outputs.any == 'true' && steps.capture.outputs.failed == '1'
+        run: |
+          echo "One or more screenshot specs failed — see the sticky comment and the log above."
+          exit 1
