@@ -1,5 +1,7 @@
 .page {
   max-width: 960px;
+  width: 100%;
+  min-width: 0;
   margin: 0 auto;
   padding: 3rem 1.5rem 4rem;
 }
