@@ -27,6 +27,42 @@ description: >-
   code — don't wait to be asked. If you see `additionalContext` from
   `post-edit-app-qa.sh` naming a changed file, that *is* the request.
 
+## Delegate grunt work and discovery to cheaper subagents
+
+Most of the cost of an app-qa run is search and mechanical legwork, not judgement. Push
+that to subagents on a cheaper model (`Agent` with `model: "haiku"`, or `"sonnet"` when
+the answer needs some reasoning) and keep the expensive context for the parts that
+actually need it. Run independent delegations in parallel in a single message.
+
+Good candidates — hand these off:
+
+- **Finding prior art.** Which `test/integration/**` or `test/*.test.tsx` scenario
+  already builds the repo/workspace state this spec needs; whether a spec under
+  `scripts/screenshot/specs/` already covers this flow; which spec is the closest
+  shape to copy. Use `Explore` — it's read-only and returns the conclusion instead of
+  dumping files.
+- **Locating selectors and wiring.** The `data-testid`, accessible role, or button
+  label to drive; which component renders a given piece of copy; which UI flow a
+  changed `src-tauri/` or `src/lib/` file actually backs.
+- **Tracing dispatch gaps.** When a flow hits a `not_implemented` stub, have a
+  subagent find the corresponding `treq_lib::jj::*` / `core::*` function and the
+  nearest existing `dispatch.rs` case to model the new one on.
+- **Mechanical sweeps.** Inventorying which PNGs in `scripts/screenshot/.generated/`
+  are new or changed in this session, reading a batch of `<name>.json` manifests,
+  chasing down which spec produced which capture.
+
+Ask for the specific fact you need ("which test file creates a repo with a conflicted
+merge, and what does the setup look like") rather than "look into the test setup" —
+a subagent starts cold and pays to re-derive whatever you don't tell it.
+
+Keep these yourself — they are the skill, not the legwork:
+
+- Deciding what behavior to verify and what the `expectations` should claim.
+- Writing the spec and driving the flow with `userEvent`.
+- **Step 5 verification.** Read the PNGs yourself. The whole point is that the agent
+  shipping the change looks at the pixels; a subagent's "looks fine" is not that.
+- Curating which screenshots go on the pull request, and the final report to the user.
+
 ## Ground rule: userEvent only, never fireEvent
 
 Every interaction inside a spec must go through `@testing-library/user-event`
@@ -90,8 +126,10 @@ command code as a separate, bigger decision and check with the user first.
    changed. Search `test/integration/**` and `test/*.test.tsx` for a scenario that
    already sets up the right repo/workspace state (`createTestRepo`, `commitRepoFile`,
    etc.) and reuse that setup instead of inventing your own — it's already proven to
-   work against the real backend. Remember the rule above: if workspace creation is
-   part of the scenario, drive it through the real UI, not `createWorkspace()`.
+   work against the real backend. Delegate that search to an `Explore` subagent per the
+   section above; do the "which behavior matters" call yourself. Remember the rule
+   above: if workspace creation is part of the scenario, drive it through the real UI,
+   not `createWorkspace()`.
 
 2. **Write or extend a spec** under `scripts/screenshot/specs/<slug>.spec.tsx`. One
    spec per behavior/flow. If an existing spec already covers this flow, add capture
