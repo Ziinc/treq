@@ -110,6 +110,14 @@ it("captures the Committed section staying scoped to the workspace's own commit 
 		).not.toBeInTheDocument();
 	});
 
+	// The dropdown item's onSelect calls preventDefault() (to keep control over
+	// the async action), which also keeps the Radix menu open -- close it so the
+	// capture below shows the resulting file list, not the menu overlay.
+	await user.keyboard("{Escape}");
+	await waitFor(() => {
+		expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+	});
+
 	await waitFor(() => {
 		expect(screen.getAllByText("workspace-owned.txt").length).toBeGreaterThan(
 			0,
