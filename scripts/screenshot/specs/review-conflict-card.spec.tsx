@@ -1,7 +1,6 @@
 import * as React from "react";
 import { it } from "vitest";
 import userEvent from "@testing-library/user-event";
-import { execFileSync } from "node:child_process";
 import {
 	createTestRepo,
 	findSidebarBranchElement,
@@ -12,6 +11,7 @@ import {
 import { render, screen, within } from "../../../test/test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
 import {
+	checkAndRebaseWorkspaces,
 	createCommit,
 	createWorkspace,
 	ensureWorkspaceIndexed,
@@ -20,11 +20,11 @@ import {
 import { captureDocument } from "../capture";
 
 // The inline conflict card only appears once the backend's conflict regions
-// survive the trip to the frontend. This drives the real flow -- rebase a
-// workspace commit onto a diverged main, open the Review tab, pick the
+// survive the trip to the frontend. This drives the real flow -- treq's own
+// auto-rebase onto a diverged default branch, open the Review tab, pick the
 // conflicted file -- so the card is rendered from real jj conflict markers.
 it("captures the inline conflict card in the Review tab", async () => {
-	const { repoPath } = createTestRepo(false);
+	const { repoPath, defaultBranch } = createTestRepo(false);
 	openRepo(repoPath);
 
 	const user = userEvent.setup();
@@ -43,24 +43,11 @@ it("captures the inline conflict card in the Review tab", async () => {
 
 	writeWorkspaceFile(workspacePath, "README.md", "workspace side\n");
 	await createCommit(repoPath, workspaceId, "workspace conflicting change");
-	const workspaceChangeId = execFileSync(
-		"jj",
-		["log", "-r", "@-", "--no-graph", "-T", "change_id"],
-		{ cwd: workspacePath, encoding: "utf8" },
-	).trim();
 
 	writeWorkspaceFile(repoPath, "README.md", "main side\n");
 	await createCommit(repoPath, null, "main conflicting change");
-	const mainChangeId = execFileSync(
-		"jj",
-		["log", "-r", "@-", "--no-graph", "-T", "change_id"],
-		{ cwd: repoPath, encoding: "utf8" },
-	).trim();
 
-	execFileSync("jj", ["rebase", "-s", workspaceChangeId, "-d", mainChangeId], {
-		cwd: workspacePath,
-		encoding: "utf8",
-	});
+	await checkAndRebaseWorkspaces(repoPath, workspaceId, defaultBranch, true);
 	await ensureWorkspaceIndexed(repoPath, workspaceId, workspacePath);
 
 	render(<Dashboard />);

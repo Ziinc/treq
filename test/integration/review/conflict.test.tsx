@@ -8,6 +8,7 @@ import {
 	writeWorkspaceFile,
 } from "../../utils";
 import {
+	checkAndRebaseWorkspaces,
 	createCommit,
 	createWorkspace,
 	ensureWorkspaceIndexed,
@@ -173,7 +174,7 @@ async function setupUnresolvedConflictState(
 async function setupRebaseConflictState(
 	branchName: string,
 ): Promise<ReviewFixture> {
-	const { repoPath } = createTestRepo(false);
+	const { repoPath, defaultBranch } = createTestRepo(false);
 	openRepo(repoPath);
 
 	const workspaceId = await createWorkspace(repoPath, branchName);
@@ -188,24 +189,11 @@ async function setupRebaseConflictState(
 
 	writeWorkspaceFile(workspacePath, "README.md", "workspace side\n");
 	await createCommit(repoPath, workspaceId, "workspace conflicting change");
-	const workspaceChangeId = execFileSync(
-		"jj",
-		["log", "-r", "@-", "--no-graph", "-T", "change_id"],
-		{ cwd: workspacePath, encoding: "utf8" },
-	).trim();
 
 	writeWorkspaceFile(repoPath, "README.md", "main side\n");
 	await createCommit(repoPath, null, "main conflicting change");
-	const mainChangeId = execFileSync(
-		"jj",
-		["log", "-r", "@-", "--no-graph", "-T", "change_id"],
-		{ cwd: repoPath, encoding: "utf8" },
-	).trim();
 
-	execFileSync("jj", ["rebase", "-s", workspaceChangeId, "-d", mainChangeId], {
-		cwd: workspacePath,
-		encoding: "utf8",
-	});
+	await checkAndRebaseWorkspaces(repoPath, workspaceId, defaultBranch, true);
 	await ensureWorkspaceIndexed(repoPath, workspaceId, workspacePath);
 
 	return {
