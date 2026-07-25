@@ -4,6 +4,12 @@ import type { FileHunksData } from "../types";
 
 interface UseConflictsParams {
 	allFileHunks: Map<string, FileHunksData>;
+	/**
+	 * Hunks for committed changes. The Review tab shows committed changes by
+	 * default, and a conflict produced by a rebase lives in a committed change —
+	 * so these have to be searched too or the inline conflict card never renders.
+	 */
+	committedFileHunks?: Map<string, FileHunksData>;
 	conflictedFilesHint?: string[];
 }
 
@@ -26,6 +32,7 @@ const normalizeRegion = (
 
 export function useConflicts({
 	allFileHunks,
+	committedFileHunks,
 	conflictedFilesHint = [],
 }: UseConflictsParams) {
 	const actualConflictedFiles = useMemo(() => {
@@ -42,16 +49,31 @@ export function useConflicts({
 
 	const conflictRegionsByFile = useMemo(() => {
 		const regionsByFile = new Map<string, ConflictRegion[]>();
+		const rawRegionsFor = (
+			source: Map<string, FileHunksData> | undefined,
+			filePath: string,
+		) =>
+			source?.get(filePath)?.hunks.flatMap((h) => h.conflict_regions ?? []) ??
+			[];
+
 		for (const filePath of actualConflictedFiles) {
-			const fileHunksData = allFileHunks.get(filePath);
-			const regions =
-				fileHunksData?.hunks
-					.flatMap((hunk) => hunk.conflict_regions ?? [])
-					.map((region, idx) => normalizeRegion(filePath, region, idx)) ?? [];
+			const raw = rawRegionsFor(allFileHunks, filePath);
+			const rawRegions =
+				raw.length > 0 ? raw : rawRegionsFor(committedFileHunks, filePath);
+
+			// The backend repeats a file's regions on every one of its hunks.
+			const seen = new Set<string>();
+			const regions: ConflictRegion[] = [];
+			for (const region of rawRegions) {
+				const normalized = normalizeRegion(filePath, region, regions.length);
+				if (seen.has(normalized.id)) continue;
+				seen.add(normalized.id);
+				regions.push(normalized);
+			}
 			regionsByFile.set(filePath, regions);
 		}
 		return regionsByFile;
-	}, [actualConflictedFiles, allFileHunks]);
+	}, [actualConflictedFiles, allFileHunks, committedFileHunks]);
 
 	const conflictLineLookups = useMemo(() => {
 		const map = new Map<string, Map<number, ConflictRegion>>();
