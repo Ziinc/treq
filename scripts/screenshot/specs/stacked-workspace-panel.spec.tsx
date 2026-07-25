@@ -97,7 +97,7 @@ it("captures the stack panel and navigation to a sibling workspace", async () =>
 	await captureDocument(document, {
 		name: "stacked-workspace-panel-01-child-view",
 		expectations: [
-			`The Code tab's right sidebar shows a "Stack" panel above the Commits list, reading "1 of 2".`,
+			`In the Code tab's main column, a bordered "Stack" panel reading "1 of 2" appears below the task/prompt input box and above the "Go to file" search row and file list.`,
 			`The stack panel lists two items, top-to-bottom: "${CHILD_BRANCH}" and "${PARENT_BRANCH}".`,
 			`The "${CHILD_BRANCH}" item is visually highlighted/current (filled dot, highlighted background) and shows a green "+4" line-change count; the "${PARENT_BRANCH}" item is not highlighted and shows no line-change count.`,
 			`The header's branch name reads "${CHILD_BRANCH}".`,
@@ -118,7 +118,7 @@ it("captures the stack panel and navigation to a sibling workspace", async () =>
 		name: "stacked-workspace-panel-02-after-navigate-to-parent",
 		expectations: [
 			`The header's branch name now reads "${PARENT_BRANCH}" (navigated away from ${CHILD_BRANCH}).`,
-			"No stack panel is visible in the Code tab's right sidebar -- this workspace targets the default branch directly, so it has no workspace ancestor to show a stack for.",
+			"No stack panel is visible in the Code tab's main column -- this workspace targets the default branch directly, so it has no workspace ancestor to show a stack for.",
 		],
 	});
 }, 60000);

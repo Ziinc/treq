@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Layers2 } from "lucide-react";
+import { ArrowDown, Layers2 } from "lucide-react";
 import { memo, useMemo } from "react";
 import { listCommits, listWorkspaceStatuses, type Workspace } from "../lib/api";
 import { cn, formatFullTimestamp, formatRelativeTime } from "../lib/utils";
@@ -75,6 +75,16 @@ export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
 								onSelect={onSelectWorkspace}
 							/>
 						))}
+						<li>
+							<div className="relative z-10 flex w-full items-start gap-3 py-2 px-2 -mx-2 text-muted-foreground">
+								<div className="flex-shrink-0 mt-0.5 w-[14px] h-[14px] flex items-center justify-center">
+									<ArrowDown className="w-3.5 h-3.5" />
+								</div>
+								<div className="flex-1 min-w-0">
+									<p className="text-sm font-mono truncate">{defaultBranch}</p>
+								</div>
+							</div>
+						</li>
 					</ul>
 				</div>
 			</div>
@@ -112,9 +122,9 @@ function StackItem({ repoPath, entry, onSelect }: StackItemProps) {
 				aria-current={isCurrent ? "true" : undefined}
 				onClick={() => onSelect?.(workspace)}
 				className={cn(
-					"relative z-10 flex w-full items-start gap-3 py-2 px-2 rounded-md text-left transition-all duration-200",
+					"relative z-10 flex w-full items-start gap-3 py-2 px-2 -mx-2 rounded-md text-left transition-all duration-200",
 					isCurrent
-						? "bg-accent/50 border border-accent shadow-sm"
+						? "bg-primary/10 border border-primary/40 shadow-sm"
 						: "hover:bg-muted",
 				)}
 			>

@@ -1090,6 +1090,17 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 											workingDirectory={workingDirectory}
 											onSessionCreated={onSessionCreated}
 										/>
+										{/* Stack */}
+										{workspace && workspaceStatusData?.target != null && (
+											<div className="border rounded-lg">
+												<WorkspaceStackPanel
+													repoPath={effectiveRepoPath}
+													workspace={workspace}
+													defaultBranch={defaultTargetBranch}
+													onSelectWorkspace={onNavigateToWorkspace}
+												/>
+											</div>
+										)}
 										{/* File Search Input */}
 										<div className="flex justify-end">
 											<button
@@ -1174,29 +1185,17 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 									</div>
 								</div>
 
-								{/* RIGHT: Stack + Commit History (fixed width matching sidebar) */}
-								<div className="w-[240px] shrink-0 bg-muted/20 flex flex-col h-full overflow-hidden">
-									{workspace && workspaceStatusData?.target != null && (
-										<div className="shrink-0 border-b border-border">
-											<WorkspaceStackPanel
-												repoPath={effectiveRepoPath}
-												workspace={workspace}
-												defaultBranch={defaultTargetBranch}
-												onSelectWorkspace={onNavigateToWorkspace}
-											/>
-										</div>
-									)}
-									<div className="flex-1 min-h-0">
-										<LinearCommitHistory
-											repoPath={effectiveRepoPath}
-											workspaceId={workspace?.id ?? null}
-											onCommitClick={(changeId) => {
-												setScrollToCommitId(changeId);
-												setActiveTab("commits");
-											}}
-											onCommitsLoaded={handleCommitsLoaded}
-										/>
-									</div>
+								{/* RIGHT: Commit History (fixed width matching sidebar) */}
+								<div className="w-[240px] shrink-0 bg-muted/20">
+									<LinearCommitHistory
+										repoPath={effectiveRepoPath}
+										workspaceId={workspace?.id ?? null}
+										onCommitClick={(changeId) => {
+											setScrollToCommitId(changeId);
+											setActiveTab("commits");
+										}}
+										onCommitsLoaded={handleCommitsLoaded}
+									/>
 								</div>
 							</div>
 						)
