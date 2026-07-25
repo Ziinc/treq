@@ -110,7 +110,7 @@ it("captures the Commits tab before and after pushing a workspace to remote", as
 		name: "commits-tab-after-push-02-after-push",
 		expectations: [
 			"The 'Push to remote' button is gone from the header (only 'Merge...' and the overflow menu remain).",
-			"A green toast in the bottom-left corner reads 'Pushed to remote' / 'Changes pushed successfully'.",
+			"A toast in the bottom-left corner with a green check icon reads 'Pushed to remote' / 'Changes pushed successfully'.",
 			"Workspace commit 1 and Workspace commit 2 are still listed, unchanged from the before-push screenshot.",
 		],
 	});

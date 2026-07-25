@@ -1,5 +1,5 @@
 import * as React from "react";
-import { X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, X, XCircle } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 export type ToastType = "success" | "error" | "info" | "warning";
@@ -56,52 +56,69 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 	);
 }
 
+const toastIcons: Record<ToastType, typeof CheckCircle2> = {
+	error: XCircle,
+	info: Info,
+	success: CheckCircle2,
+	warning: AlertTriangle,
+};
+
+const toastIconStyles: Record<ToastType, string> = {
+	error: "text-destructive",
+	info: "text-primary",
+	success: "text-green-600 dark:text-green-500",
+	warning: "text-orange-500 dark:text-orange-400",
+};
+
+const toastBorderStyles: Record<ToastType, string> = {
+	error: "border-destructive/40",
+	info: "border-primary/30",
+	success: "border-green-500/30",
+	warning: "border-orange-500/30",
+};
+
 function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
-	const typeStyles = {
-		error:
-			"bg-destructive dark:bg-destructive/90 border border-destructive/30 text-destructive-foreground",
-		info: "bg-primary dark:bg-primary/90 border border-primary/30 text-primary-foreground",
-		success:
-			"bg-green-600 dark:bg-green-700 border border-green-500/30 dark:border-green-600/30 text-white",
-		warning:
-			"bg-orange-600 dark:bg-orange-700 border border-orange-500/30 dark:border-orange-600/30 text-white",
-	};
+	const Icon = toastIcons[toast.type];
 
 	return (
 		<div
+			role="status"
 			className={cn(
-				"min-w-[300px] rounded-xl py-2.5 px-4 shadow-lg animate-in slide-in-from-left",
-				typeStyles[toast.type],
+				"pointer-events-auto flex w-full min-w-[320px] max-w-sm items-start gap-3 rounded-lg border bg-popover p-4 text-popover-foreground shadow-lg animate-in slide-in-from-left",
+				toastBorderStyles[toast.type],
 			)}
 		>
-			<div className="flex items-start justify-between gap-2">
-				<div className="flex-1">
-					<div className="text-base font-medium">{toast.title}</div>
-					{toast.description && (
-						<div className="text-base opacity-90 mt-0.5">
-							{toast.description}
-						</div>
-					)}
-					{toast.action && (
-						<button
-							type="button"
-							onClick={() => {
-								toast.action?.onClick();
-								onClose();
-							}}
-							className="mt-2 text-base font-medium underline underline-offset-2 opacity-95 hover:opacity-100"
-						>
-							{toast.action.label}
-						</button>
-					)}
+			<Icon
+				className={cn("mt-0.5 h-5 w-5 shrink-0", toastIconStyles[toast.type])}
+			/>
+			<div className="flex-1 space-y-1">
+				<div className="text-sm font-semibold leading-none">
+					{toast.title}
 				</div>
-				<button
-					onClick={onClose}
-					className="text-current/70 hover:text-current hover:bg-white/20 dark:hover:bg-white/10 rounded transition-colors p-0.5"
-				>
-					<X className="w-4 h-4" />
-				</button>
+				{toast.description && (
+					<div className="text-sm text-muted-foreground">
+						{toast.description}
+					</div>
+				)}
+				{toast.action && (
+					<button
+						type="button"
+						onClick={() => {
+							toast.action?.onClick();
+							onClose();
+						}}
+						className="mt-1 text-sm font-medium text-primary underline underline-offset-2 hover:no-underline"
+					>
+						{toast.action.label}
+					</button>
+				)}
 			</div>
+			<button
+				onClick={onClose}
+				className="shrink-0 rounded-md p-1 text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+			>
+				<X className="h-4 w-4" />
+			</button>
 		</div>
 	);
 }
