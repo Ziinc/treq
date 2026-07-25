@@ -2,7 +2,11 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMockWorkspace } from "../../test/factories/workspace.factory";
 import { render, screen, waitFor } from "../../test/test-utils";
-import type { JjLogResult } from "../lib/api";
+import type {
+	JjLogResult,
+	Workspace,
+	WorkspaceSidebarStatus,
+} from "../lib/api";
 import * as api from "../lib/api";
 import { WorkspaceStackPanel } from "./WorkspaceStackPanel";
 
@@ -11,10 +15,14 @@ vi.mock("../lib/api", async () => {
 		await vi.importActual<typeof import("../lib/api")>("../lib/api");
 	return {
 		...actual,
-		getWorkspaces: vi.fn(),
+		listWorkspaceStatuses: vi.fn(),
 		listCommits: vi.fn(),
 	};
 });
+
+function asStatuses(workspaces: Workspace[]): WorkspaceSidebarStatus[] {
+	return workspaces.map((current) => ({ current, has_conflicts: false }));
+}
 
 function makeLogResult(insertions: number, deletions: number): JjLogResult {
 	return {
@@ -76,18 +84,21 @@ describe("WorkspaceStackPanel", () => {
 	});
 
 	it("renders nothing when the workspace has no workspace ancestor (stack root)", async () => {
-		vi.mocked(api.getWorkspaces).mockResolvedValue([rootWorkspace]);
+		vi.mocked(api.listWorkspaceStatuses).mockResolvedValue(
+			asStatuses([rootWorkspace]),
+		);
 		vi.mocked(api.listCommits).mockResolvedValue(makeLogResult(0, 0));
 
 		render(
 			<WorkspaceStackPanel
 				repoPath={rootWorkspace.repo_path}
 				workspace={rootWorkspace}
+				defaultBranch="main"
 			/>,
 		);
 
 		await waitFor(() => {
-			expect(api.getWorkspaces).toHaveBeenCalled();
+			expect(api.listWorkspaceStatuses).toHaveBeenCalled();
 		});
 		expect(
 			screen.queryByTestId("workspace-stack-panel"),
@@ -95,17 +106,16 @@ describe("WorkspaceStackPanel", () => {
 	});
 
 	it("shows the stack header with the current position out of the total", async () => {
-		vi.mocked(api.getWorkspaces).mockResolvedValue([
-			rootWorkspace,
-			middleWorkspace,
-			tipWorkspace,
-		]);
+		vi.mocked(api.listWorkspaceStatuses).mockResolvedValue(
+			asStatuses([rootWorkspace, middleWorkspace, tipWorkspace]),
+		);
 		vi.mocked(api.listCommits).mockResolvedValue(makeLogResult(0, 0));
 
 		render(
 			<WorkspaceStackPanel
 				repoPath={middleWorkspace.repo_path}
 				workspace={middleWorkspace}
+				defaultBranch="main"
 			/>,
 		);
 
@@ -114,17 +124,16 @@ describe("WorkspaceStackPanel", () => {
 	});
 
 	it("renders every workspace title in the stack, tip-first", async () => {
-		vi.mocked(api.getWorkspaces).mockResolvedValue([
-			rootWorkspace,
-			middleWorkspace,
-			tipWorkspace,
-		]);
+		vi.mocked(api.listWorkspaceStatuses).mockResolvedValue(
+			asStatuses([rootWorkspace, middleWorkspace, tipWorkspace]),
+		);
 		vi.mocked(api.listCommits).mockResolvedValue(makeLogResult(0, 0));
 
 		render(
 			<WorkspaceStackPanel
 				repoPath={middleWorkspace.repo_path}
 				workspace={middleWorkspace}
+				defaultBranch="main"
 			/>,
 		);
 
@@ -138,17 +147,16 @@ describe("WorkspaceStackPanel", () => {
 	});
 
 	it("marks the current workspace's stack item distinctly from the others", async () => {
-		vi.mocked(api.getWorkspaces).mockResolvedValue([
-			rootWorkspace,
-			middleWorkspace,
-			tipWorkspace,
-		]);
+		vi.mocked(api.listWorkspaceStatuses).mockResolvedValue(
+			asStatuses([rootWorkspace, middleWorkspace, tipWorkspace]),
+		);
 		vi.mocked(api.listCommits).mockResolvedValue(makeLogResult(0, 0));
 
 		render(
 			<WorkspaceStackPanel
 				repoPath={middleWorkspace.repo_path}
 				workspace={middleWorkspace}
+				defaultBranch="main"
 			/>,
 		);
 
@@ -163,11 +171,9 @@ describe("WorkspaceStackPanel", () => {
 	});
 
 	it("navigates to a different workspace when its stack item is clicked", async () => {
-		vi.mocked(api.getWorkspaces).mockResolvedValue([
-			rootWorkspace,
-			middleWorkspace,
-			tipWorkspace,
-		]);
+		vi.mocked(api.listWorkspaceStatuses).mockResolvedValue(
+			asStatuses([rootWorkspace, middleWorkspace, tipWorkspace]),
+		);
 		vi.mocked(api.listCommits).mockResolvedValue(makeLogResult(0, 0));
 		const onSelectWorkspace = vi.fn();
 		const user = userEvent.setup();
@@ -176,6 +182,7 @@ describe("WorkspaceStackPanel", () => {
 			<WorkspaceStackPanel
 				repoPath={middleWorkspace.repo_path}
 				workspace={middleWorkspace}
+				defaultBranch="main"
 				onSelectWorkspace={onSelectWorkspace}
 			/>,
 		);
@@ -189,11 +196,9 @@ describe("WorkspaceStackPanel", () => {
 	});
 
 	it("shows the number of line changes for each stacked workspace", async () => {
-		vi.mocked(api.getWorkspaces).mockResolvedValue([
-			rootWorkspace,
-			middleWorkspace,
-			tipWorkspace,
-		]);
+		vi.mocked(api.listWorkspaceStatuses).mockResolvedValue(
+			asStatuses([rootWorkspace, middleWorkspace, tipWorkspace]),
+		);
 		vi.mocked(api.listCommits).mockImplementation(
 			async (_repoPath, workspaceId) =>
 				workspaceId === tipWorkspace.id
@@ -205,6 +210,7 @@ describe("WorkspaceStackPanel", () => {
 			<WorkspaceStackPanel
 				repoPath={middleWorkspace.repo_path}
 				workspace={middleWorkspace}
+				defaultBranch="main"
 			/>,
 		);
 

@@ -233,6 +233,10 @@ export function useFileActions({
 					queryClient.invalidateQueries({
 						queryKey: ["workspace-statuses", repoPath],
 					}),
+					// The stack panel's per-workspace line-change counts.
+					queryClient.invalidateQueries({
+						queryKey: ["workspace-commits", repoPath, workspaceId ?? null],
+					}),
 				]);
 			} catch (error) {
 				addToast({

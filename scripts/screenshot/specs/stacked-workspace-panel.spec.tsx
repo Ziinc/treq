@@ -1,10 +1,14 @@
+import userEvent from "@testing-library/user-event";
 import * as React from "react";
 import { expect, it } from "vitest";
-import userEvent from "@testing-library/user-event";
-import { commitWorkspaceFile, createTestRepo, openRepo } from "../../../test/utils";
-import { render, screen, waitFor, within } from "../../../test/test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
 import { getWorkspaces } from "../../../src/lib/api";
+import { render, screen, waitFor, within } from "../../../test/test-utils";
+import {
+	commitWorkspaceFile,
+	createTestRepo,
+	openRepo,
+} from "../../../test/utils";
 import { captureDocument } from "../capture";
 
 const PARENT_BRANCH = "feat/stack-parent";
@@ -56,7 +60,9 @@ it("captures the stack panel and navigation to a sibling workspace", async () =>
 	await within(header).findByText(CHILD_BRANCH);
 
 	// Give the child workspace a real commit so the panel has line-change
-	// stats to show, not just a zeroed-out entry.
+	// stats to show, not just a zeroed-out entry. Uses the test-utils helper
+	// (incidental background state, not itself the tested behavior) like
+	// commits-tab-after-push.spec.tsx does.
 	const child = (await getWorkspaces(repoPath)).find(
 		(candidate) => candidate.branch_name === CHILD_BRANCH,
 	);
@@ -71,24 +77,29 @@ it("captures the stack panel and navigation to a sibling workspace", async () =>
 		"Add child feature file",
 	);
 
-	// Re-select the child so the workspace-commits query picks up the new
-	// commit (createTestRepo/commitWorkspaceFile happen outside the UI).
+	// The stack panel's per-workspace commit query already fired once (with
+	// zero commits) when the child workspace was first selected above, and
+	// nothing re-fetches it just by re-selecting the same workspace. Navigate
+	// to the home repo and back to fully remount the panel so it picks up the
+	// commit made above.
+	await user.click(await screen.findByTestId("home-repo-row"));
 	await user.click(await screen.findByText(CHILD_BRANCH));
 
 	const panel = await screen.findByTestId("workspace-stack-panel");
 	await within(panel).findByText(PARENT_BRANCH);
+	const childItem = within(panel)
+		.getByText(CHILD_BRANCH)
+		.closest("button") as HTMLElement;
 	await waitFor(() => {
-		expect(within(panel).getByText(PARENT_BRANCH).closest("button")).toBeTruthy();
+		expect(childItem.textContent).toMatch(/\+\d/);
 	});
-	// Let the per-item workspace-commits query resolve so diff stats render.
-	await new Promise((resolve) => setTimeout(resolve, 500));
 
 	await captureDocument(document, {
 		name: "stacked-workspace-panel-01-child-view",
 		expectations: [
 			`The Code tab's right sidebar shows a "Stack" panel above the Commits list, reading "1 of 2".`,
 			`The stack panel lists two items, top-to-bottom: "${CHILD_BRANCH}" and "${PARENT_BRANCH}".`,
-			`The "${CHILD_BRANCH}" item is visually highlighted/current (filled dot, highlighted background) and shows a green "+4" line-change count; the "${PARENT_BRANCH}" item is not highlighted.`,
+			`The "${CHILD_BRANCH}" item is visually highlighted/current (filled dot, highlighted background) and shows a green "+4" line-change count; the "${PARENT_BRANCH}" item is not highlighted and shows no line-change count.`,
 			`The header's branch name reads "${CHILD_BRANCH}".`,
 		],
 	});
@@ -97,7 +108,11 @@ it("captures the stack panel and navigation to a sibling workspace", async () =>
 	await user.click(within(panel).getByText(PARENT_BRANCH));
 	header = await screen.findByTestId("show-workspace-header");
 	await within(header).findByText(PARENT_BRANCH);
-	await new Promise((resolve) => setTimeout(resolve, 500));
+	await waitFor(() => {
+		expect(
+			screen.queryByTestId("workspace-stack-panel"),
+		).not.toBeInTheDocument();
+	});
 
 	await captureDocument(document, {
 		name: "stacked-workspace-panel-02-after-navigate-to-parent",

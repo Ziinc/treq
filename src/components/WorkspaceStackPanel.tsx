@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Layers2 } from "lucide-react";
 import { memo, useMemo } from "react";
-import { getWorkspaces, listCommits, type Workspace } from "../lib/api";
+import { listCommits, listWorkspaceStatuses, type Workspace } from "../lib/api";
 import { cn, formatFullTimestamp, formatRelativeTime } from "../lib/utils";
 import { sumWorkspaceDiffStats } from "../lib/workspace-stack";
 import {
@@ -19,6 +19,8 @@ import {
 interface WorkspaceStackPanelProps {
 	repoPath: string;
 	workspace: Workspace;
+	/** The repo's default branch name, e.g. "main" */
+	defaultBranch: string;
 	onSelectWorkspace?: (workspace: Workspace) => void;
 }
 
@@ -28,17 +30,23 @@ interface WorkspaceStackPanelProps {
  * when the given workspace isn't stacked on top of another workspace.
  */
 export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
-	({ repoPath, workspace, onSelectWorkspace }) => {
-		const { data: allWorkspaces } = useQuery({
-			queryKey: ["workspaces", repoPath],
-			queryFn: () => getWorkspaces(repoPath),
+	({ repoPath, workspace, defaultBranch, onSelectWorkspace }) => {
+		const { data: workspaceStatuses } = useQuery({
+			queryKey: ["workspace-statuses", repoPath],
+			queryFn: () => listWorkspaceStatuses(repoPath),
 			enabled: Boolean(repoPath),
 		});
 
 		const stack = useMemo(() => {
-			if (!allWorkspaces) return null;
+			if (!workspaceStatuses) return null;
+			// A workspace record can exist for the repo's own default branch
+			// (surfaced in the sidebar for target-branch bookkeeping). It isn't
+			// a real stacked workspace, so it must not count as an ancestor.
+			const allWorkspaces = workspaceStatuses
+				.map((status) => status.current)
+				.filter((ws) => ws.branch_name !== defaultBranch);
 			return getWorkspaceStack(allWorkspaces, workspace.id);
-		}, [allWorkspaces, workspace.id]);
+		}, [workspaceStatuses, workspace.id, defaultBranch]);
 
 		if (!stack) return null;
 

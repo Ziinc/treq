@@ -1181,6 +1181,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 											<WorkspaceStackPanel
 												repoPath={effectiveRepoPath}
 												workspace={workspace}
+												defaultBranch={defaultTargetBranch}
 												onSelectWorkspace={onNavigateToWorkspace}
 											/>
 										</div>
