@@ -1034,6 +1034,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 									onOpenMergePreview={handleOpenMergePreview}
 									onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
 									onCreateStackedWorkspace={handleCreateStackedWorkspace}
+									onNavigateToWorkspace={handleSelectWorkspace}
 									onMoveCommitToNewWorkspace={(commit, workspace) => {
 										const firstLine =
 											commit.description.split("\n")[0] || undefined;
