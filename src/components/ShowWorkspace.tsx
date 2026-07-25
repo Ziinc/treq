@@ -1539,6 +1539,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 											size="sm"
 											className="px-1"
 											disabled={!!actionPending}
+											data-testid="workspace-more-actions-trigger"
 										>
 											<MoreVertical className="w-4 h-4" />
 										</Button>
