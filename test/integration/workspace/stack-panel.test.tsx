@@ -20,10 +20,10 @@ describe("ShowWorkspace - stack panel", () => {
 		user = userEvent.setup();
 	});
 
-	// Sets childBranch's workspace target to parentBranch via the real header
-	// UI flow. set_workspace_target_branch isn't exposed through the NAPI test
-	// bindings, so this drives it the same way header.test.tsx does.
-	async function stackOnto(childBranch: string, parentBranch: string) {
+	async function stackChildOntoParentViaHeaderUi(
+		childBranch: string,
+		parentBranch: string,
+	) {
 		await user.click(await findSidebarBranchElement(childBranch));
 
 		let targetBtn: HTMLButtonElement;
@@ -46,14 +46,11 @@ describe("ShowWorkspace - stack panel", () => {
 		await createWorkspace(repoPath, "feat/alpha");
 		render(<Dashboard />);
 
-		// Main repository view (no workspace selected yet)
 		await screen.findByText("Go to file");
 		expect(
 			screen.queryByTestId("workspace-stack-panel"),
 		).not.toBeInTheDocument();
 
-		// feat/alpha targets the default branch directly - it has no
-		// workspace ancestor, so it should not show the stack panel either.
 		await user.click(await findSidebarBranchElement("feat/alpha"));
 		await screen.findByText("Go to file");
 		await waitFor(() => {
@@ -68,7 +65,7 @@ describe("ShowWorkspace - stack panel", () => {
 		await createWorkspace(repoPath, "feat/beta");
 		render(<Dashboard />);
 
-		await stackOnto("feat/beta", "feat/alpha");
+		await stackChildOntoParentViaHeaderUi("feat/beta", "feat/alpha");
 
 		const panel = await screen.findByTestId("workspace-stack-panel");
 		expect(within(panel).getByText("1 of 2")).toBeTruthy();
@@ -96,7 +93,7 @@ describe("ShowWorkspace - stack panel", () => {
 		);
 
 		render(<Dashboard />);
-		await stackOnto("feat/beta", "feat/alpha");
+		await stackChildOntoParentViaHeaderUi("feat/beta", "feat/alpha");
 
 		const panel = await screen.findByTestId("workspace-stack-panel");
 		const betaItem = within(panel)
