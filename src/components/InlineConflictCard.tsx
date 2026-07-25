@@ -5,7 +5,11 @@ import {
 	useMemo,
 	useRef,
 } from "react";
-import type { ConflictRegion } from "../lib/api";
+import type {
+	ConflictLineRole,
+	ConflictRegion,
+	ConflictStyle,
+} from "../lib/api";
 import type { ConflictComment, DiffSearchData } from "./ChangesDiffViewer";
 import { Button } from "./ui/button";
 import { highlightInHtml } from "../lib/text-search";
@@ -44,13 +48,42 @@ interface InlineConflictCardProps {
 	registerFileRef?: (el: HTMLDivElement | null) => void;
 }
 
-const getConflictLineBackground = (
-	role: ConflictRegion["lines"][number]["role"],
-): string => {
+const getConflictLineBackground = (role: ConflictLineRole): string => {
 	if (role === "left") return "bg-red-500/20";
 	if (role === "right") return "bg-emerald-500/20";
 	if (role === "base") return "bg-amber-500/20";
 	return "";
+};
+
+/**
+ * Marker styles whose sections map one-to-one onto side #1 / base / side #2.
+ * jj's own `diff` and `snapshot` markers describe themselves in the marker text
+ * (and `%%%%%%%` opens a diff, not a side), so they are left unlabelled.
+ */
+const SIDE_LABELLED_STYLES: ReadonlySet<ConflictStyle> = new Set([
+	"git_merge",
+	"git_diff3",
+	"jj_git_diff3",
+]);
+
+const getSectionLabel = (
+	line: ConflictRegion["lines"][number],
+	markerStyle: ConflictStyle | undefined,
+): string | null => {
+	// `base` is also the role of the base section's content lines; only the
+	// marker that opens a section gets the badge.
+	if (line.kind !== "marker") return null;
+	if (!markerStyle || !SIDE_LABELLED_STYLES.has(markerStyle)) return null;
+	if (line.role === "start") return "Side #1";
+	if (line.role === "base") return "Base";
+	if (line.role === "separator") return "Side #2";
+	return null;
+};
+
+const SECTION_LABEL_CLASSES: Record<string, string> = {
+	"Side #1": "bg-red-500/20 text-red-700 dark:text-red-300",
+	Base: "bg-amber-500/20 text-amber-700 dark:text-amber-300",
+	"Side #2": "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300",
 };
 
 export const InlineConflictCard = ({
@@ -106,8 +139,18 @@ export const InlineConflictCard = ({
 	};
 
 	return (
-		<div ref={cardRef} className={className}>
-			<div className="p-0 relative">
+		<div ref={cardRef} className={className} data-conflict-card={region.id}>
+			<div className="flex items-center gap-2 text-xs text-muted-foreground">
+				<span className="font-medium text-destructive">
+					{region.total_conflicts > 0
+						? `Conflict ${region.conflict_number} of ${region.total_conflicts}`
+						: `Conflict ${region.conflict_number}`}
+				</span>
+				<span>
+					lines {region.start_line}–{region.end_line}
+				</span>
+			</div>
+			<div className="p-0">
 				<pre className="text-sm font-mono overflow-x-auto bg-muted/30 p-3 rounded whitespace-pre-wrap break-all">
 					{lines.map((line, idx) => {
 						const isMarker = line.kind === "marker";
@@ -136,12 +179,26 @@ export const InlineConflictCard = ({
 								).html
 							: null;
 
+						const sectionLabel = getSectionLabel(line, region.marker_style);
+
 						return (
 							<div
 								key={idx}
 								data-search-id={conflictSearchKey}
+								data-conflict-line-role={line.role}
 								className={cn(isMarker ? "text-muted-foreground" : "", bgClass)}
 							>
+								{sectionLabel && (
+									<span
+										data-conflict-section-label={sectionLabel}
+										className={cn(
+											"mr-2 rounded px-1.5 py-0.5 text-xs font-sans font-medium",
+											SECTION_LABEL_CLASSES[sectionLabel],
+										)}
+									>
+										{sectionLabel}
+									</span>
+								)}
 								{lineHtml ? (
 									<span dangerouslySetInnerHTML={{ __html: lineHtml }} />
 								) : (
@@ -151,7 +208,9 @@ export const InlineConflictCard = ({
 						);
 					})}
 				</pre>
-				<div className="mt-2 flex justify-end absolute right-3 bottom-3">
+				{/* In flow, not overlaid: absolute positioning covered the last
+				    lines of the conflict. */}
+				<div className="mt-2 flex justify-end">
 					<Button
 						variant="secondary"
 						size="sm"

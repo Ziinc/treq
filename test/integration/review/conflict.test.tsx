@@ -170,6 +170,53 @@ async function setupUnresolvedConflictState(
 	};
 }
 
+async function setupRebaseConflictState(
+	branchName: string,
+): Promise<ReviewFixture> {
+	const { repoPath } = createTestRepo(false);
+	openRepo(repoPath);
+
+	const workspaceId = await createWorkspace(repoPath, branchName);
+	const workspace = (await getWorkspaces(repoPath)).find(
+		(w) => w.id === workspaceId,
+	);
+	if (!workspace) throw new Error("Workspace not found");
+	const workspacePath = resolveWorkspacePath(
+		repoPath,
+		workspace.workspace_path,
+	);
+
+	writeWorkspaceFile(workspacePath, "README.md", "workspace side\n");
+	await createCommit(repoPath, workspaceId, "workspace conflicting change");
+	const workspaceChangeId = execFileSync(
+		"jj",
+		["log", "-r", "@-", "--no-graph", "-T", "change_id"],
+		{ cwd: workspacePath, encoding: "utf8" },
+	).trim();
+
+	writeWorkspaceFile(repoPath, "README.md", "main side\n");
+	await createCommit(repoPath, null, "main conflicting change");
+	const mainChangeId = execFileSync(
+		"jj",
+		["log", "-r", "@-", "--no-graph", "-T", "change_id"],
+		{ cwd: repoPath, encoding: "utf8" },
+	).trim();
+
+	execFileSync("jj", ["rebase", "-s", workspaceChangeId, "-d", mainChangeId], {
+		cwd: workspacePath,
+		encoding: "utf8",
+	});
+	await ensureWorkspaceIndexed(repoPath, workspaceId, workspacePath);
+
+	return {
+		repoPath,
+		branchName,
+		workspaceId,
+		workspacePath,
+		conflictFile: "README.md",
+	};
+}
+
 describe("Review - conflict rendering contract", () => {
 	let user: ReturnType<typeof userEvent.setup>;
 
@@ -265,6 +312,36 @@ describe("Review - conflict rendering contract", () => {
 		});
 		expect(screen.queryByText("Conflict 1 of")).not.toBeInTheDocument();
 		getHunksSpy.mockRestore();
+	});
+
+	it("rebase conflict state: renders an inline conflict card with base and both sides", async () => {
+		const fixture = await setupRebaseConflictState("feat/conflict-card");
+
+		render(<Dashboard />);
+		await screen.findByTestId(
+			`workspace-conflict-indicator-${fixture.workspaceId}`,
+		);
+		await navigateToReviewTab(user, fixture.branchName);
+		await clickFileInSection(user, "Conflicts", "README.md");
+
+		const card = await screen.findByText(/^Conflict 1 of 1$/);
+		const cardRoot = card.closest("[data-conflict-card]");
+		expect(cardRoot).not.toBeNull();
+
+		const roleOf = (text: string) =>
+			within(cardRoot as HTMLElement)
+				.getByText(text)
+				.closest("[data-conflict-line-role]")
+				?.getAttribute("data-conflict-line-role");
+		expect(roleOf("main side")).toBe("left");
+		expect(roleOf("# Test Repository")).toBe("base");
+		expect(roleOf("workspace side")).toBe("right");
+
+		expect(
+			within(cardRoot as HTMLElement)
+				.getAllByText(/^Side #1$|^Base$|^Side #2$/)
+				.map((el) => el.textContent),
+		).toEqual(["Side #1", "Base", "Side #2"]);
 	});
 
 	it("conflicted files suppress line-comment controls while non-conflicted files keep them", async () => {
