@@ -12,9 +12,7 @@ description: >-
   src-tauri/src/commands/** and src-tauri/src/core/** that back a UI flow. Do this
   before telling the user the change is done. A PostToolUse hook
   (.claude/hooks/post-edit-app-qa.sh) injects a reminder for exactly this case — treat
-  that reminder as the trigger to run this skill, not just a suggestion. Also use when
-  a pull request is being opened for work that generated screenshots in this session,
-  to pick which ones belong in the PR body and how to attach them.
+  that reminder as the trigger to run this skill, not just a suggestion.
 ---
 
 # App QA (screenshot-verified behavior checks)
@@ -47,9 +45,8 @@ Good candidates — hand these off:
 - **Tracing dispatch gaps.** When a flow hits a `not_implemented` stub, have a
   subagent find the corresponding `treq_lib::jj::*` / `core::*` function and the
   nearest existing `dispatch.rs` case to model the new one on.
-- **Mechanical sweeps.** Inventorying which PNGs in `scripts/screenshot/.generated/`
-  are new or changed in this session, reading a batch of `<name>.json` manifests,
-  chasing down which spec produced which capture.
+- **Mechanical sweeps.** Reading a batch of `<name>.json` manifests, chasing down
+  which spec produced which capture, diffing a spec against the one you're copying.
 
 Ask for the specific fact you need ("which test file creates a repo with a conflicted
 merge, and what does the setup look like") rather than "look into the test setup" —
@@ -61,7 +58,7 @@ Keep these yourself — they are the skill, not the legwork:
 - Writing the spec and driving the flow with `userEvent`.
 - **Step 5 verification.** Read the PNGs yourself. The whole point is that the agent
   shipping the change looks at the pixels; a subagent's "looks fine" is not that.
-- Curating which screenshots go on the pull request, and the final report to the user.
+- The final report to the user.
 
 ## Ground rule: userEvent only, never fireEvent
 
@@ -215,72 +212,21 @@ command code as a separate, bigger decision and check with the user first.
    with a short caption naming what changed and what to look at, and call out any
    expectation that didn't hold.
 
-7. **If a pull request is created for this work, attach the screenshots to it.** See
-   the next section — this is part of the task, not an optional extra.
+7. **Pull requests get screenshots automatically.** Don't hand-attach PNGs to a PR.
+   `.github/workflows/pr-screenshots.yml` re-runs the specs the PR touches and posts a
+   single sticky comment with an artifact link — see "How PR screenshots work" below.
 
-## Attaching screenshots to a pull request
+## How PR screenshots work
 
-If this session generated new screenshots *and* a pull request is opened for the same
-work (whether you open it or the user asks for one), the PR body must carry those
-screenshots. Applies both when the PR is created after the QA run and when QA happens
-on a branch that already has a PR — in the latter case, update the existing body.
+`.github/workflows/pr-screenshots.yml` handles this; you don't. On every push to a PR it
+runs *only* the specs under `scripts/screenshot/specs/` that the PR's diff adds or
+modifies — that's how it shows the flows relevant to this change instead of the whole
+library — uploads the PNGs and manifests as a run artifact, and edits one sticky comment
+in place with the link and the per-capture expectations.
 
-### Which screenshots go in
-
-Only PNGs that are **new or changed in this agent session**. The
-`scripts/screenshot/specs/` library accumulates captures from earlier work; a spec run
-that reproduces an unchanged image from a previous session is not part of this PR's
-story and stays out. If a run regenerated an existing capture and the image genuinely
-changed because of this session's change, that counts as new.
-
-From that set, include only the frames that show the **specific fix or feature** the PR
-is about — the sequence that ends on the desired end result, with the fix visible in and
-proven by the spec that produced them. Concretely:
-
-- **Exclude setup screenshots.** Captures of preconditions — the repo just opened, an
-  empty workspace list, a dialog mid-scaffold before the relevant interaction, a fixture
-  being built up — are there so the spec can reach the interesting state. They are not
-  evidence of anything and do not belong in the PR.
-- **Exclude non-relevant screenshots.** A spec that captures six frames while only two
-  of them show the changed behavior contributes two frames to the PR. Unrelated panels,
-  incidental flows, and captures from other specs that happened to re-run in the same
-  `npm run screenshot` invocation stay out.
-- **Keep a "before" only when it earns its place.** A before/after pair belongs in the
-  PR when the before frame is what makes the fix legible (it shows the bug, or the old
-  layout being replaced). A before frame that is merely the starting state is a setup
-  screenshot — drop it.
-- **One screenshot per aspect.** If the feature has multiple distinct aspects — several
-  states, several surfaces it appears on, several inputs that behave differently — each
-  gets its own screenshot. Don't collapse a multi-part feature into a single frame, and
-  don't pad a single-aspect fix into a gallery.
-- **Never attach a screenshot whose expectations failed** in step 5 (unless the failure
-  itself is the thing being reported). Fix it and re-capture first.
-
-### Order and presentation
-
-Put them in the PR body in the sequence a user walks the flow, ending on the desired end
-result. Each screenshot gets a short heading saying what it shows and, where it isn't
-obvious, one line on what to look at. Name the PR's copies `NN-<what-it-shows>.png` so
-the ordering is readable in the diff.
-
-### Mechanism
-
-GitHub's API has no attachment upload, so the images ride along in the branch:
-
-1. `scripts/screenshot/.generated/` is gitignored. Copy the curated PNGs (renamed as
-   above) into `scripts/screenshot/qa/<pr-slug>/`, which is committed.
-2. Commit them with the change and push to the designated branch.
-3. Reference them in the PR body with raw URLs pinned to the pushed commit SHA:
-   `![alt](https://raw.githubusercontent.com/<owner>/<repo>/<sha>/scripts/screenshot/qa/<pr-slug>/01-....png)`
-   — a SHA-pinned URL keeps rendering after later pushes and after merge.
-4. If the PR already exists, update its body (`update_pull_request`) rather than
-   posting the screenshots as a follow-up comment.
-
-Copy only the curated set into `qa/` — the point of the curation rules above is that
-this directory stays small, so leave everything else in `.generated/`.
-
-If the session produced no new screenshots, add no screenshot section at all; an empty
-or placeholder gallery is worse than none.
+The consequence for you: a UI change whose spec you never wrote or extended produces no
+screenshots on its PR. Following step 2 (write or extend the spec for the behavior you
+changed) is what puts them there.
 
 ## Keep specs around
 
