@@ -1,11 +1,10 @@
-import * as React from "react";
-import path from "node:path";
-import { expect, it, vi } from "vitest";
-import userEvent from "@testing-library/user-event";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { createTestRepo, openRepo } from "../../../test/utils";
-import { render, screen, waitFor, within } from "../../../test/test-utils";
+import userEvent from "@testing-library/user-event";
+import * as React from "react";
+import { expect, it, vi } from "vitest";
 import { Dashboard } from "../../../src/components/Dashboard";
+import { render, screen, waitFor, within } from "../../../test/test-utils";
+import { createTestRepo, openRepo } from "../../../test/utils";
 import { captureDocument } from "../capture";
 
 const BRANCH_NAME = "test-remote";
@@ -21,7 +20,6 @@ const BRANCH_NAME = "test-remote";
 it("captures re-creating a workspace under the same branch name after deleting it", async () => {
 	const { repoPath } = createTestRepo(true); // withRemote: real bare remote to push against
 	openRepo(repoPath);
-	const repoName = path.basename(repoPath);
 
 	vi.mocked(ask).mockResolvedValue(true);
 
@@ -64,18 +62,15 @@ it("captures re-creating a workspace under the same branch name after deleting i
 		).not.toBeInTheDocument();
 	});
 
-	// ── Delete the workspace through the real command-palette flow ─────────
-	const openPaletteButton = screen.getByText(repoName).closest("button");
-	if (!openPaletteButton) {
-		throw new Error("Could not find command palette trigger button");
+	// ── Delete the workspace through the real header overflow menu ─────────
+	const overflowTrigger = header
+		.querySelector(".lucide-ellipsis-vertical")
+		?.closest("button");
+	if (!overflowTrigger) {
+		throw new Error("Could not find workspace header overflow menu trigger");
 	}
-	await user.click(openPaletteButton);
-
-	const paletteModal = await screen.findByTestId("modal");
-	await user.click(within(paletteModal).getByText("Delete Workspace"));
-
-	const deletionModal = await screen.findByTestId("modal");
-	await user.click(within(deletionModal).getByText(BRANCH_NAME));
+	await user.click(overflowTrigger);
+	await user.click(await screen.findByText("Delete Workspace"));
 
 	await screen.findByText("Workspace Deleted");
 	await screen.findByRole("button", { name: "Stack" });
@@ -125,7 +120,9 @@ it("captures re-creating a workspace under the same branch name after deleting i
 		expect(screen.queryByTestId("modal")).not.toBeInTheDocument();
 	});
 	expect(screen.queryByText(/already exists/i)).not.toBeInTheDocument();
-	expect(screen.queryByText(/failed to create workspace/i)).not.toBeInTheDocument();
+	expect(
+		screen.queryByText(/failed to create workspace/i),
+	).not.toBeInTheDocument();
 
 	header = await screen.findByTestId("show-workspace-header");
 	await within(header).findByText(BRANCH_NAME);
