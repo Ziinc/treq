@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
 	createCommit,
 	getWorkspaceFileLines,
@@ -52,6 +53,7 @@ export function useFileActions({
 		new Map(),
 	);
 	const [commitPending, setCommitPending] = useState(false);
+	const queryClient = useQueryClient();
 
 	const handleDiscardAll = useCallback(async () => {
 		if (readOnly) return;
@@ -221,7 +223,17 @@ export function useFileActions({
 					description: result.trim() || "Commit successful",
 					type: "success",
 				});
-				await Promise.all([loadChangedFiles(), refreshCommittedChanges()]);
+				await Promise.all([
+					loadChangedFiles(),
+					refreshCommittedChanges(),
+					// A commit changes the ahead count the header and sidebar render.
+					queryClient.invalidateQueries({
+						queryKey: ["workspace-status", repoPath, workspaceId ?? null],
+					}),
+					queryClient.invalidateQueries({
+						queryKey: ["workspace-statuses", repoPath],
+					}),
+				]);
 			} catch (error) {
 				addToast({
 					title: "Commit failed",
@@ -242,6 +254,7 @@ export function useFileActions({
 			refreshCommittedChanges,
 			repoPath,
 			workspaceId,
+			queryClient,
 		],
 	);
 

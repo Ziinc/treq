@@ -7,6 +7,7 @@ import {
 	findSidebarBranchElement,
 	openRepo,
 	resolveWorkspacePath,
+	writeWorkspaceFile,
 } from "../../utils";
 import { fireEvent, render, screen, waitFor, within } from "../../test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
@@ -224,5 +225,57 @@ describe("ShowWorkspace - header", () => {
 			{ cwd: repoPath, encoding: "utf8" },
 		).trim();
 		expect(overlap).not.toEqual("");
+	});
+});
+
+describe("ShowWorkspace - header sync indicator", () => {
+	let repoPath: string;
+	let user: ReturnType<typeof userEvent.setup>;
+
+	beforeEach(() => {
+		({ repoPath } = createTestRepo(true));
+		openRepo(repoPath);
+		user = userEvent.setup();
+	});
+
+	it("shows the workspace ahead count as soon as a commit is made, without re-navigating", async () => {
+		await createWorkspace(repoPath, "feat/sync-indicator");
+		const workspace = (await getWorkspaces(repoPath)).find(
+			(candidate) => candidate.branch_name === "feat/sync-indicator",
+		);
+		expect(workspace).toBeTruthy();
+		render(<Dashboard />);
+
+		await user.click(await findSidebarBranchElement("feat/sync-indicator"));
+
+		const header = await screen.findByTestId("show-workspace-header");
+		await user.click(
+			await within(header).findByRole("button", { name: /push to remote/i }),
+		);
+		await screen.findByText("Pushed to remote");
+		await waitFor(() => {
+			expect(
+				screen.queryByRole("button", { name: /push to remote/i }),
+			).not.toBeInTheDocument();
+		});
+
+		writeWorkspaceFile(
+			resolveWorkspacePath(repoPath, workspace!.workspace_path),
+			"sync-indicator.txt",
+			"ahead of remote\n",
+		);
+
+		await user.click(await screen.findByRole("tab", { name: /Review/ }));
+		await screen.findAllByText("sync-indicator.txt");
+
+		await user.type(
+			await screen.findByPlaceholderText("Message"),
+			"Commit that puts the branch ahead",
+		);
+		await user.click(screen.getByRole("button", { name: "Commit" }));
+
+		await screen.findByText("Commit created");
+
+		await within(header).findByText("↑1");
 	});
 });
