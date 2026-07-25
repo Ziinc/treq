@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	createTestRepo,
 	findSidebarBranchElement,
+	newCommitWithParents,
 	openRepo,
+	resolveChangeId,
 	resolveWorkspacePath,
 	writeWorkspaceFile,
 } from "../../utils";
@@ -18,7 +20,6 @@ import { render, screen, waitFor, within } from "../../test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
 import userEvent from "@testing-library/user-event";
 import * as api from "../../../src/lib/api";
-import { execFileSync } from "node:child_process";
 
 type ReviewFixture = {
 	repoPath: string;
@@ -141,24 +142,13 @@ async function setupUnresolvedConflictState(
 
 	writeWorkspaceFile(workspacePath, "README.md", "workspace side\n");
 	await createCommit(repoPath, workspaceId, "workspace conflicting change");
-	const workspaceChangeId = execFileSync(
-		"jj",
-		["log", "-r", "@-", "--no-graph", "-T", "change_id"],
-		{ cwd: workspacePath, encoding: "utf8" },
-	).trim();
+	const workspaceChangeId = resolveChangeId(workspacePath, "@-");
 
 	writeWorkspaceFile(repoPath, "README.md", "main side\n");
 	await createCommit(repoPath, null, "main conflicting change");
-	const mainChangeId = execFileSync(
-		"jj",
-		["log", "-r", "@-", "--no-graph", "-T", "change_id"],
-		{ cwd: repoPath, encoding: "utf8" },
-	).trim();
+	const mainChangeId = resolveChangeId(repoPath, "@-");
 
-	execFileSync("jj", ["new", workspaceChangeId, mainChangeId], {
-		cwd: workspacePath,
-		encoding: "utf8",
-	});
+	newCommitWithParents(workspacePath, [workspaceChangeId, mainChangeId]);
 	await ensureWorkspaceIndexed(repoPath, workspaceId, workspacePath);
 
 	return {

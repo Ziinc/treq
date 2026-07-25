@@ -27,6 +27,13 @@ type NapiTestBindings = {
 		content: string,
 		append?: boolean,
 	) => string;
+	resolveCommitId: (workspacePath: string, revision: string) => string;
+	resolveChangeId: (workspacePath: string, revision: string) => string;
+	resolveRevsetCommitIds: (workspacePath: string, revset: string) => string[];
+	newCommitWithParents: (
+		workspacePath: string,
+		parentRevisions: string[],
+	) => string;
 };
 
 function getNapiBindings(): NapiTestBindings {
@@ -64,6 +71,47 @@ export function resolveWorkspacePath(
 		return workspacePath;
 	}
 	return path.join(repoPath, ".treq", "workspaces", workspacePath);
+}
+
+/**
+ * Resolve a revision to its short commit id via jj-lib (no `jj` CLI on PATH required).
+ */
+export function resolveCommitId(
+	workspacePath: string,
+	revision: string,
+): string {
+	return getNapiBindings().resolveCommitId(workspacePath, revision);
+}
+
+/**
+ * Resolve a revision to its short change id. Change ids survive rewrites (rebase,
+ * amend), so use this when a revision is captured before later history edits.
+ */
+export function resolveChangeId(
+	workspacePath: string,
+	revision: string,
+): string {
+	return getNapiBindings().resolveChangeId(workspacePath, revision);
+}
+
+/**
+ * Resolve a revset to the short commit ids it matches; empty when it matches nothing.
+ */
+export function resolveRevsetCommitIds(
+	workspacePath: string,
+	revset: string,
+): string[] {
+	return getNapiBindings().resolveRevsetCommitIds(workspacePath, revset);
+}
+
+/**
+ * Create a new working-copy commit on the given parents (equivalent to `jj new <rev>...`).
+ */
+export function newCommitWithParents(
+	workspacePath: string,
+	parentRevisions: string[],
+): string {
+	return getNapiBindings().newCommitWithParents(workspacePath, parentRevisions);
 }
 
 export async function writeRepoFile(

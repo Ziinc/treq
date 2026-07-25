@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { execFileSync } from "node:child_process";
 import {
 	createTestRepo,
 	openRepo,
+	resolveCommitId,
 	resolveWorkspacePath,
 	writeWorkspaceFile,
 } from "../../utils";
@@ -12,17 +12,6 @@ import {
 	getWorkspaces,
 	switchRepoBranch,
 } from "../../../src/lib/api";
-
-function getCommitId(cwd: string, revset: string): string {
-	return execFileSync(
-		"jj",
-		["log", "-r", revset, "--no-graph", "-T", "commit_id"],
-		{
-			cwd,
-			encoding: "utf8",
-		},
-	).trim();
-}
 
 describe("default-branch workspace sync after home commit", () => {
 	it("syncs same-branch workspace tip when committing in home repo", async () => {
@@ -40,17 +29,17 @@ describe("default-branch workspace sync after home commit", () => {
 		);
 		await switchRepoBranch(repoPath, "main");
 
-		const beforeMain = getCommitId(repoPath, "main");
-		const beforeWorkspaceMain = getCommitId(workspacePath, "main");
+		const beforeMain = resolveCommitId(repoPath, "main");
+		const beforeWorkspaceMain = resolveCommitId(workspacePath, "main");
 		expect(beforeWorkspaceMain).toEqual(beforeMain);
 
 		writeWorkspaceFile(repoPath, "home-sync.txt", "home sync commit\n", true);
 		await createCommit(repoPath, null, "home commit updates main");
 
-		const afterMain = getCommitId(repoPath, "main");
+		const afterMain = resolveCommitId(repoPath, "main");
 		expect(afterMain).not.toEqual(beforeMain);
 
-		const afterWorkspaceMain = getCommitId(workspacePath, "main");
+		const afterWorkspaceMain = resolveCommitId(workspacePath, "main");
 		expect(afterWorkspaceMain).toEqual(afterMain);
 	});
 
@@ -75,7 +64,7 @@ describe("default-branch workspace sync after home commit", () => {
 			"dirty workspace content\n",
 			true,
 		);
-		const workspaceAtBefore = getCommitId(workspacePath, "@");
+		const workspaceAtBefore = resolveCommitId(workspacePath, "@");
 
 		writeWorkspaceFile(
 			repoPath,
@@ -85,11 +74,11 @@ describe("default-branch workspace sync after home commit", () => {
 		);
 		await createCommit(repoPath, null, "home commit with dirty workspace");
 
-		const mainAfter = getCommitId(repoPath, "main");
-		const workspaceMainAfter = getCommitId(workspacePath, "main");
+		const mainAfter = resolveCommitId(repoPath, "main");
+		const workspaceMainAfter = resolveCommitId(workspacePath, "main");
 		expect(workspaceMainAfter).toEqual(mainAfter);
 
-		const workspaceAtAfter = getCommitId(workspacePath, "@");
+		const workspaceAtAfter = resolveCommitId(workspacePath, "@");
 		expect(workspaceAtAfter).toEqual(workspaceAtBefore);
 	});
 });
