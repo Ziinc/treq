@@ -1,5 +1,6 @@
 import * as React from "react";
 import { it } from "vitest";
+import userEvent from "@testing-library/user-event";
 import {
 	commitRepoFile,
 	createTestRepo,
@@ -26,6 +27,7 @@ it("captures the ShowWorkspace component", async () => {
 		"Add notes",
 	);
 
+	const user = userEvent.setup();
 	render(<Dashboard />);
 
 	await screen.findByTestId("show-workspace-header");
@@ -44,4 +46,18 @@ it("captures the ShowWorkspace component", async () => {
 		],
 	});
 	console.log(`Saved screenshot -> ${pngPath}`);
+
+	// Switch to the workspace itself, which renders the interactive
+	// TargetBranchSelector branch-target visualization (not shown on the
+	// home-repo header captured above).
+	await user.click(await screen.findByText("feat/screenshot-demo"));
+	await screen.findByRole("button", { name: "Workspace target" });
+
+	const workspacePngPath = await captureDocument(document, {
+		name: "show-workspace-branch-target",
+		expectations: [
+			"The header shows a branch-target row with the base branch selector and an arrow next to the workspace's own branch name (feat/screenshot-demo).",
+		],
+	});
+	console.log(`Saved screenshot -> ${workspacePngPath}`);
 }, 60000);
