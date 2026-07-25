@@ -6,6 +6,7 @@ import {
 	createTestRepo,
 	findSidebarBranchElement,
 	openRepo,
+	resolveRevsetCommitIds,
 	resolveWorkspacePath,
 	writeWorkspaceFile,
 } from "../../utils";
@@ -210,21 +211,11 @@ describe("ShowWorkspace - header", () => {
 			encoding: "utf8",
 		}).trim();
 
-		const overlap = execFileSync(
-			"jj",
-			[
-				"log",
-				"-r",
-				`ancestors(feat/alpha) & ${betaTip}`,
-				"-n",
-				"1",
-				"--no-graph",
-				"-T",
-				"commit_id",
-			],
-			{ cwd: repoPath, encoding: "utf8" },
-		).trim();
-		expect(overlap).not.toEqual("");
+		const overlap = resolveRevsetCommitIds(
+			repoPath,
+			`ancestors(feat/alpha) & ${betaTip}`,
+		);
+		expect(overlap).not.toEqual([]);
 	});
 });
 
