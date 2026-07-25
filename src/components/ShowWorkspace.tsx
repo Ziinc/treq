@@ -56,7 +56,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import {
 	AlertTriangle,
-	ArrowLeft,
+	ArrowRight,
 	ChevronLeft,
 	Code2,
 	Eye,
@@ -1303,8 +1303,14 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 							<div className="flex items-center gap-2">
 								<GitBranch className="w-4 h-4 text-muted-foreground" />
 
+								{workspace && (
+									<span className="text-sm font-semibold font-mono">
+										{branchTitle}
+									</span>
+								)}
 								{workspace && workspace.branch_name !== defaultBranch && (
 									<>
+										<ArrowRight className="w-4 h-4 text-muted-foreground" />
 										<TargetBranchSelector
 											branches={availableBranches}
 											loading={branchesLoading}
@@ -1317,16 +1323,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 											}}
 											disabled={rebasing}
 										/>
-										<ArrowLeft className="w-4 h-4 text-muted-foreground" />
-										{/* Stack button for workspace */}
-
-										<div className="flex-1" />
 									</>
-								)}
-								{workspace && (
-									<span className="text-sm font-semibold font-mono">
-										{branchTitle}
-									</span>
 								)}
 								{workspace && onCreateStackedWorkspace && (
 									<TooltipProvider delayDuration={200}>
@@ -1356,9 +1353,17 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 								)}
 								{!workspace && (
 									<>
+										<button
+											type="button"
+											onClick={onOpenBranchSwitcher}
+											className="text-sm font-semibold font-mono hover:underline cursor-pointer"
+										>
+											{branchTitle}
+										</button>
 										{/* Target branch label + rebase button for non-default home repo branches */}
 										{isHomeRepo && branchTitle !== defaultBranch && (
 											<>
+												<ArrowRight className="w-4 h-4 text-muted-foreground" />
 												<span className="text-sm font-mono text-muted-foreground">
 													{defaultBranch}
 												</span>
@@ -1423,17 +1428,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 														</TooltipProvider>
 													</>
 												)}
-												<ArrowLeft className="w-4 h-4 text-muted-foreground" />
 											</>
 										)}
-
-										<button
-											type="button"
-											onClick={onOpenBranchSwitcher}
-											className="text-sm font-semibold font-mono hover:underline cursor-pointer"
-										>
-											{branchTitle}
-										</button>
 										{/* Stack button for home repo */}
 										{onCreateStackedWorkspace && (
 											<TooltipProvider delayDuration={200}>
