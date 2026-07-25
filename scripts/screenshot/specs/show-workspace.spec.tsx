@@ -70,6 +70,14 @@ it("captures the ShowWorkspace component", async () => {
 	const dialog = await screen.findByTestId("modal");
 	const branchNameInput = within(dialog).getByLabelText("Branch Name");
 	await user.type(branchNameInput, longBranchName);
+
+	await captureDocument(document, {
+		name: "show-workspace-branch-name-input",
+		expectations: [
+			"The 'Branch Name' input in the Stack dialog is a narrow, fixed-width box that does not grow to fit the long typed branch name -- the text scrolls/overflows within the bounded input rather than the input stretching.",
+		],
+	});
+
 	await user.click(
 		within(dialog).getByRole("button", { name: "Create Workspace" }),
 	);

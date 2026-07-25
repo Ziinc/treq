@@ -43,7 +43,7 @@ export const TargetBranchSelector: React.FC<TargetBranchSelectorProps> = ({
 					variant="outline"
 					size="sm"
 					disabled={disabled || loading}
-					className="gap-2 max-w-[200px]"
+					className="gap-2 max-w-[120px]"
 					aria-label="Workspace target"
 				>
 					{loading ? (
