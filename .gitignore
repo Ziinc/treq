@@ -55,3 +55,6 @@ src-tauri/gen/
 
 # treq-napi
 crates/treq-napi/treq-napi.*.node
+
+# screenshot harness output (compiled CSS, HTML snapshots, PNGs)
+scripts/screenshot/.generated/
