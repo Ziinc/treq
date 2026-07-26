@@ -4,8 +4,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Tools index (/tools)', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.getByRole('link', { name: 'Tools' }).click();
+    await page.goto('/tools');
   });
 
   test('renders page heading', async ({ page }) => {
@@ -35,9 +34,7 @@ test.describe('Tools index (/tools)', () => {
 
 test.describe('Branch Visualizer (/tools/branch-visualizer)', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.getByRole('link', { name: 'Tools' }).click();
-    await page.getByRole('link', { name: /Branch Visualizer/ }).click();
+    await page.goto('/tools/branch-visualizer');
   });
 
   test('renders the page title', async ({ page }) => {
@@ -111,9 +108,7 @@ test.describe('Branch Visualizer (/tools/branch-visualizer)', () => {
 
 test.describe('DAG Visualizer (/tools/dag-visualizer)', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.getByRole('link', { name: 'Tools' }).click();
-    await page.getByRole('link', { name: /DAG Visualizer/ }).click();
+    await page.goto('/tools/dag-visualizer');
     // BrowserOnly renders React Flow on the client; wait for nodes to appear
     await page.getByTestId('flow-node').first().waitFor({ timeout: 15_000 });
   });

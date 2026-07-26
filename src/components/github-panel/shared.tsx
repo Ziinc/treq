@@ -2,10 +2,14 @@ import {
 	AlertCircle,
 	ChevronRight,
 	CircleDot,
+	ExternalLink,
 	GitMerge,
 	GitPullRequest,
+	GitPullRequestDraft,
 } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import type { GhIssue, GhLabel, GhPullRequest } from "../../lib/api-types";
+import { Button } from "../ui/button";
 
 export function formatDate(iso: string) {
 	try {
@@ -19,11 +23,39 @@ export function formatDate(iso: string) {
 	}
 }
 
-export function StateChip({ state }: { state: string }) {
+export function OpenInWebButton({ url }: { url: string }) {
+	return (
+		<Button
+			size="sm"
+			variant="outline"
+			className="text-base shrink-0 gap-1.5"
+			onClick={() => openUrl(url)}
+		>
+			<ExternalLink className="w-4 h-4" />
+			Open in Web
+		</Button>
+	);
+}
+
+export function StateChip({
+	state,
+	isDraft = false,
+}: {
+	state: string;
+	isDraft?: boolean;
+}) {
 	const s = state.toUpperCase();
+	if (isDraft && s === "OPEN") {
+		return (
+			<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-base bg-muted text-muted-foreground">
+				<GitPullRequestDraft className="w-3 h-3" />
+				Draft
+			</span>
+		);
+	}
 	if (s === "OPEN") {
 		return (
-			<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-500/20 text-green-600 dark:text-green-400">
+			<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-base bg-green-500/20 text-green-600 dark:text-green-400">
 				<CircleDot className="w-3 h-3" />
 				Open
 			</span>
@@ -31,14 +63,14 @@ export function StateChip({ state }: { state: string }) {
 	}
 	if (s === "MERGED") {
 		return (
-			<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-purple-500/20 text-purple-600 dark:text-purple-400">
+			<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-base bg-purple-500/20 text-purple-600 dark:text-purple-400">
 				<GitMerge className="w-3 h-3" />
 				Merged
 			</span>
 		);
 	}
 	return (
-		<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-500/20 text-red-600 dark:text-red-400">
+		<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-base bg-red-500/20 text-red-600 dark:text-red-400">
 			<AlertCircle className="w-3 h-3" />
 			Closed
 		</span>
@@ -49,7 +81,7 @@ export function LabelChip({ name, color }: GhLabel) {
 	const hex = color.startsWith("#") ? color : `#${color}`;
 	return (
 		<span
-			className="inline-block px-1.5 py-0.5 rounded text-xs font-medium"
+			className="inline-block px-1.5 py-0.5 rounded text-base font-medium"
 			style={{
 				backgroundColor: `${hex}33`,
 				color: hex,
@@ -80,20 +112,17 @@ export function IssueListItem({
 		>
 			<div className="flex items-start gap-2">
 				<div className="flex-1 min-w-0">
-					<div className="flex items-center gap-2 flex-wrap">
-						<StateChip state={issue.state} />
-						<span className="text-xs text-muted-foreground">
+					<div className="flex items-center gap-2 min-w-0">
+						<p className="text-lg font-medium truncate min-w-0">
+							{issue.title}
+						</p>
+						<span className="text-base text-muted-foreground shrink-0">
 							#{issue.number}
 						</span>
 					</div>
-					<p className="text-sm font-medium truncate mt-0.5">{issue.title}</p>
-					<div className="flex items-center gap-2 mt-1 flex-wrap">
-						{issue.labels.map((l) => (
-							<LabelChip key={l.name} name={l.name} color={l.color} />
-						))}
-						<span className="text-xs text-muted-foreground">
-							{issue.author.login} · {formatDate(issue.created_at)}
-						</span>
+					<div className="flex items-center gap-2 mt-1 min-w-0 text-base text-muted-foreground">
+						<StateChip state={issue.state} />
+						<span className="shrink-0">{formatDate(issue.created_at)}</span>
 					</div>
 				</div>
 				<ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
@@ -121,21 +150,24 @@ export function PrListItem({
 		>
 			<div className="flex items-start gap-2">
 				<div className="flex-1 min-w-0">
-					<div className="flex items-center gap-2 flex-wrap">
-						<StateChip state={pr.state} />
-						<span className="text-xs text-muted-foreground">#{pr.number}</span>
+					<div className="flex items-center gap-2 min-w-0">
+						<p className="text-lg font-medium truncate min-w-0">{pr.title}</p>
+						<span className="text-base text-muted-foreground shrink-0">
+							#{pr.number}
+						</span>
 					</div>
-					<p className="text-sm font-medium truncate mt-0.5">{pr.title}</p>
-					<div className="flex items-center gap-2 mt-1 flex-wrap">
-						{pr.labels.map((l) => (
-							<LabelChip key={l.name} name={l.name} color={l.color} />
-						))}
-						<span className="text-xs text-muted-foreground font-mono">
-							{pr.head_ref_name} → {pr.base_ref_name}
+					<div className="flex items-center gap-2 mt-1 min-w-0 text-base text-muted-foreground">
+						<StateChip state={pr.state} isDraft={Boolean(pr.is_draft)} />
+						<span className="font-mono inline-flex items-center gap-1 min-w-0">
+							<span className="truncate max-w-[16rem]" title={pr.head_ref_name}>
+								{pr.head_ref_name}
+							</span>
+							<span className="shrink-0">→</span>
+							<span className="truncate max-w-[16rem]" title={pr.base_ref_name}>
+								{pr.base_ref_name}
+							</span>
 						</span>
-						<span className="text-xs text-muted-foreground">
-							{pr.author.login} · {formatDate(pr.created_at)}
-						</span>
+						<span className="shrink-0">{formatDate(pr.created_at)}</span>
 					</div>
 				</div>
 				<ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
@@ -154,7 +186,7 @@ export function EmptyState({
 	return (
 		<div className="flex flex-col items-center justify-center py-12 text-center px-6 gap-2">
 			<Icon className="w-6 h-6 text-muted-foreground" />
-			<p className="text-sm text-muted-foreground">{message}</p>
+			<p className="text-base text-muted-foreground">{message}</p>
 		</div>
 	);
 }

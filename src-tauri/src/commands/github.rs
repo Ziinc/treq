@@ -1,5 +1,5 @@
 use crate::binary_paths::{detect_binary, get_binary_path, get_extended_path};
-pub use crate::github::{GhIssue, GhPullRequest, GitRemoteInfo, PrInfo};
+pub use crate::github::{GhIssue, GhListPage, GhPullRequest, GitRemoteInfo, PrInfo};
 
 fn gh_bin() -> Result<String, String> {
     get_binary_path("gh")
@@ -29,9 +29,21 @@ pub fn get_git_remote_url(repo_path: String) -> Result<Option<GitRemoteInfo>, St
 }
 
 #[tauri::command]
-pub fn gh_list_issues(repo_full_name: String, state: String) -> Result<Vec<GhIssue>, String> {
+pub fn gh_list_issues(
+    repo_full_name: String,
+    state: String,
+    limit: Option<u32>,
+    page: Option<u32>,
+) -> Result<GhListPage<GhIssue>, String> {
     let gh = gh_bin()?;
-    crate::github::gh_list_issues_impl(&gh, &repo_full_name, &state, &get_extended_path())
+    crate::github::gh_list_issues_impl(
+        &gh,
+        &repo_full_name,
+        &state,
+        limit.unwrap_or(crate::github::GH_LIST_PAGE_SIZE),
+        page.unwrap_or(1),
+        &get_extended_path(),
+    )
 }
 
 #[tauri::command]
@@ -75,9 +87,21 @@ pub fn gh_reopen_issue(repo_full_name: String, issue_number: u64) -> Result<(), 
 }
 
 #[tauri::command]
-pub fn gh_list_prs(repo_full_name: String, state: String) -> Result<Vec<GhPullRequest>, String> {
+pub fn gh_list_prs(
+    repo_full_name: String,
+    state: String,
+    limit: Option<u32>,
+    page: Option<u32>,
+) -> Result<GhListPage<GhPullRequest>, String> {
     let gh = gh_bin()?;
-    crate::github::gh_list_prs_impl(&gh, &repo_full_name, &state, &get_extended_path())
+    crate::github::gh_list_prs_impl(
+        &gh,
+        &repo_full_name,
+        &state,
+        limit.unwrap_or(crate::github::GH_LIST_PAGE_SIZE),
+        page.unwrap_or(1),
+        &get_extended_path(),
+    )
 }
 
 #[tauri::command]
@@ -115,12 +139,25 @@ pub fn gh_reopen_pr(repo_full_name: String, pr_number: u64) -> Result<(), String
 }
 
 #[tauri::command]
+pub fn gh_set_pr_draft(repo_full_name: String, pr_number: u64, draft: bool) -> Result<(), String> {
+    let gh = gh_bin()?;
+    crate::github::gh_set_pr_draft_impl(
+        &gh,
+        &repo_full_name,
+        pr_number,
+        draft,
+        &get_extended_path(),
+    )
+}
+
+#[tauri::command]
 pub fn gh_create_pr(
     repo_full_name: String,
     title: String,
     body: String,
     base_branch: String,
     head_branch: String,
+    draft: Option<bool>,
 ) -> Result<u64, String> {
     let gh = gh_bin()?;
     crate::github::gh_create_pr_impl(
@@ -130,6 +167,7 @@ pub fn gh_create_pr(
         &body,
         &base_branch,
         &head_branch,
+        draft.unwrap_or(false),
         &get_extended_path(),
     )
 }

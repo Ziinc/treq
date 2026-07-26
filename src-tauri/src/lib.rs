@@ -516,6 +516,7 @@ pub fn run() {
             commands::gh_create_pr_comment,
             commands::gh_close_pr,
             commands::gh_reopen_pr,
+            commands::gh_set_pr_draft,
             commands::gh_create_pr,
         ])
         .run(tauri::generate_context!())

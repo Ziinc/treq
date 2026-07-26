@@ -105,7 +105,7 @@ function CallbackContent() {
         <>
           <p style={styles.text}>You need to be signed in to link the GitHub App.</p>
           <a
-            href={`/login?redirect=${encodeURIComponent(window.location.href)}`}
+            href={`/sign-in?redirect=${encodeURIComponent(window.location.href)}`}
             style={styles.link}
           >
             Sign in

@@ -8,11 +8,11 @@ import { useTheme } from "../hooks/useTheme";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import { useToast } from "./ui/toast";
 import { getSetting, setSetting } from "../lib/api";
-import { FolderGit2, GitBranch, Settings, User } from "lucide-react";
+import { FolderGit2, GitBranch, Plug, Settings, User } from "lucide-react";
 import { AccountSettings } from "./AccountSettings";
-import { FEATURES } from "../lib/features";
+import { GitHubIntegrationSettings } from "./GitHubIntegrationSettings";
 
-type TabValue = "application" | "repository" | "account";
+type TabValue = "application" | "repository" | "account" | "integrations";
 
 interface SettingsPageProps {
 	repoPath: string;
@@ -110,12 +110,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 									<Settings className="w-4 h-4" />
 									Application
 								</TabsTrigger>
-								{FEATURES.pro && (
-									<TabsTrigger value="account">
-										<User className="w-4 h-4" />
-										Account
-									</TabsTrigger>
-								)}
+								<TabsTrigger value="account">
+									<User className="w-4 h-4" />
+									Account
+								</TabsTrigger>
+								<TabsTrigger value="integrations">
+									<Plug className="w-4 h-4" />
+									Integrations
+								</TabsTrigger>
 							</TabsList>
 
 							{/* Right content area */}
@@ -278,11 +280,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 									)}
 								</TabsContent>
 
-								{FEATURES.pro && (
-									<TabsContent value="account">
-										<AccountSettings />
-									</TabsContent>
-								)}
+								<TabsContent value="account">
+									<AccountSettings />
+								</TabsContent>
+								<TabsContent value="integrations">
+									<GitHubIntegrationSettings />
+								</TabsContent>
 							</div>
 						</Tabs>
 					</div>

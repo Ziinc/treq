@@ -9,9 +9,11 @@ import {
 	ghCreatePr,
 	ghCreatePrComment,
 	ghReopenPr,
+	ghSetPrDraft,
 	ghViewPr,
 } from "../../lib/api";
-import { formatDate, LabelChip, StateChip } from "./shared";
+import { MarkdownContent } from "../MarkdownContent";
+import { formatDate, LabelChip, OpenInWebButton, StateChip } from "./shared";
 
 export function PrDetailPanel({
 	repoFullName,
@@ -60,10 +62,21 @@ export function PrDetailPanel({
 		},
 	});
 
+	const setDraft = useMutation({
+		mutationFn: (draft: boolean) => ghSetPrDraft(repoFullName, prNumber, draft),
+		onSuccess: () => {
+			void qc.invalidateQueries({
+				queryKey: ["gh-pr", repoFullName, prNumber],
+			});
+			void qc.invalidateQueries({ queryKey: ["gh-prs", repoFullName] });
+			void qc.invalidateQueries({ queryKey: ["pr-info-gh"] });
+		},
+	});
+
 	return (
 		<div className="flex flex-col h-full">
 			<div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-				<span className="text-sm font-semibold text-muted-foreground">
+				<span className="text-base font-semibold text-muted-foreground">
 					Pull Request #{prNumber}
 				</span>
 				<Button
@@ -85,14 +98,19 @@ export function PrDetailPanel({
 			{pr && (
 				<div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
 					<div>
-						<h2 className="text-base font-semibold">{pr.title}</h2>
+						<div className="flex items-start gap-3">
+							<h2 className="text-2xl font-semibold flex-1 min-w-0">
+								{pr.title}
+							</h2>
+							<OpenInWebButton url={pr.url} />
+						</div>
 						<div className="flex items-center gap-2 mt-1 flex-wrap">
-							<StateChip state={pr.state} />
-							<span className="text-xs text-muted-foreground font-mono">
+							<StateChip state={pr.state} isDraft={Boolean(pr.is_draft)} />
+							<span className="text-base text-muted-foreground font-mono">
 								{pr.head_ref_name} → {pr.base_ref_name}
 							</span>
 						</div>
-						<div className="text-xs text-muted-foreground mt-1">
+						<div className="text-base text-muted-foreground mt-1">
 							#{pr.number} opened by {pr.author.login} on{" "}
 							{formatDate(pr.created_at)}
 						</div>
@@ -106,32 +124,41 @@ export function PrDetailPanel({
 					</div>
 
 					{pr.body && (
-						<div className="text-sm text-foreground bg-muted/30 rounded-md p-3 whitespace-pre-wrap">
-							{pr.body}
+						<div className="bg-muted/30 rounded-md p-3">
+							<MarkdownContent
+								content={pr.body}
+								className="text-base prose-base prose-code:text-base"
+							/>
 						</div>
 					)}
 
 					{(pr.comments ?? []).length > 0 && (
 						<div className="space-y-3">
-							<h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+							<h3 className="text-base font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1">
 								<MessageSquare className="w-3 h-3" />
 								Comments ({pr.comments!.length})
 							</h3>
 							{pr.comments!.map((c) => (
-								<div key={c.id} className="bg-muted/30 rounded-md p-3 text-sm">
-									<div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+								<div
+									key={c.id}
+									className="bg-muted/30 rounded-md p-3 text-base"
+								>
+									<div className="flex items-center gap-1 text-base text-muted-foreground mb-1">
 										<span className="font-medium">{c.author.login}</span>
 										<span>·</span>
 										<span>{formatDate(c.created_at)}</span>
 									</div>
-									<p className="whitespace-pre-wrap">{c.body}</p>
+									<MarkdownContent
+										content={c.body}
+										className="text-base prose-base prose-code:text-base"
+									/>
 								</div>
 							))}
 						</div>
 					)}
 
 					<div className="space-y-2">
-						<h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+						<h3 className="text-base font-semibold uppercase tracking-widest text-muted-foreground">
 							Add Comment
 						</h3>
 						<Textarea
@@ -139,11 +166,12 @@ export function PrDetailPanel({
 							value={commentBody}
 							onChange={(e) => setCommentBody(e.target.value)}
 							rows={3}
-							className="text-sm"
+							className="text-base"
 						/>
 						<div className="flex items-center gap-2">
 							<Button
 								size="sm"
+								className="text-base"
 								disabled={!commentBody.trim() || addComment.isPending}
 								onClick={() => addComment.mutate()}
 							>
@@ -153,21 +181,52 @@ export function PrDetailPanel({
 								Comment
 							</Button>
 							{pr.state === "OPEN" ? (
-								<Button
-									size="sm"
-									variant="outline"
-									disabled={closePr.isPending}
-									onClick={() => closePr.mutate()}
-								>
-									{closePr.isPending ? (
-										<Loader2 className="w-3 h-3 mr-1 animate-spin" />
-									) : null}
-									Close PR
-								</Button>
+								<>
+									{pr.is_draft ? (
+										<Button
+											size="sm"
+											variant="outline"
+											className="text-base"
+											disabled={setDraft.isPending}
+											onClick={() => setDraft.mutate(false)}
+										>
+											{setDraft.isPending ? (
+												<Loader2 className="w-3 h-3 mr-1 animate-spin" />
+											) : null}
+											Ready for Review
+										</Button>
+									) : (
+										<Button
+											size="sm"
+											variant="outline"
+											className="text-base"
+											disabled={setDraft.isPending}
+											onClick={() => setDraft.mutate(true)}
+										>
+											{setDraft.isPending ? (
+												<Loader2 className="w-3 h-3 mr-1 animate-spin" />
+											) : null}
+											Convert to Draft
+										</Button>
+									)}
+									<Button
+										size="sm"
+										variant="outline"
+										className="text-base"
+										disabled={closePr.isPending}
+										onClick={() => closePr.mutate()}
+									>
+										{closePr.isPending ? (
+											<Loader2 className="w-3 h-3 mr-1 animate-spin" />
+										) : null}
+										Close PR
+									</Button>
+								</>
 							) : pr.state === "CLOSED" ? (
 								<Button
 									size="sm"
 									variant="outline"
+									className="text-base"
 									disabled={reopenPr.isPending}
 									onClick={() => reopenPr.mutate()}
 								>
@@ -210,26 +269,26 @@ export function CreatePrForm({
 
 	return (
 		<div className="p-4 space-y-3 border-b border-border">
-			<h3 className="text-sm font-semibold">New Pull Request</h3>
+			<h3 className="text-base font-semibold">New Pull Request</h3>
 			<Input
 				placeholder="Title"
 				value={title}
 				onChange={(e) => setTitle(e.target.value)}
-				className="text-sm"
+				className="text-base"
 			/>
 			<div className="flex gap-2 items-center">
 				<Input
 					placeholder="Head branch"
 					value={head}
 					onChange={(e) => setHead(e.target.value)}
-					className="text-sm font-mono"
+					className="text-base font-mono"
 				/>
-				<span className="text-muted-foreground text-sm shrink-0">→</span>
+				<span className="text-muted-foreground text-base shrink-0">→</span>
 				<Input
 					placeholder="Base branch"
 					value={base}
 					onChange={(e) => setBase(e.target.value)}
-					className="text-sm font-mono"
+					className="text-base font-mono"
 				/>
 			</div>
 			<Textarea
@@ -237,11 +296,12 @@ export function CreatePrForm({
 				value={body}
 				onChange={(e) => setBody(e.target.value)}
 				rows={4}
-				className="text-sm"
+				className="text-base"
 			/>
 			<div className="flex gap-2">
 				<Button
 					size="sm"
+					className="text-base"
 					disabled={
 						!title.trim() || !head.trim() || !base.trim() || create.isPending
 					}
@@ -252,12 +312,17 @@ export function CreatePrForm({
 					) : null}
 					Create Pull Request
 				</Button>
-				<Button size="sm" variant="ghost" onClick={onCancel}>
+				<Button
+					size="sm"
+					variant="ghost"
+					className="text-base"
+					onClick={onCancel}
+				>
 					Cancel
 				</Button>
 			</div>
 			{create.isError && (
-				<p className="text-xs text-destructive">{String(create.error)}</p>
+				<p className="text-base text-destructive">{String(create.error)}</p>
 			)}
 		</div>
 	);

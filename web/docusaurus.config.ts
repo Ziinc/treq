@@ -66,7 +66,7 @@ const config: Config = {
                     priority: 40,
                     enforce: true,
                   },
-                  // Supabase — only loaded on login/dashboard/auth pages
+                  // Supabase — only loaded on sign-in/dashboard/auth pages
                   supabase: {
                     test: /[\\/]node_modules[\\/]@supabase[\\/]/,
                     name: 'chunk-supabase',
@@ -106,6 +106,7 @@ const config: Config = {
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: '/',
+  trailingSlash: false,
 
   // NOTE: trailingSlash intentionally left unset (Docusaurus default).
   // Setting it to true or false here breaks the site's relative doc links
@@ -180,22 +181,41 @@ const config: Config = {
       },
       items: [
         {
-          type: 'docSidebar',
-          sidebarId: 'learnSidebar',
-          docsPluginId: 'learn',
+          type: 'dropdown',
+          label: 'Discover',
           position: 'left',
-          label: 'Learn',
+          items: [
+            {
+              type: 'docSidebar',
+              sidebarId: 'learnSidebar',
+              docsPluginId: 'learn',
+              label: 'Learn',
+            },
+            {
+              to: '/tools',
+              label: 'Tools',
+            },
+          ],
         },
         {
-          type: 'docSidebar',
-          sidebarId: 'docsSidebar',
+          type: 'dropdown',
+          label: 'Product',
           position: 'left',
-          label: 'Docs',
-        },
-        {
-          to: '/tools',
-          label: 'Tools',
-          position: 'left',
+          items: [
+            {
+              type: 'docSidebar',
+              sidebarId: 'docsSidebar',
+              label: 'Documentation',
+            },
+            {
+              to: '/roadmap',
+              label: 'Roadmap',
+            },
+            {
+              to: '/changelog',
+              label: 'Changelog',
+            },
+          ],
         },
         {
           to: '/skills',
@@ -207,31 +227,20 @@ const config: Config = {
           label: 'Pricing',
           position: 'left',
         },
-        {
-          to: '/roadmap',
-          label: 'Roadmap',
-          position: 'left',
-        },
-        {
-          to: '/changelog',
-          label: 'Changelog',
-          position: 'left',
-        },
 
-        ...(featureFlags.pro ? [{
-          to: '/dashboard',
-          label: 'Dashboard',
-          position: 'right' as const,
-        }] : []),
         {
-          href: 'https://github.com/Ziinc/treq',
-          label: 'GitHub',
+          type: 'search',
+          position: 'right',
+        },
+        {
+          type: 'custom-authLinks',
           position: 'right',
         },
         {
           type: 'html',
           position: 'right',
-          value: '<a href="/docs/getting-started/installation" class="button button--primary button--sm">Get Started</a>',
+          value:
+            '<a href="https://github.com/Ziinc/treq" target="_blank" rel="noopener noreferrer" class="navbar__item navbar__link header-github-link" aria-label="GitHub repository"></a>',
         },
       ],
     },

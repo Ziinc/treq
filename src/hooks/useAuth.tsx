@@ -187,7 +187,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 	}, [session, fetchSubscription]);
 
 	const signIn = useCallback(async () => {
-		await openUrl(`${WEB_URL}/login?source=desktop`);
+		await openUrl(`${WEB_URL}/sign-in?source=desktop`);
 	}, []);
 
 	const signOut = useCallback(async () => {

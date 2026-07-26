@@ -1,9 +1,6 @@
 /* eslint-disable max-lines, max-params */
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeRaw from "rehype-raw";
 import { QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	DirectoryEntry,
@@ -84,12 +81,16 @@ import {
 	type BranchListItem,
 } from "./TargetBranchSelector";
 import { TaskInput } from "./TaskInput";
+import { MarkdownContent } from "./MarkdownContent";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import {
 	useEnqueueWorkspace,
 	useMergeQueueStatus,
 } from "../hooks/useMergeQueueStatus";
+import { FEATURES } from "../lib/features";
 import type { SessionCreationInfo } from "../types/sessions";
+import { CreatePrButtonGroup } from "./CreatePrButtonGroup";
+import { ViewPrButton } from "./ViewPrButton";
 
 interface ShowWorkspaceProps {
 	repositoryPath?: string;
@@ -104,6 +105,7 @@ interface ShowWorkspaceProps {
 	onCreateStackedWorkspace?: () => void;
 	/** Called when the user clicks a sibling workspace in the stack panel */
 	onNavigateToWorkspace?: (workspace: Workspace) => void;
+	onViewPrInApp?: (prNumber: number) => void;
 	/** Called when user wants to move a commit to a new workspace */
 	onMoveCommitToNewWorkspace?: (
 		commit: import("../lib/api").JjLogCommit,
@@ -139,6 +141,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 		onOpenBranchSwitcher,
 		onCreateStackedWorkspace,
 		onNavigateToWorkspace,
+		onViewPrInApp,
 		onMoveCommitToNewWorkspace,
 		onMoveCommitToExistingWorkspace,
 		onMoveFilesToNewWorkspace,
@@ -1169,26 +1172,12 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 													<h2 className="text-lg font-semibold mb-4">
 														README.md
 													</h2>
-													<div className="prose dark:prose-invert max-w-none prose-headings:font-semibold prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl prose-a:text-blue-500 prose-a:no-underline hover:prose-a:underline prose-strong:font-semibold prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-[''] prose-code:after:content-[''] prose-pre:bg-muted prose-pre:border prose-pre:border-border">
-														<ReactMarkdown
-															remarkPlugins={[remarkGfm]}
-															rehypePlugins={[rehypeRaw]}
-															components={{
-																img: ({ src, alt, ...props }) => (
-																	<img
-																		src={resolveReadmeImageSrc(
-																			src,
-																			readmeBaseDir,
-																		)}
-																		alt={alt ?? ""}
-																		{...props}
-																	/>
-																),
-															}}
-														>
-															{readmeContent.replace(/<!--[\s\S]*?-->/g, "")}
-														</ReactMarkdown>
-													</div>
+													<MarkdownContent
+														content={readmeContent}
+														resolveImageSrc={(src) =>
+															resolveReadmeImageSrc(src, readmeBaseDir)
+														}
+													/>
 												</>
 											) : (
 												<div className="text-muted-foreground text-sm text-center py-4">
@@ -1494,6 +1483,25 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 									</TooltipProvider>
 								)}
 
+								{/* Create / View PR once the branch is on a GitHub remote */}
+								{workspace &&
+									!workspace.not_on_remote &&
+									workspace.branch_name !== defaultBranch &&
+									effectiveRepoPath && (
+										<>
+											<ViewPrButton
+												repoPath={effectiveRepoPath}
+												branchName={workspace.branch_name}
+												onViewInApp={onViewPrInApp}
+											/>
+											<CreatePrButtonGroup
+												repoPath={effectiveRepoPath}
+												workspace={workspace}
+												baseBranch={targetBranch ?? defaultTargetBranch}
+											/>
+										</>
+									)}
+
 								{/* Sync control - status + icon in one clickable button */}
 								{(!workspace || !workspace.not_on_remote) &&
 									syncStatus &&
@@ -1535,7 +1543,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 										</TooltipProvider>
 									)}
 								{/* Merge queue button */}
-								{workspace &&
+								{FEATURES.mergeQueue &&
+									workspace &&
 									workspace.branch_name !== defaultBranch &&
 									!workspace.not_on_remote && (
 										<TooltipProvider delayDuration={200}>

@@ -13,21 +13,14 @@ export function useGitRemoteInfo(repoPath: string | undefined) {
 	});
 }
 
-/** Try `gh pr view` first; returns null if gh is not available or no PR exists. */
+/** Try `gh pr view`; null means the command positively reported no PR. */
 export function usePrInfoViaGh(
 	repoPath: string | undefined,
 	branchName: string | undefined,
 ) {
 	return useQuery<PrInfo | null>({
 		queryKey: ["pr-info-gh", repoPath, branchName],
-		queryFn: async () => {
-			try {
-				return await getPrInfoViaGh(repoPath!, branchName!);
-			} catch {
-				// gh not installed or errored — surface as null, not an error
-				return null;
-			}
-		},
+		queryFn: () => getPrInfoViaGh(repoPath!, branchName!),
 		enabled: !!repoPath && !!branchName,
 		staleTime: 30_000,
 		refetchInterval: 60_000,
@@ -62,12 +55,16 @@ export function useEnqueueWorkspace(
 ) {
 	const queryClient = useQueryClient();
 	const { data: remoteInfo } = useGitRemoteInfo(repoPath);
-	const { data: prInfoGh } = usePrInfoViaGh(repoPath, branchName);
+	const { data: prInfoGh, error: prInfoGhError } = usePrInfoViaGh(
+		repoPath,
+		branchName,
+	);
 
 	const mutate = useCallback(
 		async (action: "enqueue" | "dequeue") => {
 			if (!remoteInfo || !branchName)
 				throw new Error("Repository or branch not detected");
+			if (action === "enqueue" && prInfoGhError) throw prInfoGhError;
 
 			if (prInfoGh !== undefined && prInfoGh !== null) {
 				if (prInfoGh.state !== "OPEN" && action === "enqueue") {
@@ -90,11 +87,11 @@ export function useEnqueueWorkspace(
 				queryKey: ["merge-queue-status", remoteInfo.full_name, branchName],
 			});
 		},
-		[remoteInfo, branchName, prInfoGh, queryClient],
+		[remoteInfo, branchName, prInfoGh, prInfoGhError, queryClient],
 	);
 
 	const enqueue = useMutation({ mutationFn: () => mutate("enqueue") });
 	const dequeue = useMutation({ mutationFn: () => mutate("dequeue") });
 
-	return { enqueue, dequeue, remoteInfo, prInfoGh };
+	return { enqueue, dequeue, remoteInfo, prInfoGh, prInfoGhError };
 }

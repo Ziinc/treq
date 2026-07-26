@@ -148,6 +148,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		setViewMode("github");
 	}, []);
 
+	const [githubInitialPrNumber, setGithubInitialPrNumber] = useState<
+		number | null
+	>(null);
+
+	const openGitHubPr = useCallback((prNumber: number) => {
+		setGithubInitialPrNumber(prNumber);
+		setViewMode("github");
+	}, []);
+
+	const clearGithubInitialPr = useCallback(() => {
+		setGithubInitialPrNumber(null);
+	}, []);
+
 	const handleOpenMergePreview = useCallback(() => {
 		if (selectedWorkspace) {
 			setMergeWorkspace(selectedWorkspace);
@@ -1045,6 +1058,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 									onDeleteWorkspace={handleDelete}
 									onOpenFilePicker={() => setShowFilePicker(true)}
 									onOpenMergePreview={handleOpenMergePreview}
+									onViewPrInApp={openGitHubPr}
 									onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
 									onCreateStackedWorkspace={handleCreateStackedWorkspace}
 									onNavigateToWorkspace={handleSelectWorkspace}
@@ -1189,7 +1203,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
 					{viewMode === "github" && (
 						<GitHubPanel
 							repoPath={repoPath}
-							onClose={handleReturnToDashboard}
+							initialPrNumber={githubInitialPrNumber}
+							onInitialPrConsumed={clearGithubInitialPr}
 						/>
 					)}
 

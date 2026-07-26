@@ -1,6 +1,7 @@
 import React from 'react';
 import BrowserOnly from '@docusaurus/BrowserOnly';
 import Head from '@docusaurus/Head';
+import { AuthProvider } from '@site/src/components/AuthProvider';
 import { SearchDbProvider } from '@site/src/utils/SearchDbContext';
 import interLatin400 from '@site/static/fonts/inter-400-latin.woff2';
 
@@ -20,9 +21,11 @@ export default function Root({ children }: { children: React.ReactNode }) {
           crossOrigin="anonymous"
         />
       </Head>
-      <BrowserOnly fallback={<>{children}</>}>
-        {() => <SearchDbProvider>{children}</SearchDbProvider>}
-      </BrowserOnly>
+      <AuthProvider>
+        <BrowserOnly fallback={<>{children}</>}>
+          {() => <SearchDbProvider>{children}</SearchDbProvider>}
+        </BrowserOnly>
+      </AuthProvider>
     </>
   );
 }
