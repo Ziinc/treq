@@ -16,6 +16,8 @@ pub struct PrInfo {
     pub head_ref_name: String,
     pub base_ref_name: String,
     pub merge_state_status: Option<String>,
+    #[serde(default)]
+    pub is_draft: bool,
 }
 
 /// Parse owner/repo from a GitHub remote URL in SSH or HTTPS form.
@@ -26,7 +28,7 @@ pub fn parse_github_remote(url: &str) -> Option<GitRemoteInfo> {
     // SSH: git@github.com:owner/repo.git
     if let Some(rest) = url.strip_prefix("git@github.com:") {
         let path = rest.trim_end_matches(".git");
-        let (owner, repo) = path.split_once('/')?;
+        let (owner, repo) = valid_repo_path(path)?;
         return Some(GitRemoteInfo {
             owner: owner.to_string(),
             repo: repo.to_string(),
@@ -38,7 +40,7 @@ pub fn parse_github_remote(url: &str) -> Option<GitRemoteInfo> {
     for prefix in &["https://github.com/", "http://github.com/"] {
         if let Some(rest) = url.strip_prefix(prefix) {
             let path = rest.trim_end_matches(".git");
-            let (owner, repo) = path.split_once('/')?;
+            let (owner, repo) = valid_repo_path(path)?;
             return Some(GitRemoteInfo {
                 owner: owner.to_string(),
                 repo: repo.to_string(),
@@ -50,10 +52,57 @@ pub fn parse_github_remote(url: &str) -> Option<GitRemoteInfo> {
     None
 }
 
+fn valid_repo_path(path: &str) -> Option<(&str, &str)> {
+    let mut parts = path.split('/');
+    let owner = parts.next()?;
+    let repo = parts.next()?;
+    if owner.is_empty() || repo.is_empty() || parts.next().is_some() {
+        return None;
+    }
+    Some((owner, repo))
+}
+
 /// Read the GitHub remote URL from .git/config and parse owner/repo.
 /// Returns None if no GitHub remote is found or the directory is not a git repo.
 pub fn get_git_remote_url_impl(repo_path: &str) -> Result<Option<GitRemoteInfo>, String> {
-    let git_config_path = Path::new(repo_path).join(".git").join("config");
+    let dot_git = Path::new(repo_path).join(".git");
+    let git_dir = if dot_git.is_dir() {
+        dot_git
+    } else if dot_git.is_file() {
+        let pointer = std::fs::read_to_string(&dot_git).map_err(|e| e.to_string())?;
+        let path = pointer
+            .trim()
+            .strip_prefix("gitdir:")
+            .map(str::trim)
+            .ok_or_else(|| "Malformed .git worktree pointer".to_string())?;
+        let path = Path::new(path);
+        if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            Path::new(repo_path).join(path)
+        }
+    } else {
+        return Ok(None);
+    };
+    let common_dir = git_dir.join("commondir");
+    let config_dir = if common_dir.is_file() {
+        let common = std::fs::read_to_string(common_dir).map_err(|e| e.to_string())?;
+        git_dir.join(common.trim())
+    } else if git_dir.join("config").is_file() {
+        git_dir
+    } else if git_dir
+        .parent()
+        .is_some_and(|parent| parent.file_name().is_some_and(|name| name == "worktrees"))
+    {
+        git_dir
+            .parent()
+            .and_then(Path::parent)
+            .unwrap()
+            .to_path_buf()
+    } else {
+        git_dir
+    };
+    let git_config_path = config_dir.join("config");
     if !git_config_path.exists() {
         return Ok(None);
     }
@@ -136,6 +185,8 @@ pub struct GhPullRequest {
     pub created_at: String,
     pub updated_at: String,
     pub comments: Option<Vec<GhIssueComment>>,
+    #[serde(default)]
+    pub is_draft: bool,
 }
 
 fn run_gh(
@@ -163,12 +214,40 @@ fn parse_number_from_url(url: &str) -> Option<u64> {
     url.trim().rsplit('/').next()?.parse().ok()
 }
 
+pub const GH_LIST_PAGE_SIZE: u32 = 30;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GhListPage<T> {
+    pub items: Vec<T>,
+    pub has_more: bool,
+}
+
+/// Given items fetched with `--limit (limit * page)`, return the requested page slice.
+pub fn take_list_page<T>(fetched: Vec<T>, limit: u32, page: u32) -> GhListPage<T> {
+    let limit = limit.max(1) as usize;
+    let page = page.max(1) as usize;
+    let has_more = fetched.len() == limit * page;
+    let start = (page - 1) * limit;
+    let items = if start >= fetched.len() {
+        Vec::new()
+    } else {
+        fetched.into_iter().skip(start).take(limit).collect()
+    };
+    GhListPage { items, has_more }
+}
+
 pub fn gh_list_issues_impl(
     gh_path: &str,
     repo_full_name: &str,
     state: &str,
+    limit: u32,
+    page: u32,
     extended_path: &str,
-) -> Result<Vec<GhIssue>, String> {
+) -> Result<GhListPage<GhIssue>, String> {
+    let limit = limit.max(1);
+    let page = page.max(1);
+    let fetch_limit = (limit * page).to_string();
     let out = run_gh(
         gh_path,
         &[
@@ -181,12 +260,14 @@ pub fn gh_list_issues_impl(
             "--json",
             "number,title,state,url,author,labels,createdAt,updatedAt",
             "--limit",
-            "100",
+            &fetch_limit,
         ],
         extended_path,
     )?;
     let bytes = check_gh_output(out)?;
-    serde_json::from_slice(&bytes).map_err(|e| format!("Failed to parse gh output: {e}"))
+    let fetched: Vec<GhIssue> =
+        serde_json::from_slice(&bytes).map_err(|e| format!("Failed to parse gh output: {e}"))?;
+    Ok(take_list_page(fetched, limit, page))
 }
 
 pub fn gh_view_issue_impl(
@@ -302,8 +383,13 @@ pub fn gh_list_prs_impl(
     gh_path: &str,
     repo_full_name: &str,
     state: &str,
+    limit: u32,
+    page: u32,
     extended_path: &str,
-) -> Result<Vec<GhPullRequest>, String> {
+) -> Result<GhListPage<GhPullRequest>, String> {
+    let limit = limit.max(1);
+    let page = page.max(1);
+    let fetch_limit = (limit * page).to_string();
     let out = run_gh(
         gh_path,
         &[
@@ -314,14 +400,16 @@ pub fn gh_list_prs_impl(
             "--state",
             state,
             "--json",
-            "number,title,state,url,author,labels,headRefName,baseRefName,createdAt,updatedAt",
+            "number,title,state,url,author,labels,headRefName,baseRefName,createdAt,updatedAt,isDraft",
             "--limit",
-            "100",
+            &fetch_limit,
         ],
         extended_path,
     )?;
     let bytes = check_gh_output(out)?;
-    serde_json::from_slice(&bytes).map_err(|e| format!("Failed to parse gh output: {e}"))
+    let fetched: Vec<GhPullRequest> =
+        serde_json::from_slice(&bytes).map_err(|e| format!("Failed to parse gh output: {e}"))?;
+    Ok(take_list_page(fetched, limit, page))
 }
 
 pub fn gh_view_pr_impl(
@@ -340,7 +428,7 @@ pub fn gh_view_pr_impl(
             "--repo",
             repo_full_name,
             "--json",
-            "number,title,state,url,body,author,labels,headRefName,baseRefName,mergeStateStatus,createdAt,updatedAt,comments",
+            "number,title,state,url,body,author,labels,headRefName,baseRefName,mergeStateStatus,createdAt,updatedAt,comments,isDraft",
         ],
         extended_path,
     )?;
@@ -402,6 +490,23 @@ pub fn gh_reopen_pr_impl(
     check_gh_output(out).map(|_| ())
 }
 
+/// Mark a PR ready for review (`draft = false`) or convert it to draft (`draft = true`).
+pub fn gh_set_pr_draft_impl(
+    gh_path: &str,
+    repo_full_name: &str,
+    pr_number: u64,
+    draft: bool,
+    extended_path: &str,
+) -> Result<(), String> {
+    let num = pr_number.to_string();
+    let mut args = vec!["pr", "ready", num.as_str(), "--repo", repo_full_name];
+    if draft {
+        args.push("--undo");
+    }
+    let out = run_gh(gh_path, &args, extended_path)?;
+    check_gh_output(out).map(|_| ())
+}
+
 pub fn gh_create_pr_impl(
     gh_path: &str,
     repo_full_name: &str,
@@ -409,26 +514,27 @@ pub fn gh_create_pr_impl(
     body: &str,
     base_branch: &str,
     head_branch: &str,
+    draft: bool,
     extended_path: &str,
 ) -> Result<u64, String> {
-    let out = run_gh(
-        gh_path,
-        &[
-            "pr",
-            "create",
-            "--repo",
-            repo_full_name,
-            "--title",
-            title,
-            "--body",
-            body,
-            "--base",
-            base_branch,
-            "--head",
-            head_branch,
-        ],
-        extended_path,
-    )?;
+    let mut args = vec![
+        "pr",
+        "create",
+        "--repo",
+        repo_full_name,
+        "--title",
+        title,
+        "--body",
+        body,
+        "--base",
+        base_branch,
+        "--head",
+        head_branch,
+    ];
+    if draft {
+        args.push("--draft");
+    }
+    let out = run_gh(gh_path, &args, extended_path)?;
     let bytes = check_gh_output(out)?;
     let text = String::from_utf8_lossy(&bytes);
     for line in text.lines() {
@@ -458,6 +564,8 @@ pub fn get_pr_info_via_gh_impl(
         head_ref_name: String,
         base_ref_name: String,
         merge_state_status: Option<String>,
+        #[serde(default)]
+        is_draft: bool,
     }
 
     let output = std::process::Command::new(gh_path)
@@ -466,7 +574,7 @@ pub fn get_pr_info_via_gh_impl(
             "view",
             branch_name,
             "--json",
-            "number,title,state,url,headRefName,baseRefName,mergeStateStatus",
+            "number,title,state,url,headRefName,baseRefName,mergeStateStatus,isDraft",
         ])
         .current_dir(repo_path)
         .env("PATH", extended_path)
@@ -474,8 +582,14 @@ pub fn get_pr_info_via_gh_impl(
         .map_err(|e| e.to_string())?;
 
     if !output.status.success() {
-        // gh exits non-zero when no PR exists or not authenticated — treat as None
-        return Ok(None);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr
+            .to_ascii_lowercase()
+            .contains("no pull requests found")
+        {
+            return Ok(None);
+        }
+        return Err(format!("gh pr view failed: {}", stderr.trim()));
     }
 
     let raw: GhPrView = serde_json::from_slice(&output.stdout)
@@ -489,6 +603,7 @@ pub fn get_pr_info_via_gh_impl(
         head_ref_name: raw.head_ref_name,
         base_ref_name: raw.base_ref_name,
         merge_state_status: raw.merge_state_status,
+        is_draft: raw.is_draft,
     }))
 }
 
@@ -531,6 +646,19 @@ mod tests {
     #[test]
     fn test_parse_invalid_url_returns_none() {
         assert!(parse_github_remote("not-a-url").is_none());
+    }
+
+    #[test]
+    fn rejects_malformed_github_remote_paths() {
+        for url in [
+            "https://github.com/owner",
+            "https://github.com/owner/",
+            "https://github.com//repo.git",
+            "https://github.com/owner/repo/extra",
+            "git@github.com:owner/repo/extra.git",
+        ] {
+            assert!(parse_github_remote(url).is_none(), "accepted {url}");
+        }
     }
 
     #[test]
@@ -615,6 +743,31 @@ mod tests {
         assert!(result.is_none());
     }
 
+    #[test]
+    fn reads_origin_from_git_worktree_common_config() {
+        let dir = TempDir::new().unwrap();
+        let common = dir.path().join("repo/.git");
+        let worktree = dir.path().join("repo/.git/worktrees/feature");
+        let checkout = dir.path().join("feature");
+        fs::create_dir_all(&worktree).unwrap();
+        fs::create_dir_all(&checkout).unwrap();
+        fs::write(
+            common.join("config"),
+            "[remote \"origin\"]\n url = https://github.com/owner/repo.git\n",
+        )
+        .unwrap();
+        fs::write(
+            checkout.join(".git"),
+            format!("gitdir: {}\n", worktree.display()),
+        )
+        .unwrap();
+
+        let info = get_git_remote_url_impl(checkout.to_str().unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(info.full_name, "owner/repo");
+    }
+
     // ── get_pr_info_via_gh_impl ──────────────────────────────────────────────
 
     #[cfg(unix)]
@@ -635,7 +788,7 @@ mod tests {
         let repo_dir = TempDir::new().unwrap();
         let gh_path = write_fake_gh(
             &bin_dir,
-            r#"echo '{"number":42,"title":"My PR","state":"OPEN","url":"https://github.com/o/r/pull/42","headRefName":"feat","baseRefName":"main","mergeStateStatus":"CLEAN"}'"#,
+            r#"echo '{"number":42,"title":"My PR","state":"OPEN","url":"https://github.com/o/r/pull/42","headRefName":"feat","baseRefName":"main","mergeStateStatus":"CLEAN","isDraft":false}'"#,
         );
 
         let info = get_pr_info_via_gh_impl(
@@ -653,24 +806,73 @@ mod tests {
         assert_eq!(info.head_ref_name, "feat");
         assert_eq!(info.base_ref_name, "main");
         assert_eq!(info.merge_state_status.as_deref(), Some("CLEAN"));
+        assert!(!info.is_draft);
     }
 
     #[test]
     #[cfg(unix)]
-    fn test_get_pr_info_via_gh_nonzero_exit_returns_none() {
+    fn get_pr_info_parses_draft_flag() {
         let bin_dir = TempDir::new().unwrap();
         let repo_dir = TempDir::new().unwrap();
-        let gh_path = write_fake_gh(&bin_dir, "exit 1");
+        let gh_path = write_fake_gh(
+            &bin_dir,
+            r#"echo '{"number":7,"title":"Draft","state":"OPEN","url":"https://github.com/o/r/pull/7","headRefName":"feat","baseRefName":"main","mergeStateStatus":null,"isDraft":true}'"#,
+        );
+
+        let info = get_pr_info_via_gh_impl(
+            &gh_path,
+            repo_dir.path().to_str().unwrap(),
+            "feat",
+            "/usr/bin:/bin",
+        )
+        .unwrap()
+        .unwrap();
+        assert!(info.is_draft);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn get_pr_info_invokes_gh_with_exact_arguments_and_working_directory() {
+        let bin_dir = TempDir::new().unwrap();
+        let repo_dir = TempDir::new().unwrap();
+        let expected_dir = repo_dir.path().canonicalize().unwrap();
+        let expected_dir = expected_dir.display();
+        let script = format!(
+            r#"test "$PWD" = "{expected_dir}" || exit 8
+test "$*" = "pr view feat --json number,title,state,url,headRefName,baseRefName,mergeStateStatus,isDraft" || exit 9
+echo '{{"number":42,"title":"My PR","state":"OPEN","url":"https://github.com/o/r/pull/42","headRefName":"feat","baseRefName":"main","mergeStateStatus":null,"isDraft":false}}'"#,
+        );
+        let gh_path = write_fake_gh(&bin_dir, &script);
 
         let result = get_pr_info_via_gh_impl(
             &gh_path,
             repo_dir.path().to_str().unwrap(),
             "feat",
             "/usr/bin:/bin",
-        )
-        .unwrap();
+        );
 
-        assert!(result.is_none());
+        assert!(result.unwrap().is_some());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_get_pr_info_via_gh_operational_error_is_returned() {
+        let bin_dir = TempDir::new().unwrap();
+        let repo_dir = TempDir::new().unwrap();
+        let gh_path = write_fake_gh(&bin_dir, "echo 'authentication required' >&2\nexit 1");
+
+        let result = get_pr_info_via_gh_impl(
+            &gh_path,
+            repo_dir.path().to_str().unwrap(),
+            "feat",
+            "/usr/bin:/bin",
+        );
+        let error = match result {
+            Err(error) => error,
+            Ok(_) => panic!("operational gh failure was treated as no PR"),
+        };
+
+        assert!(error.contains("authentication required"));
     }
 
     #[test]
@@ -693,8 +895,110 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
+    fn gh_create_pr_passes_draft_flag_when_requested() {
+        let bin_dir = TempDir::new().unwrap();
+        let gh_path = write_fake_gh(
+            &bin_dir,
+            r#"test "$*" = "pr create --repo owner/repo --title T --body B --base main --head feat --draft" || exit 9
+echo 'https://github.com/owner/repo/pull/7'"#,
+        );
+
+        let number = gh_create_pr_impl(
+            &gh_path,
+            "owner/repo",
+            "T",
+            "B",
+            "main",
+            "feat",
+            true,
+            "/usr/bin:/bin",
+        )
+        .unwrap();
+        assert_eq!(number, 7);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn gh_create_pr_omits_draft_flag_when_not_requested() {
+        let bin_dir = TempDir::new().unwrap();
+        let gh_path = write_fake_gh(
+            &bin_dir,
+            r#"test "$*" = "pr create --repo owner/repo --title T --body B --base main --head feat" || exit 9
+echo 'https://github.com/owner/repo/pull/8'"#,
+        );
+
+        let number = gh_create_pr_impl(
+            &gh_path,
+            "owner/repo",
+            "T",
+            "B",
+            "main",
+            "feat",
+            false,
+            "/usr/bin:/bin",
+        )
+        .unwrap();
+        assert_eq!(number, 8);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn gh_set_pr_draft_marks_ready_without_undo() {
+        let bin_dir = TempDir::new().unwrap();
+        let gh_path = write_fake_gh(
+            &bin_dir,
+            r#"test "$*" = "pr ready 9 --repo owner/repo" || exit 9
+echo ok"#,
+        );
+        gh_set_pr_draft_impl(&gh_path, "owner/repo", 9, false, "/usr/bin:/bin").unwrap();
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn gh_set_pr_draft_converts_to_draft_with_undo() {
+        let bin_dir = TempDir::new().unwrap();
+        let gh_path = write_fake_gh(
+            &bin_dir,
+            r#"test "$*" = "pr ready 9 --repo owner/repo --undo" || exit 9
+echo ok"#,
+        );
+        gh_set_pr_draft_impl(&gh_path, "owner/repo", 9, true, "/usr/bin:/bin").unwrap();
+    }
+
+    #[test]
     fn test_get_pr_info_via_gh_bad_binary_returns_err() {
         let result = get_pr_info_via_gh_impl("/nonexistent/gh", "/tmp", "feat", "/usr/bin:/bin");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn take_list_page_returns_first_page_and_has_more_when_full() {
+        // Page 1 is fetched with --limit (limit * page) == 2
+        let page = take_list_page(vec![1, 2], 2, 1);
+        assert_eq!(page.items, vec![1, 2]);
+        assert!(page.has_more);
+    }
+
+    #[test]
+    fn take_list_page_returns_second_page_slice() {
+        // Page 2 is fetched with --limit 4
+        let page = take_list_page(vec![1, 2, 3, 4], 2, 2);
+        assert_eq!(page.items, vec![3, 4]);
+        assert!(page.has_more);
+    }
+
+    #[test]
+    fn take_list_page_has_more_false_when_short_of_full_prefix() {
+        let page = take_list_page(vec![1, 2, 3], 2, 2);
+        assert_eq!(page.items, vec![3]);
+        assert!(!page.has_more);
+    }
+
+    #[test]
+    fn take_list_page_has_more_false_on_short_first_page() {
+        let page = take_list_page(vec![1], 2, 1);
+        assert_eq!(page.items, vec![1]);
+        assert!(!page.has_more);
     }
 }

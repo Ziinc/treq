@@ -239,6 +239,19 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 			? repoPath.split("/").filter(Boolean).pop() || "Repository"
 			: "Repository";
 
+		// GitHub/Settings are their own nav destinations — don't keep home/workspace
+		// selection highlighted alongside them.
+		const workspaceSelectionActive =
+			currentPage !== "github" && currentPage !== "settings";
+		const isHomeSelected =
+			workspaceSelectionActive && selectedWorkspaceId === null;
+		const activeSelectedWorkspaceId = workspaceSelectionActive
+			? selectedWorkspaceId
+			: undefined;
+		const activeSelectedWorkspaceIds = workspaceSelectionActive
+			? selectedWorkspaceIds
+			: undefined;
+
 		return (
 			<TooltipProvider delayDuration={200} skipDelayDuration={100}>
 				<div className="group/sidebar w-[280px] bg-sidebar border-r border-border flex flex-col h-screen">
@@ -253,29 +266,6 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 								<Kbd>⌘ + K</Kbd>
 							</KbdGroup>
 						</button>
-						{onOpenGitHub && (
-							<Tooltip>
-								<TooltipTrigger asChild>
-									<button
-										type="button"
-										onClick={onOpenGitHub}
-										className={`h-9 w-9 rounded-lg hover:bg-muted flex items-center justify-center transition-colors border border-border ${
-											currentPage === "github" ? "bg-primary/20" : "bg-muted/50"
-										}`}
-										aria-label="GitHub"
-									>
-										<Github
-											className={`w-4 h-4 ${
-												currentPage === "github"
-													? "text-primary"
-													: "text-muted-foreground"
-											}`}
-										/>
-									</button>
-								</TooltipTrigger>
-								<TooltipContent side="bottom">GitHub</TooltipContent>
-							</Tooltip>
-						)}
 						{openSettings && (
 							<Tooltip>
 								<TooltipTrigger asChild>
@@ -314,7 +304,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 										<div
 											data-testid="home-repo-row"
 											className={`relative flex items-center text-sm tracking-wide px-2 py-1 rounded-md transition-colors cursor-pointer ${
-												selectedWorkspaceId === null
+												isHomeSelected
 													? "bg-primary/20"
 													: "hover:bg-muted/50"
 											}`}
@@ -337,14 +327,14 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 										>
 											<Home
 												className={`w-3 h-3 mr-1 shrink-0 ${
-													selectedWorkspaceId === null
+													isHomeSelected
 														? "text-primary"
 														: "text-muted-foreground"
 												}`}
 											/>
 											<span
 												className={`flex-1 min-w-0 truncate font-mono ${
-													selectedWorkspaceId === null
+													isHomeSelected
 														? "text-primary font-medium"
 														: "text-muted-foreground"
 												}`}
@@ -379,6 +369,37 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 							</ContextMenuContent>
 						</ContextMenu>
 
+						{onOpenGitHub && (
+							<button
+								type="button"
+								data-testid="github-sidebar-item"
+								onClick={onOpenGitHub}
+								className={`relative flex items-center text-sm tracking-wide px-2 py-1 rounded-md transition-colors cursor-pointer w-full ${
+									currentPage === "github"
+										? "bg-primary/20"
+										: "hover:bg-muted/50"
+								}`}
+								aria-label="GitHub"
+							>
+								<Github
+									className={`w-3 h-3 mr-1 shrink-0 ${
+										currentPage === "github"
+											? "text-primary"
+											: "text-muted-foreground"
+									}`}
+								/>
+								<span
+									className={`${
+										currentPage === "github"
+											? "text-primary font-medium"
+											: "text-muted-foreground"
+									}`}
+								>
+									Github
+								</span>
+							</button>
+						)}
+
 						{workspaces.length > 0 && (
 							<div className="my-2 border-t border-border" />
 						)}
@@ -408,8 +429,8 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 												node={node}
 												index={index}
 												repoPath={repoPath}
-												selectedWorkspaceId={selectedWorkspaceId}
-												selectedWorkspaceIds={selectedWorkspaceIds}
+												selectedWorkspaceId={activeSelectedWorkspaceId}
+												selectedWorkspaceIds={activeSelectedWorkspaceIds}
 												onWorkspaceClick={onWorkspaceClick}
 												onWorkspaceMultiSelect={onWorkspaceMultiSelect}
 												onAddAfter={onAddAfter}

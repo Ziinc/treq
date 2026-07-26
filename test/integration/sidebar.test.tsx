@@ -266,6 +266,74 @@ describe("Dashboard - workspace list", () => {
 			await screen.findByText(/delete 2 workspaces/i);
 		});
 
+		it("shows GitHub as a sidebar item below the home repo row", async () => {
+			render(<Dashboard />);
+
+			const sidebarRoot = document.querySelector(
+				`.${CSS.escape("group/sidebar")}`,
+			) as HTMLElement;
+			expect(sidebarRoot).toBeTruthy();
+
+			const homeRepoRow = await waitFor(() => {
+				const row = sidebarRoot.querySelector(
+					'[data-testid="home-repo-row"]',
+				) as HTMLElement;
+				expect(row).toBeTruthy();
+				return row;
+			});
+
+			const githubItem = within(sidebarRoot).getByRole("button", {
+				name: /github/i,
+			});
+			expect(githubItem).toBeTruthy();
+			expect(githubItem.textContent).toMatch(/github/i);
+
+			const homeIndex = Array.from(sidebarRoot.querySelectorAll("*")).indexOf(
+				homeRepoRow,
+			);
+			const githubIndex = Array.from(sidebarRoot.querySelectorAll("*")).indexOf(
+				githubItem,
+			);
+			expect(githubIndex).toBeGreaterThan(homeIndex);
+
+			await user.click(githubItem);
+			expect(
+				await screen.findByRole("heading", { name: /^github$/i }),
+			).toBeTruthy();
+		});
+
+		it("highlights only the GitHub sidebar item when GitHub is open", async () => {
+			render(<Dashboard />);
+
+			const sidebarRoot = document.querySelector(
+				`.${CSS.escape("group/sidebar")}`,
+			) as HTMLElement;
+			expect(sidebarRoot).toBeTruthy();
+
+			const homeRepoRow = await waitFor(() => {
+				const row = sidebarRoot.querySelector(
+					'[data-testid="home-repo-row"]',
+				) as HTMLElement;
+				expect(row).toBeTruthy();
+				return row;
+			});
+
+			await waitFor(() => {
+				expect(homeRepoRow).toHaveClass("bg-primary/20");
+			});
+
+			const githubItem = within(sidebarRoot).getByTestId("github-sidebar-item");
+			await user.click(githubItem);
+
+			await screen.findByRole("heading", { name: /^github$/i });
+
+			await waitFor(() => {
+				expect(githubItem).toHaveClass("bg-primary/20");
+				expect(homeRepoRow).not.toHaveClass("bg-primary/20");
+			});
+		});
+
+
 		it("keeps shift-click selection contiguous across the visible sidebar order", async () => {
 			await createWorkspace(repoPath, "gumbo-notes");
 			await createWorkspace(repoPath, "rubber-test-123");

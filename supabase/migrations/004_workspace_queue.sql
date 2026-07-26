@@ -14,7 +14,7 @@ returns table (
   entry_id uuid,
   pr_number int,
   status text,
-  position int,
+  "position" int,
   target_branch text,
   lane_number int,
   ci_run_status text,
@@ -67,7 +67,7 @@ create or replace function public.get_repo_branch_queue_statuses(
 returns table (
   branch_name text,
   status text,
-  position int,
+  "position" int,
   target_branch text
 )
 language sql

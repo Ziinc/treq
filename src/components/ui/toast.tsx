@@ -9,6 +9,10 @@ interface Toast {
 	title: string;
 	description?: string;
 	type: ToastType;
+	action?: {
+		label: string;
+		onClick: () => void;
+	};
 }
 
 const ToastContext = React.createContext<{
@@ -77,6 +81,18 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
 						<div className="text-base opacity-90 mt-0.5">
 							{toast.description}
 						</div>
+					)}
+					{toast.action && (
+						<button
+							type="button"
+							onClick={() => {
+								toast.action?.onClick();
+								onClose();
+							}}
+							className="mt-2 text-base font-medium underline underline-offset-2 opacity-95 hover:opacity-100"
+						>
+							{toast.action.label}
+						</button>
 					)}
 				</div>
 				<button

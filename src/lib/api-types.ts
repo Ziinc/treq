@@ -343,6 +343,11 @@ export interface GhIssueComment {
 	created_at: string;
 }
 
+export interface GhListPage<T> {
+	items: T[];
+	hasMore: boolean;
+}
+
 export interface GhIssue {
 	number: number;
 	title: string;
@@ -370,6 +375,7 @@ export interface GhPullRequest {
 	created_at: string;
 	updated_at: string;
 	comments: GhIssueComment[] | null;
+	is_draft?: boolean;
 }
 
 export interface PrInfo {
@@ -381,6 +387,7 @@ export interface PrInfo {
 	head_ref_name: string;
 	base_ref_name: string;
 	merge_state_status: string | null;
+	is_draft?: boolean;
 }
 
 export type QueueEntryStatus =

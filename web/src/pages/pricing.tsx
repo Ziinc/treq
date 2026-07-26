@@ -179,7 +179,7 @@ function PlansSection(): ReactNode {
         <FeatureList features={PRO_FEATURES} />
         <Link
           className={clsx('button', styles.planButton, styles.planButtonPrimary)}
-          to="/login"
+          to="/sign-in"
         >
           Upgrade to Pro
         </Link>

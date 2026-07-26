@@ -5,8 +5,6 @@ import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 import { supabase } from "../lib/supabase";
 import {
   PAYMENT_LINK_URL,
-  APP_DEEP_LINK,
-  APP_DOWNLOAD_URL,
   GITHUB_APP_INSTALL_URL,
 } from "../lib/constants";
 import type { User, Session } from "@supabase/supabase-js";
@@ -306,6 +304,12 @@ function RepoConfigPanel({
 // ── Integrations tab ─────────────────────────────────────────────────────────
 
 function IntegrationsTab() {
+  const { siteConfig } = useDocusaurusContext();
+  const flags = siteConfig.customFields?.featureFlags as
+    | { mergeQueue?: boolean }
+    | undefined;
+  const mergeQueueEnabled = Boolean(flags?.mergeQueue);
+
   const [repos, setRepos] = useState<GithubRepo[]>([]);
   const [loadingRepos, setLoadingRepos] = useState(true);
   const [installError, setInstallError] = useState<string | null>(null);
@@ -313,6 +317,7 @@ function IntegrationsTab() {
   // Installation linking requires a server-created single-use intent; the
   // opaque state travels through GitHub's install flow back to our callback.
   const startInstall = useCallback(async () => {
+    if (!mergeQueueEnabled) return;
     setInstallError(null);
     const { data, error } = await supabase.functions.invoke(
       "create-github-install-intent",
@@ -323,7 +328,7 @@ function IntegrationsTab() {
       return;
     }
     window.location.href = `${GITHUB_APP_INSTALL_URL}?state=${encodeURIComponent(data.state)}`;
-  }, []);
+  }, [mergeQueueEnabled]);
 
   const loadRepos = useCallback(async () => {
     setLoadingRepos(true);
@@ -355,23 +360,59 @@ function IntegrationsTab() {
               </svg>
             </div>
             <div>
-              <div style={styles.integrationName}>GitHub — Merge Queue</div>
+              <div style={styles.integrationName}>GitHub</div>
               <div style={styles.integrationDesc}>
-                Automated parallel merge queues powered by Treq.
+                GitHub management powered by Treq.
               </div>
+              <ul style={styles.integrationFeatureList}>
+                <li>
+                  <code>gh</code> CLI Integration
+                </li>
+                <li>Stacked PRs</li>
+                <li>Issues and PR management</li>
+                <li>
+                  Merge Queue{" "}
+                  <span style={styles.featureProBadge}>PRO</span>
+                </li>
+                <li>
+                  GitHub App Integration{" "}
+                  <span style={styles.featureProBadge}>PRO</span>
+                </li>
+              </ul>
             </div>
           </div>
           <div style={styles.integrationActions}>
             {isConnected ? (
               <span style={styles.connectedBadge}>Connected</span>
             ) : (
-              <button
-                type="button"
-                onClick={startInstall}
-                style={{ ...styles.primaryButton, border: "none", cursor: "pointer" }}
-              >
-                Install GitHub App
-              </button>
+              <div>
+                <span
+                  title={!mergeQueueEnabled ? "Coming Soon" : undefined}
+                  style={
+                    !mergeQueueEnabled
+                      ? { display: "inline-block", cursor: "not-allowed" }
+                      : undefined
+                  }
+                >
+                  <button
+                    type="button"
+                    onClick={startInstall}
+                    disabled={!mergeQueueEnabled}
+                    style={{
+                      ...styles.primaryButton,
+                      border: "none",
+                      ...(!mergeQueueEnabled
+                        ? styles.primaryButtonDisabled
+                        : { cursor: "pointer" }),
+                    }}
+                  >
+                    Install GitHub App
+                  </button>
+                </span>
+                {!mergeQueueEnabled && (
+                  <div style={styles.comingSoonSubtext}>Coming Soon</div>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -388,14 +429,16 @@ function IntegrationsTab() {
               <span style={styles.repoSectionTitle}>
                 {repos.length} {repos.length === 1 ? "repository" : "repositories"}
               </span>
-              <a
-                href={GITHUB_APP_INSTALL_URL}
-                style={styles.manageLink}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Manage access →
-              </a>
+              {mergeQueueEnabled && (
+                <a
+                  href={GITHUB_APP_INSTALL_URL}
+                  style={styles.manageLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Manage access →
+                </a>
+              )}
             </div>
             {loadingRepos ? (
               <div style={styles.loadingText}>Loading repositories…</div>
@@ -406,39 +449,6 @@ function IntegrationsTab() {
             )}
           </div>
         )}
-
-        {!isConnected && !loadingRepos && (
-          <div style={styles.emptyState}>
-            <div style={styles.emptyStateText}>
-              Install the Treq GitHub App to enable merge queues on your repositories.
-              Once installed, PRs labeled <code>merge-queue</code> are automatically
-              batched, tested in parallel CI lanes, and merged in order.
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Linear — still coming soon */}
-      <div style={{ ...styles.card, marginTop: "1rem" }}>
-        <div style={styles.integrationItem}>
-          <div style={styles.integrationInfo}>
-            <div style={styles.integrationIcon}>
-              <svg width="20" height="20" viewBox="0 0 100 100" fill="none">
-                <path d="M20.15 64.15L36 48.29l15.85 15.86L36 80z" fill="#5E6AD2" />
-                <path d="M4.29 48.29L20.15 32.43l15.85 15.86L20.15 64.15z" fill="#5E6AD2" />
-                <path d="M36 32.43L51.85 16.57l15.86 15.86L51.85 48.29z" fill="#5E6AD2" />
-                <path d="M51.85 16.57L67.71.71l15.86 15.86L67.71 32.43z" fill="#5E6AD2" />
-              </svg>
-            </div>
-            <div>
-              <div style={styles.integrationName}>Linear</div>
-              <div style={styles.integrationDesc}>
-                Link issues and track progress directly from Treq.
-              </div>
-            </div>
-          </div>
-          <span style={styles.comingSoonBadge}>Coming Soon</span>
-        </div>
       </div>
     </div>
   );
@@ -447,6 +457,12 @@ function IntegrationsTab() {
 // ── Dashboard shell ──────────────────────────────────────────────────────────
 
 function DashboardContent() {
+  const { siteConfig } = useDocusaurusContext();
+  const flags = siteConfig.customFields?.featureFlags as
+    | { pro?: boolean; stripePayments?: boolean }
+    | undefined;
+  const stripePaymentsEnabled = Boolean(flags?.stripePayments);
+
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -462,7 +478,7 @@ function DashboardContent() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       if (!s) {
-        window.location.href = "/login";
+        window.location.href = "/sign-in";
         return;
       }
       setSession(s);
@@ -475,7 +491,7 @@ function DashboardContent() {
     } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       setUser(s?.user ?? null);
-      if (!s) window.location.href = "/login";
+      if (!s) window.location.href = "/sign-in";
     });
 
     return () => authSub.unsubscribe();
@@ -498,7 +514,7 @@ function DashboardContent() {
   };
 
   const handleUpgrade = () => {
-    if (!user) return;
+    if (!user || !stripePaymentsEnabled) return;
     window.location.href = `${PAYMENT_LINK_URL}?client_reference_id=${user.id}`;
   };
 
@@ -520,7 +536,7 @@ function DashboardContent() {
     subscription?.plan === "pro" && subscription?.status === "active";
 
   return (
-    <div style={styles.container}>
+    <div className="dashboard-page" style={styles.container}>
       <div style={styles.sidebar}>
         <div style={styles.sidebarHeader}>
           {avatarUrl ? (
@@ -561,23 +577,6 @@ function DashboardContent() {
       </div>
 
       <div style={styles.content}>
-        <div style={styles.openAppCard}>
-          <div style={styles.openAppInfo}>
-            <div style={styles.openAppTitle}>Treq Desktop</div>
-            <div style={styles.openAppDesc}>
-              Open the app to manage your workspaces and start coding.
-            </div>
-          </div>
-          <div style={styles.openAppActions}>
-            <a href={APP_DEEP_LINK} style={styles.primaryButton}>
-              Open App
-            </a>
-            <a href={APP_DOWNLOAD_URL} style={styles.openAppDownload}>
-              Download
-            </a>
-          </div>
-        </div>
-
         {activeTab === "subscription" && (
           <div>
             <h2 style={styles.sectionTitle}>Subscription</h2>
@@ -620,9 +619,32 @@ function DashboardContent() {
               )}
               {!isPro && (
                 <div style={{ marginTop: "1.5rem" }}>
-                  <button onClick={handleUpgrade} style={styles.primaryButton}>
-                    Upgrade to Pro
-                  </button>
+                  <span
+                    title={
+                      !stripePaymentsEnabled ? "Coming Soon" : undefined
+                    }
+                    style={
+                      !stripePaymentsEnabled
+                        ? { display: "inline-block", cursor: "not-allowed" }
+                        : undefined
+                    }
+                  >
+                    <button
+                      onClick={handleUpgrade}
+                      disabled={!stripePaymentsEnabled}
+                      style={{
+                        ...styles.primaryButton,
+                        ...(!stripePaymentsEnabled
+                          ? styles.primaryButtonDisabled
+                          : {}),
+                      }}
+                    >
+                      Upgrade to Pro
+                    </button>
+                  </span>
+                  {!stripePaymentsEnabled && (
+                    <div style={styles.comingSoonSubtext}>Coming Soon</div>
+                  )}
                 </div>
               )}
             </div>
@@ -655,12 +677,18 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     display: "flex",
     width: "960px",
-    margin: "2rem auto",
-    padding: "0 1rem",
+    margin: "0 auto",
+    padding: "2rem 1rem",
     gap: "2rem",
-    minHeight: "60vh",
+    alignItems: "stretch",
+    boxSizing: "border-box",
   },
-  sidebar: { width: "240px", flexShrink: 0 },
+  sidebar: {
+    width: "240px",
+    flexShrink: 0,
+    display: "flex",
+    flexDirection: "column",
+  },
   sidebarHeader: {
     display: "flex",
     alignItems: "center",
@@ -713,33 +741,9 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#ef4444",
     fontSize: "0.9rem",
     cursor: "pointer",
-    marginTop: "1rem",
+    marginTop: "auto",
   },
   content: { flex: 1, minWidth: 0 },
-  openAppCard: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "1.25rem 1.5rem",
-    borderRadius: "10px",
-    border: "1px solid var(--ifm-color-primary)",
-    backgroundColor: "var(--ifm-background-color)",
-    marginBottom: "1.5rem",
-  },
-  openAppInfo: { flex: 1, minWidth: 0 },
-  openAppTitle: { fontWeight: 600, fontSize: "0.95rem", marginBottom: "0.2rem" },
-  openAppDesc: { fontSize: "0.8rem", color: "var(--ifm-color-emphasis-500)" },
-  openAppActions: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.75rem",
-    flexShrink: 0,
-  },
-  openAppDownload: {
-    fontSize: "0.85rem",
-    color: "var(--ifm-color-emphasis-500)",
-    textDecoration: "none",
-  },
   sectionTitle: { fontSize: "1.25rem", fontWeight: 700, marginBottom: "1rem" },
   card: {
     padding: "1.5rem",
@@ -790,6 +794,15 @@ const styles: Record<string, React.CSSProperties> = {
     transition: "all 0.2s",
     textDecoration: "none",
   },
+  primaryButtonDisabled: {
+    opacity: 0.45,
+    cursor: "not-allowed",
+  },
+  comingSoonSubtext: {
+    marginTop: "0.5rem",
+    fontSize: "0.8rem",
+    color: "var(--ifm-color-emphasis-500)",
+  },
   // Integrations tab
   integrationHeader: {
     display: "flex",
@@ -797,15 +810,9 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     gap: "1rem",
   },
-  integrationItem: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: "1rem",
-  },
   integrationInfo: {
     display: "flex",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: "0.75rem",
     flex: 1,
     minWidth: 0,
@@ -823,6 +830,25 @@ const styles: Record<string, React.CSSProperties> = {
   },
   integrationName: { fontWeight: 600, fontSize: "0.9rem", marginBottom: "0.15rem" },
   integrationDesc: { fontSize: "0.8rem", color: "var(--ifm-color-emphasis-500)" },
+  integrationFeatureList: {
+    margin: "0.4rem 0 0",
+    paddingLeft: "1.1rem",
+    fontSize: "0.8rem",
+    color: "var(--ifm-color-emphasis-600)",
+    lineHeight: 1.55,
+  },
+  featureProBadge: {
+    display: "inline-block",
+    marginLeft: "0.25rem",
+    padding: "0.05rem 0.35rem",
+    borderRadius: "4px",
+    backgroundColor: "rgba(16,185,129,0.12)",
+    color: "#10b981",
+    fontSize: "0.65rem",
+    fontWeight: 700,
+    letterSpacing: "0.04em",
+    verticalAlign: "middle",
+  },
   connectedBadge: {
     padding: "0.2rem 0.6rem",
     borderRadius: "12px",
@@ -830,22 +856,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#10b981",
     fontSize: "0.8rem",
     fontWeight: 600,
-  },
-  comingSoonBadge: {
-    padding: "0.2rem 0.6rem",
-    borderRadius: "12px",
-    backgroundColor: "var(--ifm-color-emphasis-100)",
-    color: "var(--ifm-color-emphasis-500)",
-    fontSize: "0.75rem",
-    fontWeight: 500,
-    whiteSpace: "nowrap",
-    flexShrink: 0,
-  },
-  emptyState: { marginTop: "1.25rem" },
-  emptyStateText: {
-    fontSize: "0.85rem",
-    color: "var(--ifm-color-emphasis-600)",
-    lineHeight: 1.6,
   },
   repoSection: { marginTop: "1.25rem" },
   repoSectionHeader: {
@@ -984,7 +994,7 @@ const styles: Record<string, React.CSSProperties> = {
 export default function DashboardPage(): React.ReactNode {
   const { siteConfig } = useDocusaurusContext();
   const flags = siteConfig.customFields?.featureFlags as
-    | { pro?: boolean }
+    | { pro?: boolean; stripePayments?: boolean }
     | undefined;
 
   if (!flags?.pro) {

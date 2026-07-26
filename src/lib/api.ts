@@ -3,6 +3,7 @@ import type {
 	DirectoryEntry,
 	EditorAppsResponse,
 	GhIssue,
+	GhListPage,
 	GhPullRequest,
 	GitRemoteInfo,
 	PrInfo,
@@ -452,10 +453,15 @@ export const dryRunHomeRepoRebase = (
 	});
 
 // GitHub CLI API
+export const GH_LIST_PAGE_SIZE = 30;
+
 export const ghListIssues = (
 	repoFullName: string,
 	state: string,
-): Promise<GhIssue[]> => invoke("gh_list_issues", { repoFullName, state });
+	limit = GH_LIST_PAGE_SIZE,
+	page = 1,
+): Promise<GhListPage<GhIssue>> =>
+	invoke("gh_list_issues", { repoFullName, state, limit, page });
 
 export const ghViewIssue = (
 	repoFullName: string,
@@ -488,7 +494,10 @@ export const ghReopenIssue = (
 export const ghListPrs = (
 	repoFullName: string,
 	state: string,
-): Promise<GhPullRequest[]> => invoke("gh_list_prs", { repoFullName, state });
+	limit = GH_LIST_PAGE_SIZE,
+	page = 1,
+): Promise<GhListPage<GhPullRequest>> =>
+	invoke("gh_list_prs", { repoFullName, state, limit, page });
 
 export const ghViewPr = (
 	repoFullName: string,
@@ -512,12 +521,19 @@ export const ghReopenPr = (
 	prNumber: number,
 ): Promise<void> => invoke("gh_reopen_pr", { repoFullName, prNumber });
 
+export const ghSetPrDraft = (
+	repoFullName: string,
+	prNumber: number,
+	draft: boolean,
+): Promise<void> => invoke("gh_set_pr_draft", { repoFullName, prNumber, draft });
+
 export const ghCreatePr = (
 	repoFullName: string,
 	title: string,
 	body: string,
 	baseBranch: string,
 	headBranch: string,
+	draft = false,
 ): Promise<number> =>
 	invoke("gh_create_pr", {
 		repoFullName,
@@ -525,6 +541,7 @@ export const ghCreatePr = (
 		body,
 		baseBranch,
 		headBranch,
+		draft,
 	});
 
 // PTY API

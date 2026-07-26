@@ -11,7 +11,8 @@ import {
 	ghReopenIssue,
 	ghViewIssue,
 } from "../../lib/api";
-import { formatDate, LabelChip, StateChip } from "./shared";
+import { MarkdownContent } from "../MarkdownContent";
+import { formatDate, LabelChip, OpenInWebButton, StateChip } from "./shared";
 
 export function IssueDetailPanel({
 	repoFullName,
@@ -64,7 +65,7 @@ export function IssueDetailPanel({
 	return (
 		<div className="flex flex-col h-full">
 			<div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-				<span className="text-sm font-semibold text-muted-foreground">
+				<span className="text-base font-semibold text-muted-foreground">
 					Issue #{issueNumber}
 				</span>
 				<Button
@@ -86,10 +87,15 @@ export function IssueDetailPanel({
 			{issue && (
 				<div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
 					<div>
-						<h2 className="text-base font-semibold">{issue.title}</h2>
+						<div className="flex items-start gap-3">
+							<h2 className="text-2xl font-semibold flex-1 min-w-0">
+								{issue.title}
+							</h2>
+							<OpenInWebButton url={issue.url} />
+						</div>
 						<div className="flex items-center gap-2 mt-1 flex-wrap">
 							<StateChip state={issue.state} />
-							<span className="text-xs text-muted-foreground">
+							<span className="text-base text-muted-foreground">
 								#{issue.number} opened by {issue.author.login} on{" "}
 								{formatDate(issue.created_at)}
 							</span>
@@ -104,44 +110,59 @@ export function IssueDetailPanel({
 					</div>
 
 					{issue.body && (
-						<div className="text-sm text-foreground bg-muted/30 rounded-md p-3 whitespace-pre-wrap">
-							{issue.body}
+						<div className="bg-muted/30 rounded-md p-3">
+							<MarkdownContent
+								content={issue.body}
+								className="text-base prose-base prose-code:text-base"
+							/>
 						</div>
 					)}
 
 					{(issue.comments ?? []).length > 0 && (
 						<div className="space-y-3">
-							<h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+							<h3 className="text-base font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1">
 								<MessageSquare className="w-3 h-3" />
 								Comments ({issue.comments!.length})
 							</h3>
 							{issue.comments!.map((c) => (
-								<div key={c.id} className="bg-muted/30 rounded-md p-3 text-sm">
-									<div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+								<div key={c.id} className="bg-muted/30 rounded-md p-3 text-base">
+									<div className="flex items-center gap-1 text-base text-muted-foreground mb-1">
 										<span className="font-medium">{c.author.login}</span>
 										<span>·</span>
 										<span>{formatDate(c.created_at)}</span>
 									</div>
-									<p className="whitespace-pre-wrap">{c.body}</p>
+									<MarkdownContent
+										content={c.body}
+										className="text-base prose-base prose-code:text-base"
+									/>
 								</div>
 							))}
 						</div>
 					)}
 
 					<div className="space-y-2">
-						<h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+						<h3 className="text-base font-semibold uppercase tracking-widest text-muted-foreground">
 							Add Comment
 						</h3>
 						<Textarea
 							placeholder="Leave a comment..."
 							value={commentBody}
 							onChange={(e) => setCommentBody(e.target.value)}
+							onKeyDown={(e) => {
+								if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+									e.preventDefault();
+									if (commentBody.trim() && !addComment.isPending) {
+										addComment.mutate();
+									}
+								}
+							}}
 							rows={3}
-							className="text-sm"
+							className="text-base"
 						/>
 						<div className="flex items-center gap-2">
 							<Button
 								size="sm"
+								className="text-base"
 								disabled={!commentBody.trim() || addComment.isPending}
 								onClick={() => addComment.mutate()}
 							>
@@ -154,6 +175,7 @@ export function IssueDetailPanel({
 								<Button
 									size="sm"
 									variant="outline"
+									className="text-base"
 									disabled={closeIssue.isPending}
 									onClick={() => closeIssue.mutate()}
 								>
@@ -166,6 +188,7 @@ export function IssueDetailPanel({
 								<Button
 									size="sm"
 									variant="outline"
+									className="text-base"
 									disabled={reopenIssue.isPending}
 									onClick={() => reopenIssue.mutate()}
 								>
@@ -206,23 +229,24 @@ export function CreateIssueForm({
 
 	return (
 		<div className="p-4 space-y-3 border-b border-border">
-			<h3 className="text-sm font-semibold">New Issue</h3>
+			<h3 className="text-base font-semibold">New Issue</h3>
 			<Input
 				placeholder="Title"
 				value={title}
 				onChange={(e) => setTitle(e.target.value)}
-				className="text-sm"
+				className="text-base"
 			/>
 			<Textarea
 				placeholder="Description (optional)"
 				value={body}
 				onChange={(e) => setBody(e.target.value)}
 				rows={4}
-				className="text-sm"
+				className="text-base"
 			/>
 			<div className="flex gap-2">
 				<Button
 					size="sm"
+					className="text-base"
 					disabled={!title.trim() || create.isPending}
 					onClick={() => create.mutate()}
 				>
@@ -231,12 +255,17 @@ export function CreateIssueForm({
 					) : null}
 					Submit Issue
 				</Button>
-				<Button size="sm" variant="ghost" onClick={onCancel}>
+				<Button
+					size="sm"
+					variant="ghost"
+					className="text-base"
+					onClick={onCancel}
+				>
 					Cancel
 				</Button>
 			</div>
 			{create.isError && (
-				<p className="text-xs text-destructive">{String(create.error)}</p>
+				<p className="text-base text-destructive">{String(create.error)}</p>
 			)}
 		</div>
 	);

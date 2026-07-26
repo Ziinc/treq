@@ -66,7 +66,7 @@ function ResetPasswordContent() {
           <p style={styles.text}>
             This password reset link is invalid or has expired.
           </p>
-          <a href="/login" style={styles.link}>
+          <a href="/sign-in" style={styles.link}>
             Request a new reset link
           </a>
         </div>

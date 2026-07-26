@@ -108,17 +108,19 @@ describe("useGitRemoteInfo", () => {
 });
 
 describe("usePrInfoViaGh", () => {
-	it("settles to success state and never enters error state", async () => {
+	it("surfaces gh operational failures", async () => {
 		const { repoPath } = createTestRepo(false);
+		const spy = vi.spyOn(api, "getPrInfoViaGh").mockRejectedValue(
+			new Error("gh authentication failed"),
+		);
 
 		const { result } = renderHook(
 			() => usePrInfoViaGh(repoPath, "non-existent-branch"),
 			{ wrapper: makeWrapper() },
 		);
-		await waitFor(() => expect(result.current.isSuccess).toBe(true), {
-			timeout: 10_000,
-		});
-		expect(result.current.isError).toBe(false);
+		await waitFor(() => expect(result.current.isError).toBe(true));
+		expect(result.current.error).toEqual(new Error("gh authentication failed"));
+		spy.mockRestore();
 	});
 
 	it("is disabled when branchName is undefined", () => {
@@ -217,6 +219,22 @@ describe("useEnqueueWorkspace", () => {
 
 		await result.current.enqueue.mutateAsync();
 		expect(mockEdgeFn).toHaveBeenCalled();
+	});
+
+	it("does not enqueue when the gh pre-flight fails", async () => {
+		const { repoPath } = createTestRepo(false);
+		addGitHubRemote(repoPath, "https://github.com/ziinc/treq.git");
+		ghSpy.mockRejectedValue(new Error("gh authentication failed"));
+
+		const { result } = renderHook(() => useEnqueueWorkspace(repoPath, "feat"), {
+			wrapper: makeWrapper(),
+		});
+		await waitFor(() => expect(result.current.prInfoGhError).toBeTruthy());
+
+		await expect(result.current.enqueue.mutateAsync()).rejects.toThrow(
+			"gh authentication failed",
+		);
+		expect(mockEdgeFn).not.toHaveBeenCalled();
 	});
 
 	it("throws when no GitHub remote is detected", async () => {
