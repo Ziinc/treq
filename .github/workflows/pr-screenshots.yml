@@ -152,6 +152,11 @@ jobs:
           path: |
             scripts/screenshot/.generated/*.png
             scripts/screenshot/.generated/*.json
+          # .generated/ is a dot-directory; upload-artifact treats its contents as
+          # hidden and silently skips them unless this is set, which previously
+          # made every run report "no files found" and post a comment with no
+          # artifact link at all (see PR #111 comment).
+          include-hidden-files: true
           if-no-files-found: warn
           retention-days: 30
 
