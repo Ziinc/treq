@@ -70,23 +70,13 @@ const toastIconStyles: Record<ToastType, string> = {
 	warning: "text-orange-500 dark:text-orange-400",
 };
 
-const toastBorderStyles: Record<ToastType, string> = {
-	error: "border-destructive/40",
-	info: "border-primary/30",
-	success: "border-green-500/30",
-	warning: "border-orange-500/30",
-};
-
 function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
 	const Icon = toastIcons[toast.type];
 
 	return (
 		<div
 			role="status"
-			className={cn(
-				"pointer-events-auto flex w-full min-w-[320px] max-w-sm items-start gap-3 rounded-lg border bg-popover p-4 text-popover-foreground shadow-lg animate-in slide-in-from-left",
-				toastBorderStyles[toast.type],
-			)}
+			className="pointer-events-auto flex w-full min-w-[320px] max-w-sm items-start gap-3 rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-lg animate-in slide-in-from-left"
 		>
 			<Icon
 				className={cn("mt-0.5 h-5 w-5 shrink-0", toastIconStyles[toast.type])}
