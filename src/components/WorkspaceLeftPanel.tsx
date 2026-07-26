@@ -290,7 +290,7 @@ export const WorkspaceLeftPanel: React.FC<WorkspaceLeftPanelProps> = ({
 					<Label htmlFor="branch" className="text-xs">
 						Branch Name
 					</Label>
-					<div className="relative max-w-[120px]">
+					<div className="relative max-w-[220px]">
 						<Input
 							id="branch"
 							value={branchName}

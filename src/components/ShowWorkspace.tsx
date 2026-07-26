@@ -1305,7 +1305,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 
 								{workspace && (
 									<span
-										className="text-sm font-semibold font-mono truncate min-w-0 max-w-[120px]"
+										className="text-sm font-semibold font-mono truncate min-w-0 max-w-[220px]"
 										title={branchTitle}
 									>
 										{branchTitle}
@@ -1359,7 +1359,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 										<button
 											type="button"
 											onClick={onOpenBranchSwitcher}
-											className="text-sm font-semibold font-mono hover:underline cursor-pointer truncate min-w-0 max-w-[120px]"
+											className="text-sm font-semibold font-mono hover:underline cursor-pointer truncate min-w-0 max-w-[220px]"
 											title={branchTitle}
 										>
 											{branchTitle}
@@ -1369,7 +1369,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 											<>
 												<ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
 												<span
-													className="text-sm font-mono text-muted-foreground truncate min-w-0 max-w-[120px]"
+													className="text-sm font-mono text-muted-foreground truncate min-w-0 max-w-[220px]"
 													title={defaultBranch}
 												>
 													{defaultBranch}
