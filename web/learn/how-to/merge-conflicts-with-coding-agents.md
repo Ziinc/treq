@@ -69,6 +69,8 @@ git rebase --abort
 
 Restarting the agent on current `main` can be cheaper than preserving a small obsolete patch. Compare old and new intended behavior before discarding work.
 
+When the same conflict returns across many rebases, enable [git rerere](/learn/concepts/git/git-rerere) so Git can reuse a resolution you already chose. Still review the autoresolved file before you continue.
+
 ## Agent-assisted resolution
 
 You can ask an agent to resolve conflicts, but you must review the result. Provide:
@@ -110,4 +112,5 @@ When a bookmark conflict appears after remote updates, resolve it from the botto
 - [Auto-Rebasing AI Workspaces](/learn/how-to/auto-rebase-ai-branches)
 - [Parallel Coding Agents Without Branch Chaos](/learn/parallel-coding-agents)
 - [Merge vs Rebase](/learn/concepts/git/merge-vs-rebase)
+- [What is Git Rerere?](/learn/concepts/git/git-rerere)
 - [Merging Workspaces](/docs/tutorials/merging-workspaces)

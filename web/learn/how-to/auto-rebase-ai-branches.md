@@ -65,7 +65,7 @@ After every rebase:
 
 1. Read the new diff against the intended base.
 2. Re-run the relevant tests.
-3. Treat conflict resolutions as new code under review.
+3. Treat conflict resolutions as new code under review. [Git rerere](/learn/concepts/git/git-rerere) can reuse a prior resolution across rebases, and that reused result still needs the same review.
 
 ```bash
 git diff origin/main...HEAD
@@ -103,4 +103,5 @@ Pending working-copy edits can block or complicate synchronization. Commit, move
 - [What Are Stacked PRs in AI-Assisted Development](/learn/stacked-prs)
 - [How to Fix Merge Conflicts Created by Coding Agents](/learn/how-to/merge-conflicts-with-coding-agents)
 - [Merge vs Rebase](/learn/concepts/git/merge-vs-rebase)
+- [What is Git Rerere?](/learn/concepts/git/git-rerere)
 - [Workspaces](/docs/concepts/workspaces)

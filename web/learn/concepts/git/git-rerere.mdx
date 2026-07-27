@@ -10,7 +10,7 @@ _Git rerere records how you resolved a merge conflict and reuses that resolution
 
 ## Introduction
 
-**Rerere** stands for reuse recorded resolution. When a merge or rebase hits the same conflict again, Git can apply the resolution you already chose instead of asking you to edit the markers by hand.
+**Rerere** stands for reuse recorded resolution. When a merge or [rebase](./merge-vs-rebase) hits the same conflict again, Git can apply the resolution you already chose instead of asking you to edit the markers by hand.
 
 That matters when a long-lived branch keeps meeting the same overlapping edits on `main`, or when you rebuild an integration branch after dropping one topic. You still review the result. You stop retyping the same fix.
 
@@ -93,7 +93,7 @@ Rerere pays off when the same textual conflict returns across many updates. A lo
 
 A common alternative to repeated merges is a test merge into current `main`. You resolve, verify, then reset the merge so the branch history stays free of intermediate merge commits. When you later rebase onto `main` or perform the final merge, the earlier postimage often applies again. That is how a conflicted merge can become a linear rebase without redoing the same hand edits.
 
-Treat an autoresolved file like any other conflict resolution. Read the combined diff, run the tests that cover the overlapped code, and only then stage. A reused postimage is a prior judgment applied to new parents. The surrounding code may have changed enough that the old answer is wrong.
+Treat an autoresolved file like any other conflict resolution. Read the combined diff, run the tests that cover the overlapped code, and only then stage. A reused postimage is a prior judgment applied to new parents. The surrounding code may have changed enough that the old answer is wrong. For agent-produced conflicts, keep the same review bar described in [How to Fix Merge Conflicts Created by Coding Agents](/learn/how-to/merge-conflicts-with-coding-agents).
 
 Rerere depends on conflict markers in the file. If the file already contains lines that look like markers, recording can fail. Raise `conflict-marker-size` in `.gitattributes` for those paths when that happens.
 
@@ -109,11 +109,11 @@ git rerere gc
 
 By default, `gc.rerereResolved` keeps completed resolutions for 60 days and `gc.rerereUnresolved` drops abandoned preimages after 15 days. Adjust those values when your integration cycle is longer than the defaults.
 
-Do not treat `.git/rr-cache` as shared team state unless you deliberately distribute it. Each clone records its own resolutions. Enable `rerere.enabled` in shared developer setup docs so every machine that rebases the same stacks builds a useful cache.
+Do not treat `.git/rr-cache` as shared team state unless you deliberately distribute it. Each clone records its own resolutions. Enable `rerere.enabled` in shared developer setup docs so every machine that rebases the same [pull-request stacks](./stacked-prs) builds a useful cache.
 
 ## Next Steps
 
-- [Merge vs Rebase](./merge-vs-rebase): choose how conflicts recur across updates
-- [What are Stacked PRs?](./stacked-prs): manage dependent branches that rebase often
-- [How to Fix Merge Conflicts Created by Coding Agents](/learn/how-to/merge-conflicts-with-coding-agents): resolve agent-produced conflicts with review discipline
+- [Cherry-pick vs Rebase](./cherry-pick-vs-rebase): distinguish selected patch copying from branch rewriting
+- [Stacked PR Workflow](/learn/workflows/git/stacked-pr): apply rebasing to a pull-request stack
+- [Auto-Rebasing AI Workspaces](/learn/how-to/auto-rebase-ai-branches): keep dependent branches current without treating a rebase as approval
 - [Parallel Development Workflow](/learn/workflows/git/parallel-development): combine concurrent branches with an integration policy

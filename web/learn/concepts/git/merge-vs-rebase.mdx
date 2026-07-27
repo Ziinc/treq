@@ -109,7 +109,7 @@ Each option throws away something different. Merge commits keep the shape. Squas
 
 Block force pushes on shared branches. If feature branches can be rewritten, say so out loud, so reviewers know whether it is safe to build on one.
 
-After a big rebase, use `git range-diff` to check the rewritten series still says what you meant. Run the full test suite after you resolve conflicts, whichever strategy you picked.
+After a big rebase, use `git range-diff` to check the rewritten series still says what you meant. Run the full test suite after you resolve conflicts, whichever strategy you picked. When the same conflict keeps returning on a long-lived branch, [git rerere](./git-rerere) can reuse the resolution you already chose.
 
 ## Next Steps
 
