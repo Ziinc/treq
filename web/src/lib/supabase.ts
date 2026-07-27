@@ -1,13 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
+import pkg from "../../../package.json";
 
-const SUPABASE_URL =
-  process.env.NODE_ENV === "production"
-    ? "https://xnlljmfiqyumiyexydyl.supabase.co"
-    : "http://127.0.0.1:54321";
-
-const SUPABASE_ANON_KEY =
-  process.env.NODE_ENV === "production"
-    ? "sb_publishable_pLkrXd6cs1V7Ot6Dnowmtw_KBgFf88E"
-    : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0";
+const environment =
+  pkg.env[process.env.NODE_ENV === "production" ? "prod" : "dev"];
+const SUPABASE_URL = environment.supabase.url;
+const SUPABASE_ANON_KEY = environment.supabase.anonKey;
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
