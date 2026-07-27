@@ -57,12 +57,14 @@ interface TabsTriggerProps {
 	value: string;
 	className?: string;
 	children: React.ReactNode;
+	disabled?: boolean;
 }
 
 export const TabsTrigger: React.FC<TabsTriggerProps> = ({
 	value: triggerValue,
 	className,
 	children,
+	disabled = false,
 }) => {
 	const { value, onValueChange, orientation } = useTabsContext();
 	const isActive = value === triggerValue;
@@ -82,11 +84,17 @@ export const TabsTrigger: React.FC<TabsTriggerProps> = ({
 
 	return (
 		<button
+			type="button"
 			role="tab"
 			aria-selected={isActive}
+			aria-disabled={disabled || undefined}
 			data-state={isActive ? "active" : "inactive"}
-			onClick={() => onValueChange(triggerValue)}
-			className={`${baseClass} ${className || ""}`}
+			disabled={disabled}
+			onClick={() => {
+				if (disabled) return;
+				onValueChange(triggerValue);
+			}}
+			className={`${baseClass} ${disabled ? "opacity-50 cursor-not-allowed hover:bg-transparent hover:text-muted-foreground" : ""} ${className || ""}`}
 		>
 			{children}
 		</button>

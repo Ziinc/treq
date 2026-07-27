@@ -1,9 +1,6 @@
 /* eslint-disable max-lines, max-params */
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeRaw from "rehype-raw";
 import { QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	DirectoryEntry,
@@ -70,6 +67,7 @@ import {
 	GitBranch,
 	GitCommitHorizontal,
 	GitCompareArrows,
+	GitMerge,
 	Layers2,
 	Loader2,
 	MoreVertical,
@@ -83,8 +81,16 @@ import {
 	type BranchListItem,
 } from "./TargetBranchSelector";
 import { TaskInput } from "./TaskInput";
+import { MarkdownContent } from "./MarkdownContent";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
+import {
+	useEnqueueWorkspace,
+	useMergeQueueStatus,
+} from "../hooks/useMergeQueueStatus";
+import { FEATURES } from "../lib/features";
 import type { SessionCreationInfo } from "../types/sessions";
+import { CreatePrButtonGroup } from "./CreatePrButtonGroup";
+import { ViewPrButton } from "./ViewPrButton";
 
 interface ShowWorkspaceProps {
 	repositoryPath?: string;
@@ -99,6 +105,7 @@ interface ShowWorkspaceProps {
 	onCreateStackedWorkspace?: () => void;
 	/** Called when the user clicks a sibling workspace in the stack panel */
 	onNavigateToWorkspace?: (workspace: Workspace) => void;
+	onViewPrInApp?: (prNumber: number) => void;
 	/** Called when user wants to move a commit to a new workspace */
 	onMoveCommitToNewWorkspace?: (
 		commit: import("../lib/api").JjLogCommit,
@@ -134,6 +141,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 		onOpenBranchSwitcher,
 		onCreateStackedWorkspace,
 		onNavigateToWorkspace,
+		onViewPrInApp,
 		onMoveCommitToNewWorkspace,
 		onMoveCommitToExistingWorkspace,
 		onMoveFilesToNewWorkspace,
@@ -149,6 +157,15 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 
 		const { addToast } = useToast();
 		const { fontSize } = useTerminalSettings();
+
+		const { data: queueStatus } = useMergeQueueStatus(
+			effectiveRepoPath || undefined,
+			workspace?.branch_name,
+		);
+		const { enqueue, dequeue } = useEnqueueWorkspace(
+			effectiveRepoPath || undefined,
+			workspace?.branch_name,
+		);
 
 		const [changedFiles, setChangedFiles] = useState<
 			Map<string, ParsedFileChange>
@@ -1155,26 +1172,12 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 													<h2 className="text-lg font-semibold mb-4">
 														README.md
 													</h2>
-													<div className="prose dark:prose-invert max-w-none prose-headings:font-semibold prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl prose-a:text-blue-500 prose-a:no-underline hover:prose-a:underline prose-strong:font-semibold prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-[''] prose-code:after:content-[''] prose-pre:bg-muted prose-pre:border prose-pre:border-border">
-														<ReactMarkdown
-															remarkPlugins={[remarkGfm]}
-															rehypePlugins={[rehypeRaw]}
-															components={{
-																img: ({ src, alt, ...props }) => (
-																	<img
-																		src={resolveReadmeImageSrc(
-																			src,
-																			readmeBaseDir,
-																		)}
-																		alt={alt ?? ""}
-																		{...props}
-																	/>
-																),
-															}}
-														>
-															{readmeContent.replace(/<!--[\s\S]*?-->/g, "")}
-														</ReactMarkdown>
-													</div>
+													<MarkdownContent
+														content={readmeContent}
+														resolveImageSrc={(src) =>
+															resolveReadmeImageSrc(src, readmeBaseDir)
+														}
+													/>
 												</>
 											) : (
 												<div className="text-muted-foreground text-sm text-center py-4">
@@ -1480,6 +1483,25 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 									</TooltipProvider>
 								)}
 
+								{/* Create / View PR once the branch is on a GitHub remote */}
+								{workspace &&
+									!workspace.not_on_remote &&
+									workspace.branch_name !== defaultBranch &&
+									effectiveRepoPath && (
+										<>
+											<ViewPrButton
+												repoPath={effectiveRepoPath}
+												branchName={workspace.branch_name}
+												onViewInApp={onViewPrInApp}
+											/>
+											<CreatePrButtonGroup
+												repoPath={effectiveRepoPath}
+												workspace={workspace}
+												baseBranch={targetBranch ?? defaultTargetBranch}
+											/>
+										</>
+									)}
+
 								{/* Sync control - status + icon in one clickable button */}
 								{(!workspace || !workspace.not_on_remote) &&
 									syncStatus &&
@@ -1516,6 +1538,77 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 													{hasSyncChanges
 														? "Sync with remote (fetch and push)"
 														: "No commits to sync"}
+												</TooltipContent>
+											</Tooltip>
+										</TooltipProvider>
+									)}
+								{/* Merge queue button */}
+								{FEATURES.mergeQueue &&
+									workspace &&
+									workspace.branch_name !== defaultBranch &&
+									!workspace.not_on_remote && (
+										<TooltipProvider delayDuration={200}>
+											<Tooltip>
+												<TooltipTrigger asChild>
+													<Button
+														variant={
+															queueStatus && queueStatus.status !== "dequeued"
+																? "secondary"
+																: "outline"
+														}
+														size="sm"
+														className="gap-1"
+														disabled={enqueue.isPending || dequeue.isPending}
+														onClick={async () => {
+															const isInQueue =
+																!!queueStatus &&
+																!["merged", "failed", "dequeued"].includes(
+																	queueStatus.status,
+																);
+															try {
+																if (isInQueue) {
+																	await dequeue.mutateAsync();
+																	addToast({
+																		title: "Removed from merge queue",
+																		type: "success",
+																	});
+																} else {
+																	await enqueue.mutateAsync();
+																	addToast({
+																		title: "Added to merge queue",
+																		type: "success",
+																	});
+																}
+															} catch (err) {
+																addToast({
+																	title: "Queue error",
+																	description: (err as Error).message,
+																	type: "error",
+																});
+															}
+														}}
+													>
+														<GitMerge className="w-4 h-4" />
+														{queueStatus &&
+														!["merged", "failed", "dequeued"].includes(
+															queueStatus.status,
+														)
+															? queueStatus.status === "testing"
+																? "Testing…"
+																: `Queue #${queueStatus.position}`
+															: "Add to Queue"}
+													</Button>
+												</TooltipTrigger>
+												<TooltipContent>
+													{queueStatus
+														? queueStatus.status === "merged"
+															? "Merged via queue"
+															: queueStatus.status === "testing"
+																? `CI running in lane ${queueStatus.lane_number ?? "?"}`
+																: queueStatus.status === "failed"
+																	? `Failed: ${queueStatus.failure_reason ?? "unknown"}`
+																	: `In merge queue at position ${queueStatus.position}`
+														: "Add this branch to the merge queue"}
 												</TooltipContent>
 											</Tooltip>
 										</TooltipProvider>

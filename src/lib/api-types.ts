@@ -321,6 +321,96 @@ export interface PendingReview {
 	updated_at: string;
 }
 
+export interface GitRemoteInfo {
+	owner: string;
+	repo: string;
+	full_name: string;
+}
+
+export interface GhLabel {
+	name: string;
+	color: string;
+}
+
+export interface GhAuthor {
+	login: string;
+}
+
+export interface GhIssueComment {
+	id: string;
+	body: string;
+	author: GhAuthor;
+	created_at: string;
+}
+
+export interface GhListPage<T> {
+	items: T[];
+	hasMore: boolean;
+}
+
+export interface GhIssue {
+	number: number;
+	title: string;
+	state: string;
+	url: string;
+	body: string | null;
+	author: GhAuthor;
+	labels: GhLabel[];
+	created_at: string;
+	updated_at: string;
+	comments: GhIssueComment[] | null;
+}
+
+export interface GhPullRequest {
+	number: number;
+	title: string;
+	state: string;
+	url: string;
+	body: string | null;
+	author: GhAuthor;
+	labels: GhLabel[];
+	head_ref_name: string;
+	base_ref_name: string;
+	merge_state_status: string | null;
+	created_at: string;
+	updated_at: string;
+	comments: GhIssueComment[] | null;
+	is_draft?: boolean;
+}
+
+export interface PrInfo {
+	number: number;
+	title: string;
+	/** "OPEN" | "CLOSED" | "MERGED" */
+	state: string;
+	url: string;
+	head_ref_name: string;
+	base_ref_name: string;
+	merge_state_status: string | null;
+	is_draft?: boolean;
+}
+
+export type QueueEntryStatus =
+	| "queued"
+	| "testing"
+	| "passed"
+	| "merged"
+	| "failed"
+	| "dequeued";
+
+export interface WorkspaceQueueStatus {
+	entry_id: string;
+	pr_number: number;
+	status: QueueEntryStatus;
+	position: number;
+	target_branch: string;
+	lane_number: number | null;
+	ci_run_status: string | null;
+	failure_reason: string | null;
+	enqueued_at: string;
+	merged_at: string | null;
+}
+
 export type ConflictStyle =
 	| "jj_diff"
 	| "jj_snapshot"

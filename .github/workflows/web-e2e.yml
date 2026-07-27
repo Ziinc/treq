@@ -6,6 +6,10 @@ on:
       - main
     paths:
       - "web/src/**"
+      - "web/e2e/**"
+      - "web/package.json"
+      - "web/package-lock.json"
+      - "web/playwright.config.ts"
       - ".github/workflows/web-e2e.yml"
 
 defaults:

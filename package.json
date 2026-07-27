@@ -4,7 +4,10 @@
   "version": "0.1.3",
   "type": "module",
   "featureFlags": {
-    "pro": false
+    "pro": true,
+    "stripePayments": false,
+    "emailSignup": false,
+    "mergeQueue": false
   },
   "scripts": {
     "start": "npm run tauri dev open",

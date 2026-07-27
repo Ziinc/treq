@@ -2,6 +2,10 @@ use serde_json::Value;
 
 use crate::state;
 
+fn gh_bin() -> Result<String, String> {
+    treq_lib::binary_paths::detect_binary("gh").ok_or_else(|| "gh CLI not found".to_string())
+}
+
 /// Dispatch a command by name, with camelCase JSON args.
 /// Mirrors the Tauri invoke() interface.
 pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
@@ -25,6 +29,228 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             let dir = treq_lib::binary_paths::get_exe_dir()
                 .ok_or_else(|| "Failed to determine treq binary directory".to_string())?;
             Ok(Value::String(dir))
+        }
+
+        // ── GitHub helpers ────────────────────────────────────────────────
+        "get_git_remote_url" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let info = treq_lib::github::get_git_remote_url_impl(&repo_path)?;
+            serde_json::to_value(info).map_err(|e| e.to_string())
+        }
+
+        "get_pr_info_via_gh" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let branch_name = get_str(&args, "branchName")?;
+            let gh = treq_lib::binary_paths::detect_binary("gh")
+                .ok_or_else(|| "gh CLI not found".to_string())?;
+            let extended_path = treq_lib::binary_paths::get_extended_path();
+            let info = treq_lib::github::get_pr_info_via_gh_impl(
+                &gh,
+                &repo_path,
+                &branch_name,
+                &extended_path,
+            )?;
+            serde_json::to_value(info).map_err(|e| e.to_string())
+        }
+
+        "gh_list_issues" => {
+            let repo_full_name = get_str(&args, "repoFullName")?;
+            let state = get_str(&args, "state")?;
+            let limit = get_optional_u32(&args, "limit")?
+                .unwrap_or(treq_lib::github::GH_LIST_PAGE_SIZE);
+            let page = get_optional_u32(&args, "page")?.unwrap_or(1);
+            let gh = gh_bin()?;
+            let extended_path = treq_lib::binary_paths::get_extended_path();
+            let issues = treq_lib::github::gh_list_issues_impl(
+                &gh,
+                &repo_full_name,
+                &state,
+                limit,
+                page,
+                &extended_path,
+            )?;
+            serde_json::to_value(issues).map_err(|e| e.to_string())
+        }
+
+        "gh_view_issue" => {
+            let repo_full_name = get_str(&args, "repoFullName")?;
+            let issue_number = get_positive_u64(&args, "issueNumber")?;
+            let gh = gh_bin()?;
+            let extended_path = treq_lib::binary_paths::get_extended_path();
+            let issue = treq_lib::github::gh_view_issue_impl(
+                &gh,
+                &repo_full_name,
+                issue_number,
+                &extended_path,
+            )?;
+            serde_json::to_value(issue).map_err(|e| e.to_string())
+        }
+
+        "gh_create_issue" => {
+            let repo_full_name = get_str(&args, "repoFullName")?;
+            let title = get_str(&args, "title")?;
+            let body = get_str(&args, "body")?;
+            let gh = gh_bin()?;
+            let extended_path = treq_lib::binary_paths::get_extended_path();
+            let issue_number = treq_lib::github::gh_create_issue_impl(
+                &gh,
+                &repo_full_name,
+                &title,
+                &body,
+                &extended_path,
+            )?;
+            Ok(Value::Number(serde_json::Number::from(issue_number)))
+        }
+
+        "gh_create_issue_comment" => {
+            let repo_full_name = get_str(&args, "repoFullName")?;
+            let issue_number = get_positive_u64(&args, "issueNumber")?;
+            let body = get_str(&args, "body")?;
+            let gh = gh_bin()?;
+            let extended_path = treq_lib::binary_paths::get_extended_path();
+            treq_lib::github::gh_create_issue_comment_impl(
+                &gh,
+                &repo_full_name,
+                issue_number,
+                &body,
+                &extended_path,
+            )?;
+            Ok(Value::Null)
+        }
+
+        "gh_close_issue" => {
+            let repo_full_name = get_str(&args, "repoFullName")?;
+            let issue_number = get_positive_u64(&args, "issueNumber")?;
+            let gh = gh_bin()?;
+            let extended_path = treq_lib::binary_paths::get_extended_path();
+            treq_lib::github::gh_close_issue_impl(
+                &gh,
+                &repo_full_name,
+                issue_number,
+                &extended_path,
+            )?;
+            Ok(Value::Null)
+        }
+
+        "gh_reopen_issue" => {
+            let repo_full_name = get_str(&args, "repoFullName")?;
+            let issue_number = get_positive_u64(&args, "issueNumber")?;
+            let gh = gh_bin()?;
+            let extended_path = treq_lib::binary_paths::get_extended_path();
+            treq_lib::github::gh_reopen_issue_impl(
+                &gh,
+                &repo_full_name,
+                issue_number,
+                &extended_path,
+            )?;
+            Ok(Value::Null)
+        }
+
+        "gh_list_prs" => {
+            let repo_full_name = get_str(&args, "repoFullName")?;
+            let state = get_str(&args, "state")?;
+            let limit = get_optional_u32(&args, "limit")?
+                .unwrap_or(treq_lib::github::GH_LIST_PAGE_SIZE);
+            let page = get_optional_u32(&args, "page")?.unwrap_or(1);
+            let gh = gh_bin()?;
+            let extended_path = treq_lib::binary_paths::get_extended_path();
+            let prs = treq_lib::github::gh_list_prs_impl(
+                &gh,
+                &repo_full_name,
+                &state,
+                limit,
+                page,
+                &extended_path,
+            )?;
+            serde_json::to_value(prs).map_err(|e| e.to_string())
+        }
+
+        "gh_view_pr" => {
+            let repo_full_name = get_str(&args, "repoFullName")?;
+            let pr_number = get_positive_u64(&args, "prNumber")?;
+            let gh = gh_bin()?;
+            let extended_path = treq_lib::binary_paths::get_extended_path();
+            let pr =
+                treq_lib::github::gh_view_pr_impl(&gh, &repo_full_name, pr_number, &extended_path)?;
+            serde_json::to_value(pr).map_err(|e| e.to_string())
+        }
+
+        "gh_create_pr_comment" => {
+            let repo_full_name = get_str(&args, "repoFullName")?;
+            let pr_number = get_positive_u64(&args, "prNumber")?;
+            let body = get_str(&args, "body")?;
+            let gh = gh_bin()?;
+            let extended_path = treq_lib::binary_paths::get_extended_path();
+            treq_lib::github::gh_create_pr_comment_impl(
+                &gh,
+                &repo_full_name,
+                pr_number,
+                &body,
+                &extended_path,
+            )?;
+            Ok(Value::Null)
+        }
+
+        "gh_close_pr" => {
+            let repo_full_name = get_str(&args, "repoFullName")?;
+            let pr_number = get_positive_u64(&args, "prNumber")?;
+            let gh = gh_bin()?;
+            let extended_path = treq_lib::binary_paths::get_extended_path();
+            treq_lib::github::gh_close_pr_impl(&gh, &repo_full_name, pr_number, &extended_path)?;
+            Ok(Value::Null)
+        }
+
+        "gh_reopen_pr" => {
+            let repo_full_name = get_str(&args, "repoFullName")?;
+            let pr_number = get_positive_u64(&args, "prNumber")?;
+            let gh = gh_bin()?;
+            let extended_path = treq_lib::binary_paths::get_extended_path();
+            treq_lib::github::gh_reopen_pr_impl(&gh, &repo_full_name, pr_number, &extended_path)?;
+            Ok(Value::Null)
+        }
+
+        "gh_set_pr_draft" => {
+            let repo_full_name = get_str(&args, "repoFullName")?;
+            let pr_number = get_positive_u64(&args, "prNumber")?;
+            let draft = args
+                .get("draft")
+                .and_then(|v| v.as_bool())
+                .ok_or("Missing argument: draft")?;
+            let gh = gh_bin()?;
+            let extended_path = treq_lib::binary_paths::get_extended_path();
+            treq_lib::github::gh_set_pr_draft_impl(
+                &gh,
+                &repo_full_name,
+                pr_number,
+                draft,
+                &extended_path,
+            )?;
+            Ok(Value::Null)
+        }
+
+        "gh_create_pr" => {
+            let repo_full_name = get_str(&args, "repoFullName")?;
+            let title = get_str(&args, "title")?;
+            let body = get_str(&args, "body")?;
+            let base_branch = get_str(&args, "baseBranch")?;
+            let head_branch = get_str(&args, "headBranch")?;
+            let draft = args
+                .get("draft")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let gh = gh_bin()?;
+            let extended_path = treq_lib::binary_paths::get_extended_path();
+            let pr_number = treq_lib::github::gh_create_pr_impl(
+                &gh,
+                &repo_full_name,
+                &title,
+                &body,
+                &base_branch,
+                &head_branch,
+                draft,
+                &extended_path,
+            )?;
+            Ok(Value::Number(serde_json::Number::from(pr_number)))
         }
 
         // ── Settings ──────────────────────────────────────────────────────
@@ -744,6 +970,75 @@ fn get_i64(args: &Value, key: &str) -> Result<i64, String> {
     args.get(key)
         .and_then(|v| v.as_i64())
         .ok_or_else(|| format!("Missing or invalid argument: {}", key))
+}
+
+fn get_positive_u64(args: &Value, key: &str) -> Result<u64, String> {
+    let value = args
+        .get(key)
+        .and_then(Value::as_u64)
+        .filter(|value| *value > 0)
+        .ok_or_else(|| format!("Missing or invalid positive integer argument: {key}"))?;
+    Ok(value)
+}
+
+fn get_optional_u32(args: &Value, key: &str) -> Result<Option<u32>, String> {
+    match args.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(value) => {
+            let n = value
+                .as_u64()
+                .filter(|n| *n > 0 && *n <= u32::MAX as u64)
+                .ok_or_else(|| format!("Missing or invalid positive integer argument: {key}"))?;
+            Ok(Some(n as u32))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn positive_u64_rejects_negative_zero_and_non_integer_values() {
+        for value in [
+            serde_json::json!(-1),
+            serde_json::json!(0),
+            serde_json::json!(1.5),
+        ] {
+            let args = serde_json::json!({ "number": value });
+            assert!(get_positive_u64(&args, "number").is_err());
+        }
+    }
+
+    #[test]
+    fn positive_u64_accepts_valid_identifier() {
+        let args = serde_json::json!({ "number": 42 });
+        assert_eq!(get_positive_u64(&args, "number").unwrap(), 42);
+    }
+
+    #[test]
+    fn github_routes_reject_negative_identifiers_before_running_gh() {
+        for (command, key) in [
+            ("gh_view_issue", "issueNumber"),
+            ("gh_create_issue_comment", "issueNumber"),
+            ("gh_close_issue", "issueNumber"),
+            ("gh_reopen_issue", "issueNumber"),
+            ("gh_view_pr", "prNumber"),
+            ("gh_create_pr_comment", "prNumber"),
+            ("gh_close_pr", "prNumber"),
+            ("gh_reopen_pr", "prNumber"),
+            ("gh_set_pr_draft", "prNumber"),
+        ] {
+            let mut args = serde_json::json!({
+                "repoFullName": "owner/repo",
+                "body": "comment",
+                "draft": false
+            });
+            args[key] = serde_json::json!(-1);
+            let error = dispatch(command, args).unwrap_err();
+            assert!(error.contains("positive integer"), "{command}: {error}");
+        }
+    }
 }
 
 fn opt_i64(args: &Value, key: &str) -> Option<i64> {
