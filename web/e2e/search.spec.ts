@@ -94,22 +94,22 @@ test.describe('Search results page (/search)', () => {
   test('shows results for a matching query', async ({ page }) => {
     await navigateToSearchPage(page, QUERY);
     await expect(page.getByRole('heading', { name: /search results for/i })).toBeVisible();
-    await expect(page.locator('ul li').first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('link', { name: EXPECTED_RESULT_TITLE, exact: true }))
+      .toBeVisible({ timeout: 10_000 });
   });
 
   test('CLI page result appears with a status-related excerpt', async ({ page }) => {
     await navigateToSearchPage(page, QUERY);
-    await expect(page.locator('ul li').first()).toBeVisible({ timeout: 10_000 });
     const cliResult = page.locator(`ul li:has(a[href="${EXPECTED_RESULT_URL}"])`);
-    await expect(cliResult).toBeVisible();
+    await expect(cliResult).toBeVisible({ timeout: 10_000 });
     const excerptText = await cliResult.textContent();
     expect(excerptText?.toLowerCase()).toContain(EXPECTED_RESULT_KEYWORD);
   });
 
   test('clicking CLI result navigates to the CLI reference page', async ({ page }) => {
     await navigateToSearchPage(page, QUERY);
-    await expect(page.locator('ul li').first()).toBeVisible({ timeout: 10_000 });
     const link = page.locator(`ul li a[href="${EXPECTED_RESULT_URL}"]`);
+    await expect(link).toBeVisible({ timeout: 10_000 });
     await link.click();
     await expect(page.getByRole('heading', { name: EXPECTED_RESULT_TITLE, level: 1 })).toBeVisible();
   });

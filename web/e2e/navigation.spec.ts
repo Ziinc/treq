@@ -136,14 +136,12 @@ test.describe('Navbar navigation', () => {
       });
     });
 
-    await page.addInitScript((storedSession) => {
-      const raw = JSON.stringify(storedSession);
-      // Cover prod project-ref and local supabase storage keys
-      window.localStorage.setItem('sb-xnlljmfiqyumiyexydyl-auth-token', raw);
-      window.localStorage.setItem('sb-127-auth-token', raw);
-    }, session);
-
     await page.goto('/');
+    await nav(page).getByRole('link', { name: 'Sign in' }).click();
+    await page.getByPlaceholder('Email address').fill(user.email);
+    await page.getByPlaceholder('Password').fill('e2e-password');
+    await page.getByRole('button', { name: 'Sign In' }).click();
+
     await expect(nav(page).getByRole('link', { name: 'Dashboard' })).toHaveAttribute(
       'href',
       '/dashboard',
@@ -283,7 +281,7 @@ test.describe('Learn sidebar navigation', () => {
 
   test('Pushing to Remote link navigates to pushing to remote page', async ({ page }) => {
     await page.goto('/');
-    await clickNavDropdownItem(page, 'Discover', 'Learn');
+    await clickNavDropdownItem(page, 'Product', 'Documentation');
     await sidebar(page).getByRole('link', { name: 'How-To' }).click();
     await page.locator('article').getByRole('link', { name: 'Pushing to Remote' }).click();
     await expect(page.getByRole('heading', { name: 'Pushing to Remote', level: 1 })).toBeVisible();
