@@ -52,7 +52,7 @@ git rebase auth/schema
 # resolve, test, push
 ```
 
-During conflict resolution, open the conflicted files and edit them. Git's [zdiff3](/learn/concepts/git/zdiff3) conflict style shows the merge base and shrinks shared edges out of the markers:
+During conflict resolution, open the conflicted files and edit them. Git's [zdiff3](/learn/concepts/git/zdiff3) conflict style shows the merge base and often shrinks shared edges out of the markers:
 
 ```bash
 git status
