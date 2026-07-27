@@ -20,11 +20,13 @@ test.describe('Homepage Features layout', () => {
     await page.goto('/');
     const features = page.getByRole('region', { name: 'Features' });
     await expect(features.getByRole('heading', { name: 'Features', level: 2 })).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await features.scrollIntoViewIfNeeded();
 
     const screenshot = features.getByRole('img', {
       name: 'Treq code review screenshot showing comments sent to Claude',
     });
-    await screenshot.scrollIntoViewIfNeeded();
+    await expect(screenshot).toBeVisible();
 
     const box = await screenshot.boundingBox();
     expect(box).not.toBeNull();
@@ -279,7 +281,7 @@ test.describe('Learn sidebar navigation', () => {
     await expect(page.getByRole('heading', { name: 'How-To Guides', level: 1 })).toBeVisible();
   });
 
-  test('Pushing to Remote link navigates to pushing to remote page', async ({ page }) => {
+  test('Docs Pushing to Remote link navigates to pushing to remote page', async ({ page }) => {
     await page.goto('/');
     await clickNavDropdownItem(page, 'Product', 'Documentation');
     await sidebar(page).getByRole('link', { name: 'How-To' }).click();

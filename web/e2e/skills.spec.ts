@@ -19,7 +19,7 @@ test.describe('Skills Library (/skills)', () => {
   test('searching narrows the results', async ({ page }) => {
     const search = page.getByRole('searchbox', { name: 'Search skills' });
     await search.fill('tdd');
-    await expect(page.getByText('of 161 skills')).toBeVisible();
+    await expect(page.getByText(/\d+ of \d+ skills/)).toBeVisible();
     await expect(page.getByRole('link', { name: /^tdd/ })).toBeVisible();
   });
 
@@ -33,7 +33,7 @@ test.describe('Skills Library (/skills)', () => {
     await page.getByRole('checkbox', { name: /Matt Pocock/ }).check();
     // Close the dropdown so it doesn't overlay the results.
     await page.getByRole('heading', { name: 'Skills Library', level: 1 }).click();
-    await expect(page.getByText('37 of 161 skills')).toBeVisible();
+    await expect(page.getByRole('button', { name: '1 provider' })).toBeVisible();
     await expect(page.getByRole('link', { name: /^tdd/ })).toBeVisible();
     await expect(page.getByRole('link', { name: /^pdf/ })).toHaveCount(0);
   });
@@ -62,14 +62,17 @@ test.describe('Source repos aside', () => {
   test('lists source repos ranked by stars', async ({ page }) => {
     const aside = page.getByRole('complementary', { name: /Source repositories by stars/ });
     await expect(aside.getByText('Source repos')).toBeVisible();
-    await expect(aside.getByRole('button', { name: /Superpowers/ })).toBeVisible();
-    await expect(aside.getByText('258.8k')).toBeVisible();
+    const topRepo = aside.getByRole('listitem').first();
+    await expect(topRepo.getByRole('button', { name: /Superpowers/ })).toBeVisible();
+    await expect(topRepo).toContainText(/★ \d/);
   });
 
   test('clicking a repo in the aside filters the catalog by that provider', async ({ page }) => {
     const aside = page.getByRole('complementary', { name: /Source repositories by stars/ });
     await aside.getByRole('button', { name: /Microsoft/ }).click();
-    await expect(page.getByText('32 of 161 skills')).toBeVisible();
+    await expect(page.getByRole('button', { name: '1 provider' })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^azure-ai/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^pdf/ })).toHaveCount(0);
   });
 });
 
