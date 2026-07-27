@@ -242,7 +242,7 @@ export const WorkspaceLeftPanel: React.FC<WorkspaceLeftPanelProps> = ({
 		)}
 
 		{/* Sparse checkout paths (only for plain creation, where they are applied) */}
-		{!moveToExisting && !hasSourceWorkspace && (
+		{!moveToExisting && !sourceWorkspace && (
 			<div className="grid gap-1.5">
 				<Label htmlFor="sparse-paths" className="text-xs">
 					Sparse paths (optional, one per line)
