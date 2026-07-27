@@ -109,11 +109,12 @@ Each option throws away something different. Merge commits keep the shape. Squas
 
 Block force pushes on shared branches. If feature branches can be rewritten, say so out loud, so reviewers know whether it is safe to build on one.
 
-After a big rebase, use `git range-diff` to check the rewritten series still says what you meant. Run the full test suite after you resolve conflicts, whichever strategy you picked. When the same conflict keeps returning on a long-lived branch, [git rerere](./git-rerere) can reuse the resolution you already chose.
+After a big rebase, use `git range-diff` to check the rewritten series still says what you meant. Run the full test suite after you resolve conflicts, whichever strategy you picked. [zdiff3](./zdiff3) makes conflict markers easier to read when both sides share surrounding lines. When the same conflict keeps returning on a long-lived branch, [git rerere](./git-rerere) can reuse the resolution you already chose.
 
 ## Next Steps
 
 - [Cherry-pick vs Rebase](./cherry-pick-vs-rebase): distinguish selected patch copying from branch rewriting
+- [What is zdiff3?](./zdiff3): shrink conflict markers while keeping the merge base
+- [What is Git Rerere?](./git-rerere): reuse a conflict resolution when the same conflict returns
 - [What are Stacked PRs?](./stacked-prs): manage branches that depend on one another
-- [Stacked PR Workflow](/learn/workflows/git/stacked-pr): apply rebasing to a pull-request stack
 - [Parallel Development Workflow](/learn/workflows/git/parallel-development): combine integration policy with concurrent branch work

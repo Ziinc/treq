@@ -22,7 +22,7 @@ Review the summary carefully, then confirm the merge. After the merge completes,
 
 ## Handling Conflicts
 
-Treq only opens the merge preview once the workspace has no conflicts against the target branch. If conflicts exist, resolve them in the workspace first: open the affected files, resolve the conflict markers, and commit the resolution.
+Treq only opens the merge preview once the workspace has no conflicts against the target branch. If conflicts exist, resolve them in the workspace first: open the affected files, resolve the conflict markers, and commit the resolution. Git's [zdiff3](/learn/concepts/git/zdiff3) conflict style can make those markers easier to read before you edit. For agent-driven stacks, see [How to Fix Merge Conflicts Created by Coding Agents](/learn/how-to/merge-conflicts-with-coding-agents).
 
 For large conflicts, pause and make sure the target branch is up to date before continuing. Pull the latest main branch, resolve conflicts in the workspace, and retry once tests pass. The merge preview becomes available as soon as the workspace is conflict-free.
 

@@ -9,7 +9,7 @@ import DefinitionCard from "@site/src/components/DefinitionCard";
 
 _Zealous Diff3 shows the merge base and pulls identical boundary lines out of the conflict markers._
 
-When a merge or rebase stops on conflicting edits, Git writes conflict markers into the file. The default layout shows only your side and the incoming side. **zdiff3** keeps the three-way view from `diff3` and then shrinks the marked region so you resolve the lines that actually disagree.
+When a [merge or rebase](./merge-vs-rebase) stops on conflicting edits, Git writes conflict markers into the file. The default layout shows only your side and the incoming side. **zdiff3** keeps the three-way view from `diff3` and then shrinks the marked region so you resolve the lines that actually disagree.
 
 ## Introduction
 
@@ -138,11 +138,11 @@ Set `merge.conflictStyle` in a shared team docs page or onboarding checklist so 
 
 CI and bots that parse conflict markers should accept both two-section and three-section layouts. Scripts that assume only `<<<<<<<`, `=======`, and `>>>>>>>` will miss the `|||||||` base section under `diff3` and `zdiff3`.
 
-Agent-driven parallel work raises conflict volume. Better markers do not replace isolation. Use separate worktrees, rebase early, and keep shared contracts owned by one branch. See [How to Fix Merge Conflicts Created by Coding Agents](/learn/how-to/merge-conflicts-with-coding-agents).
+Agent-driven parallel work raises conflict volume. Better markers do not replace isolation. Use separate [worktrees](./git-worktrees), rebase early, and keep shared contracts owned by one branch. See [How to Fix Merge Conflicts Created by Coding Agents](/learn/how-to/merge-conflicts-with-coding-agents).
 
 ## Next Steps
 
-- [Merge vs Rebase](./merge-vs-rebase): choose how branches integrate before conflicts appear
-- [How to Fix Merge Conflicts Created by Coding Agents](/learn/how-to/merge-conflicts-with-coding-agents): prevent and resolve conflicts from parallel agent work
 - [Parallel Development Workflow](/learn/workflows/git/parallel-development): run concurrent branches without shared-checkout collisions
-- [What are Git Worktrees?](./git-worktrees): isolate checkouts so agents do not invent false conflicts
+- [Auto-Rebasing AI Workspaces](/learn/how-to/auto-rebase-ai-branches): keep dependent agent branches current before conflicts pile up
+- [Customizing Settings](/docs/how-to/customizing-settings): set conflict style and merge preferences in Treq
+- [Merging Workspaces](/docs/tutorials/merging-workspaces): resolve conflicts before Treq opens the merge preview
