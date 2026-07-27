@@ -1,5 +1,11 @@
 import * as React from "react";
-import { AlertTriangle, CheckCircle2, Info, X, XCircle } from "lucide-react";
+import {
+	AlertCircle,
+	AlertTriangle,
+	CheckCircle2,
+	Info,
+	X,
+} from "lucide-react";
 import { cn } from "../../lib/utils";
 
 export type ToastType = "success" | "error" | "info" | "warning";
@@ -57,7 +63,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 }
 
 const toastIcons: Record<ToastType, typeof CheckCircle2> = {
-	error: XCircle,
+	error: AlertCircle,
 	info: Info,
 	success: CheckCircle2,
 	warning: AlertTriangle,
@@ -66,8 +72,8 @@ const toastIcons: Record<ToastType, typeof CheckCircle2> = {
 const toastIconStyles: Record<ToastType, string> = {
 	error: "text-destructive",
 	info: "text-primary",
-	success: "text-green-600 dark:text-green-500",
-	warning: "text-orange-500 dark:text-orange-400",
+	success: "text-green-500",
+	warning: "text-yellow-600 dark:text-yellow-400",
 };
 
 function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
@@ -79,12 +85,10 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
 			className="pointer-events-auto flex w-full min-w-[320px] max-w-sm items-start gap-3 rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-lg animate-in slide-in-from-left"
 		>
 			<Icon
-				className={cn("mt-0.5 h-5 w-5 shrink-0", toastIconStyles[toast.type])}
+				className={cn("mt-0.5 h-4 w-4 shrink-0", toastIconStyles[toast.type])}
 			/>
 			<div className="flex-1 space-y-1">
-				<div className="text-sm font-semibold leading-none">
-					{toast.title}
-				</div>
+				<div className="text-sm font-semibold leading-none">{toast.title}</div>
 				{toast.description && (
 					<div className="text-sm text-muted-foreground">
 						{toast.description}
