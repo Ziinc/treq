@@ -3,14 +3,15 @@
 
 create extension if not exists wrappers with schema extensions;
 
+-- Handlers live in `extensions`; migration search_path often omits it.
 do $$
 begin
   if not exists (
     select 1 from pg_foreign_data_wrapper where fdwname = 'stripe_wrapper'
   ) then
     create foreign data wrapper stripe_wrapper
-      handler stripe_fdw_handler
-      validator stripe_fdw_validator;
+      handler extensions.stripe_fdw_handler
+      validator extensions.stripe_fdw_validator;
   end if;
 end $$;
 
@@ -32,7 +33,7 @@ do $$
 begin
   if not exists (select 1 from pg_foreign_server where srvname = 'stripe_server') then
     create server stripe_server
-      foreign data wrapper stripe_wrapper
+      foreign data wrapper stripe_wrapper 
       options (api_key_name 'stripe');
   end if;
 end $$;
