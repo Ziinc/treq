@@ -83,12 +83,61 @@ Same for components under `src/components/**` (e.g.
    for a single component's needs — keep shared setup shared, keep
    component-specific mocking local to that story file.
 
-## Verifying
+## Verifying: always screenshot the change
 
-Run `npm run storybook` and check the component renders with real
-Tailwind styling in both the light and dark toolbar states, or run `npm run
-build-storybook` (fast, no dev server) and confirm it completes without
-errors — that's what CI does before deploying the preview.
+Don't just confirm `build-storybook` succeeds — look at the rendered
+result. Every time you add or tweak a story (new story, changed args,
+changed component markup/styles), capture it with the screenshot harness
+and view the PNGs before telling the user the change is done:
+
+```
+npm run storybook:screenshot -- src/components/ui/button.stories.tsx
+```
+
+This builds Storybook, serves `storybook-static/` locally, and uses the
+repo's existing headless-Chromium setup (same `playwright-core` +
+`PLAYWRIGHT_CHROMIUM_PATH` as `scripts/screenshot/`) to capture each story
+in both light and dark to `scripts/storybook/.generated/<story-id>.<light|
+dark>.png` plus a `manifest.json`. Pass one or more repo-relative
+`*.stories.tsx` paths or exact story ids (from `storybook-static/
+index.json`) as args; no args captures every story, which is slow — scope
+it to the story file(s) you touched.
+
+Read the resulting PNGs yourself (`Read` tool on the `.png` paths) — that's
+the whole point, an agent-written "looks fine" without looking is not
+verification. When tweaking an *existing* component, capture before your
+change and after, and compare the two images directly rather than relying
+on memory of what it looked like.
+
+`scripts/storybook/.generated/` is gitignored scratch output, not part of
+the story itself.
+
+## Prototyping variations for the user to choose from
+
+When the user asks for **variations** of a component to pick from (a new
+look, a redesigned layout, alternative styling for something that doesn't
+exist yet), don't just write one guess and iterate in place. Produce **at
+least 4 distinct options**:
+
+1. Make each option a real, separate story (e.g. `Prototype1`, `Prototype2`
+   ... or descriptive names like `Compact`, `Card`, `Inline`, `WithIcon` —
+   prefer names that describe what's different about each one) inside the
+   component's `.stories.tsx`, or a dedicated `<Component>.prototypes.
+   stories.tsx` file if the component itself doesn't exist yet and you're
+   prototyping a new one from scratch.
+2. Make the options meaningfully different from each other — different
+   layout, density, or visual treatment, not four color tweaks of the same
+   idea — so the screenshots actually help someone decide.
+3. Screenshot every option with `npm run storybook:screenshot -- <file>`
+   (light is usually enough for a first pass; add dark if theme handling is
+   part of what's being decided).
+4. Present the screenshots to the user side by side with a one-line
+   description of what's different about each, and ask which direction to
+   pursue (or if they want to mix elements of a couple).
+5. Once the user picks (or narrows down), keep the winning story and delete
+   the rejected prototype stories rather than leaving dead options in the
+   file — a merged component shouldn't carry four alternate stories nobody
+   picked.
 
 ## Shared-components long-term note
 

@@ -60,3 +60,4 @@ crates/treq-napi/treq-napi.*.node
 scripts/screenshot/.generated/
 *storybook.log
 storybook-static
+scripts/storybook/.generated/
