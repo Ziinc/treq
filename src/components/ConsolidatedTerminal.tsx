@@ -164,7 +164,8 @@ export const ConsolidatedTerminal = forwardRef<
 				cursorBlink: true,
 				cursorStyle: "bar",
 				fontSize, // Scaled to text-sm (0.875x of base font size)
-				fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+				fontFamily:
+					'"JetBrains Mono", "JetBrains Mono Fallback", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
 				theme: { background: "#1e1e1e" },
 				scrollback: 5000,
 				allowProposedApi: true,
