@@ -90,7 +90,7 @@ Pending working-copy edits can block or complicate synchronization. Commit, move
 
 ## Common failure cases
 
-**Rebase succeeds, behavior breaks.** A conflict marker resolution kept the wrong side. Re-read conflicted files and add a regression test.
+**Rebase succeeds, behavior breaks.** A conflict marker resolution kept the wrong side. Re-read conflicted files and add a regression test. [zdiff3](/learn/concepts/git/zdiff3) makes those markers easier to read when both sides share surrounding lines.
 
 **Force push without lease.** Concurrent updates on the remote branch can be overwritten, so always push with `--force-with-lease`.
 

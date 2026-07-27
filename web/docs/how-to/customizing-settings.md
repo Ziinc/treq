@@ -52,7 +52,7 @@ Toggle line numbers, the minimap, word wrap, and whitespace visibility. Pick a s
 
 **Commit settings** turn on auto-stage, which we do not recommend, set a commit message template, and add validation rules such as a maximum length or a requirement for conventional commits.
 
-**Merge settings** choose the default strategy, the conflict style, and whether Treq stashes your work before an operation.
+**Merge settings** choose the default strategy, the [conflict style](/learn/concepts/git/zdiff3), and whether Treq stashes your work before an operation.
 
 | Setting | Options |
 | --- | --- |
