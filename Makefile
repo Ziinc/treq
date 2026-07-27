@@ -37,6 +37,9 @@ deploy:
 	@echo 'Deploying DB migrations now'
 	@supabase db push
 	@echo 'Deploying functions now'
-	@find ./supabase/functions/* -type d ! -name '_*'  | xargs -I {} basename {} | xargs -I {} supabase functions deploy {}
+	@for entrypoint in supabase/functions/*/index.ts; do \
+		function_dir=$${entrypoint%/index.ts}; \
+		supabase functions deploy "$${function_dir##*/}" || exit $$?; \
+	done
 
 .PHONY: bump start db.ßdiff deploy restart db.reset stop
