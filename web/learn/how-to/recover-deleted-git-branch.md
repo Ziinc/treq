@@ -15,9 +15,9 @@ Restore a branch deleted with `git branch -d` or `git branch -D` while its tip i
 
 `git branch -D` removes the name under `.git/refs/heads/`. It does not delete the commits those names pointed at. The objects stay in the database until garbage collection prunes unreachable tips.
 
-The branch's own log under `.git/logs/refs/heads/` usually disappears with the name. Recovery depends on the **`HEAD` reflog**, which still records checkouts that moved onto or off that branch. Those entries keep the tip hash you need.
+The branch's own log under `.git/logs/refs/heads/` usually disappears with the name. Recovery depends on the **[`HEAD` reflog](/learn/concepts/git/git-reflog)**, which still records checkouts that moved onto or off that branch. Those entries keep the tip hash you need.
 
-If you never checked the branch out in this clone, the local `HEAD` reflog has no footprint to search. Use a remote that still has the tip, closed pull-request metadata, or another clone that did check it out.
+If you never checked the branch out in this [clone](/learn/concepts/git/git-worktrees-vs-clones), the local `HEAD` reflog has no footprint to search. Use a remote that still has the tip, closed pull-request metadata, or another clone that did check it out.
 
 ## Recover the branch
 
@@ -47,7 +47,7 @@ Confirm the tip and recent history:
 git log --oneline -5 feature/login
 ```
 
-The new ref makes those commits reachable again. Push when you need the branch on a remote:
+The new ref makes those commits reachable again. [Push](/docs/how-to/pushing-to-remote) when you need the branch on a remote:
 
 ```bash
 git push -u origin feature/login
@@ -67,6 +67,6 @@ Act before retention windows lapse. Unreachable reflog entries default to about 
 
 ## Related
 
-- [What is the Git Reflog?](/learn/concepts/git/git-reflog): how reflogs work, expire, and differ from commit history
-- [Discarding Changes](./discarding-changes): recovery options when uncommitted work is gone
+- [Discarding Changes](/docs/how-to/discarding-changes): recovery options when uncommitted work is gone
 - [What is Version Control?](/learn/concepts/git/version-control): commits, branches, and local recovery basics
+- [Merge vs Rebase](/learn/concepts/git/merge-vs-rebase): rewrite operations that move refs and leave tips to recover
