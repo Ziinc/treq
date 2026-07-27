@@ -71,7 +71,7 @@ test.describe('Source repos aside', () => {
     const aside = page.getByRole('complementary', { name: /Source repositories by stars/ });
     await aside.getByRole('button', { name: /Microsoft/ }).click();
     await expect(page.getByRole('button', { name: '1 provider' })).toBeVisible();
-    await expect(page.getByRole('link', { name: /^azure-ai/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^azure-ai Microsoft/ })).toBeVisible();
     await expect(page.getByRole('link', { name: /^pdf/ })).toHaveCount(0);
   });
 });
