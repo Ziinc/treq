@@ -10,27 +10,27 @@ _Version control records file history so people can inspect, combine, and recove
 
 ## Introduction
 
-A version control system stores changes to a set of files as a history. Developers use that history to collaborate, review changes, restore earlier states, and find when a defect entered the codebase.
+A version control system keeps the changes to a set of files as a history. You use that history to work with others, review changes, go back to an earlier state, and find when a bug crept in.
 
-Git is the default version control system for most software projects. Jujutsu provides a different command model and can use Git repositories as its storage and interoperability layer.
+Git is the default for most software projects. Jujutsu offers a different set of commands and can sit on top of a Git repository for storage.
 
 ## Understanding the Concept
 
-A **repository** contains versioned files and the history needed to reconstruct their recorded states. In a distributed system such as Git, each normal clone contains repository history and can create commits without contacting a central server.
+A **repository** holds your files plus the history needed to rebuild any past state of them. Git is distributed, so each normal [clone](./git-worktrees-vs-clones) carries that history and can make commits without reaching a central server.
 
 <DefinitionCard
   term="Repository"
   definition="The stored history and metadata for a versioned set of files, usually paired with a working directory where those files are edited."
 />
 
-A **commit** records a project snapshot plus metadata and parent commit IDs. Those parent links form a directed acyclic graph. A commit with one parent continues a line of history, while a merge commit has multiple parents.
+A **commit** records a snapshot of the project, some metadata, and the IDs of its parents. Those parent links form a directed acyclic graph. A commit with one parent continues a line of history, while a [merge commit](./merge-vs-rebase) has multiple parents.
 
 <DefinitionCard
   term="Commit"
   definition="An immutable history object that records a project snapshot, metadata, and links to its parent commits."
 />
 
-A **branch** in Git is a movable name for a commit. Creating a commit while a branch is checked out advances that name. Branches do not contain commits as separate storage. They identify reachable histories in the commit graph.
+A **branch** in Git is just a movable name for a commit. Make a commit while that branch is checked out and the name moves forward with you. A branch stores no commits of its own, it only marks which history you can reach.
 
 <DefinitionCard
   term="Branch"
@@ -39,7 +39,7 @@ A **branch** in Git is a movable name for a commit. Creating a commit while a br
 
 {/* TODO: Add a branch-relationship diagram showing commits as a directed graph, two branch refs pointing at tips, a remote-tracking ref, and a merge commit with two parents. */}
 
-A **remote** is a named configuration for another repository, usually including fetch and push URLs. Hosting services often act as the team's coordination point, but Git itself does not require one central server to create commits or inspect local history.
+A **remote** is a named pointer to another repository, usually with a fetch and a push URL. A hosting service is where most teams meet, but Git needs no central server to make commits or read local history.
 
 ## Applying It in Practice
 
@@ -56,7 +56,7 @@ git commit -m "Add login form"
 git push -u origin feature/add-login
 ```
 
-The **index**, often called the staging area, holds the snapshot Git will use for the next commit. `git add` copies selected file content into that index. This lets one working directory contain several edits while a commit includes only a chosen subset.
+The **index**, or staging area, holds the snapshot Git will turn into your next commit. `git add` copies the file content you pick into it. That way one working directory can hold several edits while a commit takes only the ones you chose.
 
 <DefinitionCard
   term="Index"
@@ -71,13 +71,13 @@ git diff
 git diff --staged
 ```
 
-Use `git log` to inspect ancestry, `git show` to inspect one commit, and `git blame` to trace lines to commits. Use `git revert` to undo a published change with a new commit. History-rewriting commands such as rebase and reset require more care because other work may depend on the old commit IDs.
+Use `git log` to read ancestry, `git show` for one commit, and `git blame` to trace a line back to its commit. Use `git revert` to undo a published change with a new one. [Discarding uncommitted changes](/docs/how-to/discarding-changes) is a different thing, and it cannot be undone. Commands that rewrite history, such as rebase and reset, need more care, because other work may sit on the old commit IDs.
 
 ## Git and Jujutsu
 
-Jujutsu uses a different interaction model. In its common colocated setup, Jujutsu and Git share Git-compatible commits and refs while Jujutsu records additional operation and change metadata.
+Jujutsu works differently. In the usual colocated setup, Jujutsu and Git share the same commits and refs, and Jujutsu keeps extra metadata about operations and changes on the side.
 
-Jujutsu has no staging area. The working copy is represented by a working-copy commit that Jujutsu updates as files change. Bookmarks provide named references similar to Git branches, but Jujutsu separates a change's stable change ID from the commit IDs created as that change is rewritten.
+Jujutsu has no staging area. Your working copy is itself a commit, which Jujutsu updates as you edit files. Bookmarks act like Git branches, but Jujutsu keeps a change's stable change ID apart from the commit IDs it gets each time you rewrite it.
 
 ```bash
 jj git clone https://github.com/org/repo.git
@@ -91,27 +91,27 @@ jj bookmark create feature/add-login
 jj git push --bookmark feature/add-login
 ```
 
-Jujutsu also records repository-changing commands in an operation log. `jj undo` can reverse the most recent operation, and `jj op log` exposes earlier repository states. Git offers lower-level recovery through refs and reflogs.
+Jujutsu also logs every command that changes the repository. `jj undo` reverses the last one, and `jj op log` shows earlier states. Git gives you the same kind of rescue at a lower level, through refs and reflogs.
 
-Choose Jujutsu because its working-copy, conflict, and history-editing model fits your team. Do not choose it on the assumption that Git hosting and tooling become irrelevant. Most collaboration still crosses a Git boundary.
+Pick Jujutsu because its working-copy, conflict, and history-editing model suits your team. Do not pick it expecting Git hosting and tooling to go away, because most collaboration still crosses a Git boundary.
 
 ## Engineering Considerations
 
-Commits should represent coherent changes and include messages that explain intent. Small, buildable commits improve review and make tools such as `git bisect` more useful.
+A commit should hold one coherent change and say why in its message. Small commits that still build are easier to review and make `git bisect` far more useful.
 
-Treat published history as an interface. Rewriting a private branch is routine. Rewriting a branch that others use changes commit IDs beneath their work and requires coordination.
+Treat published history as an interface. Rewriting a private branch is routine. Rewriting a branch that others use changes commit IDs beneath their work and requires coordination, which is the problem [stacked PRs](./stacked-prs) are built to manage.
 
-Version control does not replace backups. A clone may omit unreachable objects, local-only refs, server settings, issue data, release assets, and large-file objects. Protect the hosting service and any external artifact stores separately.
+Version control is not a backup. A clone can leave out unreachable objects, local-only refs, server settings, issue data, release assets, and large files. Back up the hosting service and any outside artifact stores on their own.
 
-Git stores file contents in its object database, so large binaries that change often can grow repository history quickly. Git LFS stores pointer files in Git and transfers large objects through a separate service.
+Git keeps file contents in its object database, so large binaries that change often bloat history fast. Git LFS puts a small pointer file in Git and moves the real object through a separate service.
 
 ## Scaling and Operations
 
-Large repositories may need partial clone, sparse checkout, commit-graph maintenance, or filesystem monitoring. Apply these only after measuring whether object transfer, history traversal, or working-tree scans are the bottleneck.
+Large repositories may need partial clone, sparse checkout, commit-graph upkeep, or a filesystem monitor. Reach for these only after you measure which step is slow: fetching objects, walking history, or scanning the working tree.
 
-Protect `main` and release branches with review and CI requirements. Reject force pushes where history must remain stable. Define whether feature branches may be rewritten after review begins.
+Guard `main` and release branches with required review and CI. Reject force pushes wherever history has to stay put, and decide up front whether a feature branch can be rewritten once review starts.
 
-Keep generated files, credentials, and build outputs out of commits unless the project explicitly versions them. A secret remains recoverable from old history after it is deleted in a later commit, so revoke exposed credentials before rewriting or cleaning history.
+Keep generated files, credentials, and build output out of commits unless the project versions them on purpose. Deleting a secret in a later commit does not remove it from old history, so revoke the credential first and clean the history second.
 
 ## Next Steps
 

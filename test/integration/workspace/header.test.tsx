@@ -1,18 +1,20 @@
+import { execFileSync } from "node:child_process";
+import userEvent from "@testing-library/user-event";
 import * as React from "react";
 import { beforeEach, describe, expect, it } from "vitest";
+import { Dashboard } from "../../../src/components/Dashboard";
+import { createWorkspace, getWorkspaces } from "../../../src/lib/api";
+import { fireEvent, render, screen, waitFor, within } from "../../test-utils";
 import {
 	commitRepoFile,
 	commitWorkspaceFile,
 	createTestRepo,
 	findSidebarBranchElement,
 	openRepo,
+	resolveRevsetCommitIds,
 	resolveWorkspacePath,
+	writeWorkspaceFile,
 } from "../../utils";
-import { fireEvent, render, screen, waitFor, within } from "../../test-utils";
-import { Dashboard } from "../../../src/components/Dashboard";
-import { createWorkspace, getWorkspaces } from "../../../src/lib/api";
-import userEvent from "@testing-library/user-event";
-import { execFileSync } from "node:child_process";
 
 describe("ShowWorkspace - header", () => {
 	let repoPath: string;
@@ -90,6 +92,8 @@ describe("ShowWorkspace - header", () => {
 
 		await user.click(await findSidebarBranchElement("feat/alpha"));
 
+		const header = await screen.findByTestId("show-workspace-header");
+
 		let targetBtn: HTMLButtonElement;
 		await waitFor(() => {
 			targetBtn = screen.getByRole("button", {
@@ -98,20 +102,20 @@ describe("ShowWorkspace - header", () => {
 			expect(targetBtn).not.toBeDisabled();
 		});
 
-		await screen.findByText(defaultBranch, { selector: "button *" });
+		await within(header).findByText(defaultBranch, { selector: "button *" });
 
 		fireEvent.click(targetBtn!);
 		const betaElement = await screen.findByText("feat/beta", {
 			selector: ".branch-list-item *",
 		});
 		fireEvent.click(betaElement);
-		await screen.findByText("feat/beta", { selector: "button *" });
+		await within(header).findByText("feat/beta", { selector: "button *" });
 
 		await user.click(await findSidebarBranchElement("feat/beta"));
-		await screen.findByText(defaultBranch, { selector: "button *" });
+		await within(header).findByText(defaultBranch, { selector: "button *" });
 
 		await user.click(await findSidebarBranchElement("feat/alpha"));
-		await screen.findByText("feat/beta", { selector: "button *" });
+		await within(header).findByText("feat/beta", { selector: "button *" });
 	});
 
 	it("lazily loads branch list into the target-branch dropdown on open", async () => {
@@ -183,6 +187,8 @@ describe("ShowWorkspace - header", () => {
 
 		await user.click(await screen.findByText("feat/alpha"));
 
+		const header = await screen.findByTestId("show-workspace-header");
+
 		let targetBtn: HTMLButtonElement;
 		await waitFor(() => {
 			targetBtn = screen.getByRole("button", {
@@ -198,7 +204,7 @@ describe("ShowWorkspace - header", () => {
 		fireEvent.click(betaElement);
 
 		await screen.findByText("Rebased successfully");
-		await screen.findByText("feat/beta", { selector: "button *" });
+		await within(header).findByText("feat/beta", { selector: "button *" });
 
 		const betaWorkspacePath = resolveWorkspacePath(
 			repoPath,
@@ -209,20 +215,62 @@ describe("ShowWorkspace - header", () => {
 			encoding: "utf8",
 		}).trim();
 
-		const overlap = execFileSync(
-			"jj",
-			[
-				"log",
-				"-r",
-				`ancestors(feat/alpha) & ${betaTip}`,
-				"-n",
-				"1",
-				"--no-graph",
-				"-T",
-				"commit_id",
-			],
-			{ cwd: repoPath, encoding: "utf8" },
-		).trim();
-		expect(overlap).not.toEqual("");
+		const overlap = resolveRevsetCommitIds(
+			repoPath,
+			`ancestors(feat/alpha) & ${betaTip}`,
+		);
+		expect(overlap).not.toEqual([]);
+	});
+});
+
+describe("ShowWorkspace - header sync indicator", () => {
+	let repoPath: string;
+	let user: ReturnType<typeof userEvent.setup>;
+
+	beforeEach(() => {
+		({ repoPath } = createTestRepo(true));
+		openRepo(repoPath);
+		user = userEvent.setup();
+	});
+
+	it("shows the workspace ahead count as soon as a commit is made, without re-navigating", async () => {
+		await createWorkspace(repoPath, "feat/sync-indicator");
+		const workspace = (await getWorkspaces(repoPath)).find(
+			(candidate) => candidate.branch_name === "feat/sync-indicator",
+		);
+		expect(workspace).toBeTruthy();
+		render(<Dashboard />);
+
+		await user.click(await findSidebarBranchElement("feat/sync-indicator"));
+
+		const header = await screen.findByTestId("show-workspace-header");
+		await user.click(
+			await within(header).findByRole("button", { name: /push to remote/i }),
+		);
+		await screen.findByText("Pushed to remote");
+		await waitFor(() => {
+			expect(
+				screen.queryByRole("button", { name: /push to remote/i }),
+			).not.toBeInTheDocument();
+		});
+
+		writeWorkspaceFile(
+			resolveWorkspacePath(repoPath, workspace!.workspace_path),
+			"sync-indicator.txt",
+			"ahead of remote\n",
+		);
+
+		await user.click(await screen.findByRole("tab", { name: /Review/ }));
+		await screen.findAllByText("sync-indicator.txt");
+
+		await user.type(
+			await screen.findByPlaceholderText("Message"),
+			"Commit that puts the branch ahead",
+		);
+		await user.click(screen.getByRole("button", { name: "Commit" }));
+
+		await screen.findByText("Commit created");
+
+		await within(header).findByText("↑1");
 	});
 });

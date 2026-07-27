@@ -585,6 +585,38 @@ export function buildStackTreePreview(
 	return lines;
 }
 
+export interface StackedWorkspaceEntry {
+	workspace: Workspace;
+	isCurrent: boolean;
+}
+
+/**
+ * Build the ordered stack (tip-first, root-last) that `currentWorkspaceId`
+ * belongs to, for rendering a stacked-PR-style UI.
+ *
+ * Returns null when the workspace has no workspace ancestor — i.e. it is
+ * itself the root of its stack (based directly on the default/external
+ * branch), or the id isn't found.
+ */
+export function getWorkspaceStack(
+	workspaces: Workspace[],
+	currentWorkspaceId: number,
+): StackedWorkspaceEntry[] | null {
+	const current = workspaces.find((ws) => ws.id === currentWorkspaceId);
+	if (!current) return null;
+
+	const rootBranch = getStackRoot(workspaces, current.branch_name);
+	if (rootBranch === current.branch_name) return null;
+
+	const chain = getEntireStack(workspaces, current.branch_name);
+	if (chain.length === 0) return null;
+
+	return [...chain].reverse().map((workspace) => ({
+		workspace,
+		isCurrent: workspace.id === currentWorkspaceId,
+	}));
+}
+
 export function getValidTargets(
 	workspaces: Workspace[],
 	currentBranch: string,

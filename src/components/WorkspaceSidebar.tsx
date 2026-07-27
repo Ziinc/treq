@@ -304,9 +304,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 										<div
 											data-testid="home-repo-row"
 											className={`relative flex items-center text-sm tracking-wide px-2 py-1 rounded-md transition-colors cursor-pointer ${
-												isHomeSelected
-													? "bg-primary/20"
-													: "hover:bg-muted/50"
+												isHomeSelected ? "bg-primary/20" : "hover:bg-muted/50"
 											}`}
 											onClick={(e) => {
 												if (

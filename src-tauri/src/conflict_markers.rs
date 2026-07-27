@@ -37,7 +37,6 @@ pub enum ConflictLineRole {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
 pub struct ConflictLineView {
     pub raw: String,
     pub kind: ConflictLineKind,
@@ -46,7 +45,6 @@ pub struct ConflictLineView {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
 pub struct ConflictComparisonView {
     pub left_line_indexes: Vec<usize>,
     pub base_line_indexes: Vec<usize>,
@@ -54,7 +52,6 @@ pub struct ConflictComparisonView {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
 pub struct ConflictRegionView {
     pub id: String,
     pub file_path: String,
@@ -248,5 +245,120 @@ pub fn parse_conflict_markers(content: &str, file_path: &str) -> Vec<ConflictReg
         i += 1;
     }
 
+    // Git-style markers carry no "Conflict N of M" suffix to parse a total from.
+    let parsed_total = regions.len();
+    for region in &mut regions {
+        if region.total_conflicts == 0 {
+            region.total_conflicts = parsed_total;
+        }
+    }
+
     regions
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const GIT_DIFF3_CONFLICT: &str = "line before\n\
+<<<<<<< Side #1 (Conflict 1 of 1)\nours\n\
+||||||| Base\nbase\n\
+=======\ntheirs\n\
+>>>>>>> Side #2 (Conflict 1 of 1)\n\
+line after\n";
+
+    /// Serializing as camelCase leaves the frontend's snake_case `start_line`/`end_line` undefined, which silently hides the inline conflict card.
+    #[test]
+    fn conflict_region_serializes_snake_case_field_names() {
+        let regions = parse_conflict_markers(GIT_DIFF3_CONFLICT, "README.md");
+        assert_eq!(regions.len(), 1);
+
+        let value = serde_json::to_value(&regions[0]).expect("region serializes");
+        let object = value.as_object().expect("region is a JSON object");
+
+        for key in [
+            "id",
+            "file_path",
+            "conflict_number",
+            "total_conflicts",
+            "start_line",
+            "end_line",
+            "marker_style",
+            "content",
+            "lines",
+            "line_map",
+            "comparison",
+        ] {
+            assert!(object.contains_key(key), "missing region key `{key}`");
+        }
+
+        let line = object["lines"][0]
+            .as_object()
+            .expect("line is a JSON object");
+        for key in ["raw", "kind", "role", "file_line"] {
+            assert!(line.contains_key(key), "missing line key `{key}`");
+        }
+
+        let comparison = object["comparison"]
+            .as_object()
+            .expect("comparison is a JSON object");
+        for key in [
+            "left_line_indexes",
+            "base_line_indexes",
+            "right_line_indexes",
+        ] {
+            assert!(
+                comparison.contains_key(key),
+                "missing comparison key `{key}`"
+            );
+        }
+    }
+
+    #[test]
+    fn conflict_region_line_numbers_are_one_based_file_lines() {
+        let regions = parse_conflict_markers(GIT_DIFF3_CONFLICT, "README.md");
+        let region = &regions[0];
+
+        // `<<<<<<<` is the 2nd line of the file, `>>>>>>>` the 8th.
+        assert_eq!(region.start_line, 2);
+        assert_eq!(region.end_line, 8);
+        assert_eq!(region.conflict_number, 1);
+        assert_eq!(region.total_conflicts, 1);
+        assert_eq!(region.marker_style, ConflictStyle::JjGitDiff3);
+    }
+
+    #[test]
+    fn total_conflicts_falls_back_to_the_number_of_parsed_regions() {
+        let content = "<<<<<<< main\nours\n=======\ntheirs\n>>>>>>> feature\n\
+                       middle\n\
+                       <<<<<<< main\nours2\n=======\ntheirs2\n>>>>>>> feature\n";
+        let regions = parse_conflict_markers(content, "README.md");
+
+        assert_eq!(regions.len(), 2);
+        assert_eq!(regions[0].conflict_number, 1);
+        assert_eq!(regions[1].conflict_number, 2);
+        assert!(regions.iter().all(|r| r.total_conflicts == 2));
+    }
+
+    #[test]
+    fn conflict_region_assigns_side_roles_to_content_lines() {
+        let regions = parse_conflict_markers(GIT_DIFF3_CONFLICT, "README.md");
+        let region = &regions[0];
+
+        let role_of = |raw: &str| {
+            region
+                .lines
+                .iter()
+                .find(|l| l.raw == raw)
+                .unwrap_or_else(|| panic!("no line `{raw}`"))
+                .role
+        };
+        assert_eq!(role_of("ours"), ConflictLineRole::Left);
+        assert_eq!(role_of("base"), ConflictLineRole::Base);
+        assert_eq!(role_of("theirs"), ConflictLineRole::Right);
+
+        assert_eq!(region.comparison.left_line_indexes, vec![1]);
+        assert_eq!(region.comparison.base_line_indexes, vec![3]);
+        assert_eq!(region.comparison.right_line_indexes, vec![5]);
+    }
 }

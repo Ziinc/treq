@@ -1,6 +1,28 @@
 import { describe, expect, it } from "vitest";
-import type { WorkspaceSidebarStatus } from "./api-types";
-import { buildWorkspaceTree, flattenWorkspaceTree } from "./workspace-tree";
+import type { Workspace, WorkspaceSidebarStatus } from "./api-types";
+import {
+	buildWorkspaceTree,
+	flattenWorkspaceTree,
+	getWorkspaceStack,
+} from "./workspace-tree";
+
+function makeWorkspace(
+	id: number,
+	branchName: string,
+	targetBranch: string | null,
+): Workspace {
+	return {
+		id,
+		repo_path: "/tmp/repo",
+		workspace_name: branchName,
+		workspace_path: `ws/${branchName}`,
+		branch_name: branchName,
+		created_at: "2026-01-01T00:00:00.000Z",
+		target_branch: targetBranch,
+		title: branchName,
+		not_on_remote: false,
+	};
+}
 
 function makeStatus(
 	id: number,
@@ -8,17 +30,7 @@ function makeStatus(
 	targetBranch: string | null,
 ): WorkspaceSidebarStatus {
 	return {
-		current: {
-			id,
-			repo_path: "/tmp/repo",
-			workspace_name: branchName,
-			workspace_path: `ws/${branchName}`,
-			branch_name: branchName,
-			created_at: "2026-01-01T00:00:00.000Z",
-			target_branch: targetBranch,
-			title: branchName,
-			not_on_remote: false,
-		},
+		current: makeWorkspace(id, branchName, targetBranch),
 		has_conflicts: false,
 	};
 }
@@ -81,5 +93,73 @@ describe("workspace tree root detection", () => {
 				expectedDepths: [0, 1, 2],
 			},
 		);
+	});
+});
+
+describe("getWorkspaceStack", () => {
+	it("returns null when the workspace targets an external branch (default-branch workspace)", () => {
+		const workspaces = [makeWorkspace(1, "feature/a", "main")];
+		expect(getWorkspaceStack(workspaces, 1)).toBeNull();
+	});
+
+	it("returns null when the workspace has no target_branch at all", () => {
+		const workspaces = [makeWorkspace(1, "feature/a", null)];
+		expect(getWorkspaceStack(workspaces, 1)).toBeNull();
+	});
+
+	it("returns null when the workspace id is not found", () => {
+		const workspaces = [makeWorkspace(1, "feature/a", "main")];
+		expect(getWorkspaceStack(workspaces, 999)).toBeNull();
+	});
+
+	it("returns the ordered stack (tip-first, root-last) for a stacked workspace", () => {
+		const workspaces = [
+			makeWorkspace(1, "chore/refactor", "main"),
+			makeWorkspace(2, "feat/context-prompts", "chore/refactor"),
+			makeWorkspace(3, "feat/ai-summaries", "feat/context-prompts"),
+			makeWorkspace(4, "docs/ai-guidelines", "feat/ai-summaries"),
+		];
+
+		const stack = getWorkspaceStack(workspaces, 3);
+
+		expect(stack).not.toBeNull();
+		expect(stack!.map((entry) => entry.workspace.branch_name)).toEqual([
+			"docs/ai-guidelines",
+			"feat/ai-summaries",
+			"feat/context-prompts",
+			"chore/refactor",
+		]);
+	});
+
+	it("marks only the requested workspace as current", () => {
+		const workspaces = [
+			makeWorkspace(1, "chore/refactor", "main"),
+			makeWorkspace(2, "feat/context-prompts", "chore/refactor"),
+			makeWorkspace(3, "feat/ai-summaries", "feat/context-prompts"),
+		];
+
+		const stack = getWorkspaceStack(workspaces, 2);
+
+		expect(stack!.map((entry) => entry.isCurrent)).toEqual([
+			false, // feat/ai-summaries
+			true, // feat/context-prompts (requested)
+			false, // chore/refactor
+		]);
+	});
+
+	it("returns a stack entry for a workspace positioned at the tip", () => {
+		const workspaces = [
+			makeWorkspace(1, "chore/refactor", "main"),
+			makeWorkspace(2, "feat/context-prompts", "chore/refactor"),
+		];
+
+		const stack = getWorkspaceStack(workspaces, 2);
+
+		expect(stack).not.toBeNull();
+		expect(stack).toHaveLength(2);
+		expect(stack![0]).toEqual({
+			workspace: workspaces[1],
+			isCurrent: true,
+		});
 	});
 });

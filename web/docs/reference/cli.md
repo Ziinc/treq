@@ -6,7 +6,7 @@ sidebar_position: 6
 
 _Reference for Treq's command-line interface._
 
-The `treq` command lets you create and inspect workspaces from a terminal. Run commands from inside a Git repository so Treq can detect the repository context.
+The `treq` command lets you create and inspect [workspaces](/docs/concepts/workspaces) from a terminal. Run commands from inside a Git repository so Treq can detect the repository context.
 
 ## Commands
 
@@ -70,4 +70,4 @@ treq agent <branch> <prompt> [-m <edit|plan>]
 
 - `branch`: workspace branch name.
 - `prompt`: prompt to send to the agent.
-- `-m, --mode`: permission mode. Use `edit` or `plan`.
+- `-m, --mode`: [permission mode](/docs/concepts/agent-sessions). Use `edit` or `plan`.

@@ -453,10 +453,7 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 									<Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
 								</div>
 							) : queueEntries.length === 0 ? (
-								<EmptyState
-									icon={GitMerge}
-									message="Merge queue is empty."
-								/>
+								<EmptyState icon={GitMerge} message="Merge queue is empty." />
 							) : (
 								queueEntries.map((entry) => (
 									<div

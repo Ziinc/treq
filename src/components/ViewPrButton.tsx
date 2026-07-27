@@ -4,12 +4,12 @@ import {
 	GitPullRequest,
 	GitPullRequestClosed,
 	GitPullRequestDraft,
+	type LucideIcon,
 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { usePrInfoViaGh, useGitRemoteInfo } from "../hooks/useMergeQueueStatus";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
-import type { LucideIcon } from "lucide-react";
 
 interface ViewPrButtonProps {
 	repoPath: string;
@@ -55,9 +55,7 @@ export function ViewPrButton({
 
 	const style = PR_STATUS_STYLES[prInfo.state] ?? PR_STATUS_STYLES.OPEN;
 	const Icon = prInfo.is_draft ? GitPullRequestDraft : style.Icon;
-	const statusLabel = prInfo.is_draft
-		? "draft"
-		: prInfo.state.toLowerCase();
+	const statusLabel = prInfo.is_draft ? "draft" : prInfo.state.toLowerCase();
 
 	return (
 		<div className="inline-flex items-center">
@@ -80,10 +78,7 @@ export function ViewPrButton({
 			<Button
 				variant="outline"
 				size="sm"
-				className={cn(
-					"rounded-l-none border-l-0 px-2",
-					style.className,
-				)}
+				className={cn("rounded-l-none border-l-0 px-2", style.className)}
 				onClick={() => openUrl(prInfo.url)}
 				aria-label="Open PR on web"
 				title="Open on Web"

@@ -6,7 +6,7 @@ sidebar_position: 5
 
 _How to review code using Treq's built-in review tools._
 
-Treq's review interface lets you examine changes in a dedicated workspace without disrupting your current work. You can add inline comments, test changes locally, and export review summaries for pull requests.
+Treq's review interface lets you examine [changes](/docs/concepts/changes-and-reviews) in a dedicated [workspace](/docs/concepts/workspaces) without disrupting your current work. You can add inline comments, test changes locally, and export review summaries for pull requests.
 
 ## Starting a Review
 
@@ -32,7 +32,7 @@ Once you're done, send your comments to the **Agent Terminal**. The agent picks 
 
 Open the commit history at the bottom of the review interface and click a commit to load its individual diff. Review the commit the same way you'd review a file: click a line number and leave a comment.
 
-This is useful when an agent produced a sequence of commits and you want to review each step rather than the cumulative diff. Once you're done, send your comments to the **Agent Terminal** the same way as in the file browser.
+This is useful when an agent produced a sequence of commits and you want to review each step on its own, not the cumulative diff. Once you're done, send your comments to the **Agent Terminal** the same way as in the file browser.
 
 ## Completing the Review
 

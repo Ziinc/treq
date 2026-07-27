@@ -10,20 +10,20 @@ _Give a coding agent a bounded contract, then verify the implementation before m
 
 ## Introduction
 
-A coding agent can inspect a repository, implement a feature, and run checks across several files. It works best when the expected behavior and boundaries are clear. The engineer remains responsible for the design and the accepted diff.
+A coding agent can read a repository, build a feature, and run checks across several files. It works best when the expected behavior and the boundaries are clear. You stay responsible for the design and for the diff you accept.
 
-Use this workflow for defined changes with observable acceptance criteria.
+Use this workflow for well-defined changes you can accept or reject on observable behavior.
 
 ## Understanding the Workflow
 
-A **task contract** describes the user-visible behavior, scope, constraints, and verification method. It gives the agent enough information to investigate without prescribing every implementation step.
+A **task contract** sets out the user-visible behavior, the scope, the constraints, and how you will check the result. It tells the agent enough to start digging without spelling out every step.
 
 <DefinitionCard
   term="Task Contract"
   definition="A bounded description of required behavior, scope, constraints, and acceptance checks for an implementation task."
 />
 
-The agent works in an **isolated workspace** with its own files and branch. Isolation protects other in-progress work from edits and commands, but it does not make the agent's output safe to merge.
+The agent works in an **isolated workspace** with its own files and branch, usually a [Git worktree](/learn/concepts/git/git-worktrees). That keeps your other work safe from its edits and commands. It does not make the output safe to merge.
 
 <DefinitionCard
   term="Isolated Workspace"
@@ -52,9 +52,9 @@ Do not delete the user or change the existing response shape.
 Add integration tests for success and missing-user cases.
 ```
 
-Ask the agent to inspect the code and state its plan before implementation when the task crosses boundaries or has more than one reasonable design. Correct wrong assumptions before they spread through the diff.
+When a task crosses module boundaries or has more than one sane design, ask the agent to read the code and lay out its plan first. Fix wrong assumptions before they spread through the diff.
 
-Let the agent implement and run checks in its workspace. Intervene when it leaves scope, duplicates an existing abstraction, or builds against a false assumption. Waiting until completion is costly when the direction is already wrong.
+Let the agent build and run its checks in the workspace. Step in when it drifts out of scope, rebuilds something that already exists, or works from a false assumption. Waiting for it to finish is expensive once the direction is wrong.
 
 Review the complete diff in this order:
 
@@ -64,27 +64,27 @@ Review the complete diff in this order:
 4. tests and their failure sensitivity
 5. dependencies, configuration, and generated files
 
-Give feedback against observable behavior or a specific code location. Rerun tests, static checks, and the production build after revisions. Use the normal human review and merge process.
+Point every comment at observable behavior or at a specific line. Rerun the tests, the static checks, and the production build after each revision. Then use your normal human review and merge process.
 
 ## Engineering Considerations
 
-Do not delegate a change that nobody can review. Passing tests and confident output do not establish correctness.
+Do not hand off a change nobody on the team can review. Passing tests and a confident summary do not make it correct.
 
-Narrow tasks reduce the context the agent must discover. They also produce smaller diffs, which lowers review cost and makes incorrect assumptions easier to locate.
+Narrow tasks cut the context the agent has to find on its own. They also yield smaller diffs, which are cheaper to review and make a wrong assumption easier to spot.
 
-Use test-driven development when the repository requires it or when behavior can be specified before implementation. Review the failing test before accepting production changes.
+Use test-driven development when the repository calls for it, or when you can pin down the behavior up front. Read the failing test before you accept any production change.
 
-Exploratory product work needs a different process. Resolve the user problem and design choices first, or use the agent for research and prototypes that will not merge directly.
+Exploratory product work needs a different process. Settle the user problem and the design first, or keep the agent on research and throwaway prototypes.
 
 ## Scaling and Operations
 
-Review capacity limits parallel agent work. Starting ten tasks does not help when completed diffs wait unreviewed or receive shallow approval.
+Review capacity is what caps parallel agent work. Starting ten tasks helps nobody when the finished diffs sit unread or get waved through.
 
-Give each agent a separate workspace and branch. Define ownership when tasks touch shared interfaces. Sequence dependent tasks or agree on the interface before parallel implementation.
+Give each agent its own workspace and branch, as in [running coding agents in parallel](/learn/parallel-coding-agents). Say who owns what when tasks touch shared interfaces. Run dependent tasks in order, or settle the interface before they start in parallel.
 
-Restrict credentials and commands to the task. Record the prompt, relevant tool output, checks, and final diff when the change has operational or compliance impact.
+Limit credentials and commands to what the task needs. Keep the prompt, the tool output that mattered, the checks, and the final diff when a change carries operational or compliance weight.
 
-Track rework by task category. Repeated failures on a class of work mean the task contract, repository guidance, automated checks, or delegation choice needs to change.
+Track rework by kind of task. When one class of work keeps failing, something has to change: the task contract, the repository guidance, the automated checks, or the decision to delegate at all.
 
 ## Next Steps
 

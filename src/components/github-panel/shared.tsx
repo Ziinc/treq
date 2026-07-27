@@ -151,9 +151,7 @@ export function PrListItem({
 			<div className="flex items-start gap-2">
 				<div className="flex-1 min-w-0">
 					<div className="flex items-center gap-2 min-w-0">
-						<p className="text-lg font-medium truncate min-w-0">
-							{pr.title}
-						</p>
+						<p className="text-lg font-medium truncate min-w-0">{pr.title}</p>
 						<span className="text-base text-muted-foreground shrink-0">
 							#{pr.number}
 						</span>

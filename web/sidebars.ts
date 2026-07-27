@@ -36,6 +36,17 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'How-To',
+      link: {type: 'doc', id: 'how-to/index'},
+      items: [
+        'how-to/pushing-to-remote',
+        'how-to/discarding-changes',
+        'how-to/moving-files-between-workspaces',
+        'how-to/customizing-settings',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Concepts',
       link: {type: 'doc', id: 'concepts/index'},
       items: [

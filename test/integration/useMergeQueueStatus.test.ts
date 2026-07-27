@@ -110,9 +110,9 @@ describe("useGitRemoteInfo", () => {
 describe("usePrInfoViaGh", () => {
 	it("surfaces gh operational failures", async () => {
 		const { repoPath } = createTestRepo(false);
-		const spy = vi.spyOn(api, "getPrInfoViaGh").mockRejectedValue(
-			new Error("gh authentication failed"),
-		);
+		const spy = vi
+			.spyOn(api, "getPrInfoViaGh")
+			.mockRejectedValue(new Error("gh authentication failed"));
 
 		const { result } = renderHook(
 			() => usePrInfoViaGh(repoPath, "non-existent-branch"),

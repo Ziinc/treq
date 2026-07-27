@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Layout from "@theme/Layout";
+import Head from "@docusaurus/Head";
 import BrowserOnly from "@docusaurus/BrowserOnly";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 import { supabase } from "../../lib/supabase";
@@ -213,6 +214,9 @@ export default function AuthCallback(): React.ReactNode {
 
   return (
     <Layout title="Signing in..." noFooter>
+      <Head>
+        <meta name="robots" content="noindex, nofollow" />
+      </Head>
       <BrowserOnly>{() => <CallbackContent />}</BrowserOnly>
     </Layout>
   );

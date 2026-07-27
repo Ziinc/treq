@@ -340,6 +340,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		refetchInterval: 10000,
 		enabled: !!repoPath,
 	});
+
+	// `workspaces` is refetched (e.g. after a push, or on its 10s interval) and
+	// returns fresh object references every time, but `selectedWorkspace` is a
+	// point-in-time snapshot. Without this, fields like `not_on_remote` on the
+	// currently open workspace go stale until the user re-selects it (e.g. the
+	// "Push to remote" button would keep showing after a successful push).
+	// Compare by value, not reference, so this only re-renders when the
+	// workspace's data actually changed.
+	useEffect(() => {
+		setSelectedWorkspace((current) => {
+			if (!current) return current;
+			const updated = workspaces.find((w) => w.id === current.id);
+			if (!updated || JSON.stringify(updated) === JSON.stringify(current)) {
+				return current;
+			}
+			return updated;
+		});
+	}, [workspaces]);
+
 	const { data: workspaceStatuses = [] } = useQuery({
 		queryKey: ["workspace-statuses", repoPath],
 		queryFn: () => listWorkspaceStatuses(repoPath),
@@ -1042,6 +1061,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 									onViewPrInApp={openGitHubPr}
 									onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
 									onCreateStackedWorkspace={handleCreateStackedWorkspace}
+									onNavigateToWorkspace={handleSelectWorkspace}
 									onMoveCommitToNewWorkspace={(commit, workspace) => {
 										const firstLine =
 											commit.description.split("\n")[0] || undefined;

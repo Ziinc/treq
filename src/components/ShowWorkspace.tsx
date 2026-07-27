@@ -35,6 +35,7 @@ import { FileBrowser } from "./FileBrowser";
 import { LinearCommitHistory } from "./LinearCommitHistory";
 import { CommitDiffViewer } from "./CommitDiffViewer";
 import { WorkspaceBookmarkConflictModal } from "./WorkspaceBookmarkConflictModal";
+import { WorkspaceStackPanel } from "./WorkspaceStackPanel";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import { Button } from "./ui/button";
 import { Kbd, KbdGroup } from "./ui/kbd";
@@ -102,6 +103,8 @@ interface ShowWorkspaceProps {
 	onOpenMergePreview?: () => void;
 	onOpenBranchSwitcher?: () => void;
 	onCreateStackedWorkspace?: () => void;
+	/** Called when the user clicks a sibling workspace in the stack panel */
+	onNavigateToWorkspace?: (workspace: Workspace) => void;
 	onViewPrInApp?: (prNumber: number) => void;
 	/** Called when user wants to move a commit to a new workspace */
 	onMoveCommitToNewWorkspace?: (
@@ -137,6 +140,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 		onOpenMergePreview,
 		onOpenBranchSwitcher,
 		onCreateStackedWorkspace,
+		onNavigateToWorkspace,
 		onViewPrInApp,
 		onMoveCommitToNewWorkspace,
 		onMoveCommitToExistingWorkspace,
@@ -453,6 +457,9 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 					});
 					queryClient.invalidateQueries({
 						queryKey: ["workspace-statuses", effectiveRepoPath],
+					});
+					queryClient.invalidateQueries({
+						queryKey: ["workspace-status", effectiveRepoPath, workspace.id],
 					});
 
 					setTargetBranch(branch);
@@ -1100,6 +1107,17 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 											workingDirectory={workingDirectory}
 											onSessionCreated={onSessionCreated}
 										/>
+										{/* Stack */}
+										{workspace && workspaceStatusData?.target != null && (
+											<div className="border rounded-lg">
+												<WorkspaceStackPanel
+													repoPath={effectiveRepoPath}
+													workspace={workspace}
+													defaultBranch={defaultTargetBranch}
+													onSelectWorkspace={onNavigateToWorkspace}
+												/>
+											</div>
+										)}
 										{/* File Search Input */}
 										<div className="flex justify-end">
 											<button

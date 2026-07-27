@@ -94,6 +94,8 @@ function makePr(number: number, title = `PR ${number}`) {
 }
 
 describe("GitHubPanel", () => {
+	let user: ReturnType<typeof userEvent.setup>;
+
 	beforeEach(() => {
 		auth.subscription = null;
 		remoteInfo.data = {
@@ -106,6 +108,7 @@ describe("GitHubPanel", () => {
 		api.ghListPrs.mockResolvedValue({ items: [], hasMore: false });
 		api.ghCreateIssueComment.mockReset();
 		supabaseRpc.mockResolvedValue({ data: [], error: null });
+		user = userEvent.setup();
 	});
 
 	it("does not render a panel-level close button", () => {
@@ -125,7 +128,7 @@ describe("GitHubPanel", () => {
 		expect(mergeQueueTab).not.toBeDisabled();
 		expect(within(mergeQueueTab).getByText("PRO")).toBeVisible();
 
-		await userEvent.setup().click(mergeQueueTab);
+		await user.click(mergeQueueTab);
 		expect(mergeQueueTab).toHaveAttribute("aria-selected", "true");
 		expect(
 			await screen.findByRole("heading", { name: /unlock merge queue/i }),
@@ -162,7 +165,7 @@ describe("GitHubPanel", () => {
 		expect(mergeQueueTab).not.toBeDisabled();
 		expect(within(mergeQueueTab).queryByText("PRO")).not.toBeInTheDocument();
 
-		await userEvent.setup().click(mergeQueueTab);
+		await user.click(mergeQueueTab);
 		expect(await screen.findByText("feat/alpha")).toBeVisible();
 		expect(screen.getByText("feat/beta")).toBeVisible();
 		expect(screen.getByText(/queued/i)).toBeVisible();
@@ -178,9 +181,7 @@ describe("GitHubPanel", () => {
 		render(<GitHubPanel repoPath="/tmp/repo" />);
 
 		expect(await screen.findByText("Issue 1")).toBeVisible();
-		expect(
-			screen.getByRole("button", { name: /load more/i }),
-		).toBeVisible();
+		expect(screen.getByRole("button", { name: /load more/i })).toBeVisible();
 	});
 
 	it("does not show Load more when all issues are loaded", async () => {
@@ -207,7 +208,6 @@ describe("GitHubPanel", () => {
 				items: [makeIssue(2, "Second page issue")],
 				hasMore: false,
 			});
-		const user = userEvent.setup();
 
 		render(<GitHubPanel repoPath="/tmp/repo" />);
 
@@ -232,15 +232,12 @@ describe("GitHubPanel", () => {
 			items: [makePr(1), makePr(2)],
 			hasMore: true,
 		});
-		const user = userEvent.setup();
 
 		render(<GitHubPanel repoPath="/tmp/repo" />);
 		await user.click(screen.getByRole("tab", { name: /pull requests/i }));
 
 		expect(await screen.findByText("PR 1")).toBeVisible();
-		expect(
-			screen.getByRole("button", { name: /load more/i }),
-		).toBeVisible();
+		expect(screen.getByRole("button", { name: /load more/i })).toBeVisible();
 	});
 
 	it("marks draft pull requests as Draft instead of Open", async () => {
@@ -251,7 +248,6 @@ describe("GitHubPanel", () => {
 			],
 			hasMore: false,
 		});
-		const user = userEvent.setup();
 
 		render(<GitHubPanel repoPath="/tmp/repo" />);
 		await user.click(screen.getByRole("tab", { name: /pull requests/i }));
@@ -273,7 +269,6 @@ describe("GitHubPanel", () => {
 				items: [makePr(2, "Second page PR")],
 				hasMore: false,
 			});
-		const user = userEvent.setup();
 
 		render(<GitHubPanel repoPath="/tmp/repo" />);
 		await user.click(screen.getByRole("tab", { name: /pull requests/i }));
@@ -296,7 +291,10 @@ describe("GitHubPanel", () => {
 });
 
 describe("IssueDetailPanel markdown", () => {
+	let user: ReturnType<typeof userEvent.setup>;
+
 	beforeEach(() => {
+		user = userEvent.setup();
 		api.ghViewIssue.mockResolvedValue({
 			number: 42,
 			title: "Fix markdown",
@@ -335,7 +333,6 @@ describe("IssueDetailPanel markdown", () => {
 
 	it("submits a comment with Ctrl+Enter", async () => {
 		api.ghCreateIssueComment.mockResolvedValue(undefined);
-		const user = userEvent.setup();
 
 		render(
 			<IssueDetailPanel
@@ -380,7 +377,10 @@ describe("PrDetailPanel draft toggle", () => {
 		};
 	}
 
+	let user: ReturnType<typeof userEvent.setup>;
+
 	beforeEach(() => {
+		user = userEvent.setup();
 		api.ghSetPrDraft.mockReset().mockResolvedValue(undefined);
 	});
 
@@ -388,7 +388,6 @@ describe("PrDetailPanel draft toggle", () => {
 		api.ghViewPr
 			.mockResolvedValueOnce(makeDetailPr({ is_draft: true }))
 			.mockResolvedValueOnce(makeDetailPr({ is_draft: false }));
-		const user = userEvent.setup();
 
 		render(
 			<PrDetailPanel
@@ -399,9 +398,7 @@ describe("PrDetailPanel draft toggle", () => {
 		);
 
 		expect(await screen.findByText("Draft")).toBeVisible();
-		await user.click(
-			screen.getByRole("button", { name: /ready for review/i }),
-		);
+		await user.click(screen.getByRole("button", { name: /ready for review/i }));
 
 		await waitFor(() => {
 			expect(api.ghSetPrDraft).toHaveBeenCalledWith("acme/treq", 42, false);
@@ -416,7 +413,6 @@ describe("PrDetailPanel draft toggle", () => {
 		api.ghViewPr
 			.mockResolvedValueOnce(makeDetailPr({ is_draft: false }))
 			.mockResolvedValueOnce(makeDetailPr({ is_draft: true }));
-		const user = userEvent.setup();
 
 		render(
 			<PrDetailPanel
@@ -427,9 +423,7 @@ describe("PrDetailPanel draft toggle", () => {
 		);
 
 		expect(await screen.findByText("Open")).toBeVisible();
-		await user.click(
-			screen.getByRole("button", { name: /convert to draft/i }),
-		);
+		await user.click(screen.getByRole("button", { name: /convert to draft/i }));
 
 		await waitFor(() => {
 			expect(api.ghSetPrDraft).toHaveBeenCalledWith("acme/treq", 42, true);

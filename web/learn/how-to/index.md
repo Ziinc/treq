@@ -8,11 +8,9 @@ import DocCardList from '@theme/DocCardList';
 
 Concise, task-focused guides for specific operations with Git, Treq, and coding agents.
 
+For guides on the Treq app itself, such as pushing, discarding changes, and settings, see the [Treq how-to guides](/docs/how-to).
+
 <DocCardList items={[
-  {type: 'link', href: '/learn/how-to/pushing-to-remote', label: 'Pushing to Remote'},
-  {type: 'link', href: '/learn/how-to/discarding-changes', label: 'Discarding Changes'},
-  {type: 'link', href: '/learn/how-to/moving-files-between-workspaces', label: 'Moving Files Between Workspaces'},
-  {type: 'link', href: '/learn/how-to/customizing-settings', label: 'Customizing Settings'},
   {type: 'link', href: '/learn/how-to/how-to-run-multiple-claude-code-sessions', label: 'Run Multiple Claude Code Sessions'},
   {type: 'link', href: '/learn/how-to/auto-rebase-ai-branches', label: 'Auto-Rebasing AI Workspaces'},
   {type: 'link', href: '/learn/how-to/review-ai-generated-prs', label: 'Review AI-Generated PRs'},

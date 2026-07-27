@@ -8,7 +8,7 @@ import DefinitionCard from "@site/src/components/DefinitionCard";
 
 ## Introduction
 
-A **coding agent** is an AI system that can inspect a codebase, edit files, run commands, and respond to the results. You give it a goal rather than every individual step, and it works through the task until it finishes or needs help.
+A **coding agent** is an AI system that can inspect a codebase, edit files, run commands, and respond to the results. You give it a goal instead of every individual step, and it works through the task until it finishes or needs help.
 
 <DefinitionCard
   term="Coding Agent"
@@ -30,7 +30,7 @@ A coding agent combines a language model with tools such as code search, a file 
 
 {/* TODO: Add diagram showing the agent loop: observe, decide, act, verify, then repeat or finish. */}
 
-The underlying model may be the same one used in a chat tool. The difference is that the agent can take actions and keep working across several steps.
+The underlying model may be the same one used in a chat tool. The difference is that the agent can take actions and keep working across several steps. Chat tools and agents sit at different points on the [AI-assisted software engineering](/learn/concepts/ai-engineering/ai-assisted-software-engineering) spectrum.
 
 | | Chat tool | Coding agent |
 | --- | --- | --- |
@@ -39,18 +39,18 @@ The underlying model may be the same one used in a chat tool. The difference is 
 | Work | Guided one response at a time | Continues through a multi-step task |
 | Mistakes | Remain in the response until copied | Can change files or run commands immediately |
 
-Agents cannot read an entire large codebase at once. They search for what appears relevant and bring a limited amount of it into the model's context. If the search misses an existing helper, an important convention, or a related code path, the agent may produce a locally reasonable change that does not fit the rest of the system.
+Agents cannot read an entire large codebase at once. They search for what appears relevant and bring a limited amount of it into the model's context. The search can miss an existing helper, an important convention, or a related code path. When it does, the agent produces a change that looks reasonable on its own but does not fit the rest of the system.
 
 <DefinitionCard
   term="Context Window"
   definition="The limited amount of instructions, code, and tool output that a model can consider at one time."
 />
 
-Narrow tasks are easier because they require less context. Clear file references and project rules help the agent find the right starting point, but it should still inspect the code rather than blindly following the prompt.
+Narrow tasks are easier because they require less context. Clear file references and project rules help the agent find the right starting point, but it should still inspect the code before acting on the prompt.
 
 ## Applying It in Practice
 
-Give the agent one clear outcome and enough context to begin. For example: “Add pagination to the user list endpoint in `api/users.py`. Reuse the helper in `utils/pagination.py`, preserve the current response shape, and add tests for the first and final pages.”
+Give the agent one clear outcome and enough context to begin. For example: "Add pagination to the user list endpoint in `api/users.py`. Reuse the helper in `utils/pagination.py`, preserve the current response shape, and add tests for the first and final pages."
 
 A capable agent will usually:
 
@@ -63,7 +63,7 @@ A capable agent will usually:
 
 Watch for a wrong assumption early in the run. If the agent is reading unrelated files, rebuilding an existing helper, or repeatedly trying the same failed approach, give it the missing context or narrow the remaining task.
 
-Always review the complete diff. Tests may pass because the agent made the same incorrect assumption in both the code and the tests. Check for unrequested changes, new dependencies, missed edge cases, security-sensitive behaviour, and code that departs from established project patterns.
+Always review the complete diff, which is the heart of a working [human-in-the-loop review system](/learn/ai-code-review). Tests may pass because the agent made the same incorrect assumption in both the code and the tests. Check for unrequested changes, new dependencies, missed edge cases, security-sensitive behaviour, and code that departs from established project patterns.
 
 ## Engineering Considerations
 
@@ -81,7 +81,7 @@ A mistaken assumption can spread through every later step. An agent may misunder
 
 Agents may also invent methods, options, or library behaviour that look valid but do not exist in the installed version. Running tests, type checks, and builds catches many of these errors. Reviewing unfamiliar API calls against local documentation or the actual dependency catches the rest.
 
-Parallel agents need separate workspaces. If several agents edit the same directory, their changes can conflict or overwrite each other. Give each agent its own worktree, branch, sandbox, or clone, then merge changes only after review.
+[Parallel agents](/learn/parallel-coding-agents) need separate workspaces. If several agents edit the same directory, their changes can conflict or overwrite each other. Give each agent its own worktree, branch, sandbox, or clone, then merge changes only after review.
 
 {/* TODO: Add diagram showing several coding agents working in isolated worktrees and submitting separate changes for review. */}
 

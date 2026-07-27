@@ -1,7 +1,6 @@
 use crate::binary_paths::{detect_binary, get_binary_path, get_extended_path};
 pub use crate::github::{GhIssue, GhListPage, GhPullRequest, GitRemoteInfo, PrInfo};
 
-
 fn gh_bin() -> Result<String, String> {
     get_binary_path("gh")
         .or_else(|| detect_binary("gh"))
@@ -140,11 +139,7 @@ pub fn gh_reopen_pr(repo_full_name: String, pr_number: u64) -> Result<(), String
 }
 
 #[tauri::command]
-pub fn gh_set_pr_draft(
-    repo_full_name: String,
-    pr_number: u64,
-    draft: bool,
-) -> Result<(), String> {
+pub fn gh_set_pr_draft(repo_full_name: String, pr_number: u64, draft: bool) -> Result<(), String> {
     let gh = gh_bin()?;
     crate::github::gh_set_pr_draft_impl(
         &gh,

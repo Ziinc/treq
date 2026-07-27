@@ -36,7 +36,7 @@ For authentication issues, configure your credential helper for HTTPS (`git conf
 
 ## Force Push
 
-Only force push when you rebased your own branch or are fixing mistakes in unpushed commits. Never force push shared or main branches.
+Only force push when you [rebased](/learn/concepts/git/merge-vs-rebase) your own branch or are fixing mistakes in unpushed [commits](/docs/concepts/commit-management). Never force push shared or main branches.
 
 ```bash
 git push --force-with-lease origin treq/your-branch

@@ -525,7 +525,8 @@ export const ghSetPrDraft = (
 	repoFullName: string,
 	prNumber: number,
 	draft: boolean,
-): Promise<void> => invoke("gh_set_pr_draft", { repoFullName, prNumber, draft });
+): Promise<void> =>
+	invoke("gh_set_pr_draft", { repoFullName, prNumber, draft });
 
 export const ghCreatePr = (
 	repoFullName: string,

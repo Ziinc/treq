@@ -1,5 +1,7 @@
 .page {
   max-width: 960px;
+  width: 100%;
+  min-width: 0;
   margin: 0 auto;
   padding: 3rem 1.5rem 4rem;
 }
@@ -15,13 +17,6 @@
   font-weight: 700;
   margin: 0 0 0.75rem;
   letter-spacing: -0.02em;
-}
-
-.subtitle {
-  font-size: 1.15rem;
-  color: var(--ifm-color-emphasis-700);
-  margin: 0 0 1rem;
-  line-height: 1.45;
 }
 
 .intro {
@@ -58,7 +53,7 @@
   margin: 0 0 0.25rem;
 }
 
-.planAudience {
+.planSeats {
   margin: 0 0 0.75rem;
   font-size: 0.88rem;
   font-weight: 600;
@@ -84,14 +79,6 @@
   color: var(--ifm-color-emphasis-600);
 }
 
-.planSummary {
-  font-size: 0.95rem;
-  color: var(--ifm-color-emphasis-700);
-  margin: 0 0 1.25rem;
-  line-height: 1.5;
-  flex: 1;
-}
-
 .featureList {
   list-style: none;
   margin: 0 0 1.5rem;
@@ -99,6 +86,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
+  flex: 1;
 }
 
 .featureItem {
@@ -185,6 +173,19 @@
   background: rgba(59, 156, 255, 0.08);
 }
 
+.planButtonDisabled {
+  flex-direction: column;
+  gap: 0.15rem;
+  cursor: not-allowed;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.planButtonNote {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
 .comparison,
 .faq {
   margin-bottom: 3rem;
@@ -197,22 +198,35 @@
   letter-spacing: -0.01em;
 }
 
+.comparisonHeading {
+  text-align: center;
+}
+
 .comparisonTableWrap {
   overflow-x: auto;
+  overflow-y: hidden;
   border: 1px solid var(--ifm-color-emphasis-200);
   border-radius: 14px;
-  background:
-    linear-gradient(180deg, rgba(59, 156, 255, 0.05) 0%, transparent 42%),
-    var(--ifm-background-surface-color, var(--ifm-background-color));
+  background: var(--ifm-background-surface-color, var(--ifm-background-color));
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
 }
 
 .comparisonTable {
   width: 100%;
+  min-width: 36rem;
   margin: 0;
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 0.95rem;
+}
+
+.comparisonFeatureCol {
+  width: 46%;
+}
+
+.comparisonPlanCol {
+  width: 27%;
 }
 
 .comparisonFeatureHeader,
@@ -236,7 +250,6 @@
 
 .comparisonPlanHeader {
   text-align: center;
-  width: 28%;
 }
 
 .comparisonPlanHeaderPro {
@@ -252,7 +265,6 @@
 .comparisonFeatureCell {
   font-weight: 600;
   color: var(--ifm-font-color-base);
-  width: 44%;
 }
 
 .comparisonFeatureLabel {
@@ -260,18 +272,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-}
-
-.comparisonFeaturePill {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.35rem 0.75rem;
-  border-radius: 999px;
-  background: var(--ifm-color-emphasis-100);
-  font-size: 0.84rem;
-  font-weight: 600;
-  line-height: 1.2;
-  color: var(--ifm-font-color-base);
 }
 
 .comparisonDataCell {
@@ -406,10 +406,5 @@
 
   .priceAmount {
     font-size: 2.1rem;
-  }
-
-  .comparisonPlanHeader,
-  .comparisonDataCell {
-    width: auto;
   }
 }

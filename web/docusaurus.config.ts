@@ -13,6 +13,7 @@ const config: Config = {
     require.resolve('./plugins/rawMarkdownPlugin'),
     require.resolve('./plugins/versionPlugin'),
     require.resolve('./plugins/jsonLdPlugin'),
+    require.resolve('./plugins/skillsPlugin'),
     [
       '@docusaurus/plugin-content-docs',
       {
@@ -105,7 +106,13 @@ const config: Config = {
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: '/',
-  trailingSlash: false,
+
+  // NOTE: trailingSlash intentionally left unset (Docusaurus default).
+  // Setting it to true or false here breaks the site's relative doc links
+  // (e.g. "./sibling-page" in /learn/**), which assume the current
+  // (undefined) resolution behavior. The /page vs /page/ duplicate-URL
+  // issue seen in GSC should instead be fixed at the hosting/CDN layer by
+  // adding a single 301-redirect rule normalizing one form to the other.
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
@@ -140,6 +147,13 @@ const config: Config = {
         blog: false,
         theme: {
           customCss: ['./src/css/fonts.css', './src/css/custom.css'],
+        },
+        sitemap: {
+          ignorePatterns: [
+            '/dashboard',
+            '/login',
+            '/auth/**',
+          ],
         },
         ...(shouldLoadGoogleTag ? {
           gtag: {
@@ -203,6 +217,11 @@ const config: Config = {
           ],
         },
         {
+          to: '/skills',
+          label: 'Skills',
+          position: 'left',
+        },
+        {
           to: '/pricing',
           label: 'Pricing',
           position: 'left',
@@ -251,6 +270,10 @@ const config: Config = {
         {
           title: 'More',
           items: [
+            {
+              label: 'Skills',
+              to: '/skills',
+            },
             {
               label: 'Pricing',
               to: '/pricing',

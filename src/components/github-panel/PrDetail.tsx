@@ -63,8 +63,7 @@ export function PrDetailPanel({
 	});
 
 	const setDraft = useMutation({
-		mutationFn: (draft: boolean) =>
-			ghSetPrDraft(repoFullName, prNumber, draft),
+		mutationFn: (draft: boolean) => ghSetPrDraft(repoFullName, prNumber, draft),
 		onSuccess: () => {
 			void qc.invalidateQueries({
 				queryKey: ["gh-pr", repoFullName, prNumber],
@@ -140,7 +139,10 @@ export function PrDetailPanel({
 								Comments ({pr.comments!.length})
 							</h3>
 							{pr.comments!.map((c) => (
-								<div key={c.id} className="bg-muted/30 rounded-md p-3 text-base">
+								<div
+									key={c.id}
+									className="bg-muted/30 rounded-md p-3 text-base"
+								>
 									<div className="flex items-center gap-1 text-base text-muted-foreground mb-1">
 										<span className="font-medium">{c.author.login}</span>
 										<span>·</span>

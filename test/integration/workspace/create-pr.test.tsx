@@ -18,7 +18,8 @@ import { render, screen, waitFor, within } from "../../test-utils";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("../../../src/lib/api", async (importOriginal) => {
-	const original = await importOriginal<typeof import("../../../src/lib/api")>();
+	const original =
+		await importOriginal<typeof import("../../../src/lib/api")>();
 	return {
 		...original,
 		getPrInfoViaGh: vi.fn().mockResolvedValue(null),
@@ -62,7 +63,8 @@ describe("ShowWorkspace - Create PR", () => {
 		githubRemote?: boolean;
 	}) {
 		const title = options?.title ?? "Ship the feature";
-		const description = options?.description ?? "Implements the feature end-to-end.";
+		const description =
+			options?.description ?? "Implements the feature end-to-end.";
 		const workspaceId = await createWorkspace(repoPath, "feat/create-pr");
 		await updateWorkspace(repoPath, workspaceId, undefined, title, description);
 		await pushWorkspaceToRemote(repoPath, workspaceId);
@@ -150,7 +152,9 @@ describe("ShowWorkspace - Create PR", () => {
 		await user.click(
 			await screen.findByRole("button", { name: /open in web/i }),
 		);
-		expect(openUrl).toHaveBeenCalledWith("https://github.com/acme/treq/pull/42");
+		expect(openUrl).toHaveBeenCalledWith(
+			"https://github.com/acme/treq/pull/42",
+		);
 	});
 
 	it("creates a draft PR from the dropdown", async () => {
@@ -179,7 +183,7 @@ describe("ShowWorkspace - Create PR", () => {
 	});
 
 	it("opens GitHub compare URL when creating a PR manually", async () => {
-		const { title, description } = await setupPushedWorkspaceWithGitHub();
+		await setupPushedWorkspaceWithGitHub();
 		render(<Dashboard />);
 
 		await user.click(await screen.findByText("feat/create-pr"));

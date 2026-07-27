@@ -6,7 +6,7 @@ sidebar_position: 2
 
 _How to create and manage terminal sessions across workspaces._
 
-Terminal sessions in Treq are full PTY shells bound to a workspace's directory. Each workspace can have multiple sessions for running parallel processes like dev servers, tests, and builds. Sessions support copy/paste, clickable URLs, and your default shell.
+[Terminal sessions](/docs/concepts/terminal-sessions) in Treq are full PTY shells bound to a [workspace's](/docs/concepts/workspaces) directory. Each workspace can have multiple sessions for running parallel processes like dev servers, tests, and builds. Sessions support copy/paste, clickable URLs, and your default shell.
 
 ## Creating Sessions
 
@@ -20,13 +20,20 @@ Switch between sessions by clicking tabs, using `Cmd+1` through `Cmd+9` for quic
 
 ## Working with Multiple Sessions
 
-Create separate sessions for long-running processes so you don't have to stop and restart them. A typical full-stack setup uses one session for the frontend dev server, another for the backend, a third for the database container, and a fourth for general commands and git operations.
+Create separate sessions for long-running processes so you don't have to stop and restart them. A typical full-stack setup uses one session for the frontend dev server and another for the backend. A third runs the database container, and a fourth handles general commands and git operations.
 
 The terminal supports all standard operations: `Cmd+C` to copy or interrupt, `Cmd+V` to paste, `Cmd+F` to search output, and `Cmd+K` or `clear` to clear the screen. URLs are clickable with Cmd+Click.
 
 ## Session Settings
 
-Configure terminal appearance in Settings → Terminal: font family (monospace fonts like Fira Code or JetBrains Mono), font size (12-16px recommended), default shell (bash, zsh, fish, or custom path), and scrollback buffer size.
+Configure terminal appearance in Settings → Terminal.
+
+| Setting | Options |
+| --- | --- |
+| Font family | Any monospace font, such as Fira Code or JetBrains Mono |
+| Font size | 12-16px recommended |
+| Default shell | `bash`, `zsh`, `fish`, or a custom path |
+| Scrollback buffer | Number of lines retained per session |
 
 For session-specific initialization, set environment variables with `export` or add logic to your shell's RC file.
 

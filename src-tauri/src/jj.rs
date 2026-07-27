@@ -2352,14 +2352,52 @@ pub fn jj_is_working_copy_empty(workspace_path: &str) -> Result<bool, JjError> {
     Ok(changed_files.is_empty())
 }
 
-/// Checks if working copy needs syncing with bookmark
+/// Checks if working copy needs syncing with bookmark.
+///
+/// A sync is only needed when `@` has fallen *behind* the bookmark — i.e. the
+/// bookmark tip is not an ancestor of `@`. Plain inequality is not enough: right
+/// after a commit, `@` is a fresh empty child of the bookmark, which is the
+/// normal, desired state. Treating that as "needs sync" would move `@` back onto
+/// the bookmark and discard the working-copy commit.
 pub fn jj_working_copy_needs_sync(
     workspace_path: &str,
     branch_name: &str,
 ) -> Result<bool, JjError> {
-    let bookmark_commit = jj_get_commit_id(workspace_path, branch_name)?;
-    let working_copy_commit = jj_get_commit_id(workspace_path, "@")?;
-    Ok(bookmark_commit != working_copy_commit)
+    let loaded = load_workspace_repo(workspace_path)?;
+    let bookmark_commit = resolve_commit_by_revision(&loaded, branch_name)?;
+    let working_copy_commit = resolve_commit_by_revision(&loaded, "@")?;
+    if bookmark_commit.id() == working_copy_commit.id() {
+        return Ok(false);
+    }
+    // `@` already contains the bookmark tip (e.g. an empty commit on top of it).
+    let bookmark_is_ancestor = loaded
+        .repo
+        .index()
+        .is_ancestor(bookmark_commit.id(), working_copy_commit.id())
+        .map_err(|e| JjError::IoError(format!("Failed ancestry check: {}", e)))?;
+    Ok(!bookmark_is_ancestor)
+}
+
+/// Resolves the commit a branch bookmark should point at for this workspace.
+///
+/// Returns `@` normally, but `@-` when `@` is the usual empty, undescribed
+/// working-copy commit — pointing a bookmark at that commit would push an empty
+/// commit to the remote and leave the workspace without a working-copy commit.
+pub fn jj_resolve_bookmark_tip(workspace_path: &str) -> Result<String, JjError> {
+    let wc_commit = {
+        let loaded = load_workspace_repo(workspace_path)?;
+        resolve_commit_by_revision(&loaded, "@")?
+    };
+
+    // Only a plain, single-parent, undescribed commit is a throwaway working copy.
+    if wc_commit.parent_ids().len() != 1 || !wc_commit.description().trim().is_empty() {
+        return jj_get_commit_id(workspace_path, "@");
+    }
+    if !jj_is_working_copy_empty(workspace_path)? {
+        return jj_get_commit_id(workspace_path, "@");
+    }
+
+    jj_get_commit_id(workspace_path, "@-")
 }
 
 /// Safely syncs working copy to bookmark (only if empty)
@@ -3667,6 +3705,17 @@ pub fn jj_get_commit_id(repo_path: &str, revision: &str) -> Result<String, JjErr
             )))
         }
     }
+}
+
+/// Get the short (12-char) change ID for a revision.
+///
+/// Unlike a commit ID, a change ID keeps pointing at the same logical change after
+/// it is rewritten (rebased, amended), so it is the stable way to refer back to a
+/// commit across later history edits.
+pub fn jj_get_change_id(workspace_path: &str, revision: &str) -> Result<String, JjError> {
+    let loaded = load_workspace_repo(workspace_path)?;
+    let commit = resolve_commit_by_revision(&loaded, revision)?;
+    Ok(HexPrefix::from_id(commit.change_id()).reverse_hex()[..12].to_string())
 }
 
 /// Get commit IDs matching a revset expression.
@@ -5722,6 +5771,63 @@ fn count_changed_lines(hunks: &[JjDiffHunk]) -> usize {
         .sum()
 }
 
+/// Create a new working-copy commit on top of the given parent revisions.
+///
+/// Library equivalent of `jj new <rev>...`: resolves every parent revision in the
+/// workspace, merges their trees, writes an empty commit with those parents and
+/// edits it, so a multi-parent call leaves the working copy conflicted exactly the
+/// way the CLI does.
+pub fn jj_new_with_parents(
+    workspace_path: &str,
+    parent_revisions: &[String],
+) -> Result<String, JjError> {
+    if parent_revisions.is_empty() {
+        return Err(JjError::IoError(
+            "At least one parent revision is required".to_string(),
+        ));
+    }
+
+    let mut loaded = load_workspace_repo_for_history_edit(workspace_path)?;
+    let old_wc_commit = get_workspace_wc_commit(&loaded)?;
+    let workspace_name = loaded.workspace.workspace_name().to_owned();
+    let parent_commits = parent_revisions
+        .iter()
+        .map(|revision| resolve_commit_by_revision(&loaded, revision))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let mut tx = loaded.repo.start_transaction();
+    let merged_tree = block_on(merge_commit_trees(tx.repo(), &parent_commits))
+        .map_err(|e| JjError::IoError(format!("Failed to build parent tree: {}", e)))?;
+    let new_wc_commit = block_on(
+        tx.repo_mut()
+            .new_commit(
+                parent_commits
+                    .iter()
+                    .map(|commit| commit.id().clone())
+                    .collect(),
+                merged_tree,
+            )
+            .write(),
+    )
+    .map_err(|e| JjError::IoError(format!("Failed to write commit: {}", e)))?;
+    block_on(tx.repo_mut().edit(workspace_name, &new_wc_commit))
+        .map_err(|e| JjError::IoError(format!("Failed to move working copy: {}", e)))?;
+    block_on(tx.repo_mut().rebase_descendants())
+        .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
+    let _ = git::export_refs(tx.repo_mut());
+
+    let new_repo = block_on(tx.commit("new commit"))
+        .map_err(|e| JjError::IoError(format!("Failed to commit transaction: {}", e)))?;
+    update_workspace_after_history_edit(
+        &mut loaded,
+        &new_repo,
+        old_wc_commit.as_ref(),
+        CheckoutMode::Immediate,
+    )?;
+
+    Ok(short_commit_id(&new_wc_commit))
+}
+
 /// Create a merge commit using jj-lib commit writes.
 ///
 /// Flow:
@@ -6117,6 +6223,56 @@ mod tests {
         let workspace_path = temp.path().to_str().expect("utf8 path");
         let commit_id = jj_get_commit_id(workspace_path, "@").expect("resolve @");
         assert_eq!(commit_id.len(), 12, "commit id should be 12 chars");
+    }
+
+    #[test]
+    fn jj_get_change_id_returns_short_reverse_hex_for_at_revision() {
+        let temp = TempDir::new().expect("tempdir");
+        init_git_repo(&temp);
+        let workspace_path = temp.path().to_str().expect("utf8 path");
+        init_jj_for_git_repo(workspace_path).expect("init jj for git repo");
+
+        let change_id = jj_get_change_id(workspace_path, "@").expect("resolve @");
+        assert_eq!(change_id.len(), 12, "change id should be 12 chars");
+        assert!(
+            change_id.chars().all(|c| c.is_ascii_alphabetic()),
+            "change id should be reverse hex, got {}",
+            change_id
+        );
+    }
+
+    #[test]
+    fn jj_new_with_parents_checks_out_child_of_requested_parent() {
+        let temp = TempDir::new().expect("tempdir");
+        init_git_repo(&temp);
+        let workspace_path = temp.path().to_str().expect("utf8 path");
+        init_jj_for_git_repo(workspace_path).expect("init jj for git repo");
+
+        let parent = jj_get_commit_id(workspace_path, "@").expect("resolve @");
+        let created =
+            jj_new_with_parents(workspace_path, &["@".to_string()]).expect("create new commit");
+
+        assert_eq!(
+            jj_get_commit_id(workspace_path, "@").expect("resolve new @"),
+            created,
+            "new commit should become the working-copy commit"
+        );
+        assert_eq!(
+            jj_get_commit_id(workspace_path, "@-").expect("resolve new @-"),
+            parent,
+            "previous working-copy commit should become the parent"
+        );
+    }
+
+    #[test]
+    fn jj_new_with_parents_rejects_empty_parent_list() {
+        let temp = TempDir::new().expect("tempdir");
+        let workspace_path = temp.path().to_str().expect("utf8 path");
+
+        assert!(
+            jj_new_with_parents(workspace_path, &[]).is_err(),
+            "at least one parent revision should be required"
+        );
     }
 
     #[test]

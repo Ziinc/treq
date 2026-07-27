@@ -90,9 +90,9 @@ Use a stack when layers have a clear dependency order and one combined pull requ
 
 Keep stacks shallow enough for the team to maintain. Depth is less important than change frequency near the root. A stable four-layer stack can cost less than a two-layer stack whose base changes repeatedly.
 
-Do not use line count as the only split rule. A small change with a difficult contract deserves its own review, while a larger mechanical change can remain one layer.
+Do not use line count as the only split rule. A small change with a difficult contract deserves its own review, while a larger mechanical change can remain one layer. This matters most for [AI-generated stacks](/learn/stacked-prs), where the whole diff lands at once.
 
-Stack-aware tools can automate restacking, branch submission, and pull-request retargeting. They do not resolve unclear dependencies or semantic conflicts.
+[Stack-aware tools](/learn/graphite-alternative) can automate restacking, branch submission, and pull-request retargeting. They do not resolve unclear dependencies or semantic conflicts.
 
 ## Scaling and Operations
 

@@ -29,11 +29,7 @@ export function MarkdownContent({
 					resolveImageSrc
 						? {
 								img: ({ src, alt, ...props }) => (
-									<img
-										src={resolveImageSrc(src)}
-										alt={alt ?? ""}
-										{...props}
-									/>
+									<img src={resolveImageSrc(src)} alt={alt ?? ""} {...props} />
 								),
 							}
 						: undefined

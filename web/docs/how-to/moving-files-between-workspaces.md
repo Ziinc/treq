@@ -12,7 +12,7 @@ Use this when you started work in the wrong workspace, want to split changes int
 
 In the source workspace's diff viewer, select changed files (use `Cmd/Ctrl+Click` for multiple or `Shift+Click` for ranges). Right-click and choose **Move to Workspace**, or click the **Move** button. Select the destination workspace from the dropdown and click **Move Files**.
 
-Only uncommitted changes are moved. Committed changes must be handled separately, for example with cherry-pick.
+Only uncommitted changes are moved. [Committed changes](/docs/concepts/commit-management) must be handled separately, for example with [cherry-pick](/learn/concepts/git/cherry-pick-vs-rebase).
 
 ## Using Git Stash
 

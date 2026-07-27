@@ -298,7 +298,7 @@ describe("Dashboard - workspace list", () => {
 
 			await user.click(githubItem);
 			expect(
-				await screen.findByRole("heading", { name: /^github$/i }),
+				await screen.findByRole("heading", { name: /github/i }),
 			).toBeTruthy();
 		});
 
@@ -325,14 +325,13 @@ describe("Dashboard - workspace list", () => {
 			const githubItem = within(sidebarRoot).getByTestId("github-sidebar-item");
 			await user.click(githubItem);
 
-			await screen.findByRole("heading", { name: /^github$/i });
+			await screen.findByRole("heading", { name: /github/i });
 
 			await waitFor(() => {
 				expect(githubItem).toHaveClass("bg-primary/20");
 				expect(homeRepoRow).not.toHaveClass("bg-primary/20");
 			});
 		});
-
 
 		it("keeps shift-click selection contiguous across the visible sidebar order", async () => {
 			await createWorkspace(repoPath, "gumbo-notes");
