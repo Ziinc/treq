@@ -17,10 +17,11 @@ import { captureDocument } from "../capture";
 const BRANCH_NAME = "feat/sparse-demo";
 
 // Scenario: the repo has files under src/ and docs/. The user creates a
-// workspace via the home repo's "Stack" button and fills the new "Sparse
-// paths" field with "src", so the created workspace materializes only the
-// src/ subtree. Captures the dialog empty, the dialog filled, and the
-// workspace view after creation.
+// workspace via the home repo's "Stack" button, expands the Advanced
+// section, and fills "Sparse paths" with "src", so the created workspace
+// materializes only the src/ subtree. Captures the home view's full root
+// file list (before), the dialog collapsed and expanded, and the sparse
+// workspace's reduced file list (after).
 it("captures creating a workspace with sparse checkout paths", async () => {
 	const { repoPath } = createTestRepo(false);
 	openRepo(repoPath);
@@ -38,6 +39,19 @@ it("captures creating a workspace with sparse checkout paths", async () => {
 	render(<Dashboard />);
 
 	await screen.findByTestId("show-workspace-header");
+
+	// Before: the home repo's file browser shows the full tree at the root.
+	// findAll: names can also appear in the README preview / commit sidebar.
+	await screen.findAllByText("src");
+	await screen.findAllByText("docs");
+	await screen.findAllByText("README.md");
+	await captureDocument(document, {
+		name: "workspace-sparse-checkout-01-home-full-file-list",
+		expectations: [
+			"The home repo view's file browser lists the full repository root: src, docs, and README.md.",
+		],
+	});
+
 	await user.click(await screen.findByRole("button", { name: "Stack" }));
 
 	const dialog = await screen.findByTestId("modal");
@@ -47,7 +61,7 @@ it("captures creating a workspace with sparse checkout paths", async () => {
 		within(dialog).queryByLabelText("Sparse paths (optional, one per line)"),
 	).not.toBeInTheDocument();
 	await captureDocument(document, {
-		name: "workspace-sparse-checkout-01-dialog-collapsed",
+		name: "workspace-sparse-checkout-02-dialog-collapsed",
 		expectations: [
 			"The workspace creation dialog is open over the dashboard.",
 			'A collapsed "Advanced" toggle with a right-pointing chevron sits between the Description field and the Branch Name field.',
@@ -63,7 +77,7 @@ it("captures creating a workspace with sparse checkout paths", async () => {
 		"src",
 	);
 	await captureDocument(document, {
-		name: "workspace-sparse-checkout-02-advanced-expanded-filled",
+		name: "workspace-sparse-checkout-03-advanced-expanded-filled",
 		expectations: [
 			'The "Advanced" toggle is expanded (downward chevron) revealing the sparse paths textarea.',
 			`The Branch Name input contains "${BRANCH_NAME}".`,
@@ -97,9 +111,10 @@ it("captures creating a workspace with sparse checkout paths", async () => {
 	expect(fs.existsSync(path.join(workspacePath, "docs"))).toBe(false);
 
 	await captureDocument(document, {
-		name: "workspace-sparse-checkout-03-workspace-created",
+		name: "workspace-sparse-checkout-04-workspace-sparse-file-list",
 		expectations: [
 			`The workspace header shows the ${BRANCH_NAME} branch, meaning the sparse workspace was created and opened.`,
+			"The workspace's file browser lists only src (plus .jj) — docs and README.md from capture 01 are absent.",
 			"No error toast or dialog is visible.",
 		],
 	});
