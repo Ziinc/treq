@@ -41,26 +41,31 @@ it("captures creating a workspace with sparse checkout paths", async () => {
 	await user.click(await screen.findByRole("button", { name: "Stack" }));
 
 	const dialog = await screen.findByTestId("modal");
-	await within(dialog).findByLabelText("Sparse paths (optional, one per line)");
+	// Sparse paths is an advanced option: hidden until "Advanced" is expanded.
+	await within(dialog).findByRole("button", { name: "Advanced" });
+	expect(
+		within(dialog).queryByLabelText("Sparse paths (optional, one per line)"),
+	).not.toBeInTheDocument();
 	await captureDocument(document, {
-		name: "workspace-sparse-checkout-01-dialog-empty",
+		name: "workspace-sparse-checkout-01-dialog-collapsed",
 		expectations: [
 			"The workspace creation dialog is open over the dashboard.",
-			'A "Sparse paths (optional, one per line)" labeled textarea is visible between the Description field and the Branch Name field.',
+			'A collapsed "Advanced" toggle with a right-pointing chevron sits between the Description field and the Branch Name field.',
+			"No sparse paths textarea is visible.",
 		],
 	});
 
-	await user.type(
-		within(dialog).getByLabelText("Branch Name"),
-		BRANCH_NAME,
-	);
+	await user.click(within(dialog).getByRole("button", { name: "Advanced" }));
+	await within(dialog).findByLabelText("Sparse paths (optional, one per line)");
+	await user.type(within(dialog).getByLabelText("Branch Name"), BRANCH_NAME);
 	await user.type(
 		within(dialog).getByLabelText("Sparse paths (optional, one per line)"),
 		"src",
 	);
 	await captureDocument(document, {
-		name: "workspace-sparse-checkout-02-dialog-filled",
+		name: "workspace-sparse-checkout-02-advanced-expanded-filled",
 		expectations: [
+			'The "Advanced" toggle is expanded (downward chevron) revealing the sparse paths textarea.',
 			`The Branch Name input contains "${BRANCH_NAME}".`,
 			'The sparse paths textarea contains "src".',
 		],
