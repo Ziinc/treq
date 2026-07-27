@@ -24,11 +24,13 @@ _`git filter-repo` rewrites Git history by editing fast-export streams. It repla
 
 `filter-branch` is slow on large repositories and can damage history without clear errors. `filter-repo` rewrites object streams instead of working trees, and it finishes much faster on the same data.
 
+Branch-level history edits such as [rebase](./merge-vs-rebase) replay a line of commits onto a new base. `filter-repo` rewrites the whole repository when a path, blob, or string must change everywhere.
+
 ## Understanding the Concept
 
 `git filter-branch` runs shell commands such as `sed` and `xargs` against one checkout after another. That design creates heavy disk work and slows down as the commit graph grows. It also has known safety failures. It can leave empty commits that filtering produced. It can miss short commit hashes inside old commit messages. It can corrupt paths that contain unusual characters or double quotes.
 
-`git filter-repo` works differently. It reads the repository as a fast-export stream, applies filters in memory, and writes a fast-import stream back. It does not check out a working tree for each commit. The rewrite keeps the original commit graph shape while changing only the objects your filters touch.
+`git filter-repo` works differently. It reads the repository as a fast-export stream, applies filters in memory, and writes a fast-import stream back. It does not check out a [working tree](./git-worktrees) for each commit. The rewrite keeps the original commit graph shape while changing only the objects your filters touch.
 
 | | `git filter-branch` | `git filter-repo` |
 | --- | --- | --- |
@@ -43,7 +45,7 @@ Common rewrites include pulling one directory into its own history, replacing le
 
 ## Applying It in Practice
 
-Rewrite history only on an isolated clone. Use a bare mirror. That keeps the rewrite away from your working tree and local tracking refs:
+Rewrite history only on an isolated [clone](./git-worktrees-vs-clones). Use a bare mirror. That keeps the rewrite away from your working tree and local tracking refs:
 
 ```bash
 git clone --mirror git@github.com:example/repo.git repo.git
@@ -70,7 +72,7 @@ Replace leaked strings across blobs and commit messages with a replacements file
 git filter-repo --replace-text replacements.txt
 ```
 
-A `replacements.txt` file uses `literal:` or `regex:` lines to map sensitive values to placeholders. After the rewrite, force-push the new history to the remote:
+A `replacements.txt` file uses `literal:` or `regex:` lines to map sensitive values to placeholders. After the rewrite, [force-push](/docs/how-to/pushing-to-remote) the new history to the remote:
 
 ```bash
 git push --force origin
@@ -104,5 +106,5 @@ Document the rewrite for the team: which filters ran, when the force-push landed
 ## Next Steps
 
 - [What is Version Control?](./version-control): review how commits, trees, and blobs relate
-- [Merge vs Rebase](./merge-vs-rebase): contrast everyday history edits with full-repo rewrites
-- [Git Worktrees vs Clones](./git-worktrees-vs-clones): choose isolation for a safe rewrite
+- [Cherry-pick vs Rebase](./cherry-pick-vs-rebase): distinguish selected patch copying from branch rewriting
+- [What are Stacked PRs?](./stacked-prs): coordinate dependent branches after object IDs change
