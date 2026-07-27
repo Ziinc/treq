@@ -16,15 +16,15 @@ That matters when a long-lived branch keeps meeting the same overlapping edits o
 
 ## Understanding the Concept
 
-Enable the feature with configuration:
+Turn the feature on with:
 
 ```bash
 git config --global rerere.enabled true
 ```
 
-You can also enable it for one repository by creating `.git/rr-cache`. The config setting is clearer and applies everywhere you work.
+You can also turn it on for one repo by creating the `rr-cache` directory under the repo's common Git directory. The config setting is clearer and applies everywhere you work.
 
-When a conflict appears, Git stores the conflicted file state as a **preimage** under `.git/rr-cache/`. After you resolve the file and finish the merge or rebase, Git stores the resolved content as a **postimage**. Later conflicts that match the earlier conflicted state are resolved by a three-way merge of the recorded preimage, the recorded postimage, and the new conflicted file.
+When a conflict appears, Git stores the conflicted file as a **preimage** under `$GIT_COMMON_DIR/rr-cache/`. After you fix the conflict and rerere runs again, normally while you commit or continue, Git stores the fixed content as a **postimage**. Later, when a new conflict matches the earlier one, Git runs a three-way merge of the preimage, the postimage, and the new conflicted file. The [`git rerere`](https://git-scm.com/docs/git-rerere) manual covers that reuse path.
 
 <DefinitionCard
   term="Preimage"
@@ -33,18 +33,18 @@ When a conflict appears, Git stores the conflicted file state as a **preimage** 
 
 <DefinitionCard
   term="Postimage"
-  definition="The resolved file content that rerere records after you hand-resolve a conflict and complete the merge or rebase."
+  definition="The resolved file content that rerere records after you hand-resolve the conflict and rerere runs again, normally while committing or continuing the operation."
 />
 
-{/* TODO: Add a diagram of conflicted file -> preimage in .git/rr-cache, hand resolve -> postimage, later identical conflict -> three-way reuse into the working tree. */}
+{/* TODO: Add a diagram of conflicted file to preimage in the common rr-cache, hand resolve to postimage, later matching conflict to three-way reuse in the working tree. */}
 
-Merge and rebase invoke rerere for you once it is enabled. You do not need to call `git rerere` on every conflict. Rerere updates the working tree file. It does not stage the resolution, so you still run `git add` after you verify the result.
+Merge and rebase call rerere for you once it is on. You do not need to run `git rerere` on every conflict. By default, rerere updates only the working-tree file, so you still check it and run `git add`. If [`rerere.autoUpdate`](https://git-scm.com/docs/git-config#Documentation/git-config.txt-rerereautoUpdate) is on, Git also stages a clean reuse for you.
 
 | Artifact | Meaning |
 | --- | --- |
 | Preimage | Conflicted state with markers |
 | Postimage | Hand-resolved file content |
-| `.git/rr-cache/` | Per-repository cache of recorded resolutions |
+| `$GIT_COMMON_DIR/rr-cache/` | Repo-wide cache shared by [linked worktrees](./git-worktrees) |
 
 ## Applying It in Practice
 
@@ -68,14 +68,14 @@ Inspect the delta from the recorded conflict to your current working resolution 
 git rerere diff
 ```
 
-A typical first encounter prints `Recorded preimage for FILE`. After you resolve, stage, and continue, Git prints `Recorded resolution for FILE`. On a later rebase that hits a matching conflict, Git prints `Resolved FILE using previous resolution` and removes the conflict markers from the working tree. You still verify and `git add` before continuing:
+A typical first encounter prints `Recorded preimage for FILE`. After you resolve, stage, and continue, Git prints `Recorded resolution for FILE`. On a later rebase that hits a matching conflict, Git prints `Resolved FILE using previous resolution` and removes the conflict markers from the working tree. You still check the result. Without `rerere.autoUpdate`, you still run `git add` before continuing:
 
 ```bash
 git add path/to/file
 git rebase --continue
 ```
 
-If you abort a merge or rebase, Git clears the in-progress rerere metadata for that attempt. To drop a bad recorded resolution for selected paths, use:
+If you abort a merge or rebase, Git clears the in-progress rerere state for that attempt. To drop a recorded resolution while that conflict is still open, run:
 
 ```bash
 git rerere forget path/to/file
@@ -89,17 +89,23 @@ git rerere remaining
 
 ## Engineering Considerations
 
-Rerere pays off when the same textual conflict returns across many updates. A long-lived feature branch rebased against a moving `main` often replays older commits through the same overlapped hunks. Without a cache, you resolve those hunks on every rebase. With rerere enabled, you resolve each recurring conflict once and let later rebases reuse the postimage.
+Rerere helps when the same text conflict returns across many updates. A long-lived feature branch rebased against a moving `main` often replays older commits through the same overlapped hunks. Without a cache, you fix those hunks on every rebase.
 
-A common alternative to repeated merges is a test merge into current `main`. You resolve, verify, then reset the merge so the branch history stays free of intermediate merge commits. When you later rebase onto `main` or perform the final merge, the earlier postimage often applies again. That is how a conflicted merge can become a linear rebase without redoing the same hand edits.
+With rerere on, you often fix a recurring conflict only once. Later rebases reuse the postimage when the three-way merge resolves cleanly.
 
-Treat an autoresolved file like any other conflict resolution. Read the combined diff, run the tests that cover the overlapped code, and only then stage. A reused postimage is a prior judgment applied to new parents. The surrounding code may have changed enough that the old answer is wrong. For agent-produced conflicts, keep the same review bar described in [How to Fix Merge Conflicts Created by Coding Agents](/learn/how-to/merge-conflicts-with-coding-agents).
+A common alternative to repeated merges is a test merge into current `main`. You resolve, verify, then reset the merge so the branch history stays free of intermediate merge commits. When you later rebase onto `main` or do the final merge, the earlier postimage often applies again. That is how a conflicted merge can become a linear rebase without redoing the same hand edits.
+
+Treat an autoresolved file like any other conflict resolution. Read the combined diff, run the tests that cover the overlapped code, and only then stage. A reused postimage is a prior judgment applied to new parents. The surrounding code may have changed enough that the old answer is wrong.
+
+For agent-produced conflicts, keep the same review bar described in [How to Fix Merge Conflicts Created by Coding Agents](/learn/how-to/merge-conflicts-with-coding-agents).
 
 Rerere depends on conflict markers in the file. If the file already contains lines that look like markers, recording can fail. Raise `conflict-marker-size` in `.gitattributes` for those paths when that happens.
 
 ## Scaling and Operations
 
 Teams that merge many topic branches into one integration branch for testing benefit from the same cache. If the aggregate build fails, you rewind the integration tip, drop the bad topic, and merge the remaining branches again. Rerere re-applies the resolutions you already paid for on the branches that remain.
+
+Linked worktrees in one repo share `$GIT_COMMON_DIR/rr-cache`, so a resolution recorded in one worktree is available in the others. The [git-worktree](https://git-scm.com/docs/git-worktree) docs explain how those worktrees point at that common Git directory. Separate clones do not share the cache unless you copy it on purpose.
 
 Prune stale cache entries with:
 
@@ -109,7 +115,7 @@ git rerere gc
 
 By default, `gc.rerereResolved` keeps completed resolutions for 60 days and `gc.rerereUnresolved` drops abandoned preimages after 15 days. Adjust those values when your integration cycle is longer than the defaults.
 
-Do not treat `.git/rr-cache` as shared team state unless you deliberately distribute it. Each clone records its own resolutions. Enable `rerere.enabled` in shared developer setup docs so every machine that rebases the same [pull-request stacks](./stacked-prs) builds a useful cache.
+Do not treat the rerere cache as shared team state across clones unless you copy it on purpose. Enable `rerere.enabled` in shared setup docs so every machine that rebases the same [pull-request stacks](./stacked-prs) builds a useful cache.
 
 ## Next Steps
 
