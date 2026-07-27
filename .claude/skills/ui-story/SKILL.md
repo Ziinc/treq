@@ -72,11 +72,17 @@ Same for components under `src/components/**` (e.g.
    unions in the component (see `button.stories.tsx` for the pattern with
    `class-variance-authority` variants) — don't invent props that don't
    exist.
-4. **Cover the states that matter for review**, not every permutation:
-   default, the visually distinct variants, a disabled/error/empty state if
-   the component has one, and — for anything text-heavy — a long-content
-   story to catch overflow/wrapping bugs. Prefer one story per meaningful
-   visual state over a combinatorial matrix.
+4. **Make `Default` a kitchen sink.** Rather than a single instance with
+   default args, give `Default` a custom `render` that lays out every
+   variant × size (or the component's equivalent axes) in a grid, plus a
+   disabled state where applicable — see `button.stories.tsx`. That's the
+   one screenshot a reviewer looks at to see the whole component at a
+   glance. Set `parameters: { controls: { disable: true } }` on it since a
+   fixed grid isn't meant to be driven by the args table. Still add
+   separate single-instance stories per notable variant/state (disabled,
+   error, empty, long-content) — those are what the controls panel and
+   autodocs args table drive, and what a reviewer clicks into for a closer
+   look at one case.
 5. **Use `tags: ["autodocs"]`** on the meta so Storybook's docs page is
    generated for free.
 6. Do not add global decorators or providers to `.storybook/preview.tsx`
