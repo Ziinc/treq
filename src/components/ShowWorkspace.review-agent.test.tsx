@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
 import { render, screen, waitFor } from "../../test/test-utils";
 import { ShowWorkspace } from "./ShowWorkspace";
 import type { Workspace } from "../lib/api";
@@ -97,6 +98,14 @@ function renderWorkspace(onSessionCreated: (s: SessionCreationInfo) => void) {
 	);
 }
 
+async function openReviewTab() {
+	const user = userEvent.setup();
+	const reviewTab = await screen.findByRole("tab", { name: /review/i });
+	await user.click(reviewTab);
+	await screen.findByTestId("changes-viewer");
+	await waitFor(() => expect(capturedOnCreateAgentWithReview).toBeDefined());
+}
+
 describe("Send review to terminal respects default agent setting", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -111,10 +120,7 @@ describe("Send review to terminal respects default agent setting", () => {
 		const onSessionCreated = vi.fn();
 		renderWorkspace(onSessionCreated);
 
-		await screen.findByTestId("changes-viewer");
-		await waitFor(() =>
-			expect(capturedOnCreateAgentWithReview).toBeDefined(),
-		);
+		await openReviewTab();
 
 		await capturedOnCreateAgentWithReview!("review text", "plan");
 
@@ -131,10 +137,7 @@ describe("Send review to terminal respects default agent setting", () => {
 		const onSessionCreated = vi.fn();
 		renderWorkspace(onSessionCreated);
 
-		await screen.findByTestId("changes-viewer");
-		await waitFor(() =>
-			expect(capturedOnCreateAgentWithReview).toBeDefined(),
-		);
+		await openReviewTab();
 
 		await capturedOnCreateAgentWithReview!("review text", "plan");
 
@@ -151,10 +154,7 @@ describe("Send review to terminal respects default agent setting", () => {
 		const onSessionCreated = vi.fn();
 		renderWorkspace(onSessionCreated);
 
-		await screen.findByTestId("changes-viewer");
-		await waitFor(() =>
-			expect(capturedOnCreateAgentWithReview).toBeDefined(),
-		);
+		await openReviewTab();
 
 		await capturedOnCreateAgentWithReview!("review text", "acceptEdits");
 
@@ -171,10 +171,7 @@ describe("Send review to terminal respects default agent setting", () => {
 		const onSessionCreated = vi.fn();
 		renderWorkspace(onSessionCreated);
 
-		await screen.findByTestId("changes-viewer");
-		await waitFor(() =>
-			expect(capturedOnCreateAgentWithReview).toBeDefined(),
-		);
+		await openReviewTab();
 
 		await capturedOnCreateAgentWithReview!("review text", "plan");
 
@@ -191,10 +188,7 @@ describe("Send review to terminal respects default agent setting", () => {
 		const onSessionCreated = vi.fn();
 		renderWorkspace(onSessionCreated);
 
-		await screen.findByTestId("changes-viewer");
-		await waitFor(() =>
-			expect(capturedOnCreateAgentWithReview).toBeDefined(),
-		);
+		await openReviewTab();
 
 		await capturedOnCreateAgentWithReview!("review text", "plan");
 
@@ -211,10 +205,7 @@ describe("Send review to terminal respects default agent setting", () => {
 		const onSessionCreated = vi.fn();
 		renderWorkspace(onSessionCreated);
 
-		await screen.findByTestId("changes-viewer");
-		await waitFor(() =>
-			expect(capturedOnCreateAgentWithReview).toBeDefined(),
-		);
+		await openReviewTab();
 
 		const reviewText = "## Code Review\n\nPlease fix the bug.";
 		await capturedOnCreateAgentWithReview!(reviewText, "plan");
