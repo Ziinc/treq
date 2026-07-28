@@ -190,6 +190,13 @@ command code as a separate, bigger decision and check with the user first.
    too (still required, still what proves the DOM reached that state) — the two are
    complementary, not a replacement for each other.
 
+   **At most 3 expectations per capture** — enforced by the
+   `max-3-capture-document-expectations` ast-grep rule. Three claims is what a
+   reviewer actually re-reads against an image; a list of eight gets skimmed. If a
+   screenshot genuinely needs more than three, that is a sign it is showing more
+   than one thing: take a second capture with its own `name` and split the claims
+   across the two.
+
 4. **Run it.**
    - First run in a session, or after touching `src-tauri` / `crates/treq-napi`, or
      adding new Tailwind classes: `npm run screenshot` (rebuilds the NAPI addon,
