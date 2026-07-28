@@ -179,11 +179,13 @@ it("captures the stacked PR queue for an opted-in repo", async () => {
 		name: "merge-queue-tab-02-enabled-with-queue",
 		expectations: [
 			"The tab lists the queue directly, with no toggle row above it.",
-			'Three blocks are listed. The first is a bordered "Stack of 3" block that says it merges bottom-up into main, containing #1 PR #101 (Merging, green), #2 PR #102 (Testing, amber) and #3 PR #103 (Queued).',
-			"The second block is a single un-stacked entry, #4 PR #104 (Queued), with no stack header.",
-			'The third is a "Stack of 2" block containing #5 PR #105 and #6, where the entry with no PR number reads "No PR".',
-			'Each stack header has a "Remove stack" button, and every individual entry row has its own small X remove button.',
-			"Each entry shows its branch and target underneath, e.g. 'feat/mid → feat/base', making the stacking visible.",
+			"A single vertical line runs down the left of the whole list, with a round node on it for every entry -- the line is continuous across the stack groupings, not restarted per stack, showing one merge sequence.",
+			"Node colours follow status: PR #101 (Merging) is green, PR #102 (Testing) is amber, the Queued ones are grey.",
+			'Two "Stack of N" headers appear inline in the list: "Stack of 3 · merges bottom-up into main" above entries 1-3, and "Stack of 2" above entries 5-6. Entry #4 has no stack header.',
+			"Entries belonging to a stack have a short vertical accent line to the left of their text, distinguishing them from the un-stacked entry #4.",
+			'Each stack header has a "Remove stack" button, and every entry row has its own small X remove button.',
+			'At the very bottom of the line is a down-arrow and the target branch "main", showing where the queue lands.',
+			'The entry with no PR number reads "No PR".',
 		],
 	});
 

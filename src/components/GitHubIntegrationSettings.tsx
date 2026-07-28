@@ -3,6 +3,7 @@ import { ExternalLink, Github, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import {
+	useGitRemoteInfo,
 	useMergeQueueEnabled,
 	useSetMergeQueueEnabled,
 } from "../hooks/useMergeQueueStatus";
@@ -20,54 +21,115 @@ export interface GitHubRepository {
 }
 
 interface GitHubIntegrationSettingsProps {
-	/** Repo whose merge queue opt-in this page controls. */
+	/** Repo whose integration settings this page controls. */
 	repoPath?: string;
 }
 
+/** One row of an integration's settings: label, explanation, and control. */
+const SettingRow: React.FC<{
+	title: string;
+	description: string;
+	children?: React.ReactNode;
+}> = ({ title, description, children }) => (
+	<div className="flex items-start justify-between gap-4 py-3">
+		<div className="min-w-0">
+			<p className="font-medium">{title}</p>
+			<p className="text-base text-muted-foreground">{description}</p>
+		</div>
+		<div className="flex items-center gap-2 shrink-0">{children}</div>
+	</div>
+);
+
 /**
  * Per-repo merge queue opt-in, stored in Postgres. A repo with no config row
- * has never opted in, so this reads as off and nothing can be enqueued until
- * the user turns it on here.
+ * has never opted in, so this reads as off. Turning it on requires a Pro plan
+ * and a repo the GitHub App is installed on, so an ineligible repo gets the
+ * reason rather than a control that could only fail.
  */
-const MergeQueueSetting: React.FC<{ repoPath?: string }> = ({ repoPath }) => {
+const MergeQueueSetting: React.FC<{
+	repoPath?: string;
+	isPro: boolean;
+	repositories: GitHubRepository[];
+	repositoriesLoading: boolean;
+}> = ({ repoPath, isPro, repositories, repositoriesLoading }) => {
+	const { data: remoteInfo } = useGitRemoteInfo(repoPath);
 	const { data: enabled, isLoading } = useMergeQueueEnabled(repoPath);
 	const setEnabled = useSetMergeQueueEnabled(repoPath);
 	const [error, setError] = useState<string | null>(null);
 
+	const isLinked =
+		!!remoteInfo &&
+		repositories.some((repo) => repo.full_name === remoteInfo.full_name);
+	const isEligible = isPro && isLinked;
+
+	async function apply(next: boolean) {
+		setError(null);
+		try {
+			await setEnabled.mutateAsync(next);
+		} catch (err) {
+			setError((err as Error).message);
+		}
+	}
+
+	function ineligibleReason(): string {
+		if (!remoteInfo) return "This repository has no GitHub remote.";
+		if (!isPro) return "Upgrade to Pro to use the merge queue.";
+		return `Install the Treq GitHub App on ${remoteInfo.full_name} to use the merge queue.`;
+	}
+
 	return (
-		<div
-			data-testid="merge-queue-setting"
-			className="border border-border rounded-lg p-4 space-y-3"
-		>
-			<div className="flex items-center justify-between gap-3">
-				<div className="min-w-0">
-					<h3 className="font-medium">Merge queue</h3>
-					<p className="text-base text-muted-foreground">
-						{enabled
-							? "Enabled for this repository."
-							: "Turn on the merge queue to start adding branches to it."}
-					</p>
-				</div>
-				<div className="flex items-center gap-2 shrink-0">
-					{setEnabled.isPending && (
-						<Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
-					)}
-					<Switch
-						aria-label="Enable merge queue"
-						checked={enabled === true}
-						disabled={isLoading || setEnabled.isPending}
-						onCheckedChange={async (next) => {
-							setError(null);
-							try {
-								await setEnabled.mutateAsync(next);
-							} catch (err) {
-								setError((err as Error).message);
-							}
-						}}
+		<div data-testid="merge-queue-setting">
+			<SettingRow
+				title="Merge queue"
+				description={
+					enabled
+						? "Queued branches merge automatically once CI passes."
+						: isEligible || repositoriesLoading
+							? "Merge branches automatically once CI passes."
+							: ineligibleReason()
+				}
+			>
+				{repositoriesLoading || isLoading ? (
+					<Loader2
+						aria-label="Loading merge queue setting"
+						className="w-4 h-4 animate-spin text-muted-foreground"
 					/>
-				</div>
-			</div>
-			{error && <p className="text-base text-destructive">{error}</p>}
+				) : enabled ? (
+					<>
+						{setEnabled.isPending && (
+							<Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+						)}
+						<Switch
+							aria-label="Enable merge queue"
+							checked
+							disabled={setEnabled.isPending}
+							onCheckedChange={(next) => void apply(next)}
+						/>
+					</>
+				) : isEligible ? (
+					<Button
+						size="sm"
+						className="text-base"
+						disabled={setEnabled.isPending}
+						onClick={() => void apply(true)}
+					>
+						{setEnabled.isPending ? (
+							<Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+						) : null}
+						Enable merge queue
+					</Button>
+				) : !isPro ? (
+					<Button
+						size="sm"
+						variant="outline"
+						className="text-base"
+						onClick={() => openUrl(`${WEB_URL}/dashboard`)}
+					>
+						Upgrade to Pro
+					</Button>
+				) : null}
+			</SettingRow>
+			{error && <p className="text-base text-destructive pb-3">{error}</p>}
 		</div>
 	);
 };
@@ -88,8 +150,11 @@ export const GitHubIntegrationSettings: React.FC<
 	const isPro =
 		subscription?.plan === "pro" && subscription.status === "active";
 
+	const userId = user?.id;
+	const isSignedIn = !!user && !!session;
+
 	useEffect(() => {
-		if (!user || !session) return;
+		if (!isSignedIn) return;
 		let active = true;
 		setLoading(true);
 		setFailed(false);
@@ -105,7 +170,10 @@ export const GitHubIntegrationSettings: React.FC<
 		return () => {
 			active = false;
 		};
-	}, [user, session]);
+		// Keyed on the user's identity rather than the auth objects themselves:
+		// a useAuth that returns fresh object literals per render would
+		// otherwise re-run this effect (and its setState) forever.
+	}, [userId, isSignedIn]);
 
 	if (authLoading) {
 		return (
@@ -118,7 +186,7 @@ export const GitHubIntegrationSettings: React.FC<
 		);
 	}
 
-	if (!user || !session) {
+	if (!isSignedIn) {
 		return (
 			<div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
 				<Github className="w-12 h-12 text-muted-foreground" />
@@ -143,56 +211,67 @@ export const GitHubIntegrationSettings: React.FC<
 		: repositories.filter((repo) => !repo.private);
 
 	return (
-		<div className="space-y-6">
-			{FEATURES.mergeQueue && <MergeQueueSetting repoPath={repoPath} />}
-			<div className="border border-border rounded-lg p-4 space-y-4">
-				<div className="flex items-center gap-3">
-					<Github className="w-6 h-6" />
-					<div>
-						<h3 className="font-medium">GitHub</h3>
-						<p className="text-base text-muted-foreground">
-							{isPro ? "All repositories" : "Public repositories"}
-						</p>
-					</div>
+		<div className="space-y-10">
+			{/* One header per integration; settings sit directly beneath it. */}
+			<section>
+				<div className="flex items-center gap-3 pb-2 border-b border-border">
+					<Github className="w-5 h-5" />
+					<h3 className="font-semibold">GitHub</h3>
+					<span className="text-base text-muted-foreground">
+						{isPro ? "All repositories" : "Public repositories"}
+					</span>
 				</div>
-				{loading ? (
-					<div className="flex items-center gap-2 text-base text-muted-foreground">
-						<Loader2 className="w-4 h-4 animate-spin" />
-						Loading GitHub repositories…
-					</div>
-				) : failed ? (
-					<p className="text-base text-destructive">
-						Could not load GitHub repositories. Try again later.
-					</p>
-				) : visibleRepositories.length === 0 ? (
-					<p className="text-base text-muted-foreground">
-						No enabled GitHub repositories.
-					</p>
-				) : (
-					<ul className="divide-y divide-border border border-border rounded-md">
-						{visibleRepositories.map((repo) => (
-							<li
-								key={repo.id}
-								className="flex items-center justify-between px-3 py-2 text-base"
-							>
-								<span>{repo.full_name}</span>
-								<span className="text-base text-muted-foreground">
-									{repo.private ? "Private" : "Public"}
-								</span>
-							</li>
-						))}
-					</ul>
-				)}
-				<Button
-					variant="outline"
-					size="sm"
-					className="w-full gap-2 text-base"
-					onClick={() => openUrl(`${WEB_URL}/dashboard?tab=integrations`)}
-				>
-					<ExternalLink className="w-3 h-3" />
-					Manage GitHub
-				</Button>
-			</div>
+
+				<div className="divide-y divide-border">
+					{FEATURES.mergeQueue && (
+						<MergeQueueSetting
+							repoPath={repoPath}
+							isPro={isPro}
+							repositories={repositories}
+							repositoriesLoading={loading}
+						/>
+					)}
+
+					<SettingRow
+						title="Connected repositories"
+						description={
+							loading
+								? "Loading GitHub repositories…"
+								: failed
+									? "Could not load GitHub repositories. Try again later."
+									: visibleRepositories.length === 0
+										? "No enabled GitHub repositories."
+										: `${visibleRepositories.length} enabled.`
+						}
+					>
+						<Button
+							variant="outline"
+							size="sm"
+							className="gap-2 text-base"
+							onClick={() => openUrl(`${WEB_URL}/dashboard?tab=integrations`)}
+						>
+							<ExternalLink className="w-3 h-3" />
+							Manage GitHub
+						</Button>
+					</SettingRow>
+
+					{!loading && !failed && visibleRepositories.length > 0 && (
+						<ul className="py-2">
+							{visibleRepositories.map((repo) => (
+								<li
+									key={repo.id}
+									className="flex items-center justify-between py-1.5 text-base"
+								>
+									<span className="font-mono">{repo.full_name}</span>
+									<span className="text-muted-foreground">
+										{repo.private ? "Private" : "Public"}
+									</span>
+								</li>
+							))}
+						</ul>
+					)}
+				</div>
+			</section>
 		</div>
 	);
 };

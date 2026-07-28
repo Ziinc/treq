@@ -8,13 +8,24 @@ import { captureDocument } from "../capture";
 // The merge queue opt-in lives in Settings › Integrations and is stored in
 // Postgres. Supabase and the repo's GitHub remote are stubbed (neither is
 // reachable from the desktop harness); the settings page itself is real.
-const { queueState, mockGetGitRemoteUrl, mockSetEnabled, auth } = vi.hoisted(
-	() => ({
+const { queueState, repoState, mockGetGitRemoteUrl, mockSetEnabled, auth } =
+	vi.hoisted(() => ({
 		queueState: { enabled: false },
+		repoState: {
+			repositories: [
+				{
+					id: 1,
+					full_name: "treq-dev/treq",
+					private: false,
+					default_branch: "main",
+					installation_id: 99,
+				},
+			] as unknown[],
+		},
 		mockGetGitRemoteUrl: vi.fn(),
 		mockSetEnabled: vi.fn(),
-		// Stable identities: GitHubIntegrationSettings keys its repo-loading
-		// effect on [user, session], so fresh objects per render would loop.
+		// Stable identities are no longer required (the effect keys on user.id),
+		// but a realistic useAuth returns a memoized object anyway.
 		auth: {
 			user: { id: "user-1" },
 			session: { access_token: "token" },
@@ -22,8 +33,7 @@ const { queueState, mockGetGitRemoteUrl, mockSetEnabled, auth } = vi.hoisted(
 			subscription: { plan: "pro", status: "active" },
 			signIn: vi.fn(),
 		},
-	}),
-);
+	}));
 
 vi.mock("../../../src/lib/features", () => ({
 	FEATURES: {
@@ -50,7 +60,8 @@ vi.mock("../../../src/lib/supabase", () => ({
 			return { data: [], error: null };
 		}),
 		from: () => ({
-			select: () => Promise.resolve({ data: [], error: null }),
+			select: () =>
+				Promise.resolve({ data: repoState.repositories, error: null }),
 		}),
 		functions: { invoke: vi.fn() },
 	},
@@ -66,6 +77,14 @@ vi.mock("../../../src/lib/api", async () => {
 	return { ...actual, getGitRemoteUrl: mockGetGitRemoteUrl };
 });
 
+const LINKED_REPO = {
+	id: 1,
+	full_name: "treq-dev/treq",
+	private: false,
+	default_branch: "main",
+	installation_id: 99,
+};
+
 const REMOTE_INFO = {
 	owner: "treq-dev",
 	repo: "treq",
@@ -77,6 +96,8 @@ it("captures turning the merge queue on from Settings › Integrations", async (
 	openRepo(repoPath);
 	mockGetGitRemoteUrl.mockResolvedValue(REMOTE_INFO);
 	queueState.enabled = false;
+	repoState.repositories = [LINKED_REPO];
+	auth.subscription = { plan: "pro", status: "active" };
 	mockSetEnabled.mockClear();
 
 	const user = userEvent.setup();
@@ -84,24 +105,29 @@ it("captures turning the merge queue on from Settings › Integrations", async (
 
 	await user.click(await screen.findByRole("tab", { name: /integrations/i }));
 
+	// Eligible repo, queue off: a CTA to switch it on, not a prompt.
 	const section = await screen.findByTestId("merge-queue-setting");
-	const toggle = within(section).getByRole("switch", {
+	const cta = await within(section).findByRole("button", {
 		name: /enable merge queue/i,
 	});
-	await waitFor(() => {
-		expect(toggle).toHaveAttribute("aria-checked", "false");
-	});
+	expect(
+		within(section).queryByRole("switch", { name: /enable merge queue/i }),
+	).not.toBeInTheDocument();
 	await captureDocument(document, {
 		name: "merge-queue-setting-01-off",
 		expectations: [
 			"The Settings page is on the Integrations tab.",
-			'A "Merge queue" section is shown above the GitHub repositories card, with the copy "Turn on the merge queue to start adding branches to it."',
-			"Its toggle switch is in the OFF position (grey, knob to the left).",
+			'There is a single "GitHub" header with an icon and a rule under it -- no bordered cards anywhere on the page.',
+			'Under that header, a "Merge queue" row reads "Merge branches automatically once CI passes." and a "Connected repositories" row sits below it, separated by a thin divider.',
+			'The merge queue row\'s control is a primary "Enable merge queue" CTA button -- there is no toggle switch while it is off.',
 		],
 	});
 
-	await user.click(toggle);
+	await user.click(cta);
 
+	const toggle = await within(section).findByRole("switch", {
+		name: /enable merge queue/i,
+	});
 	await waitFor(() => {
 		expect(toggle).toHaveAttribute("aria-checked", "true");
 	});
@@ -111,22 +137,24 @@ it("captures turning the merge queue on from Settings › Integrations", async (
 			p_enabled: true,
 		}),
 	);
-	await screen.findByText("Enabled for this repository.");
 	await captureDocument(document, {
 		name: "merge-queue-setting-02-on",
 		expectations: [
-			'The "Merge queue" section now reads "Enabled for this repository."',
-			"Its toggle switch is in the ON position (filled/primary, knob to the right).",
-			"No error text is shown below the toggle.",
+			'The merge queue row now reads "Queued branches merge automatically once CI passes."',
+			"Its control has become a toggle switch in the ON position (filled/primary, knob to the right) -- the CTA button is gone.",
+			"No error text is shown.",
 		],
 	});
 }, 120000);
 
-it("surfaces the reason when the repo cannot be opted in", async () => {
+it("captures the merge queue setting for a repo the GitHub App is not on", async () => {
 	const { repoPath } = createTestRepo(false);
 	openRepo(repoPath);
 	mockGetGitRemoteUrl.mockResolvedValue(REMOTE_INFO);
 	queueState.enabled = false;
+	// Signed in and on Pro, but this repo is not one of the installation's.
+	repoState.repositories = [];
+	auth.subscription = { plan: "pro", status: "active" };
 
 	const user = userEvent.setup();
 	render(<SettingsPage repoPath={repoPath} onClose={vi.fn()} />);
@@ -134,23 +162,41 @@ it("surfaces the reason when the repo cannot be opted in", async () => {
 	await user.click(await screen.findByRole("tab", { name: /integrations/i }));
 	const section = await screen.findByTestId("merge-queue-setting");
 
-	// A repo with no GitHub App installation cannot have a config row written.
-	mockSetEnabled.mockImplementationOnce(() => {
-		throw new Error(
-			"Repository treq-dev/treq is not linked to a GitHub App installation for this account",
-		);
-	});
-
-	await user.click(
-		within(section).getByRole("switch", { name: /enable merge queue/i }),
-	);
-
-	await screen.findByText(/not linked to a GitHub App installation/i);
+	await within(section).findByText(/install the treq github app/i);
+	expect(
+		within(section).queryByRole("button", { name: /enable merge queue/i }),
+	).not.toBeInTheDocument();
+	expect(
+		within(section).queryByRole("switch", { name: /enable merge queue/i }),
+	).not.toBeInTheDocument();
 	await captureDocument(document, {
-		name: "merge-queue-setting-03-error",
+		name: "merge-queue-setting-03-not-eligible",
 		expectations: [
-			'The "Merge queue" section shows red error text saying the repository is not linked to a GitHub App installation for this account.',
-			"The toggle switch has stayed in the OFF position -- the failed opt-in did not flip it.",
+			"The merge queue row explains that the Treq GitHub App must be installed on treq-dev/treq to use the merge queue.",
+			"There is no Enable CTA and no toggle -- an ineligible repo gets the reason instead of a control that could only fail.",
 		],
 	});
+}, 120000);
+
+it("offers an upgrade path instead of the CTA on a free plan", async () => {
+	const { repoPath } = createTestRepo(false);
+	openRepo(repoPath);
+	mockGetGitRemoteUrl.mockResolvedValue(REMOTE_INFO);
+	queueState.enabled = false;
+	repoState.repositories = [LINKED_REPO];
+	auth.subscription = { plan: "free", status: "active" };
+
+	const user = userEvent.setup();
+	render(<SettingsPage repoPath={repoPath} onClose={vi.fn()} />);
+
+	await user.click(await screen.findByRole("tab", { name: /integrations/i }));
+	const section = await screen.findByTestId("merge-queue-setting");
+
+	await within(section).findByText(/upgrade to pro to use the merge queue/i);
+	expect(
+		within(section).getByRole("button", { name: /upgrade to pro/i }),
+	).toBeVisible();
+	expect(
+		within(section).queryByRole("button", { name: /enable merge queue/i }),
+	).not.toBeInTheDocument();
 }, 120000);

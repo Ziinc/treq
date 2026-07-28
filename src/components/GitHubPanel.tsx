@@ -2,6 +2,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
 	AlertCircle,
+	ArrowDown,
 	CircleDot,
 	Github,
 	GitMerge,
@@ -65,6 +66,21 @@ function queueStatusLabel(status: QueueEntryStatus): string {
 			return "Dequeued";
 		default:
 			return status;
+	}
+}
+
+function queueNodeColor(status: QueueEntryStatus): string {
+	switch (status) {
+		case "testing":
+			return "bg-amber-500";
+		case "merging":
+			return "bg-green-500 animate-pulse";
+		case "merged":
+			return "bg-green-600";
+		case "failed":
+			return "bg-red-500";
+		default:
+			return "bg-muted-foreground";
 	}
 }
 
@@ -488,7 +504,14 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 							) : queueEntries.length === 0 ? (
 								<EmptyState icon={GitMerge} message="Merge queue is empty." />
 							) : (
-								<div className="p-3 space-y-3">
+								// One continuous rail down the whole queue: the entries merge
+								// as a single sequence, and stacks are groupings within it
+								// rather than separate lists.
+								<div className="relative p-3" data-testid="merge-queue-list">
+									<div
+										className="absolute left-[19px] top-5 bottom-5 w-0.5 bg-border"
+										aria-hidden="true"
+									/>
 									{queueStacks.map((stack) => {
 										const isStack = stack.entries.length > 1;
 										const stackKey = stack.entries[0].branch_name;
@@ -500,14 +523,9 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 														? `merge-queue-stack-${stackKey}`
 														: `merge-queue-single-${stackKey}`
 												}
-												className={
-													isStack
-														? "rounded-md border border-border bg-muted/20"
-														: "rounded-md border border-border"
-												}
 											>
 												{isStack && (
-													<div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+													<div className="relative z-10 flex items-center gap-2 pl-8 py-1.5">
 														<Layers2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
 														<span className="text-base font-medium">
 															Stack of {stack.entries.length}
@@ -537,11 +555,20 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 													<div
 														key={entry.branch_name}
 														data-testid={`merge-queue-entry-${entry.position}`}
-														className={`flex items-start gap-2 px-3 py-2.5 ${
-															indexInStack > 0 ? "border-t border-border" : ""
-														}`}
+														className="relative flex items-start gap-3 py-2"
 													>
-														<div className="min-w-0 flex-1">
+														<div className="shrink-0 mt-1">
+															<div
+																className={`w-[14px] h-[14px] rounded-full border-2 border-background ${queueNodeColor(entry.status)}`}
+															/>
+														</div>
+														<div
+															className={`min-w-0 flex-1 ${
+																isStack
+																	? "border-l-2 border-border/70 pl-3"
+																	: ""
+															}`}
+														>
 															<div className="flex items-center gap-2 flex-wrap">
 																<span className="text-base text-muted-foreground tabular-nums">
 																	#{entry.position}
@@ -586,6 +613,15 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 											</div>
 										);
 									})}
+									{/* The queue ultimately lands here. */}
+									<div className="relative z-10 flex items-center gap-3 py-2 text-muted-foreground">
+										<div className="shrink-0 w-[14px] h-[14px] flex items-center justify-center">
+											<ArrowDown className="w-3.5 h-3.5" />
+										</div>
+										<p className="text-base font-mono truncate">
+											{queueStacks[0]?.targetBranch ?? "main"}
+										</p>
+									</div>
 								</div>
 							)}
 						</>
