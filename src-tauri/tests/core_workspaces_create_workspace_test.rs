@@ -24,6 +24,7 @@ fn test_can_create_workspace() {
         None, // moved_files
         None, // source_branch (defaults to current)
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -97,6 +98,7 @@ fn workspace_creation_creates_empty_wc_but_bookmark_targets_parent() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -163,6 +165,7 @@ fn workspace_creation_list_commits_excludes_all_working_copy_commits() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -222,6 +225,7 @@ fn test_can_create_workspace_with_same_source_branch() {
         None,                 // moved_files
         Some(default_branch), // source_branch (defaults to current)
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -232,6 +236,7 @@ fn test_can_create_workspace_with_same_source_branch() {
         Some("new feature2".to_string()),
         None,                 // moved_files
         Some(default_branch), // source_branch (defaults to current)
+        None,
         None,
     )
     .expect("Failed to create workspace");
@@ -265,6 +270,7 @@ fn test_can_create_workspace_from_remote_branch() {
         "feature-remote",
         Some("feature-remote".to_string()),
         None, // moved_files
+        None,
         None,
         None,
     )
@@ -318,6 +324,7 @@ fn test_can_create_stacked_workspace() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create base workspace");
 
@@ -338,6 +345,7 @@ fn test_can_create_stacked_workspace() {
         None,
         None,
         Some(&base.branch_name),
+        None,
         None,
     )
     .expect("Failed to create stacked workspace");
@@ -428,6 +436,7 @@ fn test_create_workspace_from_ahead_source_stacks_history_and_working_copy_and_d
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create B workspace");
 
@@ -455,6 +464,7 @@ fn test_create_workspace_from_ahead_source_stacks_history_and_working_copy_and_d
         Some("stacked on B".to_string()),
         None,
         Some(&b_workspace.branch_name),
+        None,
         None,
     )
     .expect("Failed to create A workspace from B");
@@ -613,6 +623,7 @@ fn test_list_workspaces_removes_db_workspace_missing_from_jj_state() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -682,6 +693,7 @@ fn test_moved_files_from_main_repo() {
         Some(moved_files.clone()),
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -740,6 +752,7 @@ fn test_moved_files_from_workspace_to_workspace() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create base workspace");
 
@@ -772,6 +785,7 @@ fn test_moved_files_from_workspace_to_workspace() {
         Some("extract components".to_string()),
         Some(moved_files.clone()),
         Some("feat/base"),
+        None,
         None,
     )
     .expect("Failed to create stacked workspace");
@@ -823,6 +837,7 @@ fn test_create_workspace_copies_included_files() {
         None,
         None,
         Some(patterns),
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -862,6 +877,7 @@ fn test_create_workspace_copies_nested_directories() {
         None,
         None,
         Some(patterns),
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -890,6 +906,7 @@ fn test_create_workspace_skips_missing_included_files() {
         None,
         None,
         Some(patterns),
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -962,6 +979,7 @@ fn test_create_workspace_parents_on_target_branch_tip_after_external_commit() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -992,6 +1010,7 @@ fn test_create_workspace_sets_target_branch_in_db() {
         &repo.repo_path,
         "feat/target-branch-check",
         Some("target branch test".to_string()),
+        None,
         None,
         None,
         None,

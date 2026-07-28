@@ -23,6 +23,7 @@ fn setup_parent_child_graph(repo: &TestRepo) -> (Workspace, Workspace) {
         None,
         None,
         None,
+        None,
     )
     .expect("should create parent workspace");
 
@@ -32,6 +33,7 @@ fn setup_parent_child_graph(repo: &TestRepo) -> (Workspace, Workspace) {
         Some("child".to_string()),
         None,
         Some(&parent.branch_name),
+        None,
         None,
     )
     .expect("should create child workspace");
@@ -47,6 +49,7 @@ fn setup_sibling_graph(repo: &TestRepo) -> (Workspace, Workspace) {
         None,
         None,
         None,
+        None,
     )
     .expect("should create root workspace");
 
@@ -57,6 +60,7 @@ fn setup_sibling_graph(repo: &TestRepo) -> (Workspace, Workspace) {
         None,
         Some(&root.branch_name),
         None,
+        None,
     )
     .expect("should create left sibling workspace");
 
@@ -66,6 +70,7 @@ fn setup_sibling_graph(repo: &TestRepo) -> (Workspace, Workspace) {
         Some("right".to_string()),
         None,
         Some(&root.branch_name),
+        None,
         None,
     )
     .expect("should create right sibling workspace");

@@ -17,6 +17,7 @@ fn create_workspace(repo: &TestRepo) -> treq_lib::local_db::Workspace {
         None,
         None,
         None,
+        None,
     )
     .expect("failed to create workspace")
 }

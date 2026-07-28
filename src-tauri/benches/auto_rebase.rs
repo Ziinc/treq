@@ -17,6 +17,7 @@ fn create_workspace_with_target(
         None,
         Some(target),
         None,
+        None,
     )
     .unwrap_or_else(|e| panic!("failed to create workspace '{branch}': {e}"));
 

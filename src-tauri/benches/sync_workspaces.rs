@@ -16,6 +16,7 @@ fn create_bench_workspaces(repo: &TestRepo, count: usize) -> Vec<(i64, String, S
                 None,
                 None,
                 None,
+                None,
             )
             .expect("failed to create benchmark workspace");
 

@@ -1,7 +1,6 @@
 use crate::jj::{self, JjRebaseResult};
 use crate::local_db::{self, Workspace};
 use crate::AppState;
-use serde_json;
 use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
@@ -54,31 +53,13 @@ pub async fn create_workspace(
     metadata: Option<String>,
 ) -> Result<i64, String> {
     let started_at = Instant::now();
-    // Parse metadata JSON to extract title/description and moved_files fields directly
-    let (title, description, moved_files) = metadata
-        .and_then(|m| {
-            serde_json::from_str::<serde_json::Value>(&m)
-                .ok()
-                .and_then(|obj| {
-                    let title = obj.get("title").and_then(|v| v.as_str()).map(String::from);
-                    let description = obj
-                        .get("description")
-                        .and_then(|v| v.as_str())
-                        .map(String::from);
-                    let moved_files =
-                        obj.get("moved_files")
-                            .and_then(|v| v.as_array())
-                            .map(|arr| {
-                                arr.iter()
-                                    .filter_map(|v| v.as_str().map(String::from))
-                                    .collect::<Vec<_>>()
-                            });
-                    // Only return Some if moved_files has actual items
-                    let moved_files = moved_files.filter(|v| !v.is_empty());
-                    Some((title, description, moved_files))
-                })
-        })
-        .unwrap_or((None, None, None));
+    let parsed_metadata = crate::core::parse_workspace_metadata(metadata.as_deref());
+    let (title, description, moved_files, sparse_patterns) = (
+        parsed_metadata.title,
+        parsed_metadata.description,
+        parsed_metadata.moved_files,
+        parsed_metadata.sparse_patterns,
+    );
 
     // Read included_copy_files setting from DB
     let included_copy_files: Option<Vec<String>> = {
@@ -104,6 +85,7 @@ pub async fn create_workspace(
             moved_files,
             source_branch.as_deref(),
             included_copy_files,
+            sparse_patterns,
         )?;
         if let Some(t) = title {
             local_db::update_workspace_title(&repo_path_for_task, workspace.id, &t)?;
@@ -623,6 +605,7 @@ mod tests {
             "test-branch".to_string(),
             None,
             None,
+            None,
         )
         .unwrap();
 
@@ -669,6 +652,7 @@ mod tests {
             "test".to_string(),
             "nonexistent_workspace".to_string(),
             "test-branch".to_string(),
+            None,
             None,
             None,
         )

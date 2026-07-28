@@ -17,6 +17,7 @@ fn test_jj_restore_file_resets_working_copy_on_disk() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -67,6 +68,7 @@ fn test_jj_restore_all_resets_working_copy_on_disk() {
         &repo.repo_path,
         "feat/restore-all",
         Some("restore all".to_string()),
+        None,
         None,
         None,
         None,

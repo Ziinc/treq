@@ -14,6 +14,7 @@ fn test_can_delete_workspace() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
     let workspace_name = workspace.workspace_name.clone();
@@ -65,6 +66,7 @@ fn test_delete_workspace_retargets_children_to_default_branch() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create parent workspace");
 
@@ -74,6 +76,7 @@ fn test_delete_workspace_retargets_children_to_default_branch() {
         None,
         None,
         Some(&parent.branch_name),
+        None,
         None,
     )
     .expect("Failed to create child1 workspace");
@@ -85,6 +88,7 @@ fn test_delete_workspace_retargets_children_to_default_branch() {
         None,
         Some(&parent.branch_name),
         None,
+        None,
     )
     .expect("Failed to create child2 workspace");
 
@@ -94,6 +98,7 @@ fn test_delete_workspace_retargets_children_to_default_branch() {
         None,
         None,
         Some(&child1.branch_name),
+        None,
         None,
     )
     .expect("Failed to create grandchild workspace");

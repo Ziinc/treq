@@ -14,6 +14,7 @@ fn test_jj_get_log_diff_stats_with_multiline_output() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -68,6 +69,7 @@ fn test_jj_get_log_diff_stats_with_modifications() {
         &repo.repo_path,
         "feat/diff-mods",
         Some("diff modifications test".to_string()),
+        None,
         None,
         None,
         None,
@@ -140,6 +142,7 @@ fn test_list_commits_includes_tentative_working_copy_for_dirty_workspace() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -200,6 +203,7 @@ fn test_list_commits_includes_stacked_working_copies_for_dirty_chain() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create root workspace");
     let child = treq_lib::core::create_workspace(
@@ -209,6 +213,7 @@ fn test_list_commits_includes_stacked_working_copies_for_dirty_chain() {
         None,
         Some(&root.branch_name),
         None,
+        None,
     )
     .expect("Failed to create child workspace");
     let grandchild = treq_lib::core::create_workspace(
@@ -217,6 +222,7 @@ fn test_list_commits_includes_stacked_working_copies_for_dirty_chain() {
         Some("grandchild workspace".to_string()),
         None,
         Some(&child.branch_name),
+        None,
         None,
     )
     .expect("Failed to create grandchild workspace");
@@ -302,6 +308,7 @@ fn test_list_commits_skips_clean_branches_in_stacked_chain() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create root workspace");
     let child = treq_lib::core::create_workspace(
@@ -311,6 +318,7 @@ fn test_list_commits_skips_clean_branches_in_stacked_chain() {
         None,
         Some(&root.branch_name),
         None,
+        None,
     )
     .expect("Failed to create child workspace");
     let grandchild = treq_lib::core::create_workspace(
@@ -319,6 +327,7 @@ fn test_list_commits_skips_clean_branches_in_stacked_chain() {
         Some("grandchild clean workspace".to_string()),
         None,
         Some(&child.branch_name),
+        None,
         None,
     )
     .expect("Failed to create grandchild workspace");
@@ -384,6 +393,7 @@ fn test_list_commits_non_stacked_workspace_keeps_single_working_copy() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -428,6 +438,7 @@ fn test_move_commit_to_existing_workspace() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create source workspace");
 
@@ -454,6 +465,7 @@ fn test_move_commit_to_existing_workspace() {
         &repo.repo_path,
         "feat/target",
         Some("target workspace".to_string()),
+        None,
         None,
         None,
         None,
@@ -488,6 +500,7 @@ fn test_abandon_commit() {
         &repo.repo_path,
         "feat/abandon-test",
         Some("abandon test".to_string()),
+        None,
         None,
         None,
         None,
@@ -540,6 +553,7 @@ fn test_commit_diff_added_files() {
         &repo.repo_path,
         "feat/commit-diff-add",
         Some("commit diff add test".to_string()),
+        None,
         None,
         None,
         None,
@@ -622,6 +636,7 @@ fn test_commit_diff_modified_files() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -683,6 +698,7 @@ fn test_commit_diff_deleted_files() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -736,6 +752,7 @@ fn test_commit_diff_defers_large_file_diffs() {
         &repo.repo_path,
         "feat/commit-diff-large",
         Some("commit diff large test".to_string()),
+        None,
         None,
         None,
         None,
@@ -794,6 +811,7 @@ fn test_commit_diff_blocks_rendering_when_commit_is_too_large() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -843,6 +861,7 @@ fn test_commit_file_diff_fetches_deferred_file_on_demand() {
         &repo.repo_path,
         "feat/commit-file-diff",
         Some("commit file diff test".to_string()),
+        None,
         None,
         None,
         None,
@@ -902,6 +921,7 @@ fn test_commit_diff_invalid_change_id() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -932,6 +952,7 @@ fn test_list_commits() {
         &repo.repo_path,
         "feat/list-commits",
         Some("list commits test".to_string()),
+        None,
         None,
         None,
         None,
@@ -1010,6 +1031,7 @@ fn test_list_commits_includes_base_branch_commits_for_non_default_workspace() {
         &repo.repo_path,
         "feat/after-base",
         Some("test base exclusion".to_string()),
+        None,
         None,
         None,
         None,

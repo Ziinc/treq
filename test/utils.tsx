@@ -138,6 +138,18 @@ export async function commitRepoFile(
 	await createCommit(repoPath, null, message);
 }
 
+// Write a file and commit it with git directly, advancing the current branch
+// ref (unlike commitRepoFile, which commits through jj on the home repo).
+export async function gitCommitRepoFile(
+	repoPath: string,
+	relativePath: string,
+	content: string,
+	message: string,
+): Promise<void> {
+	await writeRepoFile(repoPath, relativePath, `${content}\n`, true);
+	getNapiBindings().gitCommitAll(repoPath, message);
+}
+
 export async function commitWorkspaceFile(
 	repoPath: string,
 	workspace: { id: number; path: string },

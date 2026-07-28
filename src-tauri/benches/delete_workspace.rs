@@ -13,6 +13,7 @@ fn setup_delete_workspace() -> (TestRepo, i64) {
         None,
         None,
         None,
+        None,
     )
     .expect("failed to create workspace");
 

@@ -1092,6 +1092,33 @@ pub fn sanitize_workspace_name(name: &str) -> String {
 
 /// Create a colocated jj workspace
 ///
+/// Parse and validate user-supplied sparse checkout patterns into repo paths.
+/// Patterns are jj sparse prefix paths: `src` matches `src` and everything
+/// under `src/`; a file path matches just that file.
+fn parse_sparse_patterns(patterns: &[String]) -> Result<Vec<RepoPathBuf>, JjError> {
+    let mut parsed: Vec<RepoPathBuf> = Vec::new();
+    for raw in patterns {
+        let trimmed = raw.trim();
+        let normalized = trimmed
+            .strip_prefix("./")
+            .unwrap_or(trimmed)
+            .trim_end_matches('/');
+        if normalized.is_empty() {
+            return Err(JjError::GitWorkspaceError(format!(
+                "Invalid sparse pattern '{}': pattern is empty",
+                raw
+            )));
+        }
+        let repo_path = RepoPathBuf::from_relative_path(normalized).map_err(|e| {
+            JjError::GitWorkspaceError(format!("Invalid sparse pattern '{}': {}", raw, e))
+        })?;
+        if !parsed.contains(&repo_path) {
+            parsed.push(repo_path);
+        }
+    }
+    Ok(parsed)
+}
+
 /// This creates:
 /// 1. A git workspace at the specified path
 /// 2. A jj workspace initialized on top of it
@@ -1104,8 +1131,15 @@ pub fn create_workspace(
     new_branch: bool,
     source_branch: Option<&str>,
     target_branch: Option<&str>,
+    sparse_patterns: Option<&[String]>,
 ) -> Result<String, JjError> {
     let repo_path_buf = Path::new(repo_path);
+
+    // Validate before any side effect; None and empty both mean a full checkout.
+    let parsed_sparse_patterns: Option<Vec<RepoPathBuf>> = match sparse_patterns {
+        Some(patterns) if !patterns.is_empty() => Some(parse_sparse_patterns(patterns)?),
+        _ => None,
+    };
 
     if !is_jj_workspace(repo_path) {
         return Err(JjError::NotGitRepository);
@@ -1340,6 +1374,20 @@ pub fn create_workspace(
         new_ws_name.clone(),
     ))
     .map_err(|e| JjError::GitWorkspaceError(format!("Failed to init workspace: {}", e)))?;
+
+    // Set sparse patterns while the wc is still empty so check_out below only materializes matching paths (mirrors `jj workspace add --sparse-patterns`).
+    if let Some(patterns) = parsed_sparse_patterns {
+        let mut locked_ws = new_workspace.start_working_copy_mutation().map_err(|e| {
+            JjError::GitWorkspaceError(format!("Failed to lock working copy: {}", e))
+        })?;
+        block_on(locked_ws.locked_wc().set_sparse_patterns(patterns)).map_err(|e| {
+            JjError::GitWorkspaceError(format!("Failed to set sparse patterns: {}", e))
+        })?;
+        let op_id = locked_ws.locked_wc().old_operation_id().clone();
+        block_on(locked_ws.finish(op_id)).map_err(|e| {
+            JjError::GitWorkspaceError(format!("Failed to finish sparse patterns mutation: {}", e))
+        })?;
+    }
 
     // Start a transaction on the new repo to move wc to the desired source commit
     let source_commit = new_repo
@@ -6173,6 +6221,37 @@ mod tests {
             .status()
             .expect("jj git init should run");
         assert!(status.success(), "jj git init should succeed");
+    }
+
+    #[test]
+    fn parse_sparse_patterns_normalizes_and_dedups() {
+        let patterns = vec![
+            "src".to_string(),
+            "./docs/".to_string(),
+            " src ".to_string(),
+            "a/b/file.txt".to_string(),
+        ];
+        let parsed = parse_sparse_patterns(&patterns).expect("valid patterns should parse");
+        let as_strings: Vec<String> = parsed
+            .iter()
+            .map(|p| p.as_internal_file_string().to_string())
+            .collect();
+        assert_eq!(as_strings, vec!["src", "docs", "a/b/file.txt"]);
+    }
+
+    #[test]
+    fn parse_sparse_patterns_rejects_invalid() {
+        for bad in ["", "  ", "/abs/path", "../escape", "a/../b"] {
+            let err = parse_sparse_patterns(&[bad.to_string()])
+                .expect_err(&format!("pattern '{}' should be rejected", bad));
+            let msg = format!("{:?}", err);
+            assert!(
+                msg.contains("Invalid sparse pattern"),
+                "error for '{}' should mention the invalid pattern, got: {}",
+                bad,
+                msg
+            );
+        }
     }
 
     #[test]

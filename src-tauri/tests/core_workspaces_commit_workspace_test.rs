@@ -94,6 +94,7 @@ fn test_create_commit_basic() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -132,6 +133,7 @@ fn test_create_commit_empty_workspace() {
         &repo.repo_path,
         "feat/commit-empty",
         Some("empty commit test".to_string()),
+        None,
         None,
         None,
         None,
@@ -193,6 +195,7 @@ fn test_commit_workspace_advances_branch() {
         &repo.repo_path,
         "feat/commit-advance",
         Some("advance test".to_string()),
+        None,
         None,
         None,
         None,
@@ -259,6 +262,7 @@ fn test_create_commit_no_divergence_with_stacked_descendant() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create parent workspace");
     let ws_a_dir = repo.workspaces_dir().join(&ws_a.workspace_path);
@@ -275,6 +279,7 @@ fn test_create_commit_no_divergence_with_stacked_descendant() {
         &repo.repo_path,
         "feat/child",
         Some("child workspace".to_string()),
+        None,
         None,
         None,
         None,
@@ -339,6 +344,7 @@ fn test_create_commit_keeps_empty_working_copy_when_self_targeted() {
         &repo.repo_path,
         "feat/sync-clobber",
         Some("sync clobber test".to_string()),
+        None,
         None,
         None,
         None,

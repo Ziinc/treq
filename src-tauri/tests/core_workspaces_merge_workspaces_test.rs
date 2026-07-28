@@ -20,6 +20,7 @@ fn test_can_rebase_and_merge_workspace() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -140,6 +141,7 @@ fn test_can_merge_workspace_into_home_repo_with_merge_commit_strategy() {
         &repo.repo_path,
         "feature-merge",
         Some("merging feature".to_string()),
+        None,
         None,
         None,
         None,
@@ -281,6 +283,7 @@ fn test_can_squash_and_merge_workspace_into_home_repo() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -374,6 +377,7 @@ fn merge_into_main_succeeds_when_main_plus_empty() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -414,6 +418,7 @@ fn merge_returns_clear_error_when_target_branch_missing() {
         &repo.repo_path,
         "feature-missing-target",
         Some("missing target branch".to_string()),
+        None,
         None,
         None,
         None,

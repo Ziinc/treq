@@ -322,14 +322,16 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
                 .and_then(|v| v.as_str())
                 .map(String::from);
 
-            let (title, description, moved_files) = parse_metadata(metadata.as_deref());
+            let parsed_metadata = treq_lib::core::parse_workspace_metadata(metadata.as_deref());
+            let title = parsed_metadata.title;
             let workspace = treq_lib::core::create_workspace(
                 &repo_path,
                 &branch_name,
-                description,
-                moved_files,
+                parsed_metadata.description,
+                parsed_metadata.moved_files,
                 source_branch.as_deref(),
                 None, // included_copy_files
+                parsed_metadata.sparse_patterns,
             )?;
             if let Some(t) = title {
                 treq_lib::local_db::update_workspace_title(&repo_path, workspace.id, &t)?;
@@ -1067,29 +1069,6 @@ fn get_conflict_style() -> Result<String, String> {
     Ok("git".to_string())
 }
 
-fn parse_metadata(metadata: Option<&str>) -> (Option<String>, Option<String>, Option<Vec<String>>) {
-    let Some(m) = metadata else {
-        return (None, None, None);
-    };
-    let Ok(obj) = serde_json::from_str::<serde_json::Value>(m) else {
-        return (None, None, None);
-    };
-    let title = obj.get("title").and_then(|v| v.as_str()).map(String::from);
-    let description = obj
-        .get("description")
-        .and_then(|v| v.as_str())
-        .map(String::from);
-    let moved_files = obj
-        .get("moved_files")
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str().map(String::from))
-                .collect::<Vec<_>>()
-        })
-        .filter(|v| !v.is_empty());
-    (title, description, moved_files)
-}
 
 #[derive(serde::Serialize)]
 struct DirEntry {

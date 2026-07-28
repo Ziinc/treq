@@ -135,7 +135,7 @@ pub struct WorkspaceNode {
 }
 
 /// Metadata for workspace creation, supporting both simple description and complex metadata with files.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct WorkspaceMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
@@ -143,6 +143,19 @@ pub struct WorkspaceMetadata {
     pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub moved_files: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sparse_patterns: Option<Vec<String>>,
+}
+
+/// Parse the creation metadata JSON sent by the frontend/NAPI callers.
+/// Unknown fields are ignored; empty arrays are normalized to `None`.
+/// Invalid or missing JSON yields an all-`None` metadata.
+pub fn parse_workspace_metadata(metadata: Option<&str>) -> WorkspaceMetadata {
+    let parsed: Option<WorkspaceMetadata> = metadata.and_then(|m| serde_json::from_str(m).ok());
+    let mut parsed = parsed.unwrap_or_default();
+    parsed.moved_files = parsed.moved_files.filter(|v| !v.is_empty());
+    parsed.sparse_patterns = parsed.sparse_patterns.filter(|v| !v.is_empty());
+    parsed
 }
 
 fn resolve_workspace_root(repo_path: &str, workspace_id: Option<i64>) -> Result<String, String> {
@@ -290,7 +303,30 @@ pub fn create_workspace(
     moved_files: Option<Vec<String>>,
     source_branch: Option<&str>,
     included_copy_files: Option<Vec<String>>,
+    sparse_patterns: Option<Vec<String>>,
 ) -> Result<local_db::Workspace, String> {
+    // None and an empty list both mean a full checkout.
+    let sparse_patterns = sparse_patterns.filter(|patterns| !patterns.is_empty());
+
+    // Moved files outside the sparse cone would land in the commit but be invisible on disk.
+    if let (Some(patterns), Some(files)) = (&sparse_patterns, &moved_files) {
+        for file in files {
+            let file = file.trim_end_matches('/');
+            let visible = patterns.iter().any(|pattern| {
+                let pattern = pattern.trim_end_matches('/');
+                file == pattern
+                    || file.starts_with(&format!("{}/", pattern))
+                    || pattern.starts_with(&format!("{}/", file))
+            });
+            if !visible {
+                return Err(format!(
+                    "Moved file '{}' is outside the sparse patterns {:?}; add a covering pattern or deselect the file",
+                    file, patterns
+                ));
+            }
+        }
+    }
+
     let stacked_source_workspace = source_branch
         .map(|src_branch| {
             local_db::get_workspace_by_branch(repo_path, src_branch)
@@ -343,6 +379,7 @@ pub fn create_workspace(
         new_branch,
         resolved_source_branch.as_deref(),
         Some(&effective_target_branch),
+        sparse_patterns.as_deref(),
     )
     .map_err(|e| format!("Failed to create workspace: {}", e))?;
 
@@ -389,6 +426,7 @@ pub fn create_workspace(
         branch_name.to_string(),
         description,
         moved_files.clone(),
+        sparse_patterns.clone(),
     )
     .map_err(|e| format!("Failed to add workspace to db: {}", e))?;
 
@@ -700,6 +738,7 @@ pub fn workspace_status(
                 description: None,
                 moved_files: None,
                 not_on_remote: false,
+                sparse_patterns: None,
             };
 
             return Ok(WorkspaceStatus {
@@ -854,7 +893,8 @@ pub fn workspace_status(
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_hunk_spec, resolve_workspace_diff_base_revision_from_last_rebased,
+        parse_hunk_spec, parse_workspace_metadata,
+        resolve_workspace_diff_base_revision_from_last_rebased,
         resolve_workspace_diff_conflict_marker_style,
         resolve_workspace_diff_tip_revision_from_workspace_state, HunkSpec, WorkspaceMoveRequest,
     };
@@ -865,6 +905,42 @@ mod tests {
     fn env_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    #[test]
+    fn parse_workspace_metadata_full_json() {
+        let parsed = parse_workspace_metadata(Some(
+            r#"{"title":"T","description":"D","moved_files":["a.rs"],"sparse_patterns":["src","docs"]}"#,
+        ));
+        assert_eq!(parsed.title.as_deref(), Some("T"));
+        assert_eq!(parsed.description.as_deref(), Some("D"));
+        assert_eq!(parsed.moved_files, Some(vec!["a.rs".to_string()]));
+        assert_eq!(
+            parsed.sparse_patterns,
+            Some(vec!["src".to_string(), "docs".to_string()])
+        );
+    }
+
+    #[test]
+    fn parse_workspace_metadata_missing_fields_and_empty_arrays() {
+        let parsed = parse_workspace_metadata(Some(
+            r#"{"title":"T","moved_files":[],"sparse_patterns":[]}"#,
+        ));
+        assert_eq!(parsed.title.as_deref(), Some("T"));
+        assert_eq!(parsed.description, None);
+        assert_eq!(parsed.moved_files, None, "empty array should become None");
+        assert_eq!(
+            parsed.sparse_patterns, None,
+            "empty array should become None"
+        );
+
+        let absent = parse_workspace_metadata(None);
+        assert_eq!(absent.title, None);
+        assert_eq!(absent.sparse_patterns, None);
+
+        let invalid = parse_workspace_metadata(Some("not json"));
+        assert_eq!(invalid.title, None);
+        assert_eq!(invalid.sparse_patterns, None);
     }
 
     #[test]

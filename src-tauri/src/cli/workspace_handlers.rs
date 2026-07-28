@@ -41,7 +41,7 @@ pub(super) fn handle_workspace_add(matches: &Matches) {
         None => {
             eprintln!("Error: branch name is required");
             eprintln!(
-                "Usage: treq add <branch_name> [-d description] [-l title] [-s source_branch]"
+                "Usage: treq add <branch_name> [-d description] [-l title] [-s source_branch] [-p sparse_path]..."
             );
             return;
         }
@@ -49,6 +49,8 @@ pub(super) fn handle_workspace_add(matches: &Matches) {
 
     let description = get_arg_value(matches, "description");
     let source_branch = get_arg_value(matches, "source-branch");
+    let sparse_patterns = get_arg_values(matches, "sparse");
+    let sparse_patterns = (!sparse_patterns.is_empty()).then_some(sparse_patterns);
 
     let repo_path = match detect_repo_path() {
         Ok(p) => p,
@@ -71,6 +73,7 @@ pub(super) fn handle_workspace_add(matches: &Matches) {
         None,
         source_branch.as_deref(),
         None,
+        sparse_patterns,
     ) {
         Ok(workspace) => {
             println!("Created workspace: {}", workspace.branch_name);

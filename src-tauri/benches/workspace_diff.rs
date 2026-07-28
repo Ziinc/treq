@@ -31,6 +31,7 @@ fn setup_workspace_diff() -> (TestRepo, i64) {
         None,
         None,
         None,
+        None,
     )
     .expect("failed to create workspace");
 
@@ -66,6 +67,7 @@ fn setup_workspace_diff_ten_files_fifty_added_lines() -> (TestRepo, i64) {
     let workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
         "feat-bench-diff-10-files",
+        None,
         None,
         None,
         None,

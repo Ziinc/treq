@@ -18,6 +18,7 @@ fn setup_workspace_with_remote() -> (TestRepo, treq_lib::local_db::Workspace, St
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 

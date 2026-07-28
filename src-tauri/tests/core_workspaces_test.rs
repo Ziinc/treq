@@ -21,6 +21,7 @@ fn setup_workspace_with_target(
         None,
         None,
         None,
+        None,
     )
     .unwrap_or_else(|e| panic!("Failed to create workspace '{}': {}", branch, e));
 
@@ -43,6 +44,7 @@ fn setup_workspace_with_source(
         Some(format!("test workspace for {}", branch)),
         None,
         Some(source_branch),
+        None,
         None,
     )
     .unwrap_or_else(|e| panic!("Failed to create workspace '{}': {}", branch, e))
@@ -237,6 +239,7 @@ fn test_can_update_workspace() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -270,6 +273,7 @@ fn test_update_workspace_target_branch_perform_rebase() {
         &repo.repo_path,
         "feat/initial",
         Some("initial feature".to_string()),
+        None,
         None,
         None,
         None,
@@ -341,6 +345,7 @@ fn test_update_workspace_target_branch_rebases_workspace_bookmark_lineage() {
         &repo.repo_path,
         "feat/bookmark-rebase",
         Some("bookmark rebase test".to_string()),
+        None,
         None,
         None,
         None,
@@ -425,6 +430,7 @@ fn test_can_list_workspaces() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
     treq_lib::core::create_workspace(
@@ -434,12 +440,14 @@ fn test_can_list_workspaces() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
     treq_lib::core::create_workspace(
         &repo.repo_path,
         "feat/c",
         Some("feature-c".to_string()),
+        None,
         None,
         None,
         None,
@@ -487,6 +495,7 @@ fn test_push_workspace_to_remote() {
         &repo.repo_path,
         "test-workspace",
         Some("test workspace".to_string()),
+        None,
         None,
         None,
         None,
@@ -551,6 +560,7 @@ fn test_push_home_repo_to_remote() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -587,6 +597,7 @@ fn test_rename_workspace_dry_run_valid_name() {
         &repo.repo_path,
         "feat/original",
         Some("original feature".to_string()),
+        None,
         None,
         None,
         None,
@@ -634,6 +645,7 @@ fn test_rename_workspace_dry_run_clashes_with_existing_branch() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace A");
 
@@ -641,6 +653,7 @@ fn test_rename_workspace_dry_run_clashes_with_existing_branch() {
         &repo.repo_path,
         "feat/b",
         Some("feature b".to_string()),
+        None,
         None,
         None,
         None,
@@ -674,6 +687,7 @@ fn test_rename_workspace_dry_run_same_name() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -696,6 +710,7 @@ fn test_rename_workspace_success() {
         &repo.repo_path,
         "feat/original",
         Some("original feature".to_string()),
+        None,
         None,
         None,
         None,
@@ -749,6 +764,7 @@ fn test_rename_workspace_updates_child_target_branches() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create parent workspace");
 
@@ -759,6 +775,7 @@ fn test_rename_workspace_updates_child_target_branches() {
         None,
         None,
         Some(&parent.branch_name),
+        None,
         None,
     )
     .expect("Failed to create child workspace");
@@ -804,6 +821,7 @@ fn test_rename_workspace_sets_not_on_remote() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -833,6 +851,7 @@ fn test_sync_workspaces_forget_deleted_directories() {
         &repo.repo_path,
         "feat/test-recover",
         Some("recovery test".to_string()),
+        None,
         None,
         None,
         None,
@@ -882,6 +901,7 @@ fn test_sync_workspaces_delete_forgotten_directories() {
         &repo.repo_path,
         "feat/test-forgotten",
         Some("forgotten test".to_string()),
+        None,
         None,
         None,
         None,
@@ -953,6 +973,7 @@ fn test_jj_get_changed_files_ignores_gitignored_noise_in_workspace() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -998,6 +1019,7 @@ fn test_jj_get_changed_files_honors_nested_gitignore() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1031,6 +1053,7 @@ fn test_jj_get_changed_files_keeps_tracked_files_visible_after_ignore_rule_added
     let workspace = treq_lib::core::create_workspace(
         &repo.repo_path,
         "feat/tracked-after-ignore",
+        None,
         None,
         None,
         None,
@@ -1106,6 +1129,7 @@ fn test_empty_commits_excluded_from_commits_ahead() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1157,6 +1181,7 @@ fn test_merge_abandons_empty_commits() {
         &repo.repo_path,
         "feat/merge-empty",
         Some("merge empty test".to_string()),
+        None,
         None,
         None,
         None,
@@ -1229,6 +1254,7 @@ fn test_squash_merge_with_empty_commits() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1284,6 +1310,7 @@ fn test_rebase_merge_with_empty_commits() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1334,6 +1361,7 @@ fn test_workspace_status_not_on_remote() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1360,6 +1388,7 @@ fn test_workspace_status_in_sync() {
         &repo.repo_path,
         "feat/in-sync",
         Some("test in sync".to_string()),
+        None,
         None,
         None,
         None,
@@ -1396,6 +1425,7 @@ fn test_workspace_status_ahead_of_remote() {
         &repo.repo_path,
         "feat/ahead",
         Some("test ahead".to_string()),
+        None,
         None,
         None,
         None,
@@ -1437,6 +1467,7 @@ fn test_workspace_status_behind_remote() {
         &repo.repo_path,
         "feat/behind",
         Some("test behind".to_string()),
+        None,
         None,
         None,
         None,
@@ -1508,6 +1539,7 @@ fn test_workspace_status_diverged() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1561,6 +1593,7 @@ fn test_pull_workspace_resolves_divergence() {
         &repo.repo_path,
         "feat/pull-diverged",
         Some("test pull diverged".to_string()),
+        None,
         None,
         None,
         None,
@@ -1645,6 +1678,7 @@ fn test_pull_workspace_from_remote_branch_stack_handles_conflicted_bookmark() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create parent workspace from remote branch");
     let child = treq_lib::core::create_workspace(
@@ -1653,6 +1687,7 @@ fn test_pull_workspace_from_remote_branch_stack_handles_conflicted_bookmark() {
         Some("stacked child".to_string()),
         None,
         Some(&parent.branch_name),
+        None,
         None,
     )
     .expect("Failed to create stacked child workspace");
@@ -1715,6 +1750,7 @@ fn test_pull_workspace_no_divergence() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1756,6 +1792,7 @@ fn test_jj_get_sync_status_baseline_in_sync() {
         &repo.repo_path,
         "feat/sync-baseline",
         Some("sync status baseline test".to_string()),
+        None,
         None,
         None,
         None,
@@ -1820,6 +1857,7 @@ fn test_jj_get_sync_status_ahead_after_local_commit() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1865,6 +1903,7 @@ fn test_jj_get_sync_status_returns_to_sync_after_push() {
         &repo.repo_path,
         "feat/sync-push",
         Some("sync status push test".to_string()),
+        None,
         None,
         None,
         None,
@@ -1940,6 +1979,7 @@ fn test_jj_get_sync_status_multiple_commits_ahead() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -1990,6 +2030,7 @@ fn test_workspace_push_pull_with_workspace_status() {
         &repo.repo_path,
         "feat/status-sync-test",
         Some("workspace status sync test".to_string()),
+        None,
         None,
         None,
         None,
@@ -2204,6 +2245,7 @@ fn test_workspace_status_ignores_gitignored_noise() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
@@ -2247,6 +2289,7 @@ fn test_workspace_status_with_workspace_id() {
         &repo.repo_path,
         "feat/ws-status-test",
         Some("workspace status test".to_string()),
+        None,
         None,
         None,
         None,
