@@ -89,7 +89,7 @@ it("captures the header sync indicator before and after committing from the Revi
 		name: "header-sync-indicator-02-after-commit",
 		expectations: [
 			"The header now shows an '↑1' sync indicator with the circular refresh-arrows icon, just left of the green 'Merge...' button -- it appeared without navigating away from this workspace.",
-			"A green 'Commit created' toast is visible in the bottom-left corner.",
+			"A 'Commit created' toast with a green check icon is visible in the bottom-left corner.",
 			"The Review tab's left sidebar no longer has a 'Changes' section; sync-indicator.txt now sits under 'Committed', tagged 'A'.",
 		],
 	});
