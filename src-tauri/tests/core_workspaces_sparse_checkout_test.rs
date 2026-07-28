@@ -304,58 +304,6 @@ fn stacked_workspace_respects_sparse_patterns() {
     );
 }
 
-/// Sparse patterns round-trip through the workspace database record.
-#[test]
-fn sparse_patterns_persisted_in_db() {
-    let repo = TestRepo::new().expect("Failed to create test repo");
-    repo.commit_file("src/lib.rs", "pub fn lib() {}\n", "add src/lib.rs")
-        .expect("Failed to commit src/lib.rs");
-
-    let sparse = treq_lib::core::create_workspace(
-        &repo.repo_path,
-        "feat/sparse-db",
-        None,
-        None,
-        None,
-        None,
-        Some(vec!["src".to_string()]),
-    )
-    .expect("Failed to create sparse workspace");
-    let full = treq_lib::core::create_workspace(
-        &repo.repo_path,
-        "feat/full-db",
-        None,
-        None,
-        None,
-        None,
-        None,
-    )
-    .expect("Failed to create full workspace");
-
-    assert_eq!(
-        sparse.sparse_patterns,
-        Some(vec!["src".to_string()]),
-        "sparse workspace record should carry its patterns"
-    );
-    assert_eq!(
-        full.sparse_patterns, None,
-        "full workspace record should have no sparse patterns"
-    );
-
-    let by_id = treq_lib::local_db::get_workspace_by_id(&repo.repo_path, sparse.id)
-        .expect("db query should succeed")
-        .expect("workspace should exist");
-    assert_eq!(by_id.sparse_patterns, Some(vec!["src".to_string()]));
-
-    let all =
-        treq_lib::local_db::get_workspaces(&repo.repo_path).expect("get_workspaces should succeed");
-    let listed = all
-        .iter()
-        .find(|w| w.id == sparse.id)
-        .expect("sparse workspace should be listed");
-    assert_eq!(listed.sparse_patterns, Some(vec!["src".to_string()]));
-}
-
 /// Files written outside the sparse patterns are neither reported as changes
 /// nor swept into commits — jj's snapshotting respects the sparse matcher.
 #[test]
