@@ -56,14 +56,9 @@ it("captures all four toast type styles", async () => {
 	await captureDocument(document, {
 		name: "toast-styles-01-all-types",
 		expectations: [
-			"Four stacked toasts are visible in the bottom-left corner of the page.",
-			"Every toast shares the same neutral card-like surface (light background, subtle border, drop shadow, rounded corners) rather than a solid saturated color fill.",
-			"The 'Synced with remote' toast shows a green circular check icon on its left.",
-			"The 'Push failed' toast shows a red/destructive circular alert (exclamation) icon on its left, the same style used for errors elsewhere in the app (e.g. the rename workspace dialog).",
-			"The 'Uncommitted changes' toast shows a yellow triangle warning icon on its left, matching the yellow warning color used elsewhere in the app (e.g. the merge dialog's uncommitted-changes banner).",
-			"The 'Terminal Restarting' toast shows a blue/primary-colored info icon on its left.",
-			"Each toast has a bold title line and a smaller, muted-colored description line below it.",
-			"Each toast has a small close (X) button on its right edge.",
+			"Four stacked toasts are visible in the bottom-left corner, and every one of them shares the same neutral card-like surface (light background, subtle border, drop shadow, rounded corners) rather than a solid saturated color fill.",
+			"Each toast carries its type icon on the left: a green circular check on 'Synced with remote', a red/destructive circular alert (exclamation) on 'Push failed', a yellow triangle warning on 'Uncommitted changes', and a blue/primary info icon on 'Terminal Restarting'.",
+			"Each toast has a bold title line, a smaller muted-colored description line below it, and a small close (X) button on its right edge.",
 		],
 	});
 }, 30000);
@@ -83,12 +78,8 @@ it("captures all four toast type styles in dark mode", async () => {
 	await captureDocument(document, {
 		name: "toast-styles-02-all-types-dark",
 		expectations: [
-			"The page background is dark (dark mode is active).",
-			"Four stacked toasts are visible in the bottom-left corner, using a dark neutral surface consistent with the rest of the dark-mode UI, not a solid saturated color fill.",
-			"The 'Synced with remote' toast shows a green check icon.",
-			"The 'Push failed' toast shows a red/destructive circular alert (exclamation) icon.",
-			"The 'Uncommitted changes' toast shows a yellow triangle warning icon.",
-			"The 'Terminal Restarting' toast shows a blue/primary info icon.",
+			"The page background is dark (dark mode is active), and the four stacked toasts in the bottom-left corner use a dark neutral surface consistent with the rest of the dark-mode UI, not a solid saturated color fill.",
+			"Each toast carries its type icon: a green check on 'Synced with remote', a red/destructive circular alert (exclamation) on 'Push failed', a yellow triangle warning on 'Uncommitted changes', and a blue/primary info icon on 'Terminal Restarting'.",
 			"Toast title and description text is legible against the dark background.",
 		],
 	});

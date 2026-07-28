@@ -137,10 +137,9 @@ it("captures workspace state before and after syncing a fresh commit", async () 
 	await captureDocument(document, {
 		name: "sync-after-commit-02-after-sync",
 		expectations: [
-			"'Commit that must survive sync' is still listed in the Commits tab, in the same position as the before screenshot.",
+			"'Commit that must survive sync' is still listed in the Commits tab, in the same position as the before screenshot, with no empty '(no description set)' commit above it.",
 			"A toast in the bottom-left with a green check icon reads 'Synced with remote' / 'Fetched and pushed changes'.",
 			"The '↑1' ahead indicator is gone from the header — the workspace is now in sync with the remote.",
-			"No empty '(no description set)' commit appears above the real commit.",
 		],
 	});
 

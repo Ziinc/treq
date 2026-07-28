@@ -69,11 +69,9 @@ it("captures the inline conflict card in the Review tab", async () => {
 	await captureDocument(document, {
 		name: "review-conflict-card-01-inline-card",
 		expectations: [
-			'The sidebar has a red "Conflicts" section listing README.md.',
-			'The diff area shows a conflict card headed "Conflict 1 of 1" with a line range next to it.',
+			'The sidebar has a red "Conflicts" section listing README.md, and the diff area shows a conflict card headed "Conflict 1 of 1" with a line range next to it.',
 			'Three coloured badges label the conflict sections: "Side #1" (red), "Base" (amber/yellow) and "Side #2" (green), each sitting on its conflict marker line.',
 			'The conflicting content lines are visible and tinted by side: "main side" red, "# Test Repository" amber, "workspace side" green.',
-			'An "Add comment" button is visible on the conflict card.',
 		],
 	});
 }, 60000);

@@ -99,8 +99,7 @@ it("captures the stack panel and navigation to a sibling workspace", async () =>
 		expectations: [
 			`In the Code tab's main column, a bordered "Stack" panel reading "1 of 2" appears below the task/prompt input box and above the "Go to file" search row and file list.`,
 			`The stack panel lists two items, top-to-bottom: "${CHILD_BRANCH}" and "${PARENT_BRANCH}".`,
-			`The "${CHILD_BRANCH}" item is visually highlighted/current (filled dot, highlighted background) and shows a green "+4" line-change count; the "${PARENT_BRANCH}" item is not highlighted and shows no line-change count.`,
-			`The header's branch name reads "${CHILD_BRANCH}".`,
+			`The "${CHILD_BRANCH}" item is visually highlighted/current (filled dot, highlighted background) and shows a green "+4" line-change count, matching the header's branch name; the "${PARENT_BRANCH}" item is not highlighted and shows no line-change count.`,
 		],
 	});
 
