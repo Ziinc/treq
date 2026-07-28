@@ -89,7 +89,10 @@ export const TargetBranchSelector: React.FC<TargetBranchSelectorProps> = ({
 										}}
 										className="branch-list-item px-3 py-1.5 flex items-center gap-2 cursor-pointer aria-selected:bg-accent font-mono"
 									>
-										<span className="flex-1 truncate min-w-0" title={branch.name}>
+										<span
+											className="flex-1 truncate min-w-0"
+											title={branch.name}
+										>
 											{branch.name}
 										</span>
 										{branch.name === targetBranch && (
