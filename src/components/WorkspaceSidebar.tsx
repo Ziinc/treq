@@ -1,6 +1,5 @@
+import { DragDropContext, Droppable, type DropResult } from "@hello-pangea/dnd";
 import { useQuery } from "@tanstack/react-query";
-import { memo, useCallback, useMemo, useState } from "react";
-import { DragDropContext, type DropResult, Droppable } from "@hello-pangea/dnd";
 import {
 	GitBranch,
 	Github,
@@ -9,17 +8,22 @@ import {
 	Settings,
 	Trash2,
 } from "lucide-react";
+import { memo, useCallback, useMemo, useState } from "react";
 import {
-	type Workspace,
+	useGitRemoteInfo,
+	useMergeQueueEnabled,
+} from "../hooks/useMergeQueueStatus";
+import {
 	getWorkspaceStatus,
 	getWorkspaces,
 	listWorkspaceStatuses,
+	type Workspace,
 } from "../lib/api";
 import type {
-	WorkspaceSidebarStatus,
 	QueueEntryStatus,
+	WorkspaceSidebarStatus,
 } from "../lib/api-types";
-import { useGitRemoteInfo } from "../hooks/useMergeQueueStatus";
+import { FEATURES } from "../lib/features";
 import { supabase } from "../lib/supabase";
 import {
 	buildWorkspaceTree,
@@ -128,6 +132,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 		});
 
 		const { data: remoteInfo } = useGitRemoteInfo(repoPath);
+		const { data: queueEnabled } = useMergeQueueEnabled(repoPath);
 		const { data: branchQueueStatuses } = useQuery({
 			queryKey: ["repo-branch-queue-statuses", remoteInfo?.full_name],
 			queryFn: async () => {
@@ -143,7 +148,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 				}
 				return map;
 			},
-			enabled: !!remoteInfo,
+			enabled: FEATURES.mergeQueue && queueEnabled === true && !!remoteInfo,
 			refetchInterval: 30_000,
 		});
 

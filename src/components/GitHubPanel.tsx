@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
@@ -7,21 +6,32 @@ import {
 	Github,
 	GitMerge,
 	GitPullRequest,
+	Layers2,
 	Loader2,
 	Plus,
 	RefreshCw,
 	Rocket,
+	X,
 } from "lucide-react";
-import { Button } from "./ui/button";
-import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
+import { useEffect, useState } from "react";
 import { useAuth } from "../hooks/useAuth";
-import { useGitRemoteInfo } from "../hooks/useMergeQueueStatus";
+import {
+	useDequeueBranches,
+	useGitRemoteInfo,
+	useMergeQueueEnabled,
+	useSetMergeQueueEnabled,
+} from "../hooks/useMergeQueueStatus";
 import { GH_LIST_PAGE_SIZE, ghListIssues, ghListPrs } from "../lib/api";
 import type { QueueEntryStatus } from "../lib/api-types";
-import { WEB_URL, supabase } from "../lib/supabase";
+import { FEATURES } from "../lib/features";
+import { buildQueueStacks, type QueueEntry } from "../lib/merge-queue-stacks";
+import { supabase, WEB_URL } from "../lib/supabase";
 import { CreateIssueForm, IssueDetailPanel } from "./github-panel/IssueDetail";
 import { CreatePrForm, PrDetailPanel } from "./github-panel/PrDetail";
 import { EmptyState, IssueListItem, PrListItem } from "./github-panel/shared";
+import { Button } from "./ui/button";
+import { Switch } from "./ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 
 type TabValue = "issues" | "prs" | "merge-queue";
 type StateFilter = "open" | "closed" | "all";
@@ -31,13 +41,6 @@ interface GitHubPanelProps {
 	/** When set, opens the PRs tab and selects this PR. */
 	initialPrNumber?: number | null;
 	onInitialPrConsumed?: () => void;
-}
-
-interface QueueBranchEntry {
-	branch_name: string;
-	status: QueueEntryStatus;
-	position: number;
-	target_branch: string;
 }
 
 const FILTERS: { label: string; value: StateFilter }[] = [
@@ -52,8 +55,8 @@ function queueStatusLabel(status: QueueEntryStatus): string {
 			return "Queued";
 		case "testing":
 			return "Testing";
-		case "passed":
-			return "Passed";
+		case "merging":
+			return "Merging";
 		case "merged":
 			return "Merged";
 		case "failed":
@@ -71,7 +74,7 @@ function QueueStatusChip({ status }: { status: QueueEntryStatus }) {
 			? "bg-amber-500/20 text-amber-600 dark:text-amber-400"
 			: status === "failed"
 				? "bg-red-500/20 text-red-600 dark:text-red-400"
-				: status === "merged" || status === "passed"
+				: status === "merged" || status === "merging"
 					? "bg-green-500/20 text-green-600 dark:text-green-400"
 					: "bg-muted text-muted-foreground";
 
@@ -127,7 +130,12 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 		subscription?.plan === "pro" && subscription.status === "active";
 	const { data: remoteInfo, isLoading: remoteLoading } =
 		useGitRemoteInfo(repoPath);
+	const { data: queueEnabled, isLoading: queueEnabledLoading } =
+		useMergeQueueEnabled(repoPath);
+	const setQueueEnabled = useSetMergeQueueEnabled(repoPath);
+	const dequeueBranches = useDequeueBranches(repoPath);
 	const [activeTab, setActiveTab] = useState<TabValue>("issues");
+	const [queueToggleError, setQueueToggleError] = useState<string | null>(null);
 	const [issueFilter, setIssueFilter] = useState<StateFilter>("open");
 	const [prFilter, setPrFilter] = useState<StateFilter>("open");
 	const [selectedIssue, setSelectedIssue] = useState<number | null>(null);
@@ -196,14 +204,21 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 				{ p_repo_full_name: repoFullName },
 			);
 			if (error) throw error;
-			return ((data ?? []) as QueueBranchEntry[]).slice().sort((a, b) => {
+			return ((data ?? []) as QueueEntry[]).slice().sort((a, b) => {
 				if (a.position !== b.position) return a.position - b.position;
 				return a.branch_name.localeCompare(b.branch_name);
 			});
 		},
-		enabled: !!repoFullName && activeTab === "merge-queue" && isPro,
+		enabled:
+			FEATURES.mergeQueue &&
+			queueEnabled === true &&
+			!!repoFullName &&
+			activeTab === "merge-queue" &&
+			isPro,
 		refetchInterval: 30_000,
 	});
+
+	const queueStacks = buildQueueStacks(queueEntries);
 
 	const isListLoading = activeTab === "issues" ? issuesLoading : prsLoading;
 	const currentFilter = activeTab === "issues" ? issueFilter : prFilter;
@@ -277,17 +292,19 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 						<TabsList className="text-base">
 							<TabsTrigger value="issues">Issues</TabsTrigger>
 							<TabsTrigger value="prs">Pull Requests</TabsTrigger>
-							<TabsTrigger
-								value="merge-queue"
-								className="inline-flex items-center gap-1.5"
-							>
-								Merge Queue
-								{!isPro && (
-									<span className="text-base font-semibold tracking-wide px-1 py-px rounded bg-green-500/20 text-green-700 dark:text-green-400 leading-none">
-										PRO
-									</span>
-								)}
-							</TabsTrigger>
+							{FEATURES.mergeQueue && (
+								<TabsTrigger
+									value="merge-queue"
+									className="inline-flex items-center gap-1.5"
+								>
+									Merge Queue
+									{!isPro && (
+										<span className="text-base font-semibold tracking-wide px-1 py-px rounded bg-green-500/20 text-green-700 dark:text-green-400 leading-none">
+											PRO
+										</span>
+									)}
+								</TabsTrigger>
+							)}
 						</TabsList>
 					</Tabs>
 				</div>
@@ -448,32 +465,156 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 
 					{remoteInfo && activeTab === "merge-queue" && isPro && (
 						<>
-							{queueLoading ? (
+							<div
+								data-testid="merge-queue-toggle-row"
+								className="flex items-center justify-between gap-3 px-3 py-2.5 border-b border-border"
+							>
+								<div className="min-w-0">
+									<p className="text-base font-medium">Merge queue</p>
+									<p className="text-base text-muted-foreground">
+										{queueEnabled
+											? "Enabled for this repository."
+											: "Turn on the merge queue to start adding branches."}
+									</p>
+								</div>
+								<div className="flex items-center gap-2 shrink-0">
+									{setQueueEnabled.isPending && (
+										<Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+									)}
+									<Switch
+										aria-label="Enable merge queue"
+										checked={queueEnabled === true}
+										disabled={queueEnabledLoading || setQueueEnabled.isPending}
+										onCheckedChange={async (next) => {
+											setQueueToggleError(null);
+											try {
+												await setQueueEnabled.mutateAsync(next);
+											} catch (err) {
+												setQueueToggleError((err as Error).message);
+											}
+										}}
+									/>
+								</div>
+							</div>
+
+							{queueToggleError && (
+								<div className="flex items-start gap-2 px-3 py-2 border-b border-border text-base text-destructive">
+									<AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+									<span>{queueToggleError}</span>
+								</div>
+							)}
+
+							{!queueEnabled ? (
+								<EmptyState
+									icon={GitMerge}
+									message="The merge queue is off for this repository."
+								/>
+							) : queueLoading ? (
 								<div className="flex items-center justify-center py-12">
 									<Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
 								</div>
 							) : queueEntries.length === 0 ? (
 								<EmptyState icon={GitMerge} message="Merge queue is empty." />
 							) : (
-								queueEntries.map((entry) => (
-									<div
-										key={`${entry.branch_name}-${entry.position}`}
-										className="px-3 py-2.5 border-b border-border"
-									>
-										<div className="flex items-center gap-2 flex-wrap">
-											<QueueStatusChip status={entry.status} />
-											<span className="text-base text-muted-foreground">
-												#{entry.position}
-											</span>
-										</div>
-										<p className="text-base font-medium font-mono mt-0.5 truncate">
-											{entry.branch_name}
-										</p>
-										<p className="text-base text-muted-foreground mt-1">
-											→ {entry.target_branch}
-										</p>
-									</div>
-								))
+								<div className="p-3 space-y-3">
+									{queueStacks.map((stack) => {
+										const isStack = stack.entries.length > 1;
+										const stackKey = stack.entries[0].branch_name;
+										return (
+											<div
+												key={stackKey}
+												data-testid={
+													isStack
+														? `merge-queue-stack-${stackKey}`
+														: `merge-queue-single-${stackKey}`
+												}
+												className={
+													isStack
+														? "rounded-md border border-border bg-muted/20"
+														: "rounded-md border border-border"
+												}
+											>
+												{isStack && (
+													<div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+														<Layers2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+														<span className="text-base font-medium">
+															Stack of {stack.entries.length}
+														</span>
+														<span className="text-base text-muted-foreground truncate">
+															merges bottom-up into {stack.targetBranch}
+														</span>
+														<div className="flex-1" />
+														<Button
+															variant="ghost"
+															size="sm"
+															className="h-7 text-base shrink-0"
+															disabled={dequeueBranches.isPending}
+															aria-label={`Remove stack of ${stack.entries.length} from queue`}
+															onClick={() =>
+																dequeueBranches.mutate(
+																	stack.entries.map((e) => e.branch_name),
+																)
+															}
+														>
+															<X className="w-3.5 h-3.5 mr-1" />
+															Remove stack
+														</Button>
+													</div>
+												)}
+												{stack.entries.map((entry, indexInStack) => (
+													<div
+														key={entry.branch_name}
+														data-testid={`merge-queue-entry-${entry.position}`}
+														className={`flex items-start gap-2 px-3 py-2.5 ${
+															indexInStack > 0 ? "border-t border-border" : ""
+														}`}
+													>
+														<div className="min-w-0 flex-1">
+															<div className="flex items-center gap-2 flex-wrap">
+																<span className="text-base text-muted-foreground tabular-nums">
+																	#{entry.position}
+																</span>
+																<span className="text-base font-medium">
+																	{entry.pr_number != null
+																		? `PR #${entry.pr_number}`
+																		: "No PR"}
+																</span>
+																<QueueStatusChip status={entry.status} />
+															</div>
+															<p className="text-base font-mono text-muted-foreground mt-0.5 truncate">
+																{entry.branch_name} → {entry.target_branch}
+															</p>
+														</div>
+														<Button
+															variant="ghost"
+															size="icon"
+															className="h-7 w-7 shrink-0"
+															disabled={dequeueBranches.isPending}
+															aria-label={`Remove ${entry.branch_name} from queue`}
+															title={
+																isStack
+																	? "Remove this branch (and anything stacked above it)"
+																	: "Remove from queue"
+															}
+															onClick={() =>
+																dequeueBranches.mutate(
+																	// Removing a branch mid-stack would strand
+																	// everything built on top of it, so take the
+																	// whole upper part of the stack with it.
+																	stack.entries
+																		.slice(indexInStack)
+																		.map((e) => e.branch_name),
+																)
+															}
+														>
+															<X className="w-3.5 h-3.5" />
+														</Button>
+													</div>
+												))}
+											</div>
+										);
+									})}
+								</div>
 							)}
 						</>
 					)}

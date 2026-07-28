@@ -21,7 +21,10 @@ const BRANCH_NAME = "feat/merge-queue-demo";
 // spec can walk the workspace through each queue state the backend can emit.
 const { queueState, mockInvoke, mockGetPrInfoViaGh, mockGetGitRemoteUrl } =
 	vi.hoisted(() => ({
-		queueState: { current: null as WorkspaceQueueStatus | null },
+		queueState: {
+			current: null as WorkspaceQueueStatus | null,
+			enabled: true,
+		},
 		mockInvoke: vi.fn(),
 		mockGetPrInfoViaGh: vi.fn(),
 		mockGetGitRemoteUrl: vi.fn(),
@@ -39,6 +42,13 @@ vi.mock("../../../src/lib/features", () => ({
 vi.mock("../../../src/lib/supabase", () => ({
 	supabase: {
 		rpc: vi.fn(async (fn: string) => {
+			if (fn === "get_merge_queue_enabled") {
+				return { data: queueState.enabled, error: null };
+			}
+			if (fn === "set_merge_queue_enabled") {
+				queueState.enabled = true;
+				return { data: true, error: null };
+			}
 			if (fn === "get_workspace_queue_status") {
 				return {
 					data: queueState.current ? [queueState.current] : [],
@@ -51,7 +61,10 @@ vi.mock("../../../src/lib/supabase", () => ({
 						? [
 								{
 									branch_name: BRANCH_NAME,
+									pr_number: queueState.current.pr_number,
 									status: queueState.current.status,
+									position: queueState.current.position,
+									target_branch: queueState.current.target_branch,
 								},
 							]
 						: [],
@@ -97,13 +110,13 @@ const REMOTE_INFO = {
 };
 
 function entry(
-	status: WorkspaceQueueStatus["status"] | "merging",
+	status: WorkspaceQueueStatus["status"],
 	overrides: Partial<WorkspaceQueueStatus> = {},
 ): WorkspaceQueueStatus {
 	return {
 		entry_id: "00000000-0000-0000-0000-000000000001",
 		pr_number: 42,
-		status: status as WorkspaceQueueStatus["status"],
+		status,
 		position: 1,
 		target_branch: "main",
 		lane_number: null,
@@ -180,6 +193,7 @@ function stubHappyPath() {
 	mockInvoke.mockReset();
 	mockInvoke.mockResolvedValue({ data: { ok: true }, error: null });
 	mockGetGitRemoteUrl.mockResolvedValue(REMOTE_INFO);
+	queueState.enabled = true;
 }
 
 it("captures enqueuing a workspace into the merge queue", async () => {
@@ -242,12 +256,15 @@ it("captures the testing state (CI running in a lane)", async () => {
 	render(<Dashboard />);
 	await createAndPushWorkspace(user, repoPath);
 
-	await screen.findByRole("button", { name: /testing/i });
+	await screen.findByRole("button", { name: /queue #1/i });
+	expect(
+		screen.queryByRole("button", { name: /testing/i }),
+	).not.toBeInTheDocument();
 	await captureDocument(document, {
 		name: "merge-queue-03-testing",
 		expectations: [
-			'The queue button reads "Testing…" instead of a position number.',
-			"The sidebar dot for the workspace is blue rather than yellow.",
+			'The queue button reads "Queue #1" -- the header deliberately does not surface a "Testing…" label any more.',
+			"The sidebar dot for the workspace is blue (CI running) rather than yellow.",
 		],
 	});
 }, 120000);
@@ -269,8 +286,8 @@ it("captures the merging state, which the frontend has no case for", async () =>
 		name: "merge-queue-04-merging",
 		expectations: [
 			"The entry is in the backend 'merging' state (the queue is landing it now).",
-			'The queue button falls back to "Queue #1" -- there is no distinct merging label.',
-			"The sidebar dot is a neutral grey/muted dot, not green or blue: queueStatusDot has no 'merging' case and hits its default branch.",
+			'The queue button reads "Queue #1".',
+			"The sidebar dot for the workspace is green (passed CI, merging now) -- not the neutral grey it used to be before 'merging' had a case.",
 		],
 	});
 }, 120000);

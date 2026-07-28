@@ -1,10 +1,10 @@
-import * as React from "react";
-import { render, screen, waitFor, within } from "../test-utils";
 import userEvent from "@testing-library/user-event";
+import * as React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GitHubPanel } from "../../src/components/GitHubPanel";
 import { IssueDetailPanel } from "../../src/components/github-panel/IssueDetail";
 import { PrDetailPanel } from "../../src/components/github-panel/PrDetail";
+import { render, screen, waitFor, within } from "../test-utils";
 
 const auth = vi.hoisted(() => ({
 	user: { id: "user-1" } as object | null,
@@ -34,9 +34,27 @@ const api = vi.hoisted(() => ({
 
 const supabaseRpc = vi.hoisted(() => vi.fn());
 
+const queueEnabled = vi.hoisted(() => ({
+	current: true,
+	setEnabled: vi.fn(),
+	dequeue: vi.fn(),
+}));
+
 vi.mock("../../src/hooks/useAuth", () => ({ useAuth: () => auth }));
 vi.mock("../../src/hooks/useMergeQueueStatus", () => ({
 	useGitRemoteInfo: () => remoteInfo,
+	useMergeQueueEnabled: () => ({
+		data: queueEnabled.current,
+		isLoading: false,
+	}),
+	useSetMergeQueueEnabled: () => ({
+		mutateAsync: queueEnabled.setEnabled,
+		isPending: false,
+	}),
+	useDequeueBranches: () => ({
+		mutate: queueEnabled.dequeue,
+		isPending: false,
+	}),
 }));
 vi.mock("../../src/lib/api", async (importOriginal) => {
 	const original = await importOriginal<typeof import("../../src/lib/api")>();
@@ -98,6 +116,9 @@ describe("GitHubPanel", () => {
 
 	beforeEach(() => {
 		auth.subscription = null;
+		queueEnabled.current = true;
+		queueEnabled.setEnabled.mockReset();
+		queueEnabled.dequeue.mockReset();
 		remoteInfo.data = {
 			full_name: "acme/treq",
 			owner: "acme",
@@ -107,6 +128,7 @@ describe("GitHubPanel", () => {
 		api.ghListIssues.mockResolvedValue({ items: [], hasMore: false });
 		api.ghListPrs.mockResolvedValue({ items: [], hasMore: false });
 		api.ghCreateIssueComment.mockReset();
+		supabaseRpc.mockReset();
 		supabaseRpc.mockResolvedValue({ data: [], error: null });
 		user = userEvent.setup();
 	});
@@ -145,12 +167,14 @@ describe("GitHubPanel", () => {
 			data: [
 				{
 					branch_name: "feat/alpha",
+					pr_number: 11,
 					status: "queued",
 					position: 1,
 					target_branch: "main",
 				},
 				{
 					branch_name: "feat/beta",
+					pr_number: 12,
 					status: "testing",
 					position: 2,
 					target_branch: "main",
@@ -166,10 +190,111 @@ describe("GitHubPanel", () => {
 		expect(within(mergeQueueTab).queryByText("PRO")).not.toBeInTheDocument();
 
 		await user.click(mergeQueueTab);
-		expect(await screen.findByText("feat/alpha")).toBeVisible();
-		expect(screen.getByText("feat/beta")).toBeVisible();
+		expect(await screen.findByText("PR #11")).toBeVisible();
+		expect(screen.getByText("PR #12")).toBeVisible();
+		expect(screen.getByText("feat/alpha → main")).toBeVisible();
+		expect(screen.getByText("feat/beta → main")).toBeVisible();
 		expect(screen.getByText(/queued/i)).toBeVisible();
 		expect(screen.getByText(/testing/i)).toBeVisible();
+	});
+
+	it("hides the queue and offers an opt-in when the repo has it disabled", async () => {
+		auth.subscription = { plan: "pro", status: "active" };
+		queueEnabled.current = false;
+
+		render(<GitHubPanel repoPath="/tmp/repo" />);
+		await user.click(screen.getByRole("tab", { name: /merge queue/i }));
+
+		expect(
+			await screen.findByText(/merge queue is off for this repository/i),
+		).toBeVisible();
+		const toggle = screen.getByRole("switch", {
+			name: /enable merge queue/i,
+		});
+		expect(toggle).toBeVisible();
+		expect(toggle).toHaveAttribute("aria-checked", "false");
+		// A disabled repo must not be polled for queue contents.
+		expect(supabaseRpc).not.toHaveBeenCalled();
+	});
+
+	it("turns the queue on for the repo from the Merge Queue tab", async () => {
+		auth.subscription = { plan: "pro", status: "active" };
+		queueEnabled.current = false;
+		supabaseRpc.mockResolvedValue({ data: [], error: null });
+
+		render(<GitHubPanel repoPath="/tmp/repo" />);
+		await user.click(screen.getByRole("tab", { name: /merge queue/i }));
+		await user.click(
+			await screen.findByRole("switch", { name: /enable merge queue/i }),
+		);
+
+		await waitFor(() => {
+			expect(queueEnabled.setEnabled).toHaveBeenCalledWith(true);
+		});
+	});
+
+	it("groups stacked branches into a block and removes them together", async () => {
+		auth.subscription = { plan: "pro", status: "active" };
+		supabaseRpc.mockResolvedValue({
+			data: [
+				{
+					branch_name: "feat/base",
+					pr_number: 11,
+					status: "queued",
+					position: 1,
+					target_branch: "main",
+				},
+				{
+					branch_name: "feat/top",
+					pr_number: 12,
+					status: "queued",
+					position: 2,
+					target_branch: "feat/base",
+				},
+			],
+			error: null,
+		});
+
+		render(<GitHubPanel repoPath="/tmp/repo" />);
+		await user.click(screen.getByRole("tab", { name: /merge queue/i }));
+
+		expect(await screen.findByText("Stack of 2")).toBeVisible();
+		expect(screen.getByText(/merges bottom-up into main/i)).toBeVisible();
+
+		await user.click(
+			screen.getByRole("button", { name: "Remove stack of 2 from queue" }),
+		);
+		expect(queueEnabled.dequeue).toHaveBeenCalledWith([
+			"feat/base",
+			"feat/top",
+		]);
+	});
+
+	it("removes only the branch itself when it has nothing stacked on it", async () => {
+		auth.subscription = { plan: "pro", status: "active" };
+		supabaseRpc.mockResolvedValue({
+			data: [
+				{
+					branch_name: "fix/solo",
+					pr_number: 11,
+					status: "queued",
+					position: 1,
+					target_branch: "main",
+				},
+			],
+			error: null,
+		});
+
+		render(<GitHubPanel repoPath="/tmp/repo" />);
+		await user.click(screen.getByRole("tab", { name: /merge queue/i }));
+
+		await screen.findByText("PR #11");
+		expect(screen.queryByText(/^Stack of/)).not.toBeInTheDocument();
+
+		await user.click(
+			screen.getByRole("button", { name: "Remove fix/solo from queue" }),
+		);
+		expect(queueEnabled.dequeue).toHaveBeenCalledWith(["fix/solo"]);
 	});
 
 	it("shows Load more when more issues are available", async () => {

@@ -1,21 +1,21 @@
 import { Draggable } from "@hello-pangea/dnd";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
+	AlertTriangle,
 	Bot,
 	Copy,
 	FolderOpen,
 	GitBranch,
-	AlertTriangle,
 	Layers2,
 	Pencil,
 	Terminal,
 	Trash2,
 } from "lucide-react";
-import type { Workspace, QueueEntryStatus } from "../lib/api";
-import type { FlattenedWorkspaceNode } from "../lib/workspace-tree";
-import { cn, getFullWorkspacePath } from "../lib/utils";
-import { getWorkspaceTitle as getWorkspaceTitleFromUtils } from "../lib/workspace-utils";
 import { useEditorApps } from "../hooks/useEditorApps";
+import type { QueueEntryStatus, Workspace } from "../lib/api";
+import { cn, getFullWorkspacePath } from "../lib/utils";
+import type { FlattenedWorkspaceNode } from "../lib/workspace-tree";
+import { getWorkspaceTitle as getWorkspaceTitleFromUtils } from "../lib/workspace-utils";
 import { Button } from "./ui/button";
 import {
 	ContextMenu,
@@ -139,8 +139,11 @@ function queueStatusDot(status: QueueEntryStatus): {
 				color: "bg-blue-400 animate-pulse",
 				label: "CI running in merge queue",
 			};
-		case "passed":
-			return { color: "bg-green-400", label: "Passed CI, awaiting merge" };
+		case "merging":
+			return {
+				color: "bg-green-400 animate-pulse",
+				label: "Passed CI, merging now",
+			};
 		case "merged":
 			return { color: "bg-green-600", label: "Merged via queue" };
 		case "failed":
