@@ -41,6 +41,16 @@ const xtermCss = fs.existsSync(xtermCssPath)
 	? fs.readFileSync(xtermCssPath, "utf8")
 	: "";
 
-fs.writeFileSync(outFile, `${xtermCss}\n${result.css}\n`);
+// Captures are rasterized from a file:// page, where the app's server-absolute
+// /fonts/*.woff2 URLs would resolve against the filesystem root and 404. Point
+// them at the real files under src/public so screenshots show the webfonts the
+// app actually ships with instead of silently falling back to a system font.
+const fontsDir = path.join(repoRoot, "src", "public", "fonts");
+const css = result.css.replace(
+	/url\((["']?)\/fonts\//g,
+	(_match, quote) => `url(${quote}file://${fontsDir}/`,
+);
+
+fs.writeFileSync(outFile, `${xtermCss}\n${css}\n`);
 
 console.log(`Wrote compiled CSS -> ${path.relative(repoRoot, outFile)}`);

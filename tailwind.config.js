@@ -7,23 +7,12 @@ export default {
   ],
   theme: {
     extend: {
+      // Font stacks come from CSS tokens in src/index.css, which mirror the
+      // docs site tokens in web/src/css/custom.css.
       fontFamily: {
-        sans: [
-          '-apple-system',
-          'BlinkMacSystemFont',
-          'SF Pro Display',
-          'SF Pro Text',
-          'Helvetica Neue',
-          'Arial',
-          'sans-serif',
-        ],
-        mono: [
-          'SF Mono',
-          'Menlo',
-          'Monaco',
-          'Courier New',
-          'monospace',
-        ],
+        sans: ['var(--font-sans)'],
+        display: ['var(--font-display)'],
+        mono: ['var(--font-mono)'],
       },
       colors: {
         border: "hsl(var(--border))",

@@ -1,9 +1,87 @@
+/**
+ * Self-hosted webfonts, kept in sync with the docs site
+ * (web/src/css/fonts.css) so the app and the website render with the same
+ * type. The .woff2 files live in src/public/fonts and are copied from
+ * web/static/fonts.
+ *
+ * Each webfont is paired with a metric-matched fallback face (ascent/descent/
+ * size-adjust overrides derived from OS/2 metrics against Arial / Courier New)
+ * so text does not reflow when the webfont finishes loading.
+ */
+
+/* Inter 400 — body copy */
+@font-face {
+	font-family: "Inter";
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url("/fonts/inter-400-latin.woff2") format("woff2");
+}
+
+/* Inter Tight 600 — headings / display */
+@font-face {
+	font-family: "Inter Tight";
+	font-style: normal;
+	font-weight: 600;
+	font-display: swap;
+	src: url("/fonts/inter-tight-600-latin.woff2") format("woff2");
+}
+
+/* JetBrains Mono 400 — code, diffs, terminal */
+@font-face {
+	font-family: "JetBrains Mono";
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url("/fonts/jetbrains-mono-400-latin.woff2") format("woff2");
+}
+
+@font-face {
+	font-family: "Inter Fallback";
+	src: local("Arial");
+	ascent-override: 90.44%;
+	descent-override: 22.52%;
+	line-gap-override: 0%;
+	size-adjust: 107.12%;
+}
+
+@font-face {
+	font-family: "Inter Tight Fallback";
+	src: local("Arial");
+	ascent-override: 95.83%;
+	descent-override: 23.86%;
+	line-gap-override: 0%;
+	size-adjust: 101.1%;
+}
+
+@font-face {
+	font-family: "JetBrains Mono Fallback";
+	src: local("Courier New");
+	ascent-override: 102.02%;
+	descent-override: 30%;
+	line-gap-override: 0%;
+	size-adjust: 99.98%;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
 	:root {
+		/* Font tokens — kept in sync with the docs site (web/src/css/custom.css).
+		   Each webfont is followed by its metric-matched fallback face. */
+		--font-sans:
+			"Inter", "Inter Fallback", system-ui, -apple-system, BlinkMacSystemFont,
+			"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+		--font-display:
+			"Inter Tight", "Inter Tight Fallback", "Inter", "Inter Fallback",
+			system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+			"Helvetica Neue", Arial, sans-serif;
+		--font-mono:
+			"JetBrains Mono", "JetBrains Mono Fallback", ui-monospace, SFMono-Regular,
+			Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
 		/* macOS Light Mode - Big Sur+ inspired colors */
 		--background: 0 0% 98%;
 		--foreground: 0 0% 13%;
@@ -113,6 +191,21 @@
 	body {
 		background-color: hsl(var(--background));
 		color: hsl(var(--foreground));
+		font-family: var(--font-sans);
+	}
+	h1,
+	h2,
+	h3,
+	h4,
+	h5,
+	h6 {
+		font-family: var(--font-display);
+	}
+	code,
+	kbd,
+	pre,
+	samp {
+		font-family: var(--font-mono);
 	}
 	html,
 	body {
