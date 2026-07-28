@@ -24,6 +24,7 @@ fn sync_after_commit_keeps_working_copy_and_pushes_real_commit() {
         None,
         None,
         None,
+        None,
     )
     .expect("Failed to create workspace");
 
