@@ -1,11 +1,25 @@
 import { test, expect } from '@playwright/test';
 
+async function navigateToTools(page: import('@playwright/test').Page) {
+  await page.goto('/');
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  await nav.getByRole('button', { name: 'Discover' }).hover();
+  await nav.getByRole('link', { name: 'Tools', exact: true }).click();
+}
+
+async function navigateToTool(
+  page: import('@playwright/test').Page,
+  name: 'Branch Visualizer' | 'DAG Visualizer',
+) {
+  await navigateToTools(page);
+  await page.getByRole('link', { name: new RegExp(name) }).click();
+}
+
 // ── Tools index ───────────────────────────────────────────────────────────────
 
 test.describe('Tools index (/tools)', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.getByRole('link', { name: 'Tools' }).click();
+    await navigateToTools(page);
   });
 
   test('renders page heading', async ({ page }) => {
@@ -35,9 +49,7 @@ test.describe('Tools index (/tools)', () => {
 
 test.describe('Branch Visualizer (/tools/branch-visualizer)', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.getByRole('link', { name: 'Tools' }).click();
-    await page.getByRole('link', { name: /Branch Visualizer/ }).click();
+    await navigateToTool(page, 'Branch Visualizer');
   });
 
   test('renders the page title', async ({ page }) => {
@@ -111,9 +123,7 @@ test.describe('Branch Visualizer (/tools/branch-visualizer)', () => {
 
 test.describe('DAG Visualizer (/tools/dag-visualizer)', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.getByRole('link', { name: 'Tools' }).click();
-    await page.getByRole('link', { name: /DAG Visualizer/ }).click();
+    await navigateToTool(page, 'DAG Visualizer');
     // BrowserOnly renders React Flow on the client; wait for nodes to appear
     await page.getByTestId('flow-node').first().waitFor({ timeout: 15_000 });
   });

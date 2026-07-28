@@ -11,7 +11,7 @@ import {
 	Terminal,
 	Trash2,
 } from "lucide-react";
-import type { Workspace } from "../lib/api";
+import type { Workspace, QueueEntryStatus } from "../lib/api";
 import type { FlattenedWorkspaceNode } from "../lib/workspace-tree";
 import { cn, getFullWorkspacePath } from "../lib/utils";
 import { getWorkspaceTitle as getWorkspaceTitleFromUtils } from "../lib/workspace-utils";
@@ -124,6 +124,30 @@ interface WorkspaceSidebarItemProps {
 	onDeleteWorkspace?: (workspace: Workspace) => void;
 	onRenameWorkspace: (workspace: Workspace) => void;
 	onDoubleClick?: (workspace: Workspace, event: React.MouseEvent) => void;
+	queueStatus?: QueueEntryStatus;
+}
+
+function queueStatusDot(status: QueueEntryStatus): {
+	color: string;
+	label: string;
+} {
+	switch (status) {
+		case "queued":
+			return { color: "bg-yellow-400", label: "In merge queue" };
+		case "testing":
+			return {
+				color: "bg-blue-400 animate-pulse",
+				label: "CI running in merge queue",
+			};
+		case "passed":
+			return { color: "bg-green-400", label: "Passed CI, awaiting merge" };
+		case "merged":
+			return { color: "bg-green-600", label: "Merged via queue" };
+		case "failed":
+			return { color: "bg-red-500", label: "Failed in merge queue" };
+		default:
+			return { color: "bg-muted-foreground", label: status };
+	}
 }
 
 export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
@@ -140,6 +164,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 	onDeleteWorkspace,
 	onRenameWorkspace,
 	onDoubleClick,
+	queueStatus,
 }) => {
 	const workspace = node.status.current;
 	const isSelected =
@@ -203,6 +228,19 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 													className="w-3.5 h-3.5 text-destructive shrink-0 mr-1"
 													aria-label="Conflicted workspace"
 												/>
+											)}
+											{queueStatus && (
+												<Tooltip>
+													<TooltipTrigger asChild>
+														<span
+															className={`w-2 h-2 rounded-full shrink-0 mr-1 ${queueStatusDot(queueStatus).color}`}
+															aria-label={queueStatusDot(queueStatus).label}
+														/>
+													</TooltipTrigger>
+													<TooltipContent side="right">
+														{queueStatusDot(queueStatus).label}
+													</TooltipContent>
+												</Tooltip>
 											)}
 											<div className="flex items-center gap-1 shrink-0 mr-1">
 												<span

@@ -65,7 +65,7 @@ After every rebase:
 
 1. Read the new diff against the intended base.
 2. Re-run the relevant tests.
-3. Treat conflict resolutions as new code under review.
+3. Treat conflict resolutions as new code under review. [Git rerere](/learn/concepts/git/git-rerere) can reuse a prior resolution across rebases, and that reused result still needs the same review.
 
 ```bash
 git diff origin/main...HEAD
@@ -90,7 +90,7 @@ Pending working-copy edits can block or complicate synchronization. Commit, move
 
 ## Common failure cases
 
-**Rebase succeeds, behavior breaks.** A conflict marker resolution kept the wrong side. Re-read conflicted files and add a regression test.
+**Rebase succeeds, behavior breaks.** A conflict marker resolution kept the wrong side. Re-read conflicted files and add a regression test. [zdiff3](/learn/concepts/git/zdiff3) makes those markers easier to read when both sides share surrounding lines.
 
 **Force push without lease.** Concurrent updates on the remote branch can be overwritten, so always push with `--force-with-lease`.
 
@@ -103,4 +103,5 @@ Pending working-copy edits can block or complicate synchronization. Commit, move
 - [What Are Stacked PRs in AI-Assisted Development](/learn/stacked-prs)
 - [How to Fix Merge Conflicts Created by Coding Agents](/learn/how-to/merge-conflicts-with-coding-agents)
 - [Merge vs Rebase](/learn/concepts/git/merge-vs-rebase)
+- [What is Git Rerere?](/learn/concepts/git/git-rerere)
 - [Workspaces](/docs/concepts/workspaces)

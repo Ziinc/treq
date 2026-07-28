@@ -2,6 +2,11 @@ import type {
 	BranchStatus,
 	DirectoryEntry,
 	EditorAppsResponse,
+	GhIssue,
+	GhListPage,
+	GhPullRequest,
+	GitRemoteInfo,
+	PrInfo,
 	HomeRebaseDryRunResult,
 	JjBranch,
 	JjCommitsAhead,
@@ -100,6 +105,16 @@ export const getWindowRepoPath = (): Promise<string | null> =>
 
 export const detectEditorApps = (): Promise<EditorAppsResponse> =>
 	invoke("detect_editor_apps");
+
+export const getGitRemoteUrl = (
+	repoPath: string,
+): Promise<GitRemoteInfo | null> => invoke("get_git_remote_url", { repoPath });
+
+export const getPrInfoViaGh = (
+	repoPath: string,
+	branchName: string,
+): Promise<PrInfo | null> =>
+	invoke("get_pr_info_via_gh", { repoPath, branchName });
 
 // JJ Workspace API
 // JJ Diff API
@@ -435,6 +450,99 @@ export const dryRunHomeRepoRebase = (
 		repoPath,
 		currentBranch,
 		targetBranch,
+	});
+
+// GitHub CLI API
+export const GH_LIST_PAGE_SIZE = 30;
+
+export const ghListIssues = (
+	repoFullName: string,
+	state: string,
+	limit = GH_LIST_PAGE_SIZE,
+	page = 1,
+): Promise<GhListPage<GhIssue>> =>
+	invoke("gh_list_issues", { repoFullName, state, limit, page });
+
+export const ghViewIssue = (
+	repoFullName: string,
+	issueNumber: number,
+): Promise<GhIssue> => invoke("gh_view_issue", { repoFullName, issueNumber });
+
+export const ghCreateIssue = (
+	repoFullName: string,
+	title: string,
+	body: string,
+): Promise<number> => invoke("gh_create_issue", { repoFullName, title, body });
+
+export const ghCreateIssueComment = (
+	repoFullName: string,
+	issueNumber: number,
+	body: string,
+): Promise<void> =>
+	invoke("gh_create_issue_comment", { repoFullName, issueNumber, body });
+
+export const ghCloseIssue = (
+	repoFullName: string,
+	issueNumber: number,
+): Promise<void> => invoke("gh_close_issue", { repoFullName, issueNumber });
+
+export const ghReopenIssue = (
+	repoFullName: string,
+	issueNumber: number,
+): Promise<void> => invoke("gh_reopen_issue", { repoFullName, issueNumber });
+
+export const ghListPrs = (
+	repoFullName: string,
+	state: string,
+	limit = GH_LIST_PAGE_SIZE,
+	page = 1,
+): Promise<GhListPage<GhPullRequest>> =>
+	invoke("gh_list_prs", { repoFullName, state, limit, page });
+
+export const ghViewPr = (
+	repoFullName: string,
+	prNumber: number,
+): Promise<GhPullRequest> => invoke("gh_view_pr", { repoFullName, prNumber });
+
+export const ghCreatePrComment = (
+	repoFullName: string,
+	prNumber: number,
+	body: string,
+): Promise<void> =>
+	invoke("gh_create_pr_comment", { repoFullName, prNumber, body });
+
+export const ghClosePr = (
+	repoFullName: string,
+	prNumber: number,
+): Promise<void> => invoke("gh_close_pr", { repoFullName, prNumber });
+
+export const ghReopenPr = (
+	repoFullName: string,
+	prNumber: number,
+): Promise<void> => invoke("gh_reopen_pr", { repoFullName, prNumber });
+
+export const ghSetPrDraft = (
+	repoFullName: string,
+	prNumber: number,
+	draft: boolean,
+): Promise<void> =>
+	invoke("gh_set_pr_draft", { repoFullName, prNumber, draft });
+
+export const ghCreatePr = (
+	repoFullName: string,
+	title: string,
+	body: string,
+	baseBranch: string,
+	headBranch: string,
+	draft = false,
+): Promise<number> =>
+	invoke("gh_create_pr", {
+		repoFullName,
+		title,
+		body,
+		baseBranch,
+		headBranch,
+		draft,
 	});
 
 // PTY API

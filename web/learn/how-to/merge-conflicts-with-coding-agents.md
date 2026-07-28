@@ -52,7 +52,7 @@ git rebase auth/schema
 # resolve, test, push
 ```
 
-During conflict resolution:
+During conflict resolution, open the conflicted files and edit them. Git's [zdiff3](/learn/concepts/git/zdiff3) conflict style shows the merge base and often shrinks shared edges out of the markers:
 
 ```bash
 git status
@@ -68,6 +68,8 @@ git rebase --abort
 ```
 
 Restarting the agent on current `main` can be cheaper than preserving a small obsolete patch. Compare old and new intended behavior before discarding work.
+
+When the same conflict returns across many rebases, enable [git rerere](/learn/concepts/git/git-rerere) so Git can reuse a resolution you already chose. Still review the autoresolved file before you continue.
 
 ## Agent-assisted resolution
 
@@ -107,7 +109,9 @@ When a bookmark conflict appears after remote updates, resolve it from the botto
 
 ## Related
 
+- [What is zdiff3?](/learn/concepts/git/zdiff3)
 - [Auto-Rebasing AI Workspaces](/learn/how-to/auto-rebase-ai-branches)
 - [Parallel Coding Agents Without Branch Chaos](/learn/parallel-coding-agents)
 - [Merge vs Rebase](/learn/concepts/git/merge-vs-rebase)
+- [What is Git Rerere?](/learn/concepts/git/git-rerere)
 - [Merging Workspaces](/docs/tutorials/merging-workspaces)

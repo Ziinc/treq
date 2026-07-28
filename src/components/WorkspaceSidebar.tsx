@@ -1,14 +1,26 @@
 import { useQuery } from "@tanstack/react-query";
 import { memo, useCallback, useMemo, useState } from "react";
 import { DragDropContext, type DropResult, Droppable } from "@hello-pangea/dnd";
-import { GitBranch, Home, Search, Settings, Trash2 } from "lucide-react";
+import {
+	GitBranch,
+	Github,
+	Home,
+	Search,
+	Settings,
+	Trash2,
+} from "lucide-react";
 import {
 	type Workspace,
 	getWorkspaceStatus,
 	getWorkspaces,
 	listWorkspaceStatuses,
 } from "../lib/api";
-import type { WorkspaceSidebarStatus } from "../lib/api-types";
+import type {
+	WorkspaceSidebarStatus,
+	QueueEntryStatus,
+} from "../lib/api-types";
+import { useGitRemoteInfo } from "../hooks/useMergeQueueStatus";
+import { supabase } from "../lib/supabase";
 import {
 	buildWorkspaceTree,
 	flattenWorkspaceTree,
@@ -51,6 +63,7 @@ interface WorkspaceSidebarProps {
 	navigateToDashboard?: () => void;
 	onOpenCommandPalette?: () => void;
 	onOpenBranchSwitcher?: () => void;
+	onOpenGitHub?: () => void;
 	currentPage?: string;
 	onAddBefore?: (workspace: Workspace) => void;
 	onAddAfter?: (workspace: Workspace) => void;
@@ -73,6 +86,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 		openSettings,
 		onOpenCommandPalette,
 		onOpenBranchSwitcher,
+		onOpenGitHub,
 		currentPage,
 		onAddAfter,
 		onMoveWorkspace,
@@ -111,6 +125,26 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 			},
 			enabled: !!repoPath && workspacesLoaded,
 			placeholderData: (previousData) => previousData,
+		});
+
+		const { data: remoteInfo } = useGitRemoteInfo(repoPath);
+		const { data: branchQueueStatuses } = useQuery({
+			queryKey: ["repo-branch-queue-statuses", remoteInfo?.full_name],
+			queryFn: async () => {
+				const { data } = await supabase.rpc("get_repo_branch_queue_statuses", {
+					p_repo_full_name: remoteInfo!.full_name,
+				});
+				const map = new Map<string, QueueEntryStatus>();
+				for (const row of (data ?? []) as {
+					branch_name: string;
+					status: string;
+				}[]) {
+					map.set(row.branch_name, row.status as QueueEntryStatus);
+				}
+				return map;
+			},
+			enabled: !!remoteInfo,
+			refetchInterval: 30_000,
 		});
 
 		const statuses = useMemo<WorkspaceSidebarStatus[]>(() => {
@@ -205,6 +239,19 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 			? repoPath.split("/").filter(Boolean).pop() || "Repository"
 			: "Repository";
 
+		// GitHub/Settings are their own nav destinations — don't keep home/workspace
+		// selection highlighted alongside them.
+		const workspaceSelectionActive =
+			currentPage !== "github" && currentPage !== "settings";
+		const isHomeSelected =
+			workspaceSelectionActive && selectedWorkspaceId === null;
+		const activeSelectedWorkspaceId = workspaceSelectionActive
+			? selectedWorkspaceId
+			: undefined;
+		const activeSelectedWorkspaceIds = workspaceSelectionActive
+			? selectedWorkspaceIds
+			: undefined;
+
 		return (
 			<TooltipProvider delayDuration={200} skipDelayDuration={100}>
 				<div className="group/sidebar w-[280px] bg-sidebar border-r border-border flex flex-col h-screen">
@@ -257,9 +304,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 										<div
 											data-testid="home-repo-row"
 											className={`relative flex items-center text-sm tracking-wide px-2 py-1 rounded-md transition-colors cursor-pointer ${
-												selectedWorkspaceId === null
-													? "bg-primary/20"
-													: "hover:bg-muted/50"
+												isHomeSelected ? "bg-primary/20" : "hover:bg-muted/50"
 											}`}
 											onClick={(e) => {
 												if (
@@ -280,14 +325,14 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 										>
 											<Home
 												className={`w-3 h-3 mr-1 shrink-0 ${
-													selectedWorkspaceId === null
+													isHomeSelected
 														? "text-primary"
 														: "text-muted-foreground"
 												}`}
 											/>
 											<span
 												className={`flex-1 min-w-0 truncate font-mono ${
-													selectedWorkspaceId === null
+													isHomeSelected
 														? "text-primary font-medium"
 														: "text-muted-foreground"
 												}`}
@@ -322,6 +367,37 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 							</ContextMenuContent>
 						</ContextMenu>
 
+						{onOpenGitHub && (
+							<button
+								type="button"
+								data-testid="github-sidebar-item"
+								onClick={onOpenGitHub}
+								className={`relative flex items-center text-sm tracking-wide px-2 py-1 rounded-md transition-colors cursor-pointer w-full ${
+									currentPage === "github"
+										? "bg-primary/20"
+										: "hover:bg-muted/50"
+								}`}
+								aria-label="GitHub"
+							>
+								<Github
+									className={`w-3 h-3 mr-1 shrink-0 ${
+										currentPage === "github"
+											? "text-primary"
+											: "text-muted-foreground"
+									}`}
+								/>
+								<span
+									className={`${
+										currentPage === "github"
+											? "text-primary font-medium"
+											: "text-muted-foreground"
+									}`}
+								>
+									Github
+								</span>
+							</button>
+						)}
+
 						{workspaces.length > 0 && (
 							<div className="my-2 border-t border-border" />
 						)}
@@ -351,8 +427,8 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 												node={node}
 												index={index}
 												repoPath={repoPath}
-												selectedWorkspaceId={selectedWorkspaceId}
-												selectedWorkspaceIds={selectedWorkspaceIds}
+												selectedWorkspaceId={activeSelectedWorkspaceId}
+												selectedWorkspaceIds={activeSelectedWorkspaceIds}
 												onWorkspaceClick={onWorkspaceClick}
 												onWorkspaceMultiSelect={onWorkspaceMultiSelect}
 												onAddAfter={onAddAfter}
@@ -361,6 +437,9 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 												onDeleteWorkspace={onDeleteWorkspace}
 												onRenameWorkspace={setRenameTarget}
 												onDoubleClick={handleDoubleClick}
+												queueStatus={branchQueueStatuses?.get(
+													node.status.current.branch_name,
+												)}
 											/>
 										))}
 										{droppableProvided.placeholder}

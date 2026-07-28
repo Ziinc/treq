@@ -132,7 +132,7 @@ function CallbackContent() {
       <div style={styles.card}>
         <h2 style={styles.title}>Authentication Error</h2>
         <p style={{ ...styles.text, color: "#ef4444" }}>{error}</p>
-        <a href="/login" style={styles.link}>
+        <a href="/sign-in" style={styles.link}>
           Try again
         </a>
       </div>

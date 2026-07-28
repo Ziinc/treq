@@ -5,3 +5,10 @@ export const PAYMENT_LINK_URL =
 
 export const APP_DEEP_LINK = "treq://";
 export const APP_DOWNLOAD_URL = "/docs/getting-started/installation";
+
+// GitHub App — update with your actual App slug after creating it at
+// https://github.com/settings/apps/new
+export const GITHUB_APP_NAME =
+  process.env.NODE_ENV === "production" ? "treq-merge-queue" : "treq-merge-queue-dev";
+
+export const GITHUB_APP_INSTALL_URL = `https://github.com/apps/${GITHUB_APP_NAME}/installations/new`;
