@@ -125,7 +125,9 @@ describe("Send review to terminal respects default agent setting", () => {
 		await capturedOnCreateAgentWithReview!("review text", "plan");
 
 		expect(onSessionCreated).toHaveBeenCalledOnce();
-		const [sessionInfo] = onSessionCreated.mock.calls[0] as [SessionCreationInfo];
+		const [sessionInfo] = onSessionCreated.mock.calls[0] as [
+			SessionCreationInfo,
+		];
 		expect(sessionInfo.agent).toBeUndefined();
 	});
 
@@ -142,7 +144,9 @@ describe("Send review to terminal respects default agent setting", () => {
 		await capturedOnCreateAgentWithReview!("review text", "plan");
 
 		expect(onSessionCreated).toHaveBeenCalledOnce();
-		const [sessionInfo] = onSessionCreated.mock.calls[0] as [SessionCreationInfo];
+		const [sessionInfo] = onSessionCreated.mock.calls[0] as [
+			SessionCreationInfo,
+		];
 		expect(sessionInfo.agent).toBe("codex");
 	});
 
@@ -159,7 +163,9 @@ describe("Send review to terminal respects default agent setting", () => {
 		await capturedOnCreateAgentWithReview!("review text", "acceptEdits");
 
 		expect(onSessionCreated).toHaveBeenCalledOnce();
-		const [sessionInfo] = onSessionCreated.mock.calls[0] as [SessionCreationInfo];
+		const [sessionInfo] = onSessionCreated.mock.calls[0] as [
+			SessionCreationInfo,
+		];
 		expect(sessionInfo.agent).toBe("cursor");
 	});
 
@@ -176,7 +182,9 @@ describe("Send review to terminal respects default agent setting", () => {
 		await capturedOnCreateAgentWithReview!("review text", "plan");
 
 		expect(onSessionCreated).toHaveBeenCalledOnce();
-		const [sessionInfo] = onSessionCreated.mock.calls[0] as [SessionCreationInfo];
+		const [sessionInfo] = onSessionCreated.mock.calls[0] as [
+			SessionCreationInfo,
+		];
 		expect(sessionInfo.agent).toBe("codex");
 	});
 
@@ -193,7 +201,9 @@ describe("Send review to terminal respects default agent setting", () => {
 		await capturedOnCreateAgentWithReview!("review text", "plan");
 
 		expect(onSessionCreated).toHaveBeenCalledOnce();
-		const [sessionInfo] = onSessionCreated.mock.calls[0] as [SessionCreationInfo];
+		const [sessionInfo] = onSessionCreated.mock.calls[0] as [
+			SessionCreationInfo,
+		];
 		expect(sessionInfo.agent).toBe("codex");
 	});
 
@@ -210,7 +220,9 @@ describe("Send review to terminal respects default agent setting", () => {
 		const reviewText = "## Code Review\n\nPlease fix the bug.";
 		await capturedOnCreateAgentWithReview!(reviewText, "plan");
 
-		const [sessionInfo] = onSessionCreated.mock.calls[0] as [SessionCreationInfo];
+		const [sessionInfo] = onSessionCreated.mock.calls[0] as [
+			SessionCreationInfo,
+		];
 		expect(sessionInfo.pendingPrompt).toBe(reviewText);
 		expect(sessionInfo.permissionMode).toBe("plan");
 	});
