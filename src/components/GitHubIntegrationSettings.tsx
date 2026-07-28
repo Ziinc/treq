@@ -1,9 +1,15 @@
-import { useEffect, useState } from "react";
-import { ExternalLink, Github, Loader2 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { ExternalLink, Github, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../hooks/useAuth";
+import {
+	useMergeQueueEnabled,
+	useSetMergeQueueEnabled,
+} from "../hooks/useMergeQueueStatus";
+import { FEATURES } from "../lib/features";
 import { supabase, WEB_URL } from "../lib/supabase";
 import { Button } from "./ui/button";
+import { Switch } from "./ui/switch";
 
 export interface GitHubRepository {
 	id: number;
@@ -13,7 +19,62 @@ export interface GitHubRepository {
 	installation_id: number;
 }
 
-export const GitHubIntegrationSettings: React.FC = () => {
+interface GitHubIntegrationSettingsProps {
+	/** Repo whose merge queue opt-in this page controls. */
+	repoPath?: string;
+}
+
+/**
+ * Per-repo merge queue opt-in, stored in Postgres. A repo with no config row
+ * has never opted in, so this reads as off and nothing can be enqueued until
+ * the user turns it on here.
+ */
+const MergeQueueSetting: React.FC<{ repoPath?: string }> = ({ repoPath }) => {
+	const { data: enabled, isLoading } = useMergeQueueEnabled(repoPath);
+	const setEnabled = useSetMergeQueueEnabled(repoPath);
+	const [error, setError] = useState<string | null>(null);
+
+	return (
+		<div
+			data-testid="merge-queue-setting"
+			className="border border-border rounded-lg p-4 space-y-3"
+		>
+			<div className="flex items-center justify-between gap-3">
+				<div className="min-w-0">
+					<h3 className="font-medium">Merge queue</h3>
+					<p className="text-base text-muted-foreground">
+						{enabled
+							? "Enabled for this repository."
+							: "Turn on the merge queue to start adding branches to it."}
+					</p>
+				</div>
+				<div className="flex items-center gap-2 shrink-0">
+					{setEnabled.isPending && (
+						<Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+					)}
+					<Switch
+						aria-label="Enable merge queue"
+						checked={enabled === true}
+						disabled={isLoading || setEnabled.isPending}
+						onCheckedChange={async (next) => {
+							setError(null);
+							try {
+								await setEnabled.mutateAsync(next);
+							} catch (err) {
+								setError((err as Error).message);
+							}
+						}}
+					/>
+				</div>
+			</div>
+			{error && <p className="text-base text-destructive">{error}</p>}
+		</div>
+	);
+};
+
+export const GitHubIntegrationSettings: React.FC<
+	GitHubIntegrationSettingsProps
+> = ({ repoPath }) => {
 	const {
 		user,
 		session,
@@ -83,6 +144,7 @@ export const GitHubIntegrationSettings: React.FC = () => {
 
 	return (
 		<div className="space-y-6">
+			{FEATURES.mergeQueue && <MergeQueueSetting repoPath={repoPath} />}
 			<div className="border border-border rounded-lg p-4 space-y-4">
 				<div className="flex items-center gap-3">
 					<Github className="w-6 h-6" />

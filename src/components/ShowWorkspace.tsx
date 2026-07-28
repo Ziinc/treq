@@ -1602,7 +1602,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 														!["merged", "failed", "dequeued"].includes(
 															queueStatus.status,
 														)
-															? `Queue #${queueStatus.position}`
+															? "Queued"
 															: "Add to Queue"}
 													</Button>
 												</TooltipTrigger>

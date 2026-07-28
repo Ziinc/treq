@@ -1,33 +1,22 @@
 /* eslint-disable max-lines */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { ask } from "@tauri-apps/plugin-dialog";
-import {
-	UnifiedWorkspaceDialog,
-	type WorkspaceDialogDefaults,
-} from "./UnifiedWorkspaceDialog";
-import { CommandPalette } from "./CommandPalette";
-import { WorkspacePicker } from "./WorkspacePicker";
-import { WorkspaceSidebar } from "./WorkspaceSidebar";
-import { ErrorBoundary } from "./ErrorBoundary";
-import { ShowWorkspace } from "./ShowWorkspace";
-import {
-	WorkspaceTerminalPane,
-	type WorkspaceTerminalPaneHandle,
-} from "./WorkspaceTerminalPane";
-import type { ClaudeSessionData } from "./terminal/types";
-
-import { SettingsPage } from "./SettingsPage";
-import { MergePreviewPage } from "./MergePreviewPage";
-import { GitHubPanel } from "./GitHubPanel";
-import { useToast } from "./ui/toast";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { useWorkspaceHierarchy } from "../hooks/useWorkspaceHierarchy";
 import {
-	Workspace,
+	type AgentDeepLinkRequest,
+	findWorkspaceByBranch,
+	isProcessedAgentRequest,
+	markProcessedAgentRequest,
+	parseAgentDeepLinks,
+	popPendingAgentRequests,
+	processAgentDeepLinkRequests,
+} from "../lib/agentDeepLink";
+import {
 	checkAndRebaseWorkspaces,
 	createSession,
 	deleteWorkspace,
@@ -45,23 +34,33 @@ import {
 	setSetting,
 	setWindowRepoPath,
 	updateSessionAccess,
+	type Workspace,
 } from "../lib/api";
+import { getFullWorkspacePath } from "../lib/utils";
 import {
 	buildWorkspaceTree,
 	flattenWorkspaceTree,
 } from "../lib/workspace-tree";
-import { getFullWorkspacePath } from "../lib/utils";
-import {
-	findWorkspaceByBranch,
-	isProcessedAgentRequest,
-	markProcessedAgentRequest,
-	parseAgentDeepLinks,
-	popPendingAgentRequests,
-	processAgentDeepLinkRequests,
-	type AgentDeepLinkRequest,
-} from "../lib/agentDeepLink";
+import { CommandPalette } from "./CommandPalette";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { GitHubPanel } from "./GitHubPanel";
+import { MergePreviewPage } from "./MergePreviewPage";
 import { Onboarding } from "./Onboarding";
+import { SettingsPage } from "./SettingsPage";
+import { ShowWorkspace } from "./ShowWorkspace";
 import type { BranchListItem } from "./TargetBranchSelector";
+import type { ClaudeSessionData } from "./terminal/types";
+import {
+	UnifiedWorkspaceDialog,
+	type WorkspaceDialogDefaults,
+} from "./UnifiedWorkspaceDialog";
+import { useToast } from "./ui/toast";
+import { WorkspacePicker } from "./WorkspacePicker";
+import { WorkspaceSidebar } from "./WorkspaceSidebar";
+import {
+	WorkspaceTerminalPane,
+	type WorkspaceTerminalPaneHandle,
+} from "./WorkspaceTerminalPane";
 
 type ViewMode =
 	| "session"
@@ -1205,6 +1204,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 							repoPath={repoPath}
 							initialPrNumber={githubInitialPrNumber}
 							onInitialPrConsumed={clearGithubInitialPr}
+							onOpenSettings={openSettings}
 						/>
 					)}
 

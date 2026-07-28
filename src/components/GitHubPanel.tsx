@@ -19,7 +19,6 @@ import {
 	useDequeueBranches,
 	useGitRemoteInfo,
 	useMergeQueueEnabled,
-	useSetMergeQueueEnabled,
 } from "../hooks/useMergeQueueStatus";
 import { GH_LIST_PAGE_SIZE, ghListIssues, ghListPrs } from "../lib/api";
 import type { QueueEntryStatus } from "../lib/api-types";
@@ -30,7 +29,6 @@ import { CreateIssueForm, IssueDetailPanel } from "./github-panel/IssueDetail";
 import { CreatePrForm, PrDetailPanel } from "./github-panel/PrDetail";
 import { EmptyState, IssueListItem, PrListItem } from "./github-panel/shared";
 import { Button } from "./ui/button";
-import { Switch } from "./ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 
 type TabValue = "issues" | "prs" | "merge-queue";
@@ -41,6 +39,8 @@ interface GitHubPanelProps {
 	/** When set, opens the PRs tab and selects this PR. */
 	initialPrNumber?: number | null;
 	onInitialPrConsumed?: () => void;
+	/** Opens the settings page, where the merge queue opt-in lives. */
+	onOpenSettings?: (tab?: string) => void;
 }
 
 const FILTERS: { label: string; value: StateFilter }[] = [
@@ -124,18 +124,16 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 	repoPath,
 	initialPrNumber = null,
 	onInitialPrConsumed,
+	onOpenSettings,
 }) => {
 	const { subscription } = useAuth();
 	const isPro =
 		subscription?.plan === "pro" && subscription.status === "active";
 	const { data: remoteInfo, isLoading: remoteLoading } =
 		useGitRemoteInfo(repoPath);
-	const { data: queueEnabled, isLoading: queueEnabledLoading } =
-		useMergeQueueEnabled(repoPath);
-	const setQueueEnabled = useSetMergeQueueEnabled(repoPath);
+	const { data: queueEnabled } = useMergeQueueEnabled(repoPath);
 	const dequeueBranches = useDequeueBranches(repoPath);
 	const [activeTab, setActiveTab] = useState<TabValue>("issues");
-	const [queueToggleError, setQueueToggleError] = useState<string | null>(null);
 	const [issueFilter, setIssueFilter] = useState<StateFilter>("open");
 	const [prFilter, setPrFilter] = useState<StateFilter>("open");
 	const [selectedIssue, setSelectedIssue] = useState<number | null>(null);
@@ -465,50 +463,24 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 
 					{remoteInfo && activeTab === "merge-queue" && isPro && (
 						<>
-							<div
-								data-testid="merge-queue-toggle-row"
-								className="flex items-center justify-between gap-3 px-3 py-2.5 border-b border-border"
-							>
-								<div className="min-w-0">
-									<p className="text-base font-medium">Merge queue</p>
-									<p className="text-base text-muted-foreground">
-										{queueEnabled
-											? "Enabled for this repository."
-											: "Turn on the merge queue to start adding branches."}
-									</p>
-								</div>
-								<div className="flex items-center gap-2 shrink-0">
-									{setQueueEnabled.isPending && (
-										<Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
-									)}
-									<Switch
-										aria-label="Enable merge queue"
-										checked={queueEnabled === true}
-										disabled={queueEnabledLoading || setQueueEnabled.isPending}
-										onCheckedChange={async (next) => {
-											setQueueToggleError(null);
-											try {
-												await setQueueEnabled.mutateAsync(next);
-											} catch (err) {
-												setQueueToggleError((err as Error).message);
-											}
-										}}
-									/>
-								</div>
-							</div>
-
-							{queueToggleError && (
-								<div className="flex items-start gap-2 px-3 py-2 border-b border-border text-base text-destructive">
-									<AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-									<span>{queueToggleError}</span>
-								</div>
-							)}
-
 							{!queueEnabled ? (
-								<EmptyState
-									icon={GitMerge}
-									message="The merge queue is off for this repository."
-								/>
+								<div
+									data-testid="merge-queue-disabled"
+									className="flex flex-col items-center justify-center h-full text-center p-8 gap-3"
+								>
+									<GitMerge className="w-8 h-8 text-muted-foreground" />
+									<p className="text-base text-muted-foreground">
+										The merge queue is off for this repository.
+									</p>
+									<Button
+										variant="outline"
+										size="sm"
+										className="text-base"
+										onClick={() => onOpenSettings?.("integrations")}
+									>
+										Enable it in Settings › Integrations
+									</Button>
+								</div>
 							) : queueLoading ? (
 								<div className="flex items-center justify-center py-12">
 									<Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />

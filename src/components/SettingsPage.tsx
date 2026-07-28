@@ -1,16 +1,16 @@
+import { FolderGit2, GitBranch, Plug, Settings, User } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useTerminalSettings } from "../hooks/useTerminalSettings";
+import { useTheme } from "../hooks/useTheme";
+import { getSetting, setSetting } from "../lib/api";
+import { AccountSettings } from "./AccountSettings";
+import { GitHubIntegrationSettings } from "./GitHubIntegrationSettings";
+import { RepositorySettingsContent } from "./RepositorySettingsContent";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { RepositorySettingsContent } from "./RepositorySettingsContent";
-import { useTheme } from "../hooks/useTheme";
-import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import { useToast } from "./ui/toast";
-import { getSetting, setSetting } from "../lib/api";
-import { FolderGit2, GitBranch, Plug, Settings, User } from "lucide-react";
-import { AccountSettings } from "./AccountSettings";
-import { GitHubIntegrationSettings } from "./GitHubIntegrationSettings";
 
 type TabValue = "application" | "repository" | "account" | "integrations";
 
@@ -284,7 +284,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 									<AccountSettings />
 								</TabsContent>
 								<TabsContent value="integrations">
-									<GitHubIntegrationSettings />
+									<GitHubIntegrationSettings repoPath={repoPath} />
 								</TabsContent>
 							</div>
 						</Tabs>

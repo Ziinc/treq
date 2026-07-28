@@ -223,11 +223,11 @@ it("captures enqueuing a workspace into the merge queue", async () => {
 	queueState.current = entry("queued", { position: 1 });
 	await user.click(addToQueue);
 	await screen.findByText("Added to merge queue");
-	await screen.findByRole("button", { name: /queue #1/i });
+	await screen.findByRole("button", { name: "Queued" });
 	await captureDocument(document, {
 		name: "merge-queue-02-queued",
 		expectations: [
-			'The queue button now reads "Queue #1" and is filled/secondary-styled rather than outlined.',
+			'The queue button now reads "Queued" -- no position number -- and is filled/secondary-styled rather than outlined.',
 			'A green success toast reads "Added to merge queue".',
 			"The workspace row in the left sidebar shows a small yellow dot next to its branch name.",
 		],
@@ -256,14 +256,14 @@ it("captures the testing state (CI running in a lane)", async () => {
 	render(<Dashboard />);
 	await createAndPushWorkspace(user, repoPath);
 
-	await screen.findByRole("button", { name: /queue #1/i });
+	await screen.findByRole("button", { name: "Queued" });
 	expect(
 		screen.queryByRole("button", { name: /testing/i }),
 	).not.toBeInTheDocument();
 	await captureDocument(document, {
 		name: "merge-queue-03-testing",
 		expectations: [
-			'The queue button reads "Queue #1" -- the header deliberately does not surface a "Testing…" label any more.',
+			'The queue button reads "Queued" -- the header deliberately shows neither a "Testing…" label nor a position number.',
 			"The sidebar dot for the workspace is blue (CI running) rather than yellow.",
 		],
 	});
@@ -281,12 +281,12 @@ it("captures the merging state, which the frontend has no case for", async () =>
 	render(<Dashboard />);
 	await createAndPushWorkspace(user, repoPath);
 
-	await screen.findByRole("button", { name: /queue #1/i });
+	await screen.findByRole("button", { name: "Queued" });
 	await captureDocument(document, {
 		name: "merge-queue-04-merging",
 		expectations: [
 			"The entry is in the backend 'merging' state (the queue is landing it now).",
-			'The queue button reads "Queue #1".',
+			'The queue button reads "Queued".',
 			"The sidebar dot for the workspace is green (passed CI, merging now) -- not the neutral grey it used to be before 'merging' had a case.",
 		],
 	});

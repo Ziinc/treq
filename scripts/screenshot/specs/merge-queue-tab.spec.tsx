@@ -135,52 +135,50 @@ const QUEUE = [
 	},
 ];
 
-it("captures enabling the merge queue and the resulting stacked PR queue", async () => {
+it("captures the Merge Queue tab when the repo has not opted in", async () => {
 	const { repoPath } = createTestRepo(false);
 	mockGetGitRemoteUrl.mockResolvedValue(REMOTE_INFO);
 	queueState.enabled = false;
 	queueState.entries = QUEUE;
-	mockSetEnabled.mockClear();
+
+	const user = userEvent.setup();
+	render(<GitHubPanel repoPath={repoPath} onOpenSettings={vi.fn()} />);
+
+	await user.click(await screen.findByRole("tab", { name: /merge queue/i }));
+
+	// Opt-in defaults to off: no config row in Postgres means no queue.
+	await screen.findByText(/merge queue is off for this repository/i);
+	expect(
+		screen.queryByRole("switch", { name: /enable merge queue/i }),
+	).not.toBeInTheDocument();
+	await captureDocument(document, {
+		name: "merge-queue-tab-01-disabled",
+		expectations: [
+			'The Merge Queue tab is selected and shows a centred empty state: a merge icon over "The merge queue is off for this repository."',
+			'Below that is an outlined button reading "Enable it in Settings › Integrations".',
+			"There is no toggle switch anywhere on this tab -- the opt-in lives in Settings.",
+			"No queue entries are listed.",
+		],
+	});
+}, 120000);
+
+it("captures the stacked PR queue for an opted-in repo", async () => {
+	const { repoPath } = createTestRepo(false);
+	mockGetGitRemoteUrl.mockResolvedValue(REMOTE_INFO);
+	queueState.enabled = true;
+	queueState.entries = QUEUE;
 	mockInvoke.mockReset();
 	mockInvoke.mockResolvedValue({ data: { ok: true }, error: null });
 
 	const user = userEvent.setup();
 	render(<GitHubPanel repoPath={repoPath} />);
 
-	const queueTab = await screen.findByRole("tab", { name: /merge queue/i });
-	await user.click(queueTab);
-
-	// Opt-in defaults to off: no config row in Postgres means no queue.
-	await screen.findByText(/merge queue is off for this repository/i);
-	const toggle = await screen.findByRole("switch", {
-		name: /enable merge queue/i,
-	});
-	expect(toggle).toHaveAttribute("aria-checked", "false");
-	await captureDocument(document, {
-		name: "merge-queue-tab-01-disabled",
-		expectations: [
-			'The Merge Queue tab is selected and shows a "Merge queue" row with the copy "Turn on the merge queue to start adding branches."',
-			"At the right of that row is a toggle switch in the OFF position (grey, knob to the left) -- not a button.",
-			'Below it an empty state reads "The merge queue is off for this repository." -- no PR entries are listed.',
-		],
-	});
-
-	await user.click(toggle);
-
+	await user.click(await screen.findByRole("tab", { name: /merge queue/i }));
 	await screen.findByText("PR #101");
-	expect(mockSetEnabled).toHaveBeenCalledWith(
-		expect.objectContaining({
-			p_repo_full_name: REMOTE_INFO.full_name,
-			p_enabled: true,
-		}),
-	);
-	await waitFor(() => {
-		expect(toggle).toHaveAttribute("aria-checked", "true");
-	});
 	await captureDocument(document, {
 		name: "merge-queue-tab-02-enabled-with-queue",
 		expectations: [
-			'The toggle row reads "Enabled for this repository." and the switch is now ON (filled/primary, knob to the right).',
+			"The tab lists the queue directly, with no toggle row above it.",
 			'Three blocks are listed. The first is a bordered "Stack of 3" block that says it merges bottom-up into main, containing #1 PR #101 (Merging, green), #2 PR #102 (Testing, amber) and #3 PR #103 (Queued).',
 			"The second block is a single un-stacked entry, #4 PR #104 (Queued), with no stack header.",
 			'The third is a "Stack of 2" block containing #5 PR #105 and #6, where the entry with no PR number reads "No PR".',

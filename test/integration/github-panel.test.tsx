@@ -198,7 +198,7 @@ describe("GitHubPanel", () => {
 		expect(screen.getByText(/testing/i)).toBeVisible();
 	});
 
-	it("hides the queue and offers an opt-in when the repo has it disabled", async () => {
+	it("hides the queue and points at Settings when the repo has it disabled", async () => {
 		auth.subscription = { plan: "pro", status: "active" };
 		queueEnabled.current = false;
 
@@ -208,29 +208,28 @@ describe("GitHubPanel", () => {
 		expect(
 			await screen.findByText(/merge queue is off for this repository/i),
 		).toBeVisible();
-		const toggle = screen.getByRole("switch", {
-			name: /enable merge queue/i,
-		});
-		expect(toggle).toBeVisible();
-		expect(toggle).toHaveAttribute("aria-checked", "false");
+		// The opt-in itself lives in Settings, not here.
+		expect(
+			screen.queryByRole("switch", { name: /enable merge queue/i }),
+		).not.toBeInTheDocument();
 		// A disabled repo must not be polled for queue contents.
 		expect(supabaseRpc).not.toHaveBeenCalled();
 	});
 
-	it("turns the queue on for the repo from the Merge Queue tab", async () => {
+	it("opens the integrations settings tab from the disabled queue state", async () => {
 		auth.subscription = { plan: "pro", status: "active" };
 		queueEnabled.current = false;
-		supabaseRpc.mockResolvedValue({ data: [], error: null });
+		const onOpenSettings = vi.fn();
 
-		render(<GitHubPanel repoPath="/tmp/repo" />);
+		render(
+			<GitHubPanel repoPath="/tmp/repo" onOpenSettings={onOpenSettings} />,
+		);
 		await user.click(screen.getByRole("tab", { name: /merge queue/i }));
 		await user.click(
-			await screen.findByRole("switch", { name: /enable merge queue/i }),
+			await screen.findByRole("button", { name: /enable it in settings/i }),
 		);
 
-		await waitFor(() => {
-			expect(queueEnabled.setEnabled).toHaveBeenCalledWith(true);
-		});
+		expect(onOpenSettings).toHaveBeenCalledWith("integrations");
 	});
 
 	it("groups stacked branches into a block and removes them together", async () => {
