@@ -6295,7 +6295,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn jj_get_change_id_returns_short_reverse_hex_for_at_revision() {
         let temp = TempDir::new().expect("tempdir");

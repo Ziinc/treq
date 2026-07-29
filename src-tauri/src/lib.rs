@@ -557,5 +557,4 @@ mod tests {
         let parsed = parse_agent_request_from_url(&url).expect("request should parse");
         assert_eq!(parsed, request);
     }
-
 }

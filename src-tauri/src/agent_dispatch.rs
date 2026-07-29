@@ -279,5 +279,4 @@ mod tests {
         let linked = normalize_repo_path(link.to_str().unwrap());
         assert_eq!(canonical, linked);
     }
-
 }
