@@ -8,7 +8,12 @@ interface EntryOptions {
 	overrides?: Partial<QueueEntry>;
 }
 
-function entry({ branch, target, position, overrides = {} }: EntryOptions): QueueEntry {
+function entry({
+	branch,
+	target,
+	position,
+	overrides = {},
+}: EntryOptions): QueueEntry {
 	return {
 		branch_name: branch,
 		pr_number: position,
@@ -23,7 +28,9 @@ function branchNames(entries: QueueEntry[]): string[] {
 	return entries.map((e) => e.branch_name);
 }
 
-function stackBranches(stacks: ReturnType<typeof buildQueueStacks>): string[][] {
+function stackBranches(
+	stacks: ReturnType<typeof buildQueueStacks>,
+): string[][] {
 	return stacks.map((s) => branchNames(s.entries));
 }
 
@@ -62,7 +69,10 @@ describe("buildQueueStacks", () => {
 			entry({ branch: "feat/top", target: "feat/base", position: 2 }),
 		]);
 
-		expect(stackBranches(stacks)).toEqual([["feat/base", "feat/top"], ["solo"]]);
+		expect(stackBranches(stacks)).toEqual([
+			["feat/base", "feat/top"],
+			["solo"],
+		]);
 	});
 
 	it("never drops an entry that sits in a cycle", () => {

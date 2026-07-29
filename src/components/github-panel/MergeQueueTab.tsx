@@ -2,7 +2,10 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { ArrowDown, GitMerge, Layers2, Loader2, Rocket, X } from "lucide-react";
 import type { UseMutationResult } from "@tanstack/react-query";
 import type { QueueEntryStatus } from "../../lib/api-types";
-import { buildQueueStacks, type QueueEntry } from "../../lib/merge-queue-stacks";
+import {
+	buildQueueStacks,
+	type QueueEntry,
+} from "../../lib/merge-queue-stacks";
 import { WEB_URL } from "../../lib/supabase";
 import { Button } from "../ui/button";
 import { EmptyState } from "./shared";
@@ -131,7 +134,9 @@ function QueueStackBlock({ stack, dequeueBranches }: QueueStackBlockProps) {
 	return (
 		<div
 			data-testid={
-				isStack ? `merge-queue-stack-${stackKey}` : `merge-queue-single-${stackKey}`
+				isStack
+					? `merge-queue-stack-${stackKey}`
+					: `merge-queue-single-${stackKey}`
 			}
 		>
 			{isStack && (
@@ -283,7 +288,8 @@ export function MergeQueueTab({
 }: MergeQueueTabProps) {
 	if (!isPro) return <MergeQueueUpsell />;
 	if (!hasRemote) return null;
-	if (!queueEnabled) return <MergeQueueDisabled onOpenSettings={onOpenSettings} />;
+	if (!queueEnabled)
+		return <MergeQueueDisabled onOpenSettings={onOpenSettings} />;
 
 	return (
 		<MergeQueueList
