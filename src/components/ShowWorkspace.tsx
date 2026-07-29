@@ -27,6 +27,7 @@ import {
   Search,
   Trash2,
   Upload,
+  Workflow,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -97,6 +98,7 @@ import {
 } from "./ChangesDiffViewer";
 import { BrowserPanel } from "./browser-panel/BrowserPanel";
 import type { BrowserOpenRequest } from "./browser-panel/types";
+import { ChecksTab } from "./ChecksTab";
 import { CiStatusIndicator } from "./CiStatusIndicator";
 import { CommitDiffViewer } from "./CommitDiffViewer";
 import { CreatePrButtonGroup } from "./CreatePrButtonGroup";
@@ -1238,6 +1240,13 @@ export const ShowWorkspace = ({
                   </span>
                 )}
               </TabsTrigger>
+              <TabsTrigger
+                value="checks"
+                className="inline-flex items-center gap-1.5"
+              >
+                <Workflow className="w-4 h-4" />
+                <span>Checks</span>
+              </TabsTrigger>
             </TabsList>
           </Tabs>
           <DropdownMenu>
@@ -1536,6 +1545,12 @@ export const ShowWorkspace = ({
             }
             onViewTentativeChanges={handleViewTentativeChanges}
             onDeleteTentativeChanges={handleDeleteTentativeChanges}
+          />
+        ) : activeTab === "checks" ? (
+          <ChecksTab
+            repoPath={effectiveRepoPath ?? ""}
+            workspaceId={workspace?.id ?? 0}
+            workspacePath={workingDirectory ?? ""}
           />
         ) : reviewSubView === "browser" ? (
           <BrowserPanel
