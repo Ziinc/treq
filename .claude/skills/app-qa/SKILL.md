@@ -219,22 +219,6 @@ command code as a separate, bigger decision and check with the user first.
    with a short caption naming what changed and what to look at, and call out any
    expectation that didn't hold.
 
-7. **Pull requests get screenshots automatically.** Don't hand-attach PNGs to a PR.
-   `.github/workflows/pr-screenshots.yml` re-runs the specs the PR touches and posts a
-   single sticky comment with an artifact link — see "How PR screenshots work" below.
-
-## How PR screenshots work
-
-`.github/workflows/pr-screenshots.yml` handles this; you don't. On every push to a PR it
-runs *only* the specs under `scripts/screenshot/specs/` that the PR's diff adds or
-modifies — that's how it shows the flows relevant to this change instead of the whole
-library — uploads the PNGs and manifests as a run artifact, and edits one sticky comment
-in place with the link and the per-capture expectations.
-
-The consequence for you: a UI change whose spec you never wrote or extended produces no
-screenshots on its PR. Following step 2 (write or extend the spec for the behavior you
-changed) is what puts them there.
-
 ## Keep specs around
 
 `scripts/screenshot/specs/` is a growing visual-regression library, not a scratch
