@@ -1170,6 +1170,33 @@ export const ShowWorkspace = ({
     }
   };
 
+  /** Opens a fresh agent session seeded with the selected log content. */
+  const handleSendLogsToAgent = async (prompt: string) => {
+    try {
+      const sessionName = "Logs";
+      const dbSessionId = await createSession(
+        effectiveRepoPath,
+        workspace?.id ?? null,
+        sessionName,
+      );
+      onSessionCreated?.({
+        sessionId: dbSessionId,
+        sessionName,
+        workspaceId: workspace?.id ?? null,
+        workspacePath: workspace?.workspace_path ?? null,
+        repoPath: effectiveRepoPath || workingDirectory,
+        pendingPrompt: prompt,
+        permissionMode: "plan",
+      });
+    } catch (error) {
+      addToast({
+        title: "Failed to send logs to agent",
+        description: error instanceof Error ? error.message : String(error),
+        type: "error",
+      });
+    }
+  };
+
   const handleCreateAgentWithReview = (
     reviewMarkdown: string,
     mode: "plan" | "acceptEdits",
@@ -1558,12 +1585,16 @@ export const ShowWorkspace = ({
             onDeleteTentativeChanges={handleDeleteTentativeChanges}
           />
         ) : activeTab === "logs" ? (
-          <LogsTab repoPath={effectiveRepoPath ?? ""} />
+          <LogsTab
+            repoPath={effectiveRepoPath ?? ""}
+            onSendToAgent={handleSendLogsToAgent}
+          />
         ) : activeTab === "checks" ? (
           <ChecksTab
             repoPath={effectiveRepoPath ?? ""}
             workspaceId={workspace?.id ?? 0}
             workspacePath={workingDirectory ?? ""}
+            onSendToAgent={handleSendLogsToAgent}
           />
         ) : reviewSubView === "browser" ? (
           <BrowserPanel
