@@ -10,16 +10,8 @@ mod e2e_test_helpers;
 
 use e2e_test_helpers::TestRepo;
 use treq_lib::jj;
-use treq_lib::local_db::Workspace;
 
 // ─── shared helpers ──────────────────────────────────────────────────────────
-
-fn workspace_full_path(repo: &TestRepo, ws: &Workspace) -> String {
-    repo.workspaces_dir()
-        .join(&ws.workspace_path)
-        .to_string_lossy()
-        .to_string()
-}
 
 /// Assert that the working copy at `workspace_path` has **no** changes (is not stale / clean).
 ///
@@ -47,34 +39,6 @@ fn assert_no_revert_hunk(workspace_path: &str, content: &str) {
     );
 }
 
-/// Create a workspace, write a file, and commit — mirrors the pattern in auto_rebase_test.rs.
-fn create_workspace_with_commit(
-    repo: &TestRepo,
-    branch_name: &str,
-    filename: &str,
-    content: &str,
-    source_branch: Option<&str>,
-) -> Workspace {
-    let ws = treq_lib::core::create_workspace(
-        &repo.repo_path,
-        branch_name,
-        Some(branch_name.to_string()),
-        None,
-        source_branch,
-        None,
-        None,
-    )
-    .unwrap_or_else(|e| panic!("Failed to create workspace '{}': {}", branch_name, e));
-
-    let full_path = workspace_full_path(repo, &ws);
-    TestRepo::write_workspace_file(&full_path, filename, content)
-        .unwrap_or_else(|e| panic!("Failed to write '{}': {}", filename, e));
-    treq_lib::core::commit_workspace(&repo.repo_path, ws.id, &format!("Add {}", filename))
-        .unwrap_or_else(|e| panic!("Failed to commit '{}': {}", filename, e));
-
-    ws
-}
-
 // ─── test 1: the reported bug ─────────────────────────────────────────────────
 
 /// After rebasing workspace A's lineage, workspace B (which descends from A) must not
@@ -92,24 +56,21 @@ fn sibling_workspace_not_stale_after_lineage_rebase() {
     let default_branch = repo.default_branch().to_string();
 
     // Create workspace A with a real file commit
-    let ws_a = create_workspace_with_commit(
-        &repo,
-        "feat/ws-a",
-        "feature-a.txt",
-        "feature a content",
-        None,
-    );
-    let ws_a_path = workspace_full_path(&repo, &ws_a);
+    let ws_a = repo
+        .create_workspace_with_commit("feat/ws-a", "feature-a.txt", "feature a content", None)
+        .expect("Failed to create workspace with commit");
+    let ws_a_path = repo.workspace_full_path(&ws_a);
 
     // Create workspace B stacked on top of A
-    let ws_b = create_workspace_with_commit(
-        &repo,
-        "feat/ws-b",
-        "feature-b.txt",
-        "feature b content",
-        Some(&ws_a.branch_name),
-    );
-    let ws_b_path = workspace_full_path(&repo, &ws_b);
+    let ws_b = repo
+        .create_workspace_with_commit(
+            "feat/ws-b",
+            "feature-b.txt",
+            "feature b content",
+            Some(&ws_a.branch_name),
+        )
+        .expect("Failed to create workspace with commit");
+    let ws_b_path = repo.workspace_full_path(&ws_b);
 
     // Sanity: both working copies are clean before the rebase
     assert_working_copy_clean(&ws_a_path);
@@ -146,25 +107,22 @@ fn deferred_rebase_leaves_no_stale_working_copy() {
     let default_branch = repo.default_branch().to_string();
 
     // Workspace A with a committed file
-    let ws_a = create_workspace_with_commit(
-        &repo,
-        "feat/deferred-a",
-        "deferred-a.txt",
-        "content-a",
-        None,
-    );
-    let ws_a_path = workspace_full_path(&repo, &ws_a);
+    let ws_a = repo
+        .create_workspace_with_commit("feat/deferred-a", "deferred-a.txt", "content-a", None)
+        .expect("Failed to create workspace with commit");
+    let ws_a_path = repo.workspace_full_path(&ws_a);
 
     // Workspace B stacked on A (also has a commit — non-empty WC to ensure
     // jj_sync_working_copy_if_safe won't silently skip it)
-    let ws_b = create_workspace_with_commit(
-        &repo,
-        "feat/deferred-b",
-        "deferred-b.txt",
-        "content-b",
-        Some(&ws_a.branch_name),
-    );
-    let ws_b_path = workspace_full_path(&repo, &ws_b);
+    let ws_b = repo
+        .create_workspace_with_commit(
+            "feat/deferred-b",
+            "deferred-b.txt",
+            "content-b",
+            Some(&ws_a.branch_name),
+        )
+        .expect("Failed to create workspace with commit");
+    let ws_b_path = repo.workspace_full_path(&ws_b);
 
     // Add a new commit to main to give the rebase something to do
     repo.commit_file(
@@ -197,24 +155,21 @@ fn abandon_does_not_strand_sibling_working_copy() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
     // Workspace A: we will abandon its tip commit
-    let ws_a = create_workspace_with_commit(
-        &repo,
-        "feat/abandon-a",
-        "abandon-a.txt",
-        "content-abandon-a",
-        None,
-    );
-    let ws_a_path = workspace_full_path(&repo, &ws_a);
+    let ws_a = repo
+        .create_workspace_with_commit("feat/abandon-a", "abandon-a.txt", "content-abandon-a", None)
+        .expect("Failed to create workspace with commit");
+    let ws_a_path = repo.workspace_full_path(&ws_a);
 
     // Workspace B stacked on A's commit
-    let ws_b = create_workspace_with_commit(
-        &repo,
-        "feat/abandon-b",
-        "abandon-b.txt",
-        "content-abandon-b",
-        Some(&ws_a.branch_name),
-    );
-    let ws_b_path = workspace_full_path(&repo, &ws_b);
+    let ws_b = repo
+        .create_workspace_with_commit(
+            "feat/abandon-b",
+            "abandon-b.txt",
+            "content-abandon-b",
+            Some(&ws_a.branch_name),
+        )
+        .expect("Failed to create workspace with commit");
+    let ws_b_path = repo.workspace_full_path(&ws_b);
 
     // Sanity pre-condition
     assert_working_copy_clean(&ws_a_path);
@@ -257,19 +212,21 @@ fn update_stale_workspace_is_idempotent() {
     let default_branch = repo.default_branch().to_string();
 
     // Workspace A with a committed file
-    let ws_a =
-        create_workspace_with_commit(&repo, "feat/idem-a", "idem-a.txt", "idem-a-content", None);
-    let ws_a_path = workspace_full_path(&repo, &ws_a);
+    let ws_a = repo
+        .create_workspace_with_commit("feat/idem-a", "idem-a.txt", "idem-a-content", None)
+        .expect("Failed to create workspace with commit");
+    let ws_a_path = repo.workspace_full_path(&ws_a);
 
     // Workspace B stacked on A
-    let ws_b = create_workspace_with_commit(
-        &repo,
-        "feat/idem-b",
-        "idem-b.txt",
-        "idem-b-content",
-        Some(&ws_a.branch_name),
-    );
-    let ws_b_path = workspace_full_path(&repo, &ws_b);
+    let ws_b = repo
+        .create_workspace_with_commit(
+            "feat/idem-b",
+            "idem-b.txt",
+            "idem-b-content",
+            Some(&ws_a.branch_name),
+        )
+        .expect("Failed to create workspace with commit");
+    let ws_b_path = repo.workspace_full_path(&ws_b);
 
     // Advance main and rebase A (our fix reconciles B automatically)
     repo.commit_file(
