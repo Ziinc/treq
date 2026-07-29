@@ -154,8 +154,7 @@ it("captures the Merge Queue tab when the repo has not opted in", async () => {
 	await captureDocument(document, {
 		name: "merge-queue-tab-01-disabled",
 		expectations: [
-			'The Merge Queue tab is selected and shows a centred empty state: a merge icon over "The merge queue is off for this repository."',
-			'Below that is an outlined button reading "Enable it in Settings › Integrations".',
+			'The Merge Queue tab is selected and shows a centred empty state: a merge icon over "The merge queue is off for this repository," with an outlined "Enable it in Settings › Integrations" button below.',
 			"There is no toggle switch anywhere on this tab -- the opt-in lives in Settings.",
 			"No queue entries are listed.",
 		],
@@ -181,11 +180,14 @@ it("captures the stacked PR queue for an opted-in repo", async () => {
 			"The tab lists the queue directly, with no toggle row above it.",
 			"A single vertical line runs down the left of the whole list, with a round node on it for every entry -- the line is continuous across the stack groupings, not restarted per stack, showing one merge sequence.",
 			"Node colours follow status: PR #101 (Merging) is green, PR #102 (Testing) is amber, the Queued ones are grey.",
+		],
+	});
+	await captureDocument(document, {
+		name: "merge-queue-tab-02b-stacks-and-terminator",
+		expectations: [
 			'Two "Stack of N" headers appear inline in the list: "Stack of 3 · merges bottom-up into main" above entries 1-3, and "Stack of 2" above entries 5-6. Entry #4 has no stack header.',
-			"Entries belonging to a stack have a short vertical accent line to the left of their text, distinguishing them from the un-stacked entry #4.",
-			'Each stack header has a "Remove stack" button, and every entry row has its own small X remove button.',
-			'At the very bottom of the line is a down-arrow and the target branch "main", showing where the queue lands.',
-			'The entry with no PR number reads "No PR".',
+			'Each stack header has a "Remove stack" button, entries in a stack have a short vertical accent line to their left, and every entry row has its own small X remove button.',
+			'At the very bottom of the line is a down-arrow and the target branch "main"; the entry with no PR number reads "No PR".',
 		],
 	});
 

@@ -47,17 +47,15 @@ export function buildQueueStacks(entries: readonly QueueEntry[]): QueueStack[] {
 		while (current && !claimed.has(current.branch_name)) {
 			claimed.add(current.branch_name);
 			chain.push(current);
-			// A branch can only be stacked on one parent, so take the lowest
-			// position when data is unexpectedly forked.
-			current = (childrenOf.get(current.branch_name) ?? []).sort(
+			// Lowest position wins if a branch is unexpectedly forked.
+			[current] = (childrenOf.get(current.branch_name) ?? []).sort(
 				(a, b) => a.position - b.position,
-			)[0];
+			);
 		}
 		stacks.push({ targetBranch: root.target_branch, entries: chain });
 	}
 
-	// Anything left over sits in a cycle and has no root; surface it rather than
-	// dropping it silently from the queue view.
+	// A leftover sits in a cycle with no root; surface it rather than drop it.
 	for (const entry of entries) {
 		if (claimed.has(entry.branch_name)) continue;
 		claimed.add(entry.branch_name);

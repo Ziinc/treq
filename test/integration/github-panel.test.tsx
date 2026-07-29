@@ -208,11 +208,9 @@ describe("GitHubPanel", () => {
 		expect(
 			await screen.findByText(/merge queue is off for this repository/i),
 		).toBeVisible();
-		// The opt-in itself lives in Settings, not here.
 		expect(
 			screen.queryByRole("switch", { name: /enable merge queue/i }),
 		).not.toBeInTheDocument();
-		// A disabled repo must not be polled for queue contents.
 		expect(supabaseRpc).not.toHaveBeenCalled();
 	});
 

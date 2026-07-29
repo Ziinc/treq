@@ -18,8 +18,6 @@ const { mockEdgeFn, mockRpc, queueEnabled } = vi.hoisted(() => {
 	return {
 		queueEnabled,
 		mockEdgeFn: vi.fn(),
-		// get_merge_queue_enabled returns a bare boolean; the other queue RPCs
-		// return row arrays.
 		mockRpc: vi.fn(async (fn: string) =>
 			fn === "get_merge_queue_enabled"
 				? { data: queueEnabled.current, error: null }

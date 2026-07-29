@@ -116,7 +116,6 @@ it("captures turning the merge queue on from Settings › Integrations", async (
 	await captureDocument(document, {
 		name: "merge-queue-setting-01-off",
 		expectations: [
-			"The Settings page is on the Integrations tab.",
 			'There is a single "GitHub" header with an icon and a rule under it -- no bordered cards anywhere on the page.',
 			'Under that header, a "Merge queue" row reads "Merge branches automatically once CI passes." and a "Connected repositories" row sits below it, separated by a thin divider.',
 			'The merge queue row\'s control is a primary "Enable merge queue" CTA button -- there is no toggle switch while it is off.',

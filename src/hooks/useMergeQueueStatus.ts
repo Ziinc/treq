@@ -90,16 +90,25 @@ export function useDequeueBranches(repoPath: string | undefined) {
 	return useMutation({
 		mutationFn: async (branchNames: string[]) => {
 			if (!remoteInfo) throw new Error("No GitHub remote detected");
-			for (const branchName of [...branchNames].reverse()) {
-				const { error } = await supabase.functions.invoke("enqueue-workspace", {
-					body: {
-						repo_full_name: remoteInfo.full_name,
-						branch_name: branchName,
-						action: "dequeue",
-					},
-				});
-				if (error) throw error;
-			}
+			const fullName = remoteInfo.full_name;
+			// Sequential top-down: never dequeue a branch before what's stacked above it.
+			await [...branchNames].reverse().reduce(
+				(prev, branchName) =>
+					prev.then(async () => {
+						const { error } = await supabase.functions.invoke(
+							"enqueue-workspace",
+							{
+								body: {
+									repo_full_name: fullName,
+									branch_name: branchName,
+									action: "dequeue",
+								},
+							},
+						);
+						if (error) throw error;
+					}),
+				Promise.resolve(),
+			);
 			return branchNames;
 		},
 		onSuccess: () => {
@@ -132,8 +141,7 @@ export function useMergeQueueStatus(
 			if (error) throw error;
 			return (data as WorkspaceQueueStatus[] | null)?.[0] ?? null;
 		},
-		// Never poll for a feature that is switched off, either globally by the
-		// build flag or per-repo by the user's own opt-in.
+		// Never poll when off, whether by the build flag or the per-repo opt-in.
 		enabled:
 			FEATURES.mergeQueue &&
 			queueEnabled === true &&
@@ -182,9 +190,7 @@ export function useEnqueueWorkspace(
 			});
 			if (error) throw error;
 
-			// Refresh every view of the queue, not just this workspace's button --
-			// the sidebar dots and the GitHub panel's queue tab read from separate
-			// per-repo queries and would otherwise stay stale until their next poll.
+			// Refresh every view of the queue, not just this workspace's button.
 			await Promise.all([
 				queryClient.invalidateQueries({
 					queryKey: ["merge-queue-status", remoteInfo.full_name, branchName],

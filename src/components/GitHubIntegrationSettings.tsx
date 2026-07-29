@@ -170,9 +170,7 @@ export const GitHubIntegrationSettings: React.FC<
 		return () => {
 			active = false;
 		};
-		// Keyed on the user's identity rather than the auth objects themselves:
-		// a useAuth that returns fresh object literals per render would
-		// otherwise re-run this effect (and its setState) forever.
+		// Keyed on user identity, not the auth objects, so an unstable useAuth can't loop this.
 	}, [userId, isSignedIn]);
 
 	if (authLoading) {
