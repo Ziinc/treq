@@ -28,6 +28,7 @@ import {
   Trash2,
   Upload,
   Workflow,
+  Database,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -99,6 +100,7 @@ import {
 import { BrowserPanel } from "./browser-panel/BrowserPanel";
 import type { BrowserOpenRequest } from "./browser-panel/types";
 import { ChecksTab } from "./ChecksTab";
+import { LogsTab } from "./LogsTab";
 import { CiStatusIndicator } from "./CiStatusIndicator";
 import { CommitDiffViewer } from "./CommitDiffViewer";
 import { CreatePrButtonGroup } from "./CreatePrButtonGroup";
@@ -1247,6 +1249,15 @@ export const ShowWorkspace = ({
                 <Workflow className="w-4 h-4" />
                 <span>Checks</span>
               </TabsTrigger>
+              {!workspace && (
+                <TabsTrigger
+                  value="logs"
+                  className="inline-flex items-center gap-1.5"
+                >
+                  <Database className="w-4 h-4" />
+                  <span>Logs</span>
+                </TabsTrigger>
+              )}
             </TabsList>
           </Tabs>
           <DropdownMenu>
@@ -1546,6 +1557,8 @@ export const ShowWorkspace = ({
             onViewTentativeChanges={handleViewTentativeChanges}
             onDeleteTentativeChanges={handleDeleteTentativeChanges}
           />
+        ) : activeTab === "logs" ? (
+          <LogsTab repoPath={effectiveRepoPath ?? ""} />
         ) : activeTab === "checks" ? (
           <ChecksTab
             repoPath={effectiveRepoPath ?? ""}
