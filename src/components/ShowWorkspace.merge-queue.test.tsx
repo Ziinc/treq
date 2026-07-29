@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "../../test/test-utils";
-import { ShowWorkspace } from "./ShowWorkspace";
 import type { Workspace } from "../lib/api";
 import * as api from "../lib/api";
+import { ShowWorkspace } from "./ShowWorkspace";
 
 const { mockFeatures } = vi.hoisted(() => ({
 	mockFeatures: {
@@ -67,8 +67,14 @@ vi.mock("../lib/api", async () => {
 	};
 });
 
+const { mockQueueEnabled } = vi.hoisted(() => ({
+	mockQueueEnabled: { current: true },
+}));
+
 vi.mock("../hooks/useMergeQueueStatus", () => ({
 	useMergeQueueStatus: () => ({ data: null }),
+	useMergeQueueEnabled: () => ({ data: mockQueueEnabled.current }),
+	useSetMergeQueueEnabled: () => ({ mutateAsync: vi.fn(), isPending: false }),
 	useEnqueueWorkspace: () => ({
 		enqueue: { mutateAsync: vi.fn(), isPending: false },
 		dequeue: { mutateAsync: vi.fn(), isPending: false },
@@ -92,6 +98,7 @@ describe("ShowWorkspace - Add to Queue feature flag", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockFeatures.mergeQueue = false;
+		mockQueueEnabled.current = true;
 		vi.mocked(api.getWorkspaceStatus).mockResolvedValue({
 			current: workspace,
 			has_conflicts: false,
@@ -141,5 +148,27 @@ describe("ShowWorkspace - Add to Queue feature flag", () => {
 		expect(
 			await screen.findByRole("button", { name: /add to queue/i }),
 		).toBeInTheDocument();
+	});
+
+	it("hides Add to Queue when the repo has not enabled the merge queue", async () => {
+		mockFeatures.mergeQueue = true;
+		mockQueueEnabled.current = false;
+
+		render(
+			<ShowWorkspace
+				repositoryPath={workspace.repo_path}
+				workspace={workspace}
+				mainRepoBranch="main"
+				initialSelectedFile={null}
+				onOpenMergePreview={vi.fn()}
+			/>,
+		);
+
+		expect(
+			await screen.findByRole("button", { name: /merge/i }),
+		).toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", { name: /add to queue/i }),
+		).not.toBeInTheDocument();
 	});
 });

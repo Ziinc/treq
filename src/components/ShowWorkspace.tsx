@@ -1,59 +1,10 @@
 /* eslint-disable max-lines, max-params */
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-	DirectoryEntry,
-	dryRunHomeRepoRebase,
-	type HomeRebaseDryRunResult,
-	type JjLogResult,
-	type SingleRebaseResult,
-	Workspace,
-	type WorkspaceBookmarkConflict,
-	checkAndRebaseWorkspaces,
-	createSession,
-	discardWorkspaceChanges,
-	getWorkspaceReadme,
-	getWorkspaceStatus,
-	listCommits,
-	lsWorkspace,
-	pullWorkspaceFromRemote,
-	pushWorkspaceToRemote,
-	rebaseHomeRepoBranch,
-	resolveBookmarkConflict,
-	updateWorkspace,
-} from "../lib/api";
-import { getStatusBgColor } from "../lib/git-status-colors";
-import { type ParsedFileChange } from "../lib/git-utils";
-import { cn, getFullWorkspacePath, resolveReadmeImageSrc } from "../lib/utils";
-
-import {
-	ChangesDiffViewer,
-	type ChangesDiffViewerHandle,
-} from "./ChangesDiffViewer";
-import { FileBrowser } from "./FileBrowser";
-import { LinearCommitHistory } from "./LinearCommitHistory";
-import { CommitDiffViewer } from "./CommitDiffViewer";
-import { WorkspaceBookmarkConflictModal } from "./WorkspaceBookmarkConflictModal";
-import { WorkspaceStackPanel } from "./WorkspaceStackPanel";
-import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
-import { Button } from "./ui/button";
-import { Kbd, KbdGroup } from "./ui/kbd";
-import { useToast } from "./ui/toast";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipProvider,
-	TooltipTrigger,
-} from "./ui/tooltip";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+	type QueryClient,
+	useQuery,
+	useQueryClient,
+} from "@tanstack/react-query";
 import {
 	AlertTriangle,
 	ArrowLeft,
@@ -76,21 +27,74 @@ import {
 	Trash2,
 	Upload,
 } from "lucide-react";
-import {
-	TargetBranchSelector,
-	type BranchListItem,
-} from "./TargetBranchSelector";
-import { TaskInput } from "./TaskInput";
-import { MarkdownContent } from "./MarkdownContent";
-import { useTerminalSettings } from "../hooks/useTerminalSettings";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	useEnqueueWorkspace,
+	useMergeQueueEnabled,
 	useMergeQueueStatus,
 } from "../hooks/useMergeQueueStatus";
+import { useTerminalSettings } from "../hooks/useTerminalSettings";
+import {
+	checkAndRebaseWorkspaces,
+	createSession,
+	type DirectoryEntry,
+	discardWorkspaceChanges,
+	dryRunHomeRepoRebase,
+	getWorkspaceReadme,
+	getWorkspaceStatus,
+	type HomeRebaseDryRunResult,
+	type JjLogResult,
+	listCommits,
+	lsWorkspace,
+	pullWorkspaceFromRemote,
+	pushWorkspaceToRemote,
+	rebaseHomeRepoBranch,
+	resolveBookmarkConflict,
+	type SingleRebaseResult,
+	updateWorkspace,
+	type Workspace,
+	type WorkspaceBookmarkConflict,
+} from "../lib/api";
 import { FEATURES } from "../lib/features";
+import { getStatusBgColor } from "../lib/git-status-colors";
+import type { ParsedFileChange } from "../lib/git-utils";
+import { cn, getFullWorkspacePath, resolveReadmeImageSrc } from "../lib/utils";
 import type { SessionCreationInfo } from "../types/sessions";
+import {
+	ChangesDiffViewer,
+	type ChangesDiffViewerHandle,
+} from "./ChangesDiffViewer";
+import { CommitDiffViewer } from "./CommitDiffViewer";
 import { CreatePrButtonGroup } from "./CreatePrButtonGroup";
+import { FileBrowser } from "./FileBrowser";
+import { LinearCommitHistory } from "./LinearCommitHistory";
+import { MarkdownContent } from "./MarkdownContent";
+import {
+	type BranchListItem,
+	TargetBranchSelector,
+} from "./TargetBranchSelector";
+import { TaskInput } from "./TaskInput";
+import { Button } from "./ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
+import { Kbd, KbdGroup } from "./ui/kbd";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
+import { useToast } from "./ui/toast";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from "./ui/tooltip";
 import { ViewPrButton } from "./ViewPrButton";
+import { WorkspaceBookmarkConflictModal } from "./WorkspaceBookmarkConflictModal";
+import { WorkspaceStackPanel } from "./WorkspaceStackPanel";
 
 interface ShowWorkspaceProps {
 	repositoryPath?: string;
@@ -158,6 +162,9 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 		const { addToast } = useToast();
 		const { fontSize } = useTerminalSettings();
 
+		const { data: queueEnabled } = useMergeQueueEnabled(
+			effectiveRepoPath || undefined,
+		);
 		const { data: queueStatus } = useMergeQueueStatus(
 			effectiveRepoPath || undefined,
 			workspace?.branch_name,
@@ -1542,8 +1549,10 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 											</Tooltip>
 										</TooltipProvider>
 									)}
-								{/* Merge queue button */}
+								{/* Merge queue button. Hidden entirely until the repo has
+								    opted into the merge queue in the GitHub panel. */}
 								{FEATURES.mergeQueue &&
+									queueEnabled === true &&
 									workspace &&
 									workspace.branch_name !== defaultBranch &&
 									!workspace.not_on_remote && (
@@ -1593,9 +1602,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 														!["merged", "failed", "dequeued"].includes(
 															queueStatus.status,
 														)
-															? queueStatus.status === "testing"
-																? "Testing…"
-																: `Queue #${queueStatus.position}`
+															? "Queued"
 															: "Add to Queue"}
 													</Button>
 												</TooltipTrigger>
@@ -1603,11 +1610,9 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 													{queueStatus
 														? queueStatus.status === "merged"
 															? "Merged via queue"
-															: queueStatus.status === "testing"
-																? `CI running in lane ${queueStatus.lane_number ?? "?"}`
-																: queueStatus.status === "failed"
-																	? `Failed: ${queueStatus.failure_reason ?? "unknown"}`
-																	: `In merge queue at position ${queueStatus.position}`
+															: queueStatus.status === "failed"
+																? `Failed: ${queueStatus.failure_reason ?? "unknown"}`
+																: `In merge queue at position ${queueStatus.position}`
 														: "Add this branch to the merge queue"}
 												</TooltipContent>
 											</Tooltip>

@@ -1,8 +1,15 @@
-import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { getGitRemoteUrl, getPrInfoViaGh } from "../lib/api";
-import { supabase } from "../lib/supabase";
 import type { PrInfo, WorkspaceQueueStatus } from "../lib/api-types";
+import { FEATURES } from "../lib/features";
+import { supabase } from "../lib/supabase";
+
+/** Query key for the per-repo merge queue opt-in. */
+export const mergeQueueEnabledKey = (repoFullName: string | undefined) => [
+	"merge-queue-enabled",
+	repoFullName,
+];
 
 export function useGitRemoteInfo(repoPath: string | undefined) {
 	return useQuery({
@@ -27,11 +34,101 @@ export function usePrInfoViaGh(
 	});
 }
 
+/**
+ * Whether the merge queue is switched on for this repo, as stored in Postgres.
+ * A repo with no config row has never opted in, so this resolves to false --
+ * the user has to turn the queue on before anything can be enqueued.
+ */
+export function useMergeQueueEnabled(repoPath: string | undefined) {
+	const { data: remoteInfo } = useGitRemoteInfo(repoPath);
+
+	return useQuery<boolean>({
+		queryKey: mergeQueueEnabledKey(remoteInfo?.full_name),
+		queryFn: async () => {
+			const { data, error } = await supabase.rpc("get_merge_queue_enabled", {
+				p_repo_full_name: remoteInfo!.full_name,
+			});
+			if (error) throw error;
+			return data === true;
+		},
+		enabled: FEATURES.mergeQueue && !!remoteInfo,
+		staleTime: 60_000,
+	});
+}
+
+export function useSetMergeQueueEnabled(repoPath: string | undefined) {
+	const queryClient = useQueryClient();
+	const { data: remoteInfo } = useGitRemoteInfo(repoPath);
+
+	return useMutation({
+		mutationFn: async (enabled: boolean) => {
+			if (!remoteInfo) throw new Error("No GitHub remote detected");
+			const { error } = await supabase.rpc("set_merge_queue_enabled", {
+				p_repo_full_name: remoteInfo.full_name,
+				p_enabled: enabled,
+			});
+			if (error) throw error;
+			return enabled;
+		},
+		onSuccess: () => {
+			void queryClient.invalidateQueries({
+				queryKey: mergeQueueEnabledKey(remoteInfo?.full_name),
+			});
+		},
+	});
+}
+
+/**
+ * Remove one or more branches from the queue, used by the GitHub panel's queue
+ * list. Stacks are removed top-down so a branch is never left queued on top of
+ * a parent that has already gone.
+ */
+export function useDequeueBranches(repoPath: string | undefined) {
+	const queryClient = useQueryClient();
+	const { data: remoteInfo } = useGitRemoteInfo(repoPath);
+
+	return useMutation({
+		mutationFn: async (branchNames: string[]) => {
+			if (!remoteInfo) throw new Error("No GitHub remote detected");
+			const fullName = remoteInfo.full_name;
+			// Sequential top-down: never dequeue a branch before what's stacked above it.
+			await [...branchNames].reverse().reduce(
+				(prev, branchName) =>
+					prev.then(async () => {
+						const { error } = await supabase.functions.invoke(
+							"enqueue-workspace",
+							{
+								body: {
+									repo_full_name: fullName,
+									branch_name: branchName,
+									action: "dequeue",
+								},
+							},
+						);
+						if (error) throw error;
+					}),
+				Promise.resolve(),
+			);
+			return branchNames;
+		},
+		onSuccess: () => {
+			void queryClient.invalidateQueries({
+				queryKey: ["repo-branch-queue-statuses-panel", remoteInfo?.full_name],
+			});
+			void queryClient.invalidateQueries({
+				queryKey: ["repo-branch-queue-statuses", remoteInfo?.full_name],
+			});
+			void queryClient.invalidateQueries({ queryKey: ["merge-queue-status"] });
+		},
+	});
+}
+
 export function useMergeQueueStatus(
 	repoPath: string | undefined,
 	branchName: string | undefined,
 ) {
 	const { data: remoteInfo } = useGitRemoteInfo(repoPath);
+	const { data: queueEnabled } = useMergeQueueEnabled(repoPath);
 
 	return useQuery<WorkspaceQueueStatus | null>({
 		queryKey: ["merge-queue-status", remoteInfo?.full_name, branchName],
@@ -44,7 +141,12 @@ export function useMergeQueueStatus(
 			if (error) throw error;
 			return (data as WorkspaceQueueStatus[] | null)?.[0] ?? null;
 		},
-		enabled: !!remoteInfo && !!branchName,
+		// Never poll when off, whether by the build flag or the per-repo opt-in.
+		enabled:
+			FEATURES.mergeQueue &&
+			queueEnabled === true &&
+			!!remoteInfo &&
+			!!branchName,
 		refetchInterval: 30_000,
 	});
 }
@@ -59,11 +161,16 @@ export function useEnqueueWorkspace(
 		repoPath,
 		branchName,
 	);
+	const { data: queueEnabled } = useMergeQueueEnabled(repoPath);
 
 	const mutate = useCallback(
 		async (action: "enqueue" | "dequeue") => {
 			if (!remoteInfo || !branchName)
 				throw new Error("Repository or branch not detected");
+			if (action === "enqueue" && !queueEnabled)
+				throw new Error(
+					"The merge queue is not enabled for this repository. Turn it on in the GitHub panel's Merge Queue tab.",
+				);
 			if (action === "enqueue" && prInfoGhError) throw prInfoGhError;
 
 			if (prInfoGh !== undefined && prInfoGh !== null) {
@@ -83,11 +190,27 @@ export function useEnqueueWorkspace(
 			});
 			if (error) throw error;
 
-			await queryClient.invalidateQueries({
-				queryKey: ["merge-queue-status", remoteInfo.full_name, branchName],
-			});
+			// Refresh every view of the queue, not just this workspace's button.
+			await Promise.all([
+				queryClient.invalidateQueries({
+					queryKey: ["merge-queue-status", remoteInfo.full_name, branchName],
+				}),
+				queryClient.invalidateQueries({
+					queryKey: ["repo-branch-queue-statuses", remoteInfo.full_name],
+				}),
+				queryClient.invalidateQueries({
+					queryKey: ["repo-branch-queue-statuses-panel", remoteInfo.full_name],
+				}),
+			]);
 		},
-		[remoteInfo, branchName, prInfoGh, prInfoGhError, queryClient],
+		[
+			remoteInfo,
+			branchName,
+			prInfoGh,
+			prInfoGhError,
+			queueEnabled,
+			queryClient,
+		],
 	);
 
 	const enqueue = useMutation({ mutationFn: () => mutate("enqueue") });

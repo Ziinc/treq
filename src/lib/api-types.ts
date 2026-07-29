@@ -391,10 +391,11 @@ export interface PrInfo {
 	is_draft?: boolean;
 }
 
+/** Mirrors the merge_queue_entry_status enum in 003_merge_queue.sql. */
 export type QueueEntryStatus =
 	| "queued"
 	| "testing"
-	| "passed"
+	| "merging"
 	| "merged"
 	| "failed"
 	| "dequeued";

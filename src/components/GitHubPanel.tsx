@@ -1,27 +1,30 @@
-import { useEffect, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import {
 	AlertCircle,
 	CircleDot,
 	Github,
-	GitMerge,
 	GitPullRequest,
 	Loader2,
 	Plus,
 	RefreshCw,
-	Rocket,
 } from "lucide-react";
-import { Button } from "./ui/button";
-import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
+import { useEffect, useState } from "react";
 import { useAuth } from "../hooks/useAuth";
-import { useGitRemoteInfo } from "../hooks/useMergeQueueStatus";
+import {
+	useDequeueBranches,
+	useGitRemoteInfo,
+	useMergeQueueEnabled,
+} from "../hooks/useMergeQueueStatus";
 import { GH_LIST_PAGE_SIZE, ghListIssues, ghListPrs } from "../lib/api";
-import type { QueueEntryStatus } from "../lib/api-types";
-import { WEB_URL, supabase } from "../lib/supabase";
+import { FEATURES } from "../lib/features";
+import type { QueueEntry } from "../lib/merge-queue-stacks";
+import { supabase } from "../lib/supabase";
+import { MergeQueueTab } from "./github-panel/MergeQueueTab";
 import { CreateIssueForm, IssueDetailPanel } from "./github-panel/IssueDetail";
 import { CreatePrForm, PrDetailPanel } from "./github-panel/PrDetail";
 import { EmptyState, IssueListItem, PrListItem } from "./github-panel/shared";
+import { Button } from "./ui/button";
+import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 
 type TabValue = "issues" | "prs" | "merge-queue";
 type StateFilter = "open" | "closed" | "all";
@@ -31,13 +34,8 @@ interface GitHubPanelProps {
 	/** When set, opens the PRs tab and selects this PR. */
 	initialPrNumber?: number | null;
 	onInitialPrConsumed?: () => void;
-}
-
-interface QueueBranchEntry {
-	branch_name: string;
-	status: QueueEntryStatus;
-	position: number;
-	target_branch: string;
+	/** Opens the settings page, where the merge queue opt-in lives. */
+	onOpenSettings?: (tab?: string) => void;
 }
 
 const FILTERS: { label: string; value: StateFilter }[] = [
@@ -46,87 +44,19 @@ const FILTERS: { label: string; value: StateFilter }[] = [
 	{ label: "All", value: "all" },
 ];
 
-function queueStatusLabel(status: QueueEntryStatus): string {
-	switch (status) {
-		case "queued":
-			return "Queued";
-		case "testing":
-			return "Testing";
-		case "passed":
-			return "Passed";
-		case "merged":
-			return "Merged";
-		case "failed":
-			return "Failed";
-		case "dequeued":
-			return "Dequeued";
-		default:
-			return status;
-	}
-}
-
-function QueueStatusChip({ status }: { status: QueueEntryStatus }) {
-	const color =
-		status === "testing"
-			? "bg-amber-500/20 text-amber-600 dark:text-amber-400"
-			: status === "failed"
-				? "bg-red-500/20 text-red-600 dark:text-red-400"
-				: status === "merged" || status === "passed"
-					? "bg-green-500/20 text-green-600 dark:text-green-400"
-					: "bg-muted text-muted-foreground";
-
-	return (
-		<span
-			className={`inline-flex items-center px-2 py-0.5 rounded-full text-base ${color}`}
-		>
-			{queueStatusLabel(status)}
-		</span>
-	);
-}
-
-function MergeQueueUpsell() {
-	return (
-		<div className="flex items-center justify-center h-full p-6">
-			<div className="max-w-md w-full rounded-xl border border-border bg-gradient-to-br from-muted/40 via-background to-green-500/5 p-8 text-center space-y-4">
-				<div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-500/15 text-green-600 dark:text-green-400">
-					<Rocket className="w-6 h-6" />
-				</div>
-				<div className="space-y-2">
-					<div className="inline-flex items-center gap-1.5 text-base font-semibold tracking-wide px-1.5 py-0.5 rounded bg-green-500/20 text-green-700 dark:text-green-400">
-						PRO
-					</div>
-					<h2 className="text-lg font-semibold tracking-tight">
-						Unlock Merge Queue
-					</h2>
-					<p className="text-base text-muted-foreground leading-relaxed">
-						Queue stacked PRs, run CI in parallel lanes, and merge with
-						confidence. Upgrade to Pro to manage your repository&apos;s merge
-						queue from Treq.
-					</p>
-				</div>
-				<Button
-					size="lg"
-					className="gap-2 w-full bg-green-600 hover:bg-green-700 text-white"
-					onClick={() => openUrl(`${WEB_URL}/dashboard`)}
-				>
-					<Rocket className="w-4 h-4" />
-					Upgrade to Pro
-				</Button>
-			</div>
-		</div>
-	);
-}
-
 export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 	repoPath,
 	initialPrNumber = null,
 	onInitialPrConsumed,
+	onOpenSettings,
 }) => {
 	const { subscription } = useAuth();
 	const isPro =
 		subscription?.plan === "pro" && subscription.status === "active";
 	const { data: remoteInfo, isLoading: remoteLoading } =
 		useGitRemoteInfo(repoPath);
+	const { data: queueEnabled } = useMergeQueueEnabled(repoPath);
+	const dequeueBranches = useDequeueBranches(repoPath);
 	const [activeTab, setActiveTab] = useState<TabValue>("issues");
 	const [issueFilter, setIssueFilter] = useState<StateFilter>("open");
 	const [prFilter, setPrFilter] = useState<StateFilter>("open");
@@ -196,12 +126,17 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 				{ p_repo_full_name: repoFullName },
 			);
 			if (error) throw error;
-			return ((data ?? []) as QueueBranchEntry[]).slice().sort((a, b) => {
+			return ((data ?? []) as QueueEntry[]).slice().sort((a, b) => {
 				if (a.position !== b.position) return a.position - b.position;
 				return a.branch_name.localeCompare(b.branch_name);
 			});
 		},
-		enabled: !!repoFullName && activeTab === "merge-queue" && isPro,
+		enabled:
+			FEATURES.mergeQueue &&
+			queueEnabled === true &&
+			!!repoFullName &&
+			activeTab === "merge-queue" &&
+			isPro,
 		refetchInterval: 30_000,
 	});
 
@@ -277,17 +212,19 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 						<TabsList className="text-base">
 							<TabsTrigger value="issues">Issues</TabsTrigger>
 							<TabsTrigger value="prs">Pull Requests</TabsTrigger>
-							<TabsTrigger
-								value="merge-queue"
-								className="inline-flex items-center gap-1.5"
-							>
-								Merge Queue
-								{!isPro && (
-									<span className="text-base font-semibold tracking-wide px-1 py-px rounded bg-green-500/20 text-green-700 dark:text-green-400 leading-none">
-										PRO
-									</span>
-								)}
-							</TabsTrigger>
+							{FEATURES.mergeQueue && (
+								<TabsTrigger
+									value="merge-queue"
+									className="inline-flex items-center gap-1.5"
+								>
+									Merge Queue
+									{!isPro && (
+										<span className="text-base font-semibold tracking-wide px-1 py-px rounded bg-green-500/20 text-green-700 dark:text-green-400 leading-none">
+											PRO
+										</span>
+									)}
+								</TabsTrigger>
+							)}
 						</TabsList>
 					</Tabs>
 				</div>
@@ -444,38 +381,16 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 						</>
 					)}
 
-					{activeTab === "merge-queue" && !isPro && <MergeQueueUpsell />}
-
-					{remoteInfo && activeTab === "merge-queue" && isPro && (
-						<>
-							{queueLoading ? (
-								<div className="flex items-center justify-center py-12">
-									<Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-								</div>
-							) : queueEntries.length === 0 ? (
-								<EmptyState icon={GitMerge} message="Merge queue is empty." />
-							) : (
-								queueEntries.map((entry) => (
-									<div
-										key={`${entry.branch_name}-${entry.position}`}
-										className="px-3 py-2.5 border-b border-border"
-									>
-										<div className="flex items-center gap-2 flex-wrap">
-											<QueueStatusChip status={entry.status} />
-											<span className="text-base text-muted-foreground">
-												#{entry.position}
-											</span>
-										</div>
-										<p className="text-base font-medium font-mono mt-0.5 truncate">
-											{entry.branch_name}
-										</p>
-										<p className="text-base text-muted-foreground mt-1">
-											→ {entry.target_branch}
-										</p>
-									</div>
-								))
-							)}
-						</>
+					{activeTab === "merge-queue" && (
+						<MergeQueueTab
+							isPro={isPro}
+							hasRemote={!!remoteInfo}
+							queueEnabled={queueEnabled}
+							queueLoading={queueLoading}
+							queueEntries={queueEntries}
+							dequeueBranches={dequeueBranches}
+							onOpenSettings={onOpenSettings}
+						/>
 					)}
 				</div>
 			</div>

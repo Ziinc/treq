@@ -1,22 +1,33 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
 import fs from "node:fs";
 import path from "node:path";
-import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import * as api from "../../src/lib/api";
+import { renderHook, waitFor } from "@testing-library/react";
+import React from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+	useEnqueueWorkspace,
 	useGitRemoteInfo,
 	usePrInfoViaGh,
-	useEnqueueWorkspace,
 } from "../../src/hooks/useMergeQueueStatus";
+import * as api from "../../src/lib/api";
 import type { PrInfo } from "../../src/lib/api-types";
 import { createTestRepo } from "../utils";
 
-const { mockEdgeFn } = vi.hoisted(() => ({ mockEdgeFn: vi.fn() }));
+const { mockEdgeFn, mockRpc, queueEnabled } = vi.hoisted(() => {
+	const queueEnabled = { current: true };
+	return {
+		queueEnabled,
+		mockEdgeFn: vi.fn(),
+		mockRpc: vi.fn(async (fn: string) =>
+			fn === "get_merge_queue_enabled"
+				? { data: queueEnabled.current, error: null }
+				: { data: [], error: null },
+		),
+	};
+});
 vi.mock("../../src/lib/supabase", () => ({
 	supabase: {
-		rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
+		rpc: mockRpc,
 		functions: { invoke: mockEdgeFn },
 	},
 }));
@@ -137,6 +148,7 @@ describe("useEnqueueWorkspace", () => {
 
 	beforeEach(() => {
 		mockEdgeFn.mockReset();
+		queueEnabled.current = true;
 		ghSpy = vi.spyOn(api, "getPrInfoViaGh");
 	});
 
@@ -249,6 +261,24 @@ describe("useEnqueueWorkspace", () => {
 
 		await expect(result.current.enqueue.mutateAsync()).rejects.toThrow(
 			"Repository or branch not detected",
+		);
+		expect(mockEdgeFn).not.toHaveBeenCalled();
+	});
+
+	it("refuses to enqueue when the repo has not enabled the merge queue", async () => {
+		const { repoPath } = createTestRepo(false);
+		addGitHubRemote(repoPath, "git@github.com:ziinc/treq.git");
+		queueEnabled.current = false;
+		ghSpy.mockResolvedValue(OPEN_PR);
+		mockEdgeFn.mockResolvedValue({ error: null });
+
+		const { result } = renderHook(() => useEnqueueWorkspace(repoPath, "feat"), {
+			wrapper: makeWrapper(),
+		});
+
+		await waitFor(() => expect(result.current.remoteInfo).toBeTruthy());
+		await expect(result.current.enqueue.mutateAsync()).rejects.toThrow(
+			/not enabled for this repository/i,
 		);
 		expect(mockEdgeFn).not.toHaveBeenCalled();
 	});
