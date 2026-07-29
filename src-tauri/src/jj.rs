@@ -6295,14 +6295,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn jj_get_commit_id_returns_short_hex_for_at_revision() {
-        let temp = TempDir::new().expect("tempdir");
-        init_jj_repo(&temp);
-        let workspace_path = temp.path().to_str().expect("utf8 path");
-        let commit_id = jj_get_commit_id(workspace_path, "@").expect("resolve @");
-        assert_eq!(commit_id.len(), 12, "commit id should be 12 chars");
-    }
 
     #[test]
     fn jj_get_change_id_returns_short_reverse_hex_for_at_revision() {

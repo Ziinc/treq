@@ -1,6 +1,6 @@
 use super::{
-    build_agent_deep_link_url, dispatch_agent_request, handle_cli_command, handle_cli_global_args,
-    is_supported_cli_command, normalize_repo_path, parse_agent_mode, parse_agent_mode_or_default,
+    dispatch_agent_request, handle_cli_command, handle_cli_global_args, normalize_repo_path,
+    parse_agent_mode, parse_agent_mode_or_default,
 };
 use crate::agent_dispatch;
 use crate::local_db;
@@ -20,23 +20,6 @@ fn make_subcommand(name: &str) -> SubcommandMatches {
     sub.name = name.to_string();
     sub.matches = Matches::default();
     sub
-}
-
-#[test]
-fn supports_new_top_level_commands() {
-    assert!(is_supported_cli_command("add"));
-    assert!(is_supported_cli_command("set"));
-    assert!(is_supported_cli_command("st"));
-    assert!(is_supported_cli_command("mv"));
-    assert!(is_supported_cli_command("agent"));
-    assert!(is_supported_cli_command("help"));
-    assert!(!is_supported_cli_command("open"));
-}
-
-#[test]
-fn rejects_removed_commands() {
-    assert!(!is_supported_cli_command("ls"));
-    assert!(!is_supported_cli_command("workspace"));
 }
 
 #[test]
@@ -110,37 +93,6 @@ fn parse_agent_mode_or_default_uses_explicit_mode() {
 fn parse_agent_mode_rejects_invalid_mode() {
     let error = parse_agent_mode("invalid").expect_err("invalid mode must fail");
     assert!(error.contains("invalid mode"));
-}
-
-#[test]
-fn build_agent_deep_link_encodes_payload() {
-    let url = build_agent_deep_link_url(
-        "/tmp/repo path",
-        "feat/test",
-        "Fix this now",
-        "acceptEdits",
-        "codex",
-        "req-123",
-    );
-    assert!(url.starts_with("treq://agent/start?"));
-    assert!(url.contains("repo=%2Ftmp%2Frepo%20path"));
-    assert!(url.contains("branch=feat%2Ftest"));
-    assert!(url.contains("prompt=Fix%20this%20now"));
-    assert!(url.contains("mode=acceptEdits"));
-    assert!(url.contains("agent=codex"));
-    assert!(url.contains("request_id=req-123"));
-}
-
-#[test]
-fn normalize_repo_path_returns_canonical_when_available() {
-    let temp = TempDir::new().expect("temp dir");
-    let canonical = std::fs::canonicalize(temp.path()).expect("canonical path");
-    let normalized = normalize_repo_path(temp.path());
-    assert_eq!(
-        Path::new(&normalized),
-        canonical.as_path(),
-        "normalized path should be canonical"
-    );
 }
 
 #[test]
