@@ -6,15 +6,6 @@ use std::path::Path;
 use treq_lib::core::{HunkSpec, WorkspaceMoveRequest};
 use treq_lib::local_db::Workspace;
 
-fn workspace_path(repo_path: &str, workspace: &Workspace) -> String {
-    Path::new(repo_path)
-        .join(".treq")
-        .join("workspaces")
-        .join(&workspace.workspace_path)
-        .to_string_lossy()
-        .to_string()
-}
-
 fn setup_parent_child_graph(repo: &TestRepo) -> (Workspace, Workspace) {
     let parent = treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -84,7 +75,7 @@ fn make_commit_fixture(
     file_path: &str,
     marker: &str,
 ) -> String {
-    let source_path = workspace_path(&repo.repo_path, source);
+    let source_path = repo.workspace_full_path(source);
     TestRepo::write_workspace_file(&source_path, file_path, &format!("{}\n", marker))
         .expect("should write fixture file");
     treq_lib::core::commit_workspace(&repo.repo_path, source.id, &format!("commit-{}", marker))
@@ -100,19 +91,19 @@ fn make_commit_fixture(
 }
 
 fn make_file_fixture(repo: &TestRepo, source: &Workspace, file_path: &str, content: &str) {
-    let source_path = workspace_path(&repo.repo_path, source);
+    let source_path = repo.workspace_full_path(source);
     TestRepo::write_workspace_file(&source_path, file_path, content)
         .expect("should write file fixture");
 }
 
 fn make_hunk_fixture(repo: &TestRepo, source: &Workspace, file_path: &str) {
-    let source_path = workspace_path(&repo.repo_path, source);
+    let source_path = repo.workspace_full_path(source);
     TestRepo::write_workspace_file(&source_path, file_path, "line-1\nline-2\nline-3\nline-4\n")
         .expect("should write hunk fixture");
 }
 
 fn read_workspace_file(repo: &TestRepo, workspace: &Workspace, file_path: &str) -> String {
-    let abs = Path::new(&workspace_path(&repo.repo_path, workspace)).join(file_path);
+    let abs = Path::new(&repo.workspace_full_path(workspace)).join(file_path);
     std::fs::read_to_string(abs).expect("expected workspace file to exist")
 }
 

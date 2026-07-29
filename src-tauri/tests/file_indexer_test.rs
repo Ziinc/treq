@@ -1,18 +1,11 @@
 mod e2e_test_helpers;
 
 use e2e_test_helpers::TestRepo;
-use std::process::Command;
 use tempfile::TempDir;
 
 fn setup_jj_repo(temp_dir: &TempDir) -> String {
     let path = temp_dir.path().to_str().unwrap().to_string();
-
-    Command::new("jj")
-        .args(["git", "init"])
-        .current_dir(&path)
-        .output()
-        .expect("Failed to init jj repo");
-
+    TestRepo::run_jj(&path, &["git", "init"]).expect("Failed to init jj repo");
     path
 }
 
@@ -26,11 +19,7 @@ fn test_get_jj_tracked_files_returns_all_files() {
     TestRepo::write_workspace_file(repo_path_str, "file2.txt", "content2").unwrap();
     TestRepo::write_workspace_file(repo_path_str, "subdir/file3.txt", "content3").unwrap();
 
-    Command::new("jj")
-        .args(["status"])
-        .current_dir(&repo_path)
-        .output()
-        .expect("Failed to run jj status");
+    TestRepo::run_jj(&repo_path, &["status"]).expect("Failed to run jj status");
 
     let files = treq_lib::file_indexer::get_jj_tracked_files(&repo_path).expect("Should get files");
 
@@ -46,11 +35,7 @@ fn test_get_jj_tracked_files_includes_unchanged_committed_files() {
     let repo_path_str = repo_path.as_str();
 
     TestRepo::write_workspace_file(repo_path_str, "committed.txt", "committed").unwrap();
-    Command::new("jj")
-        .args(["commit", "-m", "initial"])
-        .current_dir(&repo_path)
-        .output()
-        .expect("Failed to commit");
+    TestRepo::run_jj(&repo_path, &["commit", "-m", "initial"]).expect("Failed to commit");
 
     TestRepo::write_workspace_file(repo_path_str, "changed.txt", "changed").unwrap();
 

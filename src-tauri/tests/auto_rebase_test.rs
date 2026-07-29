@@ -3,56 +3,16 @@ mod e2e_test_helpers;
 use e2e_test_helpers::TestRepo;
 use treq_lib::jj;
 
-/// Helper: given a workspace's workspace_path (directory name), return the full path.
-fn workspace_full_path(repo: &TestRepo, ws: &treq_lib::local_db::Workspace) -> String {
-    repo.workspaces_dir()
-        .join(&ws.workspace_path)
-        .to_string_lossy()
-        .to_string()
-}
-
-/// Helper: create a workspace, make a local commit, and push to remote.
-fn setup_workspace_with_pushed_commit(
-    repo: &TestRepo,
-    branch_name: &str,
-    filename: &str,
-    content: &str,
-) -> treq_lib::local_db::Workspace {
-    let ws = treq_lib::core::create_workspace(
-        &repo.repo_path,
-        branch_name,
-        Some(branch_name.to_string()),
-        None,
-        None,
-        None,
-        None,
-    )
-    .expect("Failed to create workspace");
-
-    let full_path = workspace_full_path(repo, &ws);
-    TestRepo::write_workspace_file(&full_path, filename, content).expect("Failed to write file");
-    treq_lib::core::commit_workspace(&repo.repo_path, ws.id, &format!("Add {}", filename))
-        .expect("Failed to create commit");
-
-    jj::jj_push(&full_path).expect("Failed to push branch via jj");
-    jj::jj_git_fetch(&repo.repo_path).expect("Failed to fetch");
-
-    ws
-}
-
 #[test]
 fn test_auto_rebase_resolves_bookmark_conflict() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
     let default_branch = repo.default_branch();
 
-    let ws = setup_workspace_with_pushed_commit(
-        &repo,
-        "feat/conflict-test",
-        "local.txt",
-        "local content",
-    );
+    let ws = repo
+        .setup_workspace_with_pushed_commit("feat/conflict-test", "local.txt", "local content")
+        .expect("Failed to create pushed workspace");
 
-    let full_path = workspace_full_path(&repo, &ws);
+    let full_path = repo.workspace_full_path(&ws);
 
     TestRepo::write_workspace_file(&full_path, "local2.txt", "local2")
         .expect("Failed to write file");
@@ -95,14 +55,11 @@ fn test_auto_rebase_resolves_conflict_no_local_commits() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
     let default_branch = repo.default_branch();
 
-    let ws = setup_workspace_with_pushed_commit(
-        &repo,
-        "feat/no-local",
-        "initial.txt",
-        "initial content",
-    );
+    let ws = repo
+        .setup_workspace_with_pushed_commit("feat/no-local", "initial.txt", "initial content")
+        .expect("Failed to create pushed workspace");
 
-    let full_path = workspace_full_path(&repo, &ws);
+    let full_path = repo.workspace_full_path(&ws);
 
     repo.remote_commit_on_branch(
         "feat/no-local",
@@ -136,11 +93,15 @@ fn test_auto_rebase_batch_resolves_bookmark_conflicts() {
     let default_branch = repo.default_branch();
     let origin_default = format!("origin/{default_branch}");
 
-    let ws1 = setup_workspace_with_pushed_commit(&repo, "feat/batch-ws1", "ws1.txt", "ws1 content");
-    let ws2 = setup_workspace_with_pushed_commit(&repo, "feat/batch-ws2", "ws2.txt", "ws2 content");
+    let ws1 = repo
+        .setup_workspace_with_pushed_commit("feat/batch-ws1", "ws1.txt", "ws1 content")
+        .expect("Failed to create pushed workspace");
+    let ws2 = repo
+        .setup_workspace_with_pushed_commit("feat/batch-ws2", "ws2.txt", "ws2 content")
+        .expect("Failed to create pushed workspace");
 
-    let full_path1 = workspace_full_path(&repo, &ws1);
-    let full_path2 = workspace_full_path(&repo, &ws2);
+    let full_path1 = repo.workspace_full_path(&ws1);
+    let full_path2 = repo.workspace_full_path(&ws2);
 
     treq_lib::local_db::update_workspace_target_branch(&repo.repo_path, ws1.id, &origin_default)
         .expect("Failed to set target branch on ws1");
@@ -207,7 +168,7 @@ fn test_auto_rebase_no_conflict_still_works() {
     )
     .expect("Failed to create workspace");
 
-    let full_path = workspace_full_path(&repo, &ws);
+    let full_path = repo.workspace_full_path(&ws);
 
     TestRepo::write_workspace_file(&full_path, "ws_file.txt", "workspace content")
         .expect("Failed to write file");
@@ -270,7 +231,7 @@ fn test_force_rebase_rooted_subtree_handles_conflicted_local_main_target() {
     )
     .expect("Failed to create child workspace");
 
-    let child_path = workspace_full_path(&repo, &child);
+    let child_path = repo.workspace_full_path(&child);
     TestRepo::write_workspace_file(&child_path, "child.txt", "child content\n")
         .expect("Failed to write child file");
     treq_lib::core::commit_workspace(&repo.repo_path, child.id, "Child commit")
@@ -291,7 +252,7 @@ fn test_force_rebase_rooted_subtree_handles_conflicted_local_main_target() {
     .expect("Failed to create remote main commit");
     jj::jj_git_fetch(&repo.repo_path).expect("Failed to fetch");
 
-    let main_workspace_path = workspace_full_path(&repo, &root_main);
+    let main_workspace_path = repo.workspace_full_path(&root_main);
     assert!(
         jj::jj_is_bookmark_conflicted(&main_workspace_path, default_branch),
         "main bookmark should be conflicted before force rebase"

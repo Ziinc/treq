@@ -86,6 +86,71 @@ impl TestRepo {
         &self.default_branch
     }
 
+    /// Full on-disk path for a workspace's working copy.
+    pub fn workspace_full_path(&self, ws: &treq_lib::local_db::Workspace) -> String {
+        self.workspaces_dir()
+            .join(&ws.workspace_path)
+            .to_string_lossy()
+            .to_string()
+    }
+
+    /// Create a workspace with no description/moved-files/source/sparse options set.
+    pub fn create_workspace_simple(
+        &self,
+        branch_name: &str,
+    ) -> Result<treq_lib::local_db::Workspace, String> {
+        treq_lib::core::create_workspace(
+            &self.repo_path,
+            branch_name,
+            Some(branch_name.to_string()),
+            None,
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Create a workspace (optionally stacked on `source_branch`), write `filename` with
+    /// `content`, and commit it (no push).
+    pub fn create_workspace_with_commit(
+        &self,
+        branch_name: &str,
+        filename: &str,
+        content: &str,
+        source_branch: Option<&str>,
+    ) -> Result<treq_lib::local_db::Workspace, String> {
+        let ws = treq_lib::core::create_workspace(
+            &self.repo_path,
+            branch_name,
+            Some(branch_name.to_string()),
+            None,
+            source_branch,
+            None,
+            None,
+        )?;
+        let full_path = self.workspace_full_path(&ws);
+        Self::write_workspace_file(&full_path, filename, content)?;
+        treq_lib::core::commit_workspace(&self.repo_path, ws.id, &format!("Add {}", filename))?;
+        Ok(ws)
+    }
+
+    /// Create a workspace, make a local commit, and push it to the remote
+    /// (requires `with_remote()`). Fetches afterward so the home repo sees the push.
+    pub fn setup_workspace_with_pushed_commit(
+        &self,
+        branch_name: &str,
+        filename: &str,
+        content: &str,
+    ) -> Result<treq_lib::local_db::Workspace, String> {
+        let ws = self.create_workspace_with_commit(branch_name, filename, content, None)?;
+        let full_path = self.workspace_full_path(&ws);
+
+        treq_lib::jj::jj_push(&full_path).map_err(|e| e.to_string())?;
+        treq_lib::jj::jj_git_fetch(&self.repo_path).map_err(|e| e.to_string())?;
+
+        Ok(ws)
+    }
+
     /// Creates a test repo with a remote origin for testing remote branch operations.
     /// Calls `core::init()` to initialize jj and local db.
     pub fn with_remote() -> Result<Self, String> {

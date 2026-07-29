@@ -14,16 +14,8 @@ mod e2e_test_helpers;
 
 use e2e_test_helpers::TestRepo;
 use treq_lib::jj;
-use treq_lib::local_db::Workspace;
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
-
-fn workspace_full_path(repo: &TestRepo, ws: &Workspace) -> String {
-    repo.workspaces_dir()
-        .join(&ws.workspace_path)
-        .to_string_lossy()
-        .to_string()
-}
 
 /// Return the full commit id of the workspace's current `@` commit.
 fn workspace_wc_commit(workspace_path: &str) -> String {
@@ -34,34 +26,6 @@ fn workspace_wc_commit(workspace_path: &str) -> String {
     .unwrap_or_default()
     .trim()
     .to_string()
-}
-
-/// Create a workspace, write `filename` with `content`, and commit it.
-fn create_workspace_with_commit(
-    repo: &TestRepo,
-    branch_name: &str,
-    filename: &str,
-    content: &str,
-    source_branch: Option<&str>,
-) -> Workspace {
-    let ws = treq_lib::core::create_workspace(
-        &repo.repo_path,
-        branch_name,
-        Some(branch_name.to_string()),
-        None,
-        source_branch,
-        None,
-        None,
-    )
-    .unwrap_or_else(|e| panic!("Failed to create workspace '{branch_name}': {e}"));
-
-    let full_path = workspace_full_path(repo, &ws);
-    TestRepo::write_workspace_file(&full_path, filename, content)
-        .unwrap_or_else(|e| panic!("Failed to write '{filename}': {e}"));
-    treq_lib::core::commit_workspace(&repo.repo_path, ws.id, &format!("Add {filename}"))
-        .unwrap_or_else(|e| panic!("Failed to commit '{filename}': {e}"));
-
-    ws
 }
 
 // ─── test 1: fork replication ─────────────────────────────────────────────────
@@ -77,23 +41,20 @@ fn test_stacked_workspace_lineage_stays_linear_after_auto_rebase() {
     let default_branch = repo.default_branch().to_string();
 
     // chicken workspace stacked directly on main
-    let chicken = create_workspace_with_commit(
-        &repo,
-        "feat/chicken",
-        "chicken.txt",
-        "chicken content\n",
-        None,
-    );
-    let chicken_path = workspace_full_path(&repo, &chicken);
+    let chicken = repo
+        .create_workspace_with_commit("feat/chicken", "chicken.txt", "chicken content\n", None)
+        .expect("Failed to create workspace with commit");
+    let chicken_path = repo.workspace_full_path(&chicken);
 
     // ducks workspace stacked on chicken
-    let ducks = create_workspace_with_commit(
-        &repo,
-        "feat/ducks",
-        "ducks.txt",
-        "ducks content\n",
-        Some(&chicken.branch_name),
-    );
+    let ducks = repo
+        .create_workspace_with_commit(
+            "feat/ducks",
+            "ducks.txt",
+            "ducks content\n",
+            Some(&chicken.branch_name),
+        )
+        .expect("Failed to create workspace with commit");
 
     treq_lib::local_db::update_workspace_target_branch(
         &repo.repo_path,
@@ -213,29 +174,20 @@ fn test_auto_rebase_does_not_leave_stale_working_copy_on_stacked_workspaces() {
     let repo = TestRepo::new().expect("Failed to create test repo");
     let default_branch = repo.default_branch().to_string();
 
-    let chicken_base = create_workspace_with_commit(
-        &repo,
-        "feat/chicken-base",
-        "CHICKEN.md",
-        "# chicken rules\n",
-        None,
-    );
-    let ws_duck = create_workspace_with_commit(
-        &repo,
-        "feat/duck-fencing",
-        "CHICKEN.md",
-        "# chicken rules\n\n## duck fencing\n\nUse a sturdy fence.\n",
-        Some(&chicken_base.branch_name),
-    );
-    let ws_duck_path = workspace_full_path(&repo, &ws_duck);
-    let ws_rule = create_workspace_with_commit(
-        &repo,
-        "feat/ducks-rule",
-        "CHICKEN.md",
-        "# chicken rules\n\n## duck fencing\n\nUse a sturdy fence.\n\n## ducks rule\n\nYes they do.\n",
-        Some(&ws_duck.branch_name),
-    );
-    let ws_rule_path = workspace_full_path(&repo, &ws_rule);
+    let chicken_base = repo
+        .create_workspace_with_commit("feat/chicken-base", "CHICKEN.md", "# chicken rules\n", None)
+        .expect("Failed to create workspace with commit");
+    let ws_duck = repo
+        .create_workspace_with_commit(
+            "feat/duck-fencing",
+            "CHICKEN.md",
+            "# chicken rules\n\n## duck fencing\n\nUse a sturdy fence.\n",
+            Some(&chicken_base.branch_name),
+        )
+        .expect("Failed to create workspace with commit");
+    let ws_duck_path = repo.workspace_full_path(&ws_duck);
+    let ws_rule = repo.create_workspace_with_commit("feat/ducks-rule", "CHICKEN.md", "# chicken rules\n\n## duck fencing\n\nUse a sturdy fence.\n\n## ducks rule\n\nYes they do.\n", Some(&ws_duck.branch_name)).expect("Failed to create workspace with commit");
+    let ws_rule_path = repo.workspace_full_path(&ws_rule);
 
     treq_lib::local_db::update_workspace_target_branch(
         &repo.repo_path,

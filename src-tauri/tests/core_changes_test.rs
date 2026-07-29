@@ -1,30 +1,9 @@
 mod e2e_test_helpers;
 
 use e2e_test_helpers::TestRepo;
-use std::process::Command;
-
-fn jj_binary() -> String {
-    treq_lib::binary_paths::detect_binary("jj").unwrap_or_else(|| "jj".to_string())
-}
-
-fn run_jj(cwd: &str, args: &[&str]) -> Result<String, String> {
-    let output = Command::new(jj_binary())
-        .current_dir(cwd)
-        .args(args)
-        .output()
-        .map_err(|e| format!("Failed to run jj: {}", e))?;
-    if !output.status.success() {
-        return Err(format!(
-            "jj {} failed: {}",
-            args.join(" "),
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
-}
 
 fn get_change_id(cwd: &str, rev: &str) -> Result<String, String> {
-    let output = run_jj(cwd, &["log", "-r", rev, "--no-graph", "-T", "change_id\n"])?;
+    let output = TestRepo::run_jj(cwd, &["log", "-r", rev, "--no-graph", "-T", "change_id\n"])?;
     Ok(output.trim().to_string())
 }
 
@@ -101,7 +80,7 @@ fn test_list_conflicted_files_with_conflicts() {
     // In workspace: create a merge commit with both changes as parents.
     // Since ws_change and main_change both add conflict.txt with different content
     // from a common ancestor that doesn't have it, jj creates a conflict in @.
-    run_jj(workspace_path_str, &["new", &ws_change_id, &main_change_id])
+    TestRepo::run_jj(workspace_path_str, &["new", &ws_change_id, &main_change_id])
         .expect("Failed to create merge commit in workspace");
 
     // get_conflicted_files should now return conflict.txt
@@ -200,7 +179,7 @@ fn test_workspace_status_invariant_unresolved_conflicts_require_conflicted_files
     let main_change_id =
         get_change_id(&repo.repo_path, "@-").expect("Failed to get main change_id");
 
-    run_jj(workspace_path_str, &["new", &ws_change_id, &main_change_id])
+    TestRepo::run_jj(workspace_path_str, &["new", &ws_change_id, &main_change_id])
         .expect("Failed to create unresolved conflict");
 
     let status = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
@@ -258,7 +237,7 @@ fn test_list_conflicted_files_preserves_deleted_side_conflict_path() {
     let main_change_id =
         get_change_id(&repo.repo_path, "@-").expect("Failed to get main change_id");
 
-    run_jj(workspace_path_str, &["new", &ws_change_id, &main_change_id])
+    TestRepo::run_jj(workspace_path_str, &["new", &ws_change_id, &main_change_id])
         .expect("Failed to create merge commit with deleted-side content conflict");
 
     let conflicted_files = treq_lib::jj::get_conflicted_files(workspace_path_str, None)
@@ -304,7 +283,7 @@ fn test_list_conflicted_files_is_deterministic_and_deduped() {
     let main_change_id =
         get_change_id(&repo.repo_path, "@-").expect("Failed to get main change_id");
 
-    run_jj(workspace_path_str, &["new", &ws_change_id, &main_change_id])
+    TestRepo::run_jj(workspace_path_str, &["new", &ws_change_id, &main_change_id])
         .expect("Failed to create merge commit with conflicts");
 
     let conflicted_files = treq_lib::jj::get_conflicted_files(workspace_path_str, None)

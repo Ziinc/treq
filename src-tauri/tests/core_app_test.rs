@@ -266,49 +266,14 @@ fn init_checks_all_workspaces_and_rebases_only_diverged_ones() {
     );
 }
 
-fn workspace_full_path(repo: &TestRepo, ws: &treq_lib::local_db::Workspace) -> String {
-    repo.workspaces_dir()
-        .join(&ws.workspace_path)
-        .to_string_lossy()
-        .to_string()
-}
-
-fn setup_workspace_with_pushed_commit(
-    repo: &TestRepo,
-    branch_name: &str,
-    filename: &str,
-    content: &str,
-) -> treq_lib::local_db::Workspace {
-    let ws = treq_lib::core::create_workspace(
-        &repo.repo_path,
-        branch_name,
-        Some(branch_name.to_string()),
-        None,
-        None,
-        None,
-        None,
-    )
-    .expect("Failed to create workspace");
-    let full_path = workspace_full_path(repo, &ws);
-    TestRepo::write_workspace_file(&full_path, filename, content).expect("Failed to write file");
-    treq_lib::core::commit_workspace(&repo.repo_path, ws.id, &format!("Add {}", filename))
-        .expect("Failed to create commit");
-    jj::jj_push(&full_path).expect("Failed to push branch via jj");
-    jj::jj_git_fetch(&repo.repo_path).expect("Failed to fetch");
-    ws
-}
-
 #[test]
 fn ensure_workspace_rebased_handles_conflicted_bookmark() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
 
-    let ws = setup_workspace_with_pushed_commit(
-        &repo,
-        "feat/ensure-conflict",
-        "local.txt",
-        "local content",
-    );
-    let full_path = workspace_full_path(&repo, &ws);
+    let ws = repo
+        .setup_workspace_with_pushed_commit("feat/ensure-conflict", "local.txt", "local content")
+        .expect("Failed to create pushed workspace");
+    let full_path = repo.workspace_full_path(&ws);
 
     // Make a local commit diverging from origin
     TestRepo::write_workspace_file(&full_path, "local2.txt", "local2")
