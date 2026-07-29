@@ -92,11 +92,6 @@ pub fn handle_cli_global_args(matches: &Matches) -> bool {
     false
 }
 
-#[cfg(test)]
-pub(super) fn is_supported_cli_command(name: &str) -> bool {
-    matches!(name, "add" | "set" | "st" | "mv" | "agent" | "help")
-}
-
 fn print_cli_help() {
     println!("Treq - Stacking ADE");
     println!();
@@ -148,26 +143,6 @@ pub(super) fn resolve_default_agent(repo_path: &str) -> String {
         .filter(|v| !v.is_empty())
         .or_else(|| get_db_setting(&db, "default_agent"))
         .unwrap_or_else(|| "claude".to_string())
-}
-
-#[cfg(test)]
-pub(super) fn build_agent_deep_link_url(
-    repo_path: &str,
-    branch: &str,
-    prompt: &str,
-    mode: &str,
-    agent: &str,
-    request_id: &str,
-) -> String {
-    format!(
-        "treq://agent/start?repo={}&branch={}&prompt={}&mode={}&agent={}&request_id={}",
-        urlencoding::encode(repo_path),
-        urlencoding::encode(branch),
-        urlencoding::encode(prompt),
-        urlencoding::encode(mode),
-        urlencoding::encode(agent),
-        urlencoding::encode(request_id),
-    )
 }
 
 pub(super) fn dispatch_agent_request(

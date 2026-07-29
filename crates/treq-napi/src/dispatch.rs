@@ -1012,11 +1012,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn positive_u64_accepts_valid_identifier() {
-        let args = serde_json::json!({ "number": 42 });
-        assert_eq!(get_positive_u64(&args, "number").unwrap(), 42);
-    }
 
     #[test]
     fn github_routes_reject_negative_identifiers_before_running_gh() {

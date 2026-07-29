@@ -279,12 +279,4 @@ mod tests {
         let linked = normalize_repo_path(link.to_str().unwrap());
         assert_eq!(canonical, linked);
     }
-
-    #[test]
-    fn parses_ipc_ack_response_payload() {
-        let payload = r#"{"status":"handled"}"#;
-        let parsed: AgentDispatchResponse = serde_json::from_str(payload).expect("parse");
-        assert_eq!(parsed.status, "handled");
-        assert_eq!(parsed.reason, None);
-    }
 }

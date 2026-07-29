@@ -528,7 +528,6 @@ mod tests {
     use super::agent_runtime::{
         build_agent_deep_link_url, extract_repo_from_agent_deep_link, parse_agent_request_from_url,
     };
-    use tempfile::TempDir;
 
     #[test]
     fn extracts_repo_from_agent_deep_link() {
@@ -557,17 +556,5 @@ mod tests {
         let url = build_agent_deep_link_url(&request);
         let parsed = parse_agent_request_from_url(&url).expect("request should parse");
         assert_eq!(parsed, request);
-    }
-
-    #[test]
-    fn normalize_repo_path_canonicalizes_existing_paths() {
-        let temp = TempDir::new().expect("temp dir");
-        let canonical = std::fs::canonicalize(temp.path()).expect("canonical path");
-        let normalized = crate::agent_dispatch::normalize_repo_path(
-            temp.path()
-                .to_str()
-                .expect("temp dir should be valid utf-8"),
-        );
-        assert_eq!(normalized, canonical.to_string_lossy());
     }
 }

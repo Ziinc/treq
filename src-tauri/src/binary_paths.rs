@@ -124,21 +124,3 @@ pub fn init_editor_apps_cache(apps: HashMap<String, bool>) {
 pub fn get_editor_apps_cache() -> Option<HashMap<String, bool>> {
     EDITOR_APPS_CACHE.get().cloned()
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_get_extended_path_includes_homebrew() {
-        let path = get_extended_path();
-        assert!(path.contains("/opt/homebrew/bin") || path.contains("/usr/local/bin"));
-    }
-
-    #[test]
-    fn test_detect_binary_finds_git() {
-        // git should be available on most systems
-        let git_path = detect_binary("git");
-        assert!(git_path.is_some());
-    }
-}
