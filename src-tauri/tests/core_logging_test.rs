@@ -175,8 +175,20 @@ fn forward_log_record_emits_otlp_json_per_level() {
         .find(|e| e.file_name().to_string_lossy().starts_with("treq."))
         .expect("rolling appender wrote a file");
 
-    let contents = std::fs::read_to_string(log_file.path()).expect("read log file");
-    let lines: Vec<&str> = contents.lines().filter(|l| !l.is_empty()).collect();
+    // `WorkerGuard`'s drop only waits a bounded amount of time for the
+    // non-blocking writer's background thread to flush; under heavy CI load
+    // that window can be missed even though the record was queued. Poll
+    // instead of assuming the flush already landed by the time we read.
+    let mut contents = String::new();
+    let mut lines: Vec<&str> = Vec::new();
+    for _ in 0..50 {
+        contents = std::fs::read_to_string(log_file.path()).expect("read log file");
+        lines = contents.lines().filter(|l| !l.is_empty()).collect();
+        if lines.len() >= 5 {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
     assert_eq!(
         lines.len(),
         5,
