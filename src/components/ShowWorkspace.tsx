@@ -7,7 +7,7 @@ import {
 } from "@tanstack/react-query";
 import {
 	AlertTriangle,
-	ArrowLeft,
+	ArrowRight,
 	ChevronLeft,
 	Code2,
 	Eye,
@@ -1307,11 +1307,20 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 					>
 						{/* Row 1: Branch name */}
 						<div className="flex items-center justify-between">
-							<div className="flex items-center gap-2">
-								<GitBranch className="w-4 h-4 text-muted-foreground" />
+							<div className="flex items-center gap-2 min-w-0">
+								<GitBranch className="w-4 h-4 text-muted-foreground shrink-0" />
 
+								{workspace && (
+									<span
+										className="text-sm font-semibold font-mono truncate min-w-0 max-w-[220px]"
+										title={branchTitle}
+									>
+										{branchTitle}
+									</span>
+								)}
 								{workspace && workspace.branch_name !== defaultBranch && (
 									<>
+										<ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
 										<TargetBranchSelector
 											branches={availableBranches}
 											loading={branchesLoading}
@@ -1324,16 +1333,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 											}}
 											disabled={rebasing}
 										/>
-										<ArrowLeft className="w-4 h-4 text-muted-foreground" />
-										{/* Stack button for workspace */}
-
-										<div className="flex-1" />
 									</>
-								)}
-								{workspace && (
-									<span className="text-sm font-semibold font-mono">
-										{branchTitle}
-									</span>
 								)}
 								{workspace && onCreateStackedWorkspace && (
 									<TooltipProvider delayDuration={200}>
@@ -1363,10 +1363,22 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 								)}
 								{!workspace && (
 									<>
+										<button
+											type="button"
+											onClick={onOpenBranchSwitcher}
+											className="text-sm font-semibold font-mono hover:underline cursor-pointer truncate min-w-0 max-w-[220px]"
+											title={branchTitle}
+										>
+											{branchTitle}
+										</button>
 										{/* Target branch label + rebase button for non-default home repo branches */}
 										{isHomeRepo && branchTitle !== defaultBranch && (
 											<>
-												<span className="text-sm font-mono text-muted-foreground">
+												<ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
+												<span
+													className="text-sm font-mono text-muted-foreground truncate min-w-0 max-w-[220px]"
+													title={defaultBranch}
+												>
 													{defaultBranch}
 												</span>
 												{homeRepoTargetAheadCount > 0 && (
@@ -1430,17 +1442,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 														</TooltipProvider>
 													</>
 												)}
-												<ArrowLeft className="w-4 h-4 text-muted-foreground" />
 											</>
 										)}
-
-										<button
-											type="button"
-											onClick={onOpenBranchSwitcher}
-											className="text-sm font-semibold font-mono hover:underline cursor-pointer"
-										>
-											{branchTitle}
-										</button>
 										{/* Stack button for home repo */}
 										{onCreateStackedWorkspace && (
 											<TooltipProvider delayDuration={200}>

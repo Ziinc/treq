@@ -43,16 +43,21 @@ export const TargetBranchSelector: React.FC<TargetBranchSelectorProps> = ({
 					variant="outline"
 					size="sm"
 					disabled={disabled || loading}
-					className="gap-2"
+					className="gap-2 max-w-[220px]"
 					aria-label="Workspace target"
 				>
 					{loading ? (
-						<Loader2 className="w-4 h-4 animate-spin" />
+						<Loader2 className="w-4 h-4 animate-spin shrink-0" />
 					) : (
-						<GitBranch className="w-4 h-4" />
+						<GitBranch className="w-4 h-4 shrink-0" />
 					)}
-					<span className="font-mono">{targetBranch || "Select..."}</span>
-					<ChevronDown className="w-4 h-4 opacity-50" />
+					<span
+						className="font-mono truncate min-w-0"
+						title={targetBranch ?? undefined}
+					>
+						{targetBranch || "Select..."}
+					</span>
+					<ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
 				</Button>
 			</PopoverTrigger>
 			<PopoverContent className="w-[300px] p-0" align="start">
@@ -84,9 +89,14 @@ export const TargetBranchSelector: React.FC<TargetBranchSelectorProps> = ({
 										}}
 										className="branch-list-item px-3 py-1.5 flex items-center gap-2 cursor-pointer aria-selected:bg-accent font-mono"
 									>
-										<span className="flex-1">{branch.name}</span>
+										<span
+											className="flex-1 truncate min-w-0"
+											title={branch.name}
+										>
+											{branch.name}
+										</span>
 										{branch.name === targetBranch && (
-											<Check className="w-4 h-4" />
+											<Check className="w-4 h-4 shrink-0" />
 										)}
 									</Command.Item>
 								))}
