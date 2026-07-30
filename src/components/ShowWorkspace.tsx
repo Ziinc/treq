@@ -40,6 +40,8 @@ import {
 	type DirectoryEntry,
 	discardWorkspaceChanges,
 	dryRunHomeRepoRebase,
+	getRepoSetting,
+	getSetting,
 	getWorkspaceReadme,
 	getWorkspaceStatus,
 	type HomeRebaseDryRunResult,
@@ -861,6 +863,38 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 				try {
 					const sessionName = "Code Review";
 
+					// Resolve the default agent from repo-level then app-level settings,
+					// so "send review to terminal" honours the configured default agent.
+					let resolvedAgent: "claude" | "codex" | "cursor" | undefined;
+					const repoPathForSettings = effectiveRepoPath || workingDirectory;
+					try {
+						let repoDefault: string | null = null;
+						let appDefault: string | null = null;
+						try {
+							repoDefault = await getRepoSetting(
+								repoPathForSettings,
+								"default_agent",
+							);
+						} catch {
+							// repo may not be initialized yet
+						}
+						try {
+							appDefault = await getSetting("default_agent");
+						} catch {
+							// ignore
+						}
+						const defaultAgent = repoDefault || appDefault;
+						if (
+							defaultAgent === "codex" ||
+							defaultAgent === "cursor" ||
+							defaultAgent === "claude"
+						) {
+							resolvedAgent = defaultAgent;
+						}
+					} catch {
+						// fall back to undefined (Dashboard will default to claude)
+					}
+
 					// Create new database session
 					const dbSessionId = await createSession(
 						effectiveRepoPath,
@@ -869,7 +903,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 					);
 					const sessionRepoPath = effectiveRepoPath || workingDirectory;
 
-					// Notify parent with pending prompt to be sent after Claude initializes
+					// Notify parent with pending prompt to be sent after agent initializes
 					// (ConsolidatedTerminal will create the PTY session when it mounts)
 					onSessionCreated?.({
 						sessionId: dbSessionId,
@@ -879,6 +913,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 						repoPath: sessionRepoPath,
 						pendingPrompt: reviewMarkdown,
 						permissionMode: mode,
+						agent: resolvedAgent,
 					});
 				} catch (error) {
 					addToast({

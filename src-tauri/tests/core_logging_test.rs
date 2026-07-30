@@ -11,6 +11,15 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::Registry;
 use treq_lib::telemetry::{cleanup_old_logs, forward_log_record, FileLogExporter};
 
+/// True for an OTLP JSON record produced by one of this test's own
+/// `forward_log_record` calls, as opposed to a self-diagnostic record the
+/// OTel SDK emits through the same pipeline (e.g. on `LoggerProvider` drop).
+fn is_forwarded_record(v: &Value) -> bool {
+    v["resourceLogs"][0]["scopeLogs"][0]["logRecords"][0]["body"]["stringValue"]
+        .as_str()
+        .is_some_and(|body| body.starts_with("message at "))
+}
+
 /// Drive the real logging pipeline to produce a file on disk, then rewind its
 /// mtime to simulate age — much closer to what we ship than `fs::write` of
 /// arbitrary bytes.
@@ -175,8 +184,33 @@ fn forward_log_record_emits_otlp_json_per_level() {
         .find(|e| e.file_name().to_string_lossy().starts_with("treq."))
         .expect("rolling appender wrote a file");
 
-    let contents = std::fs::read_to_string(log_file.path()).expect("read log file");
-    let lines: Vec<&str> = contents.lines().filter(|l| !l.is_empty()).collect();
+    // `WorkerGuard`'s drop only waits a bounded amount of time for the
+    // non-blocking writer's background thread to flush; under heavy CI load
+    // that window can be missed even though the record was queued. Poll
+    // instead of assuming the flush already landed by the time we read.
+    //
+    // The SDK also emits its own self-diagnostic record ("Last reference of
+    // LoggerProvider dropped, initiating shutdown.") through this same
+    // pipeline when `provider` is dropped. It isn't one of the five records
+    // this test forwarded, so filter to lines carrying our own message body
+    // rather than asserting on the raw line count.
+    let is_own_record =
+        |line: &&str| serde_json::from_str::<Value>(line).is_ok_and(|v| is_forwarded_record(&v));
+
+    let mut contents = String::new();
+    let mut lines: Vec<&str> = Vec::new();
+    for _ in 0..50 {
+        contents = std::fs::read_to_string(log_file.path()).expect("read log file");
+        lines = contents
+            .lines()
+            .filter(|l| !l.is_empty())
+            .filter(is_own_record)
+            .collect();
+        if lines.len() >= 5 {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
     assert_eq!(
         lines.len(),
         5,
