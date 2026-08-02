@@ -74,7 +74,6 @@ export const RepositorySettingsContent: React.FC<
 				description: "Repository settings have been updated successfully.",
 				type: "success",
 			});
-			onClose?.();
 		} catch (err) {
 			const errorMsg = err instanceof Error ? err.message : String(err);
 			setError(`Failed to save settings: ${errorMsg}`);
