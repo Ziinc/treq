@@ -28,6 +28,7 @@ export function MarkdownContent({
 				rehypePlugins={[rehypeRaw]}
 				components={{
 					code: ({ children, className, node: _node, ...props }) => {
+						void _node;
 						const language = /(?:^|\s)language-([\w-]+)/.exec(
 							className ?? "",
 						)?.[1];
