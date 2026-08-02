@@ -1,1 +1,0 @@
--- Local seed data (intentionally empty).
