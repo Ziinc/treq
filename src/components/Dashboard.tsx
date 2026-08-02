@@ -106,6 +106,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	const [showFilePicker, setShowFilePicker] = useState(false);
 	const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
 	const [showWorkspaceDeletion, setShowWorkspaceDeletion] = useState(false);
+	const [taskInputFocusRequest, setTaskInputFocusRequest] = useState(0);
 	const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
 	const [pendingSessionData, setPendingSessionData] = useState<
 		Map<
@@ -1125,6 +1126,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 											});
 										}
 									}}
+									taskInputFocusRequest={taskInputFocusRequest}
 								/>
 							</ErrorBoundary>
 						</div>
@@ -1305,19 +1307,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				showCommandPalette={showCommandPalette}
 				onCommandPaletteChange={setShowCommandPalette}
 				workspaces={workspaces}
-				sessions={sessions}
 				onNavigateToDashboard={handleReturnToDashboard}
 				onNavigateToSettings={openSettings}
-				onOpenWorkspaceSession={handleOpenSession}
 				onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
 				onOpenFilePicker={() => setShowFilePicker(true)}
 				onOpenWorkspacePicker={() => setShowWorkspacePicker(true)}
 				onOpenWorkspaceDeletion={() => setShowWorkspaceDeletion(true)}
-				onCreateWorkspace={() => setUnifiedDialogDefaults({})}
+				onCreateStackedWorkspace={handleCreateStackedWorkspace}
 				onToggleTerminal={() => terminalPaneRef.current?.toggleCollapse()}
 				onMaximizeTerminal={() => terminalPaneRef.current?.toggleMaximize()}
-				onCreateAgentTerminal={(agent) =>
-					terminalPaneRef.current?.createAgentSession(agent)
+				onStartAgentWithPrompt={() =>
+					setTaskInputFocusRequest((request) => request + 1)
 				}
 				onCreateShellTerminal={() =>
 					terminalPaneRef.current?.createShellSession()
@@ -1335,7 +1335,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				onFileSelected={(filePath) => setSessionSelectedFile(filePath)}
 				selectedWorkspaceId={selectedWorkspace?.id ?? null}
 				repoPath={repoPath}
-				workspaceChangeCounts={undefined}
 			/>
 
 			<WorkspacePicker
