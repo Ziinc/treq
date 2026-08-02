@@ -1,0 +1,35 @@
+id: no-test-banner-comments-rust
+valid:
+  - |
+    #[test]
+    fn rebase_merge_with_empty_commits() {
+      let result = run_test_case();
+      assert!(result);
+    }
+  - |
+    #[test]
+    fn keeps_normal_comments() {
+      // This explains the assertion.
+      assert_eq!(2 + 2, 4);
+    }
+invalid:
+  - |
+    // =============================================================================
+    // Test: Rebase merge with empty commits
+    // =============================================================================
+    #[test]
+    fn rebase_merge_with_empty_commits() {
+      assert!(true);
+    }
+  - |
+    // ---
+    #[test]
+    fn rejects_dash_separator() {
+      assert!(true);
+    }
+  - |
+    // ###
+    #[test]
+    fn rejects_hash_separator() {
+      assert!(true);
+    }

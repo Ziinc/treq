@@ -1,0 +1,100 @@
+---
+sidebar_position: 2
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard";
+
+# What is Human-in-the-Loop Development?
+
+## Introduction
+
+In **human-in-the-loop development**, AI writes or changes the code, but a person checks the result at set points before it goes any further. You can approve it, reject it, or send it back with notes.
+
+<DefinitionCard
+  term="Human-in-the-Loop Development"
+  definition="A development process in which people review, guide, or approve work produced by AI before it advances to the next important stage."
+/>
+
+Review exists because of the way AI fails. Generated code usually compiles and often passes its tests while still getting a business rule wrong, weakening security, or cutting against a design decision made months ago. That is the [AI slop](/learn/concepts/ai-engineering/ai-assisted-software-engineering) problem. A deliberate approval step catches what automated checks miss.
+
+This article explains how the feedback loop works, where to place review checkpoints, and how to adjust oversight to the risk of the task.
+
+## Understanding the Concept
+
+The loop is simple: an agent produces a change, a person evaluates it, and the agent either revises the work or the person approves it. A task may pass through this cycle several times.
+
+<DefinitionCard
+  term="Review Checkpoint"
+  definition="A required point in a workflow where a person examines AI-produced work and decides whether it can continue, needs revision, or should be rejected."
+/>
+
+{/* TODO: Add diagram showing the loop between agent work, human review, feedback, revision, and approval. */}
+
+AI and people are good at different things. An agent searches files, writes routine code, runs tests, and repeats dull steps fast. A developer knows what the product is for, how the system fits together, where the security lines are, and what a change will do beyond the diff in front of them.
+
+Read generated code as carefully as you would read a colleague's pull request. You have to understand what changed and decide whether it is safe to ship. An approval that only means the tests went green is worth nothing.
+
+Keep the work isolated until it is approved. A branch, a [Git worktree](/learn/concepts/git/git-worktrees), a sandbox, or a separate clone lets the agent write and rewrite without touching the shared codebase.
+
+<DefinitionCard
+  term="Workspace Isolation"
+  definition="Keeping an agent's files and changes separate from the shared codebase until a person has reviewed and accepted them."
+/>
+
+Match the oversight to the risk. A docs fix may need nothing more than a look at the final diff. A change to authentication or payments may need an agreed plan, someone watching as it is built, security checks, and a close read at the end.
+
+## Applying It in Practice
+
+A basic workflow is:
+
+1. A developer gives an agent a bounded task.
+2. The agent works in an isolated workspace.
+3. Automated tests and checks run.
+4. The developer reviews the diff and test results.
+5. The developer approves, rejects, or gives specific feedback.
+6. The agent revises the change until it is acceptable.
+7. An approved change is merged through the normal process.
+
+{/* TODO: Add diagram showing review checkpoints at planning, implementation, automated checks, and merge. */}
+
+Good feedback identifies the problem and the expected behaviour. "This fails when the list is empty. Preserve the existing empty response shape" gives the agent something precise to correct. Restarting with the entire original prompt wastes context and makes the next result harder to compare.
+
+During review, ask:
+
+- Does the change solve the requested problem?
+- Which assumptions did the agent make?
+- Are important edge cases missing?
+- Does the code follow existing project patterns?
+- Could the change affect security, privacy, or access control?
+- What behaviour is not covered by the tests?
+
+Step in before it finishes when the agent is clearly going the wrong way. Correcting early costs far less than reviewing a big diff built on a bad assumption.
+
+## Engineering Considerations
+
+Human review keeps responsibility where it belongs, with a person rather than a model. That lets a team hand implementation to agents and still own correctness, security, and design.
+
+This only saves time while the agent's work lands close enough that reviewing it beats writing it. If every task comes back needing heavy rework, drop to a more hands-on form of AI help, or write the code yourself.
+
+Make this the default for any agent change that matters. Save full autonomy for narrow, reversible work that has strong automated checks and does little damage when it goes wrong.
+
+Oversight can also go too far. Demand approval for every file read and every command and you have manual development with extra paperwork. Put checkpoints where the harm or the uncertainty is, not everywhere an agent appears.
+
+## Scaling and Operations
+
+Review capacity is the ceiling on agent output. Once agents produce more than people can actually read, approval turns into a rubber stamp. Run fewer tasks at once, or make them smaller, instead of asking reviewers to go faster.
+
+Send work to someone who knows the area it touches. A careful reviewer without that knowledge will still miss a broken business rule or a design conflict.
+
+Track how often each kind of task gets approved, revised, or rejected. That shows you where you can review more lightly and where agents still need watching.
+
+Security-sensitive changes need explicit checks for authentication, authorization, input handling, secrets, and data storage. A general [code review](/learn/ai-code-review) does not automatically cover these concerns. Keep permissions narrow and verify what the agent changed. Its summary is not a substitute for reading the diff.
+
+The point is not to take people out of development. It is to spend their attention where it actually changes the outcome.
+
+## Next Steps
+
+- [What are Coding Agents?](./coding-agents): understand how agents carry out development tasks
+- [What is AI Code Review?](./ai-code-review): add an automated review pass before human approval
+- [Human-in-the-Loop Review Workflow](/learn/workflows/git/human-in-the-loop-review): apply this process to day-to-day review
+- [AI Feature Development Workflow](/learn/workflows/ai/ai-feature-development): use review checkpoints throughout feature development

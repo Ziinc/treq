@@ -1,0 +1,15 @@
+id: no-e2e-xpath
+valid:
+  - |
+    page.getByRole('navigation', { name: 'Main' });
+  - |
+    page.getByRole('link', { name: 'Guides' });
+  - |
+    page.locator('text=Guides');
+invalid:
+  - |
+    page.locator('xpath=//nav/a');
+  - |
+    page.locator('//nav');
+  - |
+    page.locator('//*[@aria-label="Main"]');

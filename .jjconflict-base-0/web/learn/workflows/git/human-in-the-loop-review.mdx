@@ -1,0 +1,92 @@
+---
+sidebar_position: 4
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard"
+
+# Human-in-the-Loop Review Workflow
+
+_Compare an agent's change with its task, give precise feedback, and keep a person responsible for merge._
+
+## Introduction
+
+Agent-written code needs a review before it lands on a shared branch. The reviewer checks scope, behavior, design, and risk. Automated checks feed that decision, they do not make it.
+
+This workflow keeps review focused as the agent revises its work.
+
+## Understanding the Workflow
+
+A **review checkpoint** is a point where a person has to decide whether the work goes on, changes, or stops.
+
+<DefinitionCard
+  term="Review Checkpoint"
+  definition="A required point where a person examines agent output and decides whether to approve it, request changes, or reject it."
+/>
+
+Review starts with three records:
+
+- the original task says what should change
+- the agent summary says what the agent believes changed
+- the diff shows what changed
+
+Where those three disagree, the agent has either drifted out of scope or misread the task.
+
+A **delta review** looks only at what moved since the last round. It confirms your feedback landed without making you reread code that did not change.
+
+<DefinitionCard
+  term="Delta Review"
+  definition="A review of the changes between two iterations, used to verify requested corrections and detect new issues."
+/>
+
+{/* Diagram: Show the original task, summary, and diff entering structural review, logic review, feedback, agent revision, delta review, checks, and merge approval. Include a reject-and-restart path. */}
+
+## Applying It in Practice
+
+Read the task before the summary or diff. Then scan the diff at the file level:
+
+- Are the changed files expected?
+- Is the diff size proportionate to the task?
+- Did the agent add dependencies, configuration, or generated files?
+- Does new code duplicate an existing helper?
+- Did unrelated cleanup enter the change?
+
+Stop as soon as the shape of the diff tells you the agent solved a different problem. Fixing a wrong implementation through review comments costs more than starting again with a better task.
+
+Once the scope holds up, follow the main behavior and the failure paths that matter. Check authorization, data handling, resource lifetime, compatibility, and side effects where they apply. Read the tests, and make sure they actually fail when the code is wrong.
+
+Write feedback with a location, a concrete problem, and the required constraint. For example:
+
+```text
+In auth/token.ts, validateExpiry compares now with created_at.
+Use expires_at from the token record. Add a test for an expired token
+whose created_at value is still within the session duration.
+```
+
+Send related findings together and rank correctness or security issues first. After revision, inspect the delta and rerun relevant checks. Review the complete final diff before approval.
+
+## Engineering Considerations
+
+Precise feedback points the agent at the right code. It also leaves a record another engineer can judge.
+
+Do not quietly patch a big agent mistake yourself. Editing it directly hides whether the task or the repository guidance caused it. Small wording fixes are fine, but the final diff still needs a review.
+
+Passing tests do not prove the task was done right. The agent can bake the same wrong assumption into the code and the tests, which is why an [AI review pass](/learn/ai-code-review) sits before human approval rather than instead of it.
+
+Agree when to restart before review turns into an open-ended repair job. Start over when the approach breaks a core constraint, when the same bug keeps coming back, or when the reviewer can no longer explain what the diff does.
+
+## Scaling and Operations
+
+Review capacity is what caps agent output. Cut the number of tasks running at once when diffs sit too long or reviewers start skimming.
+
+Track review state next to the task, branch, owner, risk level, and current checkpoint. A [stack of dependent changes](/learn/concepts/git/stacked-prs) needs that tracking per layer. Send security and architecture work to reviewers who know the area.
+
+Measure revision rounds, review time, rejected changes, and bugs found after merge. Use what you learn to sharpen task scope and repository instructions, not to reward whoever merges the most.
+
+Keep permissions narrow until someone approves the work. An agent that writes code has no need to merge or deploy it.
+
+## Next Steps
+
+- [AI Code Review Workflow](/learn/workflows/ai/ai-code-review): add a focused automated review pass
+- [Parallel Development Workflow](./parallel-development): manage several isolated tasks
+- [What is Human-in-the-Loop Development?](/learn/concepts/ai-engineering/human-in-the-loop-development): understand review checkpoints and oversight
+- [What are Coding Agents?](/learn/concepts/ai-engineering/coding-agents): understand the output under review
