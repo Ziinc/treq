@@ -14,6 +14,7 @@ import {
 	getSetting,
 	getRepoSetting,
 	searchWorkspaceFiles,
+	setRepoSetting,
 	type FileSearchResult,
 } from "../lib/api";
 import { useToast } from "./ui/toast";
@@ -45,6 +46,11 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 	const [selectedAgent, setSelectedAgent] = useState<
 		"claude" | "codex" | "cursor"
 	>("claude");
+	const [configuredDefaultAgent, setConfiguredDefaultAgent] = useState<
+		"claude" | "codex" | "cursor"
+	>("claude");
+	const [saveAsRepoDefault, setSaveAsRepoDefault] = useState(false);
+	const [showSaveAsRepoDefault, setShowSaveAsRepoDefault] = useState(false);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const mentionRef = useRef<HTMLDivElement>(null);
 	const { addToast } = useToast();
@@ -77,6 +83,9 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 					repoAgent === "cursor"
 				) {
 					setSelectedAgent(repoAgent);
+					setConfiguredDefaultAgent(repoAgent);
+					setSaveAsRepoDefault(false);
+					setShowSaveAsRepoDefault(false);
 					return;
 				}
 				return getSetting("default_agent").then((globalAgent) => {
@@ -88,6 +97,15 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 					) {
 						setSelectedAgent(globalAgent);
 					}
+					setConfiguredDefaultAgent(
+						globalAgent === "claude" ||
+							globalAgent === "codex" ||
+							globalAgent === "cursor"
+							? globalAgent
+							: "claude",
+					);
+					setSaveAsRepoDefault(false);
+					setShowSaveAsRepoDefault(false);
 				});
 			})
 			.catch(() => {
@@ -277,6 +295,12 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 
 			setSubmitting(true);
 			try {
+				if (saveAsRepoDefault && selectedAgent !== configuredDefaultAgent) {
+					await setRepoSetting(repoPath, "default_agent", selectedAgent);
+					setConfiguredDefaultAgent(selectedAgent);
+					setSaveAsRepoDefault(false);
+				}
+
 				const sessionName =
 					trimmed.length > 50 ? `${trimmed.slice(0, 47)}...` : trimmed;
 
@@ -301,6 +325,7 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 
 				// Clear input on success
 				setTaskText("");
+				setShowSaveAsRepoDefault(false);
 			} catch (error) {
 				addToast({
 					title: "Failed to create task",
@@ -321,6 +346,8 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 			onSessionCreated,
 			addToast,
 			selectedAgent,
+			saveAsRepoDefault,
+			configuredDefaultAgent,
 		],
 	);
 
@@ -458,15 +485,33 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 						</div>
 
 						<div className="flex items-center gap-2">
+							{showSaveAsRepoDefault &&
+								selectedAgent !== configuredDefaultAgent && (
+									<label className="flex items-center gap-1.5 text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
+										<input
+											type="checkbox"
+											checked={saveAsRepoDefault}
+											onChange={(e) => setSaveAsRepoDefault(e.target.checked)}
+											className="h-3.5 w-3.5 accent-blue-500"
+										/>
+										Set as default for this repo
+									</label>
+								)}
 							{/* Agent picker */}
 							<select
 								aria-label="Agent"
 								value={selectedAgent}
-								onChange={(e) =>
-									setSelectedAgent(
-										e.target.value as "claude" | "codex" | "cursor",
-									)
-								}
+								onChange={(e) => {
+									const nextAgent = e.target.value as
+										| "claude"
+										| "codex"
+										| "cursor";
+									setSelectedAgent(nextAgent);
+									setSaveAsRepoDefault(false);
+									setShowSaveAsRepoDefault(
+										nextAgent !== configuredDefaultAgent,
+									);
+								}}
 								className="h-7 text-xs px-2 rounded-md border border-border bg-background text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-400"
 							>
 								<option value="claude">Claude</option>
