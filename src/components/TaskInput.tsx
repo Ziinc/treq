@@ -347,7 +347,7 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 				}
 			}
 
-			if (e.key === "Enter" && e.shiftKey) {
+			if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
 				e.preventDefault();
 				handleSubmit("acceptEdits");
 			}
@@ -491,7 +491,7 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 										</Button>
 									</TooltipTrigger>
 									<TooltipContent side="top">
-										<p className="text-xs">Shift+Enter</p>
+										<p className="text-xs">⌘+Enter</p>
 									</TooltipContent>
 								</Tooltip>
 							</TooltipProvider>

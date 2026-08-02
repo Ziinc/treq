@@ -97,6 +97,11 @@ describe("default agent configuration", () => {
 		await user.click(textarea);
 		await user.type(textarea, "codex task one");
 		await user.keyboard("{Shift>}{Enter}{/Shift}");
+		expect(textarea).toHaveValue("codex task one\n");
+		expect(
+			(await getSessions(repoPath)).some((s) => s.name === "codex task one"),
+		).toBe(false);
+		await user.keyboard("{Meta>}{Enter}{/Meta}");
 
 		await waitFor(async () => {
 			const sessions = await getSessions(repoPath);
@@ -109,7 +114,7 @@ describe("default agent configuration", () => {
 		const textarea2 = await screen.findByPlaceholderText(/describe a task/i);
 		await user.click(textarea2);
 		await user.type(textarea2, "claude task two");
-		await user.keyboard("{Shift>}{Enter}{/Shift}");
+		await user.keyboard("{Meta>}{Enter}{/Meta}");
 
 		await waitFor(async () => {
 			const sessions = await getSessions(repoPath);
