@@ -1,0 +1,95 @@
+---
+sidebar_position: 4
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard"
+
+# AI Refactoring Workflow
+
+_Change code structure while preserving observable behavior._
+
+## Introduction
+
+Coding agents are good at broad mechanical edits: moving modules, renaming symbols, and updating call sites. The risk is a change in behavior hidden inside a large structural diff.
+
+This workflow pins down current behavior first, limits the scope of the change, and checks after each step that behavior still matches.
+
+## Understanding the Workflow
+
+**Refactoring** changes how code is built inside without changing what it does. A bug fix or a feature belongs in its own change, because it asks the reviewer a different question.
+
+<DefinitionCard
+  term="Refactoring"
+  definition="A change to code structure that preserves the system's observable behavior."
+/>
+
+A **characterization test** records how the system behaves today. It gives you a safety net when existing tests do not cover the code you are about to change.
+
+<DefinitionCard
+  term="Characterization Test"
+  definition="A test written before refactoring to capture current behavior, including behavior whose original intent is uncertain."
+/>
+
+{/* Diagram: Show scope definition, behavior characterization, staged structural changes, equivalence review, and regression validation. Include a stop path when coverage is insufficient. */}
+
+Keep structural changes apart from behavior changes. The diff stays readable, and you can undo the refactor without also undoing a feature or a fix.
+
+## Applying It in Practice
+
+Write down what you are changing and where it stops:
+
+```text
+Extract authentication logic from UserController into AuthService.
+Preserve public API signatures and error behavior.
+Do not change authorization rules or response bodies.
+Update callers and tests only where names or imports require it.
+```
+
+Ask the agent to list the affected interfaces, callers, side effects, and existing tests. Where important behavior has no test, add characterization tests before you touch production code.
+
+Split broad work into stages:
+
+1. add missing behavior coverage
+2. move or extract code without cleanup
+3. update callers and imports
+4. remove obsolete structure
+5. rename and reformat to fit the new structure
+
+Run the relevant tests after every stage. Keep each diff small enough that you can compare control flow, data flow, and the order of side effects against what was there before.
+
+During review, check:
+
+- public and internal contracts
+- error types and timing
+- ordering of writes, events, logs, and cleanup
+- null, empty, and boundary cases
+- concurrency and resource lifetime
+- tests that changed alongside production behavior
+
+Run the full test suite, static analysis, and the build before you merge. Benchmark when the refactor touches a hot path you measure, because a change meant to be structural can still slow things down.
+
+## Engineering Considerations
+
+Tests lower the risk, but they only prove what they assert. Add type checking, static analysis, runtime traces, and targeted benchmarks where each one catches a failure the others miss.
+
+Prefer a codemod or a language-server refactor when it can express the change exactly. Use a [coding agent](/learn/concepts/ai-engineering/coding-agents) when the change needs context from the whole repository, or when call sites need different edits.
+
+Do not let the agent "clean up nearby code" during the refactor. Record useful follow-up work as separate tasks.
+
+Moving modules or renaming interfaces forces some test changes. Review those on their own and confirm no assertion got weaker.
+
+## Scaling and Operations
+
+Run refactors that touch shared interfaces one after another. [Parallel agents](/learn/parallel-coding-agents) editing the same callers create conflicts and make the diff harder to review.
+
+For large migrations, add a temporary shim layer and move callers in small groups. Keep the repository building after each group.
+
+Record the baseline test and benchmark results with the change. When a regression shows up after merge, a refactor that stands alone is easier to revert and bisect.
+
+Set an explicit condition for deleting the shim layer. Without one, a staged refactor leaves two code paths in place for good.
+
+## Next Steps
+
+- [AI Feature Development Workflow](./ai-feature-development): add behavior in a separate change
+- [AI Bug Fix Workflow](./ai-bug-fix): reproduce and correct defective behavior
+- [What is AI-Assisted Software Engineering?](/learn/concepts/ai-engineering/ai-assisted-software-engineering): place refactoring within the broader practice

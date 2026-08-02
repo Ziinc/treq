@@ -1,0 +1,43 @@
+# Dependencies
+/node_modules
+
+# Production
+/build
+
+# Generated files
+.docusaurus
+.cache-loader
+
+# TypeScript compiled output (tsc emits .js alongside .ts/.tsx sources)
+/src/**/*.js
+/src/**/*.d.ts
+/e2e/**/*.js
+/docusaurus.config.js
+/sidebars.js
+/sidebarsLearn.js
+/playwright.config.js
+
+# Misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Playwright
+/test-results/
+/playwright-report/
+
+# Version endpoint (generated at build time)
+/static/version
+
+# Search index (generated at build time)
+/static/site.db
+/static/site-*.db
+/static/search-meta.json
+/static/sqlite.worker.js
+/static/sql-wasm*.wasm

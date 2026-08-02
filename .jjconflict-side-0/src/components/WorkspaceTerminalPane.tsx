@@ -1,0 +1,568 @@
+import {
+	forwardRef,
+	memo,
+	useCallback,
+	useEffect,
+	useImperativeHandle,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
+import { type ConsolidatedTerminalHandle } from "./ConsolidatedTerminal";
+import { ptyClose } from "../lib/api";
+import { useKeyboardShortcut } from "../hooks/useKeyboard";
+import { type ClaudeSessionData } from "./terminal/types";
+import { WorkspaceTerminalPaneView } from "./WorkspaceTerminalPaneView";
+import { buildWorkspaceGroups } from "./workspace-terminal-pane/buildWorkspaceGroups";
+import { useTerminalPaneHeightResize } from "./workspace-terminal-pane/useTerminalPaneHeightResize";
+import {
+	type ShellTerminalData,
+	type WorkspaceTerminalPaneHandle,
+	type WorkspaceTerminalPaneProps,
+} from "./workspace-terminal-pane/types";
+
+export type { WorkspaceTerminalPaneHandle };
+
+const WorkspaceTerminalPaneInner = forwardRef<
+	WorkspaceTerminalPaneHandle,
+	WorkspaceTerminalPaneProps
+>(
+	(
+		{
+			workingDirectory,
+			onSessionError,
+			currentBranch,
+			claudeSessions = [],
+			activeClaudeSessionId = null,
+			onCreateNewSession,
+			onCloseSession,
+			onNavigateToWorkspace,
+			className,
+		},
+		ref,
+	) => {
+		// Shared pane state
+		const [collapsed, setCollapsed] = useState(true);
+		const [maximized, setMaximized] = useState(false);
+		const { height, isResizingHeight, handleHeightResizeMouseDown } =
+			useTerminalPaneHeightResize(maximized);
+		const scrollContainerRef = useRef<HTMLDivElement>(null);
+		const paneRef = useRef<HTMLDivElement>(null);
+
+		// Track which terminal is focused (last-clicked)
+		const [activePtySessionId, setActivePtySessionId] = useState<string | null>(
+			null,
+		);
+
+		// Clear active terminal when clicking outside the pane
+		useEffect(() => {
+			const handleMouseDown = (e: MouseEvent) => {
+				if (
+					activePtySessionId &&
+					paneRef.current &&
+					!paneRef.current.contains(e.target as Node)
+				) {
+					setActivePtySessionId(null);
+				}
+			};
+			document.addEventListener("mousedown", handleMouseDown);
+			return () => document.removeEventListener("mousedown", handleMouseDown);
+		}, [activePtySessionId]);
+
+		// Track scroll container width for computing 40% min terminal width
+		const [containerWidth, setContainerWidth] = useState(0);
+		useEffect(() => {
+			const el = scrollContainerRef.current;
+			if (!el) return;
+			const getEntryWidth = (entry: ResizeObserverEntry): number => {
+				const sizeFrom = (
+					size:
+						| ResizeObserverSize
+						| ReadonlyArray<ResizeObserverSize>
+						| undefined,
+				): number | undefined => {
+					if (!size) return undefined;
+					if ("inlineSize" in size) return size.inlineSize;
+					return size[0]?.inlineSize;
+				};
+
+				return (
+					entry.contentRect?.width ??
+					sizeFrom(entry.contentBoxSize) ??
+					sizeFrom(entry.borderBoxSize) ??
+					(entry.target as Element).clientWidth
+				);
+			};
+			// Set immediately so sticky headers work from first render
+			setContainerWidth(el.clientWidth);
+			const ro = new ResizeObserver((entries) => {
+				for (const entry of entries) {
+					setContainerWidth(getEntryWidth(entry));
+				}
+			});
+			ro.observe(el);
+			return () => ro.disconnect();
+		}, [collapsed]);
+
+		// Shell terminals - start empty (agent sessions are opened by default instead)
+		const [shellTerminals, setShellTerminals] = useState<ShellTerminalData[]>(
+			[],
+		);
+
+		// Track mounted Claude sessions to keep them alive
+		const [mountedClaudeSessions, setMountedClaudeSessions] = useState<
+			Set<number>
+		>(new Set());
+
+		// Track order of all terminals (shell and claude) by their IDs
+		const [terminalOrder, setTerminalOrder] = useState<string[]>([]);
+
+		// Track terminal widths by ID (null means flex-1, number is fixed pixel width)
+		const [terminalWidths, setTerminalWidths] = useState<
+			Map<string, number | null>
+		>(new Map());
+
+		// Shared refs for all terminals
+		const terminalRefs = useRef<Map<string, ConsolidatedTerminalHandle | null>>(
+			new Map(),
+		);
+
+		// Scroll a specific terminal element into view after render
+		const scrollToTerminal = useCallback((terminalId: string) => {
+			requestAnimationFrame(() => {
+				requestAnimationFrame(() => {
+					const el = scrollContainerRef.current?.querySelector(
+						`[data-terminal-id="${CSS.escape(terminalId)}"]`,
+					);
+					if (el) {
+						el.scrollIntoView({
+							behavior: "smooth",
+							block: "nearest",
+							inline: "nearest",
+						});
+					}
+				});
+			});
+		}, []);
+
+		// Auto-mount active session when it changes (after creation or selection)
+		useEffect(() => {
+			if (activeClaudeSessionId === null) return;
+
+			const claudeTerminalId = `claude-${activeClaudeSessionId}`;
+
+			setMountedClaudeSessions((prev) => {
+				if (prev.has(activeClaudeSessionId)) return prev;
+				const next = new Set(prev);
+				next.add(activeClaudeSessionId);
+				return next;
+			});
+
+			setTerminalOrder((prev) => {
+				if (prev.includes(claudeTerminalId)) return prev;
+				return [...prev, claudeTerminalId];
+			});
+
+			setCollapsed(false);
+
+			// Scroll to the new terminal after it's rendered
+			scrollToTerminal(claudeTerminalId);
+		}, [activeClaudeSessionId]);
+
+		// Derive the working directory for new terminals based on the active terminal's workspace.
+		// Falls back to the sidebar-selected workspace (workingDirectory prop).
+		const activeWorkspaceDir = useMemo(() => {
+			if (!activePtySessionId) return null;
+
+			// Check claude sessions
+			const activeClaude = claudeSessions.find(
+				(s) => s.ptySessionId === activePtySessionId,
+			);
+			if (activeClaude) {
+				return activeClaude.workspacePath || activeClaude.repoPath;
+			}
+
+			// Check shell terminals
+			const activeShell = shellTerminals.find(
+				(s) => s.id === activePtySessionId,
+			);
+			if (activeShell) {
+				return activeShell.workingDirectory;
+			}
+
+			return null;
+		}, [activePtySessionId, claudeSessions, shellTerminals]);
+
+		// Add new shell terminal in the active terminal's workspace, or sidebar-selected workspace
+		const handleAddShell = useCallback(
+			(dirOverride?: string) => {
+				const dir = dirOverride || activeWorkspaceDir || workingDirectory;
+				const newId = `shell-${dir.replace(/[^a-zA-Z0-9]/g, "-")}-${Date.now()}`;
+				setShellTerminals((prev) => [
+					...prev,
+					{ id: newId, workingDirectory: dir },
+				]);
+				// Add to terminal order (rightmost position)
+				setTerminalOrder((prev) => [...prev, newId]);
+				if (collapsed) {
+					setCollapsed(false);
+				}
+				scrollToTerminal(newId);
+			},
+			[activeWorkspaceDir, workingDirectory, collapsed, scrollToTerminal],
+		);
+
+		// Create Agent session in the active terminal's workspace, or sidebar-selected workspace
+		const handleCreateAgentSession = useCallback(
+			(agent?: "claude" | "codex" | "cursor") => {
+				onCreateNewSession?.(activeWorkspaceDir, agent);
+			},
+			[onCreateNewSession, activeWorkspaceDir],
+		);
+
+		// Close shell terminal
+		const handleCloseShell = useCallback(
+			(terminalId: string) => {
+				console.info(
+					"[WorkspaceTerminalPane] shell close requested",
+					JSON.stringify({
+						terminalId,
+						activePtySessionId,
+					}),
+				);
+				ptyClose(terminalId)
+					.then(() => {
+						console.info(
+							"[WorkspaceTerminalPane] ptyClose succeeded",
+							JSON.stringify({ terminalId }),
+						);
+					})
+					.catch((error) => {
+						console.warn(
+							"[WorkspaceTerminalPane] ptyClose failed",
+							JSON.stringify({
+								terminalId,
+								error: error instanceof Error ? error.message : String(error),
+							}),
+						);
+					});
+				terminalRefs.current.delete(terminalId);
+				console.info(
+					"[WorkspaceTerminalPane] terminal ref deleted",
+					JSON.stringify({ terminalId }),
+				);
+				setShellTerminals((prev) => prev.filter((t) => t.id !== terminalId));
+				setTerminalOrder((prev) => prev.filter((id) => id !== terminalId));
+				if (activePtySessionId === terminalId) {
+					console.info(
+						"[WorkspaceTerminalPane] clearing active shell session",
+						JSON.stringify({ terminalId }),
+					);
+					setActivePtySessionId(null);
+				}
+			},
+			[activePtySessionId],
+		);
+
+		// Close Claude session
+		const handleCloseClaudeSession = useCallback(
+			(sessionId: number) => {
+				const claudeTerminalId = `claude-${sessionId}`;
+				console.info(
+					"[WorkspaceTerminalPane] agent session close requested",
+					JSON.stringify({
+						sessionId,
+						claudeTerminalId,
+						activePtySessionId,
+					}),
+				);
+				const sessionData = claudeSessions.find(
+					(s) => s.sessionId === sessionId,
+				);
+				if (sessionData) {
+					// ptyClose(sessionData.ptySessionId).catch(console.error);
+					terminalRefs.current.delete(claudeTerminalId);
+					console.info(
+						"[WorkspaceTerminalPane] agent terminal ref deleted",
+						JSON.stringify({
+							sessionId,
+							claudeTerminalId,
+							ptySessionId: sessionData.ptySessionId,
+						}),
+					);
+				}
+				setMountedClaudeSessions((prev) => {
+					const next = new Set(prev);
+					next.delete(sessionId);
+					return next;
+				});
+				setTerminalOrder((prev) =>
+					prev.filter((id) => id !== claudeTerminalId),
+				);
+				onCloseSession?.(sessionId);
+				console.info(
+					"[WorkspaceTerminalPane] onCloseSession callback fired",
+					JSON.stringify({ sessionId }),
+				);
+				if (activePtySessionId === claudeTerminalId) {
+					console.info(
+						"[WorkspaceTerminalPane] clearing active agent session",
+						JSON.stringify({ sessionId, claudeTerminalId }),
+					);
+					setActivePtySessionId(null);
+				}
+			},
+			[
+				claudeSessions,
+				onCloseSession,
+				activeClaudeSessionId,
+				activePtySessionId,
+			],
+		);
+
+		// Expose methods via ref for command palette
+		useImperativeHandle(
+			ref,
+			() => ({
+				toggleCollapse: () => setCollapsed((prev) => !prev),
+				toggleMaximize: () => {
+					if (maximized) {
+						setMaximized(false);
+					} else {
+						setCollapsed(false);
+						setMaximized(true);
+					}
+				},
+				createAgentSession: handleCreateAgentSession,
+				createShellSession: handleAddShell,
+			}),
+			[maximized, handleCreateAgentSession, handleAddShell],
+		);
+
+		// Terminal width resize handler
+		const handleTerminalResize = useCallback(
+			(leftId: string, rightId: string, deltaX: number) => {
+				if (!scrollContainerRef.current) return;
+
+				setTerminalWidths((prev) => {
+					const newWidths = new Map(prev);
+					const container = scrollContainerRef.current;
+					if (!container) return prev;
+
+					// Minimum width is 2/5 of scroll container viewport
+					const minWidth = containerWidth * 0.4 || 300;
+
+					// Get current widths - if null, calculate from actual element width
+					const leftEl = container.querySelector(
+						`[data-terminal-id="${leftId}"]`,
+					) as HTMLElement | null;
+					const rightEl = container.querySelector(
+						`[data-terminal-id="${rightId}"]`,
+					) as HTMLElement | null;
+
+					if (!leftEl || !rightEl) return prev;
+
+					const leftCurrentWidth =
+						prev.get(leftId) ?? leftEl.getBoundingClientRect().width;
+					const rightCurrentWidth =
+						prev.get(rightId) ?? rightEl.getBoundingClientRect().width;
+
+					// Calculate new widths
+					let newLeftWidth = leftCurrentWidth + deltaX;
+					let newRightWidth = rightCurrentWidth - deltaX;
+
+					// Enforce minimum widths
+					if (newLeftWidth < minWidth) {
+						const diff = minWidth - newLeftWidth;
+						newLeftWidth = minWidth;
+						newRightWidth -= diff;
+					}
+					if (newRightWidth < minWidth) {
+						const diff = minWidth - newRightWidth;
+						newRightWidth = minWidth;
+						newLeftWidth -= diff;
+					}
+
+					// Don't update if either would be below minimum
+					if (newLeftWidth < minWidth || newRightWidth < minWidth) {
+						return prev;
+					}
+
+					newWidths.set(leftId, newLeftWidth);
+					newWidths.set(rightId, newRightWidth);
+
+					return newWidths;
+				});
+			},
+			[],
+		);
+
+		// Show ALL mounted Claude sessions (no workspace filtering)
+		const claudeSessionsToRender = claudeSessions.filter((s) => {
+			const isActiveSession = activeClaudeSessionId === s.sessionId;
+			return isActiveSession || mountedClaudeSessions.has(s.sessionId);
+		});
+
+		// Cmd+J: Toggle bottom terminal pane
+		useKeyboardShortcut(
+			"j",
+			true,
+			() => {
+				setCollapsed((prev) => !prev);
+			},
+			[],
+		);
+
+		// Cmd+Control+J: Toggle maximize/restore terminal pane
+		useKeyboardShortcut(
+			"j",
+			true,
+			() => {
+				if (maximized) {
+					// If already maximized, restore to expanded state
+					setMaximized(false);
+				} else {
+					// If collapsed or expanded, maximize
+					setCollapsed(false);
+					setMaximized(true);
+				}
+			},
+			[maximized],
+			{ requireBothCmdAndCtrl: true },
+		);
+
+		// Cmd+]: Create new agent terminal
+		useKeyboardShortcut(
+			"]",
+			true,
+			() => {
+				handleCreateAgentSession();
+			},
+			[handleCreateAgentSession],
+		);
+
+		// Cmd+\: Create new shell terminal
+		useKeyboardShortcut(
+			"\\",
+			true,
+			() => {
+				handleAddShell();
+			},
+			[handleAddShell],
+		);
+
+		// Build ordered list of all terminals for rendering based on terminalOrder
+		const shellTerminalMap = new Map(shellTerminals.map((t) => [t.id, t]));
+		const claudeSessionMap = new Map(
+			claudeSessionsToRender.map((s) => [`claude-${s.sessionId}`, s]),
+		);
+
+		const orderedTerminals: Array<
+			| { type: "shell"; data: ShellTerminalData }
+			| { type: "claude"; data: ClaudeSessionData }
+		> = terminalOrder
+			.map((id) => {
+				if (id.startsWith("shell-")) {
+					const shellData = shellTerminalMap.get(id);
+					if (shellData) {
+						return { type: "shell" as const, data: shellData };
+					}
+				} else if (id.startsWith("claude-")) {
+					const claudeData = claudeSessionMap.get(id);
+					if (claudeData) {
+						return { type: "claude" as const, data: claudeData };
+					}
+				}
+				return null;
+			})
+			.filter((t): t is NonNullable<typeof t> => t !== null);
+
+		// Ensure newly created Claude sessions render immediately even before their IDs
+		// are added to terminalOrder (e.g., pending agent sessions).
+		const missingClaudeTerminals = claudeSessionsToRender
+			.filter(
+				(session) => !terminalOrder.includes(`claude-${session.sessionId}`),
+			)
+			.map((session) => ({ type: "claude" as const, data: session }));
+
+		const allTerminals = [...orderedTerminals, ...missingClaudeTerminals];
+
+		// Auto-collapse when all terminals are closed
+		useEffect(() => {
+			if (allTerminals.length === 0) {
+				setCollapsed(true);
+				setMaximized(false);
+			}
+		}, [allTerminals.length]);
+
+		const workspaceGroups = useMemo(
+			() => buildWorkspaceGroups(allTerminals, claudeSessions),
+			[allTerminals, claudeSessions],
+		);
+
+		// Scroll to workspace group and focus first terminal when workingDirectory changes
+		useEffect(() => {
+			if (collapsed || !scrollContainerRef.current) return;
+			const matchingGroup = workspaceGroups.find(
+				(g) => g.workspaceKey === workingDirectory,
+			);
+			if (!matchingGroup || matchingGroup.terminals.length === 0) return;
+
+			// Scroll the group element into view
+			requestAnimationFrame(() => {
+				const groupEl = scrollContainerRef.current?.querySelector(
+					`[data-workspace-group="${CSS.escape(matchingGroup.workspaceKey)}"]`,
+				);
+				if (groupEl) {
+					groupEl.scrollIntoView({
+						behavior: "smooth",
+						block: "nearest",
+						inline: "start",
+					});
+				}
+			});
+
+			// Set the first terminal in the group as active
+			const [firstTerminal] = matchingGroup.terminals;
+			if (firstTerminal.type === "shell") {
+				setActivePtySessionId(firstTerminal.data.id);
+			} else {
+				setActivePtySessionId(firstTerminal.data.ptySessionId);
+			}
+		}, [workingDirectory]);
+
+		const totalTerminals = allTerminals.length;
+
+		return (
+			<WorkspaceTerminalPaneView
+				paneRef={paneRef}
+				className={className}
+				collapsed={collapsed}
+				maximized={maximized}
+				height={height}
+				isResizingHeight={isResizingHeight}
+				handleHeightResizeMouseDown={handleHeightResizeMouseDown}
+				totalTerminals={totalTerminals}
+				handleCreateAgentSession={handleCreateAgentSession}
+				handleAddShell={handleAddShell}
+				setCollapsed={setCollapsed}
+				setMaximized={setMaximized}
+				scrollContainerRef={scrollContainerRef}
+				workspaceGroups={workspaceGroups}
+				containerWidth={containerWidth}
+				onNavigateToWorkspace={onNavigateToWorkspace}
+				currentBranch={currentBranch}
+				activePtySessionId={activePtySessionId}
+				setActivePtySessionId={setActivePtySessionId}
+				handleCloseShell={handleCloseShell}
+				onSessionError={onSessionError}
+				terminalRefs={terminalRefs}
+				terminalWidths={terminalWidths}
+				handleTerminalResize={handleTerminalResize}
+				handleCloseClaudeSession={handleCloseClaudeSession}
+			/>
+		);
+	},
+);
+
+export const WorkspaceTerminalPane = memo(WorkspaceTerminalPaneInner);

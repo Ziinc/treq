@@ -1,0 +1,25 @@
+id: no-everything-matcher-tauri-src
+snapshots:
+  ? |
+    fn matcher() {
+      let _ = &EverythingMatcher;
+    }
+  : labels:
+    - source: '&EverythingMatcher'
+      style: primary
+      start: 25
+      end: 43
+  ? |
+    use jj_lib::matchers::EverythingMatcher;
+  : labels:
+    - source: use jj_lib::matchers::EverythingMatcher;
+      style: primary
+      start: 0
+      end: 40
+  ? |
+    use jj_lib::matchers::{NothingMatcher, EverythingMatcher};
+  : labels:
+    - source: use jj_lib::matchers::{NothingMatcher, EverythingMatcher};
+      style: primary
+      start: 0
+      end: 58

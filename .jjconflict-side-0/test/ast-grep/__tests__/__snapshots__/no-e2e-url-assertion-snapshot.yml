@@ -1,0 +1,16 @@
+id: no-e2e-url-assertion
+snapshots:
+  ? |
+    await expect(page).toHaveURL('/docs/guides');
+  : labels:
+    - source: expect(page).toHaveURL('/docs/guides')
+      style: primary
+      start: 6
+      end: 44
+  ? |
+    await expect(page).toHaveURL(/\/learn\/installation/);
+  : labels:
+    - source: expect(page).toHaveURL(/\/learn\/installation/)
+      style: primary
+      start: 6
+      end: 53

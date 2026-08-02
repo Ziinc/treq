@@ -1,0 +1,131 @@
+---
+sidebar_position: 2
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard";
+
+# What are Stacked PRs?
+
+_Stacked pull requests split one larger change into an ordered chain of dependent reviews._
+
+## Introduction
+
+In a stacked pull-request workflow, each branch builds on the branch below it. Each pull request targets its immediate parent branch, so reviewers see the increment introduced by that layer instead of the full change from `main`.
+
+This makes a large feature reviewable before every layer is complete. The cost is maintaining the dependencies as lower layers change and merge.
+
+## Understanding the Concept
+
+A **stacked pull request** is one pull request in an ordered chain. The bottom layer targets `main`. Every higher layer targets the branch directly below it.
+
+<DefinitionCard
+  term="Stacked Pull Request"
+  definition="A pull request whose branch depends on another pull-request branch, forming an ordered chain of incremental changes."
+/>
+
+<DefinitionCard
+  term="Stack Root"
+  definition="The lowest branch in a pull-request stack, usually the only layer that targets the main branch directly."
+/>
+
+{/* TODO: Add a branch-relationship diagram showing main, three dependent branches, each pull request's base and head, and the incremental diff visible to its reviewer. */}
+
+For example:
+
+```text
+main
+└── auth/schema       PR 1: auth/schema -> main
+    └── auth/service  PR 2: auth/service -> auth/schema
+        └── auth/api  PR 3: auth/api -> auth/service
+```
+
+If `auth/schema` changes during review, the branches above it still contain commits based on the old version. [Rebasing](./merge-vs-rebase) each dependent branch in order is a **restack**.
+
+<DefinitionCard
+  term="Restack"
+  definition="The process of rebasing dependent branches in order after a lower branch or the target branch changes."
+/>
+
+{/* TODO: Add a commit-history transformation diagram showing a change to the bottom layer followed by the ordered rebase of each dependent layer and their new commit IDs. */}
+
+The pull requests are independently reviewable, but the branches are not independent. A higher layer cannot be merged safely until its required lower layers are available on the target branch.
+
+## Applying It in Practice
+
+Create three layers:
+
+```bash
+git switch main
+git pull --ff-only
+
+git switch -c auth/schema
+# edit and commit
+
+git switch -c auth/service
+# edit and commit
+
+git switch -c auth/api
+# edit and commit
+```
+
+Open pull requests with these base branches:
+
+```text
+auth/schema  -> main
+auth/service -> auth/schema
+auth/api     -> auth/service
+```
+
+After changing the bottom layer, restack from bottom to top:
+
+```bash
+git switch auth/service
+git rebase auth/schema
+
+git switch auth/api
+git rebase auth/service
+
+git push --force-with-lease origin auth/service auth/api
+```
+
+Before pushing, inspect each layer against its intended base:
+
+```bash
+git log --oneline auth/schema..auth/service
+git diff auth/schema...auth/service
+```
+
+After the bottom pull request merges, retarget the next pull request to `main` if the hosting platform or stack tool does not do it. The exact diff can change when the platform squash-merges or rebases the lower layer because the merged commits have different identities. Restacking the remaining branches onto updated `main` restores a clear chain.
+
+## Engineering Considerations
+
+Use a stack when the feature has ordered layers with clear review boundaries. Schema, domain logic, and API changes can form a useful stack when each layer is testable and leaves the target branch in a valid state.
+
+Do not create a stack for a small change or split code at arbitrary file boundaries. That mistake is common with [AI-generated features](/learn/stacked-prs), where the whole diff arrives at once and gets split after the fact. Reviewers should be able to explain what one layer does without reading all later layers.
+
+Keep stacks shallow. Two or three stable layers are manageable by hand. Deep stacks with frequent changes near the root create repeated conflict resolution and force pushes. [Stack-aware tools](/learn/graphite-alternative) can automate branch bookkeeping and pull-request retargeting, but they cannot choose sound boundaries or resolve semantic conflicts.
+
+Merge order matters. Land layers from the root upward. If a project uses squash merge, expect the lower layer's commit identity to change on `main` and restack the remaining branches.
+
+## Scaling and Operations
+
+Assign one owner to maintain the branch chain, even when several developers contribute. That owner coordinates restacks, verifies pull-request bases, and tells reviewers when a diff changed after a force push.
+
+Automate these checks:
+
+- every layer has the expected base branch
+- commits in one layer do not appear unexpectedly in another
+- CI runs for each incremental diff and for the combined stack
+- force pushes use leases
+- merged layers are retargeted or removed
+
+Review the combined result as well as each layer. Individually correct diffs can still produce a broken integration when assumptions differ across layers.
+
+Avoid dependencies on branches owned by another team unless both teams agree on rewrite policy. A force push to a lower layer changes every dependent branch's base.
+
+## Next Steps
+
+- [Merge vs Rebase](./merge-vs-rebase): understand the rewrite and integration choices behind restacking
+- [Cherry-pick vs Rebase](./cherry-pick-vs-rebase): choose the correct operation for dependent commits
+- [Stacked PR Workflow](/learn/workflows/git/stacked-pr): create and maintain a stack step by step
+- [Parallel Development Workflow](/learn/workflows/git/parallel-development): separate independent work from dependent layers

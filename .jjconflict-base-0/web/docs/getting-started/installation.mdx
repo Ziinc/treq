@@ -1,0 +1,45 @@
+---
+sidebar_position: 1
+---
+
+# Installation and Quickstart
+
+_How to install and set up Treq on your machine._
+
+Download the latest version for macOS from the GitHub Releases page.
+
+[View Releases](https://github.com/Ziinc/treq/releases)
+
+Treq works with ordinary Git repositories. You do not need to install or learn [Jujutsu](https://docs.jj-vcs.dev/latest/install-and-setup/) to use it. Treq initializes colocated Jujutsu metadata itself when you open a repo, and it runs Git and Jujutsu operations [under the hood](/docs/under-the-hood).
+
+:::tip[Optional: install `jj` only for power-user debugging]
+
+Installing [Jujutsu (`jj`)](https://docs.jj-vcs.dev/latest/install-and-setup/) and adding it to your `PATH` is optional. It can help when you intentionally inspect repository state from a shell. For normal Treq use, stay in the app. Dropping to the `jj` CLI is not recommended as a day-to-day workflow.
+
+:::
+
+## Initial Setup
+
+Click **Select Repository** or the folder icon, and navigate to a Git repository, selecting the folder containing `.git`. [Using Treq with a Git repository](/docs/tutorials/using-treq-with-git-repo) covers what Treq writes to that folder.
+
+## Creating Your First Workspace
+
+A [workspace](/docs/concepts/workspaces) is where each piece of parallel work lives.
+
+1. Click **New Workspace** (or press `Cmd+N`) to open the creation dialog.
+2. Fill in a plan title describing what you're working on.
+3. Adjust the branch name if needed.
+4. Click **Create Workspace** to save.
+
+## Starting an Agent
+
+1. In the **Code** tab, write your prompt into the prompt input.
+2. Submit the prompt.
+3. Watch the agent terminal open and start running.
+4. Open the **Review** tab to view the agent's changes.
+
+## Commit, Push, Merge
+
+1. Commit changes in the **Review** tab.
+2. Push changes to remote.
+3. Optionally merge locally by clicking the **Merge** button.

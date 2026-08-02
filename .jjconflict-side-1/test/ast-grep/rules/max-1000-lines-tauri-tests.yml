@@ -1,0 +1,14 @@
+id: max-2000-lines-tauri-tests
+language: rust
+severity: warning
+message: >
+  Keep test files in src-tauri/tests/ at 2000 lines or fewer. Split oversized test
+  files into focused modules.
+files:
+  - "src-tauri/tests/**/*_test.rs"
+ignores:
+  - "src-tauri/tests/core_workspaces_test.rs"
+rule:
+  kind: source_file
+  # Triggers when a file has 1001+ lines.
+  regex: (?m)(?:^[^\n]*\n){2001,}
