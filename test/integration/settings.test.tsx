@@ -55,4 +55,20 @@ describe("Settings integration", () => {
 		await screen.findByLabelText(/claude code model/i);
 		expect(screen.queryByLabelText(/theme/i)).not.toBeInTheDocument();
 	});
+
+	it("returns to the previous page when settings is closed", async () => {
+		render(<Dashboard />);
+
+		await user.click(await screen.findByLabelText("Settings"));
+		expect(
+			await screen.findByRole("heading", { name: "Settings" }),
+		).toBeVisible();
+
+		await user.click(screen.getByRole("button", { name: "Close" }));
+
+		expect(
+			screen.queryByRole("heading", { name: "Settings" }),
+		).not.toBeInTheDocument();
+		expect(await screen.findByText(/Terminals/i)).toBeVisible();
+	});
 });
