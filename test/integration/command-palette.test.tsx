@@ -1,15 +1,27 @@
 import * as React from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import userEvent from "@testing-library/user-event";
-import { createTestRepo, openRepo } from "../utils";
+import { createTestRepo, findSidebarBranchElement, openRepo } from "../utils";
 import { render, screen, waitFor } from "../test-utils";
 import { Dashboard } from "../../src/components/Dashboard";
+import { createWorkspace } from "../../src/lib/api";
 
 describe("CommandPalette integration", () => {
 	let user: ReturnType<typeof userEvent.setup>;
+	let repoPath: string;
 
 	beforeEach(() => {
-		const { repoPath } = createTestRepo(false);
+		const values = new Map<string, string>();
+		Object.defineProperty(globalThis, "localStorage", {
+			configurable: true,
+			value: {
+				getItem: (key: string) => values.get(key) ?? null,
+				setItem: (key: string, value: string) => values.set(key, value),
+				removeItem: (key: string) => values.delete(key),
+				clear: () => values.clear(),
+			},
+		});
+		({ repoPath } = createTestRepo(false));
 		openRepo(repoPath);
 		user = userEvent.setup();
 	});
@@ -47,6 +59,27 @@ describe("CommandPalette integration", () => {
 
 		await screen.findByPlaceholderText("Search files...");
 
+		await waitFor(() => {
+			expect(
+				screen.queryByPlaceholderText("Type a command or search..."),
+			).not.toBeInTheDocument();
+		});
+	});
+
+	it("opens the same stacked workspace dialog as the Stack button", async () => {
+		await createWorkspace(repoPath, "feat/parent");
+		render(<Dashboard />);
+		await user.click(await findSidebarBranchElement("feat/parent"));
+
+		await user.keyboard("{Control>}k{/Control}");
+		await user.click(await screen.findByText("Create Workspace"));
+
+		expect(await screen.findByText("Stack a new Workspace")).toBeVisible();
+		expect(
+			screen.getByText(
+				"Create a new workspace stacked on feat/parent. Optionally move commits or file changes.",
+			),
+		).toBeVisible();
 		await waitFor(() => {
 			expect(
 				screen.queryByPlaceholderText("Type a command or search..."),

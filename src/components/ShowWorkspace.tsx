@@ -106,6 +106,7 @@ interface ShowWorkspaceProps {
 	onDeleteWorkspace?: (workspace: Workspace) => void;
 	onOpenFilePicker?: () => void;
 	onSessionCreated?: (session: SessionCreationInfo) => void;
+	taskInputFocusRequest?: number;
 	onOpenMergePreview?: () => void;
 	onOpenBranchSwitcher?: () => void;
 	onCreateStackedWorkspace?: () => void;
@@ -143,6 +144,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 		onDeleteWorkspace,
 		onOpenFilePicker,
 		onSessionCreated,
+		taskInputFocusRequest,
 		onOpenMergePreview,
 		onOpenBranchSwitcher,
 		onCreateStackedWorkspace,
@@ -263,6 +265,10 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			setBookmarkConflict(null);
 			setConflictModalOpen(false);
 		}, [workspace?.id]);
+
+		useEffect(() => {
+			if (taskInputFocusRequest) setActiveTab("overview");
+		}, [taskInputFocusRequest]);
 
 		// Load workspace commit count to control Committed toggle availability
 		const loadWorkspaceCommitCount = useCallback(async () => {
@@ -1147,6 +1153,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 											workspaceId={workspace?.id ?? null}
 											workspacePath={workspace?.workspace_path ?? null}
 											workingDirectory={workingDirectory}
+											focusRequest={taskInputFocusRequest}
 											onSessionCreated={onSessionCreated}
 										/>
 										{/* Stack */}

@@ -27,6 +27,7 @@ interface TaskInputProps {
 	workspacePath: string | null;
 	workingDirectory: string;
 	onSessionCreated?: (session: SessionCreationInfo) => void;
+	focusRequest?: number;
 }
 
 export const TaskInput: React.FC<TaskInputProps> = ({
@@ -35,6 +36,7 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 	workspacePath,
 	workingDirectory,
 	onSessionCreated,
+	focusRequest,
 }) => {
 	const [taskText, setTaskText] = useState("");
 	const [filePickerOpen, setFilePickerOpen] = useState(false);
@@ -58,6 +60,10 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 	useEffect(() => {
 		textareaRef.current?.focus();
 	}, [workspaceId]);
+
+	useEffect(() => {
+		if (focusRequest) textareaRef.current?.focus();
+	}, [focusRequest]);
 
 	// Load default agent from repo setting, falling back to global setting
 	useEffect(() => {
