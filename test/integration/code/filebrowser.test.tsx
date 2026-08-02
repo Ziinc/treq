@@ -87,6 +87,34 @@ describe("Dashboard - FileBrowser integration", () => {
 		await screen.findByRole("button", { name: /back/i });
 	});
 
+	it("uses Code and Preview tabs for markdown files and defaults to Code", async () => {
+		await setupWorkspace("feat/filebrowser-markdown-preview-test", {
+			"guide.md": "# Getting started\n\nUse **Treq** to ship changes.\n",
+		});
+
+		const fileBrowser = await openWorkspaceCodeBrowser(
+			user,
+			"feat/filebrowser-markdown-preview-test",
+			"guide.md",
+		);
+
+		const codeTab = fileBrowser.getByRole("tab", { name: "Code" });
+		const previewTab = fileBrowser.getByRole("tab", { name: "Preview" });
+		expect(codeTab).toHaveAttribute("aria-selected", "true");
+		expect(previewTab).toHaveAttribute("aria-selected", "false");
+		expect(
+			(await fileBrowser.findAllByTestId("code-line")).length,
+		).toBeGreaterThan(0);
+
+		await user.click(previewTab);
+
+		expect(
+			await fileBrowser.findByRole("heading", { name: "Getting started" }),
+		).toBeTruthy();
+		expect(fileBrowser.getByText("Treq").tagName).toBe("STRONG");
+		expect(previewTab).toHaveAttribute("aria-selected", "true");
+	});
+
 	it("shows humanized modified time and reveals absolute timestamp on hover in file header", async () => {
 		const { workspacePath } = await setupWorkspace(
 			"feat/filebrowser-edit-time-test",

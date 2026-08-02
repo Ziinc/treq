@@ -4,7 +4,9 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	AlertCircle,
 	Check,
+	Code2,
 	Copy,
+	Eye,
 	FileText,
 	Folder,
 	FolderOpen,
@@ -28,6 +30,7 @@ import {
 	formatFullTimestamp,
 	formatRelativeTime,
 	getFullWorkspacePath,
+	resolveReadmeImageSrc,
 } from "../lib/utils";
 import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
 import { useToast } from "./ui/toast";
@@ -64,6 +67,8 @@ import {
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useEditorApps } from "../hooks/useEditorApps";
 import { CommentInput } from "./CommentInput";
+import { MarkdownContent } from "./MarkdownContent";
+import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 
 // Helper to check if file is binary
 function isBinaryFile(path: string): boolean {
@@ -354,6 +359,15 @@ const FileContentView = memo(
 	}: FileContentViewProps) => {
 		const [copied, setCopied] = useState(false);
 		const [copiedPath, setCopiedPath] = useState(false);
+		const [markdownView, setMarkdownView] = useState<{
+			path: string;
+			preview: boolean;
+		} | null>(null);
+		const isMarkdown = selectedFile
+			? /\.(?:md|markdown)$/i.test(selectedFile)
+			: false;
+		const showMarkdownPreview =
+			isMarkdown && markdownView?.path === selectedFile && markdownView.preview;
 
 		const relativePath =
 			selectedFile && basePath && selectedFile.startsWith(`${basePath}/`)
@@ -466,6 +480,34 @@ const FileContentView = memo(
 									</TooltipContent>
 								</Tooltip>
 							)}
+							{isMarkdown && (
+								<Tabs
+									value={showMarkdownPreview ? "preview" : "code"}
+									onValueChange={(value) =>
+										setMarkdownView({
+											path: selectedFile ?? "",
+											preview: value === "preview",
+										})
+									}
+								>
+									<TabsList className="p-0.5 gap-0.5 text-xs">
+										<TabsTrigger
+											value="code"
+											className="flex items-center gap-1 px-2 py-0.5"
+										>
+											<Code2 className="w-3.5 h-3.5" />
+											Code
+										</TabsTrigger>
+										<TabsTrigger
+											value="preview"
+											className="flex items-center gap-1 px-2 py-0.5"
+										>
+											<Eye className="w-3.5 h-3.5" />
+											Preview
+										</TabsTrigger>
+									</TabsList>
+								</Tabs>
+							)}
 							<Tooltip>
 								<TooltipTrigger asChild>
 									<button
@@ -488,113 +530,134 @@ const FileContentView = memo(
 					</div>
 				</TooltipProvider>
 				<div className="flex-1 overflow-hidden relative">
-					<List
-						listRef={listRef}
-						rowCount={
-							lines.length + (showCommentInput && pendingComment ? 1 : 0)
-						}
-						rowHeight={getItemHeight}
-						rowComponent={({
-							index,
-							style,
-						}: {
-							index: number;
-							style: React.CSSProperties;
-						}) => {
-							// Comment row is inserted at index = pendingComment.endLine (after last selected line)
-							if (
-								showCommentInput &&
-								pendingComment &&
-								index === pendingComment.endLine
-							) {
-								return (
-									<div style={style}>
-										<CommentInput
-											onSubmit={onSubmitComment}
-											onCancel={onCancelComment}
-											filePath={relativePath ?? undefined}
-											startLine={pendingComment.startLine}
-											endLine={pendingComment.endLine}
-										/>
-									</div>
-								);
-							}
-
-							// For rows after the comment row, adjust index to account for inserted row
-							const lineIndex =
-								showCommentInput &&
-								pendingComment &&
-								index > pendingComment.endLine
-									? index - 1
-									: index;
-							const lineNum = lineIndex + 1;
-							let line = lines[lineIndex];
-							const diffStatus = fileHunks.get(lineNum);
-							const hasDeletionMarker = deletionMarkers.has(lineNum);
-
-							// Apply search highlighting if there's a query
-							if (searchQuery) {
-								// Find which global match index corresponds to this line
-								const lineMatches = searchMatches.filter(
-									(m) => m.lineNumber === lineIndex,
-								);
-								if (lineMatches.length > 0) {
-									// Find global index of first match on this line
-									const firstMatchGlobalIndex = searchMatches.findIndex(
-										(m) => m.lineNumber === lineIndex,
-									);
-									const isCurrentMatchOnLine =
-										searchMatches[currentMatchIndex]?.lineNumber === lineIndex;
-									const currentMatchOffset = isCurrentMatchOnLine
-										? currentMatchIndex - firstMatchGlobalIndex
-										: -1;
-
-									const result = highlightInHtml(
-										line,
-										searchQuery,
-										currentMatchOffset,
-									);
-									line = result.html;
+					{isMarkdown && showMarkdownPreview ? (
+						<div className="h-full overflow-auto bg-background px-8 py-6">
+							<MarkdownContent
+								content={fileContent}
+								resolveImageSrc={(src) => {
+									const separator = selectedFile.lastIndexOf("/");
+									const markdownDir =
+										separator >= 0
+											? selectedFile.slice(0, separator)
+											: basePath;
+									return resolveReadmeImageSrc(src, markdownDir);
+								}}
+							/>
+						</div>
+					) : (
+						<>
+							<List
+								listRef={listRef}
+								rowCount={
+									lines.length + (showCommentInput && pendingComment ? 1 : 0)
 								}
-							}
+								rowHeight={getItemHeight}
+								rowComponent={({
+									index,
+									style,
+								}: {
+									index: number;
+									style: React.CSSProperties;
+								}) => {
+									// Comment row is inserted at index = pendingComment.endLine (after last selected line)
+									if (
+										showCommentInput &&
+										pendingComment &&
+										index === pendingComment.endLine
+									) {
+										return (
+											<div style={style}>
+												<CommentInput
+													onSubmit={onSubmitComment}
+													onCancel={onCancelComment}
+													filePath={relativePath ?? undefined}
+													startLine={pendingComment.startLine}
+													endLine={pendingComment.endLine}
+												/>
+											</div>
+										);
+									}
 
-							return (
-								<CodeLine
-									lineNum={lineNum}
-									htmlContent={line}
-									diffStatus={diffStatus}
-									hasDeletionMarker={hasDeletionMarker}
-									lineNumberWidth={lineNumberWidth}
-									onMouseEnter={() => onSetHoveredLine(lineNum)}
-									onMouseLeave={() => onSetHoveredLine(null)}
-									style={style}
-									fontSize={fontSize}
-									hoveredLine={hoveredLine}
-									isLineSelected={isLineSelected(lineNum)}
-									isSelecting={isSelecting}
-									onLineMouseDown={onLineMouseDown}
-									onLineMouseEnter={onLineMouseEnter}
-									onLineMouseUp={onLineMouseUp}
-									onAddComment={onAddComment}
-								/>
-							);
-						}}
-						// eslint-disable-next-line @typescript-eslint/no-explicit-any
-						rowProps={{} as any}
-					/>
-					{/* Search overlay */}
-					<SearchOverlay
-						isVisible={isSearchOpen}
-						query={searchQueryDisplay}
-						onQueryChange={onSearchQueryChange}
-						onNext={onSearchNext}
-						onPrevious={onSearchPrevious}
-						onClose={onSearchClose}
-						currentMatch={searchMatches.length > 0 ? currentMatchIndex + 1 : 0}
-						totalMatches={searchMatches.length}
-						className="absolute top-2 right-2 z-20"
-						focusTrigger={searchFocusTrigger}
-					/>
+									// For rows after the comment row, adjust index to account for inserted row
+									const lineIndex =
+										showCommentInput &&
+										pendingComment &&
+										index > pendingComment.endLine
+											? index - 1
+											: index;
+									const lineNum = lineIndex + 1;
+									let line = lines[lineIndex];
+									const diffStatus = fileHunks.get(lineNum);
+									const hasDeletionMarker = deletionMarkers.has(lineNum);
+
+									// Apply search highlighting if there's a query
+									if (searchQuery) {
+										// Find which global match index corresponds to this line
+										const lineMatches = searchMatches.filter(
+											(m) => m.lineNumber === lineIndex,
+										);
+										if (lineMatches.length > 0) {
+											// Find global index of first match on this line
+											const firstMatchGlobalIndex = searchMatches.findIndex(
+												(m) => m.lineNumber === lineIndex,
+											);
+											const isCurrentMatchOnLine =
+												searchMatches[currentMatchIndex]?.lineNumber ===
+												lineIndex;
+											const currentMatchOffset = isCurrentMatchOnLine
+												? currentMatchIndex - firstMatchGlobalIndex
+												: -1;
+
+											const result = highlightInHtml(
+												line,
+												searchQuery,
+												currentMatchOffset,
+											);
+											line = result.html;
+										}
+									}
+
+									return (
+										<CodeLine
+											lineNum={lineNum}
+											htmlContent={line}
+											diffStatus={diffStatus}
+											hasDeletionMarker={hasDeletionMarker}
+											lineNumberWidth={lineNumberWidth}
+											onMouseEnter={() => onSetHoveredLine(lineNum)}
+											onMouseLeave={() => onSetHoveredLine(null)}
+											style={style}
+											fontSize={fontSize}
+											hoveredLine={hoveredLine}
+											isLineSelected={isLineSelected(lineNum)}
+											isSelecting={isSelecting}
+											onLineMouseDown={onLineMouseDown}
+											onLineMouseEnter={onLineMouseEnter}
+											onLineMouseUp={onLineMouseUp}
+											onAddComment={onAddComment}
+										/>
+									);
+								}}
+								// eslint-disable-next-line @typescript-eslint/no-explicit-any
+								rowProps={{} as any}
+							/>
+							{/* Search overlay */}
+							<SearchOverlay
+								isVisible={isSearchOpen}
+								query={searchQueryDisplay}
+								onQueryChange={onSearchQueryChange}
+								onNext={onSearchNext}
+								onPrevious={onSearchPrevious}
+								onClose={onSearchClose}
+								currentMatch={
+									searchMatches.length > 0 ? currentMatchIndex + 1 : 0
+								}
+								totalMatches={searchMatches.length}
+								className="absolute top-2 right-2 z-20"
+								focusTrigger={searchFocusTrigger}
+							/>
+						</>
+					)}
 				</div>
 			</div>
 		);

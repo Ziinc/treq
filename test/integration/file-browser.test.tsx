@@ -17,6 +17,10 @@ describe("FileBrowser text selection", () => {
 		user = userEvent.setup({ writeToClipboard: true });
 	});
 
+	async function viewReadmeSource() {
+		fireEvent.click(await screen.findByRole("tab", { name: "Code" }));
+	}
+
 	it("does not block native text selection on double-click mousedown", async () => {
 		render(
 			<FileBrowser
@@ -26,6 +30,7 @@ describe("FileBrowser text selection", () => {
 				initialExpandedDir={null}
 			/>,
 		);
+		await viewReadmeSource();
 
 		const lines = await screen.findAllByTestId("code-line");
 		expect(lines.length).toBeGreaterThan(0);
@@ -44,6 +49,7 @@ describe("FileBrowser text selection", () => {
 				initialExpandedDir={null}
 			/>,
 		);
+		await viewReadmeSource();
 
 		const lines = await screen.findAllByTestId("code-line");
 		const codeSpan = within(lines[0]).getByTestId("code-line-content");
@@ -73,6 +79,7 @@ describe("FileBrowser text selection", () => {
 				initialExpandedDir={null}
 			/>,
 		);
+		await viewReadmeSource();
 
 		const lines = await screen.findAllByTestId("code-line");
 		const [line] = lines;
