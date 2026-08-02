@@ -1,0 +1,86 @@
+use crate::core;
+use crate::AppState;
+use std::collections::HashMap;
+use std::time::Instant;
+use tauri::{State, Window};
+
+#[tauri::command]
+pub async fn init_repo(repo_path: String) -> Result<bool, String> {
+    let started_at = Instant::now();
+    let repo_path_for_task = repo_path.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        core::init(&repo_path_for_task).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("Failed to join init_repo task: {}", e))?;
+    log::debug!(
+        "init_repo(repo_path={}) completed in {:?}",
+        repo_path,
+        started_at.elapsed()
+    );
+    result
+}
+
+#[tauri::command]
+pub fn get_setting(state: State<AppState>, key: String) -> Result<Option<String>, String> {
+    let db = state.db.lock().unwrap();
+    db.get_setting(&key).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_settings_batch(
+    state: State<AppState>,
+    keys: Vec<String>,
+) -> Result<HashMap<String, Option<String>>, String> {
+    let db = state.db.lock().unwrap();
+    db.get_settings_batch(&keys).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_setting(state: State<AppState>, key: String, value: String) -> Result<(), String> {
+    let db = state.db.lock().unwrap();
+    db.set_setting(&key, &value).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_repo_setting(
+    state: State<AppState>,
+    repo_path: String,
+    key: String,
+) -> Result<Option<String>, String> {
+    let db = state.db.lock().unwrap();
+    db.get_repo_setting(&repo_path, &key)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_repo_setting(
+    state: State<AppState>,
+    repo_path: String,
+    key: String,
+    value: String,
+) -> Result<(), String> {
+    let db = state.db.lock().unwrap();
+    db.set_repo_setting(&repo_path, &key, &value)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_window_repo_path(
+    state: State<AppState>,
+    window: Window,
+    repo_path: String,
+) -> Result<(), String> {
+    let mut map = state.window_repo_paths.lock().unwrap();
+    map.insert(window.label().to_string(), repo_path);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_window_repo_path(
+    state: State<AppState>,
+    window: Window,
+) -> Result<Option<String>, String> {
+    let map = state.window_repo_paths.lock().unwrap();
+    Ok(map.get(window.label()).cloned())
+}

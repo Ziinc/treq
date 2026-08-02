@@ -1,0 +1,95 @@
+---
+sidebar_position: 3
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard";
+
+# What are Coding Agents?
+
+## Introduction
+
+A **coding agent** is an AI system that can inspect a codebase, edit files, run commands, and respond to the results. You give it a goal instead of every individual step, and it works through the task until it finishes or needs help.
+
+<DefinitionCard
+  term="Coding Agent"
+  definition="An AI system that uses tools to inspect and change a codebase, run development commands, and complete a software task from a stated goal."
+/>
+
+This is different from asking a chatbot to produce a code snippet. A chatbot returns text for you to apply. A coding agent acts on real files, which makes it more useful but also gives its mistakes real consequences.
+
+This article explains how coding agents work, where they are useful, and what developers need to check before shipping their changes.
+
+## Understanding the Concept
+
+A coding agent combines a language model with tools such as code search, a file editor, a shell, a test runner, and sometimes external services. The model chooses a tool, examines the result, and then decides what to do next.
+
+<DefinitionCard
+  term="Agent Loop"
+  definition="The repeated process in which an agent observes the current state, chooses an action, performs it, and uses the result to decide its next action."
+/>
+
+{/* TODO: Add diagram showing the agent loop: observe, decide, act, verify, then repeat or finish. */}
+
+The underlying model may be the same one used in a chat tool. The difference is that the agent can take actions and keep working across several steps. Chat tools and agents sit at different points on the [AI-assisted software engineering](/learn/concepts/ai-engineering/ai-assisted-software-engineering) spectrum.
+
+| | Chat tool | Coding agent |
+| --- | --- | --- |
+| Result | Suggested text or code | Changes made to working files |
+| Tools | Usually limited | File search, editing, shell, tests, and APIs |
+| Work | Guided one response at a time | Continues through a multi-step task |
+| Mistakes | Remain in the response until copied | Can change files or run commands immediately |
+
+Agents cannot read an entire large codebase at once. They search for what appears relevant and bring a limited amount of it into the model's context. The search can miss an existing helper, an important convention, or a related code path. When it does, the agent produces a change that looks reasonable on its own but does not fit the rest of the system.
+
+<DefinitionCard
+  term="Context Window"
+  definition="The limited amount of instructions, code, and tool output that a model can consider at one time."
+/>
+
+Narrow tasks are easier because they require less context. Clear file references and project rules help the agent find the right starting point, but it should still inspect the code before acting on the prompt.
+
+## Applying It in Practice
+
+Give the agent one clear outcome and enough context to begin. For example: "Add pagination to the user list endpoint in `api/users.py`. Reuse the helper in `utils/pagination.py`, preserve the current response shape, and add tests for the first and final pages."
+
+A capable agent will usually:
+
+1. inspect the relevant code and project instructions
+2. form a plan
+3. edit the implementation and tests
+4. run the appropriate checks
+5. investigate failures and revise the change
+6. report what changed and anything it could not verify
+
+Watch for a wrong assumption early in the run. If the agent is reading unrelated files, rebuilding an existing helper, or repeatedly trying the same failed approach, give it the missing context or narrow the remaining task.
+
+Always review the complete diff, which is the heart of a working [human-in-the-loop review system](/learn/ai-code-review). Tests may pass because the agent made the same incorrect assumption in both the code and the tests. Check for unrequested changes, new dependencies, missed edge cases, security-sensitive behaviour, and code that departs from established project patterns.
+
+## Engineering Considerations
+
+Coding agents work best on tasks with clear outcomes and familiar implementation patterns. Examples include adding tests, updating an API usage, implementing a standard endpoint, or applying a repeated change across several files.
+
+They are less reliable when the work depends on unclear requirements, new architecture, unusual domain knowledge, or security decisions. In those cases, explaining and reviewing the result can take longer than writing it directly.
+
+Do not delegate work that nobody on the team can evaluate. Plausible-looking code is not evidence that it is correct. Use autocomplete or chat assistance when a developer needs to retain close control over each decision.
+
+Agent reliability is specific to both the task and the codebase. Good results on test generation do not prove that the same agent should design an authentication system. Build trust by observing repeated results in a narrow category, not by assuming one success applies everywhere.
+
+## Scaling and Operations
+
+A mistaken assumption can spread through every later step. An agent may misunderstand a schema, change several callers to match that misunderstanding, and write tests that confirm its own interpretation. Clear scope and early observation are cheaper than untangling a broad change at the end.
+
+Agents may also invent methods, options, or library behaviour that look valid but do not exist in the installed version. Running tests, type checks, and builds catches many of these errors. Reviewing unfamiliar API calls against local documentation or the actual dependency catches the rest.
+
+[Parallel agents](/learn/parallel-coding-agents) need separate workspaces. If several agents edit the same directory, their changes can conflict or overwrite each other. Give each agent its own worktree, branch, sandbox, or clone, then merge changes only after review.
+
+{/* TODO: Add diagram showing several coding agents working in isolated worktrees and submitting separate changes for review. */}
+
+Limit each agent's permissions to what its task requires. A documentation task should not have production credentials, and an agent that only needs to run tests should not be able to deploy. Record important commands and file changes so failures can be investigated.
+
+## Next Steps
+
+- [What is Human-in-the-Loop Development?](./human-in-the-loop-development): learn how people review and approve agent output
+- [What is Agent Orchestration?](./agent-orchestration): coordinate several agents working on separate tasks
+- [What are Git Worktrees?](/learn/concepts/git/git-worktrees): isolate parallel changes in separate working directories
+- [AI Feature Development Workflow](/learn/workflows/ai/ai-feature-development): use a coding agent to implement a feature from start to review

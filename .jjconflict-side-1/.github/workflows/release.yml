@@ -1,0 +1,138 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      notes: ${{ steps.gen.outputs.notes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Delete pre-existing draft release for this version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
+          TAG="v${VERSION}"
+
+          RELEASE_ID=$(gh api "repos/${{ github.repository }}/releases" \
+            --jq ".[] | select(.tag_name == \"${TAG}\" and .draft == true) | .id")
+
+          if [ -n "$RELEASE_ID" ]; then
+            echo "Deleting existing draft release for ${TAG}"
+            gh api -X DELETE "repos/${{ github.repository }}/releases/${RELEASE_ID}"
+          fi
+
+          if gh api "repos/${{ github.repository }}/git/refs/tags/${TAG}" > /dev/null 2>&1; then
+            echo "Deleting existing tag ${TAG}"
+            gh api -X DELETE "repos/${{ github.repository }}/git/refs/tags/${TAG}"
+          fi
+
+      - name: Install git-cliff
+        uses: taiki-e/install-action@v2
+        with:
+          tool: git-cliff
+
+      - name: Generate release notes
+        id: gen
+        run: |
+          GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" git-cliff --output CHANGELOG.md
+          {
+            echo 'notes<<CLIFF_EOF'
+            GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" git-cliff --unreleased --strip all
+            echo 'CLIFF_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: changelog
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest" # for Arm based macs (M1 and above).
+            args: "--target aarch64-apple-darwin"
+          - platform: "macos-latest" # for Intel based macs.
+            args: "--target x86_64-apple-darwin"
+          # - platform: "macos-latest"
+          #   args: "--target universal-apple-darwin"
+          # - platform: 'ubuntu-22.04'
+          #   args: ''
+          # - platform: 'windows-latest'
+          #   args: ''
+    runs-on: ${{ matrix.platform }}
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: "npm"
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: "./src-tauri -> target"
+
+      # Certificate import handled by tauri-action with auto-detect
+      # Manual certificate import commented out - tauri-action handles this automatically
+      # Uncomment this section if auto-detect fails
+      # - name: import Apple Developer Certificate
+      #   # Prevents keychain from locking automatically for 3600 seconds.
+      #   env:
+      #     APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      #     APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      #     KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+      #   run: |
+      #     echo $APPLE_CERTIFICATE | base64 --decode > certificate.p12
+      #     security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+      #     security default-keychain -s build.keychain
+      #     security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+      #     security set-keychain-settings -t 3600 -u build.keychain
+      #     security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+      #     security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+      #     security find-identity -v -p codesigning build.keychain
+
+      # - name: verify certificate
+      #   run: |
+      #     CERT_INFO=$(security find-identity -v -p codesigning build.keychain | grep "Developer ID Application")
+      #     CERT_ID=$(echo "$CERT_INFO" | awk -F'"' '{print $2}')
+      #     echo "CERT_ID=$CERT_ID" >> $GITHUB_ENV
+      #     echo "Certificate imported: $CERT_ID"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          tagName: v__VERSION__
+          releaseName: "v__VERSION__"
+          releaseBody: ${{ needs.changelog.outputs.notes }}
+          generateReleaseNotes: false
+          releaseDraft: true
+          prerelease: false
+          releaseAssetNamePattern: "[name]-[version]-[platform]-[arch][ext]"
+          args: ${{ matrix.args }}

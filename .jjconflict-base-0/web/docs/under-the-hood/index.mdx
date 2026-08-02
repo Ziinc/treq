@@ -1,0 +1,202 @@
+---
+sidebar_position: 1
+---
+
+# Under the Hood
+
+_How Treq connects its interface, Rust backend, colocated Git and Jujutsu store, and local state._
+
+Treq is a Tauri desktop app for Git repositories. React draws the interface. Rust owns repository access, local databases, file updates, and terminal processes. You work with Git remotes and managed workspaces, and you do not need to know Jujutsu. Colocated Jujutsu is what makes automatic workspace rebasing work.
+
+## Architecture
+
+A request passes through four layers:
+
+```
+React interface
+  ↓ Tauri invoke
+Command handler
+  ↓
+Rust core
+  ↓
+Repository integration, SQLite, file watcher, or PTY manager
+```
+
+The frontend calls typed wrappers in `src/lib/api.ts`. Tauri routes each request to a handler in `src-tauri/src/commands`. Handlers check the input, take the app state they need, and hand the work to `src-tauri/src/core`.
+
+Core modules own how workspaces, commits, repositories, and changes behave, while the layer beneath them reaches colocated Git and Jujutsu, SQLite, file events, and terminal processes.
+
+## Frontend State
+
+TanStack Query owns server state: workspace status, commit history, diffs, and sessions. Marking a query stale is what ties a repository change back to what you see on screen.
+
+React context owns settings and shared interface state, and component state holds the short-lived things: line selection, active review comments, and terminal tabs.
+
+## Backend State
+
+Tauri creates one shared app state object. Mutexes guard the app database and the PTY manager. Separate managers keep track of file watchers, the repository path for each open window, and agent dispatch.
+
+Command handlers stay thin, because the same core code serves more than the desktop interface. That split also lets you test the repository rules without a webview.
+
+## Repository Model
+
+Treq opens an existing Git repository and sets up Jujutsu beside it, in colocated mode. Git stays the boundary for remotes and for anything a host needs to read. Jujutsu supplies the revision model behind workspaces, stacks, and automatic rebases. Treq keeps its own state under `.treq`.
+
+```
+{repo}/
+├── .git/                   # Git objects, refs, and remote configuration
+├── .jj/                    # Colocated Jujutsu repository state
+└── .treq/
+    ├── local.db            # Treq repository-local metadata
+    └── workspaces/         # Managed working copies
+```
+
+Jujutsu reads and writes the colocated Git store. That is how Treq can rebase dependent workspace branches when a target moves. [Git worktrees](/learn/concepts/git/git-worktrees) share objects and refs, but they will not rebase a stack for you. Stay in Treq or in ordinary Git commands for daily work. The `jj` CLI is there for debugging, not as the supported path.
+
+## Home and Managed Workspaces
+
+The repository root is the **home workspace**, and Treq creates managed workspaces alongside it under `.treq/workspaces/{name}`. Each one has its own working copy but shares history with the home repository.
+
+The home workspace is a fine place to inspect and commit changes. Each managed workspace also gets a database row holding its bookmark, target bookmark, path, and rebase metadata.
+
+## Bookmarks and Targets
+
+Jujutsu bookmarks provide the branch-like names Treq shows. Each managed workspace owns a bookmark and records a `target_branch`, which can point at the default branch or at another workspace's bookmark.
+
+That target link is what forms a stack. It also sets the revision range used for divergence, commit history, review diffs, and merges.
+
+## Repository Operations
+
+The Rust backend calls `jj-lib` through Treq's own repository layer. It never shells out to `jj` or `git` for repository work.
+
+Treq runs commit operations one at a time per repository path. The lock stops two commands from changing the same repository state at once.
+
+## Remote Compatibility
+
+Git stays the transport boundary for hosted repositories. Fetch and push update the colocated state, and Treq then reads the new bookmarks and revisions through its repository layer.
+
+Remote changes can leave a workspace ahead, behind, diverged, or holding a bookmark conflict. Treq sorts those out when it syncs the workspace.
+
+## Workspace Synchronization
+
+Syncing happens at two layers. An interface refresh pulls current repository data into React. A repository sync moves bookmarks, revisions, and working copies so dependent workspaces stay rebased onto their targets.
+
+## Interface Refresh
+
+TanStack Query polls workspace status every 10 seconds and session data every 30 seconds, and switching the active workspace or finishing a repository operation triggers a focused reload on top of that.
+
+Treq also has a recursive file watcher with a one-second debounce. It skips repository internals, dependencies, build output, and temporary editor files.
+
+{/* TODO: The dashboard does not currently start the file watcher. Document file events as part of the active refresh path only after the watcher is re-enabled. */}
+
+## Target Updates
+
+Each workspace records the bookmark it targets. Treq compares the workspace history against that target to see whether the workspace is up to date.
+
+When a target moves, Treq rebases the workspaces below it onto the new commit. It skips any workspace that already descends from the target, and it records the target commit each successful rebase used.
+
+## Stack Order
+
+Treq works a stack from its lowest target upward, because a change near the base reaches every workspace above it and each rebase has to finish before the next one starts.
+
+A conflict stops that flow, so resolve the lowest one first and then update the workspaces above it against the corrected history.
+
+## Working-Copy Safety
+
+A rebase changes history before the files in every working copy catch up. Treq only syncs a working copy with its bookmark when that copy has no pending changes.
+
+If there are pending changes, Treq leaves the working copy alone. That protects your edits, but the files can fall behind the rebased bookmark. Commit, move, or discard them, then sync again.
+
+## Bookmark Conflicts
+
+A fetch can leave a local bookmark pointing two ways at once. Treq shows the conflict and asks you to pick the remote target before it goes on.
+
+Resolving it points the bookmark at that target and replays your local-only commits on top. The workspaces above can then rebase in stack order.
+
+## Home Workspace Synchronization
+
+After a merge, Treq can sync the home working copy with the target bookmark. It only does this when the home workspace is editing that bookmark.
+
+The merge flow then forgets the source managed workspace and clears its Treq metadata.
+
+## Local State and Persistence
+
+Treq splits saved state between an app database and a database inside each repository. Live terminal processes and short-lived interface state stay in memory.
+
+## Application Database
+
+The app database is `treq.db`, and it lives in the Tauri app data directory. It holds state that has to exist before you open a repository, or that spans several of them.
+
+| Data | Scope |
+|---|---|
+| Application settings | All repositories |
+| Repository settings | One repository path |
+| Last opened repository | Application |
+| Viewed-file records | Workspace path and file content |
+| Legacy cache records | Repository operation keys |
+
+Repository settings are keyed by repository path. That way one app database can hold separate preferences for many repositories.
+
+## Repository-Local Database
+
+Treq creates `.treq/local.db` inside each managed repository. This database stays outside version control.
+
+| Data | Purpose |
+|---|---|
+| Workspaces | Paths, bookmarks, targets, and rebase metadata |
+| Agent sessions | Names, models, workspace ownership, and timestamps |
+| Pending reviews | Comments and review summaries |
+| Changed files | Cached workspace status |
+| Workspace files | Cached file lists |
+| Commit diff statistics | Cached change counts |
+| Instance registry | Dispatch targets for Treq agent links |
+
+Deleting a workspace clears its repository-local rows. The app database can still hold state keyed by workspace path, such as viewed-file records.
+
+{/* TODO: Unify viewed-file persistence with pending reviews before documenting one retention guarantee for review progress. */}
+
+## In-Memory State
+
+The backend keeps PTY processes in a session manager held in memory. The frontend owns terminal scrollback, the active diff, unsaved conflict comments, and query results.
+
+Closing Treq kills the live processes and clears this state. Session metadata stays in `.treq/local.db`, but it cannot bring back a dead process or its output.
+
+## Cache Invalidation
+
+Repository work marks the matching query and database cache rows stale. The interface then reloads changed files, commit counts, or workspace status.
+
+Cache rows are derived data. Deleting them costs you some work on the next load, but it never removes commits or working-copy changes.
+
+{/* TODO: Publish cache lifetime and invalidation guarantees once they become a supported part of Treq's behavior. */}
+
+## Ownership Boundaries
+
+Git owns remote transport and the object store you authenticate against. Colocated Jujutsu owns the revision work behind workspace stacks and automatic rebases. Treq's databases own interface metadata and cached views of that history. React and the PTY manager own the current app session.
+
+Those boundaries decide what you can recover. Repository history survives without Treq, local review data needs `.treq/local.db`, and live terminal state dies with the process.
+
+## Terminal Architecture
+
+The Rust PTY manager starts and tracks shell processes through `portable-pty`. Output crosses the Tauri event boundary, and xterm.js draws it in React.
+
+[Agent sessions](/docs/concepts/agent-sessions) use the same terminal path. Treq builds the agent command, feeds in the task prompt, and starts the process in the chosen workspace directory.
+
+## Native Test Bridge
+
+The `treq-napi` crate exposes the Rust backend as a Node native addon. Frontend integration tests swap Tauri dispatch for this bridge.
+
+The tests render the real React app and call the same Rust core against throwaway colocated repositories. They cover repository behavior without opening a desktop window.
+
+## Concurrency Boundaries
+
+App state locks guard the mutable resources that commands share. Repository commit locks force changes to one repository path into single file.
+
+Long repository work sits behind async commands. The frontend still has to show loading states, mark queries stale, and surface errors.
+
+## Learn More
+
+- [Using Treq with a Git Repository](/docs/tutorials/using-treq-with-git-repo)
+- [Workspaces](/docs/concepts/workspaces)
+- [Commit Management](/docs/concepts/commit-management)
+- [Agent Sessions](/docs/concepts/agent-sessions)
+- [Terminal Sessions](/docs/concepts/terminal-sessions)

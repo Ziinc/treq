@@ -1,0 +1,30 @@
+id: no-e2e-query-selector
+snapshots:
+  ? |
+    await page.$$('.menu-item');
+  : labels:
+    - source: page.$$('.menu-item')
+      style: primary
+      start: 6
+      end: 27
+  ? |
+    await page.$$eval('.items', els => els.length);
+  : labels:
+    - source: page.$$eval('.items', els => els.length)
+      style: primary
+      start: 6
+      end: 46
+  ? |
+    await page.$('nav.navbar');
+  : labels:
+    - source: page.$('nav.navbar')
+      style: primary
+      start: 6
+      end: 26
+  ? |
+    await page.$eval('.button', el => el.textContent);
+  : labels:
+    - source: page.$eval('.button', el => el.textContent)
+      style: primary
+      start: 6
+      end: 49

@@ -1,0 +1,131 @@
+---
+sidebar_position: 7
+slug: /git-worktrees-for-ai
+description: A practical guide to using git worktrees for Claude Code, Codex, and other coding agents without merge conflicts or context switching.
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard";
+
+# Git Worktrees for AI Coding Agents
+
+_Give each coding agent its own checkout so parallel tasks stop colliding in one working tree._
+
+## Introduction
+
+Coding agents edit real files. If two agents share one checkout, they share one `HEAD`, one index, and one set of working files. That is how you get overwritten patches, confused rebases, and merge conflicts that have nothing to do with the product.
+
+A **Git worktree** gives each agent a separate directory while still sharing the repository object database. You keep one clone's history and get several working copies. That is the right default isolation for local agents under the same trust boundary.
+
+This guide covers worktree basics for agent workflows, setup patterns, limitations, and when worktrees are the wrong tool.
+
+## Understanding the Concept
+
+A worktree is a working directory attached to a Git repository. The main worktree is the directory you cloned. Linked worktrees are additional directories created with `git worktree add`.
+
+<DefinitionCard
+  term="Agent Worktree"
+  definition="A linked Git worktree assigned to one coding agent task, with its own branch, HEAD, index, and working files."
+/>
+
+Agents need isolation because they write continuously and often run long command loops. Stashing human work to free a branch does not help when two agents both need a dirty tree at the same time.
+
+```text
+~/code/app                 main worktree   (review, local merges)
+~/code/app-auth-timeout    linked worktree (Claude Code)
+~/code/app-search-index    linked worktree (Codex)
+```
+
+The directories share commits and refs. A commit created in one worktree is immediately visible from the others. Local branch names are also shared, which is why Git blocks checking out the same branch in two worktrees by default.
+
+Worktrees are not clones and not sandboxes. They do not isolate credentials, hooks, or repository configuration. They also do not copy `.gitignore`d files into the new directory. Dependencies are not installed for you. Setup scripts still need a manual run. Local services such as databases, caches, and listening ports are not isolated either, so two worktrees can fight over the same resource on the host.
+
+Worktrees isolate working files. That is usually enough for concurrent local agents. It is not enough when tasks need separate remotes, configs, or security boundaries. See [Git Worktrees vs Clones for Agents](/learn/how-to/git-worktrees-vs-clones-for-agents).
+
+## Applying It in Practice
+
+Create one branch and worktree per agent task from current `main`:
+
+```bash
+git fetch origin
+
+git worktree add -b agent/auth-timeout ../app-auth-timeout origin/main
+git worktree add -b agent/search-index ../app-search-index origin/main
+
+git worktree list
+```
+
+Start the agent with that directory as its working directory:
+
+```bash
+cd ../app-auth-timeout
+claude   # or: codex, cursor-agent
+```
+
+Tell the agent to stay inside the worktree. After it finishes, inspect the diff from that directory, push the branch, and open a pull request. Keep your main worktree for review and integration.
+
+Common setup patterns:
+
+| Pattern | When to use |
+| --- | --- |
+| One worktree per task | Default for parallel local agents |
+| Detached worktree for review | Inspect a remote branch without creating a branch |
+| Stacked branches across worktrees | Dependent layers that must review separately |
+
+```bash
+# read-only inspection
+git worktree add --detach ../app-review origin/feature/payment
+
+# cleanup after merge
+git worktree remove ../app-auth-timeout
+git branch -d agent/auth-timeout
+```
+
+## Engineering Considerations
+
+Worktrees fail in predictable ways.
+
+**Same branch in two places.** Git rejects a second checkout of a local branch. Give every agent a unique branch name to avoid this issue.
+
+**Shared refs surprise you.** Deleting a branch, fetching, or running maintenance affects the whole repository. Coordinate these operations carefully to avoid gotchas when working on dependent branches.
+
+**Dependencies are per worktree.** `node_modules`, virtualenvs, and build outputs are not shared. Each agent directory can grow large as dependency trees bloat. Budget disk and install time for every worktree, clean unused dependency directories regularly, and make sure install or setup steps do not leak secrets into those trees.
+
+**Secrets leaking.** Worktrees raise the chance that secrets spread across the disk. A `.env` file often has to be copied during worktree setup. Local test and validation scripts may also rely on secrets stored beside the code. Those files then exist in many directories, which makes cleanup harder and increases the blast radius of a leaked path or a backup that includes agent worktrees.
+
+**Ignored and generated files diverge.** Two worktrees can have different local env files. Document which secrets or `.env` files each task needs, and delete them when you remove the worktree.
+
+**Hooks run from shared config.** A repository hook still fires for commits in every worktree unless you deliberately configure otherwise.
+
+When worktrees are the wrong tool, use a clone or a stronger sandbox. Choose a clone when the task needs different remotes, credential settings, or disposable repository state. Choose a container or separate user account when the agent must not share host credentials or filesystem access.
+
+## Scaling and Operational Considerations
+
+Name worktrees after the task, not after the agent product. Prefer names with words as well as IDs so people can recognise the work without looking up a ticket number:
+
+```text
+../app-pr-1842-auth-timeout
+../app-task-search-index
+```
+
+Automate creation and cleanup. Orphaned directories left behind by killed agent processes leave stale worktree records. Repair those with:
+
+```bash
+git worktree prune
+```
+
+For many short-lived agents, measure working-tree size as carefully as Git object size. Dependency installs often dominate disk use, and enough of them can make the host struggle for free space and I/O.
+
+## How Treq Fits
+
+Treq manages this isolation pattern as workspaces. Each workspace is a [Jujutsu](https://jj-vcs.github.io/jj/latest/) working copy under `.treq/workspaces/`, with its own bookmark and agent session. Treq also handles stack rebases when a lower workspace moves, which plain Git worktrees leave as manual operations.
+
+Jujutsu workspaces are the VCS mechanism behind that model. See the [Jujutsu workspaces documentation](https://jj-vcs.github.io/jj/latest/working-copy/#workspaces) for how additional working copies attach to one repository. [Under the Hood](/docs/under-the-hood) explains why Treq uses Jujutsu workspaces for agent isolation, stacking, and local review.
+
+Create a workspace per task, start the agent session there, and merge only after review. Auto-rebase keeps dependent workspaces current when their targets move. Full workspace behavior is covered in [Workspaces](/docs/concepts/workspaces).
+
+## Next Steps
+
+- [What are Git Worktrees?](/learn/concepts/git/git-worktrees): core worktree model and lifecycle
+- [Git Worktrees vs Clones for Agents](/learn/how-to/git-worktrees-vs-clones-for-agents): choose the isolation level
+- [How to Run Multiple Claude Code Sessions](/learn/how-to/how-to-run-multiple-claude-code-sessions): run parallel Claude Code sessions
+- [Parallel Coding Agents Without Branch Chaos](/learn/parallel-coding-agents): full parallel-agent workflow
