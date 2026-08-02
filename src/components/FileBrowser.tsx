@@ -1189,6 +1189,15 @@ export const FileBrowser = memo(
 			(e: React.MouseEvent, lineNum: number, lineContent: string) => {
 				void lineContent;
 				if (e.button !== 0) return;
+				// Code text must retain the browser's native drag selection. Starting our
+				// line-range selection here causes React to re-render rows during the drag,
+				// which collapses a selection as soon as it crosses a line boundary.
+				if (
+					e.target instanceof Element &&
+					e.target.closest('[data-testid="code-line-content"]')
+				) {
+					return;
+				}
 				// Let the browser handle native word/line text selection on double-click+.
 				if (e.detail >= 2) return;
 				setIsSelecting(true);
