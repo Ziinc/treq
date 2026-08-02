@@ -133,7 +133,7 @@ describe("default agent configuration", () => {
 		await waitFor(() => expect(agentPicker).toHaveValue("cursor"));
 	});
 
-	it("New Agent Terminal command palette entry uses the configured default_agent, not hardcoded claude", async () => {
+	it("command palette agent prompt uses the configured default_agent", async () => {
 		await setSetting("default_agent", "codex");
 
 		await createWorkspace(repoPath, "feat/agent-terminal-default-test");
@@ -145,12 +145,19 @@ describe("default agent configuration", () => {
 		);
 
 		await user.keyboard("{Meta>}k{/Meta}");
-		const newAgentTerminal = await screen.findByText("New Agent Terminal");
-		await user.click(newAgentTerminal);
+		await user.click(
+			await screen.findByText("Start an agent session with a prompt"),
+		);
+
+		const textarea = await screen.findByPlaceholderText(/describe a task/i);
+		await user.type(textarea, "command palette codex task");
+		await user.keyboard("{Shift>}{Enter}{/Shift}");
 
 		await waitFor(async () => {
 			const sessions = await getSessions(repoPath);
-			expect(sessions.some((s) => s.name === "Codex 1")).toBe(true);
+			expect(
+				sessions.some((s) => s.name === "command palette codex task"),
+			).toBe(true);
 		});
 	});
 
