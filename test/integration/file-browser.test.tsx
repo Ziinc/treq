@@ -2,7 +2,7 @@ import * as React from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { fireEvent, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createTestRepo } from "../utils";
+import { createTestRepo, writeWorkspaceFile } from "../utils";
 import { ensureWorkspaceIndexed } from "../../src/lib/api";
 import { render, screen } from "../test-utils";
 import { FileBrowser } from "../../src/components/FileBrowser";
@@ -13,6 +13,11 @@ describe("FileBrowser text selection", () => {
 
 	beforeEach(async () => {
 		({ repoPath } = createTestRepo(false));
+		writeWorkspaceFile(
+			repoPath,
+			"README.md",
+			["first line", "second line", "third line", "fourth line"].join("\n"),
+		);
 		await ensureWorkspaceIndexed(repoPath, null, repoPath);
 		user = userEvent.setup({ writeToClipboard: true });
 	});
@@ -62,6 +67,32 @@ describe("FileBrowser text selection", () => {
 
 		const copied = await navigator.clipboard.readText();
 		expect(copied).toBe(selectedText);
+	});
+
+	it("does not start line selection when dragging across code text", async () => {
+		render(
+			<FileBrowser
+				workspace={null}
+				repoPath={repoPath}
+				initialSelectedFile={null}
+				initialExpandedDir={null}
+			/>,
+		);
+
+		const lines = await screen.findAllByTestId("code-line");
+		expect(lines.length).toBeGreaterThan(3);
+		const firstLineContent = within(lines[0]).getByTestId("code-line-content");
+
+		fireEvent.mouseDown(firstLineContent, { button: 0, detail: 1 });
+		fireEvent.mouseMove(lines[1]);
+		fireEvent.mouseMove(lines[2]);
+		fireEvent.mouseMove(lines[3]);
+		fireEvent.mouseUp(lines[3]);
+
+		const linesAfter = screen.getAllByTestId("code-line");
+		for (const line of linesAfter.slice(0, 4)) {
+			expect(line).not.toHaveClass("!bg-blue-500/20");
+		}
 	});
 
 	it("still enters line selection on a single-click mousedown", async () => {
