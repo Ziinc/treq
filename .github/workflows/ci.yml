@@ -87,8 +87,10 @@ jobs:
 
       - name: Install jj CLI (ubuntu)
         if: matrix.platform == 'ubuntu-22.04' # This must match the platform value defined above.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          cargo binstall --strategies crate-meta-data jj-cli
+          cargo binstall --strategies crate-meta-data,compile jj-cli
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install gh CLI (ubuntu)
