@@ -1,24 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FileText, Paperclip, Plus } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Button } from "./ui/button";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipProvider,
-	TooltipTrigger,
-} from "./ui/tooltip";
 import { FilePicker } from "./FilePicker";
+import { TaskInputMentionDropdown } from "./task-input/TaskInputMentionDropdown";
+import { TaskInputToolbar } from "./task-input/TaskInputToolbar";
 import {
 	createSession,
 	getSetting,
 	getRepoSetting,
 	searchWorkspaceFiles,
+	setRepoSetting,
 	type FileSearchResult,
 } from "../lib/api";
 import { useToast } from "./ui/toast";
 import { useDebounce } from "../hooks/useDebounce";
 import { cn } from "../lib/utils";
+import type { AgentType } from "../lib/agentDeepLink";
 import type { SessionCreationInfo } from "../types/sessions";
 
 interface TaskInputProps {
@@ -42,9 +38,11 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 	const [filePickerOpen, setFilePickerOpen] = useState(false);
 	const [submitting, setSubmitting] = useState(false);
 	const [focused, setFocused] = useState(false);
-	const [selectedAgent, setSelectedAgent] = useState<
-		"claude" | "codex" | "cursor"
-	>("claude");
+	const [selectedAgent, setSelectedAgent] = useState<AgentType>("claude");
+	const [configuredDefaultAgent, setConfiguredDefaultAgent] =
+		useState<AgentType>("claude");
+	const [saveAsRepoDefault, setSaveAsRepoDefault] = useState(false);
+	const [showSaveAsRepoDefault, setShowSaveAsRepoDefault] = useState(false);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const mentionRef = useRef<HTMLDivElement>(null);
 	const { addToast } = useToast();
@@ -77,6 +75,9 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 					repoAgent === "cursor"
 				) {
 					setSelectedAgent(repoAgent);
+					setConfiguredDefaultAgent(repoAgent);
+					setSaveAsRepoDefault(false);
+					setShowSaveAsRepoDefault(false);
 					return;
 				}
 				return getSetting("default_agent").then((globalAgent) => {
@@ -88,6 +89,15 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 					) {
 						setSelectedAgent(globalAgent);
 					}
+					setConfiguredDefaultAgent(
+						globalAgent === "claude" ||
+							globalAgent === "codex" ||
+							globalAgent === "cursor"
+							? globalAgent
+							: "claude",
+					);
+					setSaveAsRepoDefault(false);
+					setShowSaveAsRepoDefault(false);
 				});
 			})
 			.catch(() => {
@@ -277,6 +287,12 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 
 			setSubmitting(true);
 			try {
+				if (saveAsRepoDefault && selectedAgent !== configuredDefaultAgent) {
+					await setRepoSetting(repoPath, "default_agent", selectedAgent);
+					setConfiguredDefaultAgent(selectedAgent);
+					setSaveAsRepoDefault(false);
+				}
+
 				const sessionName =
 					trimmed.length > 50 ? `${trimmed.slice(0, 47)}...` : trimmed;
 
@@ -301,6 +317,7 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 
 				// Clear input on success
 				setTaskText("");
+				setShowSaveAsRepoDefault(false);
 			} catch (error) {
 				addToast({
 					title: "Failed to create task",
@@ -321,6 +338,8 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 			onSessionCreated,
 			addToast,
 			selectedAgent,
+			saveAsRepoDefault,
+			configuredDefaultAgent,
 		],
 	);
 
@@ -391,118 +410,31 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 						style={{ minHeight: "44px", maxHeight: "200px" }}
 					/>
 
-					{/* @ mention dropdown — rendered in-flow to avoid overflow-auto clipping from parent */}
-					<div
-						className="grid transition-[grid-template-rows] duration-200 ease-out"
-						style={{
-							gridTemplateRows:
-								mentionQuery !== null && mentionResults.length > 0
-									? "1fr"
-									: "0fr",
+					<TaskInputMentionDropdown
+						mentionRef={mentionRef}
+						mentionQuery={mentionQuery}
+						mentionResults={mentionResults}
+						mentionIndex={mentionIndex}
+						onMentionSelect={handleMentionSelect}
+					/>
+
+					<TaskInputToolbar
+						isEmpty={isEmpty}
+						submitting={submitting}
+						selectedAgent={selectedAgent}
+						configuredDefaultAgent={configuredDefaultAgent}
+						saveAsRepoDefault={saveAsRepoDefault}
+						showSaveAsRepoDefault={showSaveAsRepoDefault}
+						onOpenFilePicker={() => setFilePickerOpen(true)}
+						onAttachFromFinder={handleAttachFromFinder}
+						onAgentChange={(nextAgent) => {
+							setSelectedAgent(nextAgent);
+							setSaveAsRepoDefault(false);
+							setShowSaveAsRepoDefault(nextAgent !== configuredDefaultAgent);
 						}}
-					>
-						<div className="overflow-hidden">
-							<div
-								ref={mentionRef}
-								className="mx-2 mb-1 rounded-lg border border-border bg-muted/50 overflow-hidden"
-							>
-								<div className="px-3 py-1 text-[10px] text-muted-foreground font-medium uppercase tracking-wider border-b border-border">
-									Files
-								</div>
-								{mentionResults.map((file, i) => (
-									<button
-										key={file.file_path}
-										type="button"
-										className={cn(
-											"w-full px-3 py-1.5 flex items-center gap-2 text-sm text-left transition-colors",
-											i === mentionIndex
-												? "bg-accent/50"
-												: "hover:bg-accent/30",
-										)}
-										onMouseDown={(e) => {
-											e.preventDefault();
-											handleMentionSelect(file);
-										}}
-									>
-										<FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-										<span className="truncate font-mono text-xs">
-											{file.relative_path}
-										</span>
-									</button>
-								))}
-							</div>
-						</div>
-					</div>
-
-					{/* Bottom toolbar */}
-					<div className="px-2 pb-2 pt-1 flex items-center justify-between">
-						<div className="flex items-center gap-1">
-							<Button
-								variant="ghost"
-								size="sm"
-								className="h-7 text-xs px-2 gap-1"
-								onClick={() => setFilePickerOpen(true)}
-							>
-								<Plus className="w-4 h-4" />
-								File
-							</Button>
-							<Button
-								variant="ghost"
-								size="sm"
-								className="h-7 text-xs px-2 gap-1"
-								onClick={handleAttachFromFinder}
-							>
-								<Paperclip className="w-4 h-4" />
-								Attach
-							</Button>
-						</div>
-
-						<div className="flex items-center gap-2">
-							{/* Agent picker */}
-							<select
-								aria-label="Agent"
-								value={selectedAgent}
-								onChange={(e) =>
-									setSelectedAgent(
-										e.target.value as "claude" | "codex" | "cursor",
-									)
-								}
-								className="h-7 text-xs px-2 rounded-md border border-border bg-background text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-400"
-							>
-								<option value="claude">Claude</option>
-								<option value="codex">Codex</option>
-								<option value="cursor">Cursor</option>
-							</select>
-							{selectedAgent !== "codex" && (
-								<Button
-									size="sm"
-									variant="secondary"
-									disabled={isEmpty || submitting}
-									onClick={() => handleSubmit("plan")}
-									className="h-7 text-xs px-3"
-								>
-									Plan
-								</Button>
-							)}
-							<TooltipProvider>
-								<Tooltip>
-									<TooltipTrigger asChild>
-										<Button
-											size="sm"
-											disabled={isEmpty || submitting}
-											onClick={() => handleSubmit("acceptEdits")}
-											className="h-7 text-xs px-3"
-										>
-											{selectedAgent === "claude" ? "Edit" : "Run"}
-										</Button>
-									</TooltipTrigger>
-									<TooltipContent side="top">
-										<p className="text-xs">⌘+Enter</p>
-									</TooltipContent>
-								</Tooltip>
-							</TooltipProvider>
-						</div>
-					</div>
+						onSaveAsRepoDefaultChange={setSaveAsRepoDefault}
+						onSubmit={handleSubmit}
+					/>
 				</div>
 			</div>
 

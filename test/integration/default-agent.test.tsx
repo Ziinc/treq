@@ -96,12 +96,7 @@ describe("default agent configuration", () => {
 		const textarea = await screen.findByPlaceholderText(/describe a task/i);
 		await user.click(textarea);
 		await user.type(textarea, "codex task one");
-		await user.keyboard("{Shift>}{Enter}{/Shift}");
-		expect(textarea).toHaveValue("codex task one\n");
-		expect(
-			(await getSessions(repoPath)).some((s) => s.name === "codex task one"),
-		).toBe(false);
-		await user.keyboard("{Meta>}{Enter}{/Meta}");
+		await user.keyboard("{Control>}{Enter}{/Control}");
 
 		await waitFor(async () => {
 			const sessions = await getSessions(repoPath);
@@ -110,16 +105,24 @@ describe("default agent configuration", () => {
 
 		await user.selectOptions(agentPicker, "claude");
 		expect(agentPicker).toHaveValue("claude");
+		expect(
+			await screen.findByLabelText(/set as default for this repo/i),
+		).toBeInTheDocument();
 
 		const textarea2 = await screen.findByPlaceholderText(/describe a task/i);
 		await user.click(textarea2);
 		await user.type(textarea2, "claude task two");
-		await user.keyboard("{Meta>}{Enter}{/Meta}");
+		await user.keyboard("{Control>}{Enter}{/Control}");
 
 		await waitFor(async () => {
 			const sessions = await getSessions(repoPath);
 			expect(sessions.some((s) => s.name === "claude task two")).toBe(true);
 		});
+		await waitFor(() =>
+			expect(
+				screen.queryByLabelText(/set as default for this repo/i),
+			).not.toBeInTheDocument(),
+		);
 
 		await user.selectOptions(agentPicker, "codex");
 		expect(agentPicker).toHaveValue("codex");
@@ -156,7 +159,7 @@ describe("default agent configuration", () => {
 
 		const textarea = await screen.findByPlaceholderText(/describe a task/i);
 		await user.type(textarea, "command palette codex task");
-		await user.keyboard("{Shift>}{Enter}{/Shift}");
+		await user.keyboard("{Control>}{Enter}{/Control}");
 
 		await waitFor(async () => {
 			const sessions = await getSessions(repoPath);

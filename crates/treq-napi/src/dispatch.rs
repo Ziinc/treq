@@ -56,8 +56,8 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
         "gh_list_issues" => {
             let repo_full_name = get_str(&args, "repoFullName")?;
             let state = get_str(&args, "state")?;
-            let limit = get_optional_u32(&args, "limit")?
-                .unwrap_or(treq_lib::github::GH_LIST_PAGE_SIZE);
+            let limit =
+                get_optional_u32(&args, "limit")?.unwrap_or(treq_lib::github::GH_LIST_PAGE_SIZE);
             let page = get_optional_u32(&args, "page")?.unwrap_or(1);
             let gh = gh_bin()?;
             let extended_path = treq_lib::binary_paths::get_extended_path();
@@ -149,8 +149,8 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
         "gh_list_prs" => {
             let repo_full_name = get_str(&args, "repoFullName")?;
             let state = get_str(&args, "state")?;
-            let limit = get_optional_u32(&args, "limit")?
-                .unwrap_or(treq_lib::github::GH_LIST_PAGE_SIZE);
+            let limit =
+                get_optional_u32(&args, "limit")?.unwrap_or(treq_lib::github::GH_LIST_PAGE_SIZE);
             let page = get_optional_u32(&args, "page")?.unwrap_or(1);
             let gh = gh_bin()?;
             let extended_path = treq_lib::binary_paths::get_extended_path();
@@ -234,10 +234,7 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             let body = get_str(&args, "body")?;
             let base_branch = get_str(&args, "baseBranch")?;
             let head_branch = get_str(&args, "headBranch")?;
-            let draft = args
-                .get("draft")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
+            let draft = args.get("draft").and_then(|v| v.as_bool()).unwrap_or(false);
             let gh = gh_bin()?;
             let extended_path = treq_lib::binary_paths::get_extended_path();
             let pr_number = treq_lib::github::gh_create_pr_impl(
@@ -1012,7 +1009,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn github_routes_reject_negative_identifiers_before_running_gh() {
         for (command, key) in [
@@ -1063,7 +1059,6 @@ fn get_conflict_style() -> Result<String, String> {
     }
     Ok("git".to_string())
 }
-
 
 #[derive(serde::Serialize)]
 struct DirEntry {
