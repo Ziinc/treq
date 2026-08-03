@@ -1,6 +1,6 @@
 import { createCommit } from "../src/lib/api";
 import path from "node:path";
-import { expect } from "vitest";
+import { afterEach, expect } from "vitest";
 import { waitFor, within } from "./test-utils";
 
 export function openRepo(repoPath: string) {
@@ -14,6 +14,7 @@ type NapiTestBindings = {
 		tempDirPath: string;
 		defaultBranch: string;
 	};
+	cleanupTestRepo: (tempDirPath: string) => void;
 	gitCommitAll: (repoPath: string, message: string) => void;
 	writeWorkspaceFile: (
 		workspacePath: string,
@@ -41,12 +42,24 @@ function getNapiBindings(): NapiTestBindings {
 	return require("../crates/treq-napi") as NapiTestBindings;
 }
 
+const testRepoPaths = new Set<string>();
+
+afterEach(() => {
+	const napi = getNapiBindings();
+	for (const tempDirPath of testRepoPaths) {
+		napi.cleanupTestRepo(tempDirPath);
+	}
+	testRepoPaths.clear();
+});
+
 export function createTestRepo(withRemote = false): {
 	repoPath: string;
 	tempDirPath: string;
 	defaultBranch: string;
 } {
-	return getNapiBindings().createTestRepo(withRemote);
+	const repo = getNapiBindings().createTestRepo(withRemote);
+	testRepoPaths.add(repo.tempDirPath);
+	return repo;
 }
 
 export function writeWorkspaceFile(
