@@ -95,6 +95,39 @@ describe("ShowWorkspace - Create PR", () => {
 		).not.toBeInTheDocument();
 	});
 
+	it("shows tooltips and a dark-mode border for the Create PR controls", async () => {
+		await setupPushedWorkspaceWithGitHub();
+		render(<Dashboard />);
+
+		await user.click(await screen.findByText("feat/create-pr"));
+		const header = await screen.findByTestId("show-workspace-header");
+		const createPr = await within(header).findByRole("button", {
+			name: /^create pr$/i,
+		});
+		const moreOptions = within(header).getByRole("button", {
+			name: /more create pr options/i,
+		});
+
+		expect(createPr).toHaveClass("dark:border-white/30");
+		expect(moreOptions).toHaveClass("dark:border-white/30");
+
+		createPr.focus();
+		expect(await screen.findByRole("tooltip")).toHaveTextContent(
+			"Create a pull request on GitHub",
+		);
+
+		moreOptions.focus();
+		await waitFor(() => {
+			expect(
+				screen
+					.getAllByRole("tooltip")
+					.some((tooltip) =>
+						tooltip.textContent?.includes("More pull request options"),
+					),
+			).toBe(true);
+		});
+	});
+
 	it("keeps Push to remote when the branch is not on remote", async () => {
 		await createWorkspace(repoPath, "feat/unpushed");
 		setOriginUrl(repoPath, "https://github.com/acme/treq.git");
@@ -256,6 +289,46 @@ describe("ShowWorkspace - Create PR", () => {
 		expect(openUrl).not.toHaveBeenCalled();
 		expect(await screen.findByText("Existing")).toBeVisible();
 		expect(ghViewPr).toHaveBeenCalledWith("acme/treq", 9);
+	});
+
+	it("shows tooltips for the View PR controls", async () => {
+		await setupPushedWorkspaceWithGitHub();
+		vi.mocked(getPrInfoViaGh).mockResolvedValue({
+			number: 9,
+			title: "Existing",
+			state: "OPEN",
+			url: "https://github.com/acme/treq/pull/9",
+			head_ref_name: "feat/create-pr",
+			base_ref_name: "main",
+			merge_state_status: "CLEAN",
+			is_draft: false,
+		});
+		render(<Dashboard />);
+
+		await user.click(await screen.findByText("feat/create-pr"));
+		const header = await screen.findByTestId("show-workspace-header");
+		const viewPr = await within(header).findByRole("button", {
+			name: /view pr.*open/i,
+		});
+		const openOnWeb = within(header).getByRole("button", {
+			name: /open pr on web/i,
+		});
+
+		viewPr.focus();
+		expect(await screen.findByRole("tooltip")).toHaveTextContent(
+			"View pull request #9 in Treq",
+		);
+
+		openOnWeb.focus();
+		await waitFor(() => {
+			expect(
+				screen
+					.getAllByRole("tooltip")
+					.some((tooltip) =>
+						tooltip.textContent?.includes("Open pull request #9 on GitHub"),
+					),
+			).toBe(true);
+		});
 	});
 
 	it("uses draft label when PR is a draft", async () => {
