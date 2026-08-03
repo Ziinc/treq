@@ -44,6 +44,7 @@ interface CommandPaletteProps {
 	onToggleTerminal?: () => void;
 	onMaximizeTerminal?: () => void;
 	onStartAgentWithPrompt?: () => void;
+	onStartAgentTerminal?: () => void;
 	onCreateShellTerminal?: () => void;
 	hasSelectedWorkspace: boolean;
 
@@ -82,6 +83,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 	onToggleTerminal,
 	onMaximizeTerminal,
 	onStartAgentWithPrompt,
+	onStartAgentTerminal,
 	onCreateShellTerminal,
 	hasSelectedWorkspace,
 	showBranchSwitcher,
@@ -172,6 +174,28 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 			});
 		}
 
+		if (repoPath && onStartAgentWithPrompt) {
+			result.push({
+				id: "start-agent-with-prompt",
+				type: "action",
+				label: "Start a new agent session with a prompt",
+				description: "Write a prompt and choose its workspace",
+				icon: <Bot className="w-4 h-4" />,
+				onSelect: onStartAgentWithPrompt,
+			});
+		}
+
+		if (repoPath && onStartAgentTerminal) {
+			result.push({
+				id: "start-agent-terminal",
+				type: "action",
+				label: "Start a new agent terminal",
+				description: "Start the default agent immediately",
+				icon: <Bot className="w-4 h-4" />,
+				onSelect: onStartAgentTerminal,
+			});
+		}
+
 		if (hasSelectedWorkspace) {
 			if (onToggleTerminal) {
 				result.push({
@@ -192,17 +216,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 					description: "Toggle maximize/restore terminal pane",
 					icon: <Maximize2 className="w-4 h-4" />,
 					onSelect: onMaximizeTerminal,
-				});
-			}
-
-			if (onStartAgentWithPrompt) {
-				result.push({
-					id: "start-agent-with-prompt",
-					type: "action",
-					label: "Start an agent session with a prompt",
-					description: "Focus the prompt inbox, then start an agent terminal",
-					icon: <Bot className="w-4 h-4" />,
-					onSelect: onStartAgentWithPrompt,
 				});
 			}
 
@@ -237,6 +250,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 		onToggleTerminal,
 		onMaximizeTerminal,
 		onStartAgentWithPrompt,
+		onStartAgentTerminal,
 		onCreateShellTerminal,
 		repoPath,
 		hasSelectedWorkspace,

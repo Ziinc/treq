@@ -42,6 +42,7 @@ import {
 	flattenWorkspaceTree,
 } from "../lib/workspace-tree";
 import { CommandPalette } from "./CommandPalette";
+import { AgentPromptDialog } from "./AgentPromptDialog";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { GitHubPanel } from "./GitHubPanel";
 import { MergePreviewPage } from "./MergePreviewPage";
@@ -102,11 +103,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	);
 	const [mergeWorkspace, setMergeWorkspace] = useState<Workspace | null>(null);
 	const [showCommandPalette, setShowCommandPalette] = useState(false);
+	const [showAgentPromptDialog, setShowAgentPromptDialog] = useState(false);
 	const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
 	const [showFilePicker, setShowFilePicker] = useState(false);
 	const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
 	const [showWorkspaceDeletion, setShowWorkspaceDeletion] = useState(false);
-	const [taskInputFocusRequest, setTaskInputFocusRequest] = useState(0);
 	const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
 	const [pendingSessionData, setPendingSessionData] = useState<
 		Map<
@@ -654,6 +655,57 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		[getOrCreateSession],
 	);
 
+	const handleSessionCreated = useCallback(
+		(sessionData: {
+			sessionId: number;
+			pendingPrompt?: string;
+			permissionMode?: "plan" | "acceptEdits";
+			agent?: "claude" | "codex" | "cursor";
+		}) => {
+			queryClient.invalidateQueries({ queryKey: ["sessions"] });
+			setActiveSessionId(sessionData.sessionId);
+			if (
+				sessionData.pendingPrompt ||
+				sessionData.permissionMode ||
+				sessionData.agent
+			) {
+				setPendingSessionData((prev) => {
+					const next = new Map(prev);
+					next.set(sessionData.sessionId, {
+						pendingPrompt: sessionData.pendingPrompt,
+						permissionMode: sessionData.permissionMode,
+						agent: sessionData.agent,
+					});
+					return next;
+				});
+			}
+		},
+		[queryClient],
+	);
+
+	const handleStartDefaultAgent = useCallback(async () => {
+		const configuredAgent =
+			(await getRepoSetting(repoPath, "default_agent")) ||
+			(await getSetting("default_agent"));
+		const agent =
+			configuredAgent === "codex" || configuredAgent === "cursor"
+				? configuredAgent
+				: "claude";
+		const sessionId = await getOrCreateSession(selectedWorkspace?.id ?? null, {
+			workspaceBranchName:
+				selectedWorkspace?.branch_name ?? effectiveDefaultBranch,
+			forceNew: true,
+			agent,
+		});
+		handleSessionCreated({ sessionId, agent });
+	}, [
+		repoPath,
+		selectedWorkspace,
+		effectiveDefaultBranch,
+		getOrCreateSession,
+		handleSessionCreated,
+	]);
+
 	// Navigate to workspace without creating an agent session
 	const handleSelectWorkspace = useCallback((workspace: Workspace | null) => {
 		setSelectedWorkspace(workspace);
@@ -1105,28 +1157,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 										});
 									}}
 									queryClient={queryClient}
-									onSessionCreated={(sessionData) => {
-										queryClient.invalidateQueries({
-											queryKey: ["sessions"],
-										});
-										setActiveSessionId(sessionData.sessionId);
-										if (
-											sessionData.pendingPrompt ||
-											sessionData.permissionMode ||
-											sessionData.agent
-										) {
-											setPendingSessionData((prev) => {
-												const next = new Map(prev);
-												next.set(sessionData.sessionId, {
-													pendingPrompt: sessionData.pendingPrompt,
-													permissionMode: sessionData.permissionMode,
-													agent: sessionData.agent,
-												});
-												return next;
-											});
-										}
-									}}
-									taskInputFocusRequest={taskInputFocusRequest}
+									onSessionCreated={handleSessionCreated}
 								/>
 							</ErrorBoundary>
 						</div>
@@ -1316,9 +1347,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				onCreateStackedWorkspace={handleCreateStackedWorkspace}
 				onToggleTerminal={() => terminalPaneRef.current?.toggleCollapse()}
 				onMaximizeTerminal={() => terminalPaneRef.current?.toggleMaximize()}
-				onStartAgentWithPrompt={() =>
-					setTaskInputFocusRequest((request) => request + 1)
-				}
+				onStartAgentWithPrompt={() => setShowAgentPromptDialog(true)}
+				onStartAgentTerminal={() => void handleStartDefaultAgent()}
 				onCreateShellTerminal={() =>
 					terminalPaneRef.current?.createShellSession()
 				}
@@ -1335,6 +1365,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				onFileSelected={(filePath) => setSessionSelectedFile(filePath)}
 				selectedWorkspaceId={selectedWorkspace?.id ?? null}
 				repoPath={repoPath}
+			/>
+
+			<AgentPromptDialog
+				open={showAgentPromptDialog}
+				onOpenChange={setShowAgentPromptDialog}
+				repoPath={repoPath}
+				defaultBranch={effectiveDefaultBranch}
+				workspaces={workspaces}
+				onSessionCreated={handleSessionCreated}
 			/>
 
 			<WorkspacePicker

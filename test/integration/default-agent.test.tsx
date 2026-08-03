@@ -8,7 +8,7 @@ import {
 	getSessions,
 	setSetting,
 } from "../../src/lib/api";
-import { render, screen, waitFor } from "../test-utils";
+import { render, screen, waitFor, within } from "../test-utils";
 import { Dashboard } from "../../src/components/Dashboard";
 import userEvent from "@testing-library/user-event";
 
@@ -154,12 +154,19 @@ describe("default agent configuration", () => {
 
 		await user.keyboard("{Meta>}k{/Meta}");
 		await user.click(
-			await screen.findByText("Start an agent session with a prompt"),
+			await screen.findByText("Start a new agent session with a prompt"),
 		);
 
-		const textarea = await screen.findByPlaceholderText(/describe a task/i);
+		const promptDialog = (
+			await screen.findByRole("heading", {
+				name: "Start a new agent session",
+			})
+		).closest('[data-testid="modal"]');
+		if (!promptDialog) throw new Error("Agent prompt dialog was not rendered");
+		const textarea =
+			await within(promptDialog).findByPlaceholderText(/describe a task/i);
 		await user.type(textarea, "command palette codex task");
-		await user.keyboard("{Control>}{Enter}{/Control}");
+		await user.click(within(promptDialog).getByRole("button", { name: "Run" }));
 
 		await waitFor(async () => {
 			const sessions = await getSessions(repoPath);

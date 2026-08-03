@@ -4,9 +4,10 @@ import { render, screen } from "../../test/test-utils";
 import { CommandPalette } from "./CommandPalette";
 
 describe("CommandPalette prompted agent session", () => {
-	it("opens the prompt inbox instead of offering promptless agent terminals", async () => {
+	it("offers exactly the two agent session commands", async () => {
 		const user = userEvent.setup();
 		const onStartAgentWithPrompt = vi.fn();
+		const onStartAgentTerminal = vi.fn();
 
 		render(
 			<CommandPalette
@@ -21,6 +22,7 @@ describe("CommandPalette prompted agent session", () => {
 				onOpenWorkspaceDeletion={vi.fn()}
 				onCreateStackedWorkspace={vi.fn()}
 				onStartAgentWithPrompt={onStartAgentWithPrompt}
+				onStartAgentTerminal={onStartAgentTerminal}
 				hasSelectedWorkspace
 				showBranchSwitcher={false}
 				onBranchSwitcherChange={vi.fn()}
@@ -38,10 +40,12 @@ describe("CommandPalette prompted agent session", () => {
 		);
 
 		await user.click(
-			await screen.findByText("Start an agent session with a prompt"),
+			await screen.findByText("Start a new agent session with a prompt"),
 		);
 
 		expect(onStartAgentWithPrompt).toHaveBeenCalledOnce();
+		await user.click(await screen.findByText("Start a new agent terminal"));
+		expect(onStartAgentTerminal).toHaveBeenCalledOnce();
 		expect(screen.queryByText("New Agent Terminal")).not.toBeInTheDocument();
 		expect(screen.queryByText("New Codex Terminal")).not.toBeInTheDocument();
 		expect(screen.queryByText("New Cursor Terminal")).not.toBeInTheDocument();
