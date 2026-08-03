@@ -69,6 +69,10 @@
 
 @layer base {
 	:root {
+		/* Applied to the document element so the app and all portal content scale
+		   together, rather than only scaling the React root. */
+		--ui-zoom: 100%;
+
 		/* Font tokens — kept in sync with the docs site (web/src/css/custom.css).
 		   Each webfont is followed by its metric-matched fallback face. */
 		--font-sans:
@@ -210,6 +214,9 @@
 	html,
 	body {
 		overscroll-behavior: none;
+	}
+	html {
+		zoom: var(--ui-zoom);
 	}
 }
 

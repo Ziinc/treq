@@ -8,7 +8,12 @@ import { getSettingsBatch } from "../lib/api";
 export const useSettingsPreloader = () => {
 	useEffect(() => {
 		// Pre-fetch all common settings in one batch
-		getSettingsBatch(["theme", "terminal_font_size", "diff_font_size"]).catch(
+		getSettingsBatch([
+			"theme",
+			"terminal_font_size",
+			"diff_font_size",
+			"ui_zoom",
+		]).catch(
 			(error) => {
 				console.error("Failed to preload settings:", error);
 			},

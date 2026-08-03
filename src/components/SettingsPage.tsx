@@ -1,6 +1,12 @@
 import { FolderGit2, GitBranch, Plug, Settings, User } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
+import {
+	MAX_ZOOM,
+	MIN_ZOOM,
+	ZOOM_STEP,
+	useZoomSettings,
+} from "../hooks/useZoomSettings";
 import { useTheme } from "../hooks/useTheme";
 import { getSetting, setSetting } from "../lib/api";
 import { AccountSettings } from "./AccountSettings";
@@ -9,6 +15,7 @@ import { RepositorySettingsContent } from "./RepositorySettingsContent";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
+import { Slider } from "./ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { useToast } from "./ui/toast";
 
@@ -31,9 +38,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 	const [conflictMarkerStyle, setConflictMarkerStyle] = useState<string>("git");
 	const [originalFontSize, setOriginalFontSize] = useState<number | null>(null);
 	const [localFontSize, setLocalFontSize] = useState<number>(12);
+	const [localZoom, setLocalZoom] = useState<number>(100);
 
 	const { theme, setTheme } = useTheme();
 	const { fontSize, setFontSize } = useTerminalSettings();
+	const { zoom, setZoom } = useZoomSettings();
 	const { addToast } = useToast();
 
 	// Load settings on mount
@@ -50,7 +59,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 		// Store original font size and initialize local font size
 		setOriginalFontSize(fontSize);
 		setLocalFontSize(fontSize);
-	}, []);
+		setLocalZoom(zoom);
+	}, [fontSize, zoom]);
 
 	const handleSaveApplicationSettings = async () => {
 		try {
@@ -58,6 +68,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 			await setSetting("default_agent", defaultAgent);
 			await setSetting("conflict_marker_style", conflictMarkerStyle);
 			await setFontSize(localFontSize);
+			await setZoom(localZoom);
 
 			addToast({
 				title: "Settings Saved",
@@ -140,6 +151,29 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 												<option value="light">Light</option>
 												<option value="dark">Dark</option>
 											</select>
+										</div>
+
+										<div>
+											<div className="flex items-center justify-between">
+												<Label htmlFor="ui-zoom">UI Zoom</Label>
+												<span className="text-sm text-muted-foreground">
+													{localZoom}%
+												</span>
+											</div>
+											<Slider
+												id="ui-zoom"
+												aria-label="UI Zoom"
+												min={MIN_ZOOM}
+												max={MAX_ZOOM}
+												step={ZOOM_STEP}
+												value={[localZoom]}
+												onValueChange={([value]) => setLocalZoom(value)}
+												className="mt-3"
+											/>
+											<p className="text-sm text-muted-foreground mt-2">
+												Scale the application interface. Use Ctrl/Cmd + + to
+												zoom in and Ctrl/Cmd + - to zoom out in 5% steps.
+											</p>
 										</div>
 
 										<div>

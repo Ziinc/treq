@@ -3,6 +3,7 @@ import { Dashboard } from "./components/Dashboard";
 import { ToastProvider } from "./components/ui/toast";
 import { ThemeProvider } from "./hooks/useTheme";
 import { TerminalSettingsProvider } from "./hooks/useTerminalSettings";
+import { ZoomSettingsProvider } from "./hooks/useZoomSettings";
 import { DiffSettingsProvider } from "./hooks/useDiffSettings";
 import { EditorAppsProvider } from "./hooks/useEditorApps";
 import { AuthProvider } from "./hooks/useAuth";
@@ -54,15 +55,17 @@ function App() {
 				<AuthProvider>
 					<ThemeProvider>
 						<PrismThemeLoader />
-						<TerminalSettingsProvider>
-							<DiffSettingsProvider>
-								<EditorAppsProvider>
-									<ToastProvider>
-										<AppContent />
-									</ToastProvider>
-								</EditorAppsProvider>
-							</DiffSettingsProvider>
-						</TerminalSettingsProvider>
+						<ZoomSettingsProvider>
+							<TerminalSettingsProvider>
+								<DiffSettingsProvider>
+									<EditorAppsProvider>
+										<ToastProvider>
+											<AppContent />
+										</ToastProvider>
+									</EditorAppsProvider>
+								</DiffSettingsProvider>
+							</TerminalSettingsProvider>
+						</ZoomSettingsProvider>
 					</ThemeProvider>
 				</AuthProvider>
 			</QueryClientProvider>
