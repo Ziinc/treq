@@ -1,61 +1,61 @@
 {
-  "generatedAt": "2026-07-27T09:40:28.026Z",
+  "generatedAt": "2026-08-03T09:34:02.336Z",
   "sources": [
     {
       "id": "anthropic",
       "name": "Anthropic",
       "url": "https://github.com/anthropics/skills",
       "skillCount": 17,
-      "stars": 164462
+      "stars": 165935
     },
     {
       "id": "openai",
       "name": "OpenAI",
       "url": "https://github.com/openai/skills",
       "skillCount": 44,
-      "stars": 24222
+      "stars": 24446
     },
     {
       "id": "mattpocock",
       "name": "Matt Pocock",
       "url": "https://github.com/mattpocock/skills",
       "skillCount": 37,
-      "stars": 190537
+      "stars": 200574
     },
     {
       "id": "vercel",
       "name": "Vercel",
       "url": "https://github.com/vercel-labs/agent-browser",
       "skillCount": 1,
-      "stars": 39297
+      "stars": 39816
     },
     {
       "id": "microsoft",
       "name": "Microsoft",
       "url": "https://github.com/microsoft/azure-skills",
       "skillCount": 34,
-      "stars": 1324
+      "stars": 1352
     },
     {
       "id": "superpowers",
       "name": "Superpowers",
       "url": "https://github.com/obra/superpowers",
       "skillCount": 14,
-      "stars": 261829
+      "stars": 265406
     },
     {
       "id": "caveman",
       "name": "Caveman",
       "url": "https://github.com/JuliusBrussee/caveman",
       "skillCount": 7,
-      "stars": 93345
+      "stars": 95391
     },
     {
       "id": "prisma",
       "name": "Prisma",
       "url": "https://github.com/prisma/skills",
       "skillCount": 9,
-      "stars": 47
+      "stars": 50
     }
   ],
   "skills": [
@@ -5767,7 +5767,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 12697,
+          "size": 12696,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-prepare/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-prepare/SKILL.md"
@@ -7888,7 +7888,7 @@
         },
         {
           "path": "SKILL.md",
-          "size": 24650,
+          "size": 24649,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/SKILL.md"
