@@ -7,7 +7,7 @@ import {
 } from "@tanstack/react-query";
 import {
 	AlertTriangle,
-	ArrowLeft,
+	ArrowRight,
 	ChevronLeft,
 	Code2,
 	Eye,
@@ -40,6 +40,8 @@ import {
 	type DirectoryEntry,
 	discardWorkspaceChanges,
 	dryRunHomeRepoRebase,
+	getRepoSetting,
+	getSetting,
 	getWorkspaceReadme,
 	getWorkspaceStatus,
 	type HomeRebaseDryRunResult,
@@ -104,6 +106,7 @@ interface ShowWorkspaceProps {
 	onDeleteWorkspace?: (workspace: Workspace) => void;
 	onOpenFilePicker?: () => void;
 	onSessionCreated?: (session: SessionCreationInfo) => void;
+	taskInputFocusRequest?: number;
 	onOpenMergePreview?: () => void;
 	onOpenBranchSwitcher?: () => void;
 	onCreateStackedWorkspace?: () => void;
@@ -141,6 +144,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 		onDeleteWorkspace,
 		onOpenFilePicker,
 		onSessionCreated,
+		taskInputFocusRequest,
 		onOpenMergePreview,
 		onOpenBranchSwitcher,
 		onCreateStackedWorkspace,
@@ -261,6 +265,10 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			setBookmarkConflict(null);
 			setConflictModalOpen(false);
 		}, [workspace?.id]);
+
+		useEffect(() => {
+			if (taskInputFocusRequest) setActiveTab("overview");
+		}, [taskInputFocusRequest]);
 
 		// Load workspace commit count to control Committed toggle availability
 		const loadWorkspaceCommitCount = useCallback(async () => {
@@ -861,6 +869,38 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 				try {
 					const sessionName = "Code Review";
 
+					// Resolve the default agent from repo-level then app-level settings,
+					// so "send review to terminal" honours the configured default agent.
+					let resolvedAgent: "claude" | "codex" | "cursor" | undefined;
+					const repoPathForSettings = effectiveRepoPath || workingDirectory;
+					try {
+						let repoDefault: string | null = null;
+						let appDefault: string | null = null;
+						try {
+							repoDefault = await getRepoSetting(
+								repoPathForSettings,
+								"default_agent",
+							);
+						} catch {
+							// repo may not be initialized yet
+						}
+						try {
+							appDefault = await getSetting("default_agent");
+						} catch {
+							// ignore
+						}
+						const defaultAgent = repoDefault || appDefault;
+						if (
+							defaultAgent === "codex" ||
+							defaultAgent === "cursor" ||
+							defaultAgent === "claude"
+						) {
+							resolvedAgent = defaultAgent;
+						}
+					} catch {
+						// fall back to undefined (Dashboard will default to claude)
+					}
+
 					// Create new database session
 					const dbSessionId = await createSession(
 						effectiveRepoPath,
@@ -869,7 +909,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 					);
 					const sessionRepoPath = effectiveRepoPath || workingDirectory;
 
-					// Notify parent with pending prompt to be sent after Claude initializes
+					// Notify parent with pending prompt to be sent after agent initializes
 					// (ConsolidatedTerminal will create the PTY session when it mounts)
 					onSessionCreated?.({
 						sessionId: dbSessionId,
@@ -879,6 +919,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 						repoPath: sessionRepoPath,
 						pendingPrompt: reviewMarkdown,
 						permissionMode: mode,
+						agent: resolvedAgent,
 					});
 				} catch (error) {
 					addToast({
@@ -1112,6 +1153,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 											workspaceId={workspace?.id ?? null}
 											workspacePath={workspace?.workspace_path ?? null}
 											workingDirectory={workingDirectory}
+											focusRequest={taskInputFocusRequest}
 											onSessionCreated={onSessionCreated}
 										/>
 										{/* Stack */}
@@ -1307,11 +1349,20 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 					>
 						{/* Row 1: Branch name */}
 						<div className="flex items-center justify-between">
-							<div className="flex items-center gap-2">
-								<GitBranch className="w-4 h-4 text-muted-foreground" />
+							<div className="flex items-center gap-2 min-w-0">
+								<GitBranch className="w-4 h-4 text-muted-foreground shrink-0" />
 
+								{workspace && (
+									<span
+										className="text-sm font-semibold font-mono truncate min-w-0 max-w-[220px]"
+										title={branchTitle}
+									>
+										{branchTitle}
+									</span>
+								)}
 								{workspace && workspace.branch_name !== defaultBranch && (
 									<>
+										<ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
 										<TargetBranchSelector
 											branches={availableBranches}
 											loading={branchesLoading}
@@ -1324,16 +1375,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 											}}
 											disabled={rebasing}
 										/>
-										<ArrowLeft className="w-4 h-4 text-muted-foreground" />
-										{/* Stack button for workspace */}
-
-										<div className="flex-1" />
 									</>
-								)}
-								{workspace && (
-									<span className="text-sm font-semibold font-mono">
-										{branchTitle}
-									</span>
 								)}
 								{workspace && onCreateStackedWorkspace && (
 									<TooltipProvider delayDuration={200}>
@@ -1363,10 +1405,22 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 								)}
 								{!workspace && (
 									<>
+										<button
+											type="button"
+											onClick={onOpenBranchSwitcher}
+											className="text-sm font-semibold font-mono hover:underline cursor-pointer truncate min-w-0 max-w-[220px]"
+											title={branchTitle}
+										>
+											{branchTitle}
+										</button>
 										{/* Target branch label + rebase button for non-default home repo branches */}
 										{isHomeRepo && branchTitle !== defaultBranch && (
 											<>
-												<span className="text-sm font-mono text-muted-foreground">
+												<ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
+												<span
+													className="text-sm font-mono text-muted-foreground truncate min-w-0 max-w-[220px]"
+													title={defaultBranch}
+												>
 													{defaultBranch}
 												</span>
 												{homeRepoTargetAheadCount > 0 && (
@@ -1430,17 +1484,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 														</TooltipProvider>
 													</>
 												)}
-												<ArrowLeft className="w-4 h-4 text-muted-foreground" />
 											</>
 										)}
-
-										<button
-											type="button"
-											onClick={onOpenBranchSwitcher}
-											className="text-sm font-semibold font-mono hover:underline cursor-pointer"
-										>
-											{branchTitle}
-										</button>
 										{/* Stack button for home repo */}
 										{onCreateStackedWorkspace && (
 											<TooltipProvider delayDuration={200}>

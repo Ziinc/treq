@@ -6,7 +6,7 @@ import { BranchSwitcher } from "./BranchSwitcher";
 import { WorkspaceDeletion } from "./WorkspaceDeletion";
 import { FilePicker } from "./FilePicker";
 import { CmdkFooter } from "./ui/cmdk-footer";
-import { Session, Workspace } from "../lib/api";
+import { Workspace } from "../lib/api";
 import {
 	Bot,
 	ChevronsUpDown,
@@ -14,10 +14,8 @@ import {
 	GitBranch,
 	Home,
 	Maximize2,
-	MousePointer2,
 	Plus,
 	Settings,
-	Sparkles,
 	Terminal as TerminalIcon,
 	Trash2,
 } from "lucide-react";
@@ -36,18 +34,16 @@ interface CommandPaletteProps {
 	showCommandPalette: boolean;
 	onCommandPaletteChange: (open: boolean) => void;
 	workspaces: Workspace[];
-	sessions: Session[];
 	onNavigateToDashboard: () => void;
 	onNavigateToSettings: () => void;
-	onOpenWorkspaceSession: (workspace: Workspace) => void;
 	onOpenBranchSwitcher: () => void;
 	onOpenFilePicker: () => void;
 	onOpenWorkspacePicker: () => void;
 	onOpenWorkspaceDeletion: () => void;
-	onCreateWorkspace: () => void;
+	onCreateStackedWorkspace: () => void;
 	onToggleTerminal?: () => void;
 	onMaximizeTerminal?: () => void;
-	onCreateAgentTerminal?: (agent?: "claude" | "codex" | "cursor") => void;
+	onStartAgentWithPrompt?: () => void;
 	onCreateShellTerminal?: () => void;
 	hasSelectedWorkspace: boolean;
 
@@ -70,7 +66,6 @@ interface CommandPaletteProps {
 
 	// Common
 	repoPath: string;
-	workspaceChangeCounts?: Map<number, number>;
 }
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
@@ -83,10 +78,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 	onOpenFilePicker,
 	onOpenWorkspacePicker,
 	onOpenWorkspaceDeletion,
-	onCreateWorkspace,
+	onCreateStackedWorkspace,
 	onToggleTerminal,
 	onMaximizeTerminal,
-	onCreateAgentTerminal,
+	onStartAgentWithPrompt,
 	onCreateShellTerminal,
 	hasSelectedWorkspace,
 	showBranchSwitcher,
@@ -155,14 +150,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 			});
 		}
 
-		if (repoPath && onCreateWorkspace) {
+		if (repoPath && onCreateStackedWorkspace) {
 			result.push({
 				id: "create-workspace",
 				type: "action",
 				label: "Create Workspace",
 				description: "Create a new workspace",
 				icon: <Plus className="w-4 h-4" />,
-				onSelect: onCreateWorkspace,
+				onSelect: onCreateStackedWorkspace,
 			});
 		}
 
@@ -200,30 +195,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 				});
 			}
 
-			if (onCreateAgentTerminal) {
+			if (onStartAgentWithPrompt) {
 				result.push({
-					id: "new-agent-terminal",
+					id: "start-agent-with-prompt",
 					type: "action",
-					label: "New Agent Terminal",
-					description: "Create a new agent session using your default agent",
+					label: "Start an agent session with a prompt",
+					description: "Focus the prompt inbox, then start an agent terminal",
 					icon: <Bot className="w-4 h-4" />,
-					onSelect: () => onCreateAgentTerminal(),
-				});
-				result.push({
-					id: "new-codex-terminal",
-					type: "action",
-					label: "New Codex Terminal",
-					description: "Create a new Codex agent session",
-					icon: <Sparkles className="w-4 h-4" />,
-					onSelect: () => onCreateAgentTerminal("codex"),
-				});
-				result.push({
-					id: "new-cursor-terminal",
-					type: "action",
-					label: "New Cursor Terminal",
-					description: "Create a new Cursor agent session",
-					icon: <MousePointer2 className="w-4 h-4" />,
-					onSelect: () => onCreateAgentTerminal("cursor"),
+					onSelect: onStartAgentWithPrompt,
 				});
 			}
 
@@ -254,10 +233,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 		onOpenFilePicker,
 		onOpenWorkspacePicker,
 		onOpenWorkspaceDeletion,
-		onCreateWorkspace,
+		onCreateStackedWorkspace,
 		onToggleTerminal,
 		onMaximizeTerminal,
-		onCreateAgentTerminal,
+		onStartAgentWithPrompt,
 		onCreateShellTerminal,
 		repoPath,
 		hasSelectedWorkspace,

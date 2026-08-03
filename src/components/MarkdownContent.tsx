@@ -1,6 +1,7 @@
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
+import remarkGfm from "remark-gfm";
+import { highlightCode } from "../lib/syntax-highlight";
 import { cn } from "../lib/utils";
 
 const PROSE_CLASS =
@@ -25,15 +26,42 @@ export function MarkdownContent({
 			<ReactMarkdown
 				remarkPlugins={[remarkGfm]}
 				rehypePlugins={[rehypeRaw]}
-				components={
-					resolveImageSrc
+				components={{
+					code: ({ children, className, node: _node, ...props }) => {
+						void _node;
+						const language = /(?:^|\s)language-([\w-]+)/.exec(
+							className ?? "",
+						)?.[1];
+						if (!language) {
+							return (
+								<code className={className} {...props}>
+									{children}
+								</code>
+							);
+						}
+
+						return (
+							<code
+								className={className}
+								// biome-ignore lint/security/noDangerouslySetInnerHtml: Prism returns escaped, highlighted markup.
+								dangerouslySetInnerHTML={{
+									__html: highlightCode(
+										String(children).replace(/\n$/, ""),
+										language,
+									),
+								}}
+								{...props}
+							/>
+						);
+					},
+					...(resolveImageSrc
 						? {
 								img: ({ src, alt, ...props }) => (
 									<img src={resolveImageSrc(src)} alt={alt ?? ""} {...props} />
 								),
 							}
-						: undefined
-				}
+						: {}),
+				}}
 			>
 				{stripped}
 			</ReactMarkdown>

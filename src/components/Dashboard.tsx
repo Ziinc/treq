@@ -94,6 +94,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	const [unifiedDialogDefaults, setUnifiedDialogDefaults] =
 		useState<WorkspaceDialogDefaults | null>(null);
 	const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
+	const previousViewModeRef = useRef<ViewMode>(
+		initialViewMode === "settings" ? "show-workspace" : initialViewMode,
+	);
 	const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(
 		null,
 	);
@@ -103,6 +106,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	const [showFilePicker, setShowFilePicker] = useState(false);
 	const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
 	const [showWorkspaceDeletion, setShowWorkspaceDeletion] = useState(false);
+	const [taskInputFocusRequest, setTaskInputFocusRequest] = useState(0);
 	const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
 	const [pendingSessionData, setPendingSessionData] = useState<
 		Map<
@@ -138,9 +142,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		setActiveSessionId(null);
 	}, []);
 
-	const openSettings = useCallback((tab?: string) => {
-		void tab;
-		setViewMode("settings");
+	const openSettings = useCallback(
+		(tab?: string) => {
+			void tab;
+			if (viewMode !== "settings") {
+				previousViewModeRef.current = viewMode;
+			}
+			setViewMode("settings");
+		},
+		[viewMode],
+	);
+
+	const closeSettings = useCallback(() => {
+		setViewMode(previousViewModeRef.current);
 	}, []);
 
 	const openGitHub = useCallback(() => {
@@ -454,7 +468,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 			// ),
 			// Navigate to settings
 			listen("navigate-to-settings", () => {
-				setViewMode("settings");
+				openSettings();
 			}),
 			// Menu open repository
 			listen("menu-open-repository", () => handleOpenRepository()),
@@ -568,6 +582,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		queryClient,
 		deleteWorkspaceMutation,
 		handleOpenRepository,
+		openSettings,
 	]);
 
 	// Note: Git merge functionality removed - using JJ now
@@ -1111,6 +1126,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 											});
 										}
 									}}
+									taskInputFocusRequest={taskInputFocusRequest}
 								/>
 							</ErrorBoundary>
 						</div>
@@ -1193,7 +1209,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 					{viewMode === "settings" && (
 						<SettingsPage
 							repoPath={repoPath}
-							onClose={handleReturnToDashboard}
+							onClose={closeSettings}
 							currentBranch={effectiveDefaultBranch}
 						/>
 					)}
@@ -1291,19 +1307,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				showCommandPalette={showCommandPalette}
 				onCommandPaletteChange={setShowCommandPalette}
 				workspaces={workspaces}
-				sessions={sessions}
 				onNavigateToDashboard={handleReturnToDashboard}
-				onNavigateToSettings={() => setViewMode("settings")}
-				onOpenWorkspaceSession={handleOpenSession}
+				onNavigateToSettings={openSettings}
 				onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
 				onOpenFilePicker={() => setShowFilePicker(true)}
 				onOpenWorkspacePicker={() => setShowWorkspacePicker(true)}
 				onOpenWorkspaceDeletion={() => setShowWorkspaceDeletion(true)}
-				onCreateWorkspace={() => setUnifiedDialogDefaults({})}
+				onCreateStackedWorkspace={handleCreateStackedWorkspace}
 				onToggleTerminal={() => terminalPaneRef.current?.toggleCollapse()}
 				onMaximizeTerminal={() => terminalPaneRef.current?.toggleMaximize()}
-				onCreateAgentTerminal={(agent) =>
-					terminalPaneRef.current?.createAgentSession(agent)
+				onStartAgentWithPrompt={() =>
+					setTaskInputFocusRequest((request) => request + 1)
 				}
 				onCreateShellTerminal={() =>
 					terminalPaneRef.current?.createShellSession()
@@ -1321,7 +1335,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				onFileSelected={(filePath) => setSessionSelectedFile(filePath)}
 				selectedWorkspaceId={selectedWorkspace?.id ?? null}
 				repoPath={repoPath}
-				workspaceChangeCounts={undefined}
 			/>
 
 			<WorkspacePicker
