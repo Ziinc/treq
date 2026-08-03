@@ -1,6 +1,15 @@
 /* eslint-disable max-lines, max-params, max-nested-callbacks, no-await-in-loop */
 
 import { useQuery } from "@tanstack/react-query";
+import { ask } from "@tauri-apps/plugin-dialog";
+import {
+	ArrowRightLeft,
+	ChevronRight,
+	FileText,
+	Loader2,
+	Plus,
+	Trash2,
+} from "lucide-react";
 import {
 	Fragment,
 	memo,
@@ -11,15 +20,16 @@ import {
 	useState,
 } from "react";
 import {
+	abandonCommit,
+	getCommitDiff,
+	getCommitFileDiff,
 	type JjDiffHunk,
 	type JjFileDiff,
 	type JjLogCommit,
 	type JjRevisionDiff,
-	abandonCommit,
-	getCommitDiff,
-	getCommitFileDiff,
 	listCommits,
 } from "../lib/api";
+import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
 import {
 	cn,
 	formatDayLabel,
@@ -27,12 +37,7 @@ import {
 	formatRelativeTime,
 	getDayKey,
 } from "../lib/utils";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipProvider,
-	TooltipTrigger,
-} from "./ui/tooltip";
+import { CommentInput } from "./CommentInput";
 import { Button } from "./ui/button";
 import {
 	DropdownMenu,
@@ -40,17 +45,13 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import {
-	ArrowRightLeft,
-	ChevronRight,
-	FileText,
-	Loader2,
-	Plus,
-	Trash2,
-} from "lucide-react";
-import { CommentInput } from "./CommentInput";
 import { useToast } from "./ui/toast";
-import { ask } from "@tauri-apps/plugin-dialog";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from "./ui/tooltip";
 
 interface CommitDiffViewerProps {
 	repoPath: string;
@@ -1592,6 +1593,7 @@ function HunkView({
 	onCommentCancel,
 }: HunkViewProps) {
 	const { oldStart, newStart } = parseHunkHeader(hunk.header);
+	const language = getLanguageFromPath(filePath);
 	let oldLine = oldStart;
 	let newLine = newStart;
 
@@ -1691,7 +1693,12 @@ function HunkView({
 								</span>
 							)}
 							<span className="flex-1 whitespace-pre overflow-x-auto">
-								{line.slice(1)}
+								<span
+									// biome-ignore lint/security/noDangerouslySetInnerHtml: Prism escapes source text before adding token markup.
+									dangerouslySetInnerHTML={{
+										__html: highlightCode(line.slice(1), language),
+									}}
+								/>
 							</span>
 						</div>
 
