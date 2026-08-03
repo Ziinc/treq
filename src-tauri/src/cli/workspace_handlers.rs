@@ -19,6 +19,14 @@ fn get_arg_value(matches: &Matches, name: &str) -> Option<String> {
     })
 }
 
+fn get_arg_flag(matches: &Matches, name: &str) -> bool {
+    matches
+        .args
+        .get(name)
+        .and_then(|arg| arg.value.as_bool())
+        .unwrap_or(false)
+}
+
 fn get_arg_values(matches: &Matches, name: &str) -> Vec<String> {
     let Some(arg) = matches.args.get(name) else {
         return Vec::new();
@@ -374,5 +382,65 @@ pub(super) fn handle_workspace_agent(matches: &Matches) {
     ) {
         eprintln!("Error dispatching agent request: {}", error);
         std::process::exit(1);
+    }
+}
+
+pub(super) fn handle_workspace_commit(matches: &Matches) {
+    let workspace_name = match get_arg_value(matches, "workspace_name") {
+        Some(value) => value,
+        None => {
+            eprintln!("Error: workspace name is required");
+            eprintln!("Usage: treq commit <workspace_name> -m <message> [--push]");
+            return;
+        }
+    };
+
+    let message = match get_arg_value(matches, "message") {
+        Some(value) => value,
+        None => {
+            eprintln!("Error: commit message is required (-m)");
+            eprintln!("Usage: treq commit <workspace_name> -m <message> [--push]");
+            return;
+        }
+    };
+
+    let push = get_arg_flag(matches, "push");
+
+    let repo_path = match detect_repo_path() {
+        Ok(path) => path,
+        Err(error) => {
+            eprintln!("Error: {}", error);
+            return;
+        }
+    };
+
+    let workspace = match local_db::get_workspace_by_branch(&repo_path, &workspace_name) {
+        Ok(Some(ws)) => ws,
+        Ok(None) => {
+            eprintln!("Error: workspace '{}' not found", workspace_name);
+            return;
+        }
+        Err(error) => {
+            eprintln!("Error looking up workspace: {}", error);
+            return;
+        }
+    };
+
+    match core::commit_workspace(&repo_path, workspace.id, &message) {
+        Ok(result) => println!("{}", result),
+        Err(error) => {
+            eprintln!("Error creating commit: {}", error);
+            std::process::exit(1);
+        }
+    }
+
+    if push {
+        match core::push_workspace_to_remote(&repo_path, Some(workspace.id)) {
+            Ok(result) => println!("{}", result),
+            Err(error) => {
+                eprintln!("Error pushing to remote: {}", error);
+                std::process::exit(1);
+            }
+        }
     }
 }

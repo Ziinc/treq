@@ -168,6 +168,29 @@
               "description": "Permission mode: edit or plan"
             }
           ]
+        },
+        "commit": {
+          "description": "Commit changes in a workspace",
+          "args": [
+            {
+              "name": "workspace_name",
+              "index": 1,
+              "takesValue": true,
+              "required": true,
+              "description": "Workspace branch name"
+            },
+            {
+              "name": "message",
+              "short": "m",
+              "takesValue": true,
+              "required": true,
+              "description": "Commit message"
+            },
+            {
+              "name": "push",
+              "description": "Push to remote after committing"
+            }
+          ]
         }
       }
     },
