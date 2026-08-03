@@ -2,7 +2,6 @@ name: CI
 
 on:
   push:
-    branches: [main]
     paths:
       - "src/**"
       - "src-tauri/**"
@@ -16,7 +15,6 @@ on:
       - "package-lock.json"
       - ".github/workflows/ci.yml"
   pull_request:
-    branches: [main]
     paths:
       - "src/**"
       - "src-tauri/**"
