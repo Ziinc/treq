@@ -1,14 +1,23 @@
 import {
 	AlertCircle,
+	CheckCircle2,
 	ChevronRight,
+	CircleDashed,
 	CircleDot,
 	ExternalLink,
 	GitMerge,
 	GitPullRequest,
 	GitPullRequestDraft,
+	Loader2,
+	XCircle,
 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { GhIssue, GhLabel, GhPullRequest } from "../../lib/api-types";
+import type {
+	GhCheckRun,
+	GhIssue,
+	GhLabel,
+	GhPullRequest,
+} from "../../lib/api-types";
 import { Button } from "../ui/button";
 
 export function formatDate(iso: string) {
@@ -90,6 +99,95 @@ export function LabelChip({ name, color }: GhLabel) {
 		>
 			{name}
 		</span>
+	);
+}
+
+type CheckRunKind = "success" | "failure" | "pending" | "neutral";
+
+const CHECK_RUN_STYLES: Record<
+	CheckRunKind,
+	{ className: string; icon: React.ComponentType<{ className?: string }> }
+> = {
+	success: {
+		className: "text-green-600 dark:text-green-400",
+		icon: CheckCircle2,
+	},
+	failure: { className: "text-red-600 dark:text-red-400", icon: XCircle },
+	pending: {
+		className: "text-amber-600 dark:text-amber-400",
+		icon: Loader2,
+	},
+	neutral: {
+		className: "text-muted-foreground",
+		icon: CircleDashed,
+	},
+};
+
+/** Normalizes a statusCheckRollup entry (a Checks API CheckRun or legacy StatusContext) into a display-ready shape. */
+export function normalizeCheckRun(check: GhCheckRun): {
+	name: string;
+	kind: CheckRunKind;
+	label: string;
+	url: string | null;
+} {
+	const name = check.name ?? check.context ?? "Check";
+	const url = check.details_url ?? check.target_url ?? null;
+
+	if (check.conclusion) {
+		const c = check.conclusion.toUpperCase();
+		if (c === "SUCCESS") return { name, kind: "success", label: "Success", url };
+		if (["FAILURE", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE"].includes(c)) {
+			return { name, kind: "failure", label: "Failed", url };
+		}
+		return {
+			name,
+			kind: "neutral",
+			label: c.charAt(0) + c.slice(1).toLowerCase(),
+			url,
+		};
+	}
+
+	if (check.state) {
+		const s = check.state.toUpperCase();
+		if (s === "SUCCESS") return { name, kind: "success", label: "Success", url };
+		if (s === "FAILURE" || s === "ERROR") {
+			return { name, kind: "failure", label: "Failed", url };
+		}
+		return { name, kind: "pending", label: "Pending", url };
+	}
+
+	if (check.status) {
+		const s = check.status.toUpperCase();
+		if (s === "IN_PROGRESS") return { name, kind: "pending", label: "In progress", url };
+		if (s === "QUEUED") return { name, kind: "pending", label: "Queued", url };
+	}
+
+	return { name, kind: "pending", label: "Pending", url };
+}
+
+export function CheckRunRow({ check }: { check: GhCheckRun }) {
+	const { name, kind, label, url } = normalizeCheckRun(check);
+	const { className, icon: Icon } = CHECK_RUN_STYLES[kind];
+
+	const content = (
+		<div className="flex items-center gap-2 py-1.5 px-2 text-base">
+			<Icon
+				className={`w-4 h-4 shrink-0 ${className} ${kind === "pending" ? "animate-spin" : ""}`}
+			/>
+			<span className="flex-1 min-w-0 truncate">{name}</span>
+			<span className={`shrink-0 ${className}`}>{label}</span>
+		</div>
+	);
+
+	if (!url) return content;
+	return (
+		<button
+			type="button"
+			className="w-full text-left hover:bg-muted/50 transition-colors rounded"
+			onClick={() => openUrl(url)}
+		>
+			{content}
+		</button>
 	);
 }
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, MessageSquare, X } from "lucide-react";
+import { ListChecks, Loader2, MessageSquare, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
@@ -13,7 +13,14 @@ import {
 	ghViewPr,
 } from "../../lib/api";
 import { MarkdownContent } from "../MarkdownContent";
-import { formatDate, LabelChip, OpenInWebButton, StateChip } from "./shared";
+import {
+	CheckRunRow,
+	formatDate,
+	LabelChip,
+	normalizeCheckRun,
+	OpenInWebButton,
+	StateChip,
+} from "./shared";
 
 export function PrDetailPanel({
 	repoFullName,
@@ -122,6 +129,26 @@ export function PrDetailPanel({
 							</div>
 						)}
 					</div>
+
+					{(pr.status_check_rollup ?? []).length > 0 && (
+						<div className="space-y-2">
+							<h3 className="text-base font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+								<ListChecks className="w-3 h-3" />
+								Checks (
+								{
+									pr.status_check_rollup!.filter(
+										(c) => normalizeCheckRun(c).kind === "success",
+									).length
+								}
+								/{pr.status_check_rollup!.length})
+							</h3>
+							<div className="border border-border rounded-md divide-y divide-border overflow-hidden">
+								{pr.status_check_rollup!.map((check, i) => (
+									<CheckRunRow key={`${check.name ?? check.context}-${i}`} check={check} />
+								))}
+							</div>
+						</div>
+					)}
 
 					{pr.body && (
 						<div className="bg-muted/30 rounded-md p-3">

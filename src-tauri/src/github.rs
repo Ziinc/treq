@@ -169,6 +169,26 @@ pub struct GhIssue {
     pub comments: Option<Vec<GhIssueComment>>,
 }
 
+/// One entry of a PR's `statusCheckRollup`. GitHub's GraphQL API returns a
+/// union of `CheckRun` (GitHub Actions and other Checks API integrations)
+/// and `StatusContext` (legacy commit status API) objects, which is why most
+/// fields here are optional -- each variant only populates its own subset.
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[serde(rename_all(deserialize = "camelCase"))]
+pub struct GhCheckRun {
+    #[serde(rename = "__typename", default)]
+    pub typename: String,
+    pub name: Option<String>,
+    pub context: Option<String>,
+    pub status: Option<String>,
+    pub conclusion: Option<String>,
+    pub state: Option<String>,
+    pub description: Option<String>,
+    pub workflow_name: Option<String>,
+    pub details_url: Option<String>,
+    pub target_url: Option<String>,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 #[serde(rename_all(deserialize = "camelCase"))]
 pub struct GhPullRequest {
@@ -187,6 +207,8 @@ pub struct GhPullRequest {
     pub comments: Option<Vec<GhIssueComment>>,
     #[serde(default)]
     pub is_draft: bool,
+    #[serde(default)]
+    pub status_check_rollup: Vec<GhCheckRun>,
 }
 
 /// ETXTBSY: the target binary is momentarily open for writing elsewhere (e.g.
@@ -448,7 +470,7 @@ pub fn gh_view_pr_impl(
             "--repo",
             repo_full_name,
             "--json",
-            "number,title,state,url,body,author,labels,headRefName,baseRefName,mergeStateStatus,createdAt,updatedAt,comments,isDraft",
+            "number,title,state,url,body,author,labels,headRefName,baseRefName,mergeStateStatus,createdAt,updatedAt,comments,isDraft,statusCheckRollup",
         ],
         extended_path,
     )?;
@@ -1244,6 +1266,44 @@ echo '[{{"name":"build","bucket":"pass","link":"https://x/1"}}]'"#,
     fn test_get_pr_info_via_gh_bad_binary_returns_err() {
         let result = get_pr_info_via_gh_impl("/nonexistent/gh", "/tmp", "feat", "/usr/bin:/bin");
         assert!(result.is_err());
+    }
+
+    // ── gh_view_pr_impl / statusCheckRollup ──────────────────────────────────
+
+    #[test]
+    #[cfg(unix)]
+    fn gh_view_pr_parses_status_check_rollup_check_run_and_status_context() {
+        let bin_dir = TempDir::new().unwrap();
+        let gh_path = write_fake_gh(
+            &bin_dir,
+            r#"echo '{"number":1,"title":"T","state":"OPEN","url":"https://github.com/o/r/pull/1","body":null,"author":{"login":"me"},"labels":[],"headRefName":"feat","baseRefName":"main","mergeStateStatus":"CLEAN","createdAt":"2024-01-01T00:00:00Z","updatedAt":"2024-01-01T00:00:00Z","comments":[],"isDraft":false,"statusCheckRollup":[{"__typename":"CheckRun","name":"build","status":"COMPLETED","conclusion":"SUCCESS","workflowName":"CI","detailsUrl":"https://x/1"},{"__typename":"StatusContext","context":"ci/circleci","state":"FAILURE","targetUrl":"https://x/2"}]}'"#,
+        );
+
+        let pr = gh_view_pr_impl(&gh_path, "owner/repo", 1, "/usr/bin:/bin").unwrap();
+        assert_eq!(pr.status_check_rollup.len(), 2);
+        assert_eq!(pr.status_check_rollup[0].name.as_deref(), Some("build"));
+        assert_eq!(
+            pr.status_check_rollup[0].conclusion.as_deref(),
+            Some("SUCCESS")
+        );
+        assert_eq!(
+            pr.status_check_rollup[1].context.as_deref(),
+            Some("ci/circleci")
+        );
+        assert_eq!(pr.status_check_rollup[1].state.as_deref(), Some("FAILURE"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn gh_view_pr_defaults_status_check_rollup_when_absent() {
+        let bin_dir = TempDir::new().unwrap();
+        let gh_path = write_fake_gh(
+            &bin_dir,
+            r#"echo '{"number":1,"title":"T","state":"OPEN","url":"https://github.com/o/r/pull/1","body":null,"author":{"login":"me"},"labels":[],"headRefName":"feat","baseRefName":"main","mergeStateStatus":null,"createdAt":"2024-01-01T00:00:00Z","updatedAt":"2024-01-01T00:00:00Z","comments":[],"isDraft":false}'"#,
+        );
+
+        let pr = gh_view_pr_impl(&gh_path, "owner/repo", 1, "/usr/bin:/bin").unwrap();
+        assert!(pr.status_check_rollup.is_empty());
     }
 
     #[test]
