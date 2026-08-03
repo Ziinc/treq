@@ -8,6 +8,7 @@ import {
 	useState,
 } from "react";
 import { getSetting, setSetting } from "../lib/api";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 
 export const DEFAULT_ZOOM = 100;
 export const ZOOM_STEP = 5;
@@ -19,7 +20,16 @@ function clampZoom(value: number): number {
 }
 
 function applyZoomToDocument(zoom: number) {
-	document.documentElement.style.setProperty("--ui-zoom", `${zoom}%`);
+	// WebView zoom changes the CSS viewport as well as the rendered scale. Unlike
+	// CSS `zoom`, this lets responsive layouts reflow instead of scaling a
+	// viewport-sized tree beyond the visible window and cropping it.
+	try {
+		void getCurrentWebview()
+			.setZoom(zoom / 100)
+			.catch((error) => console.error("Failed to apply UI zoom", error));
+	} catch {
+		// Unit and integration tests run without Tauri's window metadata.
+	}
 }
 
 interface ZoomSettingsContextType {

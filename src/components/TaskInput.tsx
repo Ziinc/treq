@@ -390,10 +390,10 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 
 	return (
 		<>
-			<div className="max-w-2xl mx-auto w-full">
+			<div className="max-w-2xl min-w-0 mx-auto w-full">
 				<div
 					className={cn(
-						"rounded-xl border bg-background relative transition-colors",
+						"min-h-28 rounded-xl border bg-background relative transition-colors",
 						focused ? "border-blue-400" : "border-border",
 					)}
 				>
@@ -406,7 +406,7 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 						onBlur={() => setFocused(false)}
 						placeholder="Describe a task..."
 						rows={1}
-						className="w-full resize-none border-0 bg-transparent px-4 pt-3 pb-1 text-sm outline-none placeholder:text-muted-foreground focus:ring-0 caret-blue-400"
+						className="block w-full min-w-0 resize-none overflow-x-hidden border-0 bg-transparent px-4 pt-3 pb-1 text-sm outline-none placeholder:text-muted-foreground focus:ring-0 caret-blue-400"
 						style={{ minHeight: "44px", maxHeight: "200px" }}
 					/>
 

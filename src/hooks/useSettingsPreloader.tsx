@@ -13,10 +13,8 @@ export const useSettingsPreloader = () => {
 			"terminal_font_size",
 			"diff_font_size",
 			"ui_zoom",
-		]).catch(
-			(error) => {
-				console.error("Failed to preload settings:", error);
-			},
-		);
+		]).catch((error) => {
+			console.error("Failed to preload settings:", error);
+		});
 	}, []);
 };
