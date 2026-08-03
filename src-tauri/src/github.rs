@@ -545,6 +545,103 @@ pub fn gh_create_pr_impl(
     Err(format!("Could not parse PR number from output: {text}"))
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct PrCheckEntry {
+    pub name: String,
+    /// "pass" | "fail" | "pending" | "skipping" | "cancel"
+    pub bucket: String,
+    pub link: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct PrCiStatus {
+    /// "success" | "failure" | "pending"
+    pub state: String,
+    pub total: u32,
+    pub passed: u32,
+    pub failed: u32,
+    pub pending: u32,
+    pub checks: Vec<PrCheckEntry>,
+}
+
+/// Run `gh pr checks` for the given branch in the given repo directory and
+/// roll the individual check runs up into an overall CI status.
+/// Returns None if gh is not installed, not authenticated, there is no PR,
+/// or the PR has no checks reported yet.
+pub fn get_pr_checks_via_gh_impl(
+    gh_path: &str,
+    repo_path: &str,
+    branch_name: &str,
+    extended_path: &str,
+) -> Result<Option<PrCiStatus>, String> {
+    #[derive(serde::Deserialize)]
+    struct GhCheck {
+        name: String,
+        bucket: String,
+        link: String,
+    }
+
+    let output = std::process::Command::new(gh_path)
+        .args(["pr", "checks", branch_name, "--json", "name,bucket,link"])
+        .current_dir(repo_path)
+        .env("PATH", extended_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let lower = stderr.to_ascii_lowercase();
+        if lower.contains("no pull requests found") || lower.contains("no checks reported") {
+            return Ok(None);
+        }
+        return Err(format!("gh pr checks failed: {}", stderr.trim()));
+    }
+
+    let raw: Vec<GhCheck> = serde_json::from_slice(&output.stdout)
+        .map_err(|e| format!("Failed to parse gh output: {e}"))?;
+
+    if raw.is_empty() {
+        return Ok(None);
+    }
+
+    let mut passed = 0u32;
+    let mut failed = 0u32;
+    let mut pending = 0u32;
+    let checks: Vec<PrCheckEntry> = raw
+        .into_iter()
+        .map(|c| {
+            match c.bucket.as_str() {
+                "pass" | "skipping" => passed += 1,
+                "fail" | "cancel" => failed += 1,
+                _ => pending += 1,
+            }
+            PrCheckEntry {
+                name: c.name,
+                bucket: c.bucket,
+                link: c.link,
+            }
+        })
+        .collect();
+
+    let state = if failed > 0 {
+        "failure"
+    } else if pending > 0 {
+        "pending"
+    } else {
+        "success"
+    }
+    .to_string();
+
+    Ok(Some(PrCiStatus {
+        state,
+        total: checks.len() as u32,
+        passed,
+        failed,
+        pending,
+        checks,
+    }))
+}
+
 /// Run `gh pr view` for the given branch in the given repo directory.
 /// Returns None if gh is not installed, not authenticated, or no PR exists.
 /// The `gh_path` argument is the resolved path to the gh binary.
@@ -964,6 +1061,165 @@ echo ok"#,
 echo ok"#,
         );
         gh_set_pr_draft_impl(&gh_path, "owner/repo", 9, true, "/usr/bin:/bin").unwrap();
+    }
+
+    // ── get_pr_checks_via_gh_impl ────────────────────────────────────────────
+
+    #[test]
+    #[cfg(unix)]
+    fn test_get_pr_checks_all_passing_reports_success() {
+        let bin_dir = TempDir::new().unwrap();
+        let repo_dir = TempDir::new().unwrap();
+        let gh_path = write_fake_gh(
+            &bin_dir,
+            r#"echo '[{"name":"build","bucket":"pass","link":"https://x/1"},{"name":"lint","bucket":"skipping","link":"https://x/2"}]'"#,
+        );
+
+        let status = get_pr_checks_via_gh_impl(
+            &gh_path,
+            repo_dir.path().to_str().unwrap(),
+            "feat",
+            "/usr/bin:/bin",
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(status.state, "success");
+        assert_eq!(status.total, 2);
+        assert_eq!(status.passed, 2);
+        assert_eq!(status.failed, 0);
+        assert_eq!(status.pending, 0);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_get_pr_checks_any_failure_reports_failure() {
+        let bin_dir = TempDir::new().unwrap();
+        let repo_dir = TempDir::new().unwrap();
+        let gh_path = write_fake_gh(
+            &bin_dir,
+            r#"echo '[{"name":"build","bucket":"pass","link":"https://x/1"},{"name":"test","bucket":"fail","link":"https://x/2"},{"name":"lint","bucket":"pending","link":"https://x/3"}]'"#,
+        );
+
+        let status = get_pr_checks_via_gh_impl(
+            &gh_path,
+            repo_dir.path().to_str().unwrap(),
+            "feat",
+            "/usr/bin:/bin",
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(status.state, "failure");
+        assert_eq!(status.total, 3);
+        assert_eq!(status.passed, 1);
+        assert_eq!(status.failed, 1);
+        assert_eq!(status.pending, 1);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_get_pr_checks_pending_without_failure_reports_pending() {
+        let bin_dir = TempDir::new().unwrap();
+        let repo_dir = TempDir::new().unwrap();
+        let gh_path = write_fake_gh(
+            &bin_dir,
+            r#"echo '[{"name":"build","bucket":"pass","link":"https://x/1"},{"name":"test","bucket":"pending","link":"https://x/2"}]'"#,
+        );
+
+        let status = get_pr_checks_via_gh_impl(
+            &gh_path,
+            repo_dir.path().to_str().unwrap(),
+            "feat",
+            "/usr/bin:/bin",
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(status.state, "pending");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_get_pr_checks_no_checks_reported_returns_none() {
+        let bin_dir = TempDir::new().unwrap();
+        let repo_dir = TempDir::new().unwrap();
+        let gh_path = write_fake_gh(
+            &bin_dir,
+            "echo 'no checks reported on the feat branch' >&2\nexit 1",
+        );
+
+        let result = get_pr_checks_via_gh_impl(
+            &gh_path,
+            repo_dir.path().to_str().unwrap(),
+            "feat",
+            "/usr/bin:/bin",
+        )
+        .unwrap();
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_get_pr_checks_no_pr_returns_none() {
+        let bin_dir = TempDir::new().unwrap();
+        let repo_dir = TempDir::new().unwrap();
+        let gh_path = write_fake_gh(&bin_dir, "echo 'no pull requests found' >&2\nexit 1");
+
+        let result = get_pr_checks_via_gh_impl(
+            &gh_path,
+            repo_dir.path().to_str().unwrap(),
+            "unknown-branch",
+            "/usr/bin:/bin",
+        )
+        .unwrap();
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_get_pr_checks_operational_error_is_returned() {
+        let bin_dir = TempDir::new().unwrap();
+        let repo_dir = TempDir::new().unwrap();
+        let gh_path = write_fake_gh(&bin_dir, "echo 'authentication required' >&2\nexit 1");
+
+        let result = get_pr_checks_via_gh_impl(
+            &gh_path,
+            repo_dir.path().to_str().unwrap(),
+            "feat",
+            "/usr/bin:/bin",
+        );
+        let error = match result {
+            Err(error) => error,
+            Ok(_) => panic!("operational gh failure was treated as no checks"),
+        };
+        assert!(error.contains("authentication required"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn get_pr_checks_invokes_gh_with_exact_arguments_and_working_directory() {
+        let bin_dir = TempDir::new().unwrap();
+        let repo_dir = TempDir::new().unwrap();
+        let expected_dir = repo_dir.path().canonicalize().unwrap();
+        let expected_dir = expected_dir.display();
+        let script = format!(
+            r#"test "$PWD" = "{expected_dir}" || exit 8
+test "$*" = "pr checks feat --json name,bucket,link" || exit 9
+echo '[{{"name":"build","bucket":"pass","link":"https://x/1"}}]'"#,
+        );
+        let gh_path = write_fake_gh(&bin_dir, &script);
+
+        let result = get_pr_checks_via_gh_impl(
+            &gh_path,
+            repo_dir.path().to_str().unwrap(),
+            "feat",
+            "/usr/bin:/bin",
+        );
+
+        assert!(result.unwrap().is_some());
     }
 
     #[test]

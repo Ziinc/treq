@@ -7,10 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	useEnqueueWorkspace,
 	useGitRemoteInfo,
+	usePrCiStatus,
 	usePrInfoViaGh,
 } from "../../src/hooks/useMergeQueueStatus";
 import * as api from "../../src/lib/api";
-import type { PrInfo } from "../../src/lib/api-types";
+import type { PrCiStatus, PrInfo } from "../../src/lib/api-types";
 import { createTestRepo } from "../utils";
 
 const { mockEdgeFn, mockRpc, queueEnabled } = vi.hoisted(() => {
@@ -137,6 +138,56 @@ describe("usePrInfoViaGh", () => {
 	it("is disabled when branchName is undefined", () => {
 		const { repoPath } = createTestRepo(false);
 		const { result } = renderHook(() => usePrInfoViaGh(repoPath, undefined), {
+			wrapper: makeWrapper(),
+		});
+		expect(result.current.fetchStatus).toBe("idle");
+	});
+});
+
+const SUCCESS_CI: PrCiStatus = {
+	state: "success",
+	total: 2,
+	passed: 2,
+	failed: 0,
+	pending: 0,
+	checks: [
+		{ name: "build", bucket: "pass", link: "https://x/1" },
+		{ name: "lint", bucket: "pass", link: "https://x/2" },
+	],
+};
+
+describe("usePrCiStatus", () => {
+	it("returns the rolled-up CI status", async () => {
+		const { repoPath } = createTestRepo(false);
+		const spy = vi
+			.spyOn(api, "getPrChecksViaGh")
+			.mockResolvedValue(SUCCESS_CI);
+
+		const { result } = renderHook(() => usePrCiStatus(repoPath, "feat"), {
+			wrapper: makeWrapper(),
+		});
+		await waitFor(() => expect(result.current.isSuccess).toBe(true));
+		expect(result.current.data).toEqual(SUCCESS_CI);
+		spy.mockRestore();
+	});
+
+	it("surfaces gh operational failures", async () => {
+		const { repoPath } = createTestRepo(false);
+		const spy = vi
+			.spyOn(api, "getPrChecksViaGh")
+			.mockRejectedValue(new Error("gh authentication failed"));
+
+		const { result } = renderHook(() => usePrCiStatus(repoPath, "feat"), {
+			wrapper: makeWrapper(),
+		});
+		await waitFor(() => expect(result.current.isError).toBe(true));
+		expect(result.current.error).toEqual(new Error("gh authentication failed"));
+		spy.mockRestore();
+	});
+
+	it("is disabled when branchName is undefined", () => {
+		const { repoPath } = createTestRepo(false);
+		const { result } = renderHook(() => usePrCiStatus(repoPath, undefined), {
 			wrapper: makeWrapper(),
 		});
 		expect(result.current.fetchStatus).toBe("idle");

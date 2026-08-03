@@ -505,6 +505,7 @@ pub fn run() {
             commands::dry_run_home_repo_rebase,
             commands::get_git_remote_url,
             commands::get_pr_info_via_gh,
+            commands::get_pr_checks_via_gh,
             commands::gh_list_issues,
             commands::gh_view_issue,
             commands::gh_create_issue,

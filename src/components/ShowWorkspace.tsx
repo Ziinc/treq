@@ -94,6 +94,7 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "./ui/tooltip";
+import { CiStatusIndicator } from "./CiStatusIndicator";
 import { ViewPrButton } from "./ViewPrButton";
 import { WorkspaceBookmarkConflictModal } from "./WorkspaceBookmarkConflictModal";
 import { WorkspaceStackPanel } from "./WorkspaceStackPanel";
@@ -1541,6 +1542,10 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 									workspace.branch_name !== defaultBranch &&
 									effectiveRepoPath && (
 										<>
+											<CiStatusIndicator
+												repoPath={effectiveRepoPath}
+												branchName={workspace.branch_name}
+											/>
 											<ViewPrButton
 												repoPath={effectiveRepoPath}
 												branchName={workspace.branch_name}
