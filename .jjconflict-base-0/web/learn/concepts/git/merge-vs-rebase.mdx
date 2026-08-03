@@ -1,0 +1,120 @@
+---
+sidebar_position: 5
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard";
+
+# Merge vs Rebase
+
+_Merge joins histories. Rebase recreates commits on a different base._
+
+## Introduction
+
+`git merge` and `git rebase` both bring a feature branch up to date or get it ready to land. Merge keeps the commits you have and records where two histories met. Rebase replaces a line of commits so it starts somewhere else.
+
+The choice shapes your history and how you work with others. It has no bearing on whether the final files are right.
+
+## Understanding the Concept
+
+A **merge commit** has two or more parents. In a normal two-branch merge, the first parent is where your branch was and the second is the tip you merged in. Every existing commit keeps its object ID.
+
+<DefinitionCard
+  term="Merge Commit"
+  definition="A commit with two or more parents that records the point where separate lines of history were combined."
+/>
+
+A **rebase** computes patches from commits on the current branch, applies them to a new base in order, and moves the [branch ref](./version-control) to the new commits. Their object IDs change because their parent history changes.
+
+<DefinitionCard
+  term="Fast-forward"
+  definition="A ref update that moves a branch pointer to a descendant commit without creating a merge commit."
+/>
+
+{/* TODO: Add a commit-history diagram with one shared starting graph and three outcomes: merge commit, fast-forward after rebase, and squash merge. Mark rewritten commits with primes and show parent links. */}
+
+| | Merge | Rebase |
+| --- | --- | --- |
+| Existing commits | Preserved | Replayed commits are replaced |
+| History | Retains branch topology | Produces a linearized branch |
+| Collaboration | Safe for shared history | Requires coordination after sharing |
+| Conflicts | Usually resolved in one merge result | Can recur as each commit is replayed |
+| Integration record | Merge commit when not fast-forwarded | No integration commit from rebase itself |
+
+A merge can fast-forward when your branch is an ancestor of the one you are merging. Git just slides the branch ref along and makes no merge commit. Use `--no-ff` when the project wants an explicit integration commit.
+
+## Applying It in Practice
+
+Merge `main` into a shared feature branch without rewriting its commits:
+
+```bash
+git fetch origin
+git switch feature/my-work
+git merge origin/main
+```
+
+Rebase a private feature branch onto current `main`:
+
+```bash
+git fetch origin
+git switch feature/my-work
+git rebase origin/main
+```
+
+If that branch already exists on a remote and its rewrite is agreed, [force push](/docs/how-to/pushing-to-remote) it with a lease:
+
+```bash
+git push --force-with-lease origin feature/my-work
+```
+
+Integrate a branch with an explicit merge commit:
+
+```bash
+git switch main
+git merge --no-ff feature/my-work
+```
+
+A squash merge creates one new commit containing the branch's combined file changes. It does not create a merge commit, so Git does not record the feature branch as a parent:
+
+```bash
+git switch main
+git merge --squash feature/my-work
+git commit -m "Add user authentication"
+```
+
+Hosting platforms also offer rebase-and-merge. That option [replays](./cherry-pick-vs-rebase) pull-request commits onto the target branch and usually creates new object IDs. Check the platform's exact behavior before making policy depend on it.
+
+## Engineering Considerations
+
+Merge is the safe choice on a shared branch, because it replaces nothing. The graph keeps both the development history and the moment things joined. A first-parent log shows what landed on `main` without opening every side branch:
+
+```bash
+git log --first-parent --oneline main
+```
+
+Rebase is good for tidying private work and for moving a branch onto the base it should have had. A straight line is easier to scan, but you lose the shape of the original branches. Never rewrite commits colleagues have built on unless everyone agrees how to recover. A [stack of dependent branches](./stacked-prs) needs that agreement on every rebase.
+
+`git bisect` works on straight and merged histories alike. A merge commit can muddy a regression when neither parent reproduces it on its own, and a squash can bury the step that caused the bug. What makes history useful is commits that build and stay focused, not the shape of the graph.
+
+`git blame` also works across merges. Options such as `-M` and `-C` help detect moved or copied lines. Rebase does not automatically make blame more accurate.
+
+## Scaling and Operations
+
+Set one integration policy for each protected branch. Common choices are:
+
+- merge commits for an explicit first-parent release history
+- squash merges for one target-branch commit per pull request
+- rebase-and-merge for preserving individual pull-request commits in a linear history
+
+Each option throws away something different. Merge commits keep the shape. Squash keeps the combined change but loses where each commit began and ended. Rebase-and-merge keeps those boundaries but gives every commit a new identity.
+
+Block force pushes on shared branches. If feature branches can be rewritten, say so out loud, so reviewers know whether it is safe to build on one.
+
+After a big rebase, use `git range-diff` to check the rewritten series still says what you meant. Run the full test suite after you resolve conflicts, whichever strategy you picked. [zdiff3](./zdiff3) makes conflict markers easier to read when both sides share surrounding lines. When the same conflict keeps returning on a long-lived branch, [git rerere](./git-rerere) can reuse the resolution you already chose.
+
+## Next Steps
+
+- [Cherry-pick vs Rebase](./cherry-pick-vs-rebase): distinguish selected patch copying from branch rewriting
+- [What is zdiff3?](./zdiff3): shrink conflict markers while keeping the merge base
+- [What is Git Rerere?](./git-rerere): reuse a conflict resolution when the same conflict returns
+- [What are Stacked PRs?](./stacked-prs): manage branches that depend on one another
+- [Parallel Development Workflow](/learn/workflows/git/parallel-development): combine integration policy with concurrent branch work

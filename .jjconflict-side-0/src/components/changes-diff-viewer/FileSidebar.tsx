@@ -1,0 +1,226 @@
+import React from "react";
+import { CheckCircle2, Loader2 } from "lucide-react";
+import type { JjFileChange } from "../../lib/api";
+import type { ParsedFileChange } from "../../lib/git-utils";
+import { ChangesSection } from "../ChangesSection";
+import { CommittedChangesSection } from "../CommittedChangesSection";
+import { ConflictsSection } from "../ConflictsSection";
+import { CommitInput } from "./CommitInput";
+import type { CommitInputHandle } from "./types";
+
+interface FileSidebarProps {
+	commitInputRef: React.RefObject<CommitInputHandle>;
+	handleCommit: (msg: string) => void;
+	readOnly: boolean;
+	files: ParsedFileChange[];
+	commitPending: boolean;
+	stagedFiles: Set<string>;
+	initialLoading: boolean;
+	actualConflictedFiles: string[];
+	collapsedSections: Set<string>;
+	toggleSectionCollapse: (section: string) => void;
+	activeFilePath: string | null;
+	setActiveFilePath: React.Dispatch<React.SetStateAction<string | null>>;
+	setLargeChangesetExpanded: React.Dispatch<React.SetStateAction<boolean>>;
+	setCollapsedFiles: React.Dispatch<React.SetStateAction<Set<string>>>;
+	setExpandedLargeDiffs: React.Dispatch<React.SetStateAction<Set<string>>>;
+	conflictFileRefs: React.MutableRefObject<Map<string, HTMLDivElement>>;
+	showCommittedChanges: boolean | undefined;
+	committedFiles: JjFileChange[];
+	committedSectionCollapsed: boolean;
+	setCommittedSectionCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
+	scrollToFileIfNeeded: (path: string) => void;
+	stagedFilesList: ParsedFileChange[];
+	selectedStagedFiles: Set<string>;
+	lastSelectedStagedIndex: number | null;
+	handleStagedFileSelect: (path: string, event: React.MouseEvent) => void;
+	handleSelectAllStaged: () => void;
+	handleUnstageFile: (path: string) => void;
+	handleUnstageAllFiles: () => void;
+	setSelectedStagedFiles: React.Dispatch<React.SetStateAction<Set<string>>>;
+	unstagedFiles: ParsedFileChange[];
+	selectedUnstagedFiles: Set<string>;
+	lastSelectedFileIndex: number | null;
+	handleFileSelect: (path: string, event: React.MouseEvent) => void;
+	onMoveFilesToNewWorkspace: ((files: string[]) => void) | undefined;
+	handleDiscardAll: () => void;
+	handleDiscardFiles: (path: string) => void;
+	setSelectedUnstagedFiles: React.Dispatch<React.SetStateAction<Set<string>>>;
+	handleSelectAllUnstaged: () => void;
+	handleStageFile: (path: string) => void;
+	handleStageAllFiles: () => void;
+	fileActionTarget: string | null;
+	workspacePath: string;
+}
+
+export function FileSidebar({
+	commitInputRef,
+	handleCommit,
+	readOnly,
+	files,
+	commitPending,
+	stagedFiles,
+	initialLoading,
+	actualConflictedFiles,
+	collapsedSections,
+	toggleSectionCollapse,
+	activeFilePath,
+	setActiveFilePath,
+	setLargeChangesetExpanded,
+	setCollapsedFiles,
+	setExpandedLargeDiffs,
+	conflictFileRefs,
+	showCommittedChanges,
+	committedFiles,
+	committedSectionCollapsed,
+	setCommittedSectionCollapsed,
+	scrollToFileIfNeeded,
+	stagedFilesList,
+	selectedStagedFiles,
+	lastSelectedStagedIndex,
+	handleStagedFileSelect,
+	handleSelectAllStaged,
+	handleUnstageFile,
+	handleUnstageAllFiles,
+	setSelectedStagedFiles,
+	unstagedFiles,
+	selectedUnstagedFiles,
+	lastSelectedFileIndex,
+	handleFileSelect,
+	onMoveFilesToNewWorkspace,
+	handleDiscardAll,
+	handleDiscardFiles,
+	setSelectedUnstagedFiles,
+	handleSelectAllUnstaged,
+	handleStageFile,
+	handleStageAllFiles,
+	fileActionTarget,
+	workspacePath,
+}: FileSidebarProps) {
+	return (
+		<div className="w-60 border-r border-border bg-sidebar flex flex-col">
+			<CommitInput
+				ref={commitInputRef}
+				onCommit={handleCommit}
+				disabled={readOnly || files.length === 0}
+				pending={commitPending}
+				selectedFileCount={stagedFiles.size}
+				totalFileCount={files.length}
+			/>
+			<div className="flex-1 overflow-y-auto px-4 pb-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full">
+				{initialLoading ? (
+					<div className="flex items-center justify-center h-full">
+						<Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+					</div>
+				) : (
+					<>
+						{actualConflictedFiles.length > 0 && (
+							<ConflictsSection
+								files={actualConflictedFiles}
+								isCollapsed={collapsedSections.has("conflicts")}
+								onToggleCollapse={() => toggleSectionCollapse("conflicts")}
+								activeFilePath={activeFilePath}
+								onFileSelect={(path) => {
+									setActiveFilePath(path);
+									setLargeChangesetExpanded(true);
+									setCollapsedFiles((prev) => {
+										const next = new Set(prev);
+										next.delete(path);
+										return next;
+									});
+									setExpandedLargeDiffs((prev) => {
+										const next = new Set(prev);
+										next.add(path);
+										return next;
+									});
+									setTimeout(() => {
+										const el = conflictFileRefs.current.get(path);
+										if (el)
+											el.scrollIntoView({ behavior: "smooth", block: "start" });
+									}, 50);
+								}}
+							/>
+						)}
+						{files.length === 0 &&
+						!(showCommittedChanges && committedFiles.length > 0) ? (
+							<div className="flex flex-col items-center justify-center h-full text-center py-12">
+								<CheckCircle2 className="w-12 h-12 text-muted-foreground/40 mb-3" />
+								<p className="text-sm text-muted-foreground">No changes</p>
+							</div>
+						) : files.length > 0 ? (
+							<>
+								{stagedFilesList.length > 0 && (
+									<ChangesSection
+										title="Selected"
+										files={stagedFilesList}
+										isCollapsed={collapsedSections.has("staged")}
+										onToggleCollapse={() => toggleSectionCollapse("staged")}
+										activeFilePath={activeFilePath}
+										selectedFiles={selectedStagedFiles}
+										lastSelectedPath={
+											lastSelectedStagedIndex !== null &&
+											stagedFilesList[lastSelectedStagedIndex]
+												? stagedFilesList[lastSelectedStagedIndex].path
+												: null
+										}
+										onFileSelect={handleStagedFileSelect}
+										onSelectAll={handleSelectAllStaged}
+										onUnstage={handleUnstageFile}
+										onUnstageAll={handleUnstageAllFiles}
+										onDeselectAll={() => setSelectedStagedFiles(new Set())}
+										isStaged={true}
+										workspacePath={workspacePath}
+									/>
+								)}
+								<ChangesSection
+									title="Changes"
+									files={unstagedFiles}
+									isCollapsed={collapsedSections.has("changes")}
+									onToggleCollapse={() => toggleSectionCollapse("changes")}
+									fileActionTarget={fileActionTarget}
+									activeFilePath={activeFilePath}
+									selectedFiles={selectedUnstagedFiles}
+									lastSelectedPath={
+										lastSelectedFileIndex !== null &&
+										files[lastSelectedFileIndex]
+											? files[lastSelectedFileIndex].path
+											: null
+									}
+									onFileSelect={handleFileSelect}
+									onMoveToWorkspace={() => {
+										onMoveFilesToNewWorkspace?.(
+											Array.from(selectedUnstagedFiles),
+										);
+									}}
+									onDiscardAll={handleDiscardAll}
+									onDiscard={handleDiscardFiles}
+									onDeselectAll={() => setSelectedUnstagedFiles(new Set())}
+									onSelectAll={handleSelectAllUnstaged}
+									onStage={handleStageFile}
+									onStageAll={handleStageAllFiles}
+									workspacePath={workspacePath}
+								/>
+							</>
+						) : null}
+						{showCommittedChanges && committedFiles.length > 0 && (
+							<CommittedChangesSection
+								files={committedFiles}
+								isCollapsed={committedSectionCollapsed}
+								onToggleCollapse={() =>
+									setCommittedSectionCollapsed(!committedSectionCollapsed)
+								}
+								activeFilePath={activeFilePath}
+								onFileSelect={(path, event) => {
+									event.preventDefault();
+									setActiveFilePath(path);
+									scrollToFileIfNeeded(path);
+								}}
+								workspacePath={workspacePath}
+							/>
+						)}
+					</>
+				)}
+			</div>
+		</div>
+	);
+}

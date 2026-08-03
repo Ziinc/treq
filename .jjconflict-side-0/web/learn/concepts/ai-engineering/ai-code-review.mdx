@@ -1,0 +1,93 @@
+---
+sidebar_position: 4
+---
+
+import DefinitionCard from "@site/src/components/DefinitionCard";
+
+# What is AI Code Review?
+
+## Introduction
+
+**AI code review** puts a language model over a code change to look for likely bugs, security problems, missing tests, and breaks from project convention. It can run before a human opens the diff, or beside them while they read.
+
+<DefinitionCard
+  term="AI Code Review"
+  definition="The use of an AI model to examine code changes and report possible defects, security risks, missing tests, and departures from agreed coding practices."
+/>
+
+Code review runs on limited human attention. A reviewer can burn so much of it on missing null checks and forgotten error handling that little is left for the design or the product. AI can take a fast first pass over every change, but it cannot stand in for someone who knows why the change exists. Splitting the work that way is the basis of a [human-in-the-loop review system](/learn/ai-code-review).
+
+This article explains what AI review can find, what it tends to miss, and how to introduce it without filling pull requests with unhelpful comments.
+
+## Understanding the Concept
+
+An AI reviewer gets a diff, some instructions, and sometimes the files around the change. It matches what it sees against patterns learned from code and past reviews. That works well on familiar mistakes. It works badly when the answer turns on a business rule, a decision nobody wrote down, or code it was never shown.
+
+AI review is good at finding:
+
+- unchecked null or error values
+- common boundary and control-flow mistakes
+- familiar security flaws such as injection and unsafe input handling
+- changed behaviour without matching tests
+- duplicated code and departures from visible project patterns
+
+It is far weaker at judging whether the feature solves the right problem, whether the design will still hold up in a year, or whether a trade-off suits the product. Those calls stay with people who know the system.
+
+<DefinitionCard
+  term="False Positive"
+  definition="A review finding that reports a problem where no meaningful problem exists."
+/>
+
+{/* TODO: Add diagram showing code moving from author or coding agent, through AI review, then to human review and merge. */}
+
+Think of it as a row of filters. Tests catch known behaviour, AI review catches mistakes it recognises, and a human checks intent, design, and the risks that need wider context. Getting through one filter does not excuse you from the rest.
+
+## Applying It in Practice
+
+Start with a narrow goal. Ask an AI reviewer for every possible improvement and you get vague, low-value comments. Ask it to check the changed input-handling code for security holes and missing error paths and it has a real job.
+
+Useful findings point to a specific line, explain the failure, and describe when it occurs. "`user.id` is read before `user` is checked for null" can be verified and fixed. "Consider better error handling" leaves the author to rediscover the issue.
+
+A common pull request flow is:
+
+1. The author or coding agent opens a pull request.
+2. Tests and static checks run.
+3. AI review comments on a small set of configured concerns.
+4. The author fixes or explicitly dismisses each finding.
+5. A human reviews the complete change and decides whether to approve it.
+
+When AI reviews AI-written code, write different instructions for each. A reviewer hunting for security and correctness bugs comes at the change from somewhere else than an agent trying to ship a feature. The two can still hold the same wrong assumption, so you still need a human.
+
+For a first rollout, pick one category worth having, such as unsafe input handling or missing error paths. Run it on real pull requests for a few weeks, cut the rules that only make noise, then add more.
+
+## Engineering Considerations
+
+The gain is earlier feedback on routine problems. Authors clear the simple issues before a human spends time on the change, and the human gets to think about behaviour and design instead.
+
+The main cost is noise. Post enough irrelevant comments and authors learn to wave through all of them. A few findings that are usually right beat a long list that tries to cover everything.
+
+<DefinitionCard
+  term="Review Fatigue"
+  definition="The loss of attention that occurs when reviewers receive so many low-value findings that they begin dismissing comments without evaluating them carefully."
+/>
+
+No findings does not mean the code is right. It means the reviewer saw nothing it recognised, inside the categories and context you handed it. Neither the interface nor the team process should dress that up as a pass.
+
+A small team may not need to automate this at all. Anyone can ask for a second pass on a risky diff without a pull request bot or a CI integration to maintain. Automate once you are doing it often enough to be worth the setup and tuning.
+
+## Scaling and Operations
+
+Track which findings get fixed, dismissed, or ignored. A high dismissal rate usually means the instructions are too broad, the reviewer is short on project context, or a rule does not suit this codebase.
+
+Decide what AI comments do to a merge. Making authors resolve or explicitly dismiss each one keeps things honest. Pushing findings to a separate dashboard mostly makes them easy to ignore.
+
+Read the data policy of any outside service before you send it private code. A diff can carry proprietary logic, internal architecture, personal data, or a credential someone committed by mistake. Check how the provider stores prompts, how long it keeps code, and what it does with what you send.
+
+Keep human ownership explicit. The person approving the change remains responsible for understanding it, regardless of how many automated checks ran first. This matters most when a [coding agent](./coding-agents) wrote the change under review.
+
+## Next Steps
+
+- [What are Coding Agents?](./coding-agents): understand the agents that often produce the code being reviewed
+- [What is Human-in-the-Loop Development?](./human-in-the-loop-development): learn how automated checks and human approval work together
+- [AI Code Review Workflow](/learn/workflows/ai/ai-code-review): set up AI review in a pull request process
+- [Human-in-the-Loop Review Workflow](/learn/workflows/git/human-in-the-loop-review): structure the human review that follows automated checks

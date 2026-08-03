@@ -1,0 +1,13 @@
+id: no-command-new-git-rust-tests
+language: rust
+severity: error
+message: >
+  Do not call `Command::new("git")` directly in Rust test files. Use
+  `TestRepo::run_git` or a focused test helper so git subprocess use stays
+  centralized.
+files:
+  - "src-tauri/**/*_test.rs"
+rule:
+  any:
+    - pattern: 'Command::new("git")'
+    - pattern: 'std::process::Command::new("git")'

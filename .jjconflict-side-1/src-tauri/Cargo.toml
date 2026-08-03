@@ -1,0 +1,114 @@
+[package]
+name = "treq"
+version = "0.1.3"
+description = "Stacking Agent Development Environment"
+authors = ["Ziinc"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "treq_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2.10.3", features = ["protocol-asset"] }
+tauri-plugin-opener = "2.5.2"
+tauri-plugin-dialog = "2.7.0"
+tauri-plugin-log = "2.8.0"
+tauri-plugin-deep-link = "2.4.7"
+tauri-plugin-cli = "2.4.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.39", features = ["bundled"] }
+portable-pty = "0.9"
+chrono = { version = "0.4", features = ["serde"] }
+sha2 = "0.11"
+ignore = "0.4"
+jj-lib = "0.40.0"
+futures = "0.3"
+notify = { version = "8.2", default-features = false, features = ["macos_fsevent"] }
+notify-debouncer-full = "0.7"
+log = "0.4"
+regex = "1"
+rayon = "1.10"
+urlencoding = "2"
+uuid = { version = "1", features = ["v4"] }
+imara-diff = "0.1.8"
+gix = "0.81.0"
+tracing = "0.1.44"
+tracing-appender = "0.2.5"
+tracing-subscriber = { version = "0.3.23", features = ["registry", "env-filter"] }
+opentelemetry = { version = "0.32.0", features = ["logs"] }
+opentelemetry_sdk = { version = "0.32.0", features = ["logs"] }
+opentelemetry-appender-tracing = "0.32.0"
+opentelemetry-stdout = { version = "0.32.0", features = ["logs"] }
+
+[dev-dependencies]
+mockall = "0.14.0"
+tempfile = "3"
+criterion = { version = "0.8.2", features = ["html_reports"] }
+
+[[bench]]
+name = "commit_workspace"
+harness = false
+
+[[bench]]
+name = "create_workspace"
+harness = false
+
+[[bench]]
+name = "auto_rebase"
+harness = false
+
+[[bench]]
+name = "workspace_status"
+harness = false
+
+[[bench]]
+name = "delete_workspace"
+harness = false
+
+[[bench]]
+name = "list_workspace_statuses"
+harness = false
+
+[[bench]]
+name = "workspace_diff"
+harness = false
+
+[[bench]]
+name = "sync_workspaces"
+harness = false
+
+[[bench]]
+name = "merge_workspace"
+harness = false
+
+# Development profile - faster compilation with minimal optimization
+[profile.dev]
+opt-level = 0                # No optimization (fastest compile)
+debug = true                 # Keep debug symbols for debugging
+incremental = true           # Enable incremental compilation
+split-debuginfo = "unpacked" # Skip dsymutil on macOS (faster linking)
+
+# Compile dependencies with higher optimization in dev mode
+# This makes dev builds faster by optimizing slow dependencies once
+[profile.dev.package."*"]
+opt-level = 3           # Optimize dependencies more aggressively
+debug = false           # Strip debug info from dependencies
+
+# Release profile - optimized for size and performance
+[profile.release]
+opt-level = "z"         # Optimize for size (alternative: "s" for slightly faster code)
+lto = "thin"            # Thin Link Time Optimization (good balance of speed vs build time)
+codegen-units = 1       # Single codegen unit for better optimization (slower build, smaller binary)
+strip = true            # Strip symbols from binary (reduces size significantly)
+panic = "abort"         # Abort on panic instead of unwinding (smaller binary)
+incremental = false     # Disable incremental for release builds

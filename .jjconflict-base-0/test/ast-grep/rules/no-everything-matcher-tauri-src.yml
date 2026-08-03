@@ -1,0 +1,17 @@
+id: no-everything-matcher-tauri-src
+language: rust
+severity: error
+message: >
+  Do not use `EverythingMatcher` in app code under src-tauri/src. Use
+  `NothingMatcher` for snapshot tracking defaults or a narrower matcher such as
+  `PrefixMatcher` for explicit tree traversal.
+files:
+  - "src-tauri/src/**/*.rs"
+rule:
+  any:
+    - pattern: "use jj_lib::matchers::EverythingMatcher;"
+    - pattern: "use jj_lib::matchers::{$$$A, EverythingMatcher, $$$B};"
+    - pattern: "use jj_lib::matchers::{EverythingMatcher, $$$A};"
+    - pattern: "use jj_lib::matchers::{$$$A, EverythingMatcher};"
+    - pattern: "&EverythingMatcher"
+    - pattern: "EverythingMatcher"
