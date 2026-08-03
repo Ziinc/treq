@@ -10,6 +10,12 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { usePrInfoViaGh, useGitRemoteInfo } from "../hooks/useMergeQueueStatus";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from "./ui/tooltip";
 
 interface ViewPrButtonProps {
 	repoPath: string;
@@ -58,33 +64,48 @@ export function ViewPrButton({
 	const statusLabel = prInfo.is_draft ? "draft" : prInfo.state.toLowerCase();
 
 	return (
-		<div className="inline-flex items-center">
-			<Button
-				variant="outline"
-				size="sm"
-				className={cn("gap-1 rounded-r-none", style.className)}
-				onClick={() => {
-					if (onViewInApp) {
-						onViewInApp(prInfo.number);
-					} else {
-						openUrl(prInfo.url);
-					}
-				}}
-				aria-label={`View PR (#${prInfo.number}, ${statusLabel})`}
-			>
-				<Icon className="w-4 h-4" />
-				{style.label}
-			</Button>
-			<Button
-				variant="outline"
-				size="sm"
-				className={cn("rounded-l-none border-l-0 px-2", style.className)}
-				onClick={() => openUrl(prInfo.url)}
-				aria-label="Open PR on web"
-				title="Open on Web"
-			>
-				<ExternalLink className="w-4 h-4" />
-			</Button>
-		</div>
+		<TooltipProvider delayDuration={200}>
+			<div className="inline-flex items-center">
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Button
+							variant="outline"
+							size="sm"
+							className={cn("gap-1 rounded-r-none", style.className)}
+							onClick={() => {
+								if (onViewInApp) {
+									onViewInApp(prInfo.number);
+								} else {
+									openUrl(prInfo.url);
+								}
+							}}
+							aria-label={`View PR (#${prInfo.number}, ${statusLabel})`}
+						>
+							<Icon className="w-4 h-4" />
+							{style.label}
+						</Button>
+					</TooltipTrigger>
+					<TooltipContent>
+						View pull request #{prInfo.number} in Treq
+					</TooltipContent>
+				</Tooltip>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Button
+							variant="outline"
+							size="sm"
+							className={cn("rounded-l-none border-l-0 px-2", style.className)}
+							onClick={() => openUrl(prInfo.url)}
+							aria-label="Open PR on web"
+						>
+							<ExternalLink className="w-4 h-4" />
+						</Button>
+					</TooltipTrigger>
+					<TooltipContent>
+						Open pull request #{prInfo.number} on GitHub
+					</TooltipContent>
+				</Tooltip>
+			</div>
+		</TooltipProvider>
 	);
 }
