@@ -14,6 +14,12 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from "./ui/tooltip";
 
 interface CreatePrButtonGroupProps {
 	repoPath: string;
@@ -91,52 +97,64 @@ export function CreatePrButtonGroup({
 	};
 
 	return (
-		<div className="inline-flex items-center">
-			<Button
-				variant="default"
-				size="sm"
-				className="gap-1 rounded-r-none bg-[#24292f] text-white hover:bg-[#1b1f23]"
-				disabled={creating}
-				onClick={() => createPr(false)}
-			>
-				{creating ? (
-					<Loader2 className="w-4 h-4 animate-spin" />
-				) : (
-					<Github className="w-4 h-4" />
-				)}
-				Create PR
-			</Button>
-			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
-					<Button
-						variant="default"
-						size="sm"
-						className="rounded-l-none border-l border-white/20 px-1.5 bg-[#24292f] text-white hover:bg-[#1b1f23]"
-						disabled={creating}
-						aria-label="More Create PR options"
-					>
-						<ChevronDown className="w-4 h-4" />
-					</Button>
-				</DropdownMenuTrigger>
-				<DropdownMenuContent align="end" sideOffset={4}>
-					<DropdownMenuItem
-						onSelect={(e) => {
-							e.preventDefault();
-							void createPr(true);
-						}}
-					>
-						Create draft PR
-					</DropdownMenuItem>
-					<DropdownMenuItem
-						onSelect={(e) => {
-							e.preventDefault();
-							openManual();
-						}}
-					>
-						Create PR manually
-					</DropdownMenuItem>
-				</DropdownMenuContent>
-			</DropdownMenu>
-		</div>
+		<TooltipProvider delayDuration={200}>
+			<div className="inline-flex items-center">
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Button
+							variant="default"
+							size="sm"
+							className="gap-1 rounded-r-none bg-[#24292f] text-white hover:bg-[#1b1f23] dark:border-white/30"
+							disabled={creating}
+							onClick={() => createPr(false)}
+						>
+							{creating ? (
+								<Loader2 className="w-4 h-4 animate-spin" />
+							) : (
+								<Github className="w-4 h-4" />
+							)}
+							Create PR
+						</Button>
+					</TooltipTrigger>
+					<TooltipContent>Create a pull request on GitHub</TooltipContent>
+				</Tooltip>
+				<DropdownMenu>
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<DropdownMenuTrigger asChild>
+								<Button
+									variant="default"
+									size="sm"
+									className="rounded-l-none border-l border-white/20 px-1.5 bg-[#24292f] text-white hover:bg-[#1b1f23] dark:border-white/30"
+									disabled={creating}
+									aria-label="More Create PR options"
+								>
+									<ChevronDown className="w-4 h-4" />
+								</Button>
+							</DropdownMenuTrigger>
+						</TooltipTrigger>
+						<TooltipContent>More pull request options</TooltipContent>
+					</Tooltip>
+					<DropdownMenuContent align="end" sideOffset={4}>
+						<DropdownMenuItem
+							onSelect={(e) => {
+								e.preventDefault();
+								void createPr(true);
+							}}
+						>
+							Create draft PR
+						</DropdownMenuItem>
+						<DropdownMenuItem
+							onSelect={(e) => {
+								e.preventDefault();
+								openManual();
+							}}
+						>
+							Create PR manually
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</div>
+		</TooltipProvider>
 	);
 }

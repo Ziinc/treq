@@ -29,6 +29,43 @@ pub fn create_test_repo(with_remote: bool) -> napi::Result<TestRepoInfo> {
     create_test_repo_impl(with_remote).map_err(napi::Error::from_reason)
 }
 
+pub fn cleanup_test_repo_impl(temp_dir_path: &str) -> Result<(), String> {
+    let repo = {
+        let mut repos = TEST_REPOS.lock().map_err(|e| e.to_string())?;
+        repos
+            .iter()
+            .position(|repo| repo.temp_dir.path() == std::path::Path::new(temp_dir_path))
+            .map(|position| repos.remove(position))
+    };
+
+    // Dropping the TestRepo drops its TempDir and removes the repository from disk.
+    drop(repo);
+    Ok(())
+}
+
+#[napi]
+pub fn cleanup_test_repo(temp_dir_path: String) -> napi::Result<()> {
+    cleanup_test_repo_impl(&temp_dir_path).map_err(napi::Error::from_reason)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cleans_up_only_requested_test_repo() {
+        let first = create_test_repo_impl(false).expect("create first test repo");
+        let second = create_test_repo_impl(false).expect("create second test repo");
+
+        cleanup_test_repo_impl(&first.temp_dir_path).expect("clean up first test repo");
+
+        assert!(!std::path::Path::new(&first.temp_dir_path).exists());
+        assert!(std::path::Path::new(&second.temp_dir_path).exists());
+
+        cleanup_test_repo_impl(&second.temp_dir_path).expect("clean up second test repo");
+    }
+}
+
 pub fn write_workspace_file_impl(
     workspace_path: &str,
     relative_path: &str,
