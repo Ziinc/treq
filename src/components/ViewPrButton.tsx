@@ -20,7 +20,7 @@ import {
 interface ViewPrButtonProps {
 	repoPath: string;
 	branchName: string;
-	onViewInApp?: (prNumber: number) => void;
+	onViewInApp?: (prNumber: number, prState: string) => void;
 }
 
 const PR_STATUS_STYLES: Record<
@@ -74,7 +74,7 @@ export function ViewPrButton({
 							className={cn("gap-1 rounded-r-none", style.className)}
 							onClick={() => {
 								if (onViewInApp) {
-									onViewInApp(prInfo.number);
+									onViewInApp(prInfo.number, prInfo.state);
 								} else {
 									openUrl(prInfo.url);
 								}
