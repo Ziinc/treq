@@ -6,10 +6,7 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "../ui/tooltip";
-import type {
-	AgentPermissionMode,
-	AgentType,
-} from "../../lib/agentDeepLink";
+import type { AgentPermissionMode, AgentType } from "../../lib/agentDeepLink";
 
 interface TaskInputToolbarProps {
 	isEmpty: boolean;
