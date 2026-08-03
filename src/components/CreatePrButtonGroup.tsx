@@ -13,7 +13,10 @@ import {
 } from "../hooks/useMergeQueueStatus";
 import { ghCreatePr, pushWorkspaceToRemote } from "../lib/api";
 import type { Workspace } from "../lib/api-types";
-import { buildGitHubComparePrUrl } from "../lib/github-pr";
+import {
+	buildGitHubComparePrUrl,
+	deriveConventionalPrTitle,
+} from "../lib/github-pr";
 import { Button } from "./ui/button";
 import {
 	DropdownMenu,
@@ -50,7 +53,10 @@ export function CreatePrButtonGroup({
 		workspace.branch_name,
 	);
 	const [pushingManually, setPushingManually] = useState(false);
-	const title = workspace.title || workspace.branch_name;
+	const title = deriveConventionalPrTitle(
+		workspace.title ?? "",
+		workspace.branch_name,
+	);
 	const body = workspace.description ?? "";
 
 	// Shared across surfaces (this button and the Review tab's "Commit and
