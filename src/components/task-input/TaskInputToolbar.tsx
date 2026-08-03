@@ -35,7 +35,7 @@ export const TaskInputToolbar: React.FC<TaskInputToolbarProps> = ({
 	onSaveAsRepoDefaultChange,
 	onSubmit,
 }) => (
-	<div className="px-2 pb-2 pt-1 flex items-center justify-between">
+	<div className="px-2 pb-2 pt-1 flex min-w-0 flex-wrap items-center justify-between gap-1">
 		<div className="flex items-center gap-1">
 			<Button
 				variant="ghost"
@@ -57,9 +57,9 @@ export const TaskInputToolbar: React.FC<TaskInputToolbarProps> = ({
 			</Button>
 		</div>
 
-		<div className="flex items-center gap-2">
+		<div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
 			{showSaveAsRepoDefault && selectedAgent !== configuredDefaultAgent && (
-				<label className="flex items-center gap-1.5 text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
+				<label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
 					<input
 						type="checkbox"
 						checked={saveAsRepoDefault}

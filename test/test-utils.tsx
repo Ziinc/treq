@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React, { ReactNode } from "react";
 import { ToastProvider } from "../src/components/ui/toast";
 import { TerminalSettingsProvider } from "../src/hooks/useTerminalSettings";
+import { ZoomSettingsProvider } from "../src/hooks/useZoomSettings";
 import { ThemeProvider } from "../src/hooks/useTheme";
 import { DiffSettingsProvider } from "../src/hooks/useDiffSettings";
 import {
@@ -31,7 +32,9 @@ const AllTheProviders = ({ children }: { children: ReactNode }) => {
 			<ToastProvider>
 				<QueryClientProvider client={queryClient}>
 					<DiffSettingsProvider>
-						<TerminalSettingsProvider>{children}</TerminalSettingsProvider>
+						<ZoomSettingsProvider>
+							<TerminalSettingsProvider>{children}</TerminalSettingsProvider>
+						</ZoomSettingsProvider>
 					</DiffSettingsProvider>
 				</QueryClientProvider>
 			</ToastProvider>
