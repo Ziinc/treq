@@ -36,14 +36,26 @@ export type CaptureOptions = {
 	 * are checked visually against the PNG, not against the DOM.
 	 */
 	expectations: string[];
+	/**
+	 * CSS selector for an element to scroll into view before rasterizing.
+	 * jsdom's scrollTop never carries into the re-rendered static HTML, so a
+	 * target sitting below the fold of a scrollable region (e.g. the cmdk
+	 * list's `overflow-y-auto`) is otherwise clipped out of the screenshot
+	 * even though it's present in the DOM.
+	 */
+	scrollIntoView?: string;
 };
 
 export async function captureDocument(
 	doc: Document,
 	options: CaptureOptions,
 ): Promise<string> {
-	const { name, viewport = { width: 1440, height: 900 }, expectations } =
-		options;
+	const {
+		name,
+		viewport = { width: 1440, height: 900 },
+		expectations,
+		scrollIntoView,
+	} = options;
 
 	if (!expectations || expectations.length === 0) {
 		throw new Error(
@@ -85,6 +97,9 @@ ${css}
 	try {
 		const page = await browser.newPage({ viewport });
 		await page.goto(`file://${htmlPath}`);
+		if (scrollIntoView) {
+			await page.locator(scrollIntoView).first().scrollIntoViewIfNeeded();
+		}
 		await page.screenshot({ path: pngPath });
 	} finally {
 		await browser.close();
