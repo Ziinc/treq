@@ -391,6 +391,23 @@ export interface PrInfo {
 	is_draft?: boolean;
 }
 
+export interface PrCheckEntry {
+	name: string;
+	/** "pass" | "fail" | "pending" | "skipping" | "cancel" */
+	bucket: string;
+	link: string;
+}
+
+export interface PrCiStatus {
+	/** "success" | "failure" | "pending" */
+	state: string;
+	total: number;
+	passed: number;
+	failed: number;
+	pending: number;
+	checks: PrCheckEntry[];
+}
+
 /** Mirrors the merge_queue_entry_status enum in 003_merge_queue.sql. */
 export type QueueEntryStatus =
 	| "queued"

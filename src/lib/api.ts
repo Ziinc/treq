@@ -6,6 +6,7 @@ import type {
 	GhListPage,
 	GhPullRequest,
 	GitRemoteInfo,
+	PrCiStatus,
 	PrInfo,
 	HomeRebaseDryRunResult,
 	JjBranch,
@@ -115,6 +116,12 @@ export const getPrInfoViaGh = (
 	branchName: string,
 ): Promise<PrInfo | null> =>
 	invoke("get_pr_info_via_gh", { repoPath, branchName });
+
+export const getPrChecksViaGh = (
+	repoPath: string,
+	branchName: string,
+): Promise<PrCiStatus | null> =>
+	invoke("get_pr_checks_via_gh", { repoPath, branchName });
 
 // JJ Workspace API
 // JJ Diff API

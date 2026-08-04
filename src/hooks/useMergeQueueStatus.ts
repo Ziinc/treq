@@ -1,7 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { getGitRemoteUrl, getPrInfoViaGh } from "../lib/api";
-import type { PrInfo, WorkspaceQueueStatus } from "../lib/api-types";
+import { getGitRemoteUrl, getPrChecksViaGh, getPrInfoViaGh } from "../lib/api";
+import type {
+	PrCiStatus,
+	PrInfo,
+	WorkspaceQueueStatus,
+} from "../lib/api-types";
 import { FEATURES } from "../lib/features";
 import { supabase } from "../lib/supabase";
 
@@ -31,6 +35,25 @@ export function usePrInfoViaGh(
 		enabled: !!repoPath && !!branchName,
 		staleTime: 30_000,
 		refetchInterval: 60_000,
+	});
+}
+
+/**
+ * CI status for the branch's PR, rolled up from `gh pr checks`. Polls every
+ * 15s so the indicator next to the View PR button stays live while the
+ * workspace is on screen; React Query pauses the interval automatically
+ * once the tab/window loses focus.
+ */
+export function usePrCiStatus(
+	repoPath: string | undefined,
+	branchName: string | undefined,
+) {
+	return useQuery<PrCiStatus | null>({
+		queryKey: ["pr-ci-status", repoPath, branchName],
+		queryFn: () => getPrChecksViaGh(repoPath!, branchName!),
+		enabled: !!repoPath && !!branchName,
+		staleTime: 10_000,
+		refetchInterval: 15_000,
 	});
 }
 

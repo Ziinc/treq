@@ -81,6 +81,7 @@ vi.mock("../hooks/useMergeQueueStatus", () => ({
 	}),
 	useGitRemoteInfo: () => ({ data: null }),
 	usePrInfoViaGh: () => ({ data: null, isLoading: false }),
+	usePrCiStatus: () => ({ data: null, isLoading: false }),
 }));
 
 describe("ShowWorkspace - Add to Queue feature flag", () => {

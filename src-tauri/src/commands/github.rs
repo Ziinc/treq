@@ -1,5 +1,5 @@
 use crate::binary_paths::{detect_binary, get_binary_path, get_extended_path};
-pub use crate::github::{GhIssue, GhListPage, GhPullRequest, GitRemoteInfo, PrInfo};
+pub use crate::github::{GhIssue, GhListPage, GhPullRequest, GitRemoteInfo, PrCiStatus, PrInfo};
 
 fn gh_bin() -> Result<String, String> {
     get_binary_path("gh")
@@ -19,6 +19,22 @@ pub fn get_pr_info_via_gh(
         .ok_or_else(|| "gh CLI not found".to_string())?;
 
     crate::github::get_pr_info_via_gh_impl(&gh, &repo_path, &branch_name, &get_extended_path())
+}
+
+/// Run `gh pr checks` for the given branch in the given repo directory and
+/// roll the individual check runs up into an overall CI status.
+/// Returns None if gh is not installed, not authenticated, there is no PR,
+/// or the PR has no checks reported yet.
+#[tauri::command]
+pub fn get_pr_checks_via_gh(
+    repo_path: String,
+    branch_name: String,
+) -> Result<Option<PrCiStatus>, String> {
+    let gh = get_binary_path("gh")
+        .or_else(|| detect_binary("gh"))
+        .ok_or_else(|| "gh CLI not found".to_string())?;
+
+    crate::github::get_pr_checks_via_gh_impl(&gh, &repo_path, &branch_name, &get_extended_path())
 }
 
 /// Read the GitHub remote URL from .git/config and parse owner/repo.
