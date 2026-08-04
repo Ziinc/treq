@@ -265,6 +265,22 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             Ok(Value::Number(serde_json::Number::from(pr_number)))
         }
 
+        "gh_list_pr_review_threads" => {
+            let owner = get_str(&args, "owner")?;
+            let repo = get_str(&args, "repo")?;
+            let pr_number = get_positive_u64(&args, "prNumber")?;
+            let gh = gh_bin()?;
+            let extended_path = treq_lib::binary_paths::get_extended_path();
+            let threads = treq_lib::github::gh_list_pr_review_threads_impl(
+                &gh,
+                &owner,
+                &repo,
+                pr_number,
+                &extended_path,
+            )?;
+            serde_json::to_value(threads).map_err(|e| e.to_string())
+        }
+
         // ── Settings ──────────────────────────────────────────────────────
         "get_setting" => {
             let key = get_str(&args, "key")?;

@@ -190,22 +190,10 @@ it("captures GitHub review comment threads in the Review tab", async () => {
 	await user.click(await screen.findByRole("button", { name: /^cancel$/i }));
 
 	// Select text inside the unresolved comment's body and quote it.
+	// (Range.getBoundingClientRect is polyfilled globally in test/setup.common.ts --
+	// jsdom doesn't implement it, but real browsers do.)
 	const textNode = commentBody.firstChild;
 	if (!textNode) throw new Error("comment body has no text node");
-	// jsdom doesn't implement Range.getBoundingClientRect -- stub it so the
-	// toolbar's positioning code (real browsers do implement this) can run.
-	Range.prototype.getBoundingClientRect = () =>
-		({
-			x: 100,
-			y: 100,
-			top: 100,
-			left: 100,
-			right: 300,
-			bottom: 120,
-			width: 200,
-			height: 20,
-			toJSON: () => ({}),
-		}) as DOMRect;
 	const range = document.createRange();
 	range.selectNodeContents(textNode);
 	const selection = window.getSelection();
