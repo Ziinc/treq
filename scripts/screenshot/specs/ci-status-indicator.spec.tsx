@@ -116,12 +116,19 @@ async function setupPushedWorkspace(user: ReturnType<typeof userEvent.setup>) {
 	);
 
 	await user.click(
-		await screen.findByRole("button", { name: /push to remote/i }),
+		await screen.findByRole("button", { name: /more workspace actions/i }),
 	);
-	await waitFor(() => {
-		expect(
-			screen.queryByRole("button", { name: /push to remote/i }),
-		).not.toBeInTheDocument();
+	await user.click(
+		await screen.findByRole("menuitem", { name: /push to remote/i }),
+	);
+	// The item calls preventDefault() in onSelect so the menu stays open;
+	// close it so the rest of the header isn't left aria-hidden behind it.
+	await user.keyboard("{Escape}");
+	await waitFor(async () => {
+		const pushed = (await getWorkspaces(repoPath)).find(
+			(candidate) => candidate.branch_name === BRANCH_NAME,
+		);
+		expect(pushed?.not_on_remote).toBe(false);
 	});
 }
 
