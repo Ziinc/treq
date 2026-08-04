@@ -588,6 +588,32 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             Ok(Value::Null)
         }
 
+        "get_commit_description" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let workspace_id: i64 = get_i64(&args, "workspaceId")?;
+            let commit_change_id = get_str(&args, "commitChangeId")?;
+            let description = treq_lib::core::get_commit_description(
+                &repo_path,
+                workspace_id,
+                &commit_change_id,
+            )?;
+            Ok(Value::String(description))
+        }
+
+        "describe_commit" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let workspace_id: i64 = get_i64(&args, "workspaceId")?;
+            let commit_change_id = get_str(&args, "commitChangeId")?;
+            let description = get_str(&args, "description")?;
+            treq_lib::core::describe_commit(
+                &repo_path,
+                workspace_id,
+                &commit_change_id,
+                &description,
+            )?;
+            Ok(Value::Null)
+        }
+
         // ── Commits ───────────────────────────────────────────────────────
         "discard_workspace_changes" => {
             let workspace_path = get_str(&args, "workspacePath")?;
