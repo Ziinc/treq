@@ -193,8 +193,8 @@ it("captures CI still running (pending) next to the View PR button", async () =>
 	await captureDocument(document, {
 		name: "ci-status-indicator-03-pending",
 		expectations: [
-			'A small blue outlined pill button reading "1/2" with a loader icon sits immediately to the left of the "View PR" button.',
-			"The pending indicator is visually distinct in color (blue) from both the green success and red failure states.",
+			'A small yellow outlined pill button reading "1/2" with a loader icon sits immediately to the left of the "View PR" button.',
+			"The pending indicator is visually distinct in color (yellow) from both the green success and red failure states.",
 		],
 	});
 }, 120000);

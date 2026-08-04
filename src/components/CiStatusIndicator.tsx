@@ -34,7 +34,7 @@ const CI_STATUS_STYLES: Record<
 	pending: {
 		label: "CI running",
 		className:
-			"border-blue-600 text-blue-700 hover:bg-blue-600/10 hover:text-blue-700 dark:text-blue-400 dark:border-blue-500",
+			"border-yellow-600 text-yellow-700 hover:bg-yellow-600/10 hover:text-yellow-700 dark:text-yellow-400 dark:border-yellow-500",
 		Icon: Loader2,
 	},
 };
