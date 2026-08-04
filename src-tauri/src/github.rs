@@ -189,16 +189,36 @@ pub struct GhPullRequest {
     pub is_draft: bool,
 }
 
+/// ETXTBSY: the target binary is momentarily open for writing elsewhere (e.g.
+/// another test process still finalizing a freshly-written fake `gh` script
+/// under heavy parallelism). The exec never started in this case, so retrying
+/// is always safe -- including for mutating `gh` subcommands.
+const ETXTBSY: i32 = 26;
+
+fn spawn_with_etxtbsy_retry(
+    mut cmd: std::process::Command,
+) -> Result<std::process::Output, String> {
+    let mut attempt = 0;
+    loop {
+        match cmd.output() {
+            Ok(output) => return Ok(output),
+            Err(e) if e.raw_os_error() == Some(ETXTBSY) && attempt < 5 => {
+                attempt += 1;
+                std::thread::sleep(std::time::Duration::from_millis(20 * attempt as u64));
+            }
+            Err(e) => return Err(e.to_string()),
+        }
+    }
+}
+
 fn run_gh(
     gh_path: &str,
     args: &[&str],
     extended_path: &str,
 ) -> Result<std::process::Output, String> {
-    std::process::Command::new(gh_path)
-        .args(args)
-        .env("PATH", extended_path)
-        .output()
-        .map_err(|e| e.to_string())
+    let mut cmd = std::process::Command::new(gh_path);
+    cmd.args(args).env("PATH", extended_path);
+    spawn_with_etxtbsy_retry(cmd)
 }
 
 fn check_gh_output(output: std::process::Output) -> Result<Vec<u8>, String> {
@@ -581,12 +601,11 @@ pub fn get_pr_checks_via_gh_impl(
         link: String,
     }
 
-    let output = std::process::Command::new(gh_path)
-        .args(["pr", "checks", branch_name, "--json", "name,bucket,link"])
+    let mut cmd = std::process::Command::new(gh_path);
+    cmd.args(["pr", "checks", branch_name, "--json", "name,bucket,link"])
         .current_dir(repo_path)
-        .env("PATH", extended_path)
-        .output()
-        .map_err(|e| e.to_string())?;
+        .env("PATH", extended_path);
+    let output = spawn_with_etxtbsy_retry(cmd)?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -665,18 +684,17 @@ pub fn get_pr_info_via_gh_impl(
         is_draft: bool,
     }
 
-    let output = std::process::Command::new(gh_path)
-        .args([
-            "pr",
-            "view",
-            branch_name,
-            "--json",
-            "number,title,state,url,headRefName,baseRefName,mergeStateStatus,isDraft",
-        ])
-        .current_dir(repo_path)
-        .env("PATH", extended_path)
-        .output()
-        .map_err(|e| e.to_string())?;
+    let mut cmd = std::process::Command::new(gh_path);
+    cmd.args([
+        "pr",
+        "view",
+        branch_name,
+        "--json",
+        "number,title,state,url,headRefName,baseRefName,mergeStateStatus,isDraft",
+    ])
+    .current_dir(repo_path)
+    .env("PATH", extended_path);
+    let output = spawn_with_etxtbsy_retry(cmd)?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
