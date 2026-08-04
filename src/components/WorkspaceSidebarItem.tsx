@@ -12,7 +12,9 @@ import {
 	Trash2,
 } from "lucide-react";
 import { useEditorApps } from "../hooks/useEditorApps";
+import { useGitRemoteInfo, usePrInfoViaGh } from "../hooks/useMergeQueueStatus";
 import type { QueueEntryStatus, Workspace } from "../lib/api";
+import type { PrInfo } from "../lib/api-types";
 import { cn, getFullWorkspacePath } from "../lib/utils";
 import type { FlattenedWorkspaceNode } from "../lib/workspace-tree";
 import { getWorkspaceTitle as getWorkspaceTitleFromUtils } from "../lib/workspace-utils";
@@ -127,6 +129,26 @@ interface WorkspaceSidebarItemProps {
 	queueStatus?: QueueEntryStatus;
 }
 
+function prIconStyle(prInfo: PrInfo): { color: string; label: string } {
+	const state = prInfo.state.toUpperCase();
+	if (prInfo.is_draft && state === "OPEN") {
+		return { color: "text-muted-foreground", label: "Draft PR" };
+	}
+	if (state === "OPEN") {
+		return {
+			color: "text-green-600 dark:text-green-400",
+			label: "Open PR",
+		};
+	}
+	if (state === "MERGED") {
+		return {
+			color: "text-purple-600 dark:text-purple-400",
+			label: "PR merged",
+		};
+	}
+	return { color: "text-red-600 dark:text-red-400", label: "PR closed" };
+}
+
 function queueStatusDot(status: QueueEntryStatus): {
 	color: string;
 	label: string;
@@ -178,6 +200,9 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 	};
 	const isConflicted = node.status.has_conflicts;
 	const workspaceTitle = getWorkspaceTitleFromUtils(workspace);
+	const { data: remoteInfo } = useGitRemoteInfo(repoPath);
+	const { data: prInfo } = usePrInfoViaGh(repoPath, workspace.branch_name);
+	const prStatus = remoteInfo && prInfo ? prIconStyle(prInfo) : null;
 
 	return (
 		<div key={workspace.id}>
@@ -212,8 +237,14 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 											onDoubleClick={(e) => onDoubleClick?.(workspace, e)}
 										>
 											<GitBranch
+												data-testid={`workspace-pr-icon-${workspace.id}`}
+												aria-label={prStatus ? prStatus.label : undefined}
 												className={`w-3 h-3 mr-1 shrink-0 -scale-y-100 ${
-													isSelected ? "text-primary" : "text-muted-foreground"
+													isSelected
+														? "text-primary"
+														: prStatus
+															? prStatus.color
+															: "text-muted-foreground"
 												}`}
 											/>
 											<span
@@ -336,6 +367,11 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 										{isConflicted && (
 											<div className="font-sans mt-1 text-destructive">
 												Conflicts detected
+											</div>
+										)}
+										{prStatus && (
+											<div className={`font-sans mt-1 ${prStatus.color}`}>
+												{prStatus.label}
 											</div>
 										)}
 									</TooltipContent>
