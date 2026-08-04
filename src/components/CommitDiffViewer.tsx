@@ -1,12 +1,13 @@
 /* eslint-disable max-lines, max-params, max-nested-callbacks, no-await-in-loop */
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
 	ArrowRightLeft,
 	ChevronRight,
 	FileText,
 	Loader2,
+	Pencil,
 	Plus,
 	Trash2,
 } from "lucide-react";
@@ -38,6 +39,7 @@ import {
 	getDayKey,
 } from "../lib/utils";
 import { CommentInput } from "./CommentInput";
+import { EditCommitDescriptionDialog } from "./EditCommitDescriptionDialog";
 import { Button } from "./ui/button";
 import {
 	DropdownMenu,
@@ -182,6 +184,22 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 			new Set(),
 		);
 		const { addToast } = useToast();
+		const queryClient = useQueryClient();
+
+		// Edit description dialog state
+		const [editingCommit, setEditingCommit] = useState<JjLogCommit | null>(
+			null,
+		);
+
+		const handleEditDescription = useCallback((commit: JjLogCommit) => {
+			setEditingCommit(commit);
+		}, []);
+
+		const handleDescriptionEdited = useCallback(() => {
+			queryClient.invalidateQueries({
+				queryKey: ["commit-diff-viewer-commits", repoPath, workspaceId],
+			});
+		}, [queryClient, repoPath, workspaceId]);
 
 		useEffect(() => {
 			setTargetBranchLimit(10);
@@ -614,6 +632,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 											onMoveToNew={handleMoveToNew}
 											onMoveToExisting={handleMoveToExisting}
 											onAbandon={handleAbandon}
+											onEditDescription={() => {}}
 											onCreateAgentWithComment={onCreateAgentWithComment}
 											onLoadDeferredFileDiff={(filePath) =>
 												loadCommitFileDiff(
@@ -680,6 +699,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 													onMoveToNew={handleMoveToNew}
 													onMoveToExisting={handleMoveToExisting}
 													onAbandon={handleAbandon}
+													onEditDescription={handleEditDescription}
 													onCreateAgentWithComment={onCreateAgentWithComment}
 													onLoadDeferredFileDiff={(filePath) =>
 														loadCommitFileDiff(commit.commit_id, filePath).then(
@@ -772,6 +792,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 															onMoveToNew={() => {}}
 															onMoveToExisting={() => {}}
 															onAbandon={() => {}}
+															onEditDescription={() => {}}
 															onCreateAgentWithComment={
 																onCreateAgentWithComment
 															}
@@ -833,6 +854,18 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 						</div>
 					</div>
 				</div>
+				{workspaceId != null && (
+					<EditCommitDescriptionDialog
+						open={editingCommit != null}
+						onOpenChange={(open) => {
+							if (!open) setEditingCommit(null);
+						}}
+						repoPath={repoPath}
+						workspaceId={workspaceId}
+						commit={editingCommit}
+						onSuccess={handleDescriptionEdited}
+					/>
+				)}
 			</>
 		);
 	},
@@ -857,6 +890,7 @@ interface CommitWithDiffProps {
 	onMoveToNew: (commit: JjLogCommit) => void;
 	onMoveToExisting: (commit: JjLogCommit) => void;
 	onAbandon: (commit: JjLogCommit) => void;
+	onEditDescription: (commit: JjLogCommit) => void;
 	onViewTentativeChanges?: () => void;
 	onDeleteTentativeChanges?: () => void;
 	onCreateAgentWithComment?: (
@@ -882,6 +916,7 @@ function CommitWithDiff({
 	onMoveToNew,
 	onMoveToExisting,
 	onAbandon,
+	onEditDescription,
 	onViewTentativeChanges,
 	onDeleteTentativeChanges,
 	onCreateAgentWithComment,
@@ -1026,6 +1061,15 @@ function CommitWithDiff({
 							</>
 						) : (
 							<>
+								<Button
+									variant="outline"
+									size="sm"
+									className="gap-1.5"
+									onClick={() => onEditDescription(commit)}
+								>
+									<Pencil className="w-4 h-4" />
+									Edit description
+								</Button>
 								<DropdownMenu>
 									<DropdownMenuTrigger asChild>
 										<Button variant="outline" size="sm" className="gap-1.5">

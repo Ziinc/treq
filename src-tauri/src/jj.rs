@@ -1980,6 +1980,45 @@ pub fn jj_abandon(workspace_path: &str, change_id: &str) -> Result<String, JjErr
     Ok(String::new())
 }
 
+/// Get the full (multi-line) description of a specific commit.
+pub fn jj_get_commit_description(
+    workspace_path: &str,
+    change_id: &str,
+) -> Result<String, JjError> {
+    let loaded = load_workspace_repo(workspace_path)?;
+    let commit = resolve_commit_by_revision(&loaded, change_id)?;
+    Ok(commit.description().to_string())
+}
+
+/// Set (rewrite) the description of a specific commit by change-id.
+/// Runs: jj describe <change_id> -m <message>
+pub fn jj_describe(
+    workspace_path: &str,
+    change_id: &str,
+    message: &str,
+) -> Result<String, JjError> {
+    validate_commit_message(message)?;
+    let loaded = load_workspace_repo(workspace_path)?;
+    let commit = resolve_commit_by_revision(&loaded, change_id)?;
+    let mut tx = loaded.repo.start_transaction();
+
+    let mut builder = tx.repo_mut().rewrite_commit(&commit).detach();
+    builder.set_description(message);
+    block_on(builder.write(tx.repo_mut()))
+        .map_err(|e| JjError::IoError(format!("Failed to write commit: {}", e)))?;
+    block_on(tx.repo_mut().rebase_descendants())
+        .map_err(|e| JjError::InitFailed(format!("Failed to rebase descendants: {}", e)))?;
+    block_on(tx.commit("describe commit"))
+        .map_err(|e| JjError::InitFailed(format!("Failed to describe commit: {}", e)))?;
+
+    // rebase_descendants() may have rewritten WC commits of every workspace; reconcile all.
+    let repo_path = derive_repo_path_from_workspace(workspace_path)
+        .unwrap_or_else(|| workspace_path.to_string());
+    let _ = reconcile_all_workspaces_after_rewrite(&repo_path, None);
+
+    Ok(String::new())
+}
+
 /// Get the list of files changed in a specific commit.
 /// Runs: jj diff --summary -r <change_id>
 /// Returns file paths (added/modified/removed) from the commit.

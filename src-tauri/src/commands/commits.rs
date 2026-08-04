@@ -1,6 +1,7 @@
 use crate::core;
 use crate::jj;
 use crate::AppState;
+use std::time::Instant;
 use tauri::State;
 
 // JJ Workspace commands
@@ -252,4 +253,44 @@ pub async fn switch_repo_branch(
     })
     .await
     .map_err(|e| format!("Failed to join switch_repo_branch task: {}", e))?
+}
+
+/// Get the full (multi-line) description of a specific commit.
+#[tauri::command]
+pub async fn get_commit_description(
+    repo_path: String,
+    workspace_id: i64,
+    commit_change_id: String,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        core::get_commit_description(&repo_path, workspace_id, &commit_change_id)
+    })
+    .await
+    .map_err(|e| format!("Failed to join get_commit_description task: {}", e))?
+}
+
+/// Edit (rewrite) the description of a specific commit by change-id.
+#[tauri::command]
+pub async fn describe_commit(
+    repo_path: String,
+    workspace_id: i64,
+    commit_change_id: String,
+    description: String,
+) -> Result<(), String> {
+    let started_at = Instant::now();
+    let result = tauri::async_runtime::spawn_blocking({
+        let repo_path = repo_path.clone();
+        let commit_change_id = commit_change_id.clone();
+        move || core::describe_commit(&repo_path, workspace_id, &commit_change_id, &description)
+    })
+    .await
+    .map_err(|e| format!("Failed to join describe_commit task: {}", e))?;
+    log::debug!(
+        "describe_commit(repo_path={}, workspace_id={}, commit_change_id={}) completed in {:?}",
+        repo_path,
+        workspace_id,
+        commit_change_id,
+        started_at.elapsed()
+    );
+    result
 }

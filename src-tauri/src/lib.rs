@@ -474,6 +474,8 @@ pub fn run() {
             commands::jj_check_branch_exists,
             commands::list_repo_branches,
             commands::switch_repo_branch,
+            commands::get_commit_description,
+            commands::describe_commit,
             commands::pty_create_session,
             commands::pty_session_exists,
             commands::pty_write,

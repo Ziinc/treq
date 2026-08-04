@@ -255,6 +255,73 @@ pub fn abandon_commit(
     Ok(())
 }
 
+/// Returns the full (multi-line) description of a specific commit.
+///
+/// # Arguments
+/// * `repo_path`         - Path to the repository root
+/// * `workspace_id`      - ID of the workspace that owns the commit
+/// * `commit_change_id`  - The short change-id of the commit
+///
+/// # Returns
+/// The commit's full description on success, or an error string.
+pub fn get_commit_description(
+    repo_path: &str,
+    workspace_id: i64,
+    commit_change_id: &str,
+) -> Result<String, String> {
+    let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
+        .map_err(|e| format!("Failed to get workspace: {}", e))?
+        .ok_or_else(|| format!("Workspace not found: {}", workspace_id))?;
+
+    let workspace_dir = Path::new(repo_path)
+        .join(".treq")
+        .join("workspaces")
+        .join(&workspace.workspace_path);
+    let workspace_dir_str = workspace_dir
+        .to_str()
+        .ok_or("Failed to convert workspace path to string")?;
+
+    jj::jj_get_commit_description(workspace_dir_str, commit_change_id)
+        .map_err(|e| format!("Failed to get commit description: {}", e))
+}
+
+/// Sets (rewrites) the description of a specific commit by change-id.
+///
+/// # Arguments
+/// * `repo_path`         - Path to the repository root
+/// * `workspace_id`      - ID of the workspace that owns the commit
+/// * `commit_change_id`  - The short change-id of the commit to describe
+/// * `description`       - The new commit description
+///
+/// # Returns
+/// `Ok(())` on success, or an error string.
+pub fn describe_commit(
+    repo_path: &str,
+    workspace_id: i64,
+    commit_change_id: &str,
+    description: &str,
+) -> Result<(), String> {
+    let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
+        .map_err(|e| format!("Failed to get workspace: {}", e))?
+        .ok_or_else(|| format!("Workspace not found: {}", workspace_id))?;
+
+    let workspace_dir = Path::new(repo_path)
+        .join(".treq")
+        .join("workspaces")
+        .join(&workspace.workspace_path);
+    let workspace_dir_str = workspace_dir
+        .to_str()
+        .ok_or("Failed to convert workspace path to string")?;
+
+    jj::jj_describe(workspace_dir_str, commit_change_id, description)
+        .map_err(|e| format!("Failed to describe commit: {}", e))?;
+
+    jj::update_stale_workspace(workspace_dir_str)
+        .map_err(|e| format!("Failed to update workspace working copy: {}", e))?;
+
+    Ok(())
+}
+
 /// Returns the diff for a specific commit in a workspace.
 ///
 /// # Arguments

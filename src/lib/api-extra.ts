@@ -224,4 +224,28 @@ export const abandonCommit = (
 		commitChangeId,
 	});
 
+export const getCommitDescription = (
+	repoPath: string,
+	workspaceId: number,
+	commitChangeId: string,
+): Promise<string> =>
+	invoke("get_commit_description", {
+		repoPath,
+		workspaceId,
+		commitChangeId,
+	});
+
+export const describeCommit = (
+	repoPath: string,
+	workspaceId: number,
+	commitChangeId: string,
+	description: string,
+): Promise<void> =>
+	invoke("describe_commit", {
+		repoPath,
+		workspaceId,
+		commitChangeId,
+		description,
+	});
+
 export const getTreqBinDir = (): Promise<string> => invoke("get_treq_bin_dir");
