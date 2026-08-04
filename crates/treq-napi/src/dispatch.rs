@@ -53,6 +53,21 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             serde_json::to_value(info).map_err(|e| e.to_string())
         }
 
+        "get_pr_checks_via_gh" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let branch_name = get_str(&args, "branchName")?;
+            let gh = treq_lib::binary_paths::detect_binary("gh")
+                .ok_or_else(|| "gh CLI not found".to_string())?;
+            let extended_path = treq_lib::binary_paths::get_extended_path();
+            let status = treq_lib::github::get_pr_checks_via_gh_impl(
+                &gh,
+                &repo_path,
+                &branch_name,
+                &extended_path,
+            )?;
+            serde_json::to_value(status).map_err(|e| e.to_string())
+        }
+
         "gh_list_issues" => {
             let repo_full_name = get_str(&args, "repoFullName")?;
             let state = get_str(&args, "state")?;
