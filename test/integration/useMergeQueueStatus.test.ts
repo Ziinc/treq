@@ -159,9 +159,7 @@ const SUCCESS_CI: PrCiStatus = {
 describe("usePrCiStatus", () => {
 	it("returns the rolled-up CI status", async () => {
 		const { repoPath } = createTestRepo(false);
-		const spy = vi
-			.spyOn(api, "getPrChecksViaGh")
-			.mockResolvedValue(SUCCESS_CI);
+		const spy = vi.spyOn(api, "getPrChecksViaGh").mockResolvedValue(SUCCESS_CI);
 
 		const { result } = renderHook(() => usePrCiStatus(repoPath, "feat"), {
 			wrapper: makeWrapper(),

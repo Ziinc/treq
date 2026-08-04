@@ -1,7 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { getGitRemoteUrl, getPrChecksViaGh, getPrInfoViaGh } from "../lib/api";
-import type { PrCiStatus, PrInfo, WorkspaceQueueStatus } from "../lib/api-types";
+import type {
+	PrCiStatus,
+	PrInfo,
+	WorkspaceQueueStatus,
+} from "../lib/api-types";
 import { FEATURES } from "../lib/features";
 import { supabase } from "../lib/supabase";
 
