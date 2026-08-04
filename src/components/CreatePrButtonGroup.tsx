@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ChevronDown, Github, Loader2 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useQueryClient } from "@tanstack/react-query";
-import { ghCreatePr } from "../lib/api";
+import { ghCreatePr, pushWorkspaceToRemote } from "../lib/api";
 import { buildGitHubComparePrUrl } from "../lib/github-pr";
 import type { Workspace } from "../lib/api-types";
 import { usePrInfoViaGh, useGitRemoteInfo } from "../hooks/useMergeQueueStatus";
@@ -51,6 +51,9 @@ export function CreatePrButtonGroup({
 	const createPr = async (draft: boolean) => {
 		setCreating(true);
 		try {
+			if (workspace.not_on_remote) {
+				await pushWorkspaceToRemote(repoPath, workspace.id);
+			}
 			const number = await ghCreatePr(
 				remoteInfo.full_name,
 				title,
@@ -62,6 +65,9 @@ export function CreatePrButtonGroup({
 			await queryClient.invalidateQueries({
 				queryKey: ["pr-info-gh", repoPath, workspace.branch_name],
 			});
+			// Broad refresh so `not_on_remote`/sync status update everywhere,
+			// matching the existing manual "Push to remote" flow.
+			queryClient.invalidateQueries();
 			const prUrl = `https://github.com/${remoteInfo.full_name}/pull/${number}`;
 			addToast({
 				title: draft ? "Draft PR created" : "Pull request created",
@@ -83,18 +89,35 @@ export function CreatePrButtonGroup({
 		}
 	};
 
-	const openManual = () => {
-		openUrl(
-			buildGitHubComparePrUrl({
-				owner: remoteInfo.owner,
-				repo: remoteInfo.repo,
-				baseBranch,
-				headBranch: workspace.branch_name,
-				title,
-				body,
-			}),
-		);
+	const openManual = async () => {
+		setCreating(true);
+		try {
+			if (workspace.not_on_remote) {
+				await pushWorkspaceToRemote(repoPath, workspace.id);
+				queryClient.invalidateQueries();
+			}
+			openUrl(
+				buildGitHubComparePrUrl({
+					owner: remoteInfo.owner,
+					repo: remoteInfo.repo,
+					baseBranch,
+					headBranch: workspace.branch_name,
+					title,
+					body,
+				}),
+			);
+		} catch (err) {
+			addToast({
+				title: "Failed to push branch",
+				description: (err as Error).message,
+				type: "error",
+			});
+		} finally {
+			setCreating(false);
+		}
 	};
+
+	const pushAndCreate = workspace.not_on_remote;
 
 	return (
 		<TooltipProvider delayDuration={200}>
@@ -113,10 +136,18 @@ export function CreatePrButtonGroup({
 							) : (
 								<Github className="w-4 h-4" />
 							)}
-							Create PR
+							{creating
+								? pushAndCreate
+									? "Pushing & creating…"
+									: "Creating…"
+								: "Create PR"}
 						</Button>
 					</TooltipTrigger>
-					<TooltipContent>Create a pull request on GitHub</TooltipContent>
+					<TooltipContent>
+						{pushAndCreate
+							? "Push this branch and create a pull request on GitHub"
+							: "Create a pull request on GitHub"}
+					</TooltipContent>
 				</Tooltip>
 				<DropdownMenu>
 					<Tooltip>
@@ -137,6 +168,7 @@ export function CreatePrButtonGroup({
 					</Tooltip>
 					<DropdownMenuContent align="end" sideOffset={4}>
 						<DropdownMenuItem
+							disabled={creating}
 							onSelect={(e) => {
 								e.preventDefault();
 								void createPr(true);
@@ -145,9 +177,10 @@ export function CreatePrButtonGroup({
 							Create draft PR
 						</DropdownMenuItem>
 						<DropdownMenuItem
+							disabled={creating}
 							onSelect={(e) => {
 								e.preventDefault();
-								openManual();
+								void openManual();
 							}}
 						>
 							Create PR manually

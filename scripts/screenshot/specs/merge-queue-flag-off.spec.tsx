@@ -52,7 +52,11 @@ vi.mock("../../../src/lib/api", async () => {
 	const actual = await vi.importActual<typeof import("../../../src/lib/api")>(
 		"../../../src/lib/api",
 	);
-	return { ...actual, getGitRemoteUrl: mockGetGitRemoteUrl };
+	return {
+		...actual,
+		getGitRemoteUrl: mockGetGitRemoteUrl,
+		ghCreatePr: vi.fn().mockResolvedValue(101),
+	};
 });
 
 it("captures a pushed workspace with the merge queue flag switched off", async () => {
@@ -96,11 +100,11 @@ it("captures a pushed workspace with the merge queue flag switched off", async (
 	);
 
 	await user.click(
-		await screen.findByRole("button", { name: /push to remote/i }),
+		await screen.findByRole("button", { name: /^create pr$/i }),
 	);
 	await waitFor(() => {
 		expect(
-			screen.queryByRole("button", { name: /push to remote/i }),
+			screen.queryByRole("button", { name: /pushing & creating/i }),
 		).not.toBeInTheDocument();
 	});
 
