@@ -1281,6 +1281,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 							workspacePath={workingDirectory}
 							workspaceId={workspace?.id}
 							repoPath={effectiveRepoPath}
+							branchName={workspace?.branch_name}
 							onChangedFilesChange={handleChangedFilesUpdate}
 							onRefreshingChange={handleRefreshingChange}
 							initialSelectedFile={initialSelectedFile}

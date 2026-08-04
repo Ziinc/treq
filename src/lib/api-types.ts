@@ -310,6 +310,11 @@ export interface LineComment {
 	text: string;
 	created_at: string;
 	line_side?: "old" | "new";
+	/** Set when this comment was seeded by quoting a GitHub review comment. */
+	source?: "github";
+	github_author?: string;
+	github_avatar_url?: string;
+	github_comment_url?: string;
 }
 
 export interface PendingReview {
@@ -335,6 +340,7 @@ export interface GhLabel {
 
 export interface GhAuthor {
 	login: string;
+	avatar_url?: string | null;
 }
 
 export interface GhIssueComment {
@@ -377,6 +383,26 @@ export interface GhPullRequest {
 	updated_at: string;
 	comments: GhIssueComment[] | null;
 	is_draft?: boolean;
+}
+
+export interface GhReviewComment {
+	id: string;
+	body: string;
+	author: GhAuthor;
+	created_at: string;
+	diff_hunk: string;
+	url: string;
+}
+
+/** A GitHub PR review comment thread. Read-only -- Treq never replies to or resolves these. */
+export interface GhReviewThread {
+	id: string;
+	is_resolved: boolean;
+	is_outdated: boolean;
+	path: string;
+	line: number | null;
+	diff_side: string;
+	comments: GhReviewComment[];
 }
 
 export interface PrInfo {

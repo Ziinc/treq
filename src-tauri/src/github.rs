@@ -143,6 +143,8 @@ pub struct GhLabel {
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct GhAuthor {
     pub login: String,
+    #[serde(default)]
+    pub avatar_url: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -722,6 +724,235 @@ pub fn get_pr_info_via_gh_impl(
     }))
 }
 
+// ── GitHub PR review comment threads (read-only) ────────────────────────────
+
+#[derive(serde::Serialize, Clone)]
+pub struct GhReviewComment {
+    pub id: String,
+    pub body: String,
+    pub author: GhAuthor,
+    pub created_at: String,
+    pub diff_hunk: String,
+    pub url: String,
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct GhReviewThread {
+    pub id: String,
+    pub is_resolved: bool,
+    pub is_outdated: bool,
+    pub path: String,
+    pub line: Option<i64>,
+    pub diff_side: String,
+    pub comments: Vec<GhReviewComment>,
+}
+
+const REVIEW_THREADS_QUERY: &str = r#"query($owner: String!, $repo: String!, $number: Int!, $after: String) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $number) {
+      reviewThreads(first: 50, after: $after) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          id
+          isResolved
+          isOutdated
+          path
+          line
+          diffSide
+          comments(first: 50) {
+            nodes {
+              id
+              body
+              createdAt
+              url
+              diffHunk
+              author { login avatarUrl }
+            }
+          }
+        }
+      }
+    }
+  }
+}"#;
+
+/// Maximum pages of review threads to fetch (50 threads/page) -- generous for
+/// any real PR while bounding worst-case `gh` invocations.
+const MAX_REVIEW_THREAD_PAGES: usize = 10;
+
+#[derive(serde::Deserialize)]
+struct GqlResponse {
+    data: Option<GqlData>,
+}
+
+#[derive(serde::Deserialize)]
+struct GqlData {
+    repository: Option<GqlRepository>,
+}
+
+#[derive(serde::Deserialize)]
+struct GqlRepository {
+    #[serde(rename = "pullRequest")]
+    pull_request: Option<GqlPullRequest>,
+}
+
+#[derive(serde::Deserialize)]
+struct GqlPullRequest {
+    #[serde(rename = "reviewThreads")]
+    review_threads: GqlReviewThreadsConnection,
+}
+
+#[derive(serde::Deserialize)]
+struct GqlReviewThreadsConnection {
+    #[serde(rename = "pageInfo")]
+    page_info: GqlPageInfo,
+    nodes: Vec<GqlReviewThread>,
+}
+
+#[derive(serde::Deserialize)]
+struct GqlPageInfo {
+    #[serde(rename = "hasNextPage")]
+    has_next_page: bool,
+    #[serde(rename = "endCursor")]
+    end_cursor: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct GqlReviewThread {
+    id: String,
+    #[serde(rename = "isResolved")]
+    is_resolved: bool,
+    #[serde(rename = "isOutdated")]
+    is_outdated: bool,
+    path: String,
+    line: Option<i64>,
+    #[serde(rename = "diffSide")]
+    diff_side: String,
+    comments: GqlCommentsConnection,
+}
+
+#[derive(serde::Deserialize)]
+struct GqlCommentsConnection {
+    nodes: Vec<GqlComment>,
+}
+
+#[derive(serde::Deserialize)]
+struct GqlComment {
+    id: String,
+    body: String,
+    #[serde(rename = "createdAt")]
+    created_at: String,
+    url: String,
+    #[serde(rename = "diffHunk")]
+    diff_hunk: String,
+    author: Option<GqlAuthor>,
+}
+
+#[derive(serde::Deserialize)]
+struct GqlAuthor {
+    login: String,
+    #[serde(rename = "avatarUrl")]
+    avatar_url: Option<String>,
+}
+
+/// Fetch every review-comment thread (with resolved/outdated state) on a PR via
+/// `gh api graphql`, the only way to get thread-grouped comments with a
+/// `isResolved` flag -- the REST/`gh pr view` helpers above don't expose it.
+/// Read-only: no mutations are issued.
+pub fn gh_list_pr_review_threads_impl(
+    gh_path: &str,
+    owner: &str,
+    repo: &str,
+    pr_number: u64,
+    extended_path: &str,
+) -> Result<Vec<GhReviewThread>, String> {
+    let number = pr_number.to_string();
+    let mut threads: Vec<GhReviewThread> = Vec::new();
+    let mut after: Option<String> = None;
+
+    for _ in 0..MAX_REVIEW_THREAD_PAGES {
+        let query_arg = format!("query={REVIEW_THREADS_QUERY}");
+        let owner_arg = format!("owner={owner}");
+        let repo_arg = format!("repo={repo}");
+        let number_arg = format!("number={number}");
+        let after_arg = after.as_ref().map(|cursor| format!("after={cursor}"));
+
+        let mut args: Vec<&str> = vec![
+            "api",
+            "graphql",
+            "-f",
+            &query_arg,
+            "-f",
+            &owner_arg,
+            "-f",
+            &repo_arg,
+            "-F",
+            &number_arg,
+        ];
+        if let Some(after_arg) = &after_arg {
+            args.push("-f");
+            args.push(after_arg);
+        }
+
+        let out = run_gh(gh_path, &args, extended_path)?;
+        let bytes = check_gh_output(out)?;
+        let parsed: GqlResponse = serde_json::from_slice(&bytes)
+            .map_err(|e| format!("Failed to parse gh graphql output: {e}"))?;
+
+        let connection = parsed
+            .data
+            .and_then(|d| d.repository)
+            .and_then(|r| r.pull_request)
+            .map(|pr| pr.review_threads);
+
+        let Some(connection) = connection else {
+            break;
+        };
+
+        for node in connection.nodes {
+            threads.push(GhReviewThread {
+                id: node.id,
+                is_resolved: node.is_resolved,
+                is_outdated: node.is_outdated,
+                path: node.path,
+                line: node.line,
+                diff_side: node.diff_side,
+                comments: node
+                    .comments
+                    .nodes
+                    .into_iter()
+                    .map(|c| GhReviewComment {
+                        id: c.id,
+                        body: c.body,
+                        author: c
+                            .author
+                            .map(|a| GhAuthor {
+                                login: a.login,
+                                avatar_url: a.avatar_url,
+                            })
+                            .unwrap_or_else(|| GhAuthor {
+                                login: "ghost".to_string(),
+                                avatar_url: None,
+                            }),
+                        created_at: c.created_at,
+                        diff_hunk: c.diff_hunk,
+                        url: c.url,
+                    })
+                    .collect(),
+            });
+        }
+
+        if !connection.page_info.has_next_page {
+            break;
+        }
+        after = connection.page_info.end_cursor;
+        if after.is_none() {
+            break;
+        }
+    }
+
+    Ok(threads)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1274,5 +1505,162 @@ echo '[{{"name":"build","bucket":"pass","link":"https://x/1"}}]'"#,
         let page = take_list_page(vec![1], 2, 1);
         assert_eq!(page.items, vec![1]);
         assert!(!page.has_more);
+    }
+
+    // ── gh_list_pr_review_threads_impl ───────────────────────────────────────
+
+    #[test]
+    #[cfg(unix)]
+    fn test_gh_list_pr_review_threads_parses_and_maps_fields() {
+        let bin_dir = TempDir::new().unwrap();
+        let response = serde_json::json!({
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "pageInfo": {"hasNextPage": false, "endCursor": null},
+                            "nodes": [{
+                                "id": "PRRT_1",
+                                "isResolved": true,
+                                "isOutdated": false,
+                                "path": "src/main.rs",
+                                "line": 42,
+                                "diffSide": "RIGHT",
+                                "comments": {
+                                    "nodes": [{
+                                        "id": "PRRC_1",
+                                        "body": "nit: rename this",
+                                        "createdAt": "2026-01-01T00:00:00Z",
+                                        "url": "https://github.com/o/r/pull/1#discussion_r1",
+                                        "diffHunk": "@@ -1,3 +1,3 @@\n-a\n+b",
+                                        "author": {"login": "reviewer1", "avatarUrl": "https://avatars.example/reviewer1.png"}
+                                    }]
+                                }
+                            }]
+                        }
+                    }
+                }
+            }
+        });
+        let script = format!("cat <<'EOF'\n{response}\nEOF\n");
+        let gh_path = write_fake_gh(&bin_dir, &script);
+
+        let threads =
+            gh_list_pr_review_threads_impl(&gh_path, "owner", "repo", 1, "/usr/bin:/bin").unwrap();
+
+        assert_eq!(threads.len(), 1);
+        let thread = &threads[0];
+        assert_eq!(thread.id, "PRRT_1");
+        assert!(thread.is_resolved);
+        assert!(!thread.is_outdated);
+        assert_eq!(thread.path, "src/main.rs");
+        assert_eq!(thread.line, Some(42));
+        assert_eq!(thread.diff_side, "RIGHT");
+        assert_eq!(thread.comments.len(), 1);
+        assert_eq!(thread.comments[0].body, "nit: rename this");
+        assert_eq!(thread.comments[0].author.login, "reviewer1");
+        assert_eq!(
+            thread.comments[0].author.avatar_url.as_deref(),
+            Some("https://avatars.example/reviewer1.png")
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_gh_list_pr_review_threads_defaults_deleted_author_to_ghost() {
+        let bin_dir = TempDir::new().unwrap();
+        let response = serde_json::json!({
+            "data": {"repository": {"pullRequest": {"reviewThreads": {
+                "pageInfo": {"hasNextPage": false, "endCursor": null},
+                "nodes": [{
+                    "id": "PRRT_1", "isResolved": false, "isOutdated": false,
+                    "path": "a.rs", "line": 1, "diffSide": "RIGHT",
+                    "comments": {"nodes": [{
+                        "id": "PRRC_1", "body": "hi", "createdAt": "2026-01-01T00:00:00Z",
+                        "url": "https://github.com/o/r/pull/1#discussion_r1",
+                        "diffHunk": "@@ -1 +1 @@", "author": null
+                    }]}
+                }]
+            }}}}
+        });
+        let script = format!("cat <<'EOF'\n{response}\nEOF\n");
+        let gh_path = write_fake_gh(&bin_dir, &script);
+
+        let threads =
+            gh_list_pr_review_threads_impl(&gh_path, "owner", "repo", 1, "/usr/bin:/bin").unwrap();
+
+        assert_eq!(threads[0].comments[0].author.login, "ghost");
+        assert_eq!(threads[0].comments[0].author.avatar_url, None);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_gh_list_pr_review_threads_paginates_across_pages() {
+        let bin_dir = TempDir::new().unwrap();
+        let page1 = serde_json::json!({
+            "data": {"repository": {"pullRequest": {"reviewThreads": {
+                "pageInfo": {"hasNextPage": true, "endCursor": "CURSOR1"},
+                "nodes": [{
+                    "id": "T1", "isResolved": false, "isOutdated": false,
+                    "path": "a.rs", "line": 1, "diffSide": "RIGHT",
+                    "comments": {"nodes": []}
+                }]
+            }}}}
+        });
+        let page2 = serde_json::json!({
+            "data": {"repository": {"pullRequest": {"reviewThreads": {
+                "pageInfo": {"hasNextPage": false, "endCursor": null},
+                "nodes": [{
+                    "id": "T2", "isResolved": false, "isOutdated": false,
+                    "path": "b.rs", "line": 2, "diffSide": "RIGHT",
+                    "comments": {"nodes": []}
+                }]
+            }}}}
+        });
+        let script = format!(
+            r#"case "$*" in
+  *"after=CURSOR1"*) cat <<'EOF'
+{page2}
+EOF
+  ;;
+  *) cat <<'EOF'
+{page1}
+EOF
+  ;;
+esac
+"#,
+        );
+        let gh_path = write_fake_gh(&bin_dir, &script);
+
+        let threads =
+            gh_list_pr_review_threads_impl(&gh_path, "owner", "repo", 1, "/usr/bin:/bin").unwrap();
+
+        assert_eq!(threads.len(), 2);
+        assert_eq!(threads[0].id, "T1");
+        assert_eq!(threads[1].id, "T2");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_gh_list_pr_review_threads_returns_empty_when_no_pull_request() {
+        let bin_dir = TempDir::new().unwrap();
+        let script = "cat <<'EOF'\n{\"data\":{\"repository\":{\"pullRequest\":null}}}\nEOF\n";
+        let gh_path = write_fake_gh(&bin_dir, script);
+
+        let threads =
+            gh_list_pr_review_threads_impl(&gh_path, "owner", "repo", 1, "/usr/bin:/bin").unwrap();
+
+        assert!(threads.is_empty());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_gh_list_pr_review_threads_propagates_gh_error() {
+        let bin_dir = TempDir::new().unwrap();
+        let gh_path = write_fake_gh(&bin_dir, "echo 'GraphQL error' >&2\nexit 1");
+
+        let result = gh_list_pr_review_threads_impl(&gh_path, "owner", "repo", 1, "/usr/bin:/bin");
+
+        assert!(result.is_err());
     }
 }

@@ -15,10 +15,20 @@ export interface CommentInputProps {
 	endLine?: number;
 	/** When provided, shows "Plan" and "Edit" buttons instead of "Add Comment" */
 	onSubmitWithMode?: (text: string, mode: "plan" | "acceptEdits") => void;
+	/** When set, shows the quoted text being replied to (e.g. a GitHub review comment). */
+	quote?: { text: string; author?: string };
 }
 
 export const CommentInput: React.FC<CommentInputProps> = memo(
-	({ onSubmit, onCancel, filePath, startLine, endLine, onSubmitWithMode }) => {
+	({
+		onSubmit,
+		onCancel,
+		filePath,
+		startLine,
+		endLine,
+		onSubmitWithMode,
+		quote,
+	}) => {
 		const [text, setText] = useState("");
 
 		const handleSubmit = useCallback(() => {
@@ -73,6 +83,16 @@ export const CommentInput: React.FC<CommentInputProps> = memo(
 					<div className="mb-2 text-md text-muted-foreground">
 						{filePath}:{lineLabel}
 					</div>
+				)}
+				{quote && (
+					<blockquote className="mb-2 border-l-2 border-sky-500/50 pl-3 text-sm text-muted-foreground italic">
+						{quote.author && (
+							<div className="not-italic font-medium">
+								Quoting @{quote.author}
+							</div>
+						)}
+						{quote.text}
+					</blockquote>
 				)}
 				<Textarea
 					value={text}

@@ -18,11 +18,13 @@ import { getLanguageFromPath } from "../../lib/syntax-highlight";
 import { CommentEditInput } from "../CommentEditInput";
 import { CommentInput } from "../CommentInput";
 import { InlineConflictCard } from "../InlineConflictCard";
+import { GithubThreadsInlineList } from "./GithubThreadsInlineList";
 import { HighlightedLine } from "./FileRowComponent";
 import {
 	computeHunkLineNumbers,
 	getLinePrefix,
 	getLineTypeClass,
+	getQuoteProp,
 	parseHunkHeader,
 } from "./utils";
 import type { HunkLinesProps } from "./types";
@@ -69,6 +71,9 @@ const HunkLines: React.FC<HunkLinesProps> = memo(
 		setPendingComment,
 		setShowCommentInput,
 		getCommentsForLine,
+		getThreadsForLine,
+		collapsedThreadIds,
+		toggleThreadCollapse,
 	}) => {
 		const lineNumbers = computeHunkLineNumbers(hunk);
 		const language = getLanguageFromPath(filePath);
@@ -208,6 +213,12 @@ const HunkLines: React.FC<HunkLinesProps> = memo(
 							? "old"
 							: "new";
 					const lineComments = getCommentsForLine({
+						filePath,
+						hunkId: hunk.id,
+						lineNumber: actualLineNum,
+						side: currentLineSide,
+					});
+					const githubThreadsForLine = getThreadsForLine({
 						filePath,
 						hunkId: hunk.id,
 						lineNumber: actualLineNum,
@@ -408,6 +419,19 @@ const HunkLines: React.FC<HunkLinesProps> = memo(
 									</div>
 								)}
 
+							<GithubThreadsInlineList
+								threads={githubThreadsForLine}
+								collapsedThreadIds={collapsedThreadIds}
+								toggleThreadCollapse={toggleThreadCollapse}
+								filePath={filePath}
+								hunkId={hunk.id}
+								displayAtLineIndex={lineIndex}
+								lineNumber={actualLineNum}
+								lineSide={currentLineSide}
+								setPendingComment={setPendingComment}
+								setShowCommentInput={setShowCommentInput}
+							/>
+
 							{/* Comment input */}
 							{showCommentInputHere && pendingComment && (
 								<CommentInput
@@ -417,6 +441,7 @@ const HunkLines: React.FC<HunkLinesProps> = memo(
 									filePath={pendingComment.filePath}
 									startLine={pendingComment.startLine}
 									endLine={pendingComment.endLine}
+									quote={getQuoteProp(pendingComment)}
 								/>
 							)}
 						</Fragment>

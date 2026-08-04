@@ -1,5 +1,6 @@
 import type {
 	ConflictRegion,
+	GhReviewThread,
 	JjDiffHunk,
 	JjFileChange,
 	LineComment as ApiLineComment,
@@ -11,6 +12,7 @@ export interface ChangesDiffViewerProps {
 	workspacePath: string;
 	repoPath?: string;
 	workspaceId?: number;
+	branchName?: string;
 	readOnly?: boolean;
 	onStagedFilesChange?: (files: string[]) => void;
 	onChangedFilesChange?: (files: ParsedFileChange[]) => void;
@@ -41,6 +43,11 @@ export interface LineComment {
 	text: string;
 	createdAt: string;
 	lineSide?: "old" | "new";
+	/** Set when this comment was seeded by quoting a GitHub review comment. */
+	source?: "github";
+	githubAuthor?: string;
+	githubAvatarUrl?: string;
+	githubCommentUrl?: string;
 }
 
 export interface ConflictComment {
@@ -87,6 +94,12 @@ export interface PendingComment {
 	endLine: number;
 	lineContent: string[];
 	lineSide: "old" | "new";
+	/** Set when this pending comment was seeded by quoting a GitHub review comment. */
+	githubMeta?: {
+		author: string;
+		avatarUrl?: string;
+		commentUrl?: string;
+	};
 }
 
 export interface CommentLineQuery {
@@ -154,6 +167,20 @@ export interface FileRowComponentProps {
 	addToast: ReturnType<typeof useToast>["addToast"];
 	getOutdatedCommentsForFile: (filePath: string) => LineComment[];
 	deleteComment: (commentId: string) => void;
+	getThreadsForLine: (query: CommentLineQuery) => GhReviewThread[];
+	getUnplacedThreadsForFile: (filePath: string) => GhReviewThread[];
+	collapsedThreadIds: Set<string>;
+	toggleThreadCollapse: (threadId: string) => void;
+	expandedOutdatedGroups: Set<string>;
+	toggleOutdatedGroup: (filePath: string) => void;
+	showCommentInput: boolean;
+	pendingComment: PendingComment | null;
+	setPendingComment: React.Dispatch<
+		React.SetStateAction<PendingComment | null>
+	>;
+	setShowCommentInput: React.Dispatch<React.SetStateAction<boolean>>;
+	addComment: (text: string) => void;
+	cancelComment: () => void;
 }
 
 export type { ApiLineComment, JjFileChange };
@@ -212,4 +239,7 @@ export interface HunkLinesProps {
 	>;
 	setShowCommentInput: React.Dispatch<React.SetStateAction<boolean>>;
 	getCommentsForLine: (query: CommentLineQuery) => LineComment[];
+	getThreadsForLine: (query: CommentLineQuery) => GhReviewThread[];
+	collapsedThreadIds: Set<string>;
+	toggleThreadCollapse: (threadId: string) => void;
 }

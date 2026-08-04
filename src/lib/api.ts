@@ -5,6 +5,7 @@ import type {
 	GhIssue,
 	GhListPage,
 	GhPullRequest,
+	GhReviewThread,
 	GitRemoteInfo,
 	PrCiStatus,
 	PrInfo,
@@ -510,6 +511,14 @@ export const ghViewPr = (
 	repoFullName: string,
 	prNumber: number,
 ): Promise<GhPullRequest> => invoke("gh_view_pr", { repoFullName, prNumber });
+
+/** Read-only: lists PR review comment threads (with resolved/outdated state). */
+export const ghListPrReviewThreads = (
+	owner: string,
+	repo: string,
+	prNumber: number,
+): Promise<GhReviewThread[]> =>
+	invoke("gh_list_pr_review_threads", { owner, repo, prNumber });
 
 export const ghCreatePrComment = (
 	repoFullName: string,
