@@ -184,10 +184,7 @@ describe("ShowWorkspace - Create PR", () => {
 		);
 
 		await waitFor(() => {
-			expect(pushWorkspaceToRemote).toHaveBeenCalledWith(
-				repoPath,
-				workspaceId,
-			);
+			expect(pushWorkspaceToRemote).toHaveBeenCalledWith(repoPath, workspaceId);
 		});
 		await waitFor(() => {
 			expect(ghCreatePr).toHaveBeenCalledWith(

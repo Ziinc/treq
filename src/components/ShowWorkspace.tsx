@@ -168,7 +168,9 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 		const { addToast } = useToast();
 		const { fontSize } = useTerminalSettings();
 
-		const { data: remoteInfo } = useGitRemoteInfo(effectiveRepoPath || undefined);
+		const { data: remoteInfo } = useGitRemoteInfo(
+			effectiveRepoPath || undefined,
+		);
 		const { data: queueEnabled } = useMergeQueueEnabled(
 			effectiveRepoPath || undefined,
 		);
