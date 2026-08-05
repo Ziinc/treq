@@ -344,6 +344,151 @@ fn moves_commit_modifying_file_without_deleting_file_from_source() {
 }
 
 #[test]
+fn moves_only_selected_file_and_leaves_unselected_new_file_in_source() {
+    let repo = TestRepo::new().expect("should create repo");
+    let (parent, child) = setup_sibling_graph(&repo);
+    make_file_fixture(&repo, &parent, "selected.txt", "selected change\n");
+    make_file_fixture(&repo, &parent, "unselected.txt", "unselected change\n");
+
+    treq_lib::core::move_workspace_changes(
+        &repo.repo_path,
+        &parent.branch_name,
+        &child.branch_name,
+        WorkspaceMoveRequest {
+            files: vec!["selected.txt".to_string()],
+            ..WorkspaceMoveRequest::default()
+        },
+    )
+    .expect("selected file move should succeed");
+
+    assert_eq!(
+        read_workspace_file(&repo, &child, "selected.txt"),
+        "selected change\n"
+    );
+    let destination_changes =
+        treq_lib::core::list_changed_files(&repo.repo_path, Some(child.id))
+            .expect("should list destination changes");
+    assert!(!destination_changes
+        .iter()
+        .any(|change| change.path == "unselected.txt"));
+    assert_eq!(
+        read_workspace_file(&repo, &parent, "unselected.txt"),
+        "unselected change\n"
+    );
+    assert!(!Path::new(&repo.workspace_full_path(&parent))
+        .join("selected.txt")
+        .exists());
+}
+
+#[test]
+fn moves_only_selected_hunk_and_leaves_other_hunk_in_source() {
+    let repo = TestRepo::new().expect("should create repo");
+    let (parent, child) = setup_sibling_graph(&repo);
+    make_file_fixture(
+        &repo,
+        &parent,
+        "README.md",
+        "# Test Repository\nMOVE_ME\nKEEP_ME\n",
+    );
+
+    treq_lib::core::move_workspace_changes(
+        &repo.repo_path,
+        &parent.branch_name,
+        &child.branch_name,
+        WorkspaceMoveRequest {
+            hunks: vec![HunkSpec {
+                file_path: "README.md".to_string(),
+                start_line: 2,
+                end_line: 2,
+            }],
+            ..WorkspaceMoveRequest::default()
+        },
+    )
+    .expect("selected hunk move should succeed");
+
+    assert_eq!(
+        read_workspace_file(&repo, &parent, "README.md"),
+        "# Test Repository\nKEEP_ME\n"
+    );
+    assert_eq!(
+        read_workspace_file(&repo, &child, "README.md"),
+        "# Test Repository\nMOVE_ME\n"
+    );
+    assert_source_working_copy_hunks_do_not_contain_lines(
+        &repo,
+        &parent,
+        "README.md",
+        &["MOVE_ME"],
+    );
+}
+
+#[test]
+fn moves_only_selected_commit_and_leaves_unselected_commit_in_source() {
+    let repo = TestRepo::new().expect("should create repo");
+    let (parent, child) = setup_sibling_graph(&repo);
+    let selected_commit = make_commit_fixture(
+        &repo,
+        &parent,
+        "selected-commit.txt",
+        "selected-commit",
+    );
+    let _unselected_commit = make_commit_fixture(
+        &repo,
+        &parent,
+        "unselected-commit.txt",
+        "unselected-commit",
+    );
+
+    treq_lib::core::move_workspace_changes(
+        &repo.repo_path,
+        &parent.branch_name,
+        &child.branch_name,
+        WorkspaceMoveRequest {
+            commits: vec![selected_commit.clone()],
+            ..WorkspaceMoveRequest::default()
+        },
+    )
+    .expect("selected commit move should succeed");
+
+    assert_history_does_not_contain_commit(&repo, &parent, &selected_commit);
+    let source_log = treq_lib::core::list_commits(
+        &repo.repo_path,
+        Some(parent.id),
+        false,
+        None,
+        None,
+    )
+    .expect("should list source commits after move");
+    assert!(source_log
+        .commits
+        .iter()
+        .any(|commit| commit.description.contains("unselected-commit")));
+    let destination_log = treq_lib::core::list_commits(
+        &repo.repo_path,
+        Some(child.id),
+        false,
+        None,
+        None,
+    )
+    .expect("should list destination commits after move");
+    assert!(!destination_log
+        .commits
+        .iter()
+        .any(|commit| commit.description.contains("unselected-commit")));
+    assert_eq!(
+        read_workspace_file(&repo, &child, "selected-commit.txt"),
+        "selected-commit\n"
+    );
+    assert!(!Path::new(&repo.workspace_full_path(&child))
+        .join("unselected-commit.txt")
+        .exists());
+    assert_eq!(
+        read_workspace_file(&repo, &parent, "unselected-commit.txt"),
+        "unselected-commit\n"
+    );
+}
+
+#[test]
 fn moves_hunks_parent_to_child() {
     let repo = TestRepo::new().expect("should create repo");
     let (parent, child) = setup_parent_child_graph(&repo);
