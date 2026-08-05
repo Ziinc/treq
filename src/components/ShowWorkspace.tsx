@@ -442,16 +442,21 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 		// Handle file selection from Cmd+P (or other external sources)
 		useEffect(() => {
 			if (initialSelectedFile) {
-				setInitialSelectedFileForBrowser(initialSelectedFile);
+				// FilePicker returns a repository-relative path, while FileBrowser's
+				// read and metadata APIs require the full path in the active workspace.
+				const selectedFile = initialSelectedFile.startsWith("/")
+					? initialSelectedFile
+					: `${effectiveRepoPath.replace(/\/$/, "")}/${initialSelectedFile}`;
+				setInitialSelectedFileForBrowser(selectedFile);
 				// Extract parent directory from file path
-				const parentDir = initialSelectedFile.substring(
+				const parentDir = selectedFile.substring(
 					0,
-					initialSelectedFile.lastIndexOf("/"),
+					selectedFile.lastIndexOf("/"),
 				);
 				setInitialExpandedDir(parentDir);
 				setShowFileBrowserInCode(true);
 			}
-		}, [initialSelectedFile]);
+		}, [initialSelectedFile, effectiveRepoPath]);
 
 		const handleTargetBranchSelect = useCallback(
 			async (branch: string) => {
