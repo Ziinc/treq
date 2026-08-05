@@ -136,10 +136,7 @@ describe("WorkspaceTerminalPane integration", () => {
 			within(terminalPanel).getByLabelText(/scroll to bottom/i);
 		const resetButton = within(terminalPanel).getByLabelText(/reset terminal/i);
 
-		expect(
-			scrollButton.compareDocumentPosition(resetButton) &
-				Node.DOCUMENT_POSITION_FOLLOWING,
-		).toBeTruthy();
+		expect(scrollButton.nextElementSibling).toBe(resetButton);
 
 		await user.click(scrollButton);
 	});
