@@ -7,7 +7,9 @@ import {
 	FileText,
 	Github,
 	Loader2,
+	MessageSquarePlus,
 	MoreVertical,
+	Pencil,
 	Square,
 	X,
 } from "lucide-react";
@@ -20,6 +22,7 @@ import {
 } from "../ui/dropdown-menu";
 import { Button } from "../ui/button";
 import { FileContextMenu } from "../FileContextMenu";
+import { CommentEditInput } from "../CommentEditInput";
 import { CommentInput } from "../CommentInput";
 import { GithubCommentCard } from "./GithubCommentCard";
 import { buildQuotedPendingComment, getQuoteProp } from "./utils";
@@ -29,6 +32,7 @@ import { highlightInHtml } from "../../lib/text-search";
 import { isBinaryFile } from "../../lib/git-utils";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEditorApps } from "../../hooks/useEditorApps";
+import { FILE_COMMENT_HUNK_ID } from "./types";
 import type { FileRowComponentProps, HighlightedLineProps } from "./types";
 
 const HighlightedLine: React.FC<HighlightedLineProps> = memo(
@@ -73,6 +77,7 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
 		renderHunkLines,
 		addToast,
 		getOutdatedCommentsForFile,
+		getFileCommentsForFile,
 		deleteComment,
 		getUnplacedThreadsForFile,
 		collapsedThreadIds,
@@ -81,10 +86,14 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
 		toggleOutdatedGroup,
 		showCommentInput,
 		pendingComment,
+		editingCommentId,
 		setPendingComment,
 		setShowCommentInput,
 		addComment,
 		cancelComment,
+		startEditComment,
+		cancelEditComment,
+		saveEditComment,
 	} = props;
 
 	const editorApps = useEditorApps();
@@ -94,8 +103,18 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
 	if (!fileData) return <div />;
 
 	const isRename = !!file.oldPath;
-	const isCollapsed =
-		isBinaryFile(filePath) || isRename ? true : collapsedFiles.has(filePath);
+	const fileComments = getFileCommentsForFile(filePath);
+	const showFileCommentInputHere =
+		showCommentInput &&
+		pendingComment?.filePath === filePath &&
+		pendingComment.hunkId === FILE_COMMENT_HUNK_ID;
+	const hasFileCommentActivity =
+		fileComments.length > 0 || showFileCommentInputHere;
+	const isCollapsed = hasFileCommentActivity
+		? false
+		: isBinaryFile(filePath) || isRename
+			? true
+			: collapsedFiles.has(filePath);
 	const isViewed = viewedFiles.has(filePath);
 	const fileId = `file-section-${filePath.replace(/[^a-zA-Z0-9]/g, "-")}`;
 	const isConflictedFile = actualConflictedFiles.includes(filePath);
@@ -172,6 +191,31 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
 							</div>
 						</div>
 						<div className="flex items-center gap-[8px]">
+							{!readOnly && (
+								<button
+									onClick={(event) => {
+										event.stopPropagation();
+										if (collapsedFiles.has(filePath)) {
+											toggleFileCollapse(filePath);
+										}
+										setPendingComment({
+											filePath,
+											hunkId: FILE_COMMENT_HUNK_ID,
+											displayAtLineIndex: -1,
+											startLine: 0,
+											endLine: 0,
+											lineContent: [],
+											lineSide: "new",
+										});
+										setShowCommentInput(true);
+									}}
+									className="p-[4px] rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+									title="Add file comment"
+									data-testid="add-file-comment-button"
+								>
+									<MessageSquarePlus className="w-3.5 h-3.5" />
+								</button>
+							)}
 							<button
 								role="checkbox"
 								aria-checked={isViewed}
@@ -329,6 +373,55 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
 						className="bg-background font-mono text-sm"
 						onContextMenu={handleContextMenu}
 					>
+						{hasFileCommentActivity && (
+							<div className="border-b border-border bg-muted/20 px-4 py-3 space-y-3">
+								{fileComments.map((comment) => {
+									const isEditing = editingCommentId === comment.id;
+									return (
+										<div key={comment.id}>
+											{isEditing ? (
+												<div className="bg-background rounded-md p-[12px] border border-border/60">
+													<CommentEditInput
+														initialText={comment.text}
+														onSave={(newText) =>
+															saveEditComment(comment.id, newText)
+														}
+														onCancel={cancelEditComment}
+														onDiscard={() => deleteComment(comment.id)}
+													/>
+												</div>
+											) : (
+												<div
+													data-testid="file-comment-card"
+													className="group bg-background rounded-md p-[12px] border border-border/60 cursor-pointer hover:shadow-md transition-shadow"
+													onClick={() => startEditComment(comment.id)}
+												>
+													<div className="flex items-start gap-2">
+														<Pencil className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5" />
+														<p className="font-sans text-sm whitespace-pre-wrap flex-1">
+															{comment.text}
+														</p>
+														<button
+															onClick={(event) => {
+																event.stopPropagation();
+																deleteComment(comment.id);
+															}}
+															className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground flex-shrink-0"
+															title="Delete comment"
+														>
+															<X className="w-3 h-3" />
+														</button>
+													</div>
+												</div>
+											)}
+										</div>
+									);
+								})}
+								{showFileCommentInputHere && (
+									<CommentInput onSubmit={addComment} onCancel={cancelComment} />
+								)}
+							</div>
+						)}
 						{isBinaryFile(filePath) ? (
 							<div className="flex items-center justify-center py-[32px] text-muted-foreground">
 								<FileText className="w-5 h-5 mr-[8px] opacity-50" />

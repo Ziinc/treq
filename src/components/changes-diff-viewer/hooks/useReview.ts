@@ -10,7 +10,12 @@ import {
 import type { ParsedFileChange } from "../../../lib/git-utils";
 import { useDebounce } from "../../../hooks/useDebounce";
 import type { useToast } from "../../ui/toast";
-import type { ConflictComment, FileHunksData, LineComment } from "../types";
+import {
+	FILE_COMMENT_HUNK_ID,
+	type ConflictComment,
+	type FileHunksData,
+	type LineComment,
+} from "../types";
 import {
 	computeHunksHash,
 	toApiLineComment,
@@ -18,6 +23,9 @@ import {
 } from "../utils";
 
 function formatCommentMarkdown(comment: LineComment, filePath: string): string {
+	if (comment.hunkId === FILE_COMMENT_HUNK_ID) {
+		return `${filePath}\n> ${comment.text}\n\n`;
+	}
 	const lineRef =
 		comment.startLine === comment.endLine
 			? `${filePath}:${comment.startLine}`
@@ -395,6 +403,10 @@ export function useReview({
 				);
 				if (!fileStillExists || !newFileData) {
 					orphanedComments.push(comment);
+					continue;
+				}
+				if (comment.hunkId === FILE_COMMENT_HUNK_ID) {
+					validComments.push(comment);
 					continue;
 				}
 				const hunkStillExists = newFileData.hunks.some(

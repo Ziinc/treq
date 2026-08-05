@@ -224,6 +224,7 @@ export const ChangesDiffViewer = memo(
 				saveEditConflictComment,
 				toggleConflictComment,
 				getOutdatedCommentsForFile,
+				getFileCommentsForFile,
 				getAllOutdatedComments,
 				handleCopyOutdatedComments,
 				getCommentsForLine,
@@ -570,6 +571,7 @@ export const ChangesDiffViewer = memo(
 							handleContextMenu={handleContextMenu}
 							addToast={addToast}
 							getOutdatedCommentsForFile={getOutdatedCommentsForFile}
+							getFileCommentsForFile={getFileCommentsForFile}
 							diffContainerRef={diffContainerRef}
 						/>
 					</div>

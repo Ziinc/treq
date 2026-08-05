@@ -33,6 +33,9 @@ export interface ChangesDiffViewerHandle {
 	refresh: () => void;
 }
 
+/** Sentinel hunkId marking a comment as attached to a whole file rather than a specific line. */
+export const FILE_COMMENT_HUNK_ID = "__file__";
+
 export interface LineComment {
 	id: string;
 	filePath: string;
@@ -166,6 +169,7 @@ export interface FileRowComponentProps {
 	) => JSX.Element;
 	addToast: ReturnType<typeof useToast>["addToast"];
 	getOutdatedCommentsForFile: (filePath: string) => LineComment[];
+	getFileCommentsForFile: (filePath: string) => LineComment[];
 	deleteComment: (commentId: string) => void;
 	getThreadsForLine: (query: CommentLineQuery) => GhReviewThread[];
 	getUnplacedThreadsForFile: (filePath: string) => GhReviewThread[];
@@ -175,12 +179,16 @@ export interface FileRowComponentProps {
 	toggleOutdatedGroup: (filePath: string) => void;
 	showCommentInput: boolean;
 	pendingComment: PendingComment | null;
+	editingCommentId: string | null;
 	setPendingComment: React.Dispatch<
 		React.SetStateAction<PendingComment | null>
 	>;
 	setShowCommentInput: React.Dispatch<React.SetStateAction<boolean>>;
 	addComment: (text: string) => void;
 	cancelComment: () => void;
+	startEditComment: (commentId: string) => void;
+	cancelEditComment: () => void;
+	saveEditComment: (commentId: string, text: string) => void;
 }
 
 export type { ApiLineComment, JjFileChange };
