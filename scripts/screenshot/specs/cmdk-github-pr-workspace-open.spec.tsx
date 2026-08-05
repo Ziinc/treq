@@ -58,23 +58,25 @@ it("captures the workspace PR commands in the command palette when a PR exists",
 	await screen.findByTestId("modal");
 
 	const openInBrowser = await screen.findByText("Open Workspace PR in Browser");
-	const openInNewWindow = await screen.findByText(
-		"Open Workspace PR in New Browser Window",
-	);
+	// Distinct from "Open Workspace PR in Browser" -- exact match so it doesn't
+	// also match as a substring of the browser-labeled item above.
+	const openInApp = await screen.findByText("Open Workspace PR", {
+		exact: true,
+	});
 	expect(openInBrowser).toBeInTheDocument();
-	expect(openInNewWindow).toBeInTheDocument();
+	expect(openInApp).toBeInTheDocument();
 	await screen.findByText("Open PR #99 on GitHub");
-	await screen.findByText("Open PR #99 in a new window");
+	await screen.findByText("Navigate this window to PR #99");
 
 	await captureDocument(document, {
 		name: "cmdk-github-pr-workspace-open-01-with-pr",
 		// The two new items are last in the list, below the fold of the cmdk
 		// list's own overflow-y-auto scroll region -- scroll them into view so
 		// the screenshot actually shows them instead of clipping them out.
-		scrollIntoView: "text=Open Workspace PR in New Browser Window",
+		scrollIntoView: "text=Navigate this window to PR #99",
 		expectations: [
 			'The open command palette lists an "Open Workspace PR in Browser" item describing "Open PR #99 on GitHub".',
-			'The palette also lists an "Open Workspace PR in New Browser Window" item describing "Open PR #99 in a new window".',
+			'The palette also lists a separate "Open Workspace PR" item describing "Navigate this window to PR #99".',
 		],
 	});
 }, 60000);
@@ -95,7 +97,7 @@ it("hides the workspace PR commands when the workspace has no PR", async () => {
 		screen.queryByText("Open Workspace PR in Browser"),
 	).not.toBeInTheDocument();
 	expect(
-		screen.queryByText("Open Workspace PR in New Browser Window"),
+		screen.queryByText("Open Workspace PR", { exact: true }),
 	).not.toBeInTheDocument();
 
 	await captureDocument(document, {

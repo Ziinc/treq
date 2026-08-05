@@ -3,7 +3,6 @@ import { Command } from "cmdk";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { BranchSwitcher } from "./BranchSwitcher";
 import { WorkspaceDeletion } from "./WorkspaceDeletion";
 import { FilePicker } from "./FilePicker";
@@ -252,18 +251,13 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 			});
 
 			result.push({
-				id: "open-workspace-pr-new-window",
+				id: "open-workspace-pr-current-window",
 				type: "action",
-				label: "Open Workspace PR in New Browser Window",
-				description: `Open PR #${workspacePrInfo.number} in a new window`,
+				label: "Open Workspace PR",
+				description: `Navigate this window to PR #${workspacePrInfo.number}`,
 				icon: <AppWindow className="w-4 h-4" />,
 				onSelect: () => {
-					new WebviewWindow(`treq-pr-${workspacePrInfo.number}-${Date.now()}`, {
-						url: workspacePrInfo.url,
-						title: `PR #${workspacePrInfo.number} - ${workspacePrInfo.title}`,
-						width: 1280,
-						height: 900,
-					});
+					window.location.href = workspacePrInfo.url;
 				},
 			});
 		}
