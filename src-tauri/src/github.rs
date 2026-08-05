@@ -586,43 +586,20 @@ pub struct PrCiStatus {
     pub checks: Vec<PrCheckEntry>,
 }
 
-/// Run `gh pr checks` for the given branch in the given repo directory and
-/// roll the individual check runs up into an overall CI status.
-/// Returns None if gh is not installed, not authenticated, there is no PR,
-/// or the PR has no checks reported yet.
-pub fn get_pr_checks_via_gh_impl(
-    gh_path: &str,
-    repo_path: &str,
-    branch_name: &str,
-    extended_path: &str,
-) -> Result<Option<PrCiStatus>, String> {
-    #[derive(serde::Deserialize)]
-    struct GhCheck {
-        name: String,
-        bucket: String,
-        link: String,
-    }
+#[derive(serde::Deserialize)]
+struct GhCheck {
+    name: String,
+    bucket: String,
+    link: String,
+}
 
-    let mut cmd = std::process::Command::new(gh_path);
-    cmd.args(["pr", "checks", branch_name, "--json", "name,bucket,link"])
-        .current_dir(repo_path)
-        .env("PATH", extended_path);
-    let output = spawn_with_etxtbsy_retry(cmd)?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let lower = stderr.to_ascii_lowercase();
-        if lower.contains("no pull requests found") || lower.contains("no checks reported") {
-            return Ok(None);
-        }
-        return Err(format!("gh pr checks failed: {}", stderr.trim()));
-    }
-
-    let raw: Vec<GhCheck> = serde_json::from_slice(&output.stdout)
-        .map_err(|e| format!("Failed to parse gh output: {e}"))?;
-
+/// Rolls a `gh pr checks --json name,bucket,link` result up into an overall
+/// CI status. Shared by every entry point that surfaces PR CI status (the
+/// workspace header's live indicator and the GitHub panel's PR detail view),
+/// so they always agree on pass/fail/pending grouping.
+fn rollup_pr_checks(raw: Vec<GhCheck>) -> Option<PrCiStatus> {
     if raw.is_empty() {
-        return Ok(None);
+        return None;
     }
 
     let mut passed = 0u32;
@@ -653,14 +630,87 @@ pub fn get_pr_checks_via_gh_impl(
     }
     .to_string();
 
-    Ok(Some(PrCiStatus {
+    Some(PrCiStatus {
         state,
         total: checks.len() as u32,
         passed,
         failed,
         pending,
         checks,
-    }))
+    })
+}
+
+/// Run `gh pr checks` for the given branch in the given repo directory and
+/// roll the individual check runs up into an overall CI status.
+/// Returns None if gh is not installed, not authenticated, there is no PR,
+/// or the PR has no checks reported yet.
+pub fn get_pr_checks_via_gh_impl(
+    gh_path: &str,
+    repo_path: &str,
+    branch_name: &str,
+    extended_path: &str,
+) -> Result<Option<PrCiStatus>, String> {
+    let mut cmd = std::process::Command::new(gh_path);
+    cmd.args(["pr", "checks", branch_name, "--json", "name,bucket,link"])
+        .current_dir(repo_path)
+        .env("PATH", extended_path);
+    let output = spawn_with_etxtbsy_retry(cmd)?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let lower = stderr.to_ascii_lowercase();
+        if lower.contains("no pull requests found") || lower.contains("no checks reported") {
+            return Ok(None);
+        }
+        return Err(format!("gh pr checks failed: {}", stderr.trim()));
+    }
+
+    let raw: Vec<GhCheck> = serde_json::from_slice(&output.stdout)
+        .map_err(|e| format!("Failed to parse gh output: {e}"))?;
+
+    Ok(rollup_pr_checks(raw))
+}
+
+/// Run `gh pr checks` for a specific PR number in a repo (identified by
+/// `owner/repo`, not a local checkout), for callers -- like the GitHub
+/// panel's PR detail view -- that browse PRs without necessarily having a
+/// local workspace on that branch. Shares the same rollup as
+/// `get_pr_checks_via_gh_impl` so both surfaces always report the same
+/// pass/fail/pending grouping for a given PR.
+pub fn get_pr_checks_for_pr_impl(
+    gh_path: &str,
+    repo_full_name: &str,
+    pr_number: u64,
+    extended_path: &str,
+) -> Result<Option<PrCiStatus>, String> {
+    let num = pr_number.to_string();
+    let out = run_gh(
+        gh_path,
+        &[
+            "pr",
+            "checks",
+            &num,
+            "--repo",
+            repo_full_name,
+            "--json",
+            "name,bucket,link",
+        ],
+        extended_path,
+    )?;
+
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let lower = stderr.to_ascii_lowercase();
+        if lower.contains("no pull requests found") || lower.contains("no checks reported") {
+            return Ok(None);
+        }
+        return Err(format!("gh pr checks failed: {}", stderr.trim()));
+    }
+
+    let raw: Vec<GhCheck> = serde_json::from_slice(&out.stdout)
+        .map_err(|e| format!("Failed to parse gh output: {e}"))?;
+
+    Ok(rollup_pr_checks(raw))
 }
 
 /// Run `gh pr view` for the given branch in the given repo directory.
@@ -1469,6 +1519,71 @@ echo '[{{"name":"build","bucket":"pass","link":"https://x/1"}}]'"#,
         );
 
         assert!(result.unwrap().is_some());
+    }
+
+    // ── get_pr_checks_for_pr_impl ────────────────────────────────────────────
+
+    #[test]
+    #[cfg(unix)]
+    fn get_pr_checks_for_pr_rolls_up_like_the_branch_based_lookup() {
+        let bin_dir = TempDir::new().unwrap();
+        let gh_path = write_fake_gh(
+            &bin_dir,
+            r#"echo '[{"name":"build","bucket":"pass","link":"https://x/1"},{"name":"test","bucket":"fail","link":"https://x/2"}]'"#,
+        );
+
+        let status = get_pr_checks_for_pr_impl(&gh_path, "owner/repo", 42, "/usr/bin:/bin")
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(status.state, "failure");
+        assert_eq!(status.total, 2);
+        assert_eq!(status.passed, 1);
+        assert_eq!(status.failed, 1);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn get_pr_checks_for_pr_invokes_gh_with_exact_arguments() {
+        let bin_dir = TempDir::new().unwrap();
+        let gh_path = write_fake_gh(
+            &bin_dir,
+            r#"test "$*" = "pr checks 42 --repo owner/repo --json name,bucket,link" || exit 9
+echo '[{"name":"build","bucket":"pass","link":"https://x/1"}]'"#,
+        );
+
+        let result = get_pr_checks_for_pr_impl(&gh_path, "owner/repo", 42, "/usr/bin:/bin");
+
+        assert!(result.unwrap().is_some());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn get_pr_checks_for_pr_no_checks_reported_returns_none() {
+        let bin_dir = TempDir::new().unwrap();
+        let gh_path = write_fake_gh(
+            &bin_dir,
+            "echo 'no checks reported on the feat branch' >&2\nexit 1",
+        );
+
+        let result =
+            get_pr_checks_for_pr_impl(&gh_path, "owner/repo", 42, "/usr/bin:/bin").unwrap();
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn get_pr_checks_for_pr_operational_error_is_returned() {
+        let bin_dir = TempDir::new().unwrap();
+        let gh_path = write_fake_gh(&bin_dir, "echo 'authentication required' >&2\nexit 1");
+
+        let result = get_pr_checks_for_pr_impl(&gh_path, "owner/repo", 42, "/usr/bin:/bin");
+        let error = match result {
+            Err(error) => error,
+            Ok(_) => panic!("operational gh failure was treated as no checks"),
+        };
+        assert!(error.contains("authentication required"));
     }
 
     #[test]

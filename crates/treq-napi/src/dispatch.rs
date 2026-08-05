@@ -68,6 +68,20 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             serde_json::to_value(status).map_err(|e| e.to_string())
         }
 
+        "get_pr_checks_for_pr" => {
+            let repo_full_name = get_str(&args, "repoFullName")?;
+            let pr_number = get_positive_u64(&args, "prNumber")?;
+            let gh = gh_bin()?;
+            let extended_path = treq_lib::binary_paths::get_extended_path();
+            let status = treq_lib::github::get_pr_checks_for_pr_impl(
+                &gh,
+                &repo_full_name,
+                pr_number,
+                &extended_path,
+            )?;
+            serde_json::to_value(status).map_err(|e| e.to_string())
+        }
+
         "gh_list_issues" => {
             let repo_full_name = get_str(&args, "repoFullName")?;
             let state = get_str(&args, "state")?;
@@ -1078,6 +1092,7 @@ mod tests {
             ("gh_close_pr", "prNumber"),
             ("gh_reopen_pr", "prNumber"),
             ("gh_set_pr_draft", "prNumber"),
+            ("get_pr_checks_for_pr", "prNumber"),
         ] {
             let mut args = serde_json::json!({
                 "repoFullName": "owner/repo",

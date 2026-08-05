@@ -43,6 +43,7 @@ const queueEnabled = vi.hoisted(() => ({
 vi.mock("../../src/hooks/useAuth", () => ({ useAuth: () => auth }));
 vi.mock("../../src/hooks/useMergeQueueStatus", () => ({
 	useGitRemoteInfo: () => remoteInfo,
+	usePrChecksForPr: () => ({ data: null, isLoading: false }),
 	useMergeQueueEnabled: () => ({
 		data: queueEnabled.current,
 		isLoading: false,

@@ -8,7 +8,13 @@ import {
 	GitPullRequestDraft,
 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { GhIssue, GhLabel, GhPullRequest } from "../../lib/api-types";
+import type {
+	GhIssue,
+	GhLabel,
+	GhPullRequest,
+	PrCheckEntry,
+} from "../../lib/api-types";
+import { ciStateForBucket, ciStatusStyle } from "../../lib/ci-status";
 import { Button } from "../ui/button";
 
 export function formatDate(iso: string) {
@@ -90,6 +96,41 @@ export function LabelChip({ name, color }: GhLabel) {
 		>
 			{name}
 		</span>
+	);
+}
+
+const CHECK_STATE_LABEL: Record<ReturnType<typeof ciStateForBucket>, string> = {
+	success: "Success",
+	failure: "Failed",
+	pending: "Pending",
+};
+
+/** One row of the PR page's "Checks" list, styled identically to the workspace header's CiStatusIndicator. */
+export function CheckEntryRow({ check }: { check: PrCheckEntry }) {
+	const state = ciStateForBucket(check.bucket);
+	const { Icon, textClassName } = ciStatusStyle(state);
+
+	const content = (
+		<div className="flex items-center gap-2 py-1.5 px-2 text-base">
+			<Icon
+				className={`w-4 h-4 shrink-0 ${textClassName} ${state === "pending" ? "animate-spin" : ""}`}
+			/>
+			<span className="flex-1 min-w-0 truncate">{check.name}</span>
+			<span className={`shrink-0 ${textClassName}`}>
+				{CHECK_STATE_LABEL[state]}
+			</span>
+		</div>
+	);
+
+	if (!check.link) return content;
+	return (
+		<button
+			type="button"
+			className="w-full text-left hover:bg-muted/50 transition-colors rounded"
+			onClick={() => openUrl(check.link)}
+		>
+			{content}
+		</button>
 	);
 }
 

@@ -1,8 +1,9 @@
-import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { usePrCiStatus } from "../hooks/useMergeQueueStatus";
-import { Button } from "./ui/button";
+import type { PrCiStatus } from "../lib/api-types";
+import { ciStateForBucket, ciStatusStyle } from "../lib/ci-status";
 import { cn } from "../lib/utils";
+import { Button } from "./ui/button";
 import {
 	Tooltip,
 	TooltipContent,
@@ -10,49 +11,17 @@ import {
 	TooltipTrigger,
 } from "./ui/tooltip";
 
-interface CiStatusIndicatorProps {
-	repoPath: string;
-	branchName: string;
-}
-
-const CI_STATUS_STYLES: Record<
-	string,
-	{ label: string; className: string; Icon: typeof CheckCircle2 }
-> = {
-	success: {
-		label: "CI passed",
-		className:
-			"border-green-600 text-green-700 hover:bg-green-600/10 hover:text-green-700 dark:text-green-400 dark:border-green-500",
-		Icon: CheckCircle2,
-	},
-	failure: {
-		label: "CI failed",
-		className:
-			"border-red-600 text-red-700 hover:bg-red-600/10 hover:text-red-700 dark:text-red-400 dark:border-red-500",
-		Icon: XCircle,
-	},
-	pending: {
-		label: "CI running",
-		className:
-			"border-yellow-600 text-yellow-700 hover:bg-yellow-600/10 hover:text-yellow-700 dark:text-yellow-400 dark:border-yellow-500",
-		Icon: Loader2,
-	},
-};
-
-export function CiStatusIndicator({
-	repoPath,
-	branchName,
-}: CiStatusIndicatorProps) {
-	const { data: ciStatus } = usePrCiStatus(repoPath, branchName);
-
-	if (!ciStatus || ciStatus.total === 0) {
-		return null;
-	}
-
-	const style = CI_STATUS_STYLES[ciStatus.state] ?? CI_STATUS_STYLES.pending;
+/**
+ * Compact "passed/total" pill for a PR's rolled-up CI status. Pure/presentational
+ * so it can be reused anywhere a `PrCiStatus` is already in hand -- the
+ * workspace header (via `CiStatusIndicator` below, which fetches by branch)
+ * and the GitHub panel's PR detail view (which fetches by PR number).
+ */
+export function CiStatusButton({ ciStatus }: { ciStatus: PrCiStatus }) {
+	const style = ciStatusStyle(ciStatus.state);
 	const { Icon } = style;
 	const failingChecks = ciStatus.checks.filter(
-		(check) => check.bucket === "fail" || check.bucket === "cancel",
+		(check) => ciStateForBucket(check.bucket) === "failure",
 	);
 	const firstLink = ciStatus.checks[0]?.link;
 
@@ -63,7 +32,7 @@ export function CiStatusIndicator({
 					<Button
 						variant="outline"
 						size="sm"
-						className={cn("gap-1 px-2", style.className)}
+						className={cn("gap-1 px-2", style.buttonClassName)}
 						onClick={() => {
 							if (firstLink) openUrl(firstLink);
 						}}
@@ -91,4 +60,22 @@ export function CiStatusIndicator({
 			</Tooltip>
 		</TooltipProvider>
 	);
+}
+
+interface CiStatusIndicatorProps {
+	repoPath: string;
+	branchName: string;
+}
+
+export function CiStatusIndicator({
+	repoPath,
+	branchName,
+}: CiStatusIndicatorProps) {
+	const { data: ciStatus } = usePrCiStatus(repoPath, branchName);
+
+	if (!ciStatus || ciStatus.total === 0) {
+		return null;
+	}
+
+	return <CiStatusButton ciStatus={ciStatus} />;
 }

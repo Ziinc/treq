@@ -39,6 +39,18 @@ pub fn get_pr_checks_via_gh(
     crate::github::get_pr_checks_via_gh_impl(&gh, &repo_path, &branch_name, &get_extended_path())
 }
 
+/// Run `gh pr checks` for a specific PR number in a repo (not necessarily
+/// checked out locally), for the GitHub panel's PR detail view. Shares the
+/// same rollup as `get_pr_checks_via_gh` so both surfaces agree.
+#[tauri::command]
+pub fn get_pr_checks_for_pr(
+    repo_full_name: String,
+    pr_number: u64,
+) -> Result<Option<PrCiStatus>, String> {
+    let gh = gh_bin()?;
+    crate::github::get_pr_checks_for_pr_impl(&gh, &repo_full_name, pr_number, &get_extended_path())
+}
+
 /// Read the GitHub remote URL from .git/config and parse owner/repo.
 /// Returns None if no GitHub remote is found.
 #[tauri::command]
