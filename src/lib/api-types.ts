@@ -362,20 +362,6 @@ export interface GhIssue {
 	comments: GhIssueComment[] | null;
 }
 
-/** One entry of a PR's statusCheckRollup: either a Checks API CheckRun or a legacy StatusContext. */
-export interface GhCheckRun {
-	__typename?: string;
-	name: string | null;
-	context: string | null;
-	status: string | null;
-	conclusion: string | null;
-	state: string | null;
-	description: string | null;
-	workflow_name: string | null;
-	details_url: string | null;
-	target_url: string | null;
-}
-
 export interface GhPullRequest {
 	number: number;
 	title: string;
@@ -391,7 +377,6 @@ export interface GhPullRequest {
 	updated_at: string;
 	comments: GhIssueComment[] | null;
 	is_draft?: boolean;
-	status_check_rollup?: GhCheckRun[];
 }
 
 export interface PrInfo {

@@ -1,14 +1,17 @@
 import { expect, it, vi } from "vitest";
 import { PrDetailPanel } from "../../../src/components/github-panel/PrDetail";
-import type { GhPullRequest } from "../../../src/lib/api-types";
+import type { GhPullRequest, PrCiStatus } from "../../../src/lib/api-types";
 import { render, screen } from "../../../test/test-utils";
 import { captureDocument } from "../capture";
 
-// PrDetailPanel resolves PR data entirely through `gh` (ghViewPr), which the
-// desktop harness can't reach in this environment. That single boundary is
-// stubbed; the panel and its "Checks" section are the real components.
+// PrDetailPanel resolves PR data and CI status entirely through `gh`
+// (ghViewPr / getPrChecksForPr), which the desktop harness can't reach in
+// this environment. Those two boundaries are stubbed; the panel and its
+// "Checks" section -- which shares its data shape, rollup, and styling with
+// the workspace header's CiStatusIndicator -- are the real components.
 const api = vi.hoisted(() => ({
 	ghViewPr: vi.fn(),
+	getPrChecksForPr: vi.fn(),
 }));
 
 vi.mock("../../../src/lib/api", async (importOriginal) => {
@@ -16,6 +19,7 @@ vi.mock("../../../src/lib/api", async (importOriginal) => {
 	return {
 		...original,
 		ghViewPr: api.ghViewPr,
+		getPrChecksForPr: api.getPrChecksForPr,
 	};
 });
 
@@ -40,83 +44,47 @@ function basePr(overrides: Partial<GhPullRequest> = {}): GhPullRequest {
 }
 
 it("captures the Checks section with a mix of CI job statuses", async () => {
-	api.ghViewPr.mockReset().mockResolvedValue(
-		basePr({
-			status_check_rollup: [
-				{
-					__typename: "CheckRun",
-					name: "build",
-					context: null,
-					status: "COMPLETED",
-					conclusion: "SUCCESS",
-					state: null,
-					description: null,
-					workflow_name: "CI",
-					details_url: "https://github.com/acme/treq/actions/runs/1",
-					target_url: null,
-				},
-				{
-					__typename: "CheckRun",
-					name: "test",
-					context: null,
-					status: "COMPLETED",
-					conclusion: "FAILURE",
-					state: null,
-					description: null,
-					workflow_name: "CI",
-					details_url: "https://github.com/acme/treq/actions/runs/2",
-					target_url: null,
-				},
-				{
-					__typename: "CheckRun",
-					name: "lint",
-					context: null,
-					status: "IN_PROGRESS",
-					conclusion: null,
-					state: null,
-					description: null,
-					workflow_name: "CI",
-					details_url: "https://github.com/acme/treq/actions/runs/3",
-					target_url: null,
-				},
-				{
-					__typename: "StatusContext",
-					name: null,
-					context: "ci/circleci: verify",
-					status: null,
-					conclusion: null,
-					state: "SUCCESS",
-					description: "Your tests passed",
-					workflow_name: null,
-					details_url: null,
-					target_url: "https://circleci.com/gh/acme/treq/123",
-				},
-			],
-		}),
-	);
+	api.ghViewPr.mockReset().mockResolvedValue(basePr());
+	api.getPrChecksForPr.mockReset().mockResolvedValue({
+		state: "failure",
+		total: 3,
+		passed: 1,
+		failed: 1,
+		pending: 1,
+		checks: [
+			{ name: "build", bucket: "pass", link: "https://github.com/acme/treq/actions/runs/1" },
+			{ name: "test", bucket: "fail", link: "https://github.com/acme/treq/actions/runs/2" },
+			{ name: "lint", bucket: "pending", link: "https://github.com/acme/treq/actions/runs/3" },
+		],
+	} satisfies PrCiStatus);
 
 	render(
 		<PrDetailPanel repoFullName="acme/treq" prNumber={42} onClose={() => {}} />,
 	);
 
-	expect(await screen.findByText(/checks \(2\/4\)/i)).toBeVisible();
+	expect(await screen.findByText(/checks \(1\/3\)/i)).toBeVisible();
 	expect(screen.getByText("build")).toBeVisible();
 	expect(screen.getByText("test")).toBeVisible();
 	expect(screen.getByText("lint")).toBeVisible();
-	expect(screen.getByText("ci/circleci: verify")).toBeVisible();
+	// The compact "CI failed" pill (shared with the workspace header) shows
+	// next to the state chip in addition to the full per-job list below.
+	expect(
+		screen.getByRole("button", { name: /CI failed: 1\/3/ }),
+	).toBeVisible();
 
 	await captureDocument(document, {
 		name: "pr-detail-checks-01-mixed-statuses",
 		expectations: [
-			'A "Checks (2/4)" section header appears below the PR title/branch row, above the PR description.',
-			'Four check rows are listed: "build" with a green success icon, "test" with a red failure icon, "lint" with an amber in-progress spinner icon, and "ci/circleci: verify" with a green success icon.',
-			"Each row shows a short status word (Success/Failed/In progress) aligned to the right of the job name.",
+			'A red-bordered "1/3" pill (matching the workspace header\'s CI status indicator) appears next to the Open state chip, and a "Checks (1/3)" section header appears below it, above the PR description.',
+			'Three check rows are listed: "build" with a green success icon/label, "test" with a red failure icon/label, and "lint" with a yellow/amber spinning icon and "Pending" label.',
+			"Each row's icon and text color matches the same green/red/yellow scheme as the header pill -- the same visual language, not a separate one.",
 		],
 	});
 }, 60000);
 
-it("does not render a Checks section when statusCheckRollup is empty", async () => {
-	api.ghViewPr.mockReset().mockResolvedValue(basePr({ status_check_rollup: [] }));
+it("does not render a Checks section when the PR has no CI checks", async () => {
+	api.ghViewPr.mockReset().mockResolvedValue(basePr());
+	api.getPrChecksForPr.mockReset().mockResolvedValue(null);
 
 	render(
 		<PrDetailPanel repoFullName="acme/treq" prNumber={42} onClose={() => {}} />,
@@ -124,11 +92,12 @@ it("does not render a Checks section when statusCheckRollup is empty", async () 
 
 	expect(await screen.findByText("Add CI status indicator to PR view")).toBeVisible();
 	expect(screen.queryByText(/checks \(/i)).not.toBeInTheDocument();
+	expect(screen.queryByRole("button", { name: /CI/ })).not.toBeInTheDocument();
 
 	await captureDocument(document, {
 		name: "pr-detail-checks-02-no-checks",
 		expectations: [
-			"No 'Checks' section heading or check rows are visible anywhere in the PR detail panel.",
+			"No CI status pill, 'Checks' section heading, or check rows are visible anywhere in the PR detail panel.",
 			"The PR title, branch refs, and description render normally, immediately followed by the description box with no gap for an empty checks section.",
 		],
 	});

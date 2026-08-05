@@ -123,6 +123,12 @@ export const getPrChecksViaGh = (
 ): Promise<PrCiStatus | null> =>
 	invoke("get_pr_checks_via_gh", { repoPath, branchName });
 
+export const getPrChecksForPr = (
+	repoFullName: string,
+	prNumber: number,
+): Promise<PrCiStatus | null> =>
+	invoke("get_pr_checks_for_pr", { repoFullName, prNumber });
+
 // JJ Workspace API
 // JJ Diff API
 export const getWorkspaceChangedFiles = (

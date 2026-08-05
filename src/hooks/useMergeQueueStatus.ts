@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { getGitRemoteUrl, getPrChecksViaGh, getPrInfoViaGh } from "../lib/api";
+import {
+	getGitRemoteUrl,
+	getPrChecksForPr,
+	getPrChecksViaGh,
+	getPrInfoViaGh,
+} from "../lib/api";
 import type {
 	PrCiStatus,
 	PrInfo,
@@ -52,6 +57,25 @@ export function usePrCiStatus(
 		queryKey: ["pr-ci-status", repoPath, branchName],
 		queryFn: () => getPrChecksViaGh(repoPath!, branchName!),
 		enabled: !!repoPath && !!branchName,
+		staleTime: 10_000,
+		refetchInterval: 15_000,
+	});
+}
+
+/**
+ * CI status for a specific PR, rolled up from `gh pr checks`. Used by the
+ * GitHub panel's PR detail view, which browses PRs by number rather than by
+ * a locally checked-out branch. Shares the same rollup and polling cadence
+ * as `usePrCiStatus` so both surfaces always agree.
+ */
+export function usePrChecksForPr(
+	repoFullName: string | undefined,
+	prNumber: number | undefined,
+) {
+	return useQuery<PrCiStatus | null>({
+		queryKey: ["pr-ci-status-for-pr", repoFullName, prNumber],
+		queryFn: () => getPrChecksForPr(repoFullName!, prNumber!),
+		enabled: !!repoFullName && prNumber !== undefined,
 		staleTime: 10_000,
 		refetchInterval: 15_000,
 	});

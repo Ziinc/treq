@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ListChecks, Loader2, MessageSquare, X } from "lucide-react";
+import { CiStatusButton } from "../CiStatusIndicator";
+import { usePrChecksForPr } from "../../hooks/useMergeQueueStatus";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
@@ -13,14 +15,7 @@ import {
 	ghViewPr,
 } from "../../lib/api";
 import { MarkdownContent } from "../MarkdownContent";
-import {
-	CheckRunRow,
-	formatDate,
-	LabelChip,
-	normalizeCheckRun,
-	OpenInWebButton,
-	StateChip,
-} from "./shared";
+import { CheckEntryRow, formatDate, LabelChip, OpenInWebButton, StateChip } from "./shared";
 
 export function PrDetailPanel({
 	repoFullName,
@@ -38,6 +33,8 @@ export function PrDetailPanel({
 		queryKey: ["gh-pr", repoFullName, prNumber],
 		queryFn: () => ghViewPr(repoFullName, prNumber),
 	});
+
+	const { data: ciStatus } = usePrChecksForPr(repoFullName, prNumber);
 
 	const addComment = useMutation({
 		mutationFn: () => ghCreatePrComment(repoFullName, prNumber, commentBody),
@@ -113,6 +110,9 @@ export function PrDetailPanel({
 						</div>
 						<div className="flex items-center gap-2 mt-1 flex-wrap">
 							<StateChip state={pr.state} isDraft={Boolean(pr.is_draft)} />
+							{ciStatus && ciStatus.total > 0 && (
+								<CiStatusButton ciStatus={ciStatus} />
+							)}
 							<span className="text-base text-muted-foreground font-mono">
 								{pr.head_ref_name} → {pr.base_ref_name}
 							</span>
@@ -130,21 +130,15 @@ export function PrDetailPanel({
 						)}
 					</div>
 
-					{(pr.status_check_rollup ?? []).length > 0 && (
+					{ciStatus && ciStatus.total > 0 && (
 						<div className="space-y-2">
 							<h3 className="text-base font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1">
 								<ListChecks className="w-3 h-3" />
-								Checks (
-								{
-									pr.status_check_rollup!.filter(
-										(c) => normalizeCheckRun(c).kind === "success",
-									).length
-								}
-								/{pr.status_check_rollup!.length})
+								Checks ({ciStatus.passed}/{ciStatus.total})
 							</h3>
 							<div className="border border-border rounded-md divide-y divide-border overflow-hidden">
-								{pr.status_check_rollup!.map((check, i) => (
-									<CheckRunRow key={`${check.name ?? check.context}-${i}`} check={check} />
+								{ciStatus.checks.map((check) => (
+									<CheckEntryRow key={check.name} check={check} />
 								))}
 							</div>
 						</div>

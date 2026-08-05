@@ -23,6 +23,7 @@ vi.mock("../../../src/lib/api", async (importOriginal) => {
 	return {
 		...original,
 		getPrInfoViaGh: vi.fn().mockResolvedValue(null),
+		getPrChecksForPr: vi.fn().mockResolvedValue(null),
 		ghCreatePr: vi.fn().mockResolvedValue(42),
 		ghViewPr: vi.fn(),
 		ghListPrs: vi.fn().mockResolvedValue({ items: [], hasMore: false }),
