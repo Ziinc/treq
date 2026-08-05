@@ -123,7 +123,7 @@ describe("WorkspaceStackPanel", () => {
 		expect(await screen.findByText("2 of 3")).toBeTruthy();
 	});
 
-	it("renders every workspace title in the stack, tip-first", async () => {
+	it("renders every workspace title in the stack, base-first below the target branch", async () => {
 		vi.mocked(api.listWorkspaceStatuses).mockResolvedValue(
 			asStatuses([rootWorkspace, middleWorkspace, tipWorkspace]),
 		);
@@ -141,9 +141,30 @@ describe("WorkspaceStackPanel", () => {
 		const titles = screen
 			.getAllByTestId(/^workspace-stack-item-/)
 			.map((el) => el.textContent);
-		expect(titles[0]).toContain(tipWorkspace.title);
+		expect(titles[0]).toContain(rootWorkspace.title);
 		expect(titles[1]).toContain(middleWorkspace.title);
-		expect(titles[2]).toContain(rootWorkspace.title);
+		expect(titles[2]).toContain(tipWorkspace.title);
+	});
+
+	it("renders the target branch as the first item in the stack list", async () => {
+		vi.mocked(api.listWorkspaceStatuses).mockResolvedValue(
+			asStatuses([rootWorkspace, middleWorkspace, tipWorkspace]),
+		);
+		vi.mocked(api.listCommits).mockResolvedValue(makeLogResult(0, 0));
+
+		render(
+			<WorkspaceStackPanel
+				repoPath={middleWorkspace.repo_path}
+				workspace={middleWorkspace}
+				defaultBranch="main"
+			/>,
+		);
+
+		await screen.findByText(tipWorkspace.title!);
+		const panel = screen.getByTestId("workspace-stack-panel");
+		const items = panel.querySelectorAll("li");
+		expect(items[0].textContent).toContain("main");
+		expect(items[1].textContent).toContain(rootWorkspace.title);
 	});
 
 	it("marks the current workspace's stack item distinctly from the others", async () => {
