@@ -116,6 +116,7 @@ describe("GitHubPanel", () => {
 	let user: ReturnType<typeof userEvent.setup>;
 
 	beforeEach(() => {
+		window.history.pushState({}, "", "/");
 		auth.subscription = null;
 		queueEnabled.current = true;
 		queueEnabled.setEnabled.mockReset();

@@ -5,6 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { useWorkspaceHierarchy } from "../hooks/useWorkspaceHierarchy";
 import {
@@ -36,6 +37,12 @@ import {
 	updateSessionAccess,
 	type Workspace,
 } from "../lib/api";
+import {
+	GITHUB_BASE_PATH,
+	githubDetailPath,
+	githubListPath,
+	stateFilterForPrState,
+} from "../lib/githubRoutes";
 import { getFullWorkspacePath } from "../lib/utils";
 import {
 	buildWorkspaceTree,
@@ -95,6 +102,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	const [unifiedDialogDefaults, setUnifiedDialogDefaults] =
 		useState<WorkspaceDialogDefaults | null>(null);
 	const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
+	const [location, navigate] = useLocation();
 	const previousViewModeRef = useRef<ViewMode>(
 		initialViewMode === "settings" ? "show-workspace" : initialViewMode,
 	);
@@ -159,26 +167,48 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	}, []);
 
 	const openGitHub = useCallback(() => {
+		if (viewMode !== "github") {
+			previousViewModeRef.current = viewMode;
+		}
 		setViewMode("github");
-	}, []);
+		navigate(githubListPath("issues"));
+	}, [viewMode, navigate]);
 
-	const [githubInitialPrNumber, setGithubInitialPrNumber] = useState<
-		number | null
-	>(null);
-	const [githubInitialPrState, setGithubInitialPrState] = useState<
-		string | null
-	>(null);
+	const openGitHubPr = useCallback(
+		(prNumber: number, prState: string) => {
+			if (viewMode !== "github") {
+				previousViewModeRef.current = viewMode;
+			}
+			setViewMode("github");
+			navigate(
+				`${githubDetailPath("prs", prNumber)}?filter=${stateFilterForPrState(prState)}`,
+			);
+		},
+		[viewMode, navigate],
+	);
 
-	const openGitHubPr = useCallback((prNumber: number, prState: string) => {
-		setGithubInitialPrNumber(prNumber);
-		setGithubInitialPrState(prState);
-		setViewMode("github");
-	}, []);
+	// Browser back/forward can pop the URL out of the GitHub section (e.g. the
+	// user opened it via the sidebar, then hit Back) without going through
+	// openGitHub/openSettings, so mirror that into viewMode here.
+	useEffect(() => {
+		if (viewMode === "github" && !location.startsWith(GITHUB_BASE_PATH)) {
+			setViewMode(previousViewModeRef.current);
+		}
+	}, [location, viewMode]);
 
-	const clearGithubInitialPr = useCallback(() => {
-		setGithubInitialPrNumber(null);
-		setGithubInitialPrState(null);
-	}, []);
+	// The reverse also happens: leaving "github" through a non-URL action (e.g.
+	// clicking a workspace in the sidebar) should clear the now-stale
+	// /github URL so Back/Forward doesn't get stuck pointing at a view that's
+	// no longer showing.
+	const previousViewModeForUrlRef = useRef<ViewMode>(viewMode);
+	useEffect(() => {
+		const leftGitHub =
+			previousViewModeForUrlRef.current === "github" && viewMode !== "github";
+		previousViewModeForUrlRef.current = viewMode;
+		if (leftGitHub && location.startsWith(GITHUB_BASE_PATH)) {
+			navigate("/", { replace: true });
+		}
+	}, [viewMode, location, navigate]);
 
 	const handleOpenMergePreview = useCallback(() => {
 		if (selectedWorkspace) {
@@ -1252,13 +1282,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
 					{/* GitHub Panel */}
 					{viewMode === "github" && (
-						<GitHubPanel
-							repoPath={repoPath}
-							initialPrNumber={githubInitialPrNumber}
-							initialPrState={githubInitialPrState}
-							onInitialPrConsumed={clearGithubInitialPr}
-							onOpenSettings={openSettings}
-						/>
+						<GitHubPanel repoPath={repoPath} onOpenSettings={openSettings} />
 					)}
 
 					{/* Merge Preview View */}

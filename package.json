@@ -92,6 +92,7 @@
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^2.1.0",
     "uuid": "^14.0.0",
+    "wouter": "^3.10.0",
     "zod": "^4.4.1"
   },
   "devDependencies": {
