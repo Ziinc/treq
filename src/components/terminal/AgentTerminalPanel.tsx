@@ -25,6 +25,7 @@ import {
 	setSessionModel,
 } from "../../lib/api";
 import {
+	ArrowDownToLine,
 	Bot,
 	ChevronDown,
 	ChevronUp,
@@ -317,6 +318,26 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 									disabled={isChangingModel || isResetting}
 								/>
 							)}
+						{/* Scroll to bottom */}
+						<TooltipProvider>
+							<Tooltip>
+								<TooltipTrigger asChild>
+									<Button
+										type="button"
+										onClick={() =>
+											terminalRefs.current.get(terminalId)?.scrollToBottom()
+										}
+										variant="ghost"
+										size="xs"
+										className="bg-transparent text-gray-200 hover:bg-muted/20 hover:text-gray-200"
+										aria-label="Scroll to bottom"
+									>
+										<ArrowDownToLine className="w-4 h-4" />
+									</Button>
+								</TooltipTrigger>
+								<TooltipContent>Scroll to bottom</TooltipContent>
+							</Tooltip>
+						</TooltipProvider>
 						{/* Reset button */}
 						<TooltipProvider>
 							<Tooltip>
