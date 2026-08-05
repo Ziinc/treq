@@ -16,6 +16,7 @@ import {
 } from "../../../src/lib/api";
 import { render, screen, waitFor, within } from "../../test-utils";
 import { commitWorkspaceFile, createTestRepo, openRepo } from "../../utils";
+import { deriveConventionalPrTitle } from "../../../src/lib/github-pr";
 
 vi.mock("../../../src/lib/api", async (importOriginal) => {
 	const original =
@@ -251,7 +252,7 @@ describe("ShowWorkspace - Create PR", () => {
 		await waitFor(() => {
 			expect(ghCreatePr).toHaveBeenCalledWith(
 				"acme/treq",
-				"Ship the feature",
+				deriveConventionalPrTitle("Ship the feature", "feat/unpushed"),
 				"Implements the feature end-to-end.",
 				expect.any(String),
 				"feat/unpushed",
@@ -290,7 +291,7 @@ describe("ShowWorkspace - Create PR", () => {
 		await waitFor(() => {
 			expect(ghCreatePr).toHaveBeenCalledWith(
 				"acme/treq",
-				title,
+				deriveConventionalPrTitle(title, "feat/create-pr"),
 				description,
 				expect.any(String),
 				"feat/create-pr",
@@ -322,7 +323,7 @@ describe("ShowWorkspace - Create PR", () => {
 		await waitFor(() => {
 			expect(ghCreatePr).toHaveBeenCalledWith(
 				"acme/treq",
-				title,
+				deriveConventionalPrTitle(title, "feat/create-pr"),
 				description,
 				expect.any(String),
 				"feat/create-pr",
@@ -351,7 +352,7 @@ describe("ShowWorkspace - Create PR", () => {
 		});
 		const url = vi.mocked(openUrl).mock.calls[0][0] as string;
 		expect(url).toContain("feat%2Fcreate-pr");
-		expect(url).toContain("title=Ship+the+feature");
+		expect(url).toContain("title=feat%3A+Ship+the+feature");
 		expect(url).toContain("body=Implements+the+feature+end-to-end.");
 	});
 
