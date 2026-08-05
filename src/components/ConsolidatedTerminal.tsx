@@ -50,6 +50,7 @@ export interface ConsolidatedTerminalHandle {
 	findPrevious: (term: string, options?: ISearchOptions) => boolean;
 	clearSearch: () => void;
 	focus: () => void;
+	scrollToBottom: () => void;
 }
 
 const normalizeCommand = (command: string) => {
@@ -504,6 +505,9 @@ export const ConsolidatedTerminal = forwardRef<
 			},
 			focus: () => {
 				xtermRef.current?.focus();
+			},
+			scrollToBottom: () => {
+				xtermRef.current?.scrollToBottom();
 			},
 		}));
 
