@@ -1014,6 +1014,7 @@ export const FileBrowser = memo(
 		const { addToast } = useToast();
 		const { fontSize } = useTerminalSettings();
 		const listRef = useRef<ListImperativeAPI>(null);
+		const lastInitialSelectedFileRef = useRef<string | null>(null);
 
 		// Ensure workspace is indexed on mount
 		useEffect(() => {
@@ -1439,9 +1440,14 @@ export const FileBrowser = memo(
 
 		// Handle initial file selection from external navigation
 		useEffect(() => {
-			if (initialSelectedFile) {
-				handleFileClick(initialSelectedFile);
+			if (!initialSelectedFile) {
+				lastInitialSelectedFileRef.current = null;
+				return;
 			}
+			if (lastInitialSelectedFileRef.current === initialSelectedFile) return;
+
+			lastInitialSelectedFileRef.current = initialSelectedFile;
+			handleFileClick(initialSelectedFile);
 		}, [initialSelectedFile, handleFileClick]);
 
 		// Handle initial directory expansion from external navigation
