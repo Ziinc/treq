@@ -146,8 +146,25 @@ fn test_create_commit_empty_workspace() {
     let ws_dir = repo.workspaces_dir().join(&workspace.workspace_path);
     let ws_dir_str = ws_dir.to_str().expect("utf-8");
 
+    // A commit with no file changes must not persist in history — only the live,
+    // description-less working copy is exempt from the empty-commit policy.
     assert_workspace_status_is_clean(ws_dir_str);
-    assert_raw_jj_log_has_working_copy_commit(ws_dir_str, "empty commit");
+    let raw_log = TestRepo::run_jj(
+        ws_dir_str,
+        &[
+            "log",
+            "--no-graph",
+            "-T",
+            "description.first_line() ++ \"|\" ++ commit_id.short(12) ++ \"\\n\"",
+            "-n",
+            "15",
+        ],
+    )
+    .expect("jj log failed");
+    assert!(
+        !raw_log.contains("empty commit"),
+        "expected empty commit to be discarded from history, got:\n{raw_log}"
+    );
     assert_workspace_list_commits_hides_working_copy(&repo.repo_path, workspace.id, None);
 }
 
@@ -382,5 +399,51 @@ fn test_create_commit_keeps_empty_working_copy_when_self_targeted() {
         log.tentative_working_copy.is_none(),
         "expected no tentative working copy after commit, got: {:?}",
         log.tentative_working_copy
+    );
+}
+
+#[test]
+fn test_commit_workspace_abandons_stray_empty_commit_in_history() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let workspace = repo
+        .create_workspace_with_commit("feat/abandon-empty", "first.txt", "hello\n", None)
+        .expect("failed to create workspace with initial commit");
+
+    let ws_dir = repo.workspaces_dir().join(&workspace.workspace_path);
+    let ws_dir_str = ws_dir.to_str().expect("utf-8");
+
+    // Simulate an empty commit left behind in history (e.g. by a squash/rebase that
+    // absorbed its content elsewhere) by describing an unchanged commit directly via jj,
+    // bypassing commit_workspace.
+    TestRepo::run_jj(ws_dir_str, &["new"]).expect("jj new failed");
+    TestRepo::run_jj(ws_dir_str, &["describe", "-m", "stray empty"]).expect("jj describe failed");
+    TestRepo::run_jj(ws_dir_str, &["new"]).expect("jj new failed");
+
+    TestRepo::write_workspace_file(ws_dir_str, "second.txt", "world\n")
+        .expect("failed to write file");
+
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "add second")
+        .expect("commit_workspace should succeed");
+
+    let raw_log = TestRepo::run_jj(
+        ws_dir_str,
+        &[
+            "log",
+            "--no-graph",
+            "-T",
+            "description.first_line() ++ \"\\n\"",
+            "-n",
+            "20",
+        ],
+    )
+    .expect("jj log failed");
+
+    assert!(
+        !raw_log.contains("stray empty"),
+        "expected stray empty commit to be abandoned from history, got:\n{raw_log}"
+    );
+    assert!(
+        raw_log.contains("add second"),
+        "expected new commit to be present, got:\n{raw_log}"
     );
 }

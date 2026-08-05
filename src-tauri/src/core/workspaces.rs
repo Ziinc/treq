@@ -588,8 +588,8 @@ pub fn push_workspace_to_remote(
     repo_path: &str,
     workspace_id: Option<i64>,
 ) -> Result<String, String> {
-    // Determine the push path based on workspace_id
-    let push_path = if let Some(id) = workspace_id {
+    // Determine the push path and target branch based on workspace_id
+    let (push_path, target_branch) = if let Some(id) = workspace_id {
         // For workspace, look up the path from database
         let workspace = local_db::get_workspace_by_id(repo_path, id)
             .map_err(|e| format!("Failed to get workspace: {}", e))?
@@ -598,14 +598,24 @@ pub fn push_workspace_to_remote(
             .join(".treq")
             .join("workspaces")
             .join(&workspace.workspace_path);
-        workspace_dir
+        let push_path = workspace_dir
             .to_str()
             .ok_or("Failed to convert workspace path to string")?
-            .to_string()
+            .to_string();
+        let target_branch = workspace
+            .target_branch
+            .clone()
+            .unwrap_or_else(|| "main".to_string());
+        (push_path, target_branch)
     } else {
         // For home repo, use repo_path directly
-        repo_path.to_string()
+        let target_branch =
+            jj::get_default_branch(repo_path).unwrap_or_else(|_| "main".to_string());
+        (repo_path.to_string(), target_branch)
     };
+
+    // Ensure no empty commits reach the remote; best-effort, never blocks the push.
+    let _ = jj::jj_abandon_empty_commits(&push_path, &target_branch);
 
     // Perform the push
     let result = jj::jj_push(&push_path).map_err(|e| format!("Push failed: {}", e))?;
@@ -1964,18 +1974,27 @@ where
     let repo_commit_lock = commit_lock_for_repo(repo_path);
     let _repo_commit_guard = repo_commit_lock.lock().unwrap();
     let workspace_root = resolve_workspace_root(repo_path, workspace_id)?;
-    let committed_branch = if let Some(id) = workspace_id {
+    let (committed_branch, target_branch) = if let Some(id) = workspace_id {
         let workspace = local_db::get_workspace_by_id(repo_path, id)
             .map_err(|e| format!("Failed to get workspace: {}", e))?
             .ok_or_else(|| format!("Workspace not found: {}", id))?;
-        workspace.branch_name
+        let target_branch = workspace
+            .target_branch
+            .clone()
+            .unwrap_or_else(|| "main".to_string());
+        (workspace.branch_name, target_branch)
     } else {
-        jj::resolve_home_repo_branch(repo_path)
-            .map_err(|e| format!("Failed to resolve home repo branch: {}", e))?
+        let branch = jj::resolve_home_repo_branch(repo_path)
+            .map_err(|e| format!("Failed to resolve home repo branch: {}", e))?;
+        let target_branch =
+            jj::get_default_branch(repo_path).unwrap_or_else(|_| "main".to_string());
+        (branch, target_branch)
     };
 
     let result = jj::jj_commit(&workspace_root, message)
         .map_err(|e| format!("Failed to create commit: {}", e))?;
+    // Keep branch history free of empty commits; best-effort, never fails the commit.
+    let _ = jj::jj_abandon_empty_commits(&workspace_root, &target_branch);
     if !committed_branch.is_empty() {
         if let Some(id) = workspace_id {
             if let Ok(new_tip) = jj::jj_get_commit_id(&workspace_root, &committed_branch) {
