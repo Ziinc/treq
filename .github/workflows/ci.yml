@@ -1,19 +1,6 @@
 name: CI
 
 on:
-  push:
-    paths:
-      - "src/**"
-      - "src-tauri/**"
-      - "crates/treq-napi/**"
-      - "supabase/**"
-      - "web/**"
-      - "test/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "package.json"
-      - "package-lock.json"
-      - ".github/workflows/ci.yml"
   pull_request:
     paths:
       - "src/**"
