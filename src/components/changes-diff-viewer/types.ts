@@ -144,6 +144,7 @@ export interface CommitInputProps {
 	hasPr?: boolean;
 	selectedFileCount?: number;
 	totalFileCount?: number;
+	workspacePath: string;
 }
 
 export interface HighlightedLineProps {

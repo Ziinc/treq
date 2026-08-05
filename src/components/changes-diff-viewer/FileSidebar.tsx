@@ -133,6 +133,7 @@ export function FileSidebar({
 				hasPr={hasPr}
 				selectedFileCount={stagedFiles.size}
 				totalFileCount={files.length}
+				workspacePath={workspacePath}
 			/>
 			<div className="flex-1 overflow-y-auto px-4 pb-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full">
 				{initialLoading ? (
