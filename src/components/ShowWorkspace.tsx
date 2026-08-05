@@ -114,7 +114,7 @@ interface ShowWorkspaceProps {
 	onCreateStackedWorkspace?: () => void;
 	/** Called when the user clicks a sibling workspace in the stack panel */
 	onNavigateToWorkspace?: (workspace: Workspace) => void;
-	onViewPrInApp?: (prNumber: number) => void;
+	onViewPrInApp?: (prNumber: number, prState: string) => void;
 	/** Called when user wants to move a commit to a new workspace */
 	onMoveCommitToNewWorkspace?: (
 		commit: import("../lib/api").JjLogCommit,

@@ -33,6 +33,8 @@ interface GitHubPanelProps {
 	repoPath: string;
 	/** When set, opens the PRs tab and selects this PR. */
 	initialPrNumber?: number | null;
+	/** The PR's state (OPEN/CLOSED/MERGED), used to pick the matching filter tab. */
+	initialPrState?: string | null;
 	onInitialPrConsumed?: () => void;
 	/** Opens the settings page, where the merge queue opt-in lives. */
 	onOpenSettings?: (tab?: string) => void;
@@ -44,9 +46,25 @@ const FILTERS: { label: string; value: StateFilter }[] = [
 	{ label: "All", value: "all" },
 ];
 
+/** Maps a PR's gh state to the filter tab that will surface it in the list. */
+function stateFilterForPrState(
+	prState: string | null | undefined,
+): StateFilter {
+	switch (prState?.toUpperCase()) {
+		case "OPEN":
+			return "open";
+		case "CLOSED":
+			return "closed";
+		default:
+			// MERGED PRs aren't returned by gh's "closed" filter, so fall back to "all".
+			return "all";
+	}
+}
+
 export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 	repoPath,
 	initialPrNumber = null,
+	initialPrState = null,
 	onInitialPrConsumed,
 	onOpenSettings,
 }) => {
@@ -67,12 +85,12 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 	useEffect(() => {
 		if (initialPrNumber == null) return;
 		setActiveTab("prs");
-		setPrFilter("all");
+		setPrFilter(stateFilterForPrState(initialPrState));
 		setSelectedIssue(null);
 		setShowCreateForm(false);
 		setSelectedPr(initialPrNumber);
 		onInitialPrConsumed?.();
-	}, [initialPrNumber, onInitialPrConsumed]);
+	}, [initialPrNumber, initialPrState, onInitialPrConsumed]);
 
 	const repoFullName = remoteInfo?.full_name ?? "";
 	const isListTab = activeTab === "issues" || activeTab === "prs";

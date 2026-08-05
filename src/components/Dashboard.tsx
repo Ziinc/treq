@@ -165,14 +165,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	const [githubInitialPrNumber, setGithubInitialPrNumber] = useState<
 		number | null
 	>(null);
+	const [githubInitialPrState, setGithubInitialPrState] = useState<
+		string | null
+	>(null);
 
-	const openGitHubPr = useCallback((prNumber: number) => {
+	const openGitHubPr = useCallback((prNumber: number, prState: string) => {
 		setGithubInitialPrNumber(prNumber);
+		setGithubInitialPrState(prState);
 		setViewMode("github");
 	}, []);
 
 	const clearGithubInitialPr = useCallback(() => {
 		setGithubInitialPrNumber(null);
+		setGithubInitialPrState(null);
 	}, []);
 
 	const handleOpenMergePreview = useCallback(() => {
@@ -1250,6 +1255,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 						<GitHubPanel
 							repoPath={repoPath}
 							initialPrNumber={githubInitialPrNumber}
+							initialPrState={githubInitialPrState}
 							onInitialPrConsumed={clearGithubInitialPr}
 							onOpenSettings={openSettings}
 						/>
