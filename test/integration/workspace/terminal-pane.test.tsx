@@ -132,9 +132,8 @@ describe("WorkspaceTerminalPane integration", () => {
 			return el as Element;
 		});
 
-		const scrollButton = within(terminalPanel).getByLabelText(
-			/scroll to bottom/i,
-		);
+		const scrollButton =
+			within(terminalPanel).getByLabelText(/scroll to bottom/i);
 		const resetButton = within(terminalPanel).getByLabelText(/reset terminal/i);
 
 		expect(
