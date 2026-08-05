@@ -17,6 +17,24 @@ import {
 	toLocalLineComment,
 } from "../utils";
 
+function formatCommentMarkdown(comment: LineComment, filePath: string): string {
+	const lineRef =
+		comment.startLine === comment.endLine
+			? `${filePath}:${comment.startLine}`
+			: `${filePath}:${comment.startLine}:${comment.endLine}`;
+	let block = `${lineRef}\n`;
+	if (comment.source === "github") {
+		block += `> Quoting GitHub review comment by @${comment.githubAuthor}:\n`;
+		block += `> ${comment.lineContent.join("\n> ")}\n\n`;
+	} else {
+		block += "```\n";
+		block += `${comment.lineContent.join("\n")}\n`;
+		block += "```\n";
+	}
+	block += `> ${comment.text}\n\n`;
+	return block;
+}
+
 interface UseReviewParams {
 	comments: LineComment[];
 	setComments: (comments: LineComment[]) => void;
@@ -249,15 +267,7 @@ export function useReview({
 				);
 				for (const [filePath, fileComments] of Object.entries(commentsByFile)) {
 					for (const comment of fileComments) {
-						const lineRef =
-							comment.startLine === comment.endLine
-								? `${filePath}:${comment.startLine}`
-								: `${filePath}:${comment.startLine}:${comment.endLine}`;
-						markdown += `${lineRef}\n`;
-						markdown += "```\n";
-						markdown += `${comment.lineContent.join("\n")}\n`;
-						markdown += "```\n";
-						markdown += `> ${comment.text}\n\n`;
+						markdown += formatCommentMarkdown(comment, filePath);
 					}
 				}
 			}

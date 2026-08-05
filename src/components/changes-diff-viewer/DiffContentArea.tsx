@@ -1,6 +1,11 @@
 import React, { useCallback, useMemo } from "react";
 import { CheckCircle2, FileText, Loader2 } from "lucide-react";
-import type { ConflictRegion, JjDiffHunk, JjFileChange } from "../../lib/api";
+import type {
+	ConflictRegion,
+	GhReviewThread,
+	JjDiffHunk,
+	JjFileChange,
+} from "../../lib/api";
 import type { ParsedFileChange } from "../../lib/git-utils";
 import { Button } from "../ui/button";
 import { SearchOverlay } from "../SearchOverlay";
@@ -92,6 +97,12 @@ interface DiffContentAreaProps {
 	>;
 	setShowCommentInput: React.Dispatch<React.SetStateAction<boolean>>;
 	getCommentsForLine: (query: CommentLineQuery) => LineComment[];
+	getThreadsForLine: (query: CommentLineQuery) => GhReviewThread[];
+	getUnplacedThreadsForFile: (filePath: string) => GhReviewThread[];
+	collapsedThreadIds: Set<string>;
+	toggleThreadCollapse: (threadId: string) => void;
+	expandedOutdatedGroups: Set<string>;
+	toggleOutdatedGroup: (filePath: string) => void;
 	// file row props
 	collapsedFiles: Set<string>;
 	viewedFiles: Map<string, { viewedAt: string; contentHash: string }>;
@@ -168,6 +179,12 @@ export function DiffContentArea({
 	setPendingComment,
 	setShowCommentInput,
 	getCommentsForLine,
+	getThreadsForLine,
+	getUnplacedThreadsForFile,
+	collapsedThreadIds,
+	toggleThreadCollapse,
+	expandedOutdatedGroups,
+	toggleOutdatedGroup,
 	collapsedFiles,
 	viewedFiles,
 	expandedLargeDiffs,
@@ -226,6 +243,9 @@ export function DiffContentArea({
 			setPendingComment,
 			setShowCommentInput,
 			getCommentsForLine,
+			getThreadsForLine,
+			collapsedThreadIds,
+			toggleThreadCollapse,
 		}),
 		[
 			actualConflictedFiles,
@@ -267,6 +287,9 @@ export function DiffContentArea({
 			setPendingComment,
 			setShowCommentInput,
 			getCommentsForLine,
+			getThreadsForLine,
+			collapsedThreadIds,
+			toggleThreadCollapse,
 		],
 	);
 
@@ -367,6 +390,18 @@ export function DiffContentArea({
 										addToast={addToast}
 										getOutdatedCommentsForFile={getOutdatedCommentsForFile}
 										deleteComment={deleteComment}
+										getThreadsForLine={getThreadsForLine}
+										getUnplacedThreadsForFile={getUnplacedThreadsForFile}
+										collapsedThreadIds={collapsedThreadIds}
+										toggleThreadCollapse={toggleThreadCollapse}
+										expandedOutdatedGroups={expandedOutdatedGroups}
+										toggleOutdatedGroup={toggleOutdatedGroup}
+										showCommentInput={showCommentInput}
+										pendingComment={pendingComment}
+										setPendingComment={setPendingComment}
+										setShowCommentInput={setShowCommentInput}
+										addComment={addComment}
+										cancelComment={cancelComment}
 									/>
 								))}
 								{showCommittedChanges &&
@@ -402,6 +437,18 @@ export function DiffContentArea({
 											addToast={addToast}
 											getOutdatedCommentsForFile={() => []}
 											deleteComment={deleteComment}
+											getThreadsForLine={getThreadsForLine}
+											getUnplacedThreadsForFile={getUnplacedThreadsForFile}
+											collapsedThreadIds={collapsedThreadIds}
+											toggleThreadCollapse={toggleThreadCollapse}
+											expandedOutdatedGroups={expandedOutdatedGroups}
+											toggleOutdatedGroup={toggleOutdatedGroup}
+											showCommentInput={showCommentInput}
+											pendingComment={pendingComment}
+											setPendingComment={setPendingComment}
+											setShowCommentInput={setShowCommentInput}
+											addComment={addComment}
+											cancelComment={cancelComment}
 										/>
 									))}
 							</div>

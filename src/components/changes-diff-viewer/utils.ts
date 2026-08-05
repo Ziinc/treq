@@ -1,6 +1,7 @@
 import type { JjDiffHunk, LineComment as ApiLineComment } from "../../lib/api";
 import type { ParsedFileChange } from "../../lib/git-utils";
-import type { LineComment } from "./types";
+import type { LineComment, PendingComment } from "./types";
+import type { GithubQuote } from "./GithubCommentCard";
 
 export function toLocalLineComment(c: ApiLineComment): LineComment {
 	return {
@@ -13,6 +14,10 @@ export function toLocalLineComment(c: ApiLineComment): LineComment {
 		text: c.text,
 		createdAt: c.created_at,
 		lineSide: c.line_side,
+		source: c.source,
+		githubAuthor: c.github_author,
+		githubAvatarUrl: c.github_avatar_url,
+		githubCommentUrl: c.github_comment_url,
 	};
 }
 
@@ -27,6 +32,46 @@ export function toApiLineComment(c: LineComment): ApiLineComment {
 		text: c.text,
 		created_at: c.createdAt,
 		line_side: c.lineSide,
+		source: c.source,
+		github_author: c.githubAuthor,
+		github_avatar_url: c.githubAvatarUrl,
+		github_comment_url: c.githubCommentUrl,
+	};
+}
+
+export function buildQuotedPendingComment(
+	args: {
+		filePath: string;
+		hunkId: string;
+		displayAtLineIndex: number;
+		lineNumber: number;
+		lineSide: "old" | "new";
+	},
+	quote: GithubQuote,
+): PendingComment {
+	return {
+		filePath: args.filePath,
+		hunkId: args.hunkId,
+		displayAtLineIndex: args.displayAtLineIndex,
+		startLine: args.lineNumber,
+		endLine: args.lineNumber,
+		lineContent: [quote.text],
+		lineSide: args.lineSide,
+		githubMeta: {
+			author: quote.author,
+			avatarUrl: quote.avatarUrl,
+			commentUrl: quote.commentUrl,
+		},
+	};
+}
+
+export function getQuoteProp(
+	pendingComment: PendingComment | null,
+): { text: string; author?: string } | undefined {
+	if (!pendingComment?.githubMeta) return undefined;
+	return {
+		text: pendingComment.lineContent.join(" "),
+		author: pendingComment.githubMeta.author,
 	};
 }
 

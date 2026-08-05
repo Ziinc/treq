@@ -99,6 +99,24 @@ afterEach(async () => {
 		height: 0,
 	}),
 };
+
+// jsdom doesn't implement Range.getBoundingClientRect (real browsers do) --
+// stub it so selection-driven UI (e.g. floating toolbars) can be exercised.
+if (!Range.prototype.getBoundingClientRect) {
+	Range.prototype.getBoundingClientRect = function () {
+		return {
+			x: 0,
+			y: 0,
+			top: 0,
+			left: 0,
+			right: 0,
+			bottom: 0,
+			width: 0,
+			height: 0,
+			toJSON: () => ({}),
+		} as DOMRect;
+	};
+}
 // Stub HTMLCanvasElement.getContext to silence jsdom "not implemented" warnings
 HTMLCanvasElement.prototype.getContext = vi.fn(
 	() => null,

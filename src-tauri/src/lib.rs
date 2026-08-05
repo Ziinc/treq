@@ -521,6 +521,7 @@ pub fn run() {
             commands::gh_reopen_pr,
             commands::gh_set_pr_draft,
             commands::gh_create_pr,
+            commands::gh_list_pr_review_threads,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

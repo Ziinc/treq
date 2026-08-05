@@ -1,5 +1,7 @@
 use crate::binary_paths::{detect_binary, get_binary_path, get_extended_path};
-pub use crate::github::{GhIssue, GhListPage, GhPullRequest, GitRemoteInfo, PrCiStatus, PrInfo};
+pub use crate::github::{
+    GhIssue, GhListPage, GhPullRequest, GhReviewThread, GitRemoteInfo, PrCiStatus, PrInfo,
+};
 
 fn gh_bin() -> Result<String, String> {
     get_binary_path("gh")
@@ -162,6 +164,24 @@ pub fn gh_set_pr_draft(repo_full_name: String, pr_number: u64, draft: bool) -> R
         &repo_full_name,
         pr_number,
         draft,
+        &get_extended_path(),
+    )
+}
+
+/// List every review-comment thread on a PR, including resolved/outdated
+/// state. Read-only: no replies, resolves, or other mutations are issued.
+#[tauri::command]
+pub fn gh_list_pr_review_threads(
+    owner: String,
+    repo: String,
+    pr_number: u64,
+) -> Result<Vec<GhReviewThread>, String> {
+    let gh = gh_bin()?;
+    crate::github::gh_list_pr_review_threads_impl(
+        &gh,
+        &owner,
+        &repo,
+        pr_number,
         &get_extended_path(),
     )
 }

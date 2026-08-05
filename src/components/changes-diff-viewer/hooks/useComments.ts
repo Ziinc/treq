@@ -56,6 +56,12 @@ export function useComments({
 				text: text.trim(),
 				createdAt: new Date().toISOString(),
 				lineSide: pendingComment.lineSide,
+				...(pendingComment.githubMeta && {
+					source: "github",
+					githubAuthor: pendingComment.githubMeta.author,
+					githubAvatarUrl: pendingComment.githubMeta.avatarUrl,
+					githubCommentUrl: pendingComment.githubMeta.commentUrl,
+				}),
 			};
 			setComments((prev) => [...prev, newComment]);
 			setHasUserAddedComments(true);

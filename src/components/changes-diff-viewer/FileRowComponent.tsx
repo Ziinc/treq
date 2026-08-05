@@ -5,6 +5,7 @@ import {
 	ChevronRight,
 	Copy,
 	FileText,
+	Github,
 	Loader2,
 	MoreVertical,
 	Square,
@@ -19,6 +20,9 @@ import {
 } from "../ui/dropdown-menu";
 import { Button } from "../ui/button";
 import { FileContextMenu } from "../FileContextMenu";
+import { CommentInput } from "../CommentInput";
+import { GithubCommentCard } from "./GithubCommentCard";
+import { buildQuotedPendingComment, getQuoteProp } from "./utils";
 import { cn } from "../../lib/utils";
 import { highlightCode } from "../../lib/syntax-highlight";
 import { highlightInHtml } from "../../lib/text-search";
@@ -70,6 +74,17 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
 		addToast,
 		getOutdatedCommentsForFile,
 		deleteComment,
+		getUnplacedThreadsForFile,
+		collapsedThreadIds,
+		toggleThreadCollapse,
+		expandedOutdatedGroups,
+		toggleOutdatedGroup,
+		showCommentInput,
+		pendingComment,
+		setPendingComment,
+		setShowCommentInput,
+		addComment,
+		cancelComment,
 	} = props;
 
 	const editorApps = useEditorApps();
@@ -97,6 +112,8 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
 	}
 
 	const outdatedComments = getOutdatedCommentsForFile(filePath);
+	const unplacedGithubThreads = getUnplacedThreadsForFile(filePath);
+	const outdatedGroupExpanded = expandedOutdatedGroups.has(filePath);
 
 	return (
 		<>
@@ -349,6 +366,73 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
 							</div>
 						) : (
 							<>
+								{unplacedGithubThreads.length > 0 && (
+									<div className="border-b border-sky-500/40 bg-sky-500/5">
+										<button
+											className="w-full flex items-center gap-2 px-4 py-2 text-left hover:bg-sky-500/10"
+											onClick={() => toggleOutdatedGroup(filePath)}
+											data-testid="github-outdated-group-toggle"
+										>
+											{outdatedGroupExpanded ? (
+												<ChevronDown className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+											) : (
+												<ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+											)}
+											<Github
+												className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 flex-shrink-0"
+												aria-label="GitHub"
+											/>
+											<span className="text-xs text-muted-foreground">
+												{unplacedGithubThreads.length} outdated comment
+												{unplacedGithubThreads.length !== 1 ? "s" : ""} (no
+												longer on a visible line)
+											</span>
+										</button>
+										{outdatedGroupExpanded && (
+											<div className="px-4 pb-3 space-y-3">
+												{unplacedGithubThreads.map((thread) => (
+													<GithubCommentCard
+														key={thread.id}
+														thread={thread}
+														collapsed={collapsedThreadIds.has(thread.id)}
+														onToggleCollapse={() =>
+															toggleThreadCollapse(thread.id)
+														}
+														onQuote={(quote) => {
+															setPendingComment(
+																buildQuotedPendingComment(
+																	{
+																		filePath,
+																		hunkId: "",
+																		displayAtLineIndex: -1,
+																		lineNumber: thread.line ?? 0,
+																		lineSide: "new",
+																	},
+																	quote,
+																),
+															);
+															setShowCommentInput(true);
+														}}
+													/>
+												))}
+												{showCommentInput &&
+													pendingComment &&
+													pendingComment.filePath === filePath &&
+													pendingComment.hunkId === "" && (
+														<CommentInput
+															onSubmit={addComment}
+															onCancel={cancelComment}
+															filePath={pendingComment.filePath}
+															startLine={pendingComment.startLine}
+															endLine={pendingComment.endLine}
+															quote={getQuoteProp(pendingComment)}
+														/>
+													)}
+											</div>
+										)}
+									</div>
+								)}
+
 								{outdatedComments.length > 0 && (
 									<div className="border-b border-amber-500/40 bg-amber-500/5 px-4 py-3 space-y-3">
 										{outdatedComments.map((comment) => (

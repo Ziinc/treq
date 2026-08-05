@@ -14,6 +14,7 @@ import { useDiffSettings } from "../../hooks/useDiffSettings";
 import { useDiffSearch } from "./hooks/useDiffSearch";
 import { useLineSelection } from "./hooks/useLineSelection";
 import { useComments } from "./hooks/useComments";
+import { useGithubReviewThreads } from "./hooks/useGithubReviewThreads";
 import { useFileStaging } from "./hooks/useFileStaging";
 import { useFileLoading } from "./hooks/useFileLoading";
 import { useReview } from "./hooks/useReview";
@@ -39,6 +40,7 @@ export const ChangesDiffViewer = memo(
 				workspacePath,
 				repoPath,
 				workspaceId,
+				branchName,
 				readOnly = false,
 				onStagedFilesChange,
 				onChangedFilesChange,
@@ -231,6 +233,19 @@ export const ChangesDiffViewer = memo(
 				clearSelection,
 				setContextMenuPosition,
 				addToast,
+			});
+
+			const {
+				getThreadsForLine,
+				getUnplacedThreadsForFile,
+				collapsedThreadIds,
+				toggleThreadCollapse,
+				expandedOutdatedGroups,
+				toggleOutdatedGroup,
+			} = useGithubReviewThreads({
+				repoPath,
+				branchName,
+				allFileHunks,
 			});
 
 			const {
@@ -534,6 +549,12 @@ export const ChangesDiffViewer = memo(
 							setPendingComment={setPendingComment}
 							setShowCommentInput={setShowCommentInput}
 							getCommentsForLine={getCommentsForLine}
+							getThreadsForLine={getThreadsForLine}
+							getUnplacedThreadsForFile={getUnplacedThreadsForFile}
+							collapsedThreadIds={collapsedThreadIds}
+							toggleThreadCollapse={toggleThreadCollapse}
+							expandedOutdatedGroups={expandedOutdatedGroups}
+							toggleOutdatedGroup={toggleOutdatedGroup}
 							collapsedFiles={collapsedFiles}
 							viewedFiles={viewedFiles}
 							expandedLargeDiffs={expandedLargeDiffs}
