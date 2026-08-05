@@ -47,7 +47,9 @@ const FILTERS: { label: string; value: StateFilter }[] = [
 ];
 
 /** Maps a PR's gh state to the filter tab that will surface it in the list. */
-function stateFilterForPrState(prState: string | null | undefined): StateFilter {
+function stateFilterForPrState(
+	prState: string | null | undefined,
+): StateFilter {
 	switch (prState?.toUpperCase()) {
 		case "OPEN":
 			return "open";
