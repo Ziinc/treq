@@ -89,6 +89,16 @@ test.describe('Navbar navigation', () => {
       .toHaveAttribute('href', '/sign-in');
   });
 
+  test('email sign in is hidden when email signup is disabled', async ({ page }) => {
+    await page.goto('/sign-in');
+
+    await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
+    await expect(page.getByPlaceholder('Email address')).toHaveCount(0);
+    await expect(page.getByPlaceholder('Password')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Sign In', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Forgot password?' })).toHaveCount(0);
+  });
+
   test('signed-in navbar shows Dashboard and Open App', async ({ page }) => {
     const now = Math.floor(Date.now() / 1000);
     const user = {
@@ -112,6 +122,10 @@ test.describe('Navbar navigation', () => {
       token_type: 'bearer',
       user,
     };
+
+    await page.addInitScript((storedSession) => {
+      window.localStorage.setItem('sb-127-auth-token', JSON.stringify(storedSession));
+    }, session);
 
     await page.route(/\/auth\/v1\//, async (route) => {
       const url = route.request().url();
@@ -139,10 +153,6 @@ test.describe('Navbar navigation', () => {
     });
 
     await page.goto('/');
-    await nav(page).getByRole('link', { name: 'Sign in' }).click();
-    await page.getByPlaceholder('Email address').fill(user.email);
-    await page.getByPlaceholder('Password').fill('e2e-password');
-    await page.getByRole('button', { name: 'Sign In' }).click();
 
     await expect(nav(page).getByRole('link', { name: 'Dashboard' })).toHaveAttribute(
       'href',

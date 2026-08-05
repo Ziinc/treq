@@ -221,59 +221,61 @@ function LoginContent() {
           </button>
         </div>
 
-        <div style={styles.divider}>
-          <span style={styles.dividerText}>or</span>
-        </div>
-
-        <form onSubmit={isSignUp ? handleSignUp : handleSignIn}>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email address"
-            required
-            disabled={loading}
-            style={styles.input}
-          />
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder={isSignUp ? "Password (min. 8 characters)" : "Password"}
-            required
-            disabled={loading}
-            minLength={8}
-            style={styles.input}
-          />
-          <button
-            type="submit"
-            disabled={loading || !email || !password}
-            style={styles.submitButton}
-          >
-            {loading ? "Please wait..." : isSignUp ? "Create Account" : "Sign In"}
-          </button>
-        </form>
-
-        {!isSignUp && (
-          <div style={styles.forgotContainer}>
-            <button onClick={() => switchView("forgot-password")} style={styles.linkButton}>
-              Forgot password?
-            </button>
-          </div>
-        )}
-
         {emailSignupEnabled && (
-          <div style={styles.toggleContainer}>
-            <span style={styles.toggleText}>
-              {isSignUp ? "Already have an account?" : "Don't have an account?"}
-            </span>
-            <button
-              onClick={() => switchView(isSignUp ? "sign-in" : "sign-up")}
-              style={styles.linkButton}
-            >
-              {isSignUp ? "Sign in" : "Sign up"}
-            </button>
-          </div>
+          <>
+            <div style={styles.divider}>
+              <span style={styles.dividerText}>or</span>
+            </div>
+
+            <form onSubmit={isSignUp ? handleSignUp : handleSignIn}>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email address"
+                required
+                disabled={loading}
+                style={styles.input}
+              />
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={isSignUp ? "Password (min. 8 characters)" : "Password"}
+                required
+                disabled={loading}
+                minLength={8}
+                style={styles.input}
+              />
+              <button
+                type="submit"
+                disabled={loading || !email || !password}
+                style={styles.submitButton}
+              >
+                {loading ? "Please wait..." : isSignUp ? "Create Account" : "Sign In"}
+              </button>
+            </form>
+
+            {!isSignUp && (
+              <div style={styles.forgotContainer}>
+                <button onClick={() => switchView("forgot-password")} style={styles.linkButton}>
+                  Forgot password?
+                </button>
+              </div>
+            )}
+
+            <div style={styles.toggleContainer}>
+              <span style={styles.toggleText}>
+                {isSignUp ? "Already have an account?" : "Don't have an account?"}
+              </span>
+              <button
+                onClick={() => switchView(isSignUp ? "sign-in" : "sign-up")}
+                style={styles.linkButton}
+              >
+                {isSignUp ? "Sign in" : "Sign up"}
+              </button>
+            </div>
+          </>
         )}
       </div>
     </div>
