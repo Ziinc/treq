@@ -5049,6 +5049,53 @@ pub fn jj_dry_run_home_repo_rebase(
     })
 }
 
+/// Abandon every commit matched by `revset_expr` (by change id) in `workspace_path`.
+/// Returns the list of abandoned change IDs.
+fn abandon_commits_matching_revset(
+    workspace_path: &str,
+    revset_expr: &str,
+) -> Result<Vec<String>, JjError> {
+    let loaded = load_workspace_repo(workspace_path)?;
+    let revset = evaluate_revset(&loaded, revset_expr).map_err(|e| {
+        JjError::IoError(format!(
+            "Failed to evaluate revset '{}': {}",
+            revset_expr, e
+        ))
+    })?;
+    // Never abandon a commit that is currently the live working-copy commit of *any*
+    // workspace (not just this one) — e.g. a stacked workspace's target may be another
+    // workspace's still-empty `@`, which must be exempt from the empty-commit policy.
+    let wc_commit_ids: HashSet<_> = loaded
+        .repo
+        .view()
+        .wc_commit_ids()
+        .values()
+        .cloned()
+        .collect();
+    let change_ids: Vec<String> = revset
+        .iter()
+        .commits(loaded.repo.store())
+        .filter_map(|commit| {
+            let commit = match commit {
+                Ok(commit) => commit,
+                Err(e) => return Some(Err(JjError::IoError(e.to_string()))),
+            };
+            if wc_commit_ids.contains(commit.id()) {
+                return None;
+            }
+            Some(Ok(HexPrefix::from_id(commit.change_id()).reverse_hex()
+                [..12]
+                .to_string()))
+        })
+        .collect::<Result<Vec<_>, JjError>>()?;
+
+    for change_id in &change_ids {
+        jj_abandon(workspace_path, change_id)?;
+    }
+
+    Ok(change_ids)
+}
+
 /// Abandon empty commits between target branch and working copy parent.
 /// Returns list of abandoned change IDs.
 pub fn jj_abandon_empty_commits(
@@ -5066,26 +5113,7 @@ pub fn jj_abandon_empty_commits(
         "({}..@-) & empty()",
         format_revset_symbol(&selected_target_ref)
     );
-    let revset = evaluate_revset(&loaded, &revset_expr).map_err(|e| {
-        JjError::IoError(format!(
-            "Failed to evaluate empty-commits revset '{}': {}",
-            revset_expr, e
-        ))
-    })?;
-    let change_ids: Vec<String> = revset
-        .iter()
-        .commits(loaded.repo.store())
-        .map(|commit| {
-            let commit = commit.map_err(|e| JjError::IoError(e.to_string()))?;
-            Ok(HexPrefix::from_id(commit.change_id()).reverse_hex()[..12].to_string())
-        })
-        .collect::<Result<Vec<_>, JjError>>()?;
-
-    for change_id in &change_ids {
-        jj_abandon(workspace_path, change_id)?;
-    }
-
-    Ok(change_ids)
+    abandon_commits_matching_revset(workspace_path, &revset_expr)
 }
 
 fn too_large_revision_diff() -> JjRevisionDiff {
