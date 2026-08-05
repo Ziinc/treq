@@ -18,8 +18,11 @@ vi.mock("../../src/lib/api", async (importOriginal) => {
 });
 
 describe("FileBrowser polling", () => {
+	let user: ReturnType<typeof userEvent.setup>;
+
 	beforeEach(() => {
 		vi.clearAllMocks();
+		user = userEvent.setup();
 	});
 
 	it("preserves a comment draft when changed-file polling completes", async () => {
@@ -34,7 +37,6 @@ describe("FileBrowser polling", () => {
 		vi.mocked(api.listDirectory).mockResolvedValue([]);
 		vi.mocked(api.readFile).mockResolvedValue("const value = 1;\n");
 
-		const user = userEvent.setup();
 		render(
 			<FileBrowser
 				workspace={null}
