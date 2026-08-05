@@ -27,6 +27,10 @@ vi.mock("../../../src/lib/api", async (importOriginal) => {
 		ghViewPr: vi.fn(),
 		ghListPrs: vi.fn().mockResolvedValue({ items: [], hasMore: false }),
 		ghListIssues: vi.fn().mockResolvedValue({ items: [], hasMore: false }),
+		pushWorkspaceToRemote: vi.fn(
+			(repoPath: string, workspaceId: number | null) =>
+				original.pushWorkspaceToRemote(repoPath, workspaceId),
+		),
 	};
 });
 
@@ -128,9 +132,25 @@ describe("ShowWorkspace - Create PR", () => {
 		});
 	});
 
-	it("keeps Push to remote when the branch is not on remote", async () => {
+	it("shows Create PR instead of Push to remote when a GitHub remote is configured", async () => {
 		await createWorkspace(repoPath, "feat/unpushed");
 		setOriginUrl(repoPath, "https://github.com/acme/treq.git");
+		render(<Dashboard />);
+
+		await user.click(await screen.findByText("feat/unpushed"));
+		const header = await screen.findByTestId("show-workspace-header");
+
+		expect(
+			await within(header).findByRole("button", { name: /^create pr$/i }),
+		).toBeVisible();
+		expect(
+			within(header).queryByRole("button", { name: /push to remote/i }),
+		).not.toBeInTheDocument();
+	});
+
+	it("keeps Push to remote when the branch is not on remote and there's no GitHub remote", async () => {
+		await createWorkspace(repoPath, "feat/unpushed");
+		setOriginUrl(repoPath, "https://gitlab.com/acme/treq.git");
 		render(<Dashboard />);
 
 		await user.click(await screen.findByText("feat/unpushed"));
@@ -142,6 +162,40 @@ describe("ShowWorkspace - Create PR", () => {
 		expect(
 			within(header).queryByRole("button", { name: /^create pr$/i }),
 		).not.toBeInTheDocument();
+	});
+
+	it("pushes the branch then creates the PR in one click when it isn't on remote yet", async () => {
+		const workspaceId = await createWorkspace(repoPath, "feat/unpushed");
+		await updateWorkspace(
+			repoPath,
+			workspaceId,
+			undefined,
+			"Ship the feature",
+			"Implements the feature end-to-end.",
+		);
+		vi.mocked(pushWorkspaceToRemote).mockResolvedValueOnce("pushed");
+		setOriginUrl(repoPath, "https://github.com/acme/treq.git");
+		render(<Dashboard />);
+
+		await user.click(await screen.findByText("feat/unpushed"));
+		const header = await screen.findByTestId("show-workspace-header");
+		await user.click(
+			await within(header).findByRole("button", { name: /^create pr$/i }),
+		);
+
+		await waitFor(() => {
+			expect(pushWorkspaceToRemote).toHaveBeenCalledWith(repoPath, workspaceId);
+		});
+		await waitFor(() => {
+			expect(ghCreatePr).toHaveBeenCalledWith(
+				"acme/treq",
+				"Ship the feature",
+				"Implements the feature end-to-end.",
+				expect.any(String),
+				"feat/unpushed",
+				false,
+			);
+		});
 	});
 
 	it("hides Create PR when there is no GitHub remote", async () => {
