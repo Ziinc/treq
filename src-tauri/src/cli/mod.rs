@@ -68,6 +68,10 @@ pub fn handle_cli_command(subcommand: &SubcommandMatches) -> bool {
             workspace_handlers::handle_workspace_agent(&subcommand.matches);
             true
         }
+        "commit" => {
+            workspace_handlers::handle_workspace_commit(&subcommand.matches);
+            true
+        }
         "help" => {
             print_cli_help();
             true
@@ -101,6 +105,7 @@ fn print_cli_help() {
     println!("  treq st [workspace_name]");
     println!("  treq mv <source> <destination> -f [FILES...] -r [RANGES...] -c [COMMITS...]");
     println!("  treq agent <branch> <prompt> [-m <edit|plan>]");
+    println!("  treq commit <workspace_name> -m <message> [--push]");
     println!("  treq help");
 }
 

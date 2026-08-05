@@ -35,6 +35,12 @@ fn unknown_subcommand_is_not_handled_by_cli_dispatch() {
 }
 
 #[test]
+fn commit_is_handled_by_cli_dispatch() {
+    let subcommand = make_subcommand("commit");
+    assert!(handle_cli_command(&subcommand));
+}
+
+#[test]
 fn top_level_help_arg_is_handled_by_global_dispatch() {
     let mut matches = Matches::default();
     let mut help_arg = tauri_plugin_cli::ArgData::default();
@@ -173,6 +179,58 @@ fn mv_subcommand_uses_source_and_destination_positionals() {
     assert_eq!(
         destination.get("takesValue").and_then(Value::as_bool),
         Some(true)
+    );
+}
+
+#[test]
+fn commit_subcommand_defines_workspace_message_and_push_args() {
+    let config_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json");
+    let config = fs::read_to_string(config_path).expect("failed to read tauri.conf.json");
+    let json: Value = serde_json::from_str(&config).expect("failed to parse tauri.conf.json");
+    let commit = json["plugins"]["cli"]["subcommands"]["commit"]
+        .as_object()
+        .expect("commit subcommand must exist");
+    let args = commit
+        .get("args")
+        .and_then(Value::as_array)
+        .expect("commit args must be an array");
+
+    let workspace_name = args
+        .iter()
+        .find(|arg| arg.get("name").and_then(Value::as_str) == Some("workspace_name"))
+        .expect("commit must define workspace_name positional arg");
+    assert_eq!(workspace_name.get("index").and_then(Value::as_i64), Some(1));
+    assert_eq!(
+        workspace_name.get("takesValue").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        workspace_name.get("required").and_then(Value::as_bool),
+        Some(true)
+    );
+
+    let message = args
+        .iter()
+        .find(|arg| arg.get("name").and_then(Value::as_str) == Some("message"))
+        .expect("commit must define message arg");
+    assert_eq!(message.get("short").and_then(Value::as_str), Some("m"));
+    assert_eq!(
+        message.get("takesValue").and_then(Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(message.get("required").and_then(Value::as_bool), Some(true));
+
+    let push = args
+        .iter()
+        .find(|arg| arg.get("name").and_then(Value::as_str) == Some("push"))
+        .expect("commit must define push arg");
+    assert_eq!(push.get("index"), None, "push must not be positional");
+    assert_eq!(
+        push.get("takesValue")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        false,
+        "push must be a boolean flag"
     );
 }
 
