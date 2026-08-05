@@ -1753,18 +1753,25 @@ pub fn squash_to_workspace(
         .join(".treq")
         .join("workspaces")
         .join(&target_workspace.workspace_path);
+    // Persist the current filesystem state before restoring selected paths.
+    // Otherwise a modified tracked file may still have its parent tree in the
+    // working-copy commit, causing restore to leave the filesystem untouched.
+    let changed_files = jj_get_changed_files(source_workspace_path)?;
     let selected_paths = match file_paths {
         Some(paths) => paths,
-        None => jj_get_changed_files(source_workspace_path)?
-            .into_iter()
-            .map(|c| c.path)
-            .collect(),
+        None => changed_files.into_iter().map(|c| c.path).collect(),
     };
     move_paths_between_workspaces(
         Path::new(source_workspace_path),
         &target_workspace_path,
         &selected_paths,
     )?;
+    // Moving a working-copy change must leave the source at its parent value.
+    // Removing the path outright is only correct for a newly-added file; for a
+    // modified or deleted tracked file it turns the move into a deletion.
+    for path in &selected_paths {
+        jj_restore_file(source_workspace_path, path)?;
+    }
     Ok(String::new())
 }
 
@@ -1928,19 +1935,6 @@ fn move_paths_between_workspaces(
         let target = target_workspace_path.join(relative);
         if source.exists() {
             copy_path_recursive(&source, &target)?;
-            if source.is_dir() {
-                fs::remove_dir_all(&source).map_err(|e| {
-                    JjError::IoError(format!(
-                        "Failed to remove directory {}: {}",
-                        source.display(),
-                        e
-                    ))
-                })?;
-            } else if source.is_file() {
-                fs::remove_file(&source).map_err(|e| {
-                    JjError::IoError(format!("Failed to remove file {}: {}", source.display(), e))
-                })?;
-            }
         } else if target.exists() {
             if target.is_dir() {
                 fs::remove_dir_all(&target).map_err(|e| {

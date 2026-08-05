@@ -1406,7 +1406,7 @@ pub fn move_workspace_changes(
     request: WorkspaceMoveRequest,
 ) -> Result<WorkspaceMoveResult, String> {
     if !request.has_selectors() {
-        return Err("Must specify at least one selector: -f, -h, or -c".to_string());
+        return Err("Must specify at least one selector: -f, -r, or -c".to_string());
     }
 
     let source = local_db::get_workspace_by_branch(repo_path, source_branch)

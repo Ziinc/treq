@@ -234,7 +234,7 @@ pub(super) fn handle_workspace_move(matches: &Matches) {
         None => {
             eprintln!("Error: source workspace is required");
             eprintln!(
-                "Usage: treq mv <source> <destination> -f [FILES...] -h [HUNKS...] -c [COMMITS...]"
+                "Usage: treq mv <source> <destination> -f [FILES...] -r [RANGES...] -c [COMMITS...]"
             );
             return;
         }
@@ -244,7 +244,7 @@ pub(super) fn handle_workspace_move(matches: &Matches) {
         None => {
             eprintln!("Error: destination workspace is required");
             eprintln!(
-                "Usage: treq mv <source> <destination> -f [FILES...] -h [HUNKS...] -c [COMMITS...]"
+                "Usage: treq mv <source> <destination> -f [FILES...] -r [RANGES...] -c [COMMITS...]"
             );
             return;
         }
@@ -252,7 +252,7 @@ pub(super) fn handle_workspace_move(matches: &Matches) {
 
     let files = get_arg_values(matches, "files");
     let commits = get_arg_values(matches, "commits");
-    let raw_hunks = get_arg_values(matches, "hunks");
+    let raw_hunks = get_arg_values(matches, "ranges");
     let mut hunks = Vec::new();
     for raw_hunk in raw_hunks {
         match core::parse_hunk_spec(&raw_hunk) {
@@ -270,7 +270,7 @@ pub(super) fn handle_workspace_move(matches: &Matches) {
         commits,
     };
     if !request.has_selectors() {
-        eprintln!("Error: specify at least one of -f, -h, or -c");
+        eprintln!("Error: specify at least one of -f, -r, or -c");
         return;
     }
 

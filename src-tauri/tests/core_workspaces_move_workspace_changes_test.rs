@@ -232,6 +232,118 @@ fn moves_files_parent_to_child() {
 }
 
 #[test]
+fn moves_modified_file_without_deleting_it_from_source() {
+    let repo = TestRepo::new().expect("should create repo");
+    let (parent, child) = setup_parent_child_graph(&repo);
+    make_file_fixture(
+        &repo,
+        &parent,
+        "README.md",
+        "# Test Repository\n\nsource-only change\n",
+    );
+
+    let result = treq_lib::core::move_workspace_changes(
+        &repo.repo_path,
+        &parent.branch_name,
+        &child.branch_name,
+        WorkspaceMoveRequest {
+            files: vec!["README.md".to_string()],
+            ..WorkspaceMoveRequest::default()
+        },
+    )
+    .expect("move modified file should succeed");
+
+    assert_eq!(result.files_moved, 1);
+    assert_eq!(read_workspace_file(&repo, &parent, "README.md"), "# Test Repository\n");
+    assert_eq!(
+        read_workspace_file(&repo, &child, "README.md"),
+        "# Test Repository\n\nsource-only change\n"
+    );
+    assert_source_working_copy_not_changed_for_file(&repo, &parent, "README.md");
+}
+
+#[test]
+fn moves_modified_file_hunk_without_deleting_file_from_source() {
+    let repo = TestRepo::new().expect("should create repo");
+    let (parent, child) = setup_parent_child_graph(&repo);
+    make_file_fixture(
+        &repo,
+        &parent,
+        "README.md",
+        "# Test Repository\nsource-only line\n",
+    );
+
+    let result = treq_lib::core::move_workspace_changes(
+        &repo.repo_path,
+        &parent.branch_name,
+        &child.branch_name,
+        WorkspaceMoveRequest {
+            hunks: vec![HunkSpec {
+                file_path: "README.md".to_string(),
+                start_line: 2,
+                end_line: 2,
+            }],
+            ..WorkspaceMoveRequest::default()
+        },
+    )
+    .expect("move modified file hunk should succeed");
+
+    assert_eq!(result.hunks_applied, 1);
+    assert_eq!(read_workspace_file(&repo, &parent, "README.md"), "# Test Repository\n");
+    assert_eq!(
+        read_workspace_file(&repo, &child, "README.md"),
+        "# Test Repository\nsource-only line\n"
+    );
+    assert_source_working_copy_not_changed_for_file(&repo, &parent, "README.md");
+}
+
+#[test]
+fn moves_commit_modifying_file_without_deleting_file_from_source() {
+    let repo = TestRepo::new().expect("should create repo");
+    let (parent, child) = setup_parent_child_graph(&repo);
+    make_file_fixture(
+        &repo,
+        &parent,
+        "README.md",
+        "# Test Repository\ncommitted source change\n",
+    );
+    treq_lib::core::commit_workspace(&repo.repo_path, parent.id, "modify tracked file")
+        .expect("should commit tracked-file modification");
+    let commit_id = treq_lib::core::list_commits(
+        &repo.repo_path,
+        Some(parent.id),
+        false,
+        None,
+        None,
+    )
+    .expect("should list source commits")
+    .commits
+    .into_iter()
+    .find(|commit| commit.description.contains("modify tracked file"))
+    .expect("commit should be present")
+    .commit_id;
+
+    let result = treq_lib::core::move_workspace_changes(
+        &repo.repo_path,
+        &parent.branch_name,
+        &child.branch_name,
+        WorkspaceMoveRequest {
+            commits: vec![commit_id.clone()],
+            ..WorkspaceMoveRequest::default()
+        },
+    )
+    .expect("move tracked-file commit should succeed");
+
+    assert_eq!(result.commits_moved, 1);
+    assert_history_does_not_contain_commit(&repo, &parent, &commit_id);
+    assert_eq!(read_workspace_file(&repo, &parent, "README.md"), "# Test Repository\n");
+    assert_eq!(
+        read_workspace_file(&repo, &child, "README.md"),
+        "# Test Repository\ncommitted source change\n"
+    );
+}
+
+#[test]
 fn moves_hunks_parent_to_child() {
     let repo = TestRepo::new().expect("should create repo");
     let (parent, child) = setup_parent_child_graph(&repo);
