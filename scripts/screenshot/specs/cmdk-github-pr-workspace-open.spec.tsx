@@ -66,17 +66,17 @@ it("captures the workspace PR commands in the command palette when a PR exists",
 	expect(openInBrowser).toBeInTheDocument();
 	expect(openInApp).toBeInTheDocument();
 	await screen.findByText("Open PR #99 on GitHub");
-	await screen.findByText("Navigate this window to PR #99");
+	await screen.findByText("Navigate to PR #99");
 
 	await captureDocument(document, {
 		name: "cmdk-github-pr-workspace-open-01-with-pr",
 		// The two new items are last in the list, below the fold of the cmdk
 		// list's own overflow-y-auto scroll region -- scroll them into view so
 		// the screenshot actually shows them instead of clipping them out.
-		scrollIntoView: "text=Navigate this window to PR #99",
+		scrollIntoView: "text=Navigate to PR #99",
 		expectations: [
 			'The open command palette lists an "Open Workspace PR in Browser" item describing "Open PR #99 on GitHub".',
-			'The palette also lists a separate "Open Workspace PR" item describing "Navigate this window to PR #99".',
+			'The palette also lists a separate "Open Workspace PR" item describing "Navigate to PR #99".',
 		],
 	});
 }, 60000);

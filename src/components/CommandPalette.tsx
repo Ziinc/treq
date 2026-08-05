@@ -254,7 +254,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 				id: "open-workspace-pr-current-window",
 				type: "action",
 				label: "Open Workspace PR",
-				description: `Navigate this window to PR #${workspacePrInfo.number}`,
+				description: `Navigate to PR #${workspacePrInfo.number}`,
 				icon: <AppWindow className="w-4 h-4" />,
 				onSelect: () => {
 					window.location.href = workspacePrInfo.url;
