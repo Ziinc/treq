@@ -988,6 +988,8 @@ export const FileBrowser = memo(
 		const [changedFiles, setChangedFiles] = useState<
 			Map<string, ParsedFileChange>
 		>(new Map());
+		const changedFilesRef = useRef(changedFiles);
+		changedFilesRef.current = changedFiles;
 		const [fileHunks, setFileHunks] = useState<
 			Map<number, "add" | "modify" | "delete">
 		>(new Map());
@@ -1184,7 +1186,7 @@ export const FileBrowser = memo(
 					const relPath = path.startsWith(`${basePath}/`)
 						? path.slice(basePath.length + 1)
 						: path;
-					if (changedFiles.has(relPath) && repoPath) {
+					if (changedFilesRef.current.has(relPath) && repoPath) {
 						try {
 							const hunks = await getWorkspaceFileHunks(
 								repoPath,
@@ -1244,8 +1246,10 @@ export const FileBrowser = memo(
 					setIsLoadingFile(false);
 				}
 			},
-			[addToast, basePath, changedFiles],
+			[addToast, basePath, repoPath, workspace?.id],
 		);
+		const handleFileClickRef = useRef(handleFileClick);
+		handleFileClickRef.current = handleFileClick;
 
 		// Line selection handlers
 		const handleLineMouseDown = useCallback(
@@ -1377,6 +1381,7 @@ export const FileBrowser = memo(
 		// Auto-select README.md when rootEntries change (switching workspaces)
 		useEffect(() => {
 			if (rootEntries.length === 0) return;
+			if (initialSelectedFile) return;
 
 			// Look for README.md (case-insensitive)
 			const readme = rootEntries.find(
@@ -1386,14 +1391,14 @@ export const FileBrowser = memo(
 
 			if (readme) {
 				// Auto-select and load README.md
-				handleFileClick(readme.path);
+				handleFileClickRef.current(readme.path);
 			} else {
 				// Clear selection if no README.md
 				setSelectedFile(null);
 				setSelectedFileModifiedAt(null);
 				setFileContent("");
 			}
-		}, [rootEntries, handleFileClick]);
+		}, [rootEntries, initialSelectedFile]);
 
 		const loadDirectory = useCallback(
 			async (path: string): Promise<DirectoryEntry[]> => {
@@ -1440,9 +1445,9 @@ export const FileBrowser = memo(
 		// Handle initial file selection from external navigation
 		useEffect(() => {
 			if (initialSelectedFile) {
-				handleFileClick(initialSelectedFile);
+				handleFileClickRef.current(initialSelectedFile);
 			}
-		}, [initialSelectedFile, handleFileClick]);
+		}, [initialSelectedFile]);
 
 		// Handle initial directory expansion from external navigation
 		useEffect(() => {
