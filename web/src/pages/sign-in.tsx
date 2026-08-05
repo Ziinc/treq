@@ -3,6 +3,7 @@ import Layout from "@theme/Layout";
 import BrowserOnly from "@docusaurus/BrowserOnly";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 import { supabase } from "../lib/supabase";
+import { getAuthCallbackUrl } from "../lib/utils";
 
 type View = "sign-in" | "sign-up" | "forgot-password";
 
@@ -43,7 +44,14 @@ function LoginContent() {
     });
   }, [source]);
 
-  const redirectTo = `${window.location.origin}/auth/callback${source ? `?source=${source}` : ""}`;
+  const callbackUrl = (query?: string) =>
+    getAuthCallbackUrl({
+      siteUrl: siteConfig.url,
+      browserOrigin: window.location.origin,
+      isProduction: process.env.NODE_ENV === "production",
+      query,
+    });
+  const redirectTo = callbackUrl(source ? `source=${encodeURIComponent(source)}` : undefined);
 
   const switchView = (v: View) => {
     if (v === "sign-up" && !emailSignupEnabled) return;
@@ -126,7 +134,7 @@ function LoginContent() {
     setMessage(null);
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?type=recovery`,
+      redirectTo: callbackUrl("type=recovery"),
     });
     if (error) {
       setError(error.message);
