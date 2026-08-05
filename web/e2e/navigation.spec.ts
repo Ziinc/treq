@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import pkg from '../../package.json';
 
 const nav = (page: Page) => page.getByRole('navigation', { name: 'Main' });
 const sidebar = (page: Page) => page.getByRole('navigation', { name: 'Docs sidebar' });
@@ -90,7 +91,8 @@ test.describe('Navbar navigation', () => {
   });
 
   test('email sign in is hidden when email signup is disabled', async ({ page }) => {
-    await page.goto('/sign-in');
+    await page.goto('/');
+    await nav(page).getByRole('link', { name: 'Sign in' }).click();
 
     await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
     await expect(page.getByPlaceholder('Email address')).toHaveCount(0);
@@ -99,7 +101,7 @@ test.describe('Navbar navigation', () => {
     await expect(page.getByRole('button', { name: 'Forgot password?' })).toHaveCount(0);
   });
 
-  test('signed-in navbar shows Dashboard and Open App', async ({ page }) => {
+  test('signed-in navbar shows Dashboard and Open App', async ({ browser }) => {
     const now = Math.floor(Date.now() / 1000);
     const user = {
       id: 'e2e-user-id',
@@ -122,10 +124,30 @@ test.describe('Navbar navigation', () => {
       token_type: 'bearer',
       user,
     };
+    const supabaseProjectRef = new URL(pkg.env.prod.supabase.url).hostname.split('.')[0];
 
-    await page.addInitScript((storedSession) => {
-      window.localStorage.setItem('sb-127-auth-token', JSON.stringify(storedSession));
-    }, session);
+    // Email signup is disabled, so seed an existing session via storageState
+    // instead of driving the password form (or using addInitScript).
+    const context = await browser.newContext({
+      baseURL: 'http://localhost:3000',
+      storageState: {
+        cookies: [],
+        origins: [
+          {
+            origin: 'http://localhost:3000',
+            localStorage: [
+              {
+                // The E2E server serves a production build, so Supabase reads
+                // the storage key derived from the production project URL.
+                name: `sb-${supabaseProjectRef}-auth-token`,
+                value: JSON.stringify(session),
+              },
+            ],
+          },
+        ],
+      },
+    });
+    const page = await context.newPage();
 
     await page.route(/\/auth\/v1\//, async (route) => {
       const url = route.request().url();
@@ -164,6 +186,8 @@ test.describe('Navbar navigation', () => {
     );
     await expect(nav(page).getByRole('link', { name: 'Sign in' })).toHaveCount(0);
     await expect(nav(page).getByRole('link', { name: 'Get Started' })).toHaveCount(0);
+
+    await context.close();
   });
 
   test('Pricing link navigates to pricing page', async ({ page }) => {
