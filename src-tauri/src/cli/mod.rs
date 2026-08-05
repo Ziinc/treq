@@ -99,7 +99,7 @@ fn print_cli_help() {
     println!("  treq add <branch_name> [-d description] [-l title] [-s source_branch]");
     println!("  treq set <workspace_name> [-d description] [-l title] [-t target_branch]");
     println!("  treq st [workspace_name]");
-    println!("  treq mv <source> <destination> -f [FILES...] -h [HUNKS...] -c [COMMITS...]");
+    println!("  treq mv <source> <destination> -f [FILES...] -r [RANGES...] -c [COMMITS...]");
     println!("  treq agent <branch> <prompt> [-m <edit|plan>]");
     println!("  treq help");
 }

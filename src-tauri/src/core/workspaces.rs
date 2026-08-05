@@ -1406,7 +1406,7 @@ pub fn move_workspace_changes(
     request: WorkspaceMoveRequest,
 ) -> Result<WorkspaceMoveResult, String> {
     if !request.has_selectors() {
-        return Err("Must specify at least one selector: -f, -h, or -c".to_string());
+        return Err("Must specify at least one selector: -f, -r, or -c".to_string());
     }
 
     let source = local_db::get_workspace_by_branch(repo_path, source_branch)
@@ -1486,12 +1486,47 @@ pub fn move_workspace_changes(
     }
 
     if !request.files.is_empty() {
+        // Record the source changes before the filesystem transfer so tracked
+        // files can be restored to their parent state rather than left deleted.
+        jj::jj_get_changed_files(&source_full_path_str)
+            .map_err(|e| format!("Failed to snapshot source files: {}", e))?;
         jj::squash_to_workspace(
             &source_full_path_str,
             &destination.workspace_name,
             Some(request.files.clone()),
         )
         .map_err(|e| format!("Failed to move files: {}", e))?;
+        // Source restoration can reconcile other workspaces and check out the
+        // destination before its copied paths have been snapshotted. Preserve
+        // those bytes across that rewrite, then snapshot them afterward.
+        let destination_file_saves: Vec<(String, Option<Vec<u8>>)> = request
+            .files
+            .iter()
+            .map(|file_path| {
+                let path = Path::new(&destination_full_path_str).join(file_path);
+                (file_path.clone(), std::fs::read(path).ok())
+            })
+            .collect();
+        for file_path in &request.files {
+            jj::jj_restore_file(&source_full_path_str, file_path)
+                .map_err(|e| format!("Failed to restore source file '{}': {}", file_path, e))?;
+        }
+        for (file_path, content) in destination_file_saves {
+            let path = Path::new(&destination_full_path_str).join(&file_path);
+            if let Some(content) = content {
+                if let Some(parent) = path.parent() {
+                    std::fs::create_dir_all(parent)
+                        .map_err(|e| format!("Failed to recreate destination directory: {}", e))?;
+                }
+                std::fs::write(&path, content)
+                    .map_err(|e| format!("Failed to restore destination file: {}", e))?;
+            } else if path.exists() {
+                std::fs::remove_file(&path)
+                    .map_err(|e| format!("Failed to restore destination deletion: {}", e))?;
+            }
+        }
+        jj::jj_get_changed_files(&destination_full_path_str)
+            .map_err(|e| format!("Failed to snapshot destination files: {}", e))?;
         result.files_moved = request.files.len();
     }
 
