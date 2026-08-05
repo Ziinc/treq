@@ -1583,12 +1583,18 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 											<Tooltip>
 												<TooltipTrigger asChild>
 													<Button
-														variant="ghost"
+														variant={syncStatus.ahead > 0 ? "outline" : "ghost"}
 														size="sm"
-														className="h-6 gap-1 px-2 text-xs text-muted-foreground"
+														className="relative h-6 gap-1 px-2 text-xs text-muted-foreground"
 														onClick={handleSync}
 														disabled={!!actionPending || !hasSyncChanges}
 													>
+														{hasSyncChanges && (
+															<span
+																className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-yellow-400"
+																aria-hidden="true"
+															/>
+														)}
 														{(isHomeRepo || syncStatus.behind > 0) && (
 															<span className="flex items-center">
 																↓{syncStatus.behind}
