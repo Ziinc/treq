@@ -8,7 +8,12 @@ import {
 	GitPullRequestDraft,
 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { GhIssue, GhLabel, GhPullRequest, PrCheckEntry } from "../../lib/api-types";
+import type {
+	GhIssue,
+	GhLabel,
+	GhPullRequest,
+	PrCheckEntry,
+} from "../../lib/api-types";
 import { ciStateForBucket, ciStatusStyle } from "../../lib/ci-status";
 import { Button } from "../ui/button";
 

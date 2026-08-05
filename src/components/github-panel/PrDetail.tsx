@@ -15,7 +15,13 @@ import {
 	ghViewPr,
 } from "../../lib/api";
 import { MarkdownContent } from "../MarkdownContent";
-import { CheckEntryRow, formatDate, LabelChip, OpenInWebButton, StateChip } from "./shared";
+import {
+	CheckEntryRow,
+	formatDate,
+	LabelChip,
+	OpenInWebButton,
+	StateChip,
+} from "./shared";
 
 export function PrDetailPanel({
 	repoFullName,
