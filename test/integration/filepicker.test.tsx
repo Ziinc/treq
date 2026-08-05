@@ -2,7 +2,7 @@ import * as React from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { commitRepoFile, createTestRepo, openRepo } from "../utils";
 import { ensureWorkspaceIndexed } from "../../src/lib/api";
-import { render, screen, settleReactUpdates } from "../test-utils";
+import { render, screen, settleReactUpdates, waitFor } from "../test-utils";
 import { Dashboard } from "../../src/components/Dashboard";
 import userEvent from "@testing-library/user-event";
 
@@ -40,6 +40,12 @@ describe("FilePicker integration", () => {
 		expect(
 			screen.queryByPlaceholderText("Search files..."),
 		).not.toBeInTheDocument();
+
+		await waitFor(() => {
+			expect(
+				document.querySelector('[data-testid="code-line-content"]'),
+			).toHaveTextContent("export const Button = () => {};");
+		});
 	});
 
 	it("shows 'No files found' for a nonexistent query", async () => {
