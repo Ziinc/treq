@@ -254,7 +254,10 @@ fn moves_modified_file_without_deleting_it_from_source() {
     .expect("move modified file should succeed");
 
     assert_eq!(result.files_moved, 1);
-    assert_eq!(read_workspace_file(&repo, &parent, "README.md"), "# Test Repository\n");
+    assert_eq!(
+        read_workspace_file(&repo, &parent, "README.md"),
+        "# Test Repository\n"
+    );
     assert_eq!(
         read_workspace_file(&repo, &child, "README.md"),
         "# Test Repository\n\nsource-only change\n"
@@ -289,7 +292,10 @@ fn moves_modified_file_hunk_without_deleting_file_from_source() {
     .expect("move modified file hunk should succeed");
 
     assert_eq!(result.hunks_applied, 1);
-    assert_eq!(read_workspace_file(&repo, &parent, "README.md"), "# Test Repository\n");
+    assert_eq!(
+        read_workspace_file(&repo, &parent, "README.md"),
+        "# Test Repository\n"
+    );
     assert_eq!(
         read_workspace_file(&repo, &child, "README.md"),
         "# Test Repository\nsource-only line\n"
@@ -309,19 +315,14 @@ fn moves_commit_modifying_file_without_deleting_file_from_source() {
     );
     treq_lib::core::commit_workspace(&repo.repo_path, parent.id, "modify tracked file")
         .expect("should commit tracked-file modification");
-    let commit_id = treq_lib::core::list_commits(
-        &repo.repo_path,
-        Some(parent.id),
-        false,
-        None,
-        None,
-    )
-    .expect("should list source commits")
-    .commits
-    .into_iter()
-    .find(|commit| commit.description.contains("modify tracked file"))
-    .expect("commit should be present")
-    .commit_id;
+    let commit_id =
+        treq_lib::core::list_commits(&repo.repo_path, Some(parent.id), false, None, None)
+            .expect("should list source commits")
+            .commits
+            .into_iter()
+            .find(|commit| commit.description.contains("modify tracked file"))
+            .expect("commit should be present")
+            .commit_id;
 
     let result = treq_lib::core::move_workspace_changes(
         &repo.repo_path,
@@ -336,7 +337,10 @@ fn moves_commit_modifying_file_without_deleting_file_from_source() {
 
     assert_eq!(result.commits_moved, 1);
     assert_history_does_not_contain_commit(&repo, &parent, &commit_id);
-    assert_eq!(read_workspace_file(&repo, &parent, "README.md"), "# Test Repository\n");
+    assert_eq!(
+        read_workspace_file(&repo, &parent, "README.md"),
+        "# Test Repository\n"
+    );
     assert_eq!(
         read_workspace_file(&repo, &child, "README.md"),
         "# Test Repository\ncommitted source change\n"
@@ -365,9 +369,8 @@ fn moves_only_selected_file_and_leaves_unselected_new_file_in_source() {
         read_workspace_file(&repo, &child, "selected.txt"),
         "selected change\n"
     );
-    let destination_changes =
-        treq_lib::core::list_changed_files(&repo.repo_path, Some(child.id))
-            .expect("should list destination changes");
+    let destination_changes = treq_lib::core::list_changed_files(&repo.repo_path, Some(child.id))
+        .expect("should list destination changes");
     assert!(!destination_changes
         .iter()
         .any(|change| change.path == "unselected.txt"));
@@ -426,18 +429,10 @@ fn moves_only_selected_hunk_and_leaves_other_hunk_in_source() {
 fn moves_only_selected_commit_and_leaves_unselected_commit_in_source() {
     let repo = TestRepo::new().expect("should create repo");
     let (parent, child) = setup_sibling_graph(&repo);
-    let selected_commit = make_commit_fixture(
-        &repo,
-        &parent,
-        "selected-commit.txt",
-        "selected-commit",
-    );
-    let _unselected_commit = make_commit_fixture(
-        &repo,
-        &parent,
-        "unselected-commit.txt",
-        "unselected-commit",
-    );
+    let selected_commit =
+        make_commit_fixture(&repo, &parent, "selected-commit.txt", "selected-commit");
+    let _unselected_commit =
+        make_commit_fixture(&repo, &parent, "unselected-commit.txt", "unselected-commit");
 
     treq_lib::core::move_workspace_changes(
         &repo.repo_path,
@@ -451,26 +446,16 @@ fn moves_only_selected_commit_and_leaves_unselected_commit_in_source() {
     .expect("selected commit move should succeed");
 
     assert_history_does_not_contain_commit(&repo, &parent, &selected_commit);
-    let source_log = treq_lib::core::list_commits(
-        &repo.repo_path,
-        Some(parent.id),
-        false,
-        None,
-        None,
-    )
-    .expect("should list source commits after move");
+    let source_log =
+        treq_lib::core::list_commits(&repo.repo_path, Some(parent.id), false, None, None)
+            .expect("should list source commits after move");
     assert!(source_log
         .commits
         .iter()
         .any(|commit| commit.description.contains("unselected-commit")));
-    let destination_log = treq_lib::core::list_commits(
-        &repo.repo_path,
-        Some(child.id),
-        false,
-        None,
-        None,
-    )
-    .expect("should list destination commits after move");
+    let destination_log =
+        treq_lib::core::list_commits(&repo.repo_path, Some(child.id), false, None, None)
+            .expect("should list destination commits after move");
     assert!(!destination_log
         .commits
         .iter()
