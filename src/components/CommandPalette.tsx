@@ -2,14 +2,18 @@ import { useMemo } from "react";
 import { Command } from "cmdk";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { BranchSwitcher } from "./BranchSwitcher";
 import { WorkspaceDeletion } from "./WorkspaceDeletion";
 import { FilePicker } from "./FilePicker";
 import { CmdkFooter } from "./ui/cmdk-footer";
 import { Workspace } from "../lib/api";
+import { usePrInfoViaGh } from "../hooks/useMergeQueueStatus";
 import {
+	AppWindow,
 	Bot,
 	ChevronsUpDown,
+	ExternalLink,
 	FileSearch,
 	GitBranch,
 	Home,
@@ -99,6 +103,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 	selectedWorkspaceId,
 	repoPath,
 }) => {
+	const { data: workspacePrInfo } = usePrInfoViaGh(
+		repoPath || undefined,
+		currentWorkspace?.branch_name,
+	);
+
 	// Build command items
 	const items = useMemo<CommandItem[]>(() => {
 		const result: CommandItem[] = [];
@@ -231,6 +240,28 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 			}
 		}
 
+		if (currentWorkspace && workspacePrInfo) {
+			result.push({
+				id: "open-workspace-pr-browser",
+				type: "action",
+				label: "Open Workspace PR in Browser",
+				description: `Open PR #${workspacePrInfo.number} on GitHub`,
+				icon: <ExternalLink className="w-4 h-4" />,
+				onSelect: () => openUrl(workspacePrInfo.url),
+			});
+
+			result.push({
+				id: "open-workspace-pr-current-window",
+				type: "action",
+				label: "Open Workspace PR",
+				description: `Navigate to PR #${workspacePrInfo.number}`,
+				icon: <AppWindow className="w-4 h-4" />,
+				onSelect: () => {
+					window.location.href = workspacePrInfo.url;
+				},
+			});
+		}
+
 		// Wrap all onSelect handlers to close the dialog after execution
 		return result.map((item) => ({
 			...item,
@@ -255,6 +286,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 		repoPath,
 		hasSelectedWorkspace,
 		onCommandPaletteChange,
+		currentWorkspace,
+		workspacePrInfo,
 	]);
 
 	// Render a command item
