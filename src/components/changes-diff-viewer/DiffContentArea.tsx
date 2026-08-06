@@ -119,6 +119,7 @@ interface DiffContentAreaProps {
 	handleContextMenu: (e: React.MouseEvent) => void;
 	addToast: ReturnType<typeof useToast>["addToast"];
 	getOutdatedCommentsForFile: (filePath: string) => LineComment[];
+	getFileCommentsForFile: (filePath: string) => LineComment[];
 	diffContainerRef: React.RefObject<HTMLDivElement>;
 }
 
@@ -200,6 +201,7 @@ export function DiffContentArea({
 	handleContextMenu,
 	addToast,
 	getOutdatedCommentsForFile,
+	getFileCommentsForFile,
 	diffContainerRef,
 }: DiffContentAreaProps) {
 	const hunkLinesProps = useMemo(
@@ -389,6 +391,7 @@ export function DiffContentArea({
 										renderHunkLines={renderHunkLines}
 										addToast={addToast}
 										getOutdatedCommentsForFile={getOutdatedCommentsForFile}
+										getFileCommentsForFile={getFileCommentsForFile}
 										deleteComment={deleteComment}
 										getThreadsForLine={getThreadsForLine}
 										getUnplacedThreadsForFile={getUnplacedThreadsForFile}
@@ -398,10 +401,14 @@ export function DiffContentArea({
 										toggleOutdatedGroup={toggleOutdatedGroup}
 										showCommentInput={showCommentInput}
 										pendingComment={pendingComment}
+										editingCommentId={editingCommentId}
 										setPendingComment={setPendingComment}
 										setShowCommentInput={setShowCommentInput}
 										addComment={addComment}
 										cancelComment={cancelComment}
+										startEditComment={startEditComment}
+										cancelEditComment={cancelEditComment}
+										saveEditComment={saveEditComment}
 									/>
 								))}
 								{showCommittedChanges &&
@@ -436,6 +443,7 @@ export function DiffContentArea({
 											renderHunkLines={renderHunkLines}
 											addToast={addToast}
 											getOutdatedCommentsForFile={() => []}
+											getFileCommentsForFile={() => []}
 											deleteComment={deleteComment}
 											getThreadsForLine={getThreadsForLine}
 											getUnplacedThreadsForFile={getUnplacedThreadsForFile}
@@ -445,10 +453,14 @@ export function DiffContentArea({
 											toggleOutdatedGroup={toggleOutdatedGroup}
 											showCommentInput={showCommentInput}
 											pendingComment={pendingComment}
+											editingCommentId={editingCommentId}
 											setPendingComment={setPendingComment}
 											setShowCommentInput={setShowCommentInput}
 											addComment={addComment}
 											cancelComment={cancelComment}
+											startEditComment={startEditComment}
+											cancelEditComment={cancelEditComment}
+											saveEditComment={saveEditComment}
 										/>
 									))}
 							</div>
