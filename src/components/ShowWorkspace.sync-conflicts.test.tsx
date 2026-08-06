@@ -1,32 +1,32 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "./test-utils";
+import { render, screen, waitFor } from "../../test/test-utils";
 import userEvent from "@testing-library/user-event";
-import { ShowWorkspace } from "../src/components/ShowWorkspace";
-import * as api from "../src/lib/api";
+import { ShowWorkspace } from "./ShowWorkspace";
+import * as api from "../lib/api";
 import {
 	createMockWorkspace,
 	createMockWorkspaceStatus,
-} from "./factories/workspace.factory";
+} from "../../test/factories/workspace.factory";
 
-vi.mock("../src/components/FileBrowser", () => ({
+vi.mock("./FileBrowser", () => ({
 	FileBrowser: () => <div data-testid="file-browser" />,
 }));
 
-vi.mock("../src/components/LinearCommitHistory", () => ({
+vi.mock("./LinearCommitHistory", () => ({
 	LinearCommitHistory: () => <div data-testid="linear-commit-history" />,
 }));
 
-vi.mock("../src/components/ChangesDiffViewer", () => ({
+vi.mock("./ChangesDiffViewer", () => ({
 	ChangesDiffViewer: () => <div data-testid="changes-viewer" />,
 }));
 
-vi.mock("../src/components/TargetBranchSelector", () => ({
+vi.mock("./TargetBranchSelector", () => ({
 	TargetBranchSelector: () => <div data-testid="target-branch-selector" />,
 }));
 
-vi.mock("../src/lib/api", async () => {
+vi.mock("../lib/api", async () => {
 	const actual =
-		await vi.importActual<typeof import("../src/lib/api")>("../src/lib/api");
+		await vi.importActual<typeof import("../lib/api")>("../lib/api");
 	return {
 		...actual,
 		getSetting: vi.fn().mockResolvedValue(null),

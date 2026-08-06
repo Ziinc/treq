@@ -587,9 +587,10 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 				if (pullResult.has_conflicts) {
 					addToast({
 						title: "Conflicts to resolve",
-						description:
-							pullResult.message ||
-							"Remote changes were fetched; resolve conflicts locally, then push",
+						description: pullResult.was_diverged
+							? pullResult.message ||
+								"Remote changes were rebased; resolve conflicts locally, then push"
+							: "Resolve conflicts locally, then push",
 						type: "warning",
 					});
 					return;
