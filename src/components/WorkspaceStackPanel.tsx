@@ -151,11 +151,17 @@ function DiffBar({
 	const insertionWidth =
 		maxChange === 0 || insertions === 0
 			? 0
-			: Math.max(1, Math.round((insertions / maxChange) * DIFF_BAR_HALF_WIDTH_PX));
+			: Math.max(
+					1,
+					Math.round((insertions / maxChange) * DIFF_BAR_HALF_WIDTH_PX),
+				);
 	const deletionWidth =
 		maxChange === 0 || deletions === 0
 			? 0
-			: Math.max(1, Math.round((deletions / maxChange) * DIFF_BAR_HALF_WIDTH_PX));
+			: Math.max(
+					1,
+					Math.round((deletions / maxChange) * DIFF_BAR_HALF_WIDTH_PX),
+				);
 
 	return (
 		<div
