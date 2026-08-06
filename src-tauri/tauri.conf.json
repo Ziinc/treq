@@ -112,14 +112,14 @@
               "index": 1,
               "takesValue": true,
               "required": true,
-              "description": "Source workspace branch name (use 'home' or '.' for the home repo)"
+              "description": "Source workspace branch name (use '.' for the home repo)"
             },
             {
               "name": "destination",
               "index": 2,
               "takesValue": true,
               "required": true,
-              "description": "Destination workspace branch name (use 'home' or '.' for the home repo)"
+              "description": "Destination workspace branch name (use '.' for the home repo)"
             },
             {
               "name": "files",

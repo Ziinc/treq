@@ -1409,14 +1409,13 @@ pub fn rename_workspace(
         updated_children_ids,
     })
 }
-/// Reserved source/destination names for `move_workspace_changes` that refer to the
+/// Reserved source/destination name for `move_workspace_changes` that refers to the
 /// home repo (the repo root outside of any `.treq` workspace) instead of a registered
-/// workspace. `.` mirrors the shell convention for "here" (the home repo root).
-pub const HOME_MOVE_ENDPOINT: &str = "home";
-pub const HOME_MOVE_ENDPOINT_ALIAS: &str = ".";
+/// workspace. Mirrors the shell convention for "here" (the home repo root).
+pub const HOME_MOVE_ENDPOINT: &str = ".";
 
 fn is_home_move_endpoint(branch: &str) -> bool {
-    branch == HOME_MOVE_ENDPOINT || branch == HOME_MOVE_ENDPOINT_ALIAS
+    branch == HOME_MOVE_ENDPOINT
 }
 
 struct MoveEndpoint {

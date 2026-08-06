@@ -840,7 +840,7 @@ fn moves_combined_selectors_workspace_to_home() {
     let result = treq_lib::core::move_workspace_changes(
         &repo.repo_path,
         &ws.branch_name,
-        "home",
+        ".",
         WorkspaceMoveRequest {
             commits: vec![commit_id.clone()],
             files: vec!["combo-ws-to-home-file.txt".to_string()],
@@ -887,7 +887,7 @@ fn moves_combined_selectors_home_to_workspace() {
 
     let result = treq_lib::core::move_workspace_changes(
         &repo.repo_path,
-        "home",
+        ".",
         &ws.branch_name,
         WorkspaceMoveRequest {
             commits: vec![commit_id.clone()],
@@ -919,47 +919,6 @@ fn moves_combined_selectors_home_to_workspace() {
 }
 
 #[test]
-fn moves_files_using_dot_alias_for_home() {
-    let repo = TestRepo::new().expect("should create repo");
-    let ws = setup_single_workspace(&repo);
-    make_file_fixture(&repo, &ws, "files-ws-to-dot-home.txt", "file-ws-dot-home\n");
-
-    let result = treq_lib::core::move_workspace_changes(
-        &repo.repo_path,
-        &ws.branch_name,
-        ".",
-        WorkspaceMoveRequest {
-            files: vec!["files-ws-to-dot-home.txt".to_string()],
-            ..WorkspaceMoveRequest::default()
-        },
-    )
-    .expect("move files to '.' should succeed");
-
-    assert_eq!(result.files_moved, 1);
-    assert!(read_home_file(&repo, "files-ws-to-dot-home.txt").contains("file-ws-dot-home"));
-}
-
-#[test]
-fn returns_error_when_home_and_dot_alias_are_both_used() {
-    let repo = TestRepo::new().expect("should create repo");
-    let ws = setup_single_workspace(&repo);
-    make_file_fixture(&repo, &ws, "home-dot-alias.txt", "content\n");
-
-    let err = treq_lib::core::move_workspace_changes(
-        &repo.repo_path,
-        "home",
-        ".",
-        WorkspaceMoveRequest {
-            files: vec!["home-dot-alias.txt".to_string()],
-            ..WorkspaceMoveRequest::default()
-        },
-    )
-    .expect_err("should reject 'home' and '.' referring to the same home repo");
-
-    assert!(err.contains("must be different"));
-}
-
-#[test]
 fn returns_error_when_source_and_destination_are_the_same() {
     let repo = TestRepo::new().expect("should create repo");
     let ws = setup_single_workspace(&repo);
@@ -967,8 +926,8 @@ fn returns_error_when_source_and_destination_are_the_same() {
 
     let err = treq_lib::core::move_workspace_changes(
         &repo.repo_path,
-        "home",
-        "home",
+        ".",
+        ".",
         WorkspaceMoveRequest {
             files: vec!["same-endpoint.txt".to_string()],
             ..WorkspaceMoveRequest::default()

@@ -104,7 +104,7 @@ fn print_cli_help() {
     println!("  treq set <workspace_name> [-d description] [-l title] [-t target_branch]");
     println!("  treq st [workspace_name]");
     println!(
-        "  treq mv <source> <destination> -f [FILES...] -r [RANGES...] -c [COMMITS...]  (use 'home' or '.' for the home repo)"
+        "  treq mv <source> <destination> -f [FILES...] -r [RANGES...] -c [COMMITS...]  (use '.' for the home repo)"
     );
     println!("  treq agent <branch> <prompt> [-m <edit|plan>]");
     println!("  treq commit <workspace_name> -m <message> [--push]");
