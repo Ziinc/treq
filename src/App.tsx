@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Router } from "wouter";
+import { useHashLocation } from "wouter/use-hash-location";
 import { Dashboard } from "./components/Dashboard";
 import { ToastProvider } from "./components/ui/toast";
 import { ThemeProvider } from "./hooks/useTheme";
@@ -61,7 +62,7 @@ function App() {
 								<DiffSettingsProvider>
 									<EditorAppsProvider>
 										<ToastProvider>
-											<Router>
+											<Router hook={useHashLocation}>
 												<AppContent />
 											</Router>
 										</ToastProvider>

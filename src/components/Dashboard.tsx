@@ -180,9 +180,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				previousViewModeRef.current = viewMode;
 			}
 			setViewMode("github");
-			navigate(
-				`${githubDetailPath("prs", prNumber)}?filter=${stateFilterForPrState(prState)}`,
-			);
+			navigate(githubDetailPath("prs", prNumber, stateFilterForPrState(prState)));
 		},
 		[viewMode, navigate],
 	);

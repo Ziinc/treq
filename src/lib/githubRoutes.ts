@@ -1,32 +1,43 @@
-/** URL routes for the GitHub integration pages, built on top of wouter. */
+/**
+ * URL routes for the GitHub integration pages, built on top of wouter.
+ *
+ * These are hash routes (see the `useHashLocation` Router in App.tsx), so
+ * everything lives after the `#` and never touches `location.search` — that's
+ * where the app's own `?repo=...` window-identity param lives. For the same
+ * reason, filters are encoded as a path segment rather than `?filter=...`:
+ * wouter's hash-location `navigate()` treats a `?` in the target as the
+ * *page's* real query string, not part of the hash.
+ */
 
 export type GitHubTab = "issues" | "prs" | "merge-queue";
 export type GitHubStateFilter = "open" | "closed" | "all";
 
 export const GITHUB_BASE_PATH = "/github";
 
-export function githubTabPath(tab: GitHubTab): string {
-	if (tab === "merge-queue") return `${GITHUB_BASE_PATH}/merge-queue`;
+export function githubTabPath(tab: "merge-queue"): string {
 	return `${GITHUB_BASE_PATH}/${tab}`;
 }
 
 export function githubListPath(
 	tab: "issues" | "prs",
-	filter?: GitHubStateFilter,
+	filter: GitHubStateFilter = "open",
 ): string {
-	const base = githubTabPath(tab);
-	return filter && filter !== "open" ? `${base}?filter=${filter}` : base;
+	return `${GITHUB_BASE_PATH}/${tab}/${filter}`;
 }
 
-export function githubNewItemPath(tab: "issues" | "prs"): string {
-	return `${githubTabPath(tab)}/new`;
+export function githubNewItemPath(
+	tab: "issues" | "prs",
+	filter: GitHubStateFilter = "open",
+): string {
+	return `${githubListPath(tab, filter)}/new`;
 }
 
 export function githubDetailPath(
 	tab: "issues" | "prs",
 	number: number,
+	filter: GitHubStateFilter = "open",
 ): string {
-	return `${githubTabPath(tab)}/${number}`;
+	return `${githubListPath(tab, filter)}/${number}`;
 }
 
 /** Maps a PR's gh state to the filter tab that will surface it in the list. */

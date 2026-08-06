@@ -8,7 +8,7 @@ import {
 	Plus,
 	RefreshCw,
 } from "lucide-react";
-import { useLocation, useRoute, useSearch } from "wouter";
+import { useLocation, useRoute } from "wouter";
 import { useAuth } from "../hooks/useAuth";
 import {
 	useDequeueBranches,
@@ -59,39 +59,38 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 	const dequeueBranches = useDequeueBranches(repoPath);
 
 	// Routing: the current tab, filter, selection, and create-form state all
-	// live in the URL so browser back/forward moves between them.
-	const [location, navigate] = useLocation();
-	const search = useSearch();
-	const isPrsRoute =
-		location === "/github/prs" || location.startsWith("/github/prs/");
+	// live in the URL (as /github/<tab>/<filter>/<selector?>) so browser
+	// back/forward moves between them.
+	const [, navigate] = useLocation();
 	const [isMergeQueueRoute] = useRoute("/github/merge-queue");
-	const [isIssueDetailRoute, issueDetailParams] = useRoute<{
-		number: string;
-	}>("/github/issues/:number");
-	const [isPrDetailRoute, prDetailParams] = useRoute<{ number: string }>(
-		"/github/prs/:number",
-	);
-	const [isIssueNewRoute] = useRoute("/github/issues/new");
-	const [isPrNewRoute] = useRoute("/github/prs/new");
+	const [isIssuesRoute, issuesParams] = useRoute<{
+		filter: string;
+		selector?: string;
+	}>("/github/issues/:filter/:selector?");
+	const [isPrsRoute, prsParams] = useRoute<{
+		filter: string;
+		selector?: string;
+	}>("/github/prs/:filter/:selector?");
 
 	const activeTab: GitHubTab = isMergeQueueRoute
 		? "merge-queue"
 		: isPrsRoute
 			? "prs"
 			: "issues";
-	const showCreateForm = isIssueNewRoute || isPrNewRoute;
-	const currentFilter =
-		(new URLSearchParams(search).get("filter") as GitHubStateFilter | null) ??
-		"open";
+	const routeParams = activeTab === "prs" ? prsParams : issuesParams;
+	const rawFilter = (isIssuesRoute || isPrsRoute) && routeParams?.filter;
+	const currentFilter: GitHubStateFilter =
+		rawFilter === "closed" || rawFilter === "all" ? rawFilter : "open";
+	const selector = routeParams?.selector;
+	const showCreateForm = selector === "new";
 
-	const parsedIssueNumber = isIssueDetailRoute
-		? Number(issueDetailParams?.number)
-		: NaN;
-	const parsedPrNumber = isPrDetailRoute ? Number(prDetailParams?.number) : NaN;
-	const selectedIssue = Number.isFinite(parsedIssueNumber)
-		? parsedIssueNumber
+	const parsedSelectedNumber =
+		selector !== undefined && selector !== "new" ? Number(selector) : NaN;
+	const selectedNumber = Number.isFinite(parsedSelectedNumber)
+		? parsedSelectedNumber
 		: null;
-	const selectedPr = Number.isFinite(parsedPrNumber) ? parsedPrNumber : null;
+	const selectedIssue = activeTab === "issues" ? selectedNumber : null;
+	const selectedPr = activeTab === "prs" ? selectedNumber : null;
 
 	const repoFullName = remoteInfo?.full_name ?? "";
 	const isListTab = activeTab === "issues" || activeTab === "prs";
@@ -178,15 +177,15 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 	}
 
 	function handleSelectIssue(n: number) {
-		navigate(githubDetailPath("issues", n));
+		navigate(githubDetailPath("issues", n, currentFilter));
 	}
 
 	function handleSelectPr(n: number) {
-		navigate(githubDetailPath("prs", n));
+		navigate(githubDetailPath("prs", n, currentFilter));
 	}
 
 	function handleNewClick() {
-		navigate(githubNewItemPath(activeTab as "issues" | "prs"));
+		navigate(githubNewItemPath(activeTab as "issues" | "prs", currentFilter));
 	}
 
 	function handleCloseDetail() {
@@ -299,7 +298,9 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 							<CreateIssueForm
 								repoFullName={repoFullName}
 								onSuccess={(n) =>
-									navigate(githubDetailPath("issues", n), { replace: true })
+									navigate(githubDetailPath("issues", n, currentFilter), {
+										replace: true,
+									})
 								}
 								onCancel={handleCloseDetail}
 							/>
@@ -307,7 +308,9 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 							<CreatePrForm
 								repoFullName={repoFullName}
 								onSuccess={(n) =>
-									navigate(githubDetailPath("prs", n), { replace: true })
+									navigate(githubDetailPath("prs", n, currentFilter), {
+										replace: true,
+									})
 								}
 								onCancel={handleCloseDetail}
 							/>

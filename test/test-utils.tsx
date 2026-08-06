@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React, { ReactNode } from "react";
 import { Router } from "wouter";
+import { useHashLocation } from "wouter/use-hash-location";
 import { ToastProvider } from "../src/components/ui/toast";
 import { TerminalSettingsProvider } from "../src/hooks/useTerminalSettings";
 import { ZoomSettingsProvider } from "../src/hooks/useZoomSettings";
@@ -29,7 +30,7 @@ const AllTheProviders = ({ children }: { children: ReactNode }) => {
 	});
 
 	return (
-		<Router>
+		<Router hook={useHashLocation}>
 			<ThemeProvider>
 				<ToastProvider>
 					<QueryClientProvider client={queryClient}>
