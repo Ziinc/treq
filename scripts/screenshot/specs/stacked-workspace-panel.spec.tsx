@@ -120,7 +120,7 @@ it("captures the stack panel ordered target-first with diff bars, and navigation
 	await captureDocument(document, {
 		name: "stacked-workspace-panel-01-grandchild-view",
 		expectations: [
-			`In the Code tab's main column, a bordered "Stack" panel reading "1 of 3" appears below the task/prompt input box, listing the target branch "${defaultBranch}" (with a down-arrow icon) as its very first row, above the stacked workspaces.`,
+			`In the Code tab's main column, a bordered "Stack" panel reading "1 of 3" appears below the task/prompt input box, listing the target branch "${defaultBranch}" (with an up-arrow icon) as its very first row, above the stacked workspaces.`,
 			`Below the target branch, the three workspaces appear top-to-bottom in stacking order: "${PARENT_BRANCH}", then "${CHILD_BRANCH}", then "${GRANDCHILD_BRANCH}" at the bottom -- the last one visually highlighted/current with a filled dot and highlighted background.`,
 			`Each of "${PARENT_BRANCH}", "${CHILD_BRANCH}", and "${GRANDCHILD_BRANCH}" shows a small green/red horizontal bar next to its "+N -N" line-change count, and the bars grow noticeably longer from "${PARENT_BRANCH}" (shortest, +2) to "${CHILD_BRANCH}" (+8) to "${GRANDCHILD_BRANCH}" (longest, +20).`,
 		],
