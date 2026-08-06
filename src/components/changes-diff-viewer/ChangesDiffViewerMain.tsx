@@ -51,6 +51,8 @@ export const ChangesDiffViewer = memo(
 				conflictedFiles = [],
 				showCommittedChanges = false,
 				onMoveFilesToNewWorkspace,
+				workspace,
+				baseBranch,
 			},
 			ref,
 		) => {
@@ -392,16 +394,22 @@ export const ChangesDiffViewer = memo(
 				fileActionTarget,
 				expandedContext,
 				commitPending,
+				pendingAction,
+				canCreatePr,
 				handleDiscardAll,
 				handleDiscardFiles,
 				handleCopyLineLocation,
 				handleCopyLines,
 				handleCommit,
+				handleCommitAndPush,
+				handleCommitAndCreatePR,
 				handleExpandContext,
 			} = useFileActions({
 				workspacePath,
 				repoPath,
 				workspaceId,
+				workspace,
+				baseBranch,
 				readOnly,
 				selectedUnstagedFiles,
 				stagedFiles,
@@ -429,6 +437,10 @@ export const ChangesDiffViewer = memo(
 					<FileSidebar
 						commitInputRef={commitInputRef}
 						handleCommit={handleCommit}
+						handleCommitAndPush={handleCommitAndPush}
+						handleCommitAndCreatePR={handleCommitAndCreatePR}
+						pendingAction={pendingAction}
+						canCreatePr={canCreatePr}
 						readOnly={readOnly}
 						files={files}
 						commitPending={commitPending}
