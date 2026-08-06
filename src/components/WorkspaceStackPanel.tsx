@@ -70,14 +70,15 @@ export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
 			return map;
 		}, [stack, commitQueries]);
 
-		// Bars are sized relative to the largest change in the stack, a la
-		// Gerrit's change list.
-		const maxTotal = useMemo(
+		// Each side of the bar is sized relative to the largest single-direction
+		// change (insertions or deletions) in the stack, a la Gerrit's change
+		// list.
+		const maxChange = useMemo(
 			() =>
 				Math.max(
 					0,
-					...Array.from(diffStatsByWorkspaceId.values()).map(
-						(stats) => stats.insertions + stats.deletions,
+					...Array.from(diffStatsByWorkspaceId.values()).map((stats) =>
+						Math.max(stats.insertions, stats.deletions),
 					),
 				),
 			[diffStatsByWorkspaceId],
@@ -112,7 +113,7 @@ export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
 										deletions: 0,
 									}
 								}
-								maxTotal={maxTotal}
+								maxChange={maxChange}
 								onSelect={onSelectWorkspace}
 							/>
 						))}
@@ -133,41 +134,53 @@ export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
 	},
 );
 
-const DIFF_BAR_WIDTH_PX = 56;
+// Half-width of each side of the bar (insertions grow left from the axis,
+// deletions grow right), a la Gerrit's change list.
+const DIFF_BAR_HALF_WIDTH_PX = 14;
 
 function DiffBar({
 	diffStats,
-	maxTotal,
+	maxChange,
 }: {
 	diffStats: WorkspaceDiffStats;
-	maxTotal: number;
+	maxChange: number;
 }) {
-	const total = diffStats.insertions + diffStats.deletions;
-	if (total === 0 || maxTotal === 0) return null;
+	const { insertions, deletions } = diffStats;
+	if (insertions === 0 && deletions === 0) return null;
 
-	const barWidth = Math.max(
-		2,
-		Math.round((total / maxTotal) * DIFF_BAR_WIDTH_PX),
-	);
-	const insertionWidth = Math.round(
-		(diffStats.insertions / total) * barWidth,
-	);
-	const deletionWidth = barWidth - insertionWidth;
+	const insertionWidth =
+		maxChange === 0 || insertions === 0
+			? 0
+			: Math.max(1, Math.round((insertions / maxChange) * DIFF_BAR_HALF_WIDTH_PX));
+	const deletionWidth =
+		maxChange === 0 || deletions === 0
+			? 0
+			: Math.max(1, Math.round((deletions / maxChange) * DIFF_BAR_HALF_WIDTH_PX));
 
 	return (
 		<div
-			className="flex h-1.5 flex-shrink-0 overflow-hidden rounded-sm"
-			style={{ width: DIFF_BAR_WIDTH_PX }}
-			title={`+${diffStats.insertions} -${diffStats.deletions}`}
+			className="flex h-1.5 flex-shrink-0 items-center"
+			title={`+${insertions} -${deletions}`}
 		>
 			<div
-				className="h-full bg-green-600 dark:bg-green-400"
-				style={{ width: insertionWidth }}
-			/>
+				className="flex h-full justify-end"
+				style={{ width: DIFF_BAR_HALF_WIDTH_PX }}
+			>
+				<div
+					className="h-full bg-green-600 dark:bg-green-400"
+					style={{ width: insertionWidth }}
+				/>
+			</div>
+			<div className="w-px h-full bg-border" aria-hidden="true" />
 			<div
-				className="h-full bg-red-600 dark:bg-red-400"
-				style={{ width: deletionWidth }}
-			/>
+				className="flex h-full justify-start"
+				style={{ width: DIFF_BAR_HALF_WIDTH_PX }}
+			>
+				<div
+					className="h-full bg-red-600 dark:bg-red-400"
+					style={{ width: deletionWidth }}
+				/>
+			</div>
 		</div>
 	);
 }
@@ -175,11 +188,11 @@ function DiffBar({
 interface StackItemProps {
 	entry: StackedWorkspaceEntry;
 	diffStats: WorkspaceDiffStats;
-	maxTotal: number;
+	maxChange: number;
 	onSelect?: (workspace: Workspace) => void;
 }
 
-function StackItem({ entry, diffStats, maxTotal, onSelect }: StackItemProps) {
+function StackItem({ entry, diffStats, maxChange, onSelect }: StackItemProps) {
 	const { workspace, isCurrent } = entry;
 	const hasStats = diffStats.insertions > 0 || diffStats.deletions > 0;
 	const title = getWorkspaceDisplayTitle(workspace);
@@ -224,15 +237,13 @@ function StackItem({ entry, diffStats, maxTotal, onSelect }: StackItemProps) {
 							</Tooltip>
 						</TooltipProvider>
 						{hasStats && (
-							<div className="ml-auto flex items-center gap-2">
-								<DiffBar diffStats={diffStats} maxTotal={maxTotal} />
-								<span className="text-xs font-mono">
-									<span className="text-green-600 dark:text-green-400">
-										+{diffStats.insertions}
-									</span>{" "}
-									<span className="text-red-600 dark:text-red-400">
-										-{diffStats.deletions}
-									</span>
+							<div className="ml-auto flex items-center gap-1.5">
+								<span className="text-xs font-mono text-green-600 dark:text-green-400">
+									+{diffStats.insertions}
+								</span>
+								<DiffBar diffStats={diffStats} maxChange={maxChange} />
+								<span className="text-xs font-mono text-red-600 dark:text-red-400">
+									-{diffStats.deletions}
 								</span>
 							</div>
 						)}

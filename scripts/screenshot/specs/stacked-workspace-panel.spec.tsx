@@ -2,12 +2,14 @@ import userEvent from "@testing-library/user-event";
 import * as React from "react";
 import { expect, it } from "vitest";
 import { Dashboard } from "../../../src/components/Dashboard";
-import { getWorkspaces } from "../../../src/lib/api";
+import { createCommit, getWorkspaces } from "../../../src/lib/api";
 import { render, screen, waitFor, within } from "../../../test/test-utils";
 import {
 	commitWorkspaceFile,
 	createTestRepo,
 	openRepo,
+	resolveWorkspacePath,
+	writeWorkspaceFile,
 } from "../../../test/utils";
 import { captureDocument } from "../capture";
 
@@ -88,6 +90,20 @@ it("captures the stack panel and navigation to a sibling workspace", async () =>
 		Array.from({ length: 10 }, (_, i) => `child line ${i + 1}`).join("\n"),
 		"Add child feature file",
 	);
+	// Truncate the file down to 4 lines so this commit is a pure deletion,
+	// giving the child workspace both insertions (+10, from above) and
+	// deletions (-6) -- enough to show both sides of the diff bar.
+	const childWorkspacePath = resolveWorkspacePath(
+		repoPath,
+		child.workspace_path,
+	);
+	writeWorkspaceFile(
+		childWorkspacePath,
+		"child-feature.txt",
+		`${Array.from({ length: 4 }, (_, i) => `child line ${i + 1}`).join("\n")}\n`,
+		false,
+	);
+	await createCommit(repoPath, child.id, "Trim child feature file");
 
 	// The stack panel's per-workspace commit query already fired once (with
 	// zero commits) when the child workspace was first selected above, and
@@ -107,6 +123,7 @@ it("captures the stack panel and navigation to a sibling workspace", async () =>
 		.closest("button") as HTMLElement;
 	await waitFor(() => {
 		expect(childItem.textContent).toMatch(/\+10/);
+		expect(childItem.textContent).toMatch(/-6/);
 		expect(parentItem.textContent).toMatch(/\+2/);
 	});
 
@@ -115,7 +132,7 @@ it("captures the stack panel and navigation to a sibling workspace", async () =>
 		expectations: [
 			`In the Code tab's main column, a bordered "Stack" panel reading "1 of 2" appears below the task/prompt input box and above the "Go to file" search row and file list.`,
 			`The stack panel lists two items, top-to-bottom: "${CHILD_BRANCH}" and "${PARENT_BRANCH}", with the target branch below them at the bottom of the list.`,
-			`Both "${CHILD_BRANCH}" (highlighted/current, +10) and "${PARENT_BRANCH}" (not highlighted, +2) show a small green horizontal bar next to their line-change counts, and the "${CHILD_BRANCH}" bar is visibly longer than the "${PARENT_BRANCH}" bar, reflecting +10 vs. +2 lines.`,
+			`Each item shows a small diff bar with a green "+N" number on its left, a thin vertical axis line in the middle, and a red "-N" number on its right; "${CHILD_BRANCH}" reads "+10" / "-6" with both a green segment left of the axis and a red segment right of it, while "${PARENT_BRANCH}" reads "+2" / "-0" with only a short green segment and no red segment.`,
 		],
 	});
 
