@@ -123,6 +123,31 @@ describe("WorkspaceStackPanel", () => {
 		expect(await screen.findByText("2 of 3")).toBeTruthy();
 	});
 
+	it("shows a help tooltip explaining what a stack is", async () => {
+		vi.mocked(api.listWorkspaceStatuses).mockResolvedValue(
+			asStatuses([rootWorkspace, middleWorkspace, tipWorkspace]),
+		);
+		vi.mocked(api.listCommits).mockResolvedValue(makeLogResult(0, 0));
+		const user = userEvent.setup();
+
+		render(
+			<WorkspaceStackPanel
+				repoPath={middleWorkspace.repo_path}
+				workspace={middleWorkspace}
+				defaultBranch="main"
+			/>,
+		);
+
+		const helpButton = await screen.findByRole("button", {
+			name: /what is a stack/i,
+		});
+		await user.hover(helpButton);
+
+		expect(await screen.findByRole("tooltip")).toHaveTextContent(
+			/chain of workspaces that build on each other/i,
+		);
+	});
+
 	it("renders every workspace title in the stack, tip-first", async () => {
 		vi.mocked(api.listWorkspaceStatuses).mockResolvedValue(
 			asStatuses([rootWorkspace, middleWorkspace, tipWorkspace]),
