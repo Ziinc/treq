@@ -11,7 +11,10 @@ import {
 	pushWorkspaceToRemote,
 } from "../../../lib/api";
 import type { Workspace } from "../../../lib/api-types";
-import { useGitRemoteInfo, usePrInfoViaGh } from "../../../hooks/useMergeQueueStatus";
+import {
+	useGitRemoteInfo,
+	usePrInfoViaGh,
+} from "../../../hooks/useMergeQueueStatus";
 import type { CommitAction, DiffLineSelection, FileHunksData } from "../types";
 import { computeHunkLineNumbers, parseHunkHeader } from "../utils";
 import type { useToast } from "../../ui/toast";
