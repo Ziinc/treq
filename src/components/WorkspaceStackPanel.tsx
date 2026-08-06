@@ -30,7 +30,8 @@ interface WorkspaceStackPanelProps {
 /**
  * Shows the chain of workspaces stacked on top of one another (a la a
  * stacked-PR view), with the current workspace highlighted. Renders nothing
- * when the given workspace isn't stacked on top of another workspace.
+ * when the given workspace isn't part of a multi-workspace stack (alone on
+ * the default/external branch with no stacked descendants).
  */
 export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
 	({ repoPath, workspace, defaultBranch, onSelectWorkspace }) => {

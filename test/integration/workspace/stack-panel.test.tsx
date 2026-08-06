@@ -42,7 +42,7 @@ describe("ShowWorkspace - stack panel", () => {
 		await screen.findByText(parentBranch, { selector: "button *" });
 	}
 
-	it("does not render the stack panel for the main repository or a default-branch workspace", async () => {
+	it("does not render the stack panel for the main repository or a lone default-branch workspace", async () => {
 		await createWorkspace(repoPath, "feat/alpha");
 		render(<Dashboard />);
 
@@ -75,6 +75,27 @@ describe("ShowWorkspace - stack panel", () => {
 
 		const header = await screen.findByTestId("show-workspace-header");
 		await within(header).findByText("feat/alpha");
+
+		// Stack root still shows the card so you can navigate back up the stack.
+		const rootPanel = await screen.findByTestId("workspace-stack-panel");
+		expect(within(rootPanel).getByText("2 of 2")).toBeTruthy();
+		expect(within(rootPanel).getByText("feat/beta")).toBeTruthy();
+	});
+
+	it("shows the stack panel when viewing the first workspace of a stack", async () => {
+		await createWorkspace(repoPath, "feat/alpha");
+		await createWorkspace(repoPath, "feat/beta");
+		render(<Dashboard />);
+
+		await stackChildOntoParentViaHeaderUi("feat/beta", "feat/alpha");
+		await screen.findByTestId("workspace-stack-panel");
+
+		await user.click(await findSidebarBranchElement("feat/alpha"));
+
+		const panel = await screen.findByTestId("workspace-stack-panel");
+		expect(within(panel).getByText("2 of 2")).toBeTruthy();
+		expect(within(panel).getByText("feat/beta")).toBeTruthy();
+		expect(within(panel).getByText("feat/alpha")).toBeTruthy();
 	});
 
 	it("shows real line-change counts for a stacked workspace with commits", async () => {
