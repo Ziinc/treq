@@ -154,7 +154,7 @@ it("captures the outline-green Merge button when CI is not all passing", async (
 	await captureDocument(document, {
 		name: "merge-button-color-states-01-outline",
 		expectations: [
-			'The "Merge..." button in the workspace header has a green outline (border) with a green text/icon color, but its interior background is NOT filled solid green -- it matches the surrounding card background.',
+			'The "Merge..." button in the workspace header has a plain neutral outline (a gray/input-colored border, no green anywhere on it) with normal foreground text/icon color, and its interior background matches the surrounding card background.',
 			'A yellow "1/2" CI status pill (still running) sits to the left of the Merge button, showing CI has not finished passing.',
 		],
 	});

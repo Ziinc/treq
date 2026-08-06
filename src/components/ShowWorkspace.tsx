@@ -1713,9 +1713,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 														disabled={rebasing || conflictCount > 0}
 														className={cn(
 															"gap-1",
-															ciAllPassing
-																? "bg-green-600 hover:bg-green-700 text-white"
-																: "border-green-600 text-green-700 hover:bg-green-600/10 hover:text-green-700 dark:text-green-400 dark:border-green-500",
+															ciAllPassing &&
+																"bg-green-600 hover:bg-green-700 text-white",
 														)}
 													>
 														<GitCompareArrows className="w-4 h-4" />
