@@ -70,6 +70,8 @@ interface WorkspaceTerminalPaneViewProps {
 	) => void;
 	handleCloseClaudeSession: (sessionId: number) => void | Promise<void>;
 	onTerminalDoubleClick: (terminalId: string) => void;
+	onTerminalOutput?: (terminalId: string) => void;
+	onTerminalIdle?: (terminalId: string) => void;
 }
 
 export const WorkspaceTerminalPaneView: React.FC<
@@ -101,6 +103,8 @@ export const WorkspaceTerminalPaneView: React.FC<
 	handleTerminalResize,
 	handleCloseClaudeSession,
 	onTerminalDoubleClick,
+	onTerminalOutput,
+	onTerminalIdle,
 }) => (
 	<div
 		ref={paneRef as React.Ref<HTMLDivElement>}
@@ -365,6 +369,10 @@ export const WorkspaceTerminalPaneView: React.FC<
 														onClose={() => handleCloseShell(terminalId)}
 														canClose={true}
 														onSessionError={onSessionError}
+														onTerminalOutput={() =>
+															onTerminalOutput?.(terminalId)
+														}
+														onTerminalIdle={() => onTerminalIdle?.(terminalId)}
 														terminalRefs={
 															terminalRefs as React.MutableRefObject<
 																Map<string, ConsolidatedTerminalHandle | null>
@@ -407,6 +415,8 @@ export const WorkspaceTerminalPaneView: React.FC<
 														handleCloseClaudeSession(terminal.data.sessionId)
 													}
 													onSessionError={onSessionError}
+													onTerminalOutput={() => onTerminalOutput?.(terminalId)}
+													onTerminalIdle={() => onTerminalIdle?.(terminalId)}
 													terminalRefs={
 														terminalRefs as React.MutableRefObject<
 															Map<string, ConsolidatedTerminalHandle | null>

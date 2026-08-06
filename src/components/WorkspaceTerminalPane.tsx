@@ -14,9 +14,11 @@ import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { type ClaudeSessionData } from "./terminal/types";
 import { WorkspaceTerminalPaneView } from "./WorkspaceTerminalPaneView";
 import { buildWorkspaceGroups } from "./workspace-terminal-pane/buildWorkspaceGroups";
-import { useTerminalPaneHeightResize } from "./workspace-terminal-pane/useTerminalPaneHeightResize";
 import { useScrollContainerWidth } from "./workspace-terminal-pane/useScrollContainerWidth";
 import { useScrollTerminalIntoView } from "./workspace-terminal-pane/useScrollTerminalIntoView";
+import { useTerminalPaneHeightResize } from "./workspace-terminal-pane/useTerminalPaneHeightResize";
+import { useTerminalSessionActions } from "./workspace-terminal-pane/useTerminalSessionActions";
+import { useTerminalSessionSummaries } from "./workspace-terminal-pane/useTerminalSessionSummaries";
 import {
 	type ShellTerminalData,
 	type WorkspaceTerminalPaneHandle,
@@ -36,9 +38,12 @@ const WorkspaceTerminalPaneInner = forwardRef<
 			currentBranch,
 			claudeSessions = [],
 			activeClaudeSessionId = null,
+			onActiveSessionChange,
 			onCreateNewSession,
 			onCloseSession,
 			onNavigateToWorkspace,
+			workspaceBranchByPath,
+			onTerminalsChange,
 			className,
 		},
 		ref,
@@ -54,9 +59,9 @@ const WorkspaceTerminalPaneInner = forwardRef<
 			useScrollTerminalIntoView(scrollContainerRef);
 
 		// Track which terminal is focused (last-clicked)
-		const [activePtySessionId, setActivePtySessionId] = useState<string | null>(
-			null,
-		);
+		const [activePtySessionId, setActivePtySessionId] = useState<
+			string | null
+		>(null);
 
 		// Clear active terminal when clicking outside the pane
 		useEffect(() => {
@@ -301,31 +306,6 @@ const WorkspaceTerminalPaneInner = forwardRef<
 			],
 		);
 
-		// Expose methods via ref for command palette
-		useImperativeHandle(
-			ref,
-			() => ({
-				toggleCollapse: () => setCollapsed((prev) => !prev),
-				toggleMaximize: () => {
-					if (maximized) {
-						setMaximized(false);
-					} else {
-						setCollapsed(false);
-						setMaximized(true);
-					}
-				},
-				createAgentSession: handleCreateAgentSession,
-				createShellSession: handleAddShell,
-				closeTerminalsForWorkspace,
-			}),
-			[
-				maximized,
-				handleCreateAgentSession,
-				handleAddShell,
-				closeTerminalsForWorkspace,
-			],
-		);
-
 		// Terminal width resize handler
 		const handleTerminalResize = useCallback(
 			(leftId: string, rightId: string, deltaX: number) => {
@@ -507,6 +487,70 @@ const WorkspaceTerminalPaneInner = forwardRef<
 			}
 		}, [allTerminals.length]);
 
+		// Track last-activity timestamp + streaming state per terminal id, for
+		// the sidebar's terminal sessions list (ordering, idle icon, spinner).
+		const { handleTerminalOutput, handleTerminalIdlePulse, terminalSummariesRef } =
+			useTerminalSessionSummaries({
+				allTerminals,
+				workspaceBranchByPath,
+				currentBranch,
+				onTerminalsChange,
+			});
+
+		const {
+			handleFocusTerminalById,
+			handleCloseTerminalById,
+			handleCloseIdleTerminals,
+			handleCloseAllTerminals,
+		} = useTerminalSessionActions({
+			claudeSessions,
+			shellTerminals,
+			workspaceBranchByPath,
+			terminalSummariesRef,
+			setCollapsed,
+			setMountedClaudeSessions,
+			setTerminalOrder,
+			setActivePtySessionId,
+			onActiveSessionChange,
+			onNavigateToWorkspace,
+			scrollToTerminal,
+			handleCloseClaudeSession,
+			handleCloseShell,
+		});
+
+		// Expose methods via ref for command palette + sidebar terminal list
+		useImperativeHandle(
+			ref,
+			() => ({
+				toggleCollapse: () => setCollapsed((prev) => !prev),
+				toggleMaximize: () => {
+					if (maximized) {
+						setMaximized(false);
+					} else {
+						setCollapsed(false);
+						setMaximized(true);
+					}
+				},
+				createAgentSession: handleCreateAgentSession,
+				createShellSession: handleAddShell,
+				closeTerminalsForWorkspace,
+				focusTerminal: handleFocusTerminalById,
+				closeTerminal: handleCloseTerminalById,
+				closeIdleTerminals: handleCloseIdleTerminals,
+				closeAllTerminals: handleCloseAllTerminals,
+			}),
+			[
+				maximized,
+				handleCreateAgentSession,
+				handleAddShell,
+				closeTerminalsForWorkspace,
+				handleFocusTerminalById,
+				handleCloseTerminalById,
+				handleCloseIdleTerminals,
+				handleCloseAllTerminals,
+			],
+		);
+
 		const workspaceGroups = useMemo(
 			() => buildWorkspaceGroups(allTerminals, claudeSessions),
 			[allTerminals, claudeSessions],
@@ -573,6 +617,8 @@ const WorkspaceTerminalPaneInner = forwardRef<
 				handleTerminalResize={handleTerminalResize}
 				handleCloseClaudeSession={handleCloseClaudeSession}
 				onTerminalDoubleClick={handleTerminalDoubleClick}
+				onTerminalOutput={handleTerminalOutput}
+				onTerminalIdle={handleTerminalIdlePulse}
 			/>
 		);
 	},
