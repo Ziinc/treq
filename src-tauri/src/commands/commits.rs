@@ -39,7 +39,7 @@ pub fn get_workspace_file_lines(
 #[tauri::command]
 pub async fn jj_restore_file(workspace_path: String, file_path: String) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        jj::jj_restore_file(&workspace_path, &file_path).map_err(|e| e.to_string())
+        crate::core::discard_file_changes(&workspace_path, &file_path)
     })
     .await
     .map_err(|e| format!("Failed to join jj_restore_file task: {}", e))?
@@ -47,11 +47,9 @@ pub async fn jj_restore_file(workspace_path: String, file_path: String) -> Resul
 
 #[tauri::command]
 pub async fn jj_restore_all(workspace_path: String) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        jj::jj_restore_all(&workspace_path).map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| format!("Failed to join jj_restore_all task: {}", e))?
+    tauri::async_runtime::spawn_blocking(move || crate::core::discard_all_changes(&workspace_path))
+        .await
+        .map_err(|e| format!("Failed to join jj_restore_all task: {}", e))?
 }
 
 #[tauri::command]
@@ -75,11 +73,21 @@ pub async fn jj_restore_snapshot(
 
 #[tauri::command]
 pub async fn discard_workspace_changes(workspace_path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::core::discard_all_changes(&workspace_path))
+        .await
+        .map_err(|e| format!("Failed to join discard_workspace_changes task: {}", e))?
+}
+
+#[tauri::command]
+pub async fn discard_workspace_file(
+    workspace_path: String,
+    file_path: String,
+) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        jj::jj_restore_all(&workspace_path).map_err(|e| e.to_string())
+        crate::core::discard_file_changes(&workspace_path, &file_path)
     })
     .await
-    .map_err(|e| format!("Failed to join discard_workspace_changes task: {}", e))?
+    .map_err(|e| format!("Failed to join discard_workspace_file task: {}", e))?
 }
 
 #[tauri::command]
