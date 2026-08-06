@@ -1,9 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { ArrowDown, Layers2 } from "lucide-react";
 import { memo, useMemo } from "react";
 import { listCommits, listWorkspaceStatuses, type Workspace } from "../lib/api";
 import { cn, formatFullTimestamp, formatRelativeTime } from "../lib/utils";
-import { sumWorkspaceDiffStats } from "../lib/workspace-stack";
+import {
+	sumWorkspaceDiffStats,
+	type WorkspaceDiffStats,
+} from "../lib/workspace-stack";
 import {
 	getWorkspaceStack,
 	type StackedWorkspaceEntry,
@@ -48,6 +51,39 @@ export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
 			return getWorkspaceStack(allWorkspaces, workspace.id);
 		}, [workspaceStatuses, workspace.id, defaultBranch]);
 
+		const commitQueries = useQueries({
+			queries: (stack ?? []).map((entry) => ({
+				queryKey: ["workspace-commits", repoPath, entry.workspace.id],
+				queryFn: () => listCommits(repoPath, entry.workspace.id),
+				enabled: Boolean(repoPath),
+			})),
+		});
+
+		const diffStatsByWorkspaceId = useMemo(() => {
+			const map = new Map<number, WorkspaceDiffStats>();
+			(stack ?? []).forEach((entry, index) => {
+				map.set(
+					entry.workspace.id,
+					sumWorkspaceDiffStats(commitQueries[index]?.data?.commits ?? []),
+				);
+			});
+			return map;
+		}, [stack, commitQueries]);
+
+		// Each side of the bar is sized relative to the largest single-direction
+		// change (insertions or deletions) in the stack, a la Gerrit's change
+		// list.
+		const maxChange = useMemo(
+			() =>
+				Math.max(
+					0,
+					...Array.from(diffStatsByWorkspaceId.values()).map((stats) =>
+						Math.max(stats.insertions, stats.deletions),
+					),
+				),
+			[diffStatsByWorkspaceId],
+		);
+
 		if (!stack) return null;
 
 		const currentIndex = stack.findIndex((entry) => entry.isCurrent);
@@ -70,8 +106,14 @@ export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
 						{stack.map((entry) => (
 							<StackItem
 								key={entry.workspace.id}
-								repoPath={repoPath}
 								entry={entry}
+								diffStats={
+									diffStatsByWorkspaceId.get(entry.workspace.id) ?? {
+										insertions: 0,
+										deletions: 0,
+									}
+								}
+								maxChange={maxChange}
 								onSelect={onSelectWorkspace}
 							/>
 						))}
@@ -92,25 +134,72 @@ export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
 	},
 );
 
+// Half-width of each side of the bar (insertions grow left from the axis,
+// deletions grow right), a la Gerrit's change list.
+const DIFF_BAR_HALF_WIDTH_PX = 14;
+
+function DiffBar({
+	diffStats,
+	maxChange,
+}: {
+	diffStats: WorkspaceDiffStats;
+	maxChange: number;
+}) {
+	const { insertions, deletions } = diffStats;
+	if (insertions === 0 && deletions === 0) return null;
+
+	const insertionWidth =
+		maxChange === 0 || insertions === 0
+			? 0
+			: Math.max(
+					1,
+					Math.round((insertions / maxChange) * DIFF_BAR_HALF_WIDTH_PX),
+				);
+	const deletionWidth =
+		maxChange === 0 || deletions === 0
+			? 0
+			: Math.max(
+					1,
+					Math.round((deletions / maxChange) * DIFF_BAR_HALF_WIDTH_PX),
+				);
+
+	return (
+		<div
+			className="flex h-1.5 flex-shrink-0 items-center"
+			title={`+${insertions} -${deletions}`}
+		>
+			<div
+				className="flex h-full justify-end"
+				style={{ width: DIFF_BAR_HALF_WIDTH_PX }}
+			>
+				<div
+					className="h-full bg-green-600 dark:bg-green-400"
+					style={{ width: insertionWidth }}
+				/>
+			</div>
+			<div className="w-px h-full bg-border" aria-hidden="true" />
+			<div
+				className="flex h-full justify-start"
+				style={{ width: DIFF_BAR_HALF_WIDTH_PX }}
+			>
+				<div
+					className="h-full bg-red-600 dark:bg-red-400"
+					style={{ width: deletionWidth }}
+				/>
+			</div>
+		</div>
+	);
+}
+
 interface StackItemProps {
-	repoPath: string;
 	entry: StackedWorkspaceEntry;
+	diffStats: WorkspaceDiffStats;
+	maxChange: number;
 	onSelect?: (workspace: Workspace) => void;
 }
 
-function StackItem({ repoPath, entry, onSelect }: StackItemProps) {
+function StackItem({ entry, diffStats, maxChange, onSelect }: StackItemProps) {
 	const { workspace, isCurrent } = entry;
-
-	const { data: logResult } = useQuery({
-		queryKey: ["workspace-commits", repoPath, workspace.id],
-		queryFn: () => listCommits(repoPath, workspace.id),
-		enabled: Boolean(repoPath),
-	});
-
-	const diffStats = useMemo(
-		() => sumWorkspaceDiffStats(logResult?.commits ?? []),
-		[logResult],
-	);
 	const hasStats = diffStats.insertions > 0 || diffStats.deletions > 0;
 	const title = getWorkspaceDisplayTitle(workspace);
 
@@ -154,14 +243,15 @@ function StackItem({ repoPath, entry, onSelect }: StackItemProps) {
 							</Tooltip>
 						</TooltipProvider>
 						{hasStats && (
-							<span className="text-xs font-mono ml-auto">
-								<span className="text-green-600 dark:text-green-400">
+							<div className="ml-auto flex items-center gap-1.5">
+								<span className="text-xs font-mono text-green-600 dark:text-green-400">
 									+{diffStats.insertions}
-								</span>{" "}
-								<span className="text-red-600 dark:text-red-400">
+								</span>
+								<DiffBar diffStats={diffStats} maxChange={maxChange} />
+								<span className="text-xs font-mono text-red-600 dark:text-red-400">
 									-{diffStats.deletions}
 								</span>
-							</span>
+							</div>
 						)}
 					</div>
 				</div>
