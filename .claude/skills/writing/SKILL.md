@@ -1,10 +1,12 @@
-eb---
+---
 name: writing
 description: >-
   Write or revise docs and articles in the treq house voice: direct, declarative
-  prose that explains to a peer engineer, with no buzzwords, no marketing
-  language, and none of the common AI-generated writing tells (em dashes, "not
-  just X but Y", rule-of-three padding, "it's important to note"). Use when
+  prose that explains to a peer engineer, grounded in Orwell's rules for plain
+  English and ASD-STE100 (Simplified Technical English), with no buzzwords, no
+  marketing language, and none of the common AI-generated writing tells (em
+  dashes, "not just X but Y", rule-of-three padding, "it's important to note").
+  Precise software terminology stays in, vague jargon does not. Use when
   drafting or editing any .mdx or .md doc under web/, a README, a changelog, or
   release notes.
 ---
@@ -29,7 +31,70 @@ mechanism before its implication, so the reader understands why before they are
 told what it means. Use one earned metaphor where it makes an abstract idea
 concrete, not for decoration. Sharpen a point with contrast when a distinction
 matters. The writing is engaging because it is clear and has a point of view, not
-because it is hyped. Trust the reader to keep up.
+because it is hyped. Trust the reader to keep up. The underlying discipline
+comes from Orwell's rules and ASD-STE100. Cut every word that does not carry
+weight. Make each sentence mean only one thing. The next section covers both,
+plus where software terminology is exempt.
+
+## Foundational principles: Orwell's rules and ASD-STE100
+
+This voice is built on two sources: George Orwell's rules for clear prose, and
+ASD-STE100 (Simplified Technical English), the standard aircraft-maintenance
+writers use so a technical sentence cannot be misread. treq docs are lower
+stakes than a maintenance manual, but the same discipline makes a doc easier to
+skim and harder to misread. Apply both to every draft.
+
+### Orwell's six rules
+
+From "Politics and the English Language" (1946).
+
+1. Never use a metaphor, simile, or figure of speech you have seen in print
+   before. If you cannot invent your own for the point you are making, cut it.
+2. Never use a long word where a short one does the job. "Use" beats
+   "utilize". "Start" beats "initiate".
+3. If a word can come out, take it out. Every adjective and adverb has to earn
+   its place in the sentence.
+4. Never use the passive where you can use the active. "The service dispatches
+   the alert", not "the alert is dispatched by the service".
+5. Never use a foreign phrase, a scientific word, or jargon if an everyday
+   English word says the same thing. This bends for software: a precise
+   technical term is not jargon if it is the correct name for the thing. See
+   "Where software terms fit" below.
+6. Break any of these rules before you write something barbarous. Clarity
+   wins over the rule.
+
+### ASD-STE100 (Simplified Technical English)
+
+Adapted here for prose docs, not the full aerospace dictionary standard.
+
+- One idea, one sentence. If a sentence carries two instructions or two claims
+  joined by "and", split it.
+- Keep sentences short. 20 words is the target, 30 is the ceiling the
+  readability checker flags. Longer sentences hide more than one claim.
+- Give each concept one name and reuse it through the doc. Do not vary between
+  "repository", "repo", and "codebase" for the same referent. Pick the term the
+  rest of the site uses and keep it.
+- Avoid stacking more than three nouns in a row: "user authentication token
+  refresh logic" forces the reader to unpack it backward. Rewrite with a
+  preposition: "the logic that refreshes the token after user authentication".
+- Prefer a plain verb over an -ing noun form when describing an action: "to
+  configure the workspace", not "workspace configuration", when you mean the
+  act of doing it.
+- Write a sequence of steps as a numbered list, one action per line, not as a
+  prose paragraph describing what happens in order.
+
+### Where software terms fit
+
+Neither source means strip out real technical vocabulary. ASD-STE100 restricts
+general vocabulary to keep prose unambiguous, and Orwell's rule 5 targets
+jargon, but a correct, precise software term is never the problem it is
+guarding against. Use `commit`, `rebase`, `workspace`, `endpoint`, `NAPI`,
+`IPC` exactly and consistently, the same way a maintenance manual keeps
+"hydraulic actuator" instead of paraphrasing it into something vaguer. The
+target is marketing jargon and invented abstraction ("synergistic tooling
+layer", "solutioning"), not domain precision. If the reader needs the term to
+do the task, keep it, use the correct one, and define it once on first
+mention.
 
 ## Annotated exemplars
 
@@ -80,6 +145,11 @@ Same facts, no hype, no semicolon, and it now leads with what the reader gains.
 - Second person when addressing the reader.
 - Mechanism before implication.
 - Earn every metaphor. If it does not make an idea more concrete, cut it.
+- If a word can come out without changing the meaning, take it out.
+- Sentences aim for 20 words, 30 is the ceiling. Split anything longer.
+- One name per concept, used consistently. Do not alternate synonyms for the
+  same referent in one doc. Keep precise software terms; drop vague jargon.
+  See "Foundational principles" above.
 - No hedging or qualifiers: "quite", "fairly", "relatively", "somewhat".
 - No apologetic openers: "it should be noted that", "it is worth mentioning".
 - Paragraphs 3 to 4 sentences. Longer means break it up or use a list.
@@ -309,13 +379,17 @@ Run this against any draft before you return it.
    reports, and pull long sentences apart.
 2. Check paragraph length. Anything over 4 sentences gets split.
 3. Check every claim is declarative, not hedged.
-4. Remove any sentence that restates a point already made.
-5. Verify against the three criteria from
+4. Apply Orwell's rules and ASD-STE100: one claim per sentence, active voice,
+   no word that can be cut, one name per concept reused consistently, no noun
+   stacks over three deep. Keep precise software terms, drop paraphrased
+   jargon. See "Foundational principles" above.
+5. Remove any sentence that restates a point already made.
+6. Verify against the three criteria from
    `web/learn/workflows/ai/ai-documentation-writing.md`: technical accuracy (every
    claim checks out against the source), reader appropriateness (the intended
    reader understands it at first read), and task completeness (a reader can act
    on it using only this text).
-6. Check interlinking: at least 2 to 3 in-body links to genuinely relevant
+7. Check interlinking: at least 2 to 3 in-body links to genuinely relevant
    existing articles, a `## Next Steps` list, and every link target verified
    to exist. See the Interlinking section above.
 
@@ -352,4 +426,7 @@ concept-doc headings are intentionally title case, so that flag is informational
 
 The banlists draw on published catalogues of AI writing tells: oliviacal.com, the
 Forbes "Seven Tells of AI Writing", Wikipedia:Signs_of_AI_writing,
-github.com/kdgbalmer/ai-tells, and dragonflyeditorial.com.
+github.com/kdgbalmer/ai-tells, and dragonflyeditorial.com. The voice model itself
+draws on Orwell's "Politics and the English Language" (1946) and ASD-STE100,
+the Simplified Technical English standard maintained by ASD (AeroSpace and
+Defence Industries Association of Europe).
