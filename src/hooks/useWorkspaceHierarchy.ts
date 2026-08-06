@@ -6,7 +6,7 @@ import {
 	setWorkspaceTargetBranch,
 } from "../lib/api";
 import { getFullWorkspacePath } from "../lib/utils";
-import { isDescendantOf } from "../lib/workspace-tree";
+import { planWorkspaceTargetMove } from "../lib/workspace-tree";
 import { useCreateStackedWorkspace } from "./useCreateStackedWorkspace";
 
 interface UseWorkspaceHierarchyOptions {
@@ -79,34 +79,31 @@ export function useWorkspaceHierarchy({
 		[repoPath, defaultBranch, createStackedWorkspace, invalidate],
 	);
 
-	// Move a workspace to a new target branch while preventing cycles.
+	// Move a workspace to a new target branch. When the target is a descendant
+	// (e.g. dragging a parent below a child), lift the bridge child first so
+	// the resulting stack stays acyclic.
 	const moveWorkspace = useCallback(
 		async (
 			workspace: Workspace,
 			newTargetBranch: string | null,
 		): Promise<void> => {
 			const targetBranch = newTargetBranch ?? defaultBranch;
-
-			// Prevent self-targeting
-			if (targetBranch === workspace.branch_name) {
-				throw new Error("Cannot target self: would create a cycle");
-			}
-
-			// Prevent cycles: check if targetBranch is a descendant of workspace
-			if (
-				newTargetBranch !== null &&
-				isDescendantOf(workspaces, targetBranch, workspace.branch_name)
-			) {
-				throw new Error("Cannot move: would create a cycle");
-			}
-
-			const fullPath = getFullWorkspacePath(workspace);
-			await setWorkspaceTargetBranch(
-				repoPath,
-				fullPath,
-				workspace.id,
+			const steps = planWorkspaceTargetMove(
+				workspaces,
+				workspace.branch_name,
 				targetBranch,
+				defaultBranch,
 			);
+
+			for (const step of steps) {
+				const fullPath = getFullWorkspacePath(step.workspace);
+				await setWorkspaceTargetBranch(
+					repoPath,
+					fullPath,
+					step.workspace.id,
+					step.newTargetBranch,
+				);
+			}
 
 			invalidate();
 		},
