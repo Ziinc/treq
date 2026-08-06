@@ -55,6 +55,7 @@ pub fn emit_to_focused<S: serde::Serialize + Clone>(app: &AppHandle, event: &str
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    telemetry::install_panic_hook();
     tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -71,26 +72,37 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_cli::init())
         .setup(|app| {
+            // --- Initialize telemetry first, before anything (CLI or GUI) that may log ---
+            let log_dir = app.path().app_log_dir().expect("Failed to get app log dir");
+            let telemetry = telemetry::init(&log_dir).expect("Failed to initialize telemetry");
+
             // --- CLI mode: handle commands and exit before any GUI init ---
             {
                 use tauri_plugin_cli::CliExt;
                 if let Ok(matches) = app.cli().matches() {
                     cli::init_cli_binary_paths();
                     if let Some(ref subcommand) = matches.subcommand {
-                        if cli::handle_cli_command(subcommand) {
-                            app.handle().exit(0);
+                        if let Some(exit_code) = cli::handle_cli_command(subcommand) {
+                            // Drop explicitly to flush the log writer before the process exits,
+                            // since `app.handle().exit()` does not run Rust destructors.
+                            drop(telemetry);
+                            app.handle().exit(exit_code);
                             return Ok(());
                         }
-                        eprintln!("Unknown command: {}", subcommand.name);
+                        let msg = format!("Unknown command: {}", subcommand.name);
+                        eprintln!("{}", msg);
+                        tracing::error!("{}", msg);
                         eprintln!("Usage:");
                         eprintln!("  treq add <branch_name> [-d description] [-l title] [-s source_branch]");
                         eprintln!("  treq set <workspace_name> [-d description] [-l title] [-t target_branch]");
                         eprintln!("  treq st [workspace_name]");
                         eprintln!("  treq agent <branch> <prompt> [-m <edit|plan>]");
                         eprintln!("  treq help");
+                        drop(telemetry);
                         return Ok(());
                     } else {
                         if cli::handle_cli_global_args(&matches) {
+                            drop(telemetry);
                             app.handle().exit(0);
                             return Ok(());
                         }
@@ -99,9 +111,7 @@ pub fn run() {
                 }
             }
 
-            // --- GUI mode: initialize telemetry before anything that may log ---
-            let log_dir = app.path().app_log_dir().expect("Failed to get app log dir");
-            let telemetry = telemetry::init(&log_dir).expect("Failed to initialize telemetry");
+            // --- GUI mode: continue setup ---
 
             let app_dir = app
                 .path()

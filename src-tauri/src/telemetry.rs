@@ -32,6 +32,28 @@ impl Drop for TelemetryGuards {
     }
 }
 
+/// Installs a panic hook that forwards panic messages into the `tracing` pipeline
+/// (so they land in the log file when a subscriber is installed) in addition to
+/// running the default hook (which prints to stderr). Panic hooks run even when
+/// the release profile uses `panic = "abort"`, unlike `catch_unwind`.
+pub fn install_panic_hook() {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        let location = panic_info
+            .location()
+            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+            .unwrap_or_else(|| "unknown location".to_string());
+        let message = panic_info
+            .payload()
+            .downcast_ref::<&str>()
+            .map(|s| s.to_string())
+            .or_else(|| panic_info.payload().downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "<non-string panic payload>".to_string());
+        tracing::error!(target: "panic", "panic at {}: {}", location, message);
+        default_hook(panic_info);
+    }));
+}
+
 pub fn init(log_dir: &Path) -> Result<TelemetryGuards, Box<dyn std::error::Error>> {
     std::fs::create_dir_all(log_dir)?;
     cleanup_old_logs(log_dir, MAX_AGE);

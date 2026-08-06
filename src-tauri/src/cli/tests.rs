@@ -25,19 +25,19 @@ fn make_subcommand(name: &str) -> SubcommandMatches {
 #[test]
 fn help_is_handled_by_cli_dispatch() {
     let subcommand = make_subcommand("help");
-    assert!(handle_cli_command(&subcommand));
+    assert!(handle_cli_command(&subcommand).is_some());
 }
 
 #[test]
 fn unknown_subcommand_is_not_handled_by_cli_dispatch() {
     let subcommand = make_subcommand("open");
-    assert!(!handle_cli_command(&subcommand));
+    assert!(handle_cli_command(&subcommand).is_none());
 }
 
 #[test]
 fn commit_is_handled_by_cli_dispatch() {
     let subcommand = make_subcommand("commit");
-    assert!(handle_cli_command(&subcommand));
+    assert!(handle_cli_command(&subcommand).is_some());
 }
 
 #[test]
