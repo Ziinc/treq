@@ -102,7 +102,7 @@ it("captures the header sync indicator before and after committing from the Revi
 		name: "header-sync-indicator-03-ahead-button-styling",
 		expectations: [
 			"The '↑1' sync button in the header has a visible outline/border around it (not a plain borderless ghost button), since the workspace has an unpushed commit.",
-			"A small solid yellow/amber dot (pip) sits at the top-right corner of the sync button, overlapping its border, indicating unsynced changes.",
+			"A small, semi-transparent dark amber/yellow dot (pip) sits at the top-right corner of the sync button, overlapping its border, indicating unsynced changes.",
 		],
 	});
 }, 60000);
