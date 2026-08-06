@@ -1409,10 +1409,15 @@ pub fn rename_workspace(
         updated_children_ids,
     })
 }
-/// Reserved source/destination name for `move_workspace_changes` that refers to the
+/// Reserved source/destination names for `move_workspace_changes` that refer to the
 /// home repo (the repo root outside of any `.treq` workspace) instead of a registered
-/// workspace.
+/// workspace. `.` mirrors the shell convention for "here" (the home repo root).
 pub const HOME_MOVE_ENDPOINT: &str = "home";
+pub const HOME_MOVE_ENDPOINT_ALIAS: &str = ".";
+
+fn is_home_move_endpoint(branch: &str) -> bool {
+    branch == HOME_MOVE_ENDPOINT || branch == HOME_MOVE_ENDPOINT_ALIAS
+}
 
 struct MoveEndpoint {
     /// `None` for the home repo, `Some(id)` for a registered workspace.
@@ -1425,7 +1430,7 @@ fn resolve_move_endpoint(
     branch: &str,
     label: &str,
 ) -> Result<MoveEndpoint, String> {
-    if branch == HOME_MOVE_ENDPOINT {
+    if is_home_move_endpoint(branch) {
         return Ok(MoveEndpoint {
             workspace_id: None,
             full_path: repo_path.to_string(),
@@ -1459,7 +1464,9 @@ pub fn move_workspace_changes(
     if !request.has_selectors() {
         return Err("Must specify at least one selector: -f, -r, or -c".to_string());
     }
-    if source_branch == destination_branch {
+    if source_branch == destination_branch
+        || (is_home_move_endpoint(source_branch) && is_home_move_endpoint(destination_branch))
+    {
         return Err("Source and destination must be different".to_string());
     }
 
