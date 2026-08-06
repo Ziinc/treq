@@ -90,7 +90,10 @@ export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
 		const currentIndex = stack.findIndex((entry) => entry.isCurrent);
 
 		return (
-			<div data-testid="workspace-stack-panel" className="p-4">
+			<div
+				data-testid="workspace-stack-panel"
+				className="border rounded-lg p-4"
+			>
 				<div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground mb-4">
 					<Layers2 className="w-4 h-4" />
 					<span>Stack</span>
