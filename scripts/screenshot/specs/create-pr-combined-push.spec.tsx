@@ -1,11 +1,17 @@
-import * as React from "react";
 import fs from "node:fs";
 import path from "node:path";
-import { expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
+import * as React from "react";
+import { expect, it, vi } from "vitest";
 import { Dashboard } from "../../../src/components/Dashboard";
-import { createTestRepo, openRepo } from "../../../test/utils";
+import { getWorkspaces } from "../../../src/lib/api";
 import { render, screen, waitFor, within } from "../../../test/test-utils";
+import {
+	createTestRepo,
+	openRepo,
+	resolveWorkspacePath,
+	writeWorkspaceFile,
+} from "../../../test/utils";
 import { captureDocument } from "../capture";
 
 const BRANCH_NAME = "feat/create-pr-combined-demo";
@@ -81,9 +87,30 @@ it("captures Create PR pushing an unpushed branch before creating the PR", async
 	const header = await screen.findByTestId("show-workspace-header");
 	await within(header).findByText(BRANCH_NAME);
 
+	// Create PR is disabled until the workspace has a real commit (not just
+	// working-copy changes), so drive an actual commit through the Review tab
+	// -- writing the file alone wouldn't do it, and committing via the NAPI
+	// helper directly would bypass the query invalidation a real commit
+	// triggers, leaving the button stuck showing stale (disabled) state.
+	const workspace = (await getWorkspaces(repoPath)).find(
+		(w) => w.branch_name === BRANCH_NAME,
+	)!;
+	writeWorkspaceFile(
+		resolveWorkspacePath(repoPath, workspace.workspace_path),
+		"feature.txt",
+		"feature content\n",
+	);
+	await user.click(await screen.findByRole("tab", { name: /^Review/ }));
+	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await user.type(await screen.findByPlaceholderText("Message"), "Add feature");
+	await user.click(await screen.findByRole("button", { name: /^commit\b/i }));
+
+	await user.click(await screen.findByRole("tab", { name: /^Code/ }));
+
 	const createPrButton = await within(header).findByRole("button", {
 		name: /^create pr$/i,
 	});
+	await waitFor(() => expect(createPrButton).toBeEnabled());
 	expect(
 		within(header).queryByRole("button", { name: /push to remote/i }),
 	).not.toBeInTheDocument();

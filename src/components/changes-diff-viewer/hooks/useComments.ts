@@ -2,13 +2,14 @@ import { useCallback, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import type { useToast } from "../../ui/toast";
 import { computeHunkLineNumbers } from "../utils";
-import type {
-	CommentLineQuery,
-	ConflictComment,
-	DiffLineSelection,
-	FileHunksData,
-	LineComment,
-	PendingComment,
+import {
+	FILE_COMMENT_HUNK_ID,
+	type CommentLineQuery,
+	type ConflictComment,
+	type DiffLineSelection,
+	type FileHunksData,
+	type LineComment,
+	type PendingComment,
 } from "../types";
 
 interface UseCommentsParams {
@@ -212,6 +213,7 @@ export function useComments({
 
 	const isCommentOutdated = useCallback(
 		(comment: LineComment): boolean => {
+			if (comment.hunkId === FILE_COMMENT_HUNK_ID) return false;
 			const fileData = allFileHunks.get(comment.filePath);
 			if (!fileData || fileData.isLoading || !fileData.hunks) return false;
 			const hunk = fileData.hunks.find((h) => h.id === comment.hunkId);
@@ -279,6 +281,14 @@ export function useComments({
 		}
 	}, [getAllOutdatedComments, addToast]);
 
+	const getFileCommentsForFile = useCallback(
+		(filePath: string): LineComment[] =>
+			comments.filter(
+				(c) => c.filePath === filePath && c.hunkId === FILE_COMMENT_HUNK_ID,
+			),
+		[comments],
+	);
+
 	const getCommentsForLine = useCallback(
 		({ filePath, hunkId, lineNumber, side }: CommentLineQuery) =>
 			comments.filter(
@@ -323,6 +333,7 @@ export function useComments({
 		toggleConflictComment,
 		isCommentOutdated,
 		getOutdatedCommentsForFile,
+		getFileCommentsForFile,
 		getAllOutdatedComments,
 		handleCopyOutdatedComments,
 		getCommentsForLine,

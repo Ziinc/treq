@@ -1409,6 +1409,51 @@ pub fn rename_workspace(
         updated_children_ids,
     })
 }
+/// Reserved source/destination name for `move_workspace_changes` that refers to the
+/// home repo (the repo root outside of any `.treq` workspace) instead of a registered
+/// workspace. Mirrors the shell convention for "here" (the home repo root).
+pub const HOME_MOVE_ENDPOINT: &str = ".";
+
+fn is_home_move_endpoint(branch: &str) -> bool {
+    branch == HOME_MOVE_ENDPOINT
+}
+
+struct MoveEndpoint {
+    /// `None` for the home repo, `Some(id)` for a registered workspace.
+    workspace_id: Option<i64>,
+    full_path: String,
+}
+
+fn resolve_move_endpoint(
+    repo_path: &str,
+    branch: &str,
+    label: &str,
+) -> Result<MoveEndpoint, String> {
+    if is_home_move_endpoint(branch) {
+        return Ok(MoveEndpoint {
+            workspace_id: None,
+            full_path: repo_path.to_string(),
+        });
+    }
+
+    let workspace = local_db::get_workspace_by_branch(repo_path, branch)
+        .map_err(|e| format!("Failed to look up {} workspace: {}", label, e))?
+        .ok_or_else(|| format!("{} workspace '{}' not found", label, branch))?;
+    let full_path = Path::new(repo_path)
+        .join(".treq")
+        .join("workspaces")
+        .join(&workspace.workspace_path);
+    let full_path_str = full_path
+        .to_str()
+        .ok_or_else(|| format!("Failed to convert {} workspace path to string", label))?
+        .to_string();
+
+    Ok(MoveEndpoint {
+        workspace_id: Some(workspace.id),
+        full_path: full_path_str,
+    })
+}
+
 pub fn move_workspace_changes(
     repo_path: &str,
     source_branch: &str,
@@ -1418,30 +1463,17 @@ pub fn move_workspace_changes(
     if !request.has_selectors() {
         return Err("Must specify at least one selector: -f, -r, or -c".to_string());
     }
+    if source_branch == destination_branch
+        || (is_home_move_endpoint(source_branch) && is_home_move_endpoint(destination_branch))
+    {
+        return Err("Source and destination must be different".to_string());
+    }
 
-    let source = local_db::get_workspace_by_branch(repo_path, source_branch)
-        .map_err(|e| format!("Failed to look up source workspace: {}", e))?
-        .ok_or_else(|| format!("Source workspace '{}' not found", source_branch))?;
-    let destination = local_db::get_workspace_by_branch(repo_path, destination_branch)
-        .map_err(|e| format!("Failed to look up destination workspace: {}", e))?
-        .ok_or_else(|| format!("Destination workspace '{}' not found", destination_branch))?;
+    let source = resolve_move_endpoint(repo_path, source_branch, "Source")?;
+    let destination = resolve_move_endpoint(repo_path, destination_branch, "Destination")?;
 
-    let source_full_path = Path::new(repo_path)
-        .join(".treq")
-        .join("workspaces")
-        .join(&source.workspace_path);
-    let source_full_path_str = source_full_path
-        .to_str()
-        .ok_or("Failed to convert source workspace path to string")?
-        .to_string();
-    let destination_full_path = Path::new(repo_path)
-        .join(".treq")
-        .join("workspaces")
-        .join(&destination.workspace_path);
-    let destination_full_path_str = destination_full_path
-        .to_str()
-        .ok_or("Failed to convert destination workspace path to string")?
-        .to_string();
+    let source_full_path_str = source.full_path;
+    let destination_full_path_str = destination.full_path;
 
     let mut result = WorkspaceMoveResult {
         commits_moved: 0,
@@ -1454,7 +1486,7 @@ pub fn move_workspace_changes(
 
     if !request.commits.is_empty() {
         let source_log =
-            crate::core::commits::list_commits(repo_path, Some(source.id), false, None, None)?;
+            crate::core::commits::list_commits(repo_path, source.workspace_id, false, None, None)?;
         let history_ids: HashSet<String> = source_log
             .commits
             .iter()
@@ -1471,12 +1503,17 @@ pub fn move_workspace_changes(
         }
 
         for commit_id in &request.commits {
-            crate::core::commits::move_commit_to_existing_workspace(
-                repo_path,
-                source.id,
-                commit_id,
-                destination.id,
-            )?;
+            let commit_paths = jj::jj_diff_summary(&source_full_path_str, commit_id)
+                .map_err(|e| format!("Failed to diff commit '{}': {}", commit_id, e))?;
+            jj::move_paths_between_workspace_paths(
+                &source_full_path_str,
+                &destination_full_path_str,
+                Some(commit_paths),
+            )
+            .map_err(|e| format!("Failed to move commit to destination workspace: {}", e))?;
+            jj::update_stale_workspace(&destination_full_path_str).map_err(|e| {
+                format!("Failed to update destination workspace working copy: {}", e)
+            })?;
             commits_to_abandon_from_source.push(commit_id.clone());
             result.commits_moved += 1;
         }
@@ -1500,9 +1537,9 @@ pub fn move_workspace_changes(
         // files can be restored to their parent state rather than left deleted.
         jj::jj_get_changed_files(&source_full_path_str)
             .map_err(|e| format!("Failed to snapshot source files: {}", e))?;
-        jj::squash_to_workspace(
+        jj::move_paths_between_workspace_paths(
             &source_full_path_str,
-            &destination.workspace_name,
+            &destination_full_path_str,
             Some(request.files.clone()),
         )
         .map_err(|e| format!("Failed to move files: {}", e))?;
@@ -1553,7 +1590,10 @@ pub fn move_workspace_changes(
     }
 
     for commit_id in &commits_to_abandon_from_source {
-        crate::core::commits::abandon_commit(repo_path, source.id, commit_id)?;
+        jj::jj_abandon(&source_full_path_str, commit_id)
+            .map_err(|e| format!("Failed to abandon commit: {}", e))?;
+        jj::update_stale_workspace(&source_full_path_str)
+            .map_err(|e| format!("Failed to update source workspace working copy: {}", e))?;
     }
 
     // Restore files that destination checkout may have removed.

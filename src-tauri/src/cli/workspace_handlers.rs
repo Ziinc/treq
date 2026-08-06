@@ -242,7 +242,7 @@ pub(super) fn handle_workspace_move(matches: &Matches) {
         None => {
             eprintln!("Error: source workspace is required");
             eprintln!(
-                "Usage: treq mv <source> <destination> -f [FILES...] -r [RANGES...] -c [COMMITS...]"
+                "Usage: treq mv <source> <destination> -f [FILES...] -r [RANGES...] -c [COMMITS...]  (use '.' for the home repo)"
             );
             return;
         }
@@ -252,7 +252,7 @@ pub(super) fn handle_workspace_move(matches: &Matches) {
         None => {
             eprintln!("Error: destination workspace is required");
             eprintln!(
-                "Usage: treq mv <source> <destination> -f [FILES...] -r [RANGES...] -c [COMMITS...]"
+                "Usage: treq mv <source> <destination> -f [FILES...] -r [RANGES...] -c [COMMITS...]  (use '.' for the home repo)"
             );
             return;
         }

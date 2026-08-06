@@ -32,6 +32,19 @@ fn setup_parent_child_graph(repo: &TestRepo) -> (Workspace, Workspace) {
     (parent, child)
 }
 
+fn setup_single_workspace(repo: &TestRepo) -> Workspace {
+    treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "move-home-ws",
+        Some("workspace".to_string()),
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("should create workspace")
+}
+
 fn setup_sibling_graph(repo: &TestRepo) -> (Workspace, Workspace) {
     let root = treq_lib::core::create_workspace(
         &repo.repo_path,
@@ -105,6 +118,60 @@ fn make_hunk_fixture(repo: &TestRepo, source: &Workspace, file_path: &str) {
 fn read_workspace_file(repo: &TestRepo, workspace: &Workspace, file_path: &str) -> String {
     let abs = Path::new(&repo.workspace_full_path(workspace)).join(file_path);
     std::fs::read_to_string(abs).expect("expected workspace file to exist")
+}
+
+fn read_home_file(repo: &TestRepo, file_path: &str) -> String {
+    let abs = Path::new(&repo.repo_path).join(file_path);
+    std::fs::read_to_string(abs).expect("expected home repo file to exist")
+}
+
+fn make_home_commit_fixture(repo: &TestRepo, file_path: &str, marker: &str) -> String {
+    TestRepo::write_workspace_file(&repo.repo_path, file_path, &format!("{}\n", marker))
+        .expect("should write home fixture file");
+    treq_lib::core::commit_workspace(
+        &repo.repo_path,
+        Option::<i64>::None,
+        &format!("commit-{}", marker),
+    )
+    .expect("should create home commit");
+
+    let log = treq_lib::core::list_commits(&repo.repo_path, None, false, None, None)
+        .expect("should list home commits");
+    log.commits
+        .iter()
+        .find(|c| c.description.contains(marker))
+        .map(|c| c.commit_id.clone())
+        .expect("commit should be discoverable in home history")
+}
+
+fn assert_home_history_contains_commit(repo: &TestRepo, commit_id: &str) {
+    let log = treq_lib::core::list_commits(&repo.repo_path, None, false, None, None)
+        .expect("should list home commits");
+    let ids: HashSet<String> = log
+        .commits
+        .into_iter()
+        .flat_map(|c| [c.commit_id, c.change_id])
+        .collect();
+    assert!(
+        ids.contains(commit_id),
+        "expected commit '{}' to be present in home history",
+        commit_id
+    );
+}
+
+fn assert_home_history_does_not_contain_commit(repo: &TestRepo, commit_id: &str) {
+    let log = treq_lib::core::list_commits(&repo.repo_path, None, false, None, None)
+        .expect("should list home commits");
+    let ids: HashSet<String> = log
+        .commits
+        .into_iter()
+        .flat_map(|c| [c.commit_id, c.change_id])
+        .collect();
+    assert!(
+        !ids.contains(commit_id),
+        "expected commit '{}' to be absent from home history",
+        commit_id
+    );
 }
 
 fn assert_history_contains_commit(repo: &TestRepo, workspace: &Workspace, commit_id: &str) {
@@ -747,6 +814,148 @@ fn moves_combined_selectors_in_commit_file_hunk_order() {
     assert!(read_workspace_file(&repo, &right, "combo-commit.txt").contains("combo-commit"));
     assert!(read_workspace_file(&repo, &right, "combo-file.txt").contains("combo-file"));
     assert!(read_workspace_file(&repo, &right, "combo-hunk.txt").contains("line-2\nline-3\n"));
+}
+
+#[test]
+fn moves_combined_selectors_workspace_to_home() {
+    let repo = TestRepo::new().expect("should create repo");
+    let ws = setup_single_workspace(&repo);
+
+    let commit_id = make_commit_fixture(
+        &repo,
+        &ws,
+        "combo-ws-to-home-commit.txt",
+        "combo-ws-home-commit",
+    );
+    make_file_fixture(
+        &repo,
+        &ws,
+        "combo-ws-to-home-file.txt",
+        "combo-ws-home-file\n",
+    );
+    make_hunk_fixture(&repo, &ws, "combo-ws-to-home-hunk.txt");
+
+    assert_history_contains_commit(&repo, &ws, &commit_id);
+
+    let result = treq_lib::core::move_workspace_changes(
+        &repo.repo_path,
+        &ws.branch_name,
+        ".",
+        WorkspaceMoveRequest {
+            commits: vec![commit_id.clone()],
+            files: vec!["combo-ws-to-home-file.txt".to_string()],
+            hunks: vec![HunkSpec {
+                file_path: "combo-ws-to-home-hunk.txt".to_string(),
+                start_line: 2,
+                end_line: 3,
+            }],
+        },
+    )
+    .expect("combined move to home should succeed");
+
+    assert_eq!(result.commits_moved, 1);
+    assert_eq!(result.files_moved, 1);
+    assert_eq!(result.hunks_applied, 1);
+
+    assert_history_does_not_contain_commit(&repo, &ws, &commit_id);
+    assert!(read_home_file(&repo, "combo-ws-to-home-commit.txt").contains("combo-ws-home-commit"));
+    assert!(read_home_file(&repo, "combo-ws-to-home-file.txt").contains("combo-ws-home-file"));
+    assert!(read_home_file(&repo, "combo-ws-to-home-hunk.txt").contains("line-2\nline-3\n"));
+}
+
+#[test]
+fn moves_combined_selectors_home_to_workspace() {
+    let repo = TestRepo::new().expect("should create repo");
+    let ws = setup_single_workspace(&repo);
+
+    let commit_id =
+        make_home_commit_fixture(&repo, "combo-home-to-ws-commit.txt", "combo-home-ws-commit");
+    TestRepo::write_workspace_file(
+        &repo.repo_path,
+        "combo-home-to-ws-file.txt",
+        "combo-home-ws-file\n",
+    )
+    .expect("should write home file fixture");
+    TestRepo::write_workspace_file(
+        &repo.repo_path,
+        "combo-home-to-ws-hunk.txt",
+        "line-1\nline-2\nline-3\nline-4\n",
+    )
+    .expect("should write home hunk fixture");
+
+    assert_home_history_contains_commit(&repo, &commit_id);
+
+    let result = treq_lib::core::move_workspace_changes(
+        &repo.repo_path,
+        ".",
+        &ws.branch_name,
+        WorkspaceMoveRequest {
+            commits: vec![commit_id.clone()],
+            files: vec!["combo-home-to-ws-file.txt".to_string()],
+            hunks: vec![HunkSpec {
+                file_path: "combo-home-to-ws-hunk.txt".to_string(),
+                start_line: 2,
+                end_line: 3,
+            }],
+        },
+    )
+    .expect("combined move from home should succeed");
+
+    assert_eq!(result.commits_moved, 1);
+    assert_eq!(result.files_moved, 1);
+    assert_eq!(result.hunks_applied, 1);
+
+    assert_home_history_does_not_contain_commit(&repo, &commit_id);
+    assert!(
+        read_workspace_file(&repo, &ws, "combo-home-to-ws-commit.txt")
+            .contains("combo-home-ws-commit")
+    );
+    assert!(
+        read_workspace_file(&repo, &ws, "combo-home-to-ws-file.txt").contains("combo-home-ws-file")
+    );
+    assert!(
+        read_workspace_file(&repo, &ws, "combo-home-to-ws-hunk.txt").contains("line-2\nline-3\n")
+    );
+}
+
+#[test]
+fn returns_error_when_source_and_destination_are_the_same() {
+    let repo = TestRepo::new().expect("should create repo");
+    let ws = setup_single_workspace(&repo);
+    make_file_fixture(&repo, &ws, "same-endpoint.txt", "content\n");
+
+    let err = treq_lib::core::move_workspace_changes(
+        &repo.repo_path,
+        ".",
+        ".",
+        WorkspaceMoveRequest {
+            files: vec!["same-endpoint.txt".to_string()],
+            ..WorkspaceMoveRequest::default()
+        },
+    )
+    .expect_err("should reject moving home to itself");
+
+    assert!(err.contains("must be different"));
+}
+
+#[test]
+fn returns_error_when_destination_workspace_not_found() {
+    let repo = TestRepo::new().expect("should create repo");
+    let ws = setup_single_workspace(&repo);
+    make_file_fixture(&repo, &ws, "missing-destination.txt", "content\n");
+
+    let err = treq_lib::core::move_workspace_changes(
+        &repo.repo_path,
+        &ws.branch_name,
+        "does-not-exist",
+        WorkspaceMoveRequest {
+            files: vec!["missing-destination.txt".to_string()],
+            ..WorkspaceMoveRequest::default()
+        },
+    )
+    .expect_err("should fail for unknown destination workspace");
+
+    assert!(err.contains("Destination workspace 'does-not-exist' not found"));
 }
 
 #[test]
