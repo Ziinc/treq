@@ -176,10 +176,12 @@ export function PrListItem({
 	pr,
 	selected,
 	onClick,
+	hideBaseBranch,
 }: {
 	pr: GhPullRequest;
 	selected: boolean;
 	onClick: () => void;
+	hideBaseBranch?: boolean;
 }) {
 	return (
 		<button
@@ -203,10 +205,17 @@ export function PrListItem({
 							<span className="truncate max-w-[16rem]" title={pr.head_ref_name}>
 								{pr.head_ref_name}
 							</span>
-							<span className="shrink-0">→</span>
-							<span className="truncate max-w-[16rem]" title={pr.base_ref_name}>
-								{pr.base_ref_name}
-							</span>
+							{!hideBaseBranch && (
+								<>
+									<span className="shrink-0">→</span>
+									<span
+										className="truncate max-w-[16rem]"
+										title={pr.base_ref_name}
+									>
+										{pr.base_ref_name}
+									</span>
+								</>
+							)}
 						</span>
 						<span className="shrink-0">{formatDate(pr.created_at)}</span>
 					</div>
