@@ -5,6 +5,7 @@ import type {
 	JjFileChange,
 	LineComment as ApiLineComment,
 } from "../../lib/api";
+import type { Workspace } from "../../lib/api-types";
 import type { ParsedFileChange } from "../../lib/git-utils";
 import type { useToast } from "../ui/toast";
 
@@ -26,6 +27,8 @@ export interface ChangesDiffViewerProps {
 	conflictedFiles?: string[];
 	showCommittedChanges?: boolean;
 	onMoveFilesToNewWorkspace?: (files: string[]) => void;
+	workspace?: Workspace | null;
+	baseBranch?: string;
 }
 
 export interface ChangesDiffViewerHandle {
@@ -125,10 +128,16 @@ export interface CommitInputHandle {
 	focus: () => void;
 }
 
+export type CommitAction = "commit" | "push" | "pr";
+
 export interface CommitInputProps {
 	onCommit: (message: string) => void;
+	onCommitAndPush: (message: string) => void;
+	onCommitAndCreatePR: (message: string) => void;
 	disabled: boolean;
 	pending: boolean;
+	pendingAction?: CommitAction | null;
+	canCreatePr?: boolean;
 	selectedFileCount?: number;
 	totalFileCount?: number;
 }

@@ -1306,6 +1306,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 									? (files) => onMoveFilesToNewWorkspace(files, workspace)
 									: undefined
 							}
+							workspace={workspace}
+							baseBranch={targetBranch ?? defaultTargetBranch}
 						/>
 					)}
 				</div>

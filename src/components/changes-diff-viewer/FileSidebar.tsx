@@ -6,11 +6,15 @@ import { ChangesSection } from "../ChangesSection";
 import { CommittedChangesSection } from "../CommittedChangesSection";
 import { ConflictsSection } from "../ConflictsSection";
 import { CommitInput } from "./CommitInput";
-import type { CommitInputHandle } from "./types";
+import type { CommitAction, CommitInputHandle } from "./types";
 
 interface FileSidebarProps {
 	commitInputRef: React.RefObject<CommitInputHandle>;
 	handleCommit: (msg: string) => void;
+	handleCommitAndPush: (msg: string) => void;
+	handleCommitAndCreatePR: (msg: string) => void;
+	pendingAction: CommitAction | null;
+	canCreatePr: boolean;
 	readOnly: boolean;
 	files: ParsedFileChange[];
 	commitPending: boolean;
@@ -56,6 +60,10 @@ interface FileSidebarProps {
 export function FileSidebar({
 	commitInputRef,
 	handleCommit,
+	handleCommitAndPush,
+	handleCommitAndCreatePR,
+	pendingAction,
+	canCreatePr,
 	readOnly,
 	files,
 	commitPending,
@@ -102,8 +110,12 @@ export function FileSidebar({
 			<CommitInput
 				ref={commitInputRef}
 				onCommit={handleCommit}
+				onCommitAndPush={handleCommitAndPush}
+				onCommitAndCreatePR={handleCommitAndCreatePR}
 				disabled={readOnly || files.length === 0}
 				pending={commitPending}
+				pendingAction={pendingAction}
+				canCreatePr={canCreatePr}
 				selectedFileCount={stagedFiles.size}
 				totalFileCount={files.length}
 			/>
