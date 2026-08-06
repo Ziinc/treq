@@ -59,21 +59,33 @@ it("captures the stack panel and navigation to a sibling workspace", async () =>
 	header = await screen.findByTestId("show-workspace-header");
 	await within(header).findByText(CHILD_BRANCH);
 
-	// Give the child workspace a real commit so the panel has line-change
-	// stats to show, not just a zeroed-out entry. Uses the test-utils helper
+	// Give each workspace a real commit of a different size (2 vs. 10 inserted
+	// lines) so the panel's diff bars are visibly different widths, scaled
+	// relative to the largest change in the stack. Uses the test-utils helper
 	// (incidental background state, not itself the tested behavior) like
 	// commits-tab-after-push.spec.tsx does.
-	const child = (await getWorkspaces(repoPath)).find(
+	const workspaces = await getWorkspaces(repoPath);
+	const parent = workspaces.find(
+		(candidate) => candidate.branch_name === PARENT_BRANCH,
+	);
+	const child = workspaces.find(
 		(candidate) => candidate.branch_name === CHILD_BRANCH,
 	);
-	if (!child) {
-		throw new Error(`Expected ${CHILD_BRANCH} workspace to exist`);
+	if (!parent || !child) {
+		throw new Error(`Expected ${PARENT_BRANCH} and ${CHILD_BRANCH} to exist`);
 	}
+	await commitWorkspaceFile(
+		repoPath,
+		{ id: parent.id, path: parent.workspace_path },
+		"parent-feature.txt",
+		"parent line one\nparent line two",
+		"Add parent feature file",
+	);
 	await commitWorkspaceFile(
 		repoPath,
 		{ id: child.id, path: child.workspace_path },
 		"child-feature.txt",
-		"line one\nline two\nline three\nline four",
+		Array.from({ length: 10 }, (_, i) => `child line ${i + 1}`).join("\n"),
 		"Add child feature file",
 	);
 
@@ -90,16 +102,20 @@ it("captures the stack panel and navigation to a sibling workspace", async () =>
 	const childItem = within(panel)
 		.getByText(CHILD_BRANCH)
 		.closest("button") as HTMLElement;
+	const parentItem = within(panel)
+		.getByText(PARENT_BRANCH)
+		.closest("button") as HTMLElement;
 	await waitFor(() => {
-		expect(childItem.textContent).toMatch(/\+\d/);
+		expect(childItem.textContent).toMatch(/\+10/);
+		expect(parentItem.textContent).toMatch(/\+2/);
 	});
 
 	await captureDocument(document, {
 		name: "stacked-workspace-panel-01-child-view",
 		expectations: [
 			`In the Code tab's main column, a bordered "Stack" panel reading "1 of 2" appears below the task/prompt input box and above the "Go to file" search row and file list.`,
-			`The stack panel lists two items, top-to-bottom: "${CHILD_BRANCH}" and "${PARENT_BRANCH}".`,
-			`The "${CHILD_BRANCH}" item is visually highlighted/current (filled dot, highlighted background) and shows a green "+4" line-change count, matching the header's branch name; the "${PARENT_BRANCH}" item is not highlighted and shows no line-change count.`,
+			`The stack panel lists two items, top-to-bottom: "${CHILD_BRANCH}" and "${PARENT_BRANCH}", with the target branch below them at the bottom of the list.`,
+			`Both "${CHILD_BRANCH}" (highlighted/current, +10) and "${PARENT_BRANCH}" (not highlighted, +2) show a small green horizontal bar next to their line-change counts, and the "${CHILD_BRANCH}" bar is visibly longer than the "${PARENT_BRANCH}" bar, reflecting +10 vs. +2 lines.`,
 		],
 	});
 

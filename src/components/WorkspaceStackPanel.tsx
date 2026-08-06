@@ -1,9 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { ArrowDown, Layers2 } from "lucide-react";
 import { memo, useMemo } from "react";
 import { listCommits, listWorkspaceStatuses, type Workspace } from "../lib/api";
 import { cn, formatFullTimestamp, formatRelativeTime } from "../lib/utils";
-import { sumWorkspaceDiffStats } from "../lib/workspace-stack";
+import {
+	sumWorkspaceDiffStats,
+	type WorkspaceDiffStats,
+} from "../lib/workspace-stack";
 import {
 	getWorkspaceStack,
 	type StackedWorkspaceEntry,
@@ -48,6 +51,38 @@ export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
 			return getWorkspaceStack(allWorkspaces, workspace.id);
 		}, [workspaceStatuses, workspace.id, defaultBranch]);
 
+		const commitQueries = useQueries({
+			queries: (stack ?? []).map((entry) => ({
+				queryKey: ["workspace-commits", repoPath, entry.workspace.id],
+				queryFn: () => listCommits(repoPath, entry.workspace.id),
+				enabled: Boolean(repoPath),
+			})),
+		});
+
+		const diffStatsByWorkspaceId = useMemo(() => {
+			const map = new Map<number, WorkspaceDiffStats>();
+			(stack ?? []).forEach((entry, index) => {
+				map.set(
+					entry.workspace.id,
+					sumWorkspaceDiffStats(commitQueries[index]?.data?.commits ?? []),
+				);
+			});
+			return map;
+		}, [stack, commitQueries]);
+
+		// Bars are sized relative to the largest change in the stack, a la
+		// Gerrit's change list.
+		const maxTotal = useMemo(
+			() =>
+				Math.max(
+					0,
+					...Array.from(diffStatsByWorkspaceId.values()).map(
+						(stats) => stats.insertions + stats.deletions,
+					),
+				),
+			[diffStatsByWorkspaceId],
+		);
+
 		if (!stack) return null;
 
 		const currentIndex = stack.findIndex((entry) => entry.isCurrent);
@@ -70,8 +105,14 @@ export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
 						{stack.map((entry) => (
 							<StackItem
 								key={entry.workspace.id}
-								repoPath={repoPath}
 								entry={entry}
+								diffStats={
+									diffStatsByWorkspaceId.get(entry.workspace.id) ?? {
+										insertions: 0,
+										deletions: 0,
+									}
+								}
+								maxTotal={maxTotal}
 								onSelect={onSelectWorkspace}
 							/>
 						))}
@@ -92,25 +133,54 @@ export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
 	},
 );
 
+const DIFF_BAR_WIDTH_PX = 56;
+
+function DiffBar({
+	diffStats,
+	maxTotal,
+}: {
+	diffStats: WorkspaceDiffStats;
+	maxTotal: number;
+}) {
+	const total = diffStats.insertions + diffStats.deletions;
+	if (total === 0 || maxTotal === 0) return null;
+
+	const barWidth = Math.max(
+		2,
+		Math.round((total / maxTotal) * DIFF_BAR_WIDTH_PX),
+	);
+	const insertionWidth = Math.round(
+		(diffStats.insertions / total) * barWidth,
+	);
+	const deletionWidth = barWidth - insertionWidth;
+
+	return (
+		<div
+			className="flex h-1.5 flex-shrink-0 overflow-hidden rounded-sm"
+			style={{ width: DIFF_BAR_WIDTH_PX }}
+			title={`+${diffStats.insertions} -${diffStats.deletions}`}
+		>
+			<div
+				className="h-full bg-green-600 dark:bg-green-400"
+				style={{ width: insertionWidth }}
+			/>
+			<div
+				className="h-full bg-red-600 dark:bg-red-400"
+				style={{ width: deletionWidth }}
+			/>
+		</div>
+	);
+}
+
 interface StackItemProps {
-	repoPath: string;
 	entry: StackedWorkspaceEntry;
+	diffStats: WorkspaceDiffStats;
+	maxTotal: number;
 	onSelect?: (workspace: Workspace) => void;
 }
 
-function StackItem({ repoPath, entry, onSelect }: StackItemProps) {
+function StackItem({ entry, diffStats, maxTotal, onSelect }: StackItemProps) {
 	const { workspace, isCurrent } = entry;
-
-	const { data: logResult } = useQuery({
-		queryKey: ["workspace-commits", repoPath, workspace.id],
-		queryFn: () => listCommits(repoPath, workspace.id),
-		enabled: Boolean(repoPath),
-	});
-
-	const diffStats = useMemo(
-		() => sumWorkspaceDiffStats(logResult?.commits ?? []),
-		[logResult],
-	);
 	const hasStats = diffStats.insertions > 0 || diffStats.deletions > 0;
 	const title = getWorkspaceDisplayTitle(workspace);
 
@@ -154,14 +224,17 @@ function StackItem({ repoPath, entry, onSelect }: StackItemProps) {
 							</Tooltip>
 						</TooltipProvider>
 						{hasStats && (
-							<span className="text-xs font-mono ml-auto">
-								<span className="text-green-600 dark:text-green-400">
-									+{diffStats.insertions}
-								</span>{" "}
-								<span className="text-red-600 dark:text-red-400">
-									-{diffStats.deletions}
+							<div className="ml-auto flex items-center gap-2">
+								<DiffBar diffStats={diffStats} maxTotal={maxTotal} />
+								<span className="text-xs font-mono">
+									<span className="text-green-600 dark:text-green-400">
+										+{diffStats.insertions}
+									</span>{" "}
+									<span className="text-red-600 dark:text-red-400">
+										-{diffStats.deletions}
+									</span>
 								</span>
-							</span>
+							</div>
 						)}
 					</div>
 				</div>
