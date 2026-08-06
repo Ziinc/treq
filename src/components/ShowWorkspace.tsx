@@ -67,6 +67,7 @@ import {
 	ChangesDiffViewer,
 	type ChangesDiffViewerHandle,
 } from "./ChangesDiffViewer";
+import { CiStatusIndicator } from "./CiStatusIndicator";
 import { CommitDiffViewer } from "./CommitDiffViewer";
 import { CreatePrButtonGroup } from "./CreatePrButtonGroup";
 import { FileBrowser } from "./FileBrowser";
@@ -95,7 +96,6 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "./ui/tooltip";
-import { CiStatusIndicator } from "./CiStatusIndicator";
 import { ViewPrButton } from "./ViewPrButton";
 import { WorkspaceBookmarkConflictModal } from "./WorkspaceBookmarkConflictModal";
 import { WorkspaceStackPanel } from "./WorkspaceStackPanel";
@@ -1571,6 +1571,10 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 												repoPath={effectiveRepoPath}
 												workspace={workspace}
 												baseBranch={targetBranch ?? defaultTargetBranch}
+												hasCommits={
+													(workspaceStatusData?.commits_ahead_of_target
+														.length ?? 0) > 0
+												}
 											/>
 										</>
 									)}

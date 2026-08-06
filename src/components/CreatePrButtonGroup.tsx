@@ -1,12 +1,11 @@
-import { useState } from "react";
-import { ChevronDown, Github, Loader2 } from "lucide-react";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { useQueryClient } from "@tanstack/react-query";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { ChevronDown, Github, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { useGitRemoteInfo, usePrInfoViaGh } from "../hooks/useMergeQueueStatus";
 import { ghCreatePr, pushWorkspaceToRemote } from "../lib/api";
-import { buildGitHubComparePrUrl } from "../lib/github-pr";
 import type { Workspace } from "../lib/api-types";
-import { usePrInfoViaGh, useGitRemoteInfo } from "../hooks/useMergeQueueStatus";
-import { useToast } from "./ui/toast";
+import { buildGitHubComparePrUrl } from "../lib/github-pr";
 import { Button } from "./ui/button";
 import {
 	DropdownMenu,
@@ -14,6 +13,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import { useToast } from "./ui/toast";
 import {
 	Tooltip,
 	TooltipContent,
@@ -25,12 +25,14 @@ interface CreatePrButtonGroupProps {
 	repoPath: string;
 	workspace: Workspace;
 	baseBranch: string;
+	hasCommits: boolean;
 }
 
 export function CreatePrButtonGroup({
 	repoPath,
 	workspace,
 	baseBranch,
+	hasCommits,
 }: CreatePrButtonGroupProps) {
 	const { addToast } = useToast();
 	const queryClient = useQueryClient();
@@ -118,6 +120,9 @@ export function CreatePrButtonGroup({
 	};
 
 	const pushAndCreate = workspace.not_on_remote;
+	const disabled = creating || !hasCommits;
+	const noCommitsTooltip =
+		"Make a commit before creating a pull request. Uncommitted working-copy changes don't count.";
 
 	return (
 		<TooltipProvider delayDuration={200}>
@@ -128,7 +133,7 @@ export function CreatePrButtonGroup({
 							variant="default"
 							size="sm"
 							className="gap-1 rounded-r-none bg-[#24292f] text-white hover:bg-[#1b1f23] dark:border-white/30"
-							disabled={creating}
+							disabled={disabled}
 							onClick={() => createPr(false)}
 						>
 							{creating ? (
@@ -144,9 +149,11 @@ export function CreatePrButtonGroup({
 						</Button>
 					</TooltipTrigger>
 					<TooltipContent>
-						{pushAndCreate
-							? "Push this branch and create a pull request on GitHub"
-							: "Create a pull request on GitHub"}
+						{!hasCommits
+							? noCommitsTooltip
+							: pushAndCreate
+								? "Push this branch and create a pull request on GitHub"
+								: "Create a pull request on GitHub"}
 					</TooltipContent>
 				</Tooltip>
 				<DropdownMenu>
@@ -157,18 +164,20 @@ export function CreatePrButtonGroup({
 									variant="default"
 									size="sm"
 									className="rounded-l-none border-l border-white/20 px-1.5 bg-[#24292f] text-white hover:bg-[#1b1f23] dark:border-white/30"
-									disabled={creating}
+									disabled={disabled}
 									aria-label="More Create PR options"
 								>
 									<ChevronDown className="w-4 h-4" />
 								</Button>
 							</DropdownMenuTrigger>
 						</TooltipTrigger>
-						<TooltipContent>More pull request options</TooltipContent>
+						<TooltipContent>
+							{!hasCommits ? noCommitsTooltip : "More pull request options"}
+						</TooltipContent>
 					</Tooltip>
 					<DropdownMenuContent align="end" sideOffset={4}>
 						<DropdownMenuItem
-							disabled={creating}
+							disabled={disabled}
 							onSelect={(e) => {
 								e.preventDefault();
 								void createPr(true);
@@ -177,7 +186,7 @@ export function CreatePrButtonGroup({
 							Create draft PR
 						</DropdownMenuItem>
 						<DropdownMenuItem
-							disabled={creating}
+							disabled={disabled}
 							onSelect={(e) => {
 								e.preventDefault();
 								void openManual();

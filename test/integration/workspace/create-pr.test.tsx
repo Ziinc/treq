@@ -1,21 +1,21 @@
-import * as React from "react";
 import fs from "node:fs";
 import path from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import userEvent from "@testing-library/user-event";
+import * as React from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Dashboard } from "../../../src/components/Dashboard";
 import {
 	createWorkspace,
+	getPrInfoViaGh,
 	getWorkspaces,
 	ghCreatePr,
 	ghViewPr,
-	getPrInfoViaGh,
 	pushWorkspaceToRemote,
 	updateWorkspace,
 } from "../../../src/lib/api";
-import { createTestRepo, openRepo } from "../../utils";
 import { render, screen, waitFor, within } from "../../test-utils";
-import userEvent from "@testing-library/user-event";
+import { commitWorkspaceFile, createTestRepo, openRepo } from "../../utils";
 
 vi.mock("../../../src/lib/api", async (importOriginal) => {
 	const original =
@@ -72,6 +72,16 @@ describe("ShowWorkspace - Create PR", () => {
 			options?.description ?? "Implements the feature end-to-end.";
 		const workspaceId = await createWorkspace(repoPath, "feat/create-pr");
 		await updateWorkspace(repoPath, workspaceId, undefined, title, description);
+		const created = (await getWorkspaces(repoPath)).find(
+			(w) => w.id === workspaceId,
+		)!;
+		await commitWorkspaceFile(
+			repoPath,
+			{ id: created.id, path: created.workspace_path },
+			"feature.txt",
+			"feature content",
+			"Add feature",
+		);
 		await pushWorkspaceToRemote(repoPath, workspaceId);
 
 		if (options?.githubRemote !== false) {
@@ -149,6 +159,47 @@ describe("ShowWorkspace - Create PR", () => {
 		).not.toBeInTheDocument();
 	});
 
+	it("disables Create PR until the workspace has a real commit, not just working-copy changes", async () => {
+		await createWorkspace(repoPath, "feat/no-commits");
+		setOriginUrl(repoPath, "https://github.com/acme/treq.git");
+		const view = render(<Dashboard />);
+
+		await user.click(await screen.findByText("feat/no-commits"));
+		const header = await screen.findByTestId("show-workspace-header");
+		const createPr = await within(header).findByRole("button", {
+			name: /^create pr$/i,
+		});
+		expect(createPr).toBeDisabled();
+		expect(
+			within(header).getByRole("button", { name: /more create pr options/i }),
+		).toBeDisabled();
+
+		await user.click(createPr);
+		expect(ghCreatePr).not.toHaveBeenCalled();
+
+		view.unmount();
+
+		const workspace = (await getWorkspaces(repoPath)).find(
+			(w) => w.branch_name === "feat/no-commits",
+		)!;
+		await commitWorkspaceFile(
+			repoPath,
+			{ id: workspace.id, path: workspace.workspace_path },
+			"feature.txt",
+			"feature content",
+			"Add feature",
+		);
+
+		render(<Dashboard />);
+		await user.click(await screen.findByText("feat/no-commits"));
+		const reopenedHeader = await screen.findByTestId("show-workspace-header");
+		await waitFor(() => {
+			expect(
+				within(reopenedHeader).getByRole("button", { name: /^create pr$/i }),
+			).toBeEnabled();
+		});
+	});
+
 	it("keeps Push to remote when the branch is not on remote and there's no GitHub remote", async () => {
 		await createWorkspace(repoPath, "feat/unpushed");
 		setOriginUrl(repoPath, "https://gitlab.com/acme/treq.git");
@@ -173,6 +224,16 @@ describe("ShowWorkspace - Create PR", () => {
 			undefined,
 			"Ship the feature",
 			"Implements the feature end-to-end.",
+		);
+		const workspace = (await getWorkspaces(repoPath)).find(
+			(w) => w.id === workspaceId,
+		)!;
+		await commitWorkspaceFile(
+			repoPath,
+			{ id: workspace.id, path: workspace.workspace_path },
+			"feature.txt",
+			"feature content",
+			"Add feature",
 		);
 		vi.mocked(pushWorkspaceToRemote).mockResolvedValueOnce("pushed");
 		setOriginUrl(repoPath, "https://github.com/acme/treq.git");
