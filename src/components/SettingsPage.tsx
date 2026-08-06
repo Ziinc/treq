@@ -1,5 +1,5 @@
 import { FolderGit2, GitBranch, Plug, Settings, User } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import {
 	MAX_ZOOM,
@@ -11,7 +11,10 @@ import { useTheme } from "../hooks/useTheme";
 import { getSetting, setSetting } from "../lib/api";
 import { AccountSettings } from "./AccountSettings";
 import { GitHubIntegrationSettings } from "./GitHubIntegrationSettings";
-import { RepositorySettingsContent } from "./RepositorySettingsContent";
+import {
+	RepositorySettingsContent,
+	type RepositorySettingsContentHandle,
+} from "./RepositorySettingsContent";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -39,6 +42,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 	const [originalFontSize, setOriginalFontSize] = useState<number | null>(null);
 	const [localFontSize, setLocalFontSize] = useState<number>(12);
 	const [localZoom, setLocalZoom] = useState<number>(100);
+	const [savingRepository, setSavingRepository] = useState(false);
+	const repositorySettingsRef = useRef<RepositorySettingsContentHandle>(null);
 
 	const { theme, setTheme } = useTheme();
 	const { fontSize, setFontSize } = useTerminalSettings();
@@ -84,6 +89,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 		}
 	};
 
+	const handleSaveRepositorySettings = async () => {
+		await repositorySettingsRef.current?.save();
+	};
+
 	return (
 		<>
 			<div className="h-full flex flex-col bg-background">
@@ -97,6 +106,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 						{currentTab === "application" && (
 							<Button size="sm" onClick={handleSaveApplicationSettings}>
 								Save Settings
+							</Button>
+						)}
+						{currentTab === "repository" && repoPath && (
+							<Button
+								size="sm"
+								onClick={handleSaveRepositorySettings}
+								disabled={savingRepository}
+							>
+								{savingRepository ? "Saving..." : "Save Settings"}
 							</Button>
 						)}
 					</div>
@@ -303,8 +321,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
 											{/* Repository Settings */}
 											<RepositorySettingsContent
+												ref={repositorySettingsRef}
 												repoPath={repoPath}
-												onClose={onClose}
+												onSavingChange={setSavingRepository}
 											/>
 										</div>
 									) : (
