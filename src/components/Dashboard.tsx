@@ -19,6 +19,7 @@ import {
 } from "../lib/agentDeepLink";
 import {
 	acknowledgeAgentDispatch,
+	addPromptHistory,
 	checkAndRebaseWorkspaces,
 	createSession,
 	deleteWorkspace,
@@ -55,6 +56,7 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { GitHubPanel } from "./GitHubPanel";
 import { MergePreviewPage } from "./MergePreviewPage";
 import { Onboarding } from "./Onboarding";
+import { PromptHistoryModal } from "./PromptHistoryModal";
 import { SettingsPage } from "./SettingsPage";
 import { ShowWorkspace } from "./ShowWorkspace";
 import type { BranchListItem } from "./TargetBranchSelector";
@@ -113,6 +115,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	const [mergeWorkspace, setMergeWorkspace] = useState<Workspace | null>(null);
 	const [showCommandPalette, setShowCommandPalette] = useState(false);
 	const [showAgentPromptDialog, setShowAgentPromptDialog] = useState(false);
+	const [showPromptHistory, setShowPromptHistory] = useState(false);
 	const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
 	const [showFilePicker, setShowFilePicker] = useState(false);
 	const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
@@ -697,6 +700,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	const handleSessionCreated = useCallback(
 		(sessionData: {
 			sessionId: number;
+			workspaceId?: number | null;
 			pendingPrompt?: string;
 			permissionMode?: "plan" | "acceptEdits";
 			agent?: "claude" | "codex" | "cursor";
@@ -718,8 +722,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
 					return next;
 				});
 			}
+			if (sessionData.pendingPrompt) {
+				addPromptHistory(
+					repoPath,
+					sessionData.workspaceId ?? null,
+					sessionData.sessionId,
+					sessionData.pendingPrompt,
+					sessionData.agent,
+				)
+					.then(() => {
+						queryClient.invalidateQueries({ queryKey: ["prompt-history"] });
+						queryClient.invalidateQueries({
+							queryKey: ["workspace-starting-prompt"],
+						});
+					})
+					.catch((error) => {
+						console.error("Failed to record prompt history:", error);
+					});
+			}
 		},
-		[queryClient],
+		[queryClient, repoPath],
 	);
 
 	const handleStartDefaultAgent = useCallback(async () => {
@@ -883,6 +905,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
 					});
 					return next;
 				});
+				if (request.prompt) {
+					addPromptHistory(
+						repoPath,
+						workspace.id,
+						sessionId,
+						request.prompt,
+						request.agent,
+					)
+						.then(() => {
+							queryClient.invalidateQueries({ queryKey: ["prompt-history"] });
+							queryClient.invalidateQueries({
+								queryKey: ["workspace-starting-prompt"],
+							});
+						})
+						.catch((error) => {
+							console.error("Failed to record prompt history:", error);
+						});
+				}
 				markProcessedAgentRequest(request.requestId);
 				await acknowledgeAgentDispatch(request.requestId, "accepted");
 			} catch (error) {
@@ -890,7 +930,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				await acknowledgeAgentDispatch(request.requestId, "rejected", reason);
 			}
 		},
-		[addToast, getOrCreateSession, workspaces],
+		[addToast, getOrCreateSession, workspaces, repoPath, queryClient],
 	);
 
 	useEffect(() => {
@@ -1401,6 +1441,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				onMaximizeTerminal={() => terminalPaneRef.current?.toggleMaximize()}
 				onStartAgentWithPrompt={() => setShowAgentPromptDialog(true)}
 				onStartAgentTerminal={() => void handleStartDefaultAgent()}
+				onOpenPromptHistory={() => setShowPromptHistory(true)}
 				onCreateShellTerminal={() =>
 					terminalPaneRef.current?.createShellSession()
 				}
@@ -1426,6 +1467,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				defaultBranch={effectiveDefaultBranch}
 				workspaces={workspaces}
 				onSessionCreated={handleSessionCreated}
+			/>
+
+			<PromptHistoryModal
+				open={showPromptHistory}
+				onOpenChange={setShowPromptHistory}
+				repoPath={repoPath}
 			/>
 
 			<WorkspacePicker
