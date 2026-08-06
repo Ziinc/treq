@@ -12,6 +12,7 @@ import {
 } from "../../../lib/git-utils";
 import { useCachedWorkspaceChanges } from "../../../hooks/useCachedWorkspaceChanges";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { useToast } from "../../ui/toast";
 import type { FileHunksData } from "../types";
 import { hunksEqual, parseCachedHunks } from "../utils";
@@ -346,6 +347,43 @@ export function useFileLoading({
 			allFileHunks,
 		],
 	);
+
+	// File contents can change on disk without any jj-visible status change
+	// (e.g. edits to an already-modified file), so the file watcher event
+	// above isn't enough to keep an open diff fresh. Re-read everything from
+	// disk whenever the window regains focus, so switching back to the app
+	// never leaves the Review tab showing what was there before you left.
+	const loadChangedFilesRef = useRef(loadChangedFiles);
+	loadChangedFilesRef.current = loadChangedFiles;
+	const loadAllFileHunksRef = useRef(loadAllFileHunks);
+	loadAllFileHunksRef.current = loadAllFileHunks;
+	const filesRef = useRef(files);
+	filesRef.current = files;
+
+	useEffect(() => {
+		if (!workspaceId) return;
+		let unlisten: (() => void) | undefined;
+		let cancelled = false;
+		getCurrentWindow()
+			.onFocusChanged(({ payload: focused }) => {
+				if (!focused) return;
+				loadChangedFilesRef.current();
+				if (filesRef.current.length > 0) {
+					loadAllFileHunksRef.current(filesRef.current);
+				}
+			})
+			.then((fn) => {
+				if (cancelled) fn();
+				else unlisten = fn;
+			})
+			.catch(() => {
+				/* not running inside a Tauri window (e.g. tests) */
+			});
+		return () => {
+			cancelled = true;
+			unlisten?.();
+		};
+	}, [workspaceId]);
 
 	useEffect(() => {
 		const currentPaths = files.map((f) => f.path);
