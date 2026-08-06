@@ -56,7 +56,7 @@ Keep these yourself — they are the skill, not the legwork:
 
 - Deciding what behavior to verify and what the `expectations` should claim.
 - Writing the spec and driving the flow with `userEvent`.
-- **Step 5 verification.** Read the PNGs yourself. The whole point is that the agent
+- **Step 6 verification.** Read the PNGs yourself. The whole point is that the agent
   shipping the change looks at the pixels; a subagent's "looks fine" is not that.
 - The final report to the user.
 
@@ -99,7 +99,7 @@ part of the scenario being verified.
    headless Chromium (`playwright-core`, pinned to the pre-installed browser) purely
    to rasterize it into a PNG. jsdom itself never paints a pixel — Chromium is only
    there for the pixels. It also writes `<name>.json` next to the PNG recording the
-   `expectations` you passed (see step 4 below).
+   `expectations` you passed (see step 4 in Steps below).
 
 `test/setup.screenshot.ts` is a near-duplicate of `test/setup.integration.ts` with one
 difference: `test/integration/**` fails a run the moment any still-un-migrated `jj_*`
@@ -118,7 +118,17 @@ command code as a separate, bigger decision and check with the user first.
 
 ## Steps
 
-1. **Identify the behavior to verify.** From the user's ask, or from the changed
+1. **Lint, format, and typecheck the change before anything else.** Run:
+   - `npm run format` — Biome (`./src ./test`) + `cargo fmt`, auto-fixes what it can.
+   - `npm run lint` — oxlint + eslint over `./src ./test/integration`, plus
+     `ast-grep scan --warning`.
+   - `npm run check` — `tsc` (typecheck) + `ast-grep test`.
+
+   Fix everything these flag before writing or running a spec — a screenshot of code
+   that doesn't typecheck or lint clean isn't a finished change, it just looks like
+   one. Re-run the three after fixing until all are clean, then move on to step 2.
+
+2. **Identify the behavior to verify.** From the user's ask, or from the changed
    file(s) named in the hook's `additionalContext`, work out which user-facing flow
    changed. Search `test/integration/**` and `test/*.test.tsx` for a scenario that
    already sets up the right repo/workspace state (`createTestRepo`, `commitRepoFile`,
@@ -128,7 +138,7 @@ command code as a separate, bigger decision and check with the user first.
    above: if workspace creation is part of the scenario, drive it through the real UI,
    not `createWorkspace()`.
 
-2. **Write or extend a spec** under `scripts/screenshot/specs/<slug>.spec.tsx`. One
+3. **Write or extend a spec** under `scripts/screenshot/specs/<slug>.spec.tsx`. One
    spec per behavior/flow. If an existing spec already covers this flow, add capture
    steps to it rather than duplicating the repo setup in a new file. Shape:
 
@@ -179,12 +189,12 @@ command code as a separate, bigger decision and check with the user first.
    Give every capture a numbered, descriptive `name` — that string becomes the PNG
    (and manifest JSON) filename, so name it as `<slug>-<NN>-<what-it-shows>`.
 
-3. **`expectations` are for the picture, not the DOM.** `captureDocument` requires a
+4. **`expectations` are for the picture, not the DOM.** `captureDocument` requires a
    non-empty `expectations: string[]` — plain-English claims about what a viewer
    should be able to confirm by *looking at the screenshot* (colors, layout, which
    button is visible, what a toast says, whether a list has the right items). These
    are not code assertions and `captureDocument` does not execute them; they're
-   written to `<name>.json` next to the PNG specifically so that step 4 has a
+   written to `<name>.json` next to the PNG specifically so that step 6 has a
    concrete, per-screenshot checklist instead of "eyeball it and hope you notice
    something wrong." Keep the real `screen.findBy*`/`expect` calls in the spec body
    too (still required, still what proves the DOM reached that state) — the two are
@@ -197,7 +207,7 @@ command code as a separate, bigger decision and check with the user first.
    than one thing: take a second capture with its own `name` and split the claims
    across the two.
 
-4. **Run it.**
+5. **Run it.**
    - First run in a session, or after touching `src-tauri` / `crates/treq-napi`, or
      adding new Tailwind classes: `npm run screenshot` (rebuilds the NAPI addon,
      recompiles CSS, runs every spec — slow but complete).
@@ -206,7 +216,7 @@ command code as a separate, bigger decision and check with the user first.
    - If only Tailwind classes changed (no Rust change): `npm run screenshot:css` first,
      then the targeted vitest run above.
 
-5. **Verify each screenshot against its expectations before saying the task is done.**
+6. **Verify each screenshot against its expectations before saying the task is done.**
    For every capture: read `scripts/screenshot/.generated/<name>.json` for its
    expectations list, then read `scripts/screenshot/.generated/<name>.png` (multimodal
    Read) and go through the list confirming or refuting each one against what the
@@ -215,7 +225,7 @@ command code as a separate, bigger decision and check with the user first.
    to fix, not a false alarm, and the expectations checklist is what catches it
    instead of a cursory glance.
 
-6. **Show the result.** Use SendUserFile to deliver the before/after PNGs together,
+7. **Show the result.** Use SendUserFile to deliver the before/after PNGs together,
    with a short caption naming what changed and what to look at, and call out any
    expectation that didn't hold.
 
