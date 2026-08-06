@@ -136,6 +136,19 @@ it("captures the stack panel and navigation to a sibling workspace", async () =>
 		],
 	});
 
+	const helpButton = within(panel).getByRole("button", {
+		name: /what is a stack/i,
+	});
+	await user.hover(helpButton);
+	await screen.findByRole("tooltip");
+	await captureDocument(document, {
+		name: "stacked-workspace-panel-01b-help-tooltip",
+		expectations: [
+			'A help tooltip is visible near the Stack panel header, explaining that a stack is a chain of workspaces that build on each other.',
+			'A small circle-help icon sits next to the "Stack" label in the panel header.',
+		],
+	});
+
 	// Click the parent item in the stack panel to navigate to it.
 	await user.click(within(panel).getByText(PARENT_BRANCH));
 	header = await screen.findByTestId("show-workspace-header");
