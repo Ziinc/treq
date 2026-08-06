@@ -38,6 +38,10 @@ pub struct PullWorkspaceResult {
     pub message: String,
     pub was_diverged: bool,
     pub commits_rebased: usize,
+    /// True when the pull/rebase left unresolved file conflicts in the workspace.
+    /// Callers (e.g. Sync) should surface these for local resolution instead of pushing.
+    #[serde(default)]
+    pub has_conflicts: bool,
 }
 
 pub enum MaybeEmptyParam<T> {
@@ -751,14 +755,17 @@ pub fn workspace_status(
                 sparse_patterns: None,
             };
 
+            let conflicted_files = jj::get_conflicted_files(repo_path, Some(&default_branch))
+                .unwrap_or_default();
+
             return Ok(WorkspaceStatus {
                 partial: WorkspacePartialStatus {
                     current: home_workspace,
-                    has_conflicts: rs.has_conflicts,
+                    has_conflicts: rs.has_conflicts || !conflicted_files.is_empty(),
                     has_changes: rs.has_changes,
                     commits_ahead: 0,
                 },
-                conflicted_files: Vec::new(),
+                conflicted_files,
                 remote_sync: rs.remote_sync,
                 target: None,
                 children: Vec::new(),
@@ -1644,6 +1651,7 @@ pub fn pull_workspace_from_remote(
                 message: "Fetched home repo".to_string(),
                 was_diverged: false,
                 commits_rebased: 0,
+                has_conflicts: false,
             });
         }
     };
@@ -1679,6 +1687,7 @@ pub fn pull_workspace_from_remote(
             message: "Fetched remote changes (no divergence)".to_string(),
             was_diverged: false,
             commits_rebased: 0,
+            has_conflicts: workspace_pull_has_conflicts(full_path_str, branch_name),
         });
     }
 
@@ -1707,21 +1716,60 @@ pub fn pull_workspace_from_remote(
             conflict_marker_style,
         )
         .map_err(|e| format!("Failed to rebase local commits: {}", e))?;
+
+        // Step 5b: Advance the bookmark to the rebased local tip.
+        // Without this, the bookmark stays on origin and Sync reports InSync while
+        // conflicted/rebased work only lives on @ — users can't resolve locally and push.
+        advance_bookmark_to_working_copy_tip(full_path_str, branch_name)?;
     }
 
     // Step 6: refresh stale working copy only; do not sync bookmark tip here.
     let _ = jj::jj_workspace_update_stale(full_path_str);
     sync_home_and_workspace_for_branch(repo_path, branch_name, SyncSource::WorkspaceToHome)?;
 
+    let has_conflicts = workspace_pull_has_conflicts(full_path_str, branch_name);
+
     Ok(PullWorkspaceResult {
         success: true,
-        message: format!(
-            "Resolved divergence: rebased {} local commit(s) onto remote tip",
-            commits_rebased
-        ),
+        message: if has_conflicts {
+            format!(
+                "Rebased {} local commit(s) onto remote tip with conflicts to resolve",
+                commits_rebased
+            )
+        } else {
+            format!(
+                "Resolved divergence: rebased {} local commit(s) onto remote tip",
+                commits_rebased
+            )
+        },
         was_diverged: true,
         commits_rebased,
+        has_conflicts,
     })
+}
+
+/// Point `branch_name` at the workspace tip (`@-` when `@` is the empty WC commit).
+fn advance_bookmark_to_working_copy_tip(
+    workspace_path: &str,
+    branch_name: &str,
+) -> Result<(), String> {
+    let tip = jj::jj_resolve_bookmark_tip(workspace_path)
+        .map_err(|e| format!("Failed to resolve rebased tip: {}", e))?;
+    jj::jj_set_bookmark(workspace_path, branch_name, &tip).map_err(|e| {
+        format!(
+            "Failed to advance bookmark '{}' to rebased tip: {}",
+            branch_name, e
+        )
+    })
+}
+
+fn workspace_pull_has_conflicts(workspace_path: &str, _branch_name: &str) -> bool {
+    if jj::workspace_has_unresolved_conflicts(workspace_path).unwrap_or(false) {
+        return true;
+    }
+    !jj::get_conflicted_files(workspace_path, None)
+        .unwrap_or_default()
+        .is_empty()
 }
 
 /// Copies files/directories listed in `patterns` from `repo_path` into `workspace_dir`.

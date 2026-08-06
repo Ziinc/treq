@@ -1714,3 +1714,268 @@ fn test_workspace_status_with_workspace_id() {
         "workspace_status should not return DAG-derived conflict IDs"
     );
 }
+
+#[test]
+fn test_pull_workspace_surfaces_file_conflicts_after_divergent_same_file_edits() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/remote-conflict",
+        Some("test remote conflict".to_string()),
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().unwrap();
+
+    // Shared base on the workspace branch, pushed to remote.
+    TestRepo::write_workspace_file(workspace_path_str, "shared.txt", "base\n")
+        .expect("Failed to write shared base");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "shared base")
+        .expect("Failed to commit shared base");
+    treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
+        .expect("Failed to push shared base");
+
+    // Local-only divergent edit of the same file.
+    TestRepo::write_workspace_file(workspace_path_str, "shared.txt", "local edit\n")
+        .expect("Failed to write local edit");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "local edit")
+        .expect("Failed to commit local edit");
+
+    // Remote-only divergent edit of the same file.
+    repo.remote_commit_on_branch(
+        &workspace.branch_name,
+        "shared.txt",
+        "remote edit\n",
+        "remote edit",
+    )
+    .expect("Failed to create remote conflicting edit");
+
+    let pull =
+        treq_lib::core::pull_workspace_from_remote(&repo.repo_path, Some(workspace.id), "git")
+            .expect("pull_workspace_from_remote should succeed even when rebase conflicts");
+
+    assert!(pull.was_diverged, "pull should detect divergence");
+    assert!(
+        pull.has_conflicts,
+        "pull result must report has_conflicts so Sync can skip push"
+    );
+
+    let status = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+        .expect("workspace_status should succeed");
+
+    assert!(
+        status.partial.has_conflicts,
+        "workspace should report has_conflicts after conflicting remote pull"
+    );
+    assert!(
+        status
+            .conflicted_files
+            .iter()
+            .any(|f| f == "shared.txt" || f.ends_with("/shared.txt")),
+        "ShowWorkspace needs conflicted_files including shared.txt after remote conflict, got {:?}",
+        status.conflicted_files
+    );
+}
+
+
+#[test]
+fn test_pull_advances_bookmark_past_origin_when_rebasing_local_commits() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/pull-bookmark-tip",
+        Some("pull bookmark tip".to_string()),
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().unwrap();
+
+    TestRepo::write_workspace_file(workspace_path_str, "shared.txt", "base\n")
+        .expect("write base");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "shared base")
+        .expect("commit base");
+    treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
+        .expect("push base");
+
+    TestRepo::write_workspace_file(workspace_path_str, "shared.txt", "local edit\n")
+        .expect("write local");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "local edit")
+        .expect("commit local");
+
+    repo.remote_commit_on_branch(
+        &workspace.branch_name,
+        "other.txt",
+        "remote only\n",
+        "remote other file",
+    )
+    .expect("remote non-conflicting commit");
+
+    treq_lib::core::pull_workspace_from_remote(&repo.repo_path, Some(workspace.id), "git")
+        .expect("pull should rebase local onto remote");
+
+    let status = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+        .expect("status after pull");
+    assert!(
+        matches!(status.remote_sync, RemoteSyncStatus::Ahead { count } if count >= 1),
+        "after pull, bookmark must include rebased local commits (Ahead of origin); got {:?}",
+        status.remote_sync
+    );
+
+    assert!(
+        status.conflicted_files.is_empty() && !status.partial.has_conflicts,
+        "non-overlapping edits must not leave conflicts, got files={:?} has_conflicts={}",
+        status.conflicted_files,
+        status.partial.has_conflicts
+    );
+
+    treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
+        .expect("push should publish rebased local commits");
+
+    let status_after = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+        .expect("status after push");
+    assert!(
+        matches!(status_after.remote_sync, RemoteSyncStatus::InSync),
+        "expected InSync after publishing rebased local tip, got {:?}",
+        status_after.remote_sync
+    );
+}
+
+#[test]
+fn test_pull_with_conflicts_keeps_conflicted_tip_on_bookmark_for_local_resolve() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/pull-conflict-bookmark",
+        Some("pull conflict bookmark".to_string()),
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().unwrap();
+
+    TestRepo::write_workspace_file(workspace_path_str, "shared.txt", "base\n")
+        .expect("write base");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "shared base")
+        .expect("commit base");
+    treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
+        .expect("push base");
+
+    TestRepo::write_workspace_file(workspace_path_str, "shared.txt", "local edit\n")
+        .expect("write local");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "local edit")
+        .expect("commit local");
+
+    repo.remote_commit_on_branch(
+        &workspace.branch_name,
+        "shared.txt",
+        "remote edit\n",
+        "remote edit",
+    )
+    .expect("remote conflict");
+
+    treq_lib::core::pull_workspace_from_remote(&repo.repo_path, Some(workspace.id), "git")
+        .expect("pull");
+
+    let status = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+        .expect("status");
+
+    assert!(
+        status.partial.has_conflicts,
+        "conflicts must be visible for local resolve"
+    );
+    assert!(
+        status.conflicted_files.iter().any(|f| f == "shared.txt"),
+        "shared.txt must be in conflicted_files, got {:?}",
+        status.conflicted_files
+    );
+
+    // Bookmark must point at the conflicted rebased tip (Ahead), not stuck on origin tip.
+    // Otherwise Sync reports InSync, push is a no-op, and users are forced to resolve on the remote.
+    assert!(
+        matches!(status.remote_sync, RemoteSyncStatus::Ahead { .. }),
+        "conflicted rebased tip must be on the bookmark (Ahead of origin) so resolve-then-push works; got {:?}",
+        status.remote_sync
+    );
+}
+
+
+#[test]
+fn test_home_workspace_status_populates_conflicted_files() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    repo.create_file("home-conflict.txt", "side-a\n")
+        .expect("write side a");
+    treq_lib::jj::jj_commit(&repo.repo_path, "side a").expect("commit side a");
+    let side_a = TestRepo::run_jj(
+        &repo.repo_path,
+        &["log", "-r", "@-", "--no-graph", "-T", "change_id\n"],
+    )
+    .expect("side a change id")
+    .trim()
+    .to_string();
+
+    let parent = TestRepo::run_jj(
+        &repo.repo_path,
+        &["log", "-r", &format!("{side_a}-"), "--no-graph", "-T", "change_id\n"],
+    )
+    .expect("parent change id")
+    .trim()
+    .to_string();
+
+    TestRepo::run_jj(&repo.repo_path, &["new", &parent]).expect("new on parent");
+    repo.create_file("home-conflict.txt", "side-b\n")
+        .expect("write side b");
+    treq_lib::jj::jj_commit(&repo.repo_path, "side b").expect("commit side b");
+    let side_b = TestRepo::run_jj(
+        &repo.repo_path,
+        &["log", "-r", "@-", "--no-graph", "-T", "change_id\n"],
+    )
+    .expect("side b change id")
+    .trim()
+    .to_string();
+
+    TestRepo::run_jj(&repo.repo_path, &["new", &side_a, &side_b]).expect("merge conflicting sides");
+
+    let direct = treq_lib::jj::get_conflicted_files(&repo.repo_path, None).unwrap_or_default();
+    let has_unresolved =
+        treq_lib::jj::workspace_has_unresolved_conflicts(&repo.repo_path).unwrap_or(false);
+    println!("direct conflicted_files={direct:?} has_unresolved={has_unresolved}");
+
+    let status = treq_lib::core::workspace_status(&repo.repo_path, None)
+        .expect("home workspace_status should succeed");
+    println!(
+        "status has_conflicts={} conflicted_files={:?}",
+        status.partial.has_conflicts, status.conflicted_files
+    );
+
+    assert!(
+        status.partial.has_conflicts || !status.conflicted_files.is_empty() || !direct.is_empty(),
+        "home has_conflicts should be true; direct={direct:?} unresolved={has_unresolved} status={:?}",
+        status.conflicted_files
+    );
+    assert!(
+        status
+            .conflicted_files
+            .iter()
+            .any(|f| f == "home-conflict.txt"),
+        "ShowWorkspace reads conflicted_files for the alert; got {:?}",
+        status.conflicted_files
+    );
+}
