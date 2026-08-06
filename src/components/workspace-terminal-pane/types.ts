@@ -26,6 +26,7 @@ export interface WorkspaceTerminalPaneHandle {
 	toggleMaximize: () => void;
 	createAgentSession: (agent?: "claude" | "codex" | "cursor") => void;
 	createShellSession: (workingDir?: string) => void;
+	closeTerminalsForWorkspace: (workspaceKey: string) => void;
 }
 
 export type TerminalEntry =

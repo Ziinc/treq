@@ -320,6 +320,30 @@ const WorkspaceTerminalPaneInner = forwardRef<
 			],
 		);
 
+		// Close every terminal (shell + agent) belonging to a workspace, killing their
+		// PTY processes. Used when the owning workspace itself is being deleted, so
+		// terminals don't linger as orphaned processes.
+		const closeTerminalsForWorkspace = useCallback(
+			(workspaceKey: string) => {
+				shellTerminals
+					.filter((t) => t.workingDirectory === workspaceKey)
+					.forEach((t) => handleCloseShell(t.id));
+
+				claudeSessions
+					.filter((s) => (s.workspacePath || s.repoPath) === workspaceKey)
+					.forEach((s) => {
+						ptyClose(s.ptySessionId).catch(console.error);
+						handleCloseClaudeSession(s.sessionId);
+					});
+			},
+			[
+				shellTerminals,
+				claudeSessions,
+				handleCloseShell,
+				handleCloseClaudeSession,
+			],
+		);
+
 		// Expose methods via ref for command palette
 		useImperativeHandle(
 			ref,
@@ -335,8 +359,14 @@ const WorkspaceTerminalPaneInner = forwardRef<
 				},
 				createAgentSession: handleCreateAgentSession,
 				createShellSession: handleAddShell,
+				closeTerminalsForWorkspace,
 			}),
-			[maximized, handleCreateAgentSession, handleAddShell],
+			[
+				maximized,
+				handleCreateAgentSession,
+				handleAddShell,
+				closeTerminalsForWorkspace,
+			],
 		);
 
 		// Terminal width resize handler

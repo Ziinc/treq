@@ -430,7 +430,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		mutationFn: async (workspace: Workspace) => {
 			await deleteWorkspace(workspace.repo_path, workspace.id);
 		},
-		onSuccess: () => {
+		onSuccess: (_data, workspace) => {
+			terminalPaneRef.current?.closeTerminalsForWorkspace(
+				getFullWorkspacePath(workspace),
+			);
 			queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
 			queryClient.invalidateQueries({
 				queryKey: ["workspace-statuses", repoPath],
@@ -997,6 +1000,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
 						deleteWorkspace(workspace.repo_path, workspace.id),
 					),
 				);
+				// Close any terminals tied to the deleted workspaces so they don't
+				// linger as orphaned processes.
+				for (const workspace of workspacesToDelete) {
+					terminalPaneRef.current?.closeTerminalsForWorkspace(
+						getFullWorkspacePath(workspace),
+					);
+				}
 				// Show single toast and refresh after all deletions
 				queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
 				queryClient.invalidateQueries({
