@@ -413,6 +413,7 @@ export const ChangesDiffViewer = memo(
 				refresh,
 				loadChangedFiles,
 				refreshCommittedChanges,
+				setCommittedSectionCollapsed,
 				addToast,
 			});
 

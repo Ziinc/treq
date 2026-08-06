@@ -27,6 +27,7 @@ interface UseFileActionsParams {
 	refresh: () => void;
 	loadChangedFiles: () => void;
 	refreshCommittedChanges: () => void;
+	setCommittedSectionCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
 	addToast: ReturnType<typeof useToast>["addToast"];
 }
 
@@ -46,6 +47,7 @@ export function useFileActions({
 	refresh,
 	loadChangedFiles,
 	refreshCommittedChanges,
+	setCommittedSectionCollapsed,
 	addToast,
 }: UseFileActionsParams) {
 	const [fileActionTarget, setFileActionTarget] = useState<string | null>(null);
@@ -223,6 +225,7 @@ export function useFileActions({
 					description: result.trim() || "Commit successful",
 					type: "success",
 				});
+				setCommittedSectionCollapsed(true);
 				await Promise.all([
 					loadChangedFiles(),
 					refreshCommittedChanges(),
@@ -256,6 +259,7 @@ export function useFileActions({
 			setStagedFiles,
 			loadChangedFiles,
 			refreshCommittedChanges,
+			setCommittedSectionCollapsed,
 			repoPath,
 			workspaceId,
 			queryClient,
