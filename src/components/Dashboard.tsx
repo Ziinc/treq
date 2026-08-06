@@ -119,6 +119,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	const [promptHistoryFocusId, setPromptHistoryFocusId] = useState<
 		number | null
 	>(null);
+	const [runPromptRequest, setRunPromptRequest] = useState<{
+		prompt: string;
+		workspaceId: number | null;
+	} | null>(null);
 	const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
 	const [showFilePicker, setShowFilePicker] = useState(false);
 	const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
@@ -755,6 +759,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	const handlePromptHistoryOpenChange = useCallback((open: boolean) => {
 		setShowPromptHistory(open);
 		if (!open) setPromptHistoryFocusId(null);
+	}, []);
+
+	const handleRunPrompt = useCallback(
+		(prompt: string, workspaceId: number | null) => {
+			setShowPromptHistory(false);
+			setPromptHistoryFocusId(null);
+			setRunPromptRequest({ prompt, workspaceId });
+			setShowAgentPromptDialog(true);
+		},
+		[],
+	);
+
+	const handleAgentPromptDialogOpenChange = useCallback((open: boolean) => {
+		setShowAgentPromptDialog(open);
+		if (!open) setRunPromptRequest(null);
 	}, []);
 
 	const handleStartDefaultAgent = useCallback(async () => {
@@ -1479,11 +1498,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
 			<AgentPromptDialog
 				open={showAgentPromptDialog}
-				onOpenChange={setShowAgentPromptDialog}
+				onOpenChange={handleAgentPromptDialogOpenChange}
 				repoPath={repoPath}
 				defaultBranch={effectiveDefaultBranch}
 				workspaces={workspaces}
 				onSessionCreated={handleSessionCreated}
+				initialPrompt={runPromptRequest?.prompt}
+				initialWorkspaceId={runPromptRequest?.workspaceId ?? null}
 			/>
 
 			<PromptHistoryModal
@@ -1491,6 +1512,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				onOpenChange={handlePromptHistoryOpenChange}
 				repoPath={repoPath}
 				initialSelectedId={promptHistoryFocusId}
+				onRunPrompt={handleRunPrompt}
 			/>
 
 			<WorkspacePicker
