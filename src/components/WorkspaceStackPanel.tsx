@@ -30,7 +30,8 @@ interface WorkspaceStackPanelProps {
 /**
  * Shows the chain of workspaces stacked on top of one another (a la a
  * stacked-PR view), with the current workspace highlighted. Renders nothing
- * when the given workspace isn't stacked on top of another workspace.
+ * when the given workspace isn't part of a multi-workspace stack (alone on
+ * the default/external branch with no stacked descendants).
  */
 export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
 	({ repoPath, workspace, defaultBranch, onSelectWorkspace }) => {
@@ -89,7 +90,10 @@ export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
 		const currentIndex = stack.findIndex((entry) => entry.isCurrent);
 
 		return (
-			<div data-testid="workspace-stack-panel" className="p-4">
+			<div
+				data-testid="workspace-stack-panel"
+				className="border rounded-lg p-4"
+			>
 				<div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground mb-4">
 					<Layers2 className="w-4 h-4" />
 					<span>Stack</span>

@@ -140,17 +140,16 @@ it("captures the stack panel and navigation to a sibling workspace", async () =>
 	await user.click(within(panel).getByText(PARENT_BRANCH));
 	header = await screen.findByTestId("show-workspace-header");
 	await within(header).findByText(PARENT_BRANCH);
-	await waitFor(() => {
-		expect(
-			screen.queryByTestId("workspace-stack-panel"),
-		).not.toBeInTheDocument();
-	});
+	const parentPanel = await screen.findByTestId("workspace-stack-panel");
+	await within(parentPanel).findByText("2 of 2");
+	await within(parentPanel).findByText(CHILD_BRANCH);
 
 	await captureDocument(document, {
 		name: "stacked-workspace-panel-02-after-navigate-to-parent",
 		expectations: [
 			`The header's branch name now reads "${PARENT_BRANCH}" (navigated away from ${CHILD_BRANCH}).`,
-			"No stack panel is visible in the Code tab's main column -- this workspace targets the default branch directly, so it has no workspace ancestor to show a stack for.",
+			`In the Code tab's main column, the Stack panel still appears and now reads "2 of 2", with "${PARENT_BRANCH}" highlighted as current and "${CHILD_BRANCH}" listed above it.`,
+			`The stack panel still lists both workspaces tip-first ending at the default branch, so the first workspace in the stack keeps the stack card visible.`,
 		],
 	});
 }, 60000);

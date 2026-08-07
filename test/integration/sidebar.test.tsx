@@ -4,11 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "../test-utils";
 import userEvent from "@testing-library/user-event";
 import { createTestRepo, findSidebarBranchElement, openRepo } from "../utils";
+import * as api from "../../src/lib/api";
 import {
 	createWorkspace,
 	getWorkspaces,
 	updateWorkspace,
 } from "../../src/lib/api";
+import type { PrInfo } from "../../src/lib/api-types";
 import { Dashboard } from "../../src/components/Dashboard";
 import { waitFor, within } from "@testing-library/react";
 
@@ -160,6 +162,46 @@ describe("Dashboard - workspace list", () => {
 			expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(
 				`${repoPath}/.treq/workspaces/${alphaWorkspace.workspace_path}`,
 			);
+		});
+
+		it("should copy the GitHub PR link from context menu when a PR exists", async () => {
+			const openPr: PrInfo = {
+				number: 42,
+				title: "feat/alpha",
+				state: "OPEN",
+				url: "https://github.com/ziinc/treq/pull/42",
+				head_ref_name: "feat/alpha",
+				base_ref_name: "main",
+				merge_state_status: "CLEAN",
+			};
+			const spy = vi.spyOn(api, "getPrInfoViaGh").mockResolvedValue(openPr);
+
+			render(<Dashboard />);
+
+			const alphaElement = await findSidebarBranchElement("feat/alpha");
+
+			fireEvent.contextMenu(alphaElement);
+			await screen.findByText("Copy link to GitHub PR");
+			await user.click(screen.getByText("Copy link to GitHub PR"));
+			expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(
+				openPr.url,
+			);
+
+			spy.mockRestore();
+		});
+
+		it("should not show the copy PR link option when there is no PR", async () => {
+			const spy = vi.spyOn(api, "getPrInfoViaGh").mockResolvedValue(null);
+
+			render(<Dashboard />);
+
+			const alphaElement = await findSidebarBranchElement("feat/alpha");
+
+			fireEvent.contextMenu(alphaElement);
+			await screen.findByText("Copy branch name");
+			expect(screen.queryByText("Copy link to GitHub PR")).toBeFalsy();
+
+			spy.mockRestore();
 		});
 
 		it("should open workspace in Finder from context menu", async () => {
