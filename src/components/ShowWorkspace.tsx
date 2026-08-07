@@ -33,6 +33,7 @@ import {
 	useGitRemoteInfo,
 	useMergeQueueEnabled,
 	useMergeQueueStatus,
+	usePrCiStatus,
 } from "../hooks/useMergeQueueStatus";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import {
@@ -182,6 +183,14 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			effectiveRepoPath || undefined,
 			workspace?.branch_name,
 		);
+		const { data: mergeButtonCiStatus } = usePrCiStatus(
+			effectiveRepoPath || undefined,
+			workspace?.branch_name,
+		);
+		const ciAllPassing =
+			!!mergeButtonCiStatus &&
+			mergeButtonCiStatus.total > 0 &&
+			mergeButtonCiStatus.state === "success";
 
 		const [changedFiles, setChangedFiles] = useState<
 			Map<string, ParsedFileChange>
@@ -1717,11 +1726,15 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 											<TooltipTrigger asChild>
 												<div className="inline-flex">
 													<Button
-														variant="default"
+														variant={ciAllPassing ? "default" : "outline"}
 														size="sm"
 														onClick={onOpenMergePreview}
 														disabled={rebasing || conflictCount > 0}
-														className="gap-1 bg-green-600 hover:bg-green-700"
+														className={cn(
+															"gap-1",
+															ciAllPassing &&
+																"bg-green-600 hover:bg-green-700 text-white",
+														)}
 													>
 														<GitCompareArrows className="w-4 h-4" />
 														Merge...
