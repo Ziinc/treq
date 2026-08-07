@@ -7,6 +7,7 @@ import {
 	FolderOpen,
 	GitBranch,
 	Layers2,
+	Link,
 	Pencil,
 	Terminal,
 	Trash2,
@@ -384,6 +385,14 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 									<GitBranch className="w-4 h-4 mr-2" />
 									Copy branch name
 								</ContextMenuItem>
+								{prInfo && (
+									<ContextMenuItem
+										onClick={() => navigator.clipboard.writeText(prInfo.url)}
+									>
+										<Link className="w-4 h-4 mr-2" />
+										Copy link to GitHub PR
+									</ContextMenuItem>
+								)}
 								<ContextMenuItem onClick={() => onRenameWorkspace(workspace)}>
 									<Pencil className="w-4 h-4 mr-2" />
 									Rename Workspace
