@@ -82,11 +82,6 @@ describe("Review tab collapsible copy file path button", () => {
 		vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(
 			new Error("Clipboard permission denied"),
 		);
-		Object.defineProperty(document, "execCommand", {
-			configurable: true,
-			writable: true,
-			value: vi.fn().mockReturnValue(false),
-		});
 
 		render(
 			<ChangesDiffViewer
@@ -104,45 +99,10 @@ describe("Review tab collapsible copy file path button", () => {
 		await user.click(copyButton);
 
 		expect(
-			await screen.findByText("Failed to copy to clipboard"),
+			await screen.findByText("Clipboard permission denied"),
 		).toBeInTheDocument();
 		expect(
 			screen.queryByText("File path copied to clipboard"),
 		).not.toBeInTheDocument();
-	});
-
-	it("still copies via fallback when clipboard writeText rejects", async () => {
-		const user = userEvent.setup();
-		vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(
-			new Error("Clipboard permission denied"),
-		);
-		const execCommand = vi.fn().mockReturnValue(true);
-		Object.defineProperty(document, "execCommand", {
-			configurable: true,
-			writable: true,
-			value: execCommand,
-		});
-
-		render(
-			<ChangesDiffViewer
-				workspacePath="/tmp/workspace"
-				repoPath="/tmp/repo"
-				workspaceId={1}
-				initialSelectedFile={null}
-				showCommittedChanges={true}
-			/>,
-		);
-
-		const copyButton = await screen.findByRole("button", {
-			name: "Copy file path",
-		});
-		await user.click(copyButton);
-
-		await waitFor(() => {
-			expect(execCommand).toHaveBeenCalledWith("copy");
-		});
-		expect(
-			await screen.findByText("File path copied to clipboard"),
-		).toBeInTheDocument();
 	});
 });
