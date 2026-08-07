@@ -1783,7 +1783,6 @@ fn test_pull_workspace_surfaces_file_conflicts_after_divergent_same_file_edits()
     );
 }
 
-
 #[test]
 fn test_pull_advances_bookmark_past_origin_when_rebasing_local_commits() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
@@ -1802,8 +1801,7 @@ fn test_pull_advances_bookmark_past_origin_when_rebasing_local_commits() {
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
     let workspace_path_str = workspace_path.to_str().unwrap();
 
-    TestRepo::write_workspace_file(workspace_path_str, "shared.txt", "base\n")
-        .expect("write base");
+    TestRepo::write_workspace_file(workspace_path_str, "shared.txt", "base\n").expect("write base");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "shared base")
         .expect("commit base");
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
@@ -1870,8 +1868,7 @@ fn test_pull_with_conflicts_keeps_conflicted_tip_on_bookmark_for_local_resolve()
     let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
     let workspace_path_str = workspace_path.to_str().unwrap();
 
-    TestRepo::write_workspace_file(workspace_path_str, "shared.txt", "base\n")
-        .expect("write base");
+    TestRepo::write_workspace_file(workspace_path_str, "shared.txt", "base\n").expect("write base");
     treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "shared base")
         .expect("commit base");
     treq_lib::core::push_workspace_to_remote(&repo.repo_path, Some(workspace.id))
@@ -1893,8 +1890,8 @@ fn test_pull_with_conflicts_keeps_conflicted_tip_on_bookmark_for_local_resolve()
     treq_lib::core::pull_workspace_from_remote(&repo.repo_path, Some(workspace.id), "git")
         .expect("pull");
 
-    let status = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
-        .expect("status");
+    let status =
+        treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id)).expect("status");
 
     assert!(
         status.partial.has_conflicts,
@@ -1914,5 +1911,3 @@ fn test_pull_with_conflicts_keeps_conflicted_tip_on_bookmark_for_local_resolve()
         status.remote_sync
     );
 }
-
-

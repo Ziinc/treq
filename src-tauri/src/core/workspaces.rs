@@ -755,8 +755,8 @@ pub fn workspace_status(
                 sparse_patterns: None,
             };
 
-            let conflicted_files = jj::get_conflicted_files(repo_path, Some(&default_branch))
-                .unwrap_or_default();
+            let conflicted_files =
+                jj::get_conflicted_files(repo_path, Some(&default_branch)).unwrap_or_default();
 
             return Ok(WorkspaceStatus {
                 partial: WorkspacePartialStatus {
