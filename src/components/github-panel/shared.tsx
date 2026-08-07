@@ -203,7 +203,10 @@ export function PrListItem({
 						<StateChip state={pr.state} isDraft={Boolean(pr.is_draft)} />
 						{!hideBranches && (
 							<span className="font-mono inline-flex items-center gap-1 min-w-0">
-								<span className="truncate max-w-[16rem]" title={pr.head_ref_name}>
+								<span
+									className="truncate max-w-[16rem]"
+									title={pr.head_ref_name}
+								>
 									{pr.head_ref_name}
 								</span>
 								<span className="shrink-0">→</span>
