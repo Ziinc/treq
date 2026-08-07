@@ -76,15 +76,16 @@ it("captures sidebar stack before and after parent/child reorder", async () => {
 		);
 	});
 
+	await screen.findByText(/Rebased successfully/i);
 	await within(sidebar).findByText(CHILD);
 	await within(sidebar).findByText(PARENT);
 
 	await captureDocument(document, {
 		name: "workspace-stack-reorder-02-after",
 		expectations: [
-			"Sidebar lists feat/reorder-child at the root of the stack.",
-			"feat/reorder-parent appears indented under feat/reorder-child.",
-			"No Failed to move workspace / cycle error toast is shown.",
+			"Sidebar shows feat/reorder-child above feat/reorder-parent (child is now the stack root).",
+			"Header target reads feat/reorder-child (parent now stacks onto child).",
+			"A green success toast says the workspace rebased onto feat/reorder-child — no cycle error.",
 		],
 	});
 }, 60000);
