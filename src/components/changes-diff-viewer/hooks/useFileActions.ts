@@ -16,6 +16,8 @@ import {
 	ghCreatePr,
 	jjRestoreAll,
 	jjRestoreFile,
+	jjRestoreSnapshot,
+	jjSnapshotWorkingCopy,
 	jjSplit,
 	pushWorkspaceToRemote,
 } from "../../../lib/api";
@@ -88,14 +90,41 @@ export function useFileActions({
 		? "pr"
 		: localPendingAction;
 
+	const handleUndoDiscard = useCallback(
+		async (snapshotId: string) => {
+			try {
+				await jjRestoreSnapshot(workspacePath, snapshotId);
+				await invalidateCache();
+				refresh();
+				addToast({
+					description: "Discarded changes have been restored",
+					title: "Restored",
+					type: "success",
+				});
+			} catch (error) {
+				addToast({
+					description: error instanceof Error ? error.message : String(error),
+					title: "Undo Failed",
+					type: "error",
+				});
+			}
+		},
+		[workspacePath, refresh, addToast, invalidateCache],
+	);
+
 	const handleDiscardAll = useCallback(async () => {
 		if (readOnly) return;
 		try {
+			const snapshotId = await jjSnapshotWorkingCopy(workspacePath);
 			await jjRestoreAll(workspacePath);
 			addToast({
 				description: "All changes discarded",
 				title: "Discarded",
 				type: "success",
+				action: {
+					label: "Undo",
+					onClick: () => handleUndoDiscard(snapshotId),
+				},
 			});
 			await invalidateCache();
 			refresh();
@@ -106,7 +135,7 @@ export function useFileActions({
 				type: "error",
 			});
 		}
-	}, [workspacePath, readOnly, refresh, addToast, invalidateCache]);
+	}, [workspacePath, readOnly, refresh, addToast, invalidateCache, handleUndoDiscard]);
 
 	const handleDiscardFiles = useCallback(
 		async (filePath: string) => {
@@ -117,6 +146,7 @@ export function useFileActions({
 					: [filePath];
 			setFileActionTarget(filePath);
 			try {
+				const snapshotId = await jjSnapshotWorkingCopy(workspacePath);
 				await Promise.all(
 					filesToDiscard.map((file) => jjRestoreFile(workspacePath, file)),
 				);
@@ -128,6 +158,10 @@ export function useFileActions({
 							: `${count} files discarded`,
 					title: "Discarded",
 					type: "success",
+					action: {
+						label: "Undo",
+						onClick: () => handleUndoDiscard(snapshotId),
+					},
 				});
 				setSelectedUnstagedFiles(new Set());
 				await invalidateCache();
@@ -150,6 +184,7 @@ export function useFileActions({
 			invalidateCache,
 			workspacePath,
 			setSelectedUnstagedFiles,
+			handleUndoDiscard,
 		],
 	);
 
