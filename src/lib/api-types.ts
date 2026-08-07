@@ -238,6 +238,8 @@ export interface PullWorkspaceResult {
 	message: string;
 	was_diverged: boolean;
 	commits_rebased: number;
+	/** True when pull/rebase left unresolved conflicts for local resolution. */
+	has_conflicts?: boolean;
 }
 
 export interface BranchStatus {

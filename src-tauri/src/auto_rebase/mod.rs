@@ -98,6 +98,21 @@ fn resolve_bookmark_conflict_if_needed(
                 e
             )
         })?;
+
+        // Advance bookmark to the rebased tip so local (possibly conflicted) work
+        // stays on the branch and can be resolved then pushed.
+        let tip = jj::jj_resolve_bookmark_tip(workspace_path).map_err(|e| {
+            format!(
+                "Failed to resolve rebased tip after conflict resolution: {}",
+                e
+            )
+        })?;
+        jj::jj_set_bookmark(workspace_path, branch_name, &tip).map_err(|e| {
+            format!(
+                "Failed to advance bookmark '{}' to rebased tip: {}",
+                branch_name, e
+            )
+        })?;
     }
 
     log::debug!(

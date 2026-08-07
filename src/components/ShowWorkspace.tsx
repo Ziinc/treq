@@ -577,17 +577,26 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 
 			_setActionPending("sync");
 			try {
-				await pullWorkspaceFromRemote(effectiveRepoPath, workspace?.id ?? null);
+				const pullResult = await pullWorkspaceFromRemote(
+					effectiveRepoPath,
+					workspace?.id ?? null,
+				);
 				await pushWorkspaceToRemote(effectiveRepoPath, workspace?.id ?? null);
 
-				addToast({
-					title: "Synced with remote",
-					description: "Fetched and pushed changes",
-					type: "success",
-				});
-
-				await refetchWorkspaceStatus();
-				queryClient?.invalidateQueries();
+				if (pullResult.has_conflicts) {
+					addToast({
+						title: "Synced with conflicts",
+						description:
+							"Fetched and pushed; resolve remaining conflicts locally",
+						type: "warning",
+					});
+				} else {
+					addToast({
+						title: "Synced with remote",
+						description: "Fetched and pushed changes",
+						type: "success",
+					});
+				}
 			} catch (error) {
 				console.error("Sync failed:", error);
 				addToast({
@@ -596,6 +605,10 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 					type: "error",
 				});
 			} finally {
+				// Always refresh so conflicted_files / sync counts reflect pull outcome,
+				// including when push fails after a divergent pull.
+				await refetchWorkspaceStatus();
+				queryClient?.invalidateQueries();
 				_setActionPending(null);
 			}
 		}, [
@@ -1590,12 +1603,18 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 											<Tooltip>
 												<TooltipTrigger asChild>
 													<Button
-														variant="ghost"
+														variant={syncStatus.ahead > 0 ? "outline" : "ghost"}
 														size="sm"
-														className="h-6 gap-1 px-2 text-xs text-muted-foreground"
+														className="relative h-6 gap-1 px-2 text-xs text-muted-foreground"
 														onClick={handleSync}
 														disabled={!!actionPending || !hasSyncChanges}
 													>
+														{hasSyncChanges && (
+															<span
+																className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-yellow-600 opacity-50 animate-pulse"
+																aria-hidden="true"
+															/>
+														)}
 														{(isHomeRepo || syncStatus.behind > 0) && (
 															<span className="flex items-center">
 																↓{syncStatus.behind}

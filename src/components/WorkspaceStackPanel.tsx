@@ -1,7 +1,9 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { ArrowDown, Layers2 } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { ArrowDown, CircleHelp, ExternalLink, Layers2 } from "lucide-react";
 import { memo, useMemo } from "react";
 import { listCommits, listWorkspaceStatuses, type Workspace } from "../lib/api";
+import { WEB_URL } from "../lib/supabase";
 import { cn, formatFullTimestamp, formatRelativeTime } from "../lib/utils";
 import {
 	sumWorkspaceDiffStats,
@@ -18,6 +20,8 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "./ui/tooltip";
+
+const STACK_DOCS_URL = `${WEB_URL}/docs/concepts/workspaces#stacks-and-rebasing`;
 
 interface WorkspaceStackPanelProps {
 	repoPath: string;
@@ -97,6 +101,35 @@ export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
 				<div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground mb-4">
 					<Layers2 className="w-4 h-4" />
 					<span>Stack</span>
+					<TooltipProvider delayDuration={200}>
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<button
+									type="button"
+									aria-label="What is a stack?"
+									className="inline-flex items-center justify-center rounded-sm text-muted-foreground/70 hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+								>
+									<CircleHelp className="w-3.5 h-3.5" />
+								</button>
+							</TooltipTrigger>
+							<TooltipContent className="max-w-xs font-normal">
+								<p>
+									A stack is a chain of workspaces that build on each other.
+									Each targets the workspace below it instead of the default
+									branch. Click a workspace to navigate to it.
+								</p>
+								<button
+									type="button"
+									className="mt-1.5 inline-flex items-center gap-1 text-xs text-primary underline-offset-2 hover:underline"
+									onClick={() => openUrl(STACK_DOCS_URL)}
+									onPointerDown={(event) => event.preventDefault()}
+								>
+									Learn more
+									<ExternalLink className="w-3 h-3" />
+								</button>
+							</TooltipContent>
+						</Tooltip>
+					</TooltipProvider>
 					<span className="ml-auto text-xs font-normal">
 						{currentIndex + 1} of {stack.length}
 					</span>
