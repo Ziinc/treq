@@ -946,6 +946,7 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
 
         // ── Tauri-runtime-only: silent no-ops ─────────────────────────────
         "pty_create_session"
+        | "acknowledge_agent_dispatch"
         | "pty_session_exists"
         | "pty_write"
         | "pty_write_suppress_echo"
@@ -1029,8 +1030,7 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             serde_json::to_value(result).map_err(|e| e.to_string())
         }
 
-        "jj_split"
-        | "jj_get_commits_ahead" => Err(format!(
+        "jj_split" | "jj_get_commits_ahead" => Err(format!(
             "not_implemented: '{}' — this command calls jj::* directly. \
              Migrate UI code to use a core::* equivalent instead.",
             command

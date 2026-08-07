@@ -102,6 +102,18 @@ export const createSession = (
 	name: string,
 ): Promise<number> => invoke("create_session", { repoPath, workspaceId, name });
 
+export type AgentDispatchAcknowledgmentStatus = "accepted" | "rejected";
+
+export const acknowledgeAgentDispatch = (
+	requestId: string,
+	status: AgentDispatchAcknowledgmentStatus,
+	reason?: string,
+): Promise<void> =>
+	invoke("acknowledge_agent_dispatch", {
+		requestId,
+		status,
+		reason: reason ?? null,
+	});
 export const getSessions = (repoPath: string): Promise<Session[]> =>
 	invoke("get_sessions", { repoPath });
 

@@ -44,7 +44,7 @@ beforeAll(() => {
 const jjCalls: string[] = [];
 
 vi.mock("@tauri-apps/api/core", () => ({
-	invoke: (cmd: string, args?: Record<string, unknown>) => {
+	invoke: vi.fn((cmd: string, args?: Record<string, unknown>) => {
 		if (cmd.startsWith("jj_")) {
 			jjCalls.push(cmd);
 		}
@@ -56,7 +56,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 				err instanceof Error ? err : new Error(String(err)),
 			);
 		}
-	},
+	}),
 }));
 
 afterEach(() => {

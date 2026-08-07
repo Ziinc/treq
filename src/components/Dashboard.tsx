@@ -18,6 +18,7 @@ import {
 	processAgentDeepLinkRequests,
 } from "../lib/agentDeepLink";
 import {
+	acknowledgeAgentDispatch,
 	checkAndRebaseWorkspaces,
 	createSession,
 	deleteWorkspace,
@@ -857,26 +858,37 @@ export const Dashboard: React.FC<DashboardProps> = ({
 					description: `Branch '${request.branch}' is not available in this window.`,
 					type: "error",
 				});
+				await acknowledgeAgentDispatch(
+					request.requestId,
+					"rejected",
+					`Workspace branch '${request.branch}' was not found`,
+				);
 				return;
 			}
 
-			const sessionId = await getOrCreateSession(workspace.id, {
-				forceNew: true,
-				agent: request.agent,
-			});
-			setActiveSessionId(sessionId);
-			setSelectedWorkspace(workspace);
-			setViewMode("show-workspace");
-			setPendingSessionData((prev) => {
-				const next = new Map(prev);
-				next.set(sessionId, {
-					pendingPrompt: request.prompt,
-					permissionMode: request.mode,
+			try {
+				const sessionId = await getOrCreateSession(workspace.id, {
+					forceNew: true,
 					agent: request.agent,
 				});
-				return next;
-			});
-			markProcessedAgentRequest(request.requestId);
+				setActiveSessionId(sessionId);
+				setSelectedWorkspace(workspace);
+				setViewMode("show-workspace");
+				setPendingSessionData((prev) => {
+					const next = new Map(prev);
+					next.set(sessionId, {
+						pendingPrompt: request.prompt,
+						permissionMode: request.mode,
+						agent: request.agent,
+					});
+					return next;
+				});
+				markProcessedAgentRequest(request.requestId);
+				await acknowledgeAgentDispatch(request.requestId, "accepted");
+			} catch (error) {
+				const reason = error instanceof Error ? error.message : String(error);
+				await acknowledgeAgentDispatch(request.requestId, "rejected", reason);
+			}
 		},
 		[addToast, getOrCreateSession, workspaces],
 	);

@@ -1,5 +1,6 @@
 import * as React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { render, waitFor } from "../test-utils";
@@ -68,5 +69,72 @@ describe("agent deep-link integration", () => {
 		await callback({ payload: [url] });
 
 		expect(WebviewWindow).toHaveBeenCalled();
+		expect(vi.mocked(invoke)).not.toHaveBeenCalledWith(
+			"acknowledge_agent_dispatch",
+			expect.objectContaining({ requestId: "req-link-2" }),
+		);
+	});
+
+	it("rejects a request for a missing workspace", async () => {
+		const { repoPath } = createTestRepo(false);
+		openRepo(repoPath);
+		await createWorkspace(repoPath, "feat/existing");
+		render(<Dashboard />);
+		await waitFor(() =>
+			expect(
+				vi
+					.mocked(listen)
+					.mock.calls.filter((args) => args[0] === "deep-link-received").length,
+			).toBeGreaterThan(1),
+		);
+		const callback = vi
+			.mocked(listen)
+			.mock.calls.filter((args) => args[0] === "deep-link-received")
+			.at(-1)?.[1] as (event: { payload: string[] }) => Promise<void>;
+		await callback({
+			payload: [
+				`treq://agent/start?repo=${encodeURIComponent(repoPath)}&branch=missing&prompt=hello&mode=plan&agent=claude&request_id=req-missing`,
+			],
+		});
+		expect(vi.mocked(invoke)).toHaveBeenCalledWith(
+			"acknowledge_agent_dispatch",
+			expect.objectContaining({ requestId: "req-missing", status: "rejected" }),
+		);
+	});
+
+	it("rejects when agent session creation fails", async () => {
+		const { repoPath } = createTestRepo(false);
+		openRepo(repoPath);
+		await createWorkspace(repoPath, "feat/failure");
+		render(<Dashboard />);
+		const invokeMock = vi.mocked(invoke);
+		const originalInvoke = invokeMock.getMockImplementation();
+		expect(originalInvoke).toBeTruthy();
+		invokeMock.mockImplementation((cmd, args) =>
+			cmd === "create_session"
+				? Promise.reject(new Error("session creation failed"))
+				: originalInvoke!(cmd, args),
+		);
+		const callback = vi
+			.mocked(listen)
+			.mock.calls.find(
+				(args) => args[0] === "deep-link-received",
+			)?.[1] as (event: { payload: string[] }) => Promise<void>;
+		await callback({
+			payload: [
+				`treq://agent/start?repo=${encodeURIComponent(repoPath)}&branch=feat%2Ffailure&prompt=hello&mode=edit&agent=codex&request_id=req-failure`,
+			],
+		});
+		await waitFor(() =>
+			expect(invokeMock).toHaveBeenCalledWith(
+				"acknowledge_agent_dispatch",
+				expect.objectContaining({
+					requestId: "req-failure",
+					status: "rejected",
+					reason: "session creation failed",
+				}),
+			),
+		);
+		invokeMock.mockImplementation(originalInvoke!);
 	});
 });
