@@ -594,9 +594,10 @@ export interface StackedWorkspaceEntry {
  * Build the ordered stack (tip-first, root-last) that `currentWorkspaceId`
  * belongs to, for rendering a stacked-PR-style UI.
  *
- * Returns null when the workspace has no workspace ancestor — i.e. it is
- * itself the root of its stack (based directly on the default/external
- * branch), or the id isn't found.
+ * Returns null when the workspace isn't part of a multi-workspace stack —
+ * i.e. it is alone (no workspace ancestors or descendants), or the id
+ * isn't found. A stack root with descendants still returns the full stack
+ * so the Code tab stack card stays visible on the first workspace.
  */
 export function getWorkspaceStack(
 	workspaces: Workspace[],
@@ -605,11 +606,9 @@ export function getWorkspaceStack(
 	const current = workspaces.find((ws) => ws.id === currentWorkspaceId);
 	if (!current) return null;
 
-	const rootBranch = getStackRoot(workspaces, current.branch_name);
-	if (rootBranch === current.branch_name) return null;
-
 	const chain = getEntireStack(workspaces, current.branch_name);
-	if (chain.length === 0) return null;
+	// A single workspace targeting main/external isn't a stack worth showing.
+	if (chain.length <= 1) return null;
 
 	return [...chain].reverse().map((workspace) => ({
 		workspace,

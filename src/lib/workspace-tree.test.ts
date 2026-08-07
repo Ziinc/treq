@@ -97,7 +97,7 @@ describe("workspace tree root detection", () => {
 });
 
 describe("getWorkspaceStack", () => {
-	it("returns null when the workspace targets an external branch (default-branch workspace)", () => {
+	it("returns null when a lone workspace targets an external branch", () => {
 		const workspaces = [makeWorkspace(1, "feature/a", "main")];
 		expect(getWorkspaceStack(workspaces, 1)).toBeNull();
 	});
@@ -128,6 +128,28 @@ describe("getWorkspaceStack", () => {
 			"feat/ai-summaries",
 			"feat/context-prompts",
 			"chore/refactor",
+		]);
+	});
+
+	it("returns the full stack when viewing the first (root) workspace of a stack", () => {
+		const workspaces = [
+			makeWorkspace(1, "chore/refactor", "main"),
+			makeWorkspace(2, "feat/context-prompts", "chore/refactor"),
+			makeWorkspace(3, "feat/ai-summaries", "feat/context-prompts"),
+		];
+
+		const stack = getWorkspaceStack(workspaces, 1);
+
+		expect(stack).not.toBeNull();
+		expect(stack!.map((entry) => entry.workspace.branch_name)).toEqual([
+			"feat/ai-summaries",
+			"feat/context-prompts",
+			"chore/refactor",
+		]);
+		expect(stack!.map((entry) => entry.isCurrent)).toEqual([
+			false,
+			false,
+			true,
 		]);
 	});
 
