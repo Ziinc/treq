@@ -396,6 +396,7 @@ export const ChangesDiffViewer = memo(
 				commitPending,
 				pendingAction,
 				canCreatePr,
+				hasPr,
 				handleDiscardAll,
 				handleDiscardFiles,
 				handleCopyLineLocation,
@@ -442,6 +443,7 @@ export const ChangesDiffViewer = memo(
 						handleCommitAndCreatePR={handleCommitAndCreatePR}
 						pendingAction={pendingAction}
 						canCreatePr={canCreatePr}
+						hasPr={hasPr}
 						readOnly={readOnly}
 						files={files}
 						commitPending={commitPending}

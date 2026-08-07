@@ -25,6 +25,7 @@ interface FileSidebarProps {
 	handleCommitAndCreatePR: (msg: string) => void;
 	pendingAction: CommitAction | null;
 	canCreatePr: boolean;
+	hasPr: boolean;
 	readOnly: boolean;
 	files: ParsedFileChange[];
 	commitPending: boolean;
@@ -74,6 +75,7 @@ export function FileSidebar({
 	handleCommitAndCreatePR,
 	pendingAction,
 	canCreatePr,
+	hasPr,
 	readOnly,
 	files,
 	commitPending,
@@ -128,6 +130,7 @@ export function FileSidebar({
 				pending={commitPending}
 				pendingAction={pendingAction}
 				canCreatePr={canCreatePr}
+				hasPr={hasPr}
 				selectedFileCount={stagedFiles.size}
 				totalFileCount={files.length}
 			/>

@@ -82,4 +82,20 @@ describe("CommitInput", () => {
 		expect(screen.getByText("Enter a commit message.")).toBeTruthy();
 		expect(onCommitAndPush).not.toHaveBeenCalled();
 	});
+
+	it("hides commit and create PR when a pull request already exists", async () => {
+		const user = userEvent.setup();
+		render(<CommitInput {...defaultProps} canCreatePr={false} hasPr />);
+
+		await user.click(
+			screen.getByRole("button", { name: "More commit options" }),
+		);
+
+		expect(
+			screen.queryByRole("menuitem", { name: "Commit and create PR" }),
+		).not.toBeInTheDocument();
+		expect(
+			await screen.findByRole("menuitem", { name: "Commit and push" }),
+		).toBeInTheDocument();
+	});
 });

@@ -141,6 +141,7 @@ export interface CommitInputProps {
 	pending: boolean;
 	pendingAction?: CommitAction | null;
 	canCreatePr?: boolean;
+	hasPr?: boolean;
 	selectedFileCount?: number;
 	totalFileCount?: number;
 }

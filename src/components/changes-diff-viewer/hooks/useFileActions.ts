@@ -445,6 +445,7 @@ export function useFileActions({
 		commitPending: pendingAction !== null,
 		pendingAction,
 		canCreatePr,
+		hasPr: !!prInfo,
 		handleDiscardAll,
 		handleDiscardFiles,
 		handleCopyLineLocation,

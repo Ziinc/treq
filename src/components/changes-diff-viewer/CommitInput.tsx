@@ -31,6 +31,7 @@ const CommitInput = memo(
 				pending,
 				pendingAction,
 				canCreatePr = false,
+				hasPr = false,
 				selectedFileCount = 0,
 			},
 			ref,
@@ -174,12 +175,14 @@ const CommitInput = memo(
 								>
 									Commit and push
 								</DropdownMenuItem>
-								<DropdownMenuItem
-									disabled={disabled || pending || !canCreatePr}
-									onSelect={() => runAction(onCommitAndCreatePR)}
-								>
-									Commit and create PR
-								</DropdownMenuItem>
+								{!hasPr && (
+									<DropdownMenuItem
+										disabled={disabled || pending || !canCreatePr}
+										onSelect={() => runAction(onCommitAndCreatePR)}
+									>
+										Commit and create PR
+									</DropdownMenuItem>
+								)}
 							</DropdownMenuContent>
 						</DropdownMenu>
 					</div>
