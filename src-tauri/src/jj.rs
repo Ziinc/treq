@@ -4637,12 +4637,21 @@ fn resolve_tree_equivalent_workspace_base(
     target_revision: &str,
 ) -> Option<String> {
     let target = resolve_commit_by_revision(loaded, target_revision).ok()?;
+    let target_descendants = evaluate_revset(
+        loaded,
+        &format!("{}::", format_revset_symbol(&target.id().hex())),
+    )
+    .ok()?;
+    let is_target_descendant = target_descendants.containing_fn();
     let ancestors = evaluate_revset(loaded, "::@-").ok()?;
     ancestors
         .iter()
         .commits(loaded.repo.store())
         .filter_map(Result::ok)
-        .find(|commit| commit.tree_ids() == target.tree_ids())
+        .find(|commit| {
+            commit.tree_ids() == target.tree_ids()
+                && matches!(is_target_descendant(commit.id()), Ok(false))
+        })
         .map(|commit| commit.id().hex())
 }
 
