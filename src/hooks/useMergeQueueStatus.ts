@@ -20,6 +20,19 @@ export const mergeQueueEnabledKey = (repoFullName: string | undefined) => [
 	repoFullName,
 ];
 
+/**
+ * Shared mutation key for "create a PR for this workspace" actions. Multiple
+ * surfaces can trigger PR creation for the same workspace (the header's
+ * Create PR button, the Review tab's "Commit and create PR" dropdown item);
+ * tagging each `useMutation` with this key lets every surface detect via
+ * `useIsMutating` that a create-PR request is in flight, regardless of which
+ * one started it, so they can all render a loading state together.
+ */
+export const createPrMutationKey = (
+	repoPath: string | undefined,
+	workspaceId: number | null | undefined,
+) => ["create-pr", repoPath, workspaceId ?? null] as const;
+
 export function useGitRemoteInfo(repoPath: string | undefined) {
 	return useQuery({
 		queryKey: ["git-remote-info", repoPath],

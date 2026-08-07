@@ -104,10 +104,7 @@ it("captures the commit dropdown closing immediately and showing a Creating PR s
 		expect(screen.getAllByText("feature.txt").length).toBeGreaterThan(0),
 	);
 
-	await user.type(
-		await screen.findByPlaceholderText("Message"),
-		"Add feature",
-	);
+	await user.type(await screen.findByPlaceholderText("Message"), "Add feature");
 
 	await user.click(
 		await screen.findByRole("button", { name: "More commit options" }),
@@ -127,11 +124,20 @@ it("captures the commit dropdown closing immediately and showing a Creating PR s
 	);
 
 	await screen.findByText("Creating PR…");
+	// The header's own "Create PR" split button shares a mutation key with the
+	// Review tab's "Commit and create PR" action, so it must also flip into
+	// its loading state ("Creating…" or "Pushing & creating…") even though
+	// this workspace's push+create-PR was triggered from the dropdown, not
+	// from the header button itself.
+	await within(header).findByRole("button", {
+		name: /pushing & creating…|creating…/i,
+	});
 	await captureDocument(document, {
 		name: "commit-and-create-pr-dropdown-01-loading",
 		expectations: [
 			"No dropdown menu is visible anywhere on the page -- it has fully closed.",
 			"The primary commit button (left side of the split button in the Review sidebar) shows a spinning loading icon and the text 'Creating PR…' in place of its normal 'Commit' label.",
+			"The header's 'Create PR' button (top right) also shows a spinning loading icon and loading text instead of its normal 'Create PR' label, even though the header button itself was never clicked.",
 		],
 	});
 
