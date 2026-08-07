@@ -2856,10 +2856,7 @@ pub fn jj_restore_snapshot(workspace_path: &str, snapshot_id: &str) -> Result<St
         .store()
         .get_commit(&snapshot_commit_id)
         .map_err(|e| {
-            JjError::IoError(format!(
-                "Snapshot is no longer available to restore: {}",
-                e
-            ))
+            JjError::IoError(format!("Snapshot is no longer available to restore: {}", e))
         })?;
     let source_tree = snapshot_commit.tree();
     let destination_tree = wc_commit.tree();

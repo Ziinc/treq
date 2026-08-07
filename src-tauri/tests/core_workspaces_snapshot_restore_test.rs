@@ -9,7 +9,8 @@ use e2e_test_helpers::TestRepo;
 /// rescan disk themselves -- so tests must trigger this explicitly after
 /// writing files directly to disk.
 fn snapshot_disk_into_wc(workspace_path: &str) -> Vec<treq_lib::jj::JjFileChange> {
-    treq_lib::jj::jj_get_changed_files(workspace_path).expect("jj_get_changed_files should not panic")
+    treq_lib::jj::jj_get_changed_files(workspace_path)
+        .expect("jj_get_changed_files should not panic")
 }
 
 /// `snapshot_working_copy` + `restore_working_copy_snapshot` are the undo
@@ -113,8 +114,7 @@ fn test_snapshot_restore_covers_multiple_files() {
 
     let readme = std::fs::read_to_string(ws_dir.join("README.md")).expect("README.md missing");
     assert_eq!(readme, "# CHANGED\n");
-    let newfile =
-        std::fs::read_to_string(ws_dir.join("newfile.txt")).expect("newfile.txt missing");
+    let newfile = std::fs::read_to_string(ws_dir.join("newfile.txt")).expect("newfile.txt missing");
     assert_eq!(newfile, "brand new\n");
 }
 
@@ -147,16 +147,14 @@ fn test_snapshot_restore_after_single_file_discard() {
         .expect("snapshot_working_copy should succeed");
 
     // Discard only README.md (the per-file "Discard" action).
-    treq_lib::jj::jj_restore_file(ws_dir_str, "README.md")
-        .expect("jj_restore_file should succeed");
+    treq_lib::jj::jj_restore_file(ws_dir_str, "README.md").expect("jj_restore_file should succeed");
 
     let discarded = std::fs::read_to_string(ws_dir.join("README.md")).expect("README.md missing");
     assert_eq!(
         discarded, "# Test Repository\n",
         "README.md should be back to parent content after the single-file discard"
     );
-    let untouched =
-        std::fs::read_to_string(ws_dir.join("other.txt")).expect("other.txt missing");
+    let untouched = std::fs::read_to_string(ws_dir.join("other.txt")).expect("other.txt missing");
     assert_eq!(
         untouched, "other content\n",
         "other.txt should be unaffected by discarding only README.md"
@@ -170,8 +168,7 @@ fn test_snapshot_restore_after_single_file_discard() {
         restored, "# CHANGED\n",
         "README.md should be back to its pre-discard content after undo"
     );
-    let still_there =
-        std::fs::read_to_string(ws_dir.join("other.txt")).expect("other.txt missing");
+    let still_there = std::fs::read_to_string(ws_dir.join("other.txt")).expect("other.txt missing");
     assert_eq!(still_there, "other content\n");
 }
 

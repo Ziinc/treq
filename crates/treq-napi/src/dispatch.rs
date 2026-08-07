@@ -1042,13 +1042,13 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
         }
 
         // ── Direct jj::* commands: not implemented — migrate to core::* ───
-        "jj_split"
-        | "jj_get_commits_ahead"
-        | "resolve_workspace_bookmark_conflict" => Err(format!(
-            "not_implemented: '{}' — this command calls jj::* directly. \
+        "jj_split" | "jj_get_commits_ahead" | "resolve_workspace_bookmark_conflict" => {
+            Err(format!(
+                "not_implemented: '{}' — this command calls jj::* directly. \
              Migrate UI code to use a core::* equivalent instead.",
-            command
-        )),
+                command
+            ))
+        }
 
         _ => Err(format!("unknown_command: '{}'", command)),
     }
