@@ -1,5 +1,6 @@
 import type {
 	BranchStatus,
+	BookmarkConflictResolutionResult,
 	DirectoryEntry,
 	EditorAppsResponse,
 	GhIssue,
@@ -443,14 +444,12 @@ export const resolveBookmarkConflict = (
 	workspaceId: number,
 	workspacePath: string,
 	branchName: string,
-	revisionId: string,
-): Promise<JjRebaseResult> =>
+): Promise<BookmarkConflictResolutionResult> =>
 	invoke("resolve_workspace_bookmark_conflict", {
 		repoPath,
 		workspaceId,
 		workspacePath,
 		branchName,
-		revisionId,
 	});
 
 export const rebaseHomeRepoBranch = (

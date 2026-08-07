@@ -106,6 +106,12 @@ export interface JjRebaseResult {
 	message: string;
 }
 
+export interface BookmarkConflictResolutionResult {
+	success: boolean;
+	message: string;
+	preserved_change_ids: string[];
+}
+
 export interface BookmarkConflictCommit {
 	commit_id: string;
 	short_commit_id: string;

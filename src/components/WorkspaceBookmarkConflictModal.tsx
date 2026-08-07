@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { WorkspaceBookmarkConflict } from "../lib/api";
 import {
 	Dialog,
@@ -8,14 +8,14 @@ import {
 	DialogTitle,
 } from "./ui/dialog";
 import { Button } from "./ui/button";
-import { cn, formatFullTimestamp, formatRelativeTime } from "../lib/utils";
+import { formatFullTimestamp, formatRelativeTime } from "../lib/utils";
 import { GitBranch, Loader2 } from "lucide-react";
 
 interface WorkspaceBookmarkConflictModalProps {
 	conflict: WorkspaceBookmarkConflict | null;
 	open: boolean;
 	onClose: () => void;
-	onResolve: (revisionId: string) => Promise<void> | void;
+	onResolve: () => Promise<void> | void;
 	resolving: boolean;
 }
 
@@ -26,25 +26,17 @@ export function WorkspaceBookmarkConflictModal({
 	onResolve,
 	resolving,
 }: WorkspaceBookmarkConflictModalProps) {
-	const [selectedRevision, setSelectedRevision] = useState<string | null>(null);
-
 	const commits = conflict?.commits ?? [];
 	const bookmarkName = conflict?.bookmark ?? "";
 
-	useEffect(() => {
-		if (!open) {
-			setSelectedRevision(null);
-		}
-	}, [open, bookmarkName]);
-
 	const formattedDescription = useMemo(() => {
 		if (!bookmarkName) return "";
-		return `Bookmark ${bookmarkName} has multiple histories. Choose which commit it should point to so Treq can finish syncing the workspace.`;
+		return `Bookmark ${bookmarkName} has multiple histories. Treq will rebase the local history onto the remote tip in one atomic operation.`;
 	}, [bookmarkName]);
 
 	const handleResolve = () => {
-		if (!selectedRevision || resolving) return;
-		onResolve(selectedRevision);
+		if (resolving) return;
+		onResolve();
 	};
 
 	return (
@@ -73,22 +65,14 @@ export function WorkspaceBookmarkConflictModal({
 
 				<div className="space-y-2">
 					<p className="text-sm text-muted-foreground">
-						Select the commit you want the bookmark to track:
+						All local commits will be preserved and remain reachable:
 					</p>
 					<div className="max-h-72 space-y-2 overflow-y-auto pr-1">
 						{commits.map((commit) => {
-							const isSelected = selectedRevision === commit.commit_id;
 							return (
-								<button
+								<div
 									key={commit.commit_id}
-									type="button"
-									onClick={() => setSelectedRevision(commit.commit_id)}
-									className={cn(
-										"w-full rounded-md border bg-background p-3 text-left transition",
-										isSelected
-											? "border-blue-500 ring-2 ring-blue-200 dark:ring-blue-400/40"
-											: "border-border hover:border-blue-200 dark:hover:border-blue-600",
-									)}
+									className="w-full rounded-md border border-border bg-background p-3 text-left"
 								>
 									<div className="flex items-baseline justify-between gap-4">
 										<div className="font-mono text-sm text-foreground">
@@ -112,7 +96,7 @@ export function WorkspaceBookmarkConflictModal({
 										{commit.author_name}
 										{commit.diff_summary ? ` • ${commit.diff_summary}` : null}
 									</div>
-								</button>
+								</div>
 							);
 						})}
 						{commits.length === 0 && (
@@ -130,7 +114,7 @@ export function WorkspaceBookmarkConflictModal({
 					</Button>
 					<Button
 						onClick={handleResolve}
-						disabled={!selectedRevision || resolving}
+						disabled={resolving}
 						className="min-w-[160px]"
 					>
 						{resolving ? (

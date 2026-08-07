@@ -770,7 +770,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 		]);
 
 		const handleResolveBookmarkConflict = useCallback(
-			async (revisionId: string) => {
+			async () => {
 				if (
 					!workspace ||
 					!effectiveRepoPath ||
@@ -782,17 +782,16 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 
 				setResolvingBookmarkConflict(true);
 				try {
-					await resolveBookmarkConflict(
+					const resolution = await resolveBookmarkConflict(
 						effectiveRepoPath,
 						workspace.id,
 						workingDirectory,
 						bookmarkConflict.branch_name,
-						revisionId,
 					);
 
 					addToast({
 						title: "Bookmark updated",
-						description: `Set ${bookmarkConflict.branch_name} to ${revisionId}`,
+						description: `Preserved ${resolution.preserved_change_ids.length} local commit(s) on ${bookmarkConflict.branch_name}`,
 						type: "success",
 					});
 

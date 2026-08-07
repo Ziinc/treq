@@ -398,46 +398,21 @@ pub async fn pull_workspace_from_remote(
     result
 }
 
-/// Resolve a conflicted bookmark by setting it to a user-selected revision
+/// Resolve a conflicted bookmark while preserving every local-only change.
 #[tauri::command]
 pub async fn resolve_workspace_bookmark_conflict(
     repo_path: String,
     workspace_id: i64,
     workspace_path: String,
     branch_name: String,
-    revision_id: String,
-) -> Result<JjRebaseResult, String> {
+) -> Result<jj::BookmarkConflictResolutionResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        if workspace_path.is_empty() {
-            return Err("Workspace path does not exist".to_string());
-        }
-
-        jj::jj_set_bookmark(&workspace_path, &branch_name, &revision_id)
-            .map_err(|e| e.to_string())?;
-
-        if let Err(e) =
-            local_db::update_workspace_last_rebased_commit(&repo_path, workspace_id, &revision_id)
-        {
-            eprintln!(
-                "Warning: Failed to update last rebased commit for workspace {}: {}",
-                workspace_id, e
-            );
-        }
-
-        if let Err(e) = jj::jj_workspace_update_stale(&workspace_path) {
-            eprintln!(
-                "Warning: Failed to refresh working copy after resolving bookmark conflict: {}",
-                e
-            );
-        }
-
-        Ok(JjRebaseResult {
-            success: true,
-            message: format!(
-                "Bookmark '{}' now points to revision {}",
-                branch_name, revision_id
-            ),
-        })
+        crate::core::resolve_workspace_bookmark_conflict(
+            &repo_path,
+            workspace_id,
+            &workspace_path,
+            &branch_name,
+        )
     })
     .await
     .map_err(|e| {

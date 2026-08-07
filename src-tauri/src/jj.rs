@@ -795,6 +795,13 @@ pub struct BookmarkConflictInfo {
     pub commits: Vec<BookmarkConflictCommit>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BookmarkConflictResolutionResult {
+    pub success: bool,
+    pub message: String,
+    pub preserved_change_ids: Vec<String>,
+}
+
 /// Result of merge operation
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct JjMergeResult {
@@ -4011,6 +4018,137 @@ pub fn jj_rebase_with_revset(
     Ok(JjRebaseResult {
         success: true,
         message: summarize_rebase_stats(&stats),
+    })
+}
+
+/// Resolve a diverged bookmark without discarding local work. All local-only
+/// mutable changes are captured before the ref is changed, rebased in one jj
+/// transaction, and checked for reachability before that transaction is committed.
+pub fn jj_resolve_bookmark_conflict_losslessly(
+    workspace_path: &str,
+    bookmark_name: &str,
+    target_revision: &str,
+) -> Result<BookmarkConflictResolutionResult, JjError> {
+    if !Path::new(workspace_path).exists() {
+        return Err(JjError::IoError(
+            "Workspace path does not exist".to_string(),
+        ));
+    }
+    let mut loaded = load_workspace_repo_for_history_edit(workspace_path)?;
+    let old_wc_commit = get_workspace_wc_commit(&loaded)?;
+    let target = resolve_commit_by_revision(&loaded, target_revision)?;
+    let local_revset = format!("({}..@-) & mutable()", target.id().hex());
+    let local_commits = evaluate_revset(&loaded, &strip_mutable_revset_filter(&local_revset))?
+        .iter()
+        .commits(loaded.repo.store())
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| JjError::IoError(format!("Failed to capture local commits: {e}")))?;
+    let preserved_change_ids: Vec<String> = local_commits
+        .iter()
+        .map(|commit| HexPrefix::from_id(commit.change_id()).reverse_hex()[..12].to_string())
+        .collect();
+    let root_commits = evaluate_revset(&loaded, &format!("roots({}..@-)", target.id().hex()))?
+        .iter()
+        .commits(loaded.repo.store())
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| JjError::IoError(format!("Failed to find local roots: {e}")))?;
+
+    let mut tx = loaded.repo.start_transaction();
+    if !local_commits.is_empty() {
+        let options = RebaseOptions {
+            empty: EmptyBehavior::Keep,
+            rewrite_refs: RewriteRefsOptions {
+                delete_abandoned_bookmarks: false,
+            },
+            simplify_ancestor_merge: false,
+        };
+        let location = MoveCommitsLocation {
+            new_parent_ids: vec![target.id().clone()],
+            new_child_ids: Vec::new(),
+            target: MoveCommitsTarget::Roots(root_commits.iter().map(|c| c.id().clone()).collect()),
+        };
+        block_on(async {
+            rewrite::compute_move_commits(tx.repo_mut(), &location)
+                .await?
+                .apply(tx.repo_mut(), &options)
+                .await
+        })
+        .map_err(|e| JjError::IoError(format!("Failed to rebase local commits: {e}")))?;
+        block_on(tx.repo_mut().rebase_descendants())
+            .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {e}")))?;
+    } else {
+        let workspace_name = loaded.workspace.workspace_name().to_owned();
+        block_on(tx.repo_mut().edit(workspace_name, &target))
+            .map_err(|e| JjError::IoError(format!("Failed to move working copy to target: {e}")))?;
+    }
+
+    let workspace_name = loaded.workspace.workspace_name().to_owned();
+    let wc_id = tx
+        .repo_mut()
+        .view()
+        .get_wc_commit_id(&workspace_name)
+        .cloned()
+        .ok_or_else(|| JjError::IoError("Workspace commit is missing".to_string()))?;
+    let wc = tx
+        .repo_mut()
+        .store()
+        .get_commit(&wc_id)
+        .map_err(|e| JjError::IoError(format!("Failed to load rewritten working copy: {e}")))?;
+    let tip_id = if local_commits.is_empty() {
+        target.id().clone()
+    } else {
+        wc.parent_ids()
+            .first()
+            .cloned()
+            .unwrap_or_else(|| target.id().clone())
+    };
+
+    // Verify the stable change IDs from the pre-operation snapshot are all
+    // ancestors of the new bookmark tip before making the operation visible.
+    let mut pending = vec![tip_id.clone()];
+    let mut seen = HashSet::new();
+    let mut reachable_changes = HashSet::new();
+    while let Some(id) = pending.pop() {
+        if !seen.insert(id.clone()) {
+            continue;
+        }
+        let commit =
+            tx.repo_mut().store().get_commit(&id).map_err(|e| {
+                JjError::IoError(format!("Failed to verify rewritten history: {e}"))
+            })?;
+        reachable_changes
+            .insert(HexPrefix::from_id(commit.change_id()).reverse_hex()[..12].to_string());
+        pending.extend(commit.parent_ids().iter().cloned());
+    }
+    if let Some(missing) = preserved_change_ids
+        .iter()
+        .find(|change_id| !reachable_changes.contains(*change_id))
+    {
+        return Err(JjError::IoError(format!(
+            "Refusing bookmark resolution: captured change {missing} is not reachable"
+        )));
+    }
+
+    tx.repo_mut()
+        .set_local_bookmark_target(RefName::new(bookmark_name), RefTarget::normal(tip_id));
+    let _ = git::export_refs(tx.repo_mut());
+    let new_repo = block_on(tx.commit("resolve bookmark conflict losslessly"))
+        .map_err(|e| JjError::IoError(format!("Failed to commit bookmark resolution: {e}")))?;
+    update_workspace_after_history_edit(
+        &mut loaded,
+        &new_repo,
+        old_wc_commit.as_ref(),
+        CheckoutMode::Immediate,
+    )?;
+
+    Ok(BookmarkConflictResolutionResult {
+        success: true,
+        message: format!(
+            "Preserved and rebased {} local commit(s) onto {}",
+            preserved_change_ids.len(),
+            target_revision
+        ),
+        preserved_change_ids,
     })
 }
 
