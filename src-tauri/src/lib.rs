@@ -278,11 +278,19 @@ pub fn run() {
                 };
 
                 // Window menu
+                //
+                // Close Window intentionally has no keyboard accelerator: the OS-default
+                // Cmd+W is repurposed in the frontend to close the selected terminal (or
+                // do nothing) instead of closing the whole treq window. The menu item is
+                // still clickable and closes the focused window via the handler below.
+                let close_window_item =
+                    MenuItemBuilder::with_id("close_window", "Close Window").build(app)?;
+
                 let window_menu = SubmenuBuilder::new(app, "Window")
                     .item(&PredefinedMenuItem::minimize(app, None)?)
                     .item(&PredefinedMenuItem::maximize(app, None)?)
                     .separator()
-                    .item(&PredefinedMenuItem::close_window(app, None)?)
+                    .item(&close_window_item)
                     .build()?;
 
                 // Help menu
@@ -407,6 +415,14 @@ pub fn run() {
                     #[cfg(debug_assertions)]
                     if let Some(w) = app.get_webview_window("main") {
                         w.open_devtools();
+                    }
+                }
+                "close_window" => {
+                    for (_, window) in app.webview_windows() {
+                        if window.is_focused().unwrap_or(false) {
+                            let _ = window.close();
+                            break;
+                        }
                     }
                 }
                 "force_rebase_workspace" => emit_to_focused(app, "menu-force-rebase-workspace", ()),

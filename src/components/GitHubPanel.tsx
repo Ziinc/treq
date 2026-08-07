@@ -8,7 +8,7 @@ import {
 	Plus,
 	RefreshCw,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useLocation, useRoute } from "wouter";
 import { useAuth } from "../hooks/useAuth";
 import {
 	useDequeueBranches,
@@ -17,6 +17,14 @@ import {
 } from "../hooks/useMergeQueueStatus";
 import { GH_LIST_PAGE_SIZE, ghListIssues, ghListPrs } from "../lib/api";
 import { FEATURES } from "../lib/features";
+import {
+	githubDetailPath,
+	githubListPath,
+	githubNewItemPath,
+	githubTabPath,
+	type GitHubStateFilter,
+	type GitHubTab,
+} from "../lib/githubRoutes";
 import type { QueueEntry } from "../lib/merge-queue-stacks";
 import { supabase } from "../lib/supabase";
 import { MergeQueueTab } from "./github-panel/MergeQueueTab";
@@ -26,46 +34,20 @@ import { EmptyState, IssueListItem, PrListItem } from "./github-panel/shared";
 import { Button } from "./ui/button";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 
-type TabValue = "issues" | "prs" | "merge-queue";
-type StateFilter = "open" | "closed" | "all";
-
 interface GitHubPanelProps {
 	repoPath: string;
-	/** When set, opens the PRs tab and selects this PR. */
-	initialPrNumber?: number | null;
-	/** The PR's state (OPEN/CLOSED/MERGED), used to pick the matching filter tab. */
-	initialPrState?: string | null;
-	onInitialPrConsumed?: () => void;
 	/** Opens the settings page, where the merge queue opt-in lives. */
 	onOpenSettings?: (tab?: string) => void;
 }
 
-const FILTERS: { label: string; value: StateFilter }[] = [
+const FILTERS: { label: string; value: GitHubStateFilter }[] = [
 	{ label: "Open", value: "open" },
 	{ label: "Closed", value: "closed" },
 	{ label: "All", value: "all" },
 ];
 
-/** Maps a PR's gh state to the filter tab that will surface it in the list. */
-function stateFilterForPrState(
-	prState: string | null | undefined,
-): StateFilter {
-	switch (prState?.toUpperCase()) {
-		case "OPEN":
-			return "open";
-		case "CLOSED":
-			return "closed";
-		default:
-			// MERGED PRs aren't returned by gh's "closed" filter, so fall back to "all".
-			return "all";
-	}
-}
-
 export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 	repoPath,
-	initialPrNumber = null,
-	initialPrState = null,
-	onInitialPrConsumed,
 	onOpenSettings,
 }) => {
 	const { subscription } = useAuth();
@@ -75,22 +57,40 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 		useGitRemoteInfo(repoPath);
 	const { data: queueEnabled } = useMergeQueueEnabled(repoPath);
 	const dequeueBranches = useDequeueBranches(repoPath);
-	const [activeTab, setActiveTab] = useState<TabValue>("issues");
-	const [issueFilter, setIssueFilter] = useState<StateFilter>("open");
-	const [prFilter, setPrFilter] = useState<StateFilter>("open");
-	const [selectedIssue, setSelectedIssue] = useState<number | null>(null);
-	const [selectedPr, setSelectedPr] = useState<number | null>(null);
-	const [showCreateForm, setShowCreateForm] = useState(false);
 
-	useEffect(() => {
-		if (initialPrNumber == null) return;
-		setActiveTab("prs");
-		setPrFilter(stateFilterForPrState(initialPrState));
-		setSelectedIssue(null);
-		setShowCreateForm(false);
-		setSelectedPr(initialPrNumber);
-		onInitialPrConsumed?.();
-	}, [initialPrNumber, initialPrState, onInitialPrConsumed]);
+	// Routing: the current tab, filter, selection, and create-form state all
+	// live in the URL (as /github/<tab>/<filter>/<selector?>) so browser
+	// back/forward moves between them.
+	const [, navigate] = useLocation();
+	const [isMergeQueueRoute] = useRoute("/github/merge-queue");
+	const [isIssuesRoute, issuesParams] = useRoute<{
+		filter: string;
+		selector?: string;
+	}>("/github/issues/:filter/:selector?");
+	const [isPrsRoute, prsParams] = useRoute<{
+		filter: string;
+		selector?: string;
+	}>("/github/prs/:filter/:selector?");
+
+	const activeTab: GitHubTab = isMergeQueueRoute
+		? "merge-queue"
+		: isPrsRoute
+			? "prs"
+			: "issues";
+	const routeParams = activeTab === "prs" ? prsParams : issuesParams;
+	const rawFilter = (isIssuesRoute || isPrsRoute) && routeParams?.filter;
+	const currentFilter: GitHubStateFilter =
+		rawFilter === "closed" || rawFilter === "all" ? rawFilter : "open";
+	const selector = routeParams?.selector;
+	const showCreateForm = selector === "new";
+
+	const parsedSelectedNumber =
+		selector !== undefined && selector !== "new" ? Number(selector) : NaN;
+	const selectedNumber = Number.isFinite(parsedSelectedNumber)
+		? parsedSelectedNumber
+		: null;
+	const selectedIssue = activeTab === "issues" ? selectedNumber : null;
+	const selectedPr = activeTab === "prs" ? selectedNumber : null;
 
 	const repoFullName = remoteInfo?.full_name ?? "";
 	const isListTab = activeTab === "issues" || activeTab === "prs";
@@ -103,9 +103,9 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 		fetchNextPage: fetchNextIssues,
 		refetch: refetchIssues,
 	} = useInfiniteQuery({
-		queryKey: ["gh-issues", repoFullName, issueFilter],
+		queryKey: ["gh-issues", repoFullName, currentFilter],
 		queryFn: ({ pageParam }) =>
-			ghListIssues(repoFullName, issueFilter, GH_LIST_PAGE_SIZE, pageParam),
+			ghListIssues(repoFullName, currentFilter, GH_LIST_PAGE_SIZE, pageParam),
 		initialPageParam: 1,
 		getNextPageParam: (lastPage, _pages, lastPageParam) =>
 			lastPage.hasMore ? lastPageParam + 1 : undefined,
@@ -120,9 +120,9 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 		fetchNextPage: fetchNextPrs,
 		refetch: refetchPrs,
 	} = useInfiniteQuery({
-		queryKey: ["gh-prs", repoFullName, prFilter],
+		queryKey: ["gh-prs", repoFullName, currentFilter],
 		queryFn: ({ pageParam }) =>
-			ghListPrs(repoFullName, prFilter, GH_LIST_PAGE_SIZE, pageParam),
+			ghListPrs(repoFullName, currentFilter, GH_LIST_PAGE_SIZE, pageParam),
 		initialPageParam: 1,
 		getNextPageParam: (lastPage, _pages, lastPageParam) =>
 			lastPage.hasMore ? lastPageParam + 1 : undefined,
@@ -159,35 +159,39 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 	});
 
 	const isListLoading = activeTab === "issues" ? issuesLoading : prsLoading;
-	const currentFilter = activeTab === "issues" ? issueFilter : prFilter;
-	const setCurrentFilter =
-		activeTab === "issues" ? setIssueFilter : setPrFilter;
 
 	const showDetail =
 		(activeTab === "issues" && selectedIssue !== null) ||
 		(activeTab === "prs" && selectedPr !== null);
 
 	function handleTabChange(v: string) {
-		setActiveTab(v as TabValue);
-		setSelectedIssue(null);
-		setSelectedPr(null);
-		setShowCreateForm(false);
+		navigate(
+			v === "merge-queue"
+				? githubTabPath("merge-queue")
+				: githubListPath(v as "issues" | "prs"),
+		);
+	}
+
+	function handleFilterChange(value: GitHubStateFilter) {
+		navigate(githubListPath(activeTab as "issues" | "prs", value));
 	}
 
 	function handleSelectIssue(n: number) {
-		setSelectedIssue(n);
-		setShowCreateForm(false);
+		navigate(githubDetailPath("issues", n, currentFilter));
 	}
 
 	function handleSelectPr(n: number) {
-		setSelectedPr(n);
-		setShowCreateForm(false);
+		navigate(githubDetailPath("prs", n, currentFilter));
 	}
 
 	function handleNewClick() {
-		setShowCreateForm(true);
-		setSelectedIssue(null);
-		setSelectedPr(null);
+		navigate(githubNewItemPath(activeTab as "issues" | "prs", currentFilter));
+	}
+
+	function handleCloseDetail() {
+		navigate(githubListPath(activeTab as "issues" | "prs", currentFilter), {
+			replace: true,
+		});
 	}
 
 	function handleRefresh() {
@@ -254,7 +258,7 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 								<button
 									key={btn.value}
 									type="button"
-									onClick={() => setCurrentFilter(btn.value)}
+									onClick={() => handleFilterChange(btn.value)}
 									className={`text-base px-2 py-0.5 rounded transition-colors ${
 										currentFilter === btn.value
 											? "bg-background shadow-sm text-foreground"
@@ -293,20 +297,22 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 						{activeTab === "issues" ? (
 							<CreateIssueForm
 								repoFullName={repoFullName}
-								onSuccess={(n) => {
-									setShowCreateForm(false);
-									setSelectedIssue(n);
-								}}
-								onCancel={() => setShowCreateForm(false)}
+								onSuccess={(n) =>
+									navigate(githubDetailPath("issues", n, currentFilter), {
+										replace: true,
+									})
+								}
+								onCancel={handleCloseDetail}
 							/>
 						) : (
 							<CreatePrForm
 								repoFullName={repoFullName}
-								onSuccess={(n) => {
-									setShowCreateForm(false);
-									setSelectedPr(n);
-								}}
-								onCancel={() => setShowCreateForm(false)}
+								onSuccess={(n) =>
+									navigate(githubDetailPath("prs", n, currentFilter), {
+										replace: true,
+									})
+								}
+								onCancel={handleCloseDetail}
 							/>
 						)}
 					</div>
@@ -420,14 +426,14 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 						<IssueDetailPanel
 							repoFullName={repoFullName}
 							issueNumber={selectedIssue}
-							onClose={() => setSelectedIssue(null)}
+							onClose={handleCloseDetail}
 						/>
 					)}
 					{activeTab === "prs" && selectedPr !== null && (
 						<PrDetailPanel
 							repoFullName={repoFullName}
 							prNumber={selectedPr}
-							onClose={() => setSelectedPr(null)}
+							onClose={handleCloseDetail}
 						/>
 					)}
 				</div>

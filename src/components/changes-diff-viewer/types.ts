@@ -5,6 +5,7 @@ import type {
 	JjFileChange,
 	LineComment as ApiLineComment,
 } from "../../lib/api";
+import type { Workspace } from "../../lib/api-types";
 import type { ParsedFileChange } from "../../lib/git-utils";
 import type { useToast } from "../ui/toast";
 
@@ -26,12 +27,17 @@ export interface ChangesDiffViewerProps {
 	conflictedFiles?: string[];
 	showCommittedChanges?: boolean;
 	onMoveFilesToNewWorkspace?: (files: string[]) => void;
+	workspace?: Workspace | null;
+	baseBranch?: string;
 }
 
 export interface ChangesDiffViewerHandle {
 	focusCommitInput: () => void;
 	refresh: () => void;
 }
+
+/** Sentinel hunkId marking a comment as attached to a whole file rather than a specific line. */
+export const FILE_COMMENT_HUNK_ID = "__file__";
 
 export interface LineComment {
 	id: string;
@@ -125,10 +131,16 @@ export interface CommitInputHandle {
 	focus: () => void;
 }
 
+export type CommitAction = "commit" | "push" | "pr";
+
 export interface CommitInputProps {
 	onCommit: (message: string) => void;
+	onCommitAndPush: (message: string) => void;
+	onCommitAndCreatePR: (message: string) => void;
 	disabled: boolean;
 	pending: boolean;
+	pendingAction?: CommitAction | null;
+	canCreatePr?: boolean;
 	selectedFileCount?: number;
 	totalFileCount?: number;
 }
@@ -166,6 +178,7 @@ export interface FileRowComponentProps {
 	) => JSX.Element;
 	addToast: ReturnType<typeof useToast>["addToast"];
 	getOutdatedCommentsForFile: (filePath: string) => LineComment[];
+	getFileCommentsForFile: (filePath: string) => LineComment[];
 	deleteComment: (commentId: string) => void;
 	getThreadsForLine: (query: CommentLineQuery) => GhReviewThread[];
 	getUnplacedThreadsForFile: (filePath: string) => GhReviewThread[];
@@ -175,12 +188,16 @@ export interface FileRowComponentProps {
 	toggleOutdatedGroup: (filePath: string) => void;
 	showCommentInput: boolean;
 	pendingComment: PendingComment | null;
+	editingCommentId: string | null;
 	setPendingComment: React.Dispatch<
 		React.SetStateAction<PendingComment | null>
 	>;
 	setShowCommentInput: React.Dispatch<React.SetStateAction<boolean>>;
 	addComment: (text: string) => void;
 	cancelComment: () => void;
+	startEditComment: (commentId: string) => void;
+	cancelEditComment: () => void;
+	saveEditComment: (commentId: string, text: string) => void;
 }
 
 export type { ApiLineComment, JjFileChange };

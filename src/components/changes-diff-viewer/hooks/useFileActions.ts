@@ -1,20 +1,35 @@
+import {
+	useIsMutating,
+	useMutation,
+	useQueryClient,
+} from "@tanstack/react-query";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useCallback, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import {
+	createPrMutationKey,
+	useGitRemoteInfo,
+	usePrInfoViaGh,
+} from "../../../hooks/useMergeQueueStatus";
 import {
 	createCommit,
 	getWorkspaceFileLines,
+	ghCreatePr,
 	jjRestoreAll,
 	jjRestoreFile,
 	jjSplit,
+	pushWorkspaceToRemote,
 } from "../../../lib/api";
-import type { DiffLineSelection, FileHunksData } from "../types";
-import { computeHunkLineNumbers, parseHunkHeader } from "../utils";
+import type { Workspace } from "../../../lib/api-types";
 import type { useToast } from "../../ui/toast";
+import type { CommitAction, DiffLineSelection, FileHunksData } from "../types";
+import { computeHunkLineNumbers, parseHunkHeader } from "../utils";
 
 interface UseFileActionsParams {
 	workspacePath: string;
 	repoPath: string | undefined;
 	workspaceId: number | undefined;
+	workspace: Workspace | null | undefined;
+	baseBranch: string | undefined;
 	readOnly: boolean;
 	selectedUnstagedFiles: Set<string>;
 	stagedFiles: Set<string>;
@@ -34,6 +49,8 @@ export function useFileActions({
 	workspacePath,
 	repoPath,
 	workspaceId,
+	workspace,
+	baseBranch,
 	readOnly,
 	selectedUnstagedFiles,
 	stagedFiles,
@@ -52,8 +69,22 @@ export function useFileActions({
 	const [expandedContext, setExpandedContext] = useState<Map<string, string[]>>(
 		new Map(),
 	);
-	const [commitPending, setCommitPending] = useState(false);
+	const [localPendingAction, setPendingAction] = useState<
+		"commit" | "push" | null
+	>(null);
 	const queryClient = useQueryClient();
+	const { data: remoteInfo } = useGitRemoteInfo(repoPath);
+	const { data: prInfo } = usePrInfoViaGh(repoPath, workspace?.branch_name);
+	const canCreatePr = !!remoteInfo && !prInfo && !!workspace && !!baseBranch;
+
+	// Shared across surfaces (this dropdown item and the header's Create PR
+	// button) so either one's in-flight PR creation shows as pending here too.
+	const createPrActive =
+		useIsMutating({ mutationKey: createPrMutationKey(repoPath, workspaceId) }) >
+		0;
+	const pendingAction: CommitAction | null = createPrActive
+		? "pr"
+		: localPendingAction;
 
 	const handleDiscardAll = useCallback(async () => {
 		if (readOnly) return;
@@ -185,15 +216,15 @@ export function useFileActions({
 		}
 	}, [diffLineSelection, addToast, setContextMenuPosition]);
 
-	const handleCommit = useCallback(
-		async (commitMsg: string) => {
+	const performCommit = useCallback(
+		async (commitMsg: string): Promise<boolean> => {
 			if (!commitMsg) {
 				addToast({
 					title: "Commit message",
 					description: "Enter a commit message.",
 					type: "error",
 				});
-				return;
+				return false;
 			}
 			if (commitMsg.length > 500) {
 				addToast({
@@ -201,9 +232,8 @@ export function useFileActions({
 					description: "Please keep the message under 500 characters.",
 					type: "error",
 				});
-				return;
+				return false;
 			}
-			setCommitPending(true);
 			try {
 				const stagedPaths = Array.from(stagedFiles);
 				let result: string;
@@ -238,14 +268,14 @@ export function useFileActions({
 						queryKey: ["workspace-commits", repoPath, workspaceId ?? null],
 					}),
 				]);
+				return true;
 			} catch (error) {
 				addToast({
 					title: "Commit failed",
 					description: error instanceof Error ? error.message : String(error),
 					type: "error",
 				});
-			} finally {
-				setCommitPending(false);
+				return false;
 			}
 		},
 		[
@@ -259,6 +289,96 @@ export function useFileActions({
 			repoPath,
 			workspaceId,
 			queryClient,
+		],
+	);
+
+	const handleCommit = useCallback(
+		async (commitMsg: string) => {
+			setPendingAction("commit");
+			try {
+				await performCommit(commitMsg);
+			} finally {
+				setPendingAction(null);
+			}
+		},
+		[performCommit],
+	);
+
+	const handleCommitAndPush = useCallback(
+		async (commitMsg: string) => {
+			setPendingAction("push");
+			try {
+				const committed = await performCommit(commitMsg);
+				if (!committed) return;
+				await pushWorkspaceToRemote(repoPath!, workspaceId ?? null);
+				await queryClient.invalidateQueries();
+				addToast({
+					title: "Pushed to remote",
+					type: "success",
+				});
+			} catch (error) {
+				addToast({
+					title: "Failed to push",
+					description: error instanceof Error ? error.message : String(error),
+					type: "error",
+				});
+			} finally {
+				setPendingAction(null);
+			}
+		},
+		[performCommit, repoPath, workspaceId, queryClient, addToast],
+	);
+
+	const createPrMutation = useMutation({
+		mutationKey: createPrMutationKey(repoPath, workspaceId),
+		mutationFn: async (commitMsg: string) => {
+			if (!remoteInfo || !workspace || !baseBranch) return null;
+			const committed = await performCommit(commitMsg);
+			if (!committed) return null;
+			await pushWorkspaceToRemote(repoPath!, workspaceId ?? null);
+			return ghCreatePr(
+				remoteInfo.full_name,
+				workspace.title || workspace.branch_name,
+				workspace.description ?? "",
+				baseBranch,
+				workspace.branch_name,
+				false,
+			);
+		},
+	});
+
+	const handleCommitAndCreatePR = useCallback(
+		async (commitMsg: string) => {
+			if (!remoteInfo || !workspace || !baseBranch) return;
+			try {
+				const number = await createPrMutation.mutateAsync(commitMsg);
+				if (number == null) return;
+				await queryClient.invalidateQueries();
+				const prUrl = `https://github.com/${remoteInfo.full_name}/pull/${number}`;
+				addToast({
+					title: "Pull request created",
+					description: `#${number}`,
+					type: "success",
+					action: {
+						label: "Open in Web",
+						onClick: () => openUrl(prUrl),
+					},
+				});
+			} catch (error) {
+				addToast({
+					title: "Failed to create PR",
+					description: error instanceof Error ? error.message : String(error),
+					type: "error",
+				});
+			}
+		},
+		[
+			createPrMutation,
+			remoteInfo,
+			workspace,
+			baseBranch,
+			queryClient,
+			addToast,
 		],
 	);
 
@@ -318,12 +438,16 @@ export function useFileActions({
 	return {
 		fileActionTarget,
 		expandedContext,
-		commitPending,
+		commitPending: pendingAction !== null,
+		pendingAction,
+		canCreatePr,
 		handleDiscardAll,
 		handleDiscardFiles,
 		handleCopyLineLocation,
 		handleCopyLines,
 		handleCommit,
+		handleCommitAndPush,
+		handleCommitAndCreatePR,
 		handleExpandContext,
 	};
 }

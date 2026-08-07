@@ -67,6 +67,7 @@ import {
 	ChangesDiffViewer,
 	type ChangesDiffViewerHandle,
 } from "./ChangesDiffViewer";
+import { CiStatusIndicator } from "./CiStatusIndicator";
 import { CommitDiffViewer } from "./CommitDiffViewer";
 import { CreatePrButtonGroup } from "./CreatePrButtonGroup";
 import { FileBrowser } from "./FileBrowser";
@@ -95,7 +96,6 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "./ui/tooltip";
-import { CiStatusIndicator } from "./CiStatusIndicator";
 import { ViewPrButton } from "./ViewPrButton";
 import { WorkspaceBookmarkConflictModal } from "./WorkspaceBookmarkConflictModal";
 import { WorkspaceStackPanel } from "./WorkspaceStackPanel";
@@ -1166,16 +1166,17 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 											focusRequest={taskInputFocusRequest}
 											onSessionCreated={onSessionCreated}
 										/>
-										{/* Stack */}
-										{workspace && workspaceStatusData?.target != null && (
-											<div className="border rounded-lg">
-												<WorkspaceStackPanel
-													repoPath={effectiveRepoPath}
-													workspace={workspace}
-													defaultBranch={defaultTargetBranch}
-													onSelectWorkspace={onNavigateToWorkspace}
-												/>
-											</div>
+										{/* Stack — shown for any workspace in a multi-workspace
+										    stack, including the root (whose target is the default
+										    branch, not another workspace). The panel returns null
+										    when the workspace is alone. */}
+										{workspace && (
+											<WorkspaceStackPanel
+												repoPath={effectiveRepoPath}
+												workspace={workspace}
+												defaultBranch={defaultTargetBranch}
+												onSelectWorkspace={onNavigateToWorkspace}
+											/>
 										)}
 										{/* File Search Input */}
 										<div className="flex justify-end">
@@ -1306,6 +1307,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 									? (files) => onMoveFilesToNewWorkspace(files, workspace)
 									: undefined
 							}
+							workspace={workspace}
+							baseBranch={targetBranch ?? defaultTargetBranch}
 						/>
 					)}
 				</div>
@@ -1571,6 +1574,10 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 												repoPath={effectiveRepoPath}
 												workspace={workspace}
 												baseBranch={targetBranch ?? defaultTargetBranch}
+												hasCommits={
+													(workspaceStatusData?.commits_ahead_of_target
+														.length ?? 0) > 0
+												}
 											/>
 										</>
 									)}

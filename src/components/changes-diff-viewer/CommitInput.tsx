@@ -2,19 +2,37 @@ import {
 	forwardRef,
 	memo,
 	useCallback,
-	useImperativeHandle,
 	type KeyboardEvent as ReactKeyboardEvent,
+	useImperativeHandle,
 	useRef,
 	useState,
 } from "react";
-import { Loader2 } from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
 import type { CommitInputHandle, CommitInputProps } from "./types";
 
 const CommitInput = memo(
 	forwardRef<CommitInputHandle, CommitInputProps>(
-		({ onCommit, disabled, pending, selectedFileCount = 0 }, ref) => {
+		(
+			{
+				onCommit,
+				onCommitAndPush,
+				onCommitAndCreatePR,
+				disabled,
+				pending,
+				pendingAction,
+				canCreatePr = false,
+				selectedFileCount = 0,
+			},
+			ref,
+		) => {
 			const [message, setMessage] = useState("");
 			const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -33,21 +51,46 @@ const CommitInput = memo(
 				[],
 			);
 
-			const handleKeyDown = useCallback(
-				(event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-					if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-						event.preventDefault();
-						onCommit(message.trim());
-						setMessage("");
-					}
+			const runAction = useCallback(
+				(action: (message: string) => void) => {
+					action(message.trim());
+					setMessage("");
 				},
-				[message, onCommit],
+				[message],
 			);
 
-			const handleCommit = useCallback(() => {
-				onCommit(message.trim());
-				setMessage("");
-			}, [message, onCommit]);
+			const handleKeyDown = useCallback(
+				(event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+					if (event.metaKey || event.ctrlKey) {
+						const key = event.key.toLowerCase();
+						if (["a", "c", "x", "v", "z", "y"].includes(key)) {
+							// Stop propagation so global shortcuts (e.g. select-all-files)
+							// don't hijack standard text editing in this input.
+							event.stopPropagation();
+						}
+					}
+
+					if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+						event.preventDefault();
+						runAction(onCommit);
+					}
+				},
+				[onCommit, runAction],
+			);
+
+			const commitLabel =
+				selectedFileCount > 0
+					? `Commit ${selectedFileCount} file${
+							selectedFileCount !== 1 ? "s" : ""
+						}`
+					: "Commit";
+
+			const pendingLabel =
+				pendingAction === "push"
+					? "Pushing…"
+					: pendingAction === "pr"
+						? "Creating PR…"
+						: "Committing…";
 
 			return (
 				<div className="px-4 py-3 border-b border-border space-y-2">
@@ -61,22 +104,49 @@ const CommitInput = memo(
 						className="resize-none overflow-hidden"
 						style={{ minHeight: "24px" }}
 					/>
-					<Button
-						className="w-full text-sm !h-auto py-1.5"
-						disabled={disabled}
-						onClick={handleCommit}
-						size="sm"
-					>
-						{pending ? (
-							<Loader2 className="w-4 h-4 animate-spin" />
-						) : selectedFileCount > 0 ? (
-							`Commit ${selectedFileCount} file${
-								selectedFileCount !== 1 ? "s" : ""
-							}`
-						) : (
-							"Commit"
-						)}
-					</Button>
+					<div className="flex w-full">
+						<Button
+							className="flex-1 text-sm !h-auto py-1.5 rounded-r-none gap-1.5"
+							disabled={disabled || pending}
+							onClick={() => runAction(onCommit)}
+							size="sm"
+						>
+							{pending ? (
+								<>
+									<Loader2 className="w-4 h-4 animate-spin" />
+									{pendingLabel}
+								</>
+							) : (
+								commitLabel
+							)}
+						</Button>
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button
+									className="!h-auto py-1.5 px-1.5 rounded-l-none border-l border-primary-foreground/20"
+									disabled={disabled || pending}
+									size="sm"
+									aria-label="More commit options"
+								>
+									<ChevronDown className="w-4 h-4" />
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end" sideOffset={4}>
+								<DropdownMenuItem
+									disabled={disabled || pending}
+									onSelect={() => runAction(onCommitAndPush)}
+								>
+									Commit and push
+								</DropdownMenuItem>
+								<DropdownMenuItem
+									disabled={disabled || pending || !canCreatePr}
+									onSelect={() => runAction(onCommitAndCreatePR)}
+								>
+									Commit and create PR
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
+					</div>
 				</div>
 			);
 		},

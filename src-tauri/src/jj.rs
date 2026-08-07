@@ -1753,6 +1753,21 @@ pub fn squash_to_workspace(
         .join(".treq")
         .join("workspaces")
         .join(&target_workspace.workspace_path);
+    let target_workspace_path_str = target_workspace_path
+        .to_str()
+        .ok_or_else(|| JjError::IoError("Failed to convert target workspace path".to_string()))?;
+    move_paths_between_workspace_paths(source_workspace_path, target_workspace_path_str, file_paths)
+}
+
+/// Moves the given (or all changed) paths from a source working-copy directory
+/// directly into a destination working-copy directory, resolved by filesystem
+/// path rather than by looking up a registered workspace. Works for regular
+/// workspace directories as well as the home repo root.
+pub fn move_paths_between_workspace_paths(
+    source_workspace_path: &str,
+    target_workspace_path: &str,
+    file_paths: Option<Vec<String>>,
+) -> Result<String, JjError> {
     let selected_paths = match file_paths {
         Some(paths) => paths,
         None => jj_get_changed_files(source_workspace_path)?
@@ -1762,7 +1777,7 @@ pub fn squash_to_workspace(
     };
     move_paths_between_workspaces(
         Path::new(source_workspace_path),
-        &target_workspace_path,
+        Path::new(target_workspace_path),
         &selected_paths,
     )?;
     Ok(String::new())

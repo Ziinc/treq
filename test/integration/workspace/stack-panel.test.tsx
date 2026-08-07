@@ -1,8 +1,13 @@
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { Dashboard } from "../../../src/components/Dashboard";
-import { createWorkspace, getWorkspaces } from "../../../src/lib/api";
-import { fireEvent, render, screen, waitFor, within } from "../../test-utils";
+import {
+	createWorkspace,
+	getWorkspaces,
+	setWorkspaceTargetBranch,
+} from "../../../src/lib/api";
+import { getFullWorkspacePath } from "../../../src/lib/utils";
+import { render, screen, waitFor, within } from "../../test-utils";
 import {
 	commitWorkspaceFile,
 	createTestRepo,
@@ -20,29 +25,23 @@ describe("ShowWorkspace - stack panel", () => {
 		user = userEvent.setup();
 	});
 
-	async function stackChildOntoParentViaHeaderUi(
-		childBranch: string,
-		parentBranch: string,
-	) {
-		await user.click(await findSidebarBranchElement(childBranch));
-
-		let targetBtn: HTMLButtonElement;
-		await waitFor(() => {
-			targetBtn = screen.getByRole("button", {
-				name: "Workspace target",
-			}) as HTMLButtonElement;
-			expect(targetBtn).not.toBeDisabled();
-		});
-		fireEvent.click(targetBtn!);
-
-		const parentElement = await screen.findByText(parentBranch, {
-			selector: ".branch-list-item *",
-		});
-		fireEvent.click(parentElement);
-		await screen.findByText(parentBranch, { selector: "button *" });
+	async function stackBetaOntoAlpha() {
+		await createWorkspace(repoPath, "feat/alpha");
+		await createWorkspace(repoPath, "feat/beta");
+		const workspaces = await getWorkspaces(repoPath);
+		const beta = workspaces.find((ws) => ws.branch_name === "feat/beta");
+		if (!beta) {
+			throw new Error("Expected feat/beta workspace");
+		}
+		await setWorkspaceTargetBranch(
+			repoPath,
+			getFullWorkspacePath(beta),
+			beta.id,
+			"feat/alpha",
+		);
 	}
 
-	it("does not render the stack panel for the main repository or a default-branch workspace", async () => {
+	it("does not render the stack panel for the main repository or a lone default-branch workspace", async () => {
 		await createWorkspace(repoPath, "feat/alpha");
 		render(<Dashboard />);
 
@@ -61,11 +60,10 @@ describe("ShowWorkspace - stack panel", () => {
 	});
 
 	it("renders the stack for a workspace stacked on top of another workspace and navigates on click", async () => {
-		await createWorkspace(repoPath, "feat/alpha");
-		await createWorkspace(repoPath, "feat/beta");
+		await stackBetaOntoAlpha();
 		render(<Dashboard />);
 
-		await stackChildOntoParentViaHeaderUi("feat/beta", "feat/alpha");
+		await user.click(await findSidebarBranchElement("feat/beta"));
 
 		const panel = await screen.findByTestId("workspace-stack-panel");
 		expect(within(panel).getByText("1 of 2")).toBeTruthy();
@@ -75,11 +73,26 @@ describe("ShowWorkspace - stack panel", () => {
 
 		const header = await screen.findByTestId("show-workspace-header");
 		await within(header).findByText("feat/alpha");
+
+		const rootPanel = await screen.findByTestId("workspace-stack-panel");
+		expect(within(rootPanel).getByText("2 of 2")).toBeTruthy();
+		expect(within(rootPanel).getByText("feat/beta")).toBeTruthy();
+	});
+
+	it("shows the stack panel when viewing the first workspace of a stack", async () => {
+		await stackBetaOntoAlpha();
+		render(<Dashboard />);
+
+		await user.click(await findSidebarBranchElement("feat/alpha"));
+
+		const panel = await screen.findByTestId("workspace-stack-panel");
+		expect(within(panel).getByText("2 of 2")).toBeTruthy();
+		expect(within(panel).getByText("feat/beta")).toBeTruthy();
+		expect(within(panel).getByText("feat/alpha")).toBeTruthy();
 	});
 
 	it("shows real line-change counts for a stacked workspace with commits", async () => {
-		await createWorkspace(repoPath, "feat/alpha");
-		await createWorkspace(repoPath, "feat/beta");
+		await stackBetaOntoAlpha();
 
 		const beta = (await getWorkspaces(repoPath)).find(
 			(ws) => ws.branch_name === "feat/beta",
@@ -93,7 +106,7 @@ describe("ShowWorkspace - stack panel", () => {
 		);
 
 		render(<Dashboard />);
-		await stackChildOntoParentViaHeaderUi("feat/beta", "feat/alpha");
+		await user.click(await findSidebarBranchElement("feat/beta"));
 
 		const panel = await screen.findByTestId("workspace-stack-panel");
 		const betaItem = within(panel)

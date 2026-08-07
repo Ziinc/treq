@@ -14,11 +14,11 @@ import {
 } from "../../../test/utils";
 import { captureDocument } from "../capture";
 
-const BRANCH_NAME = "feat/create-pr-combined-demo";
+const BRANCH_NAME = "feat/commit-and-create-pr-dropdown";
 
-// Deferred resolvers so the spec can hold the button in its loading state
-// long enough to capture it, then finish the push and the PR creation in
-// order, exactly like the real handler does.
+// Deferred resolvers so the spec can hold the split-button in its loading
+// state long enough to capture it, mirroring the real push-then-create-PR
+// sequence the "Commit and create PR" dropdown item runs.
 const deferred = vi.hoisted(() => ({
 	pushResolve: null as null | (() => void),
 	createResolve: null as null | ((prNumber: number) => void),
@@ -60,12 +60,14 @@ function setOriginUrl(repoPath: string, remoteUrl: string) {
 	fs.writeFileSync(configPath, config);
 }
 
-// Scenario: a workspace branch that has never been pushed, in a repo with a
-// GitHub remote. Previously this showed "Push to remote" and only offered
-// "Create PR" as a second step after that push landed. Now "Create PR" shows
-// immediately and pushes the branch itself before creating the PR, so this
-// captures that combined flow: at-rest, mid-flight, and settled.
-it("captures Create PR pushing an unpushed branch before creating the PR", async () => {
+// Previously the "Commit and create PR" dropdown item called
+// event.preventDefault() in its onSelect handler, which stops Radix from
+// auto-closing the (modal) dropdown menu. That left the menu open and
+// pointer-events blocked on the rest of the page for the whole async
+// commit+push+create-PR sequence -- looking like the UI had frozen. This
+// captures that the menu now closes immediately on click and that the
+// primary Commit button clearly reflects the in-flight state instead.
+it("captures the commit dropdown closing immediately and showing a Creating PR state", async () => {
 	const { repoPath } = createTestRepo(true);
 	openRepo(repoPath);
 	setOriginUrl(repoPath, "https://github.com/acme/treq.git");
@@ -87,11 +89,6 @@ it("captures Create PR pushing an unpushed branch before creating the PR", async
 	const header = await screen.findByTestId("show-workspace-header");
 	await within(header).findByText(BRANCH_NAME);
 
-	// Create PR is disabled until the workspace has a real commit (not just
-	// working-copy changes), so drive an actual commit through the Review tab
-	// -- writing the file alone wouldn't do it, and committing via the NAPI
-	// helper directly would bypass the query invalidation a real commit
-	// triggers, leaving the button stuck showing stale (disabled) state.
 	const workspace = (await getWorkspaces(repoPath)).find(
 		(w) => w.branch_name === BRANCH_NAME,
 	)!;
@@ -100,47 +97,71 @@ it("captures Create PR pushing an unpushed branch before creating the PR", async
 		"feature.txt",
 		"feature content\n",
 	);
+
 	await user.click(await screen.findByRole("tab", { name: /^Review/ }));
 	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await waitFor(() =>
+		expect(screen.getAllByText("feature.txt").length).toBeGreaterThan(0),
+	);
+
 	await user.type(await screen.findByPlaceholderText("Message"), "Add feature");
-	await user.click(await screen.findByRole("button", { name: /^commit\b/i }));
 
-	await user.click(await screen.findByRole("tab", { name: /^Code/ }));
-
-	const createPrButton = await within(header).findByRole("button", {
-		name: /^create pr$/i,
+	await user.click(
+		await screen.findByRole("button", { name: "More commit options" }),
+	);
+	const dropdownItem = await screen.findByRole("menuitem", {
+		name: "Commit and create PR",
 	});
-	await waitFor(() => expect(createPrButton).toBeEnabled());
-	expect(
-		within(header).queryByRole("button", { name: /push to remote/i }),
-	).not.toBeInTheDocument();
+
+	await user.click(dropdownItem);
+
+	// The dropdown must be gone immediately -- it must not linger open while
+	// the commit/push/create-PR sequence is in flight.
+	await waitFor(() =>
+		expect(
+			screen.queryByRole("menuitem", { name: "Commit and create PR" }),
+		).not.toBeInTheDocument(),
+	);
+
+	await screen.findByText("Creating PR…");
+	// The header's own "Create PR" split button shares a mutation key with the
+	// Review tab's "Commit and create PR" action, so it must also flip into
+	// its loading state ("Creating…" or "Pushing & creating…") even though
+	// this workspace's push+create-PR was triggered from the dropdown, not
+	// from the header button itself.
+	await within(header).findByRole("button", {
+		name: /pushing & creating…|creating…/i,
+	});
 	await captureDocument(document, {
-		name: "create-pr-combined-push-01-at-rest",
+		name: "commit-and-create-pr-dropdown-01-loading",
 		expectations: [
-			"The workspace header shows a dark 'Create PR' button with a GitHub icon -- there is no separate 'Push to remote' button, even though this branch has never been pushed.",
+			"No dropdown menu is visible anywhere on the page -- it has fully closed.",
+			"The primary commit button (left side of the split button in the Review sidebar) shows a spinning loading icon and the text 'Creating PR…' in place of its normal 'Commit' label.",
+			"The header's 'Create PR' button (top right) also shows a spinning loading icon and loading text instead of its normal 'Create PR' label, even though the header button itself was never clicked.",
 		],
 	});
 
-	await user.click(createPrButton);
-	await screen.findByText("Pushing & creating…");
+	// While the PR creation is still pending, the rest of the UI must remain
+	// interactive -- switching tabs should work immediately, proving nothing
+	// is blocking pointer events on the page.
+	await user.click(await screen.findByRole("tab", { name: /^Code/ }));
+	await screen.findByRole("tab", { name: /^Code/, selected: true });
 	await captureDocument(document, {
-		name: "create-pr-combined-push-02-loading",
+		name: "commit-and-create-pr-dropdown-02-still-interactive",
 		expectations: [
-			"The button that used to read 'Create PR' now shows a spinning loading icon and the text 'Pushing & creating…' in its place.",
-			"The button and its chevron sibling both look disabled (dimmed/inactive).",
+			"The 'Code' tab is now selected/active instead of 'Review', proving the tab click was not blocked by the still-pending PR creation.",
 		],
 	});
 
 	deferred.pushResolve?.();
 	await waitFor(() => expect(deferred.createResolve).not.toBeNull());
-	deferred.createResolve?.(77);
+	deferred.createResolve?.(88);
 
 	await screen.findByText("Pull request created");
 	await captureDocument(document, {
-		name: "create-pr-combined-push-03-created",
+		name: "commit-and-create-pr-dropdown-03-created",
 		expectations: [
-			"A green success toast reads 'Pull request created' with '#77' beneath it.",
-			"The 'Create PR' button is back to its normal at-rest label (no spinner).",
+			"A green success toast reads 'Pull request created' with '#88' beneath it.",
 		],
 	});
 }, 60000);
