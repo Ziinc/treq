@@ -1,7 +1,9 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { ArrowDown, CircleHelp, Layers2 } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { ArrowDown, CircleHelp, ExternalLink, Layers2 } from "lucide-react";
 import { memo, useMemo } from "react";
 import { listCommits, listWorkspaceStatuses, type Workspace } from "../lib/api";
+import { WEB_URL } from "../lib/supabase";
 import { cn, formatFullTimestamp, formatRelativeTime } from "../lib/utils";
 import {
 	sumWorkspaceDiffStats,
@@ -18,6 +20,8 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from "./ui/tooltip";
+
+const STACK_DOCS_URL = `${WEB_URL}/docs/concepts/workspaces#stacks-and-rebasing`;
 
 interface WorkspaceStackPanelProps {
 	repoPath: string;
@@ -105,9 +109,20 @@ export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
 								</button>
 							</TooltipTrigger>
 							<TooltipContent className="max-w-xs font-normal">
-								A stack is a chain of workspaces that build on each other.
-								Each targets the workspace below it instead of the default
-								branch. Click a workspace to navigate to it.
+								<p>
+									A stack is a chain of workspaces that build on each other.
+									Each targets the workspace below it instead of the default
+									branch. Click a workspace to navigate to it.
+								</p>
+								<button
+									type="button"
+									className="mt-1.5 inline-flex items-center gap-1 text-xs text-primary underline-offset-2 hover:underline"
+									onClick={() => openUrl(STACK_DOCS_URL)}
+									onPointerDown={(event) => event.preventDefault()}
+								>
+									Learn more
+									<ExternalLink className="w-3 h-3" />
+								</button>
 							</TooltipContent>
 						</Tooltip>
 					</TooltipProvider>

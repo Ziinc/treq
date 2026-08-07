@@ -145,6 +145,7 @@ it("captures the stack panel and navigation to a sibling workspace", async () =>
 		name: "stacked-workspace-panel-01b-help-tooltip",
 		expectations: [
 			'A tooltip is open whose text starts with "A stack is a chain of workspaces that build on each other."',
+			'The tooltip includes a "Learn more" link with an external-link icon.',
 			'A small circle-help (?) icon sits immediately to the right of the "Stack" label in the panel header.',
 		],
 	});

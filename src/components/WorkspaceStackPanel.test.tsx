@@ -1,13 +1,15 @@
 import userEvent from "@testing-library/user-event";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMockWorkspace } from "../../test/factories/workspace.factory";
-import { render, screen, waitFor } from "../../test/test-utils";
+import { render, screen, waitFor, within } from "../../test/test-utils";
 import type {
 	JjLogResult,
 	Workspace,
 	WorkspaceSidebarStatus,
 } from "../lib/api";
 import * as api from "../lib/api";
+import { WEB_URL } from "../lib/supabase";
 import { WorkspaceStackPanel } from "./WorkspaceStackPanel";
 
 vi.mock("../lib/api", async () => {
@@ -143,8 +145,43 @@ describe("WorkspaceStackPanel", () => {
 		});
 		await user.hover(helpButton);
 
-		expect(await screen.findByRole("tooltip")).toHaveTextContent(
+		const tooltip = await screen.findByRole("tooltip");
+		expect(tooltip).toHaveTextContent(
 			/chain of workspaces that build on each other/i,
+		);
+		expect(
+			within(tooltip).getByRole("button", { name: /learn more/i }),
+		).toBeTruthy();
+	});
+
+	it("opens the stacks docs when the help tooltip learn-more link is clicked", async () => {
+		vi.mocked(api.listWorkspaceStatuses).mockResolvedValue(
+			asStatuses([rootWorkspace, middleWorkspace, tipWorkspace]),
+		);
+		vi.mocked(api.listCommits).mockResolvedValue(makeLogResult(0, 0));
+		vi.mocked(openUrl).mockClear();
+		const user = userEvent.setup();
+
+		render(
+			<WorkspaceStackPanel
+				repoPath={middleWorkspace.repo_path}
+				workspace={middleWorkspace}
+				defaultBranch="main"
+			/>,
+		);
+
+		const helpButton = await screen.findByRole("button", {
+			name: /what is a stack/i,
+		});
+		await user.hover(helpButton);
+
+		const tooltip = await screen.findByRole("tooltip");
+		await user.click(
+			within(tooltip).getByRole("button", { name: /learn more/i }),
+		);
+
+		expect(openUrl).toHaveBeenCalledWith(
+			`${WEB_URL}/docs/concepts/workspaces#stacks-and-rebasing`,
 		);
 	});
 
