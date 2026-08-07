@@ -37,7 +37,7 @@ export function useKeyboardShortcut(
 			}
 
 			// Allow specific global shortcuts to work even when terminal is focused
-			const allowInTerminal = ["k", "j", "n", "p", "Escape", "]", "\\"];
+			const allowInTerminal = ["k", "j", "n", "p", "Escape", "]", "\\", "w"];
 			const shouldAllow =
 				(ctrlOrCmd && allowInTerminal.includes(key)) ||
 				(!ctrlOrCmd && key === "Escape");

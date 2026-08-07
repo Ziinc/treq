@@ -17,6 +17,7 @@ import {
 	TooltipTrigger,
 } from "../ui/tooltip";
 import { Button } from "../ui/button";
+import { Kbd, KbdGroup } from "../ui/kbd";
 import { cn } from "../../lib/utils";
 import {
 	getSessionModel,
@@ -394,7 +395,12 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 											<X className="w-4 h-4" />
 										</Button>
 									</TooltipTrigger>
-									<TooltipContent>Close</TooltipContent>
+									<TooltipContent className="flex items-center gap-1.5">
+										Close
+										<KbdGroup>
+											<Kbd>⌘ + W</Kbd>
+										</KbdGroup>
+									</TooltipContent>
 								</Tooltip>
 							</TooltipProvider>
 						)}

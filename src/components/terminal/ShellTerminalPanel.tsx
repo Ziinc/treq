@@ -8,6 +8,7 @@ import {
 	TooltipTrigger,
 } from "../ui/tooltip";
 import { Button } from "../ui/button";
+import { Kbd, KbdGroup } from "../ui/kbd";
 import { cn } from "../../lib/utils";
 import { getTreqBinDir } from "../../lib/api";
 import { type ShellTerminalData, type TerminalRefsMap } from "./types";
@@ -88,7 +89,12 @@ export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
 										<X className="w-3 h-3" />
 									</Button>
 								</TooltipTrigger>
-								<TooltipContent>Close</TooltipContent>
+								<TooltipContent className="flex items-center gap-1.5">
+									Close
+									<KbdGroup>
+										<Kbd>⌘ + W</Kbd>
+									</KbdGroup>
+								</TooltipContent>
 							</Tooltip>
 						</TooltipProvider>
 					)}
