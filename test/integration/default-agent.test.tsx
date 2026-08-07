@@ -181,13 +181,13 @@ describe("default agent configuration", () => {
 
 		await createWorkspace(repoPath, "feat/agent-pane-button-test");
 
-		render(<Dashboard />);
+		const { container } = render(<Dashboard />);
 
 		await user.click(
 			await findSidebarBranchElement("feat/agent-pane-button-test"),
 		);
 
-		const agentButton = await screen.findByRole("button", {
+		const agentButton = await within(container).findByRole("button", {
 			name: /new agent/i,
 		});
 		await user.click(agentButton);
