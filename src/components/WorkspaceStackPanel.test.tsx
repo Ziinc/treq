@@ -83,7 +83,7 @@ describe("WorkspaceStackPanel", () => {
 		vi.clearAllMocks();
 	});
 
-	it("renders nothing when the workspace has no workspace ancestor (stack root)", async () => {
+	it("renders nothing when a lone workspace has no stacked descendants", async () => {
 		vi.mocked(api.listWorkspaceStatuses).mockResolvedValue(
 			asStatuses([rootWorkspace]),
 		);
@@ -103,6 +103,28 @@ describe("WorkspaceStackPanel", () => {
 		expect(
 			screen.queryByTestId("workspace-stack-panel"),
 		).not.toBeInTheDocument();
+	});
+
+	it("shows the stack when viewing the first (root) workspace of a stack", async () => {
+		vi.mocked(api.listWorkspaceStatuses).mockResolvedValue(
+			asStatuses([rootWorkspace, middleWorkspace, tipWorkspace]),
+		);
+		vi.mocked(api.listCommits).mockResolvedValue(makeLogResult(0, 0));
+
+		render(
+			<WorkspaceStackPanel
+				repoPath={rootWorkspace.repo_path}
+				workspace={rootWorkspace}
+				defaultBranch="main"
+			/>,
+		);
+
+		await screen.findByText("Stack");
+		expect(await screen.findByText("3 of 3")).toBeTruthy();
+		const currentItem = await screen.findByTestId(
+			`workspace-stack-item-${rootWorkspace.id}`,
+		);
+		expect(currentItem.getAttribute("aria-current")).toBe("true");
 	});
 
 	it("shows the stack header with the current position out of the total", async () => {

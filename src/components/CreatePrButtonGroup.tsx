@@ -1,8 +1,16 @@
-import { useQueryClient } from "@tanstack/react-query";
+import {
+	useIsMutating,
+	useMutation,
+	useQueryClient,
+} from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ChevronDown, Github, Loader2 } from "lucide-react";
 import { useState } from "react";
-import { useGitRemoteInfo, usePrInfoViaGh } from "../hooks/useMergeQueueStatus";
+import {
+	createPrMutationKey,
+	useGitRemoteInfo,
+	usePrInfoViaGh,
+} from "../hooks/useMergeQueueStatus";
 import { ghCreatePr, pushWorkspaceToRemote } from "../lib/api";
 import type { Workspace } from "../lib/api-types";
 import { buildGitHubComparePrUrl } from "../lib/github-pr";
@@ -41,22 +49,21 @@ export function CreatePrButtonGroup({
 		repoPath,
 		workspace.branch_name,
 	);
-	const [creating, setCreating] = useState(false);
-
-	if (!remoteInfo || prInfoLoading || prInfo) {
-		return null;
-	}
-
+	const [pushingManually, setPushingManually] = useState(false);
 	const title = workspace.title || workspace.branch_name;
 	const body = workspace.description ?? "";
 
-	const createPr = async (draft: boolean) => {
-		setCreating(true);
-		try {
+	// Shared across surfaces (this button and the Review tab's "Commit and
+	// create PR" dropdown item) so either one's in-flight PR creation shows
+	// as pending here too.
+	const createPrMutation = useMutation({
+		mutationKey: createPrMutationKey(repoPath, workspace.id),
+		mutationFn: async (draft: boolean) => {
+			if (!remoteInfo) throw new Error("No GitHub remote detected");
 			if (workspace.not_on_remote) {
 				await pushWorkspaceToRemote(repoPath, workspace.id);
 			}
-			const number = await ghCreatePr(
+			return ghCreatePr(
 				remoteInfo.full_name,
 				title,
 				body,
@@ -64,6 +71,20 @@ export function CreatePrButtonGroup({
 				workspace.branch_name,
 				draft,
 			);
+		},
+	});
+	const otherCreatePrActive =
+		useIsMutating({
+			mutationKey: createPrMutationKey(repoPath, workspace.id),
+		}) > 0;
+
+	if (!remoteInfo || prInfoLoading || prInfo) {
+		return null;
+	}
+
+	const createPr = async (draft: boolean) => {
+		try {
+			const number = await createPrMutation.mutateAsync(draft);
 			await queryClient.invalidateQueries({
 				queryKey: ["pr-info-gh", repoPath, workspace.branch_name],
 			});
@@ -86,13 +107,11 @@ export function CreatePrButtonGroup({
 				description: (err as Error).message,
 				type: "error",
 			});
-		} finally {
-			setCreating(false);
 		}
 	};
 
 	const openManual = async () => {
-		setCreating(true);
+		setPushingManually(true);
 		try {
 			if (workspace.not_on_remote) {
 				await pushWorkspaceToRemote(repoPath, workspace.id);
@@ -115,10 +134,11 @@ export function CreatePrButtonGroup({
 				type: "error",
 			});
 		} finally {
-			setCreating(false);
+			setPushingManually(false);
 		}
 	};
 
+	const creating = otherCreatePrActive || pushingManually;
 	const pushAndCreate = workspace.not_on_remote;
 	const disabled = creating || !hasCommits;
 	const noCommitsTooltip =
@@ -178,19 +198,13 @@ export function CreatePrButtonGroup({
 					<DropdownMenuContent align="end" sideOffset={4}>
 						<DropdownMenuItem
 							disabled={disabled}
-							onSelect={(e) => {
-								e.preventDefault();
-								void createPr(true);
-							}}
+							onSelect={() => void createPr(true)}
 						>
 							Create draft PR
 						</DropdownMenuItem>
 						<DropdownMenuItem
 							disabled={disabled}
-							onSelect={(e) => {
-								e.preventDefault();
-								void openManual();
-							}}
+							onSelect={() => void openManual()}
 						>
 							Create PR manually
 						</DropdownMenuItem>

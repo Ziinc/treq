@@ -82,6 +82,10 @@ vi.mock("../hooks/useMergeQueueStatus", () => ({
 	useGitRemoteInfo: () => ({ data: null }),
 	usePrInfoViaGh: () => ({ data: null, isLoading: false }),
 	usePrCiStatus: () => ({ data: null, isLoading: false }),
+	createPrMutationKey: (
+		repoPath: string | undefined,
+		workspaceId: number | null | undefined,
+	) => ["create-pr", repoPath, workspaceId ?? null],
 }));
 
 describe("ShowWorkspace - Add to Queue feature flag", () => {
