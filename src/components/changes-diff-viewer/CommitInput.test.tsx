@@ -1,4 +1,3 @@
-import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { CommitInput } from "./CommitInput";
