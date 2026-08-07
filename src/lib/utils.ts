@@ -193,3 +193,11 @@ export function getFullWorkspacePath(workspace: {
 	}
 	return `${workspace.repo_path}/.treq/workspaces/${workspace.workspace_path}`;
 }
+
+/** Copy text to the system clipboard via the async Clipboard API. */
+export async function copyTextToClipboard(text: string): Promise<void> {
+	if (!navigator.clipboard?.writeText) {
+		throw new Error("Clipboard API unavailable");
+	}
+	await navigator.clipboard.writeText(text);
+}

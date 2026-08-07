@@ -18,7 +18,7 @@ import {
 } from "../ui/dropdown-menu";
 import { FileContextMenu } from "../FileContextMenu";
 import type { useToast } from "../ui/toast";
-import { cn } from "../../lib/utils";
+import { cn, copyTextToClipboard } from "../../lib/utils";
 import { isBinaryFile, type ParsedFileChange } from "../../lib/git-utils";
 import { useEditorApps } from "../../hooks/useEditorApps";
 
@@ -95,17 +95,28 @@ const FileRowHeader: React.FC<FileRowHeaderProps> = ({
 								: filePath.replace(/\/+$/, "")}
 						</span>
 						<button
-							onClick={(event) => {
-								event.stopPropagation();
-								navigator.clipboard.writeText(filePath);
-								addToast({
-									description: "File path copied to clipboard",
-									title: "Copied",
-									type: "success",
-								});
-							}}
-							className="text-muted-foreground hover:text-foreground flex-shrink-0"
+							type="button"
+							aria-label="Copy file path"
 							title="Copy file path"
+							className="text-muted-foreground hover:text-foreground flex-shrink-0"
+							onClick={async (event) => {
+								event.stopPropagation();
+								try {
+									await copyTextToClipboard(filePath);
+									addToast({
+										description: "File path copied to clipboard",
+										title: "Copied",
+										type: "success",
+									});
+								} catch (error) {
+									addToast({
+										description:
+											error instanceof Error ? error.message : String(error),
+										title: "Copy Failed",
+										type: "error",
+									});
+								}
+							}}
 						>
 							<Copy className="w-4 h-4" />
 						</button>
