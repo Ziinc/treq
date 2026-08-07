@@ -70,9 +70,7 @@ describe("CommitInput", () => {
 	it("shows inline error for commit and push when message is empty", async () => {
 		const user = userEvent.setup();
 		const onCommitAndPush = vi.fn();
-		render(
-			<CommitInput {...defaultProps} onCommitAndPush={onCommitAndPush} />,
-		);
+		render(<CommitInput {...defaultProps} onCommitAndPush={onCommitAndPush} />);
 
 		await user.click(
 			screen.getByRole("button", { name: "More commit options" }),
