@@ -1,7 +1,17 @@
-import React from "react";
+import React, { useState } from "react";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import type { JjFileChange } from "../../lib/api";
 import type { ParsedFileChange } from "../../lib/git-utils";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "../ui/alert-dialog";
 import { ChangesSection } from "../ChangesSection";
 import { CommittedChangesSection } from "../CommittedChangesSection";
 import { ConflictsSection } from "../ConflictsSection";
@@ -105,6 +115,8 @@ export function FileSidebar({
 	fileActionTarget,
 	workspacePath,
 }: FileSidebarProps) {
+	const [showDiscardAllDialog, setShowDiscardAllDialog] = useState(false);
+
 	return (
 		<div className="w-60 border-r border-border bg-sidebar flex flex-col">
 			<CommitInput
@@ -204,7 +216,7 @@ export function FileSidebar({
 											Array.from(selectedUnstagedFiles),
 										);
 									}}
-									onDiscardAll={handleDiscardAll}
+									onDiscardAll={() => setShowDiscardAllDialog(true)}
 									onDiscard={handleDiscardFiles}
 									onDeselectAll={() => setSelectedUnstagedFiles(new Set())}
 									onSelectAll={handleSelectAllUnstaged}
@@ -233,6 +245,33 @@ export function FileSidebar({
 					</>
 				)}
 			</div>
+			<AlertDialog
+				open={showDiscardAllDialog}
+				onOpenChange={setShowDiscardAllDialog}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Discard all changes?</AlertDialogTitle>
+						<AlertDialogDescription>
+							This will discard all {unstagedFiles.length} unsaved{" "}
+							{unstagedFiles.length === 1 ? "change" : "changes"}. This action
+							cannot be undone.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogAction
+							onClick={() => {
+								setShowDiscardAllDialog(false);
+								handleDiscardAll();
+							}}
+							className="bg-destructive text-destructive-foreground hover:bg-destructive/85 active:bg-destructive/75"
+						>
+							Discard all changes
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</div>
 	);
 }
