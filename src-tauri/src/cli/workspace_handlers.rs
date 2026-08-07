@@ -5,7 +5,9 @@ use tauri_plugin_cli::Matches;
 use crate::core;
 use crate::local_db;
 
-use super::status_output::{print_workspace_partial_status, print_workspace_status_detail};
+use super::status_output::{
+    print_workspace_partial_status, print_workspace_status_detail, WorkspacePrStatus,
+};
 use super::{
     detect_repo_path, dispatch_agent_request, parse_agent_mode_or_default, resolve_default_agent,
 };
@@ -25,6 +27,30 @@ fn get_arg_flag(matches: &Matches, name: &str) -> bool {
         .get(name)
         .and_then(|arg| arg.value.as_bool())
         .unwrap_or(false)
+}
+
+fn workspace_checkout_path(repo_path: &Path, stored_path: &str) -> std::path::PathBuf {
+    let stored_path = Path::new(stored_path);
+    if stored_path.is_absolute() {
+        stored_path.to_path_buf()
+    } else {
+        repo_path.join(".treq").join("workspaces").join(stored_path)
+    }
+}
+
+fn github_pr_status(repo_path: &str, branch_name: &str) -> Option<WorkspacePrStatus> {
+    let remote = crate::github::get_git_remote_url_impl(repo_path).ok()??;
+    let gh = crate::binary_paths::get_binary_path("gh")
+        .or_else(|| crate::binary_paths::detect_binary("gh"))?;
+    let path = crate::binary_paths::get_extended_path();
+    let pr = crate::github::get_pr_info_via_gh_impl(&gh, repo_path, branch_name, &path).ok()??;
+    let checks = crate::github::get_pr_checks_via_gh_impl(&gh, repo_path, branch_name, &path)
+        .ok()
+        .flatten();
+    Some(WorkspacePrStatus {
+        github_id: format!("{}#{}", remote.full_name, pr.number),
+        checks,
+    })
 }
 
 fn get_arg_values(matches: &Matches, name: &str) -> Vec<String> {
@@ -209,7 +235,15 @@ pub(super) fn handle_workspace_status(matches: &Matches) {
 
             match core::workspace_status(&repo_path, Some(workspace.id)) {
                 Ok(status) => {
-                    print_workspace_status_detail(&status);
+                    let workspace_path = workspace_checkout_path(
+                        Path::new(&repo_path),
+                        &status.partial.current.workspace_path,
+                    );
+                    let pr = github_pr_status(
+                        &workspace_path.to_string_lossy(),
+                        &status.partial.current.branch_name,
+                    );
+                    print_workspace_status_detail(&status, pr.as_ref());
                 }
                 Err(e) => {
                     eprintln!("Error getting workspace status: {}", e);
@@ -225,7 +259,15 @@ pub(super) fn handle_workspace_status(matches: &Matches) {
                         return;
                     }
                     for status in &statuses {
-                        print_workspace_partial_status(status);
+                        let workspace_path = workspace_checkout_path(
+                            Path::new(&repo_path),
+                            &status.current.workspace_path,
+                        );
+                        let pr = github_pr_status(
+                            &workspace_path.to_string_lossy(),
+                            &status.current.branch_name,
+                        );
+                        print_workspace_partial_status(status, pr.as_ref());
                     }
                 }
                 Err(e) => {
@@ -308,6 +350,31 @@ pub(super) fn handle_workspace_move(matches: &Matches) {
         Err(error) => {
             eprintln!("Error moving workspace changes: {}", error);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolves_workspace_checkout_from_repo_and_stored_relative_path() {
+        let repo = Path::new("repo-root");
+
+        assert_eq!(
+            workspace_checkout_path(repo, "feat-status-pr-info"),
+            repo.join(".treq/workspaces/feat-status-pr-info")
+        );
+    }
+
+    #[test]
+    fn preserves_absolute_workspace_checkout_path() {
+        let absolute = std::env::temp_dir().join("treq-workspace");
+
+        assert_eq!(
+            workspace_checkout_path(Path::new("repo-root"), absolute.to_str().unwrap()),
+            absolute
+        );
     }
 }
 
