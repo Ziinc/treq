@@ -157,51 +157,6 @@ export function flattenWorkspaceTree(
 }
 
 /**
- * Get the ancestor chain for a given branch
- * Used for detecting circular references
- *
- * @param workspaces Flat list of workspaces
- * @param branchName Starting branch name
- * @returns Array of ancestor branch names (from immediate parent to root)
- */
-export function getAncestorChain(
-	workspaces: Workspace[],
-	branchName: string,
-): string[] {
-	const ancestors: string[] = [];
-	const workspaceByBranch = new Map<string, Workspace>();
-
-	for (const ws of workspaces) {
-		workspaceByBranch.set(ws.branch_name, ws);
-	}
-
-	let current = workspaceByBranch.get(branchName);
-	const visited = new Set<string>([branchName]);
-
-	while (current?.target_branch) {
-		const target = current.target_branch;
-
-		// Detect cycle
-		if (visited.has(target)) {
-			break;
-		}
-
-		ancestors.push(target);
-		visited.add(target);
-		current = workspaceByBranch.get(target);
-	}
-
-	return ancestors;
-}
-
-/**
- * Get valid target branches for a workspace (excluding those that would create cycles)
- *
- * @param workspaces All workspaces
- * @param currentBranch The branch we're setting a target for
- * @returns List of valid target branch names
- */
-/**
  * Recursively collect all descendant workspaces of a given branch.
  * A workspace W is a descendant of branchName if W.target_branch === branchName,
  * or W.target_branch is itself a descendant.
@@ -291,42 +246,6 @@ export function getEntireStack(
 
 	const descendants = getDescendants(workspaces, rootBranch);
 	return [root, ...descendants];
-}
-
-/**
- * Check if candidate is a descendant of ancestor.
- * Uses target_branch chain: follows candidate's ancestors upward looking for ancestor.
- */
-export function isDescendantOf(
-	workspaces: Workspace[],
-	candidate: string,
-	ancestor: string,
-): boolean {
-	if (candidate === ancestor) return false;
-
-	const workspaceByBranch = new Map<string, Workspace>();
-	for (const ws of workspaces) {
-		workspaceByBranch.set(ws.branch_name, ws);
-	}
-
-	let current = candidate;
-	const visited = new Set<string>();
-
-	while (true) {
-		visited.add(current);
-		const ws = workspaceByBranch.get(current);
-		if (!ws || !ws.target_branch) {
-			return false;
-		}
-		if (ws.target_branch === ancestor) {
-			return true;
-		}
-		// Cycle detection
-		if (visited.has(ws.target_branch)) {
-			return false;
-		}
-		current = ws.target_branch;
-	}
 }
 
 // Tree preview helpers for split/stack dialogs
@@ -623,15 +542,10 @@ export function getValidTargets(
 	const validTargets: string[] = [];
 
 	for (const ws of workspaces) {
-		// Can't target self
+		// Can't target self — every other workspace is valid because
+		// planWorkspaceTargetMove lifts the bridge node when the target
+		// is a descendant (parent/child stack reorder).
 		if (ws.branch_name === currentBranch) {
-			continue;
-		}
-
-		// Check if currentBranch is in this workspace's ancestor chain
-		const ancestors = getAncestorChain(workspaces, ws.branch_name);
-		if (ancestors.includes(currentBranch)) {
-			// Would create a cycle
 			continue;
 		}
 

@@ -3,7 +3,12 @@ import { execSync } from "node:child_process";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "../test-utils";
 import userEvent from "@testing-library/user-event";
-import { createTestRepo, findSidebarBranchElement, openRepo } from "../utils";
+import {
+	createTestRepo,
+	findSidebarBranchElement,
+	openRepo,
+	setWorkspaceTargetBranchRaw,
+} from "../utils";
 import * as api from "../../src/lib/api";
 import {
 	createWorkspace,
@@ -70,7 +75,7 @@ describe("Dashboard - workspace list", () => {
 		const alphaWorkspace = findWorkspaceByBranchName(workspaces, "feat/alpha");
 		expect(alphaWorkspace).toBeTruthy();
 
-		await updateWorkspace(repoPath, alphaWorkspace!.id, "feat/alpha");
+		setWorkspaceTargetBranchRaw(repoPath, alphaWorkspace!.id, "feat/alpha");
 
 		render(<Dashboard />);
 

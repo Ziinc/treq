@@ -1911,3 +1911,54 @@ fn test_pull_with_conflicts_keeps_conflicted_tip_on_bookmark_for_local_resolve()
         status.remote_sync
     );
 }
+
+#[test]
+fn test_retarget_workspace_lifts_bridge_when_parent_moves_below_child() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch().to_string();
+
+    let parent = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/parent",
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create parent");
+    let child = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/child",
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create child");
+
+    treq_lib::core::retarget_workspace(&repo.repo_path, child.id, "feat/parent", &default_branch)
+        .expect("Failed to stack child on parent");
+
+    treq_lib::core::retarget_workspace(&repo.repo_path, parent.id, "feat/child", &default_branch)
+        .expect("Failed to move parent below child");
+
+    let after_parent = treq_lib::local_db::get_workspace_by_id(&repo.repo_path, parent.id)
+        .expect("db lookup")
+        .expect("parent exists");
+    let after_child = treq_lib::local_db::get_workspace_by_id(&repo.repo_path, child.id)
+        .expect("db lookup")
+        .expect("child exists");
+
+    assert_eq!(
+        after_parent.target_branch.as_deref(),
+        Some("feat/child"),
+        "parent should now target child"
+    );
+    assert_eq!(
+        after_child.target_branch.as_deref(),
+        Some(default_branch.as_str()),
+        "child should have been lifted onto parent's old target"
+    );
+}

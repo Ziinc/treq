@@ -957,8 +957,7 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
         | "get_window_repo_path" => Ok(Value::Null),
 
         // ── set_workspace_target_branch ────────────────────────────────────
-        // Mirrors commands::workspace::set_workspace_target_branch (jj-lib
-        // rebase + local_db update), minus the Tauri async_runtime wrapper.
+        // Cycle-safe retarget via core::retarget_workspace (also used by CLI).
         "set_workspace_target_branch" => {
             let repo_path = get_str(&args, "repoPath")?;
             let workspace_path = get_str(&args, "workspacePath")?;
@@ -972,37 +971,11 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
                 ));
             }
 
-            let conflict_style = get_conflict_style()?;
-            let jj_target_branch =
-                treq_lib::jj::convert_git_branch_to_jj_format_public(&target_branch, &repo_path);
-
-            let workspace = treq_lib::local_db::get_workspace_by_id(&repo_path, id)?;
-            let result = if let Some(ws) = workspace {
-                let jj_workspace_branch = treq_lib::jj::convert_git_branch_to_jj_format_public(
-                    &ws.branch_name,
-                    &repo_path,
-                );
-                let revset = format!(
-                    "roots(mutable() & ({}..{}) ~ @)",
-                    jj_target_branch, jj_workspace_branch
-                );
-                treq_lib::jj::jj_rebase_with_revset(
-                    &workspace_path,
-                    &revset,
-                    &jj_target_branch,
-                    &jj_workspace_branch,
-                    &conflict_style,
-                )
-                .map_err(|e| e.to_string())?
-            } else {
-                treq_lib::jj::jj_rebase_onto(&workspace_path, &jj_target_branch, &conflict_style)
-                    .map_err(|e| e.to_string())?
+            treq_lib::core::retarget_workspace(&repo_path, id, &target_branch, "main")?;
+            let result = treq_lib::jj::JjRebaseResult {
+                success: true,
+                message: format!("Retargeted workspace onto {}", target_branch),
             };
-
-            if result.success {
-                treq_lib::local_db::update_workspace_target_branch(&repo_path, id, &target_branch)?;
-            }
-
             serde_json::to_value(result).map_err(|e| e.to_string())
         }
 

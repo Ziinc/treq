@@ -477,6 +477,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 
 				setRebasing(true);
 				try {
+					// Cycle-safe retarget (bridge lift) lives in Rust core so the
+					// CLI and UI share one plan via update_workspace / retarget_workspace.
 					await updateWorkspace(effectiveRepoPath, workspace.id, branch);
 
 					addToast({

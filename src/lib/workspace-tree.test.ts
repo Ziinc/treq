@@ -3,6 +3,7 @@ import type { Workspace, WorkspaceSidebarStatus } from "./api-types";
 import {
 	buildWorkspaceTree,
 	flattenWorkspaceTree,
+	getValidTargets,
 	getWorkspaceStack,
 } from "./workspace-tree";
 
@@ -183,5 +184,27 @@ describe("getWorkspaceStack", () => {
 			workspace: workspaces[1],
 			isCurrent: true,
 		});
+	});
+});
+
+describe("getValidTargets", () => {
+	it("allows descendants so parent/child stack reorders can be planned", () => {
+		const a = makeWorkspace(1, "feat/a", "main");
+		const b = makeWorkspace(2, "feat/b", "feat/a");
+		const c = makeWorkspace(3, "feat/c", "feat/b");
+		const other = makeWorkspace(4, "feat/other", "main");
+
+		expect(getValidTargets([a, b, c, other], "feat/a").sort()).toEqual([
+			"feat/b",
+			"feat/c",
+			"feat/other",
+		]);
+	});
+
+	it("never includes the workspace itself", () => {
+		const a = makeWorkspace(1, "feat/a", "main");
+		const b = makeWorkspace(2, "feat/b", "feat/a");
+
+		expect(getValidTargets([a, b], "feat/a")).not.toContain("feat/a");
 	});
 });

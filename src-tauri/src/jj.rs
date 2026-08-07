@@ -3517,17 +3517,6 @@ pub fn jj_split(
     Ok(format!("Committed successfully to branch '{}'", branch))
 }
 
-/// Rebase the current workspace onto a target branch
-/// Uses: jj rebase -d <target_branch>
-pub fn jj_rebase_onto(
-    workspace_path: &str,
-    target_branch: &str,
-    _conflict_marker_style: &str,
-) -> Result<JjRebaseResult, JjError> {
-    let branch_name = get_workspace_branch(workspace_path)?;
-    jj_rebase_workspace_bookmark_onto(workspace_path, &branch_name, target_branch)
-}
-
 /// Rebase a workspace bookmark's commit lineage onto `target_branch` using jj-lib.
 ///
 /// Unlike `jj rebase -d <target>`, this anchors the move at the workspace bookmark tip,
