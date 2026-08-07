@@ -10,6 +10,7 @@ import {
 import { getFullWorkspacePath } from "../../../src/lib/utils";
 import { render, screen, waitFor, within } from "../../../test/test-utils";
 import {
+	commitWorkspaceFile,
 	createTestRepo,
 	findSidebarBranchElement,
 	openRepo,
@@ -20,14 +21,45 @@ const PARENT = "feat/reorder-parent";
 const CHILD = "feat/reorder-child";
 
 it("captures sidebar stack before and after parent/child reorder", async () => {
-	const { repoPath } = createTestRepo(false);
+	const { repoPath, defaultBranch } = createTestRepo(false);
 	openRepo(repoPath);
 
+	// Default-branch workspace (sidebar bookkeeping) plus a two-level stack.
+	// Each of the three workspaces gets a real commit.
+	await createWorkspace(repoPath, defaultBranch);
 	await createWorkspace(repoPath, PARENT);
 	await createWorkspace(repoPath, CHILD);
 
 	const initial = await getWorkspaces(repoPath);
+	const defaultWs = initial.find((w) => w.branch_name === defaultBranch)!;
+	const parent = initial.find((w) => w.branch_name === PARENT)!;
 	const child = initial.find((w) => w.branch_name === CHILD)!;
+	expect(defaultWs).toBeTruthy();
+	expect(parent).toBeTruthy();
+	expect(child).toBeTruthy();
+
+	await commitWorkspaceFile(
+		repoPath,
+		{ id: defaultWs.id, path: defaultWs.workspace_path },
+		"default-branch.txt",
+		"default branch commit",
+		"Default branch commit",
+	);
+	await commitWorkspaceFile(
+		repoPath,
+		{ id: parent.id, path: parent.workspace_path },
+		"parent.txt",
+		"parent commit content",
+		"Parent commit",
+	);
+	await commitWorkspaceFile(
+		repoPath,
+		{ id: child.id, path: child.workspace_path },
+		"child.txt",
+		"child commit content",
+		"Child commit",
+	);
+
 	await setWorkspaceTargetBranch(
 		repoPath,
 		getFullWorkspacePath(child),
@@ -41,6 +73,18 @@ it("captures sidebar stack before and after parent/child reorder", async () => {
 	await screen.findByText(PARENT);
 	await screen.findByText(CHILD);
 
+	// View the child so the stack panel mounts (it ignores the default-branch
+	// workspace as an ancestor) and remount after commits like the stacked
+	// panel screenshot spec does.
+	await user.click(await findSidebarBranchElement(CHILD));
+	await user.click(await screen.findByTestId("home-repo-row"));
+	await user.click(await findSidebarBranchElement(CHILD));
+
+	const panel = await screen.findByTestId("workspace-stack-panel");
+	await within(panel).findByText(PARENT);
+	await within(panel).findByText(CHILD);
+	await screen.findByText("Child commit");
+
 	const sidebar = document.querySelector(
 		`.${CSS.escape("group/sidebar")}`,
 	) as HTMLElement;
@@ -49,13 +93,14 @@ it("captures sidebar stack before and after parent/child reorder", async () => {
 	await captureDocument(document, {
 		name: "workspace-stack-reorder-01-before",
 		expectations: [
-			"Sidebar lists feat/reorder-parent at the root of a stack.",
-			"feat/reorder-child appears indented under feat/reorder-parent.",
+			"Sidebar lists the default-branch workspace plus feat/reorder-parent with feat/reorder-child nested under it.",
+			"Stack panel shows child above parent with +1 change counts; commits panel lists Child commit.",
 			"No error toast is visible.",
 		],
 	});
 
 	await user.click(await findSidebarBranchElement(PARENT));
+	await screen.findByText("Parent commit");
 
 	const targetBtn = await screen.findByRole("button", {
 		name: "Workspace target",
@@ -83,8 +128,8 @@ it("captures sidebar stack before and after parent/child reorder", async () => {
 	await captureDocument(document, {
 		name: "workspace-stack-reorder-02-after",
 		expectations: [
-			"Sidebar shows feat/reorder-child above feat/reorder-parent (child is now the stack root).",
-			"Header target reads feat/reorder-child (parent now stacks onto child).",
+			"Sidebar still lists the default-branch workspace; feat/reorder-child sits above indented feat/reorder-parent.",
+			"Header target reads feat/reorder-child; stack panel shows parent stacked on child with +1 counts.",
 			"A green success toast says the workspace rebased onto feat/reorder-child — no cycle error.",
 		],
 	});
