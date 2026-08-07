@@ -261,6 +261,46 @@ fn test_can_create_workspace_with_same_source_branch() {
     );
 }
 #[test]
+fn creates_workspace_stacked_on_default_branch_workspace() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch().to_string();
+
+    let parent = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        &default_branch,
+        Some("default branch workspace".to_string()),
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("default branch workspace should be created");
+
+    let child = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/stacked-on-default",
+        Some("stacked workspace".to_string()),
+        None,
+        Some(&default_branch),
+        None,
+        None,
+    )
+    .expect("workspace should stack on the existing default branch workspace");
+
+    assert_ne!(child.id, parent.id);
+    assert_ne!(child.workspace_path, parent.workspace_path);
+    assert_eq!(
+        child.target_branch.as_deref(),
+        Some(default_branch.as_str())
+    );
+    assert!(
+        treq_lib::local_db::get_workspace_by_id(&repo.repo_path, parent.id)
+            .expect("parent workspace query should succeed")
+            .is_some(),
+        "stacking must not replace the default branch workspace"
+    );
+}
+#[test]
 fn test_can_create_workspace_from_remote_branch() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
 
