@@ -1166,16 +1166,17 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 											focusRequest={taskInputFocusRequest}
 											onSessionCreated={onSessionCreated}
 										/>
-										{/* Stack */}
-										{workspace && workspaceStatusData?.target != null && (
-											<div className="border rounded-lg">
-												<WorkspaceStackPanel
-													repoPath={effectiveRepoPath}
-													workspace={workspace}
-													defaultBranch={defaultTargetBranch}
-													onSelectWorkspace={onNavigateToWorkspace}
-												/>
-											</div>
+										{/* Stack — shown for any workspace in a multi-workspace
+										    stack, including the root (whose target is the default
+										    branch, not another workspace). The panel returns null
+										    when the workspace is alone. */}
+										{workspace && (
+											<WorkspaceStackPanel
+												repoPath={effectiveRepoPath}
+												workspace={workspace}
+												defaultBranch={defaultTargetBranch}
+												onSelectWorkspace={onNavigateToWorkspace}
+											/>
 										)}
 										{/* File Search Input */}
 										<div className="flex justify-end">
