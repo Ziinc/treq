@@ -59,7 +59,7 @@ struct BookmarkConflictResolution {
 fn resolve_bookmark_conflict_if_needed(
     workspace_path: &str,
     branch_name: &str,
-    conflict_marker_style: &str,
+    _conflict_marker_style: &str,
 ) -> Result<BookmarkConflictResolution, String> {
     if !jj::jj_is_bookmark_conflicted(workspace_path, branch_name) {
         return Ok(BookmarkConflictResolution {
@@ -68,52 +68,11 @@ fn resolve_bookmark_conflict_if_needed(
         });
     }
 
-    // Capture local-only commits before resolving the bookmark
     let remote_ref = format!("{}@origin", branch_name);
-    let local_revset = format!("({}..@-) & mutable()", remote_ref);
-    let local_commit_ids = jj::jj_log_revset_commit_ids(workspace_path, &local_revset)
-        .map_err(|e| format!("Failed to capture local commits: {}", e))?;
-
-    let commits_rebased = local_commit_ids.len();
-
-    // Resolve: point local bookmark to remote tip
-    jj::jj_set_bookmark(workspace_path, branch_name, &remote_ref)
-        .map_err(|e| format!("Failed to resolve bookmark conflict: {}", e))?;
-
-    // Rebase local commits onto resolved bookmark (if any exist)
-    if !local_commit_ids.is_empty() {
-        let ids_revset = local_commit_ids.join(" | ");
-        let roots_revset = format!("roots({})", ids_revset);
-
-        jj::jj_rebase_with_revset(
-            workspace_path,
-            &roots_revset,
-            branch_name,
-            branch_name,
-            conflict_marker_style,
-        )
-        .map_err(|e| {
-            format!(
-                "Failed to rebase local commits after conflict resolution: {}",
-                e
-            )
-        })?;
-
-        // Advance bookmark to the rebased tip so local (possibly conflicted) work
-        // stays on the branch and can be resolved then pushed.
-        let tip = jj::jj_resolve_bookmark_tip(workspace_path).map_err(|e| {
-            format!(
-                "Failed to resolve rebased tip after conflict resolution: {}",
-                e
-            )
-        })?;
-        jj::jj_set_bookmark(workspace_path, branch_name, &tip).map_err(|e| {
-            format!(
-                "Failed to advance bookmark '{}' to rebased tip: {}",
-                branch_name, e
-            )
-        })?;
-    }
+    let resolution =
+        jj::jj_resolve_bookmark_conflict_losslessly(workspace_path, branch_name, &remote_ref)
+            .map_err(|e| format!("Failed to resolve bookmark conflict: {e}"))?;
+    let commits_rebased = resolution.preserved_change_ids.len();
 
     log::debug!(
         "Resolved bookmark conflict for '{}': rebased {} local commit(s) onto remote tip",

@@ -82,6 +82,7 @@ vi.mock("../src/lib/api", async () => {
 		resolveBookmarkConflict: vi.fn().mockResolvedValue({
 			success: true,
 			message: "Resolved",
+			preserved_change_ids: ["xyz987"],
 		}),
 	};
 });
@@ -280,14 +281,12 @@ describe("Workspace bookmark conflict handling", () => {
 			/>,
 		);
 
-		const commitButton = await screen.findByRole("button", {
-			name: /abc123def456/i,
-		});
-		await user.click(commitButton);
-
 		const resolveButton = await screen.findByRole("button", {
 			name: /resolve conflict/i,
 		});
+		expect(
+			screen.getByText(/all local commits will be preserved/i),
+		).toBeInTheDocument();
 		await user.click(resolveButton);
 
 		await waitFor(() =>
@@ -296,7 +295,6 @@ describe("Workspace bookmark conflict handling", () => {
 				workspace.id,
 				workspace.workspace_path,
 				workspace.branch_name,
-				conflictPayload.commits[0].commit_id,
 			),
 		);
 	});

@@ -4,6 +4,51 @@ use e2e_test_helpers::TestRepo;
 use treq_lib::jj;
 
 #[test]
+fn resolve_bookmark_conflict_preserves_every_local_change_on_target() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+    let ws = repo
+        .setup_workspace_with_pushed_commit("feat/lossless", "base.txt", "base")
+        .expect("Failed to create workspace");
+    let workspace_path = repo.workspace_full_path(&ws);
+
+    TestRepo::write_workspace_file(&workspace_path, "one.txt", "one").unwrap();
+    treq_lib::core::commit_workspace(&repo.repo_path, ws.id, "local one").unwrap();
+    let first_change = jj::jj_get_change_id(&workspace_path, "@-").unwrap();
+    TestRepo::write_workspace_file(&workspace_path, "two.txt", "two").unwrap();
+    treq_lib::core::commit_workspace(&repo.repo_path, ws.id, "local two").unwrap();
+    let second_change = jj::jj_get_change_id(&workspace_path, "@-").unwrap();
+
+    repo.remote_commit_on_branch("feat/lossless", "remote.txt", "remote", "remote change")
+        .unwrap();
+    jj::jj_git_fetch(&repo.repo_path).unwrap();
+    assert!(jj::jj_is_bookmark_conflicted(
+        &workspace_path,
+        "feat/lossless"
+    ));
+
+    let result = jj::jj_resolve_bookmark_conflict_losslessly(
+        &workspace_path,
+        "feat/lossless",
+        "feat/lossless@origin",
+    )
+    .expect("lossless resolution should succeed atomically");
+
+    assert_eq!(result.preserved_change_ids.len(), 2);
+    assert!(!jj::jj_is_bookmark_conflicted(
+        &workspace_path,
+        "feat/lossless"
+    ));
+    for change_id in [first_change, second_change] {
+        let reachable = jj::jj_log_revset_commit_ids(
+            &workspace_path,
+            &format!("{} & ::feat/lossless", change_id),
+        )
+        .unwrap();
+        assert_eq!(reachable.len(), 1, "captured change must remain reachable");
+    }
+}
+
+#[test]
 fn test_auto_rebase_resolves_bookmark_conflict() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
     let default_branch = repo.default_branch();

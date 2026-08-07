@@ -1015,15 +1015,26 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
         }
 
         // ── Direct jj::* commands: not implemented — migrate to core::* ───
-        "jj_split"
-        | "jj_get_commits_ahead"
-        | "resolve_workspace_bookmark_conflict" => {
-            Err(format!(
-                "not_implemented: '{}' — this command calls jj::* directly. \
-             Migrate UI code to use a core::* equivalent instead.",
-                command
-            ))
+        "resolve_workspace_bookmark_conflict" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let workspace_id = get_i64(&args, "workspaceId")?;
+            let workspace_path = get_str(&args, "workspacePath")?;
+            let branch_name = get_str(&args, "branchName")?;
+            let result = treq_lib::core::resolve_workspace_bookmark_conflict(
+                &repo_path,
+                workspace_id,
+                &workspace_path,
+                &branch_name,
+            )?;
+            serde_json::to_value(result).map_err(|e| e.to_string())
         }
+
+        "jj_split"
+        | "jj_get_commits_ahead" => Err(format!(
+            "not_implemented: '{}' — this command calls jj::* directly. \
+             Migrate UI code to use a core::* equivalent instead.",
+            command
+        )),
 
         _ => Err(format!("unknown_command: '{}'", command)),
     }
