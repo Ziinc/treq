@@ -61,6 +61,15 @@ const CommitInput = memo(
 
 			const handleKeyDown = useCallback(
 				(event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+					if (event.metaKey || event.ctrlKey) {
+						const key = event.key.toLowerCase();
+						if (["a", "c", "x", "v", "z", "y"].includes(key)) {
+							// Stop propagation so global shortcuts (e.g. select-all-files)
+							// don't hijack standard text editing in this input.
+							event.stopPropagation();
+						}
+					}
+
 					if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
 						event.preventDefault();
 						runAction(onCommit);
