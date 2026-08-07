@@ -78,6 +78,27 @@ fn test_get_repo_current_branch_reports_detached_head_with_short_hash_display_re
 }
 
 #[test]
+fn test_get_repo_current_branch_repairs_detached_head_at_default_branch_tip() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+    let default_branch = repo.default_branch().to_string();
+    let tip = TestRepo::run_git(&repo.repo_path, &["rev-parse", &default_branch])
+        .expect("resolve default branch tip");
+
+    TestRepo::run_git(&repo.repo_path, &["checkout", "--detach", tip.trim()])
+        .expect("detach HEAD at default branch tip");
+
+    let branch =
+        get_repo_current_branch(&repo.repo_path).expect("get_repo_current_branch should succeed");
+    assert_eq!(branch.current_branch, Some(default_branch.clone()));
+    assert_eq!(branch.display_ref, default_branch.clone());
+    assert!(!branch.is_detached);
+
+    let head = std::fs::read_to_string(format!("{}/.git/HEAD", repo.repo_path))
+        .expect("read repaired HEAD");
+    assert_eq!(head.trim(), format!("ref: refs/heads/{default_branch}"));
+}
+
+#[test]
 fn test_get_repo_current_branch_errors_when_head_missing() {
     let repo = TestRepo::new().expect("Failed to create test repo");
     let head_path = std::path::Path::new(&repo.repo_path)

@@ -49,6 +49,11 @@ pub fn commit_repo(repo_path: &str, message: &str) -> Result<String, String> {
 /// checkout strictly from the working copy state.
 pub fn get_repo_current_branch(repo_path: &str) -> Result<RepoBranch, String> {
     jj::jj_util_import_git_refs(repo_path).map_err(|e| e.to_string())?;
+    // A jj rewrite/ref export can occasionally leave colocated Git HEAD detached at the
+    // default branch tip. Repair only that unambiguous case; preserve intentional detached
+    // checkouts at any other commit.
+    let _ =
+        jj::repair_detached_home_head_at_default_branch(repo_path).map_err(|e| e.to_string())?;
     let resolved_branch = jj::resolve_home_repo_branch(repo_path).map_err(|e| e.to_string())?;
     let detached_head = read_detached_head_commit(repo_path)?;
     let is_detached = detached_head.is_some() || resolved_branch == "HEAD";
