@@ -6,7 +6,8 @@ use crate::core;
 use crate::local_db;
 
 use super::status_output::{
-    print_workspace_partial_status, print_workspace_status_detail, WorkspacePrStatus,
+    format_workspace_stack_lines, print_workspace_partial_status, print_workspace_status_detail,
+    WorkspacePrStatus,
 };
 use super::{
     detect_repo_path, dispatch_agent_request, parse_agent_mode_or_default, resolve_default_agent,
@@ -27,15 +28,6 @@ fn get_arg_flag(matches: &Matches, name: &str) -> bool {
         .get(name)
         .and_then(|arg| arg.value.as_bool())
         .unwrap_or(false)
-}
-
-fn workspace_checkout_path(repo_path: &Path, stored_path: &str) -> std::path::PathBuf {
-    let stored_path = Path::new(stored_path);
-    if stored_path.is_absolute() {
-        stored_path.to_path_buf()
-    } else {
-        repo_path.join(".treq").join("workspaces").join(stored_path)
-    }
 }
 
 fn github_pr_status(repo_path: &str, branch_name: &str) -> Option<WorkspacePrStatus> {
@@ -235,12 +227,8 @@ pub(super) fn handle_workspace_status(matches: &Matches) {
 
             match core::workspace_status(&repo_path, Some(workspace.id)) {
                 Ok(status) => {
-                    let workspace_path = workspace_checkout_path(
-                        Path::new(&repo_path),
-                        &status.partial.current.workspace_path,
-                    );
                     let pr = github_pr_status(
-                        &workspace_path.to_string_lossy(),
+                        &status.partial.current.workspace_path,
                         &status.partial.current.branch_name,
                     );
                     print_workspace_status_detail(&status, pr.as_ref());
@@ -258,13 +246,13 @@ pub(super) fn handle_workspace_status(matches: &Matches) {
                         println!("No workspaces found.");
                         return;
                     }
+                    for line in format_workspace_stack_lines(&statuses) {
+                        println!("{line}");
+                    }
+                    println!("Details:");
                     for status in &statuses {
-                        let workspace_path = workspace_checkout_path(
-                            Path::new(&repo_path),
-                            &status.current.workspace_path,
-                        );
                         let pr = github_pr_status(
-                            &workspace_path.to_string_lossy(),
+                            &status.current.workspace_path,
                             &status.current.branch_name,
                         );
                         print_workspace_partial_status(status, pr.as_ref());
@@ -350,31 +338,6 @@ pub(super) fn handle_workspace_move(matches: &Matches) {
         Err(error) => {
             eprintln!("Error moving workspace changes: {}", error);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn resolves_workspace_checkout_from_repo_and_stored_relative_path() {
-        let repo = Path::new("repo-root");
-
-        assert_eq!(
-            workspace_checkout_path(repo, "feat-status-pr-info"),
-            repo.join(".treq/workspaces/feat-status-pr-info")
-        );
-    }
-
-    #[test]
-    fn preserves_absolute_workspace_checkout_path() {
-        let absolute = std::env::temp_dir().join("treq-workspace");
-
-        assert_eq!(
-            workspace_checkout_path(Path::new("repo-root"), absolute.to_str().unwrap()),
-            absolute
-        );
     }
 }
 
