@@ -41,6 +41,7 @@ import { ModelSelector } from "../ModelSelector";
 import { Input } from "../ui/input";
 import { useToast } from "../ui/toast";
 import { shellQuote } from "../../lib/shellQuote";
+import { appendAgentPrompt } from "../../lib/agentCommand";
 import { type ClaudeSessionData } from "./types";
 
 export interface AgentTerminalPanelProps {
@@ -249,7 +250,10 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 			// Codex CLI: pass system prompt via -c instructions override, then prompt as positional arg
 			autoCommand = `codex -c ${shellQuote(`instructions="${treqSystemPrompt}"`)}`;
 			if (pendingPromptRef.current) {
-				autoCommand += ` ${shellQuote(pendingPromptRef.current)}`;
+				autoCommand = appendAgentPrompt(
+					autoCommand,
+					pendingPromptRef.current,
+				);
 			}
 		} else if (sessionData.agent === "cursor") {
 			// cursor-agent: no system-prompt flag; prepend treq instructions into the prompt arg.
@@ -258,7 +262,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 				? `${treqSystemPrompt}\n\n${pendingPromptRef.current}`
 				: treqSystemPrompt;
 			const planFlag = permissionModeRef.current === "plan" ? " --plan" : "";
-			autoCommand = `cursor-agent${planFlag} ${shellQuote(combined)}`;
+			autoCommand = appendAgentPrompt(`cursor-agent${planFlag}`, combined);
 		} else {
 			// Claude Code: permission mode, model, system prompt, then prompt after --
 			const permissionModeArg =
