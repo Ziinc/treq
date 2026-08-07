@@ -57,7 +57,7 @@ pub async fn jj_restore_all(workspace_path: String) -> Result<String, String> {
 #[tauri::command]
 pub async fn jj_snapshot_working_copy(workspace_path: String) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        jj::jj_snapshot_working_copy(&workspace_path).map_err(|e| e.to_string())
+        core::snapshot_working_copy(&workspace_path)
     })
     .await
     .map_err(|e| format!("Failed to join jj_snapshot_working_copy task: {}", e))?
@@ -69,7 +69,7 @@ pub async fn jj_restore_snapshot(
     snapshot_id: String,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        jj::jj_restore_snapshot(&workspace_path, &snapshot_id).map_err(|e| e.to_string())
+        core::restore_working_copy_snapshot(&workspace_path, &snapshot_id)
     })
     .await
     .map_err(|e| format!("Failed to join jj_restore_snapshot task: {}", e))?

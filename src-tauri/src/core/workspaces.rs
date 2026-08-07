@@ -632,6 +632,22 @@ pub fn push_workspace_to_remote(
     Ok(result)
 }
 
+/// Capture a token for the working copy's current content, so it can later
+/// be restored with `restore_working_copy_snapshot` — used to undo a discard
+/// (`jj_restore_file`/`jj_restore_all`).
+pub fn snapshot_working_copy(workspace_path: &str) -> Result<String, String> {
+    jj::jj_snapshot_working_copy(workspace_path).map_err(|e| e.to_string())
+}
+
+/// Restore the working copy to a snapshot previously captured with
+/// `snapshot_working_copy`.
+pub fn restore_working_copy_snapshot(
+    workspace_path: &str,
+    snapshot_id: &str,
+) -> Result<String, String> {
+    jj::jj_restore_snapshot(workspace_path, snapshot_id).map_err(|e| e.to_string())
+}
+
 pub fn list_workspaces(repo_path: &str) -> Result<Vec<local_db::Workspace>, String> {
     local_db::get_workspaces(repo_path).map_err(|e| format!("Failed to get workspaces: {}", e))
 }

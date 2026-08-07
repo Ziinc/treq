@@ -669,16 +669,15 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
 
         "jj_snapshot_working_copy" => {
             let workspace_path = get_str(&args, "workspacePath")?;
-            let result = treq_lib::jj::jj_snapshot_working_copy(&workspace_path)
-                .map_err(|e| e.to_string())?;
+            let result = treq_lib::core::snapshot_working_copy(&workspace_path)?;
             Ok(Value::String(result))
         }
 
         "jj_restore_snapshot" => {
             let workspace_path = get_str(&args, "workspacePath")?;
             let snapshot_id = get_str(&args, "snapshotId")?;
-            let result = treq_lib::jj::jj_restore_snapshot(&workspace_path, &snapshot_id)
-                .map_err(|e| e.to_string())?;
+            let result =
+                treq_lib::core::restore_working_copy_snapshot(&workspace_path, &snapshot_id)?;
             Ok(Value::String(result))
         }
 
