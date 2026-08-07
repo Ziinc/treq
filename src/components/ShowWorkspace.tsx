@@ -769,64 +769,61 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			queryClient,
 		]);
 
-		const handleResolveBookmarkConflict = useCallback(
-			async () => {
-				if (
-					!workspace ||
-					!effectiveRepoPath ||
-					!bookmarkConflict ||
-					!targetBranch
-				) {
-					return;
+		const handleResolveBookmarkConflict = useCallback(async () => {
+			if (
+				!workspace ||
+				!effectiveRepoPath ||
+				!bookmarkConflict ||
+				!targetBranch
+			) {
+				return;
+			}
+
+			setResolvingBookmarkConflict(true);
+			try {
+				const resolution = await resolveBookmarkConflict(
+					effectiveRepoPath,
+					workspace.id,
+					workingDirectory,
+					bookmarkConflict.branch_name,
+				);
+
+				addToast({
+					title: "Bookmark updated",
+					description: `Preserved ${resolution.preserved_change_ids.length} local commit(s) on ${bookmarkConflict.branch_name}`,
+					type: "success",
+				});
+
+				setBookmarkConflict(null);
+				setConflictModalOpen(false);
+
+				const result = await checkAndRebaseWorkspaces(
+					effectiveRepoPath,
+					workspace.id,
+					targetBranch,
+					true,
+				);
+				if (result) {
+					handleBookmarkConflictsFromResult(result);
 				}
-
-				setResolvingBookmarkConflict(true);
-				try {
-					const resolution = await resolveBookmarkConflict(
-						effectiveRepoPath,
-						workspace.id,
-						workingDirectory,
-						bookmarkConflict.branch_name,
-					);
-
-					addToast({
-						title: "Bookmark updated",
-						description: `Preserved ${resolution.preserved_change_ids.length} local commit(s) on ${bookmarkConflict.branch_name}`,
-						type: "success",
-					});
-
-					setBookmarkConflict(null);
-					setConflictModalOpen(false);
-
-					const result = await checkAndRebaseWorkspaces(
-						effectiveRepoPath,
-						workspace.id,
-						targetBranch,
-						true,
-					);
-					if (result) {
-						handleBookmarkConflictsFromResult(result);
-					}
-				} catch (error) {
-					addToast({
-						title: "Failed to resolve conflict",
-						description: error instanceof Error ? error.message : String(error),
-						type: "error",
-					});
-				} finally {
-					setResolvingBookmarkConflict(false);
-				}
-			},
-			[
-				workspace,
-				effectiveRepoPath,
-				bookmarkConflict,
-				workingDirectory,
-				addToast,
-				targetBranch,
-				handleBookmarkConflictsFromResult,
-			],
-		);
+			} catch (error) {
+				addToast({
+					title: "Failed to resolve conflict",
+					description: error instanceof Error ? error.message : String(error),
+					type: "error",
+				});
+			} finally {
+				setResolvingBookmarkConflict(false);
+			}
+		}, [
+			workspace,
+			effectiveRepoPath,
+			bookmarkConflict,
+			workingDirectory,
+			addToast,
+			targetBranch,
+			handleBookmarkConflictsFromResult,
+		]);
 
 		const handleCreateAgentWithComment = useCallback(
 			async (

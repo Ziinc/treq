@@ -68,37 +68,35 @@ export function WorkspaceBookmarkConflictModal({
 						All local commits will be preserved and remain reachable:
 					</p>
 					<div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-						{commits.map((commit) => {
-							return (
-								<div
-									key={commit.commit_id}
-									className="w-full rounded-md border border-border bg-background p-3 text-left"
-								>
-									<div className="flex items-baseline justify-between gap-4">
-										<div className="font-mono text-sm text-foreground">
-											{commit.short_commit_id}
-											<span className="text-muted-foreground">
-												{" "}
-												({commit.change_id})
-											</span>
-										</div>
-										<span
-											className="text-xs text-muted-foreground"
-											title={formatFullTimestamp(commit.timestamp)}
-										>
-											{formatRelativeTime(commit.timestamp)}
+						{commits.map((commit) => (
+							<div
+								key={commit.commit_id}
+								className="w-full rounded-md border border-border bg-background p-3 text-left"
+							>
+								<div className="flex items-baseline justify-between gap-4">
+									<div className="font-mono text-sm text-foreground">
+										{commit.short_commit_id}
+										<span className="text-muted-foreground">
+											{" "}
+											({commit.change_id})
 										</span>
 									</div>
-									<p className="mt-1 text-sm text-foreground">
-										{commit.description}
-									</p>
-									<div className="mt-1 text-xs text-muted-foreground">
-										{commit.author_name}
-										{commit.diff_summary ? ` • ${commit.diff_summary}` : null}
-									</div>
+									<span
+										className="text-xs text-muted-foreground"
+										title={formatFullTimestamp(commit.timestamp)}
+									>
+										{formatRelativeTime(commit.timestamp)}
+									</span>
 								</div>
-							);
-						})}
+								<p className="mt-1 text-sm text-foreground">
+									{commit.description}
+								</p>
+								<div className="mt-1 text-xs text-muted-foreground">
+									{commit.author_name}
+									{commit.diff_summary ? ` • ${commit.diff_summary}` : null}
+								</div>
+							</div>
+						))}
 						{commits.length === 0 && (
 							<div className="rounded-md border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
 								Unable to load conflicting revisions. Try running{" "}
