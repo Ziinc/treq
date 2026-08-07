@@ -69,9 +69,9 @@ describe("workspace sidebar stack reorder", () => {
 		);
 
 		const after = await getWorkspaces(repoPath);
-		expect(after.find((w) => w.branch_name === "feat/child")?.target_branch).toBe(
-			parent.target_branch ?? "main",
-		);
+		expect(
+			after.find((w) => w.branch_name === "feat/child")?.target_branch,
+		).toBe(parent.target_branch ?? "main");
 		expect(
 			after.find((w) => w.branch_name === "feat/parent")?.target_branch,
 		).toBe("feat/child");
@@ -189,9 +189,9 @@ describe("workspace sidebar stack reorder", () => {
 		await updateWorkspace(repoPath, parent.id, "feat/child");
 
 		const after = await getWorkspaces(repoPath);
-		expect(after.find((w) => w.branch_name === "feat/parent")?.target_branch).toBe(
-			"feat/child",
-		);
+		expect(
+			after.find((w) => w.branch_name === "feat/parent")?.target_branch,
+		).toBe("feat/child");
 		expect(sidebarOrder(after)).toEqual([
 			{ branch: "feat/child", depth: 0 },
 			{ branch: "feat/parent", depth: 1 },

@@ -1,4 +1,5 @@
 import { createCommit } from "../src/lib/api";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { afterEach, expect } from "vitest";
 import { waitFor, within } from "./test-utils";
@@ -84,6 +85,27 @@ export function resolveWorkspacePath(
 		return workspacePath;
 	}
 	return path.join(repoPath, ".treq", "workspaces", workspacePath);
+}
+
+/**
+ * Write `target_branch` directly in the local DB, bypassing retarget validation.
+ * Use only to seed malformed graphs (e.g. self-target) for rendering tests.
+ */
+export function setWorkspaceTargetBranchRaw(
+	repoPath: string,
+	workspaceId: number,
+	targetBranch: string,
+): void {
+	const dbPath = path.join(repoPath, ".treq", "local.db");
+	const escaped = targetBranch.replace(/'/g, "''");
+	execFileSync(
+		"sqlite3",
+		[
+			dbPath,
+			`UPDATE workspaces SET target_branch = '${escaped}' WHERE id = ${workspaceId};`,
+		],
+		{ stdio: "pipe" },
+	);
 }
 
 /**
