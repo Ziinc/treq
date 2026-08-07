@@ -176,12 +176,12 @@ export function PrListItem({
 	pr,
 	selected,
 	onClick,
-	hideBaseBranch,
+	hideBranches,
 }: {
 	pr: GhPullRequest;
 	selected: boolean;
 	onClick: () => void;
-	hideBaseBranch?: boolean;
+	hideBranches?: boolean;
 }) {
 	return (
 		<button
@@ -201,22 +201,20 @@ export function PrListItem({
 					</div>
 					<div className="flex items-center gap-2 mt-1 min-w-0 text-base text-muted-foreground">
 						<StateChip state={pr.state} isDraft={Boolean(pr.is_draft)} />
-						<span className="font-mono inline-flex items-center gap-1 min-w-0">
-							<span className="truncate max-w-[16rem]" title={pr.head_ref_name}>
-								{pr.head_ref_name}
+						{!hideBranches && (
+							<span className="font-mono inline-flex items-center gap-1 min-w-0">
+								<span className="truncate max-w-[16rem]" title={pr.head_ref_name}>
+									{pr.head_ref_name}
+								</span>
+								<span className="shrink-0">→</span>
+								<span
+									className="truncate max-w-[16rem]"
+									title={pr.base_ref_name}
+								>
+									{pr.base_ref_name}
+								</span>
 							</span>
-							{!hideBaseBranch && (
-								<>
-									<span className="shrink-0">→</span>
-									<span
-										className="truncate max-w-[16rem]"
-										title={pr.base_ref_name}
-									>
-										{pr.base_ref_name}
-									</span>
-								</>
-							)}
-						</span>
+						)}
 						<span className="shrink-0">{formatDate(pr.created_at)}</span>
 					</div>
 				</div>

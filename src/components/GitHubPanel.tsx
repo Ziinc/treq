@@ -383,7 +383,7 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
 											pr={pr}
 											selected={selectedPr === pr.number}
 											onClick={() => handleSelectPr(pr.number)}
-											hideBaseBranch={showDetail}
+											hideBranches={showDetail}
 										/>
 									))}
 									{prsHasNextPage && (

@@ -1,8 +1,8 @@
 /**
- * Verifies that the GitHub panel's PR list hides the base/target branch
- * (the "→ base" half of "head → base") once a PR is selected and the list
- * narrows into dual-pane mode alongside the detail panel. With nothing
- * selected the list is full width and still shows both branches.
+ * Verifies that the GitHub panel's PR list hides the branch info entirely
+ * ("head → base") once a PR is selected and the list narrows into
+ * dual-pane mode alongside the detail panel. With nothing selected the
+ * list is full width and still shows both branches.
  */
 
 import userEvent from "@testing-library/user-event";
@@ -62,7 +62,7 @@ const PR: GhPullRequest = {
 	is_draft: false,
 };
 
-it("hides the base branch in the PR list once dual-pane detail opens", async () => {
+it("hides branch info in the PR list once dual-pane detail opens", async () => {
 	const { repoPath } = createTestRepo(false);
 
 	mockGetGitRemoteUrl.mockResolvedValue(REMOTE_INFO);
@@ -90,8 +90,8 @@ it("hides the base branch in the PR list once dual-pane detail opens", async () 
 	await captureDocument(document, {
 		name: "github-pr-list-dual-pane-02-detail-open",
 		expectations: [
-			'The PR list has narrowed to a sidebar with a PR detail panel now open beside it, and the list row\'s branch text shows only "feat/example-module" with no arrow and no "main" base branch.',
-			'The detail panel on the right shows the full PR "Add example module #42".',
+			'The PR list has narrowed to a sidebar with a PR detail panel now open beside it, and the list row shows no branch text at all -- no "feat/example-module", no arrow, no "main".',
+			'The detail panel on the right shows the full PR "Add example module #42" including its "feat/example-module → main" branch line.',
 		],
 	});
 }, 60000);
