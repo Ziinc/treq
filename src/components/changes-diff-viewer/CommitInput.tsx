@@ -2,6 +2,7 @@ import {
 	forwardRef,
 	memo,
 	useCallback,
+	type ChangeEvent,
 	type KeyboardEvent as ReactKeyboardEvent,
 	useImperativeHandle,
 	useRef,
@@ -16,6 +17,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
+import { cn } from "../../lib/utils";
 import type { CommitInputHandle, CommitInputProps } from "./types";
 
 const CommitInput = memo(
@@ -34,6 +36,7 @@ const CommitInput = memo(
 			ref,
 		) => {
 			const [message, setMessage] = useState("");
+			const [error, setError] = useState<string | null>(null);
 			const textareaRef = useRef<HTMLTextAreaElement>(null);
 
 			useImperativeHandle(
@@ -53,10 +56,29 @@ const CommitInput = memo(
 
 			const runAction = useCallback(
 				(action: (message: string) => void) => {
-					action(message.trim());
+					const trimmed = message.trim();
+					if (!trimmed) {
+						setError("Enter a commit message.");
+						requestAnimationFrame(() => {
+							textareaRef.current?.focus();
+						});
+						return;
+					}
+					setError(null);
+					action(trimmed);
 					setMessage("");
 				},
 				[message],
+			);
+
+			const handleMessageChange = useCallback(
+				(event: ChangeEvent<HTMLTextAreaElement>) => {
+					setMessage(event.target.value);
+					if (error) {
+						setError(null);
+					}
+				},
+				[error],
 			);
 
 			const handleKeyDown = useCallback(
@@ -98,12 +120,26 @@ const CommitInput = memo(
 						ref={textareaRef}
 						placeholder="Message"
 						value={message}
-						onChange={(event) => setMessage(event.target.value)}
+						onChange={handleMessageChange}
 						onKeyDown={handleKeyDown}
 						disabled={disabled || pending}
-						className="resize-none overflow-hidden"
+						aria-invalid={error ? true : undefined}
+						aria-describedby={error ? "commit-message-error" : undefined}
+						className={cn(
+							"resize-none overflow-hidden",
+							error && "border-destructive focus-visible:ring-destructive",
+						)}
 						style={{ minHeight: "24px" }}
 					/>
+					{error && (
+						<p
+							id="commit-message-error"
+							className="text-sm text-destructive"
+							role="alert"
+						>
+							{error}
+						</p>
+					)}
 					<div className="flex w-full">
 						<Button
 							className="flex-1 text-sm !h-auto py-1.5 rounded-r-none gap-1.5"
