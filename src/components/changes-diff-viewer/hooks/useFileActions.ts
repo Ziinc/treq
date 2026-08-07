@@ -16,6 +16,8 @@ import {
 	ghCreatePr,
 	jjRestoreAll,
 	jjRestoreFile,
+	jjRestoreSnapshot,
+	jjSnapshotWorkingCopy,
 	jjSplit,
 	pushWorkspaceToRemote,
 } from "../../../lib/api";
@@ -40,7 +42,7 @@ interface UseFileActionsParams {
 	setContextMenuPosition: (pos: { x: number; y: number } | null) => void;
 	invalidateCache: () => Promise<void>;
 	refresh: () => void;
-	loadChangedFiles: () => void;
+	loadChangedFiles: () => Promise<void>;
 	refreshCommittedChanges: () => void;
 	setCommittedSectionCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
 	addToast: ReturnType<typeof useToast>["addToast"];
@@ -88,17 +90,46 @@ export function useFileActions({
 		? "pr"
 		: localPendingAction;
 
+	const handleUndoDiscard = useCallback(
+		async (snapshotId: string) => {
+			try {
+				await jjRestoreSnapshot(workspacePath, snapshotId);
+				await invalidateCache();
+				refresh();
+				await loadChangedFiles();
+				addToast({
+					description: "Discarded changes have been restored",
+					title: "Restored",
+					type: "success",
+				});
+			} catch (error) {
+				addToast({
+					description: error instanceof Error ? error.message : String(error),
+					title: "Undo Failed",
+					type: "error",
+				});
+			}
+		},
+		[workspacePath, refresh, addToast, invalidateCache, loadChangedFiles],
+	);
+
 	const handleDiscardAll = useCallback(async () => {
 		if (readOnly) return;
 		try {
+			const snapshotId = await jjSnapshotWorkingCopy(workspacePath);
 			await jjRestoreAll(workspacePath);
 			addToast({
 				description: "All changes discarded",
 				title: "Discarded",
 				type: "success",
+				action: {
+					label: "Undo",
+					onClick: () => handleUndoDiscard(snapshotId),
+				},
 			});
 			await invalidateCache();
 			refresh();
+			await loadChangedFiles();
 		} catch (error) {
 			addToast({
 				description: error instanceof Error ? error.message : String(error),
@@ -106,7 +137,15 @@ export function useFileActions({
 				type: "error",
 			});
 		}
-	}, [workspacePath, readOnly, refresh, addToast, invalidateCache]);
+	}, [
+		workspacePath,
+		readOnly,
+		refresh,
+		addToast,
+		invalidateCache,
+		loadChangedFiles,
+		handleUndoDiscard,
+	]);
 
 	const handleDiscardFiles = useCallback(
 		async (filePath: string) => {
@@ -117,6 +156,7 @@ export function useFileActions({
 					: [filePath];
 			setFileActionTarget(filePath);
 			try {
+				const snapshotId = await jjSnapshotWorkingCopy(workspacePath);
 				await Promise.all(
 					filesToDiscard.map((file) => jjRestoreFile(workspacePath, file)),
 				);
@@ -128,10 +168,15 @@ export function useFileActions({
 							: `${count} files discarded`,
 					title: "Discarded",
 					type: "success",
+					action: {
+						label: "Undo",
+						onClick: () => handleUndoDiscard(snapshotId),
+					},
 				});
 				setSelectedUnstagedFiles(new Set());
 				await invalidateCache();
 				refresh();
+				await loadChangedFiles();
 			} catch (error) {
 				addToast({
 					description: error instanceof Error ? error.message : String(error),
@@ -148,8 +193,10 @@ export function useFileActions({
 			refresh,
 			addToast,
 			invalidateCache,
+			loadChangedFiles,
 			workspacePath,
 			setSelectedUnstagedFiles,
+			handleUndoDiscard,
 		],
 	);
 

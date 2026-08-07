@@ -667,6 +667,20 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             Ok(Value::String(result))
         }
 
+        "jj_snapshot_working_copy" => {
+            let workspace_path = get_str(&args, "workspacePath")?;
+            let result = treq_lib::core::snapshot_working_copy(&workspace_path)?;
+            Ok(Value::String(result))
+        }
+
+        "jj_restore_snapshot" => {
+            let workspace_path = get_str(&args, "workspacePath")?;
+            let snapshot_id = get_str(&args, "snapshotId")?;
+            let result =
+                treq_lib::core::restore_working_copy_snapshot(&workspace_path, &snapshot_id)?;
+            Ok(Value::String(result))
+        }
+
         "create_commit" => {
             let repo_path = get_str(&args, "repoPath")?;
             let workspace_id: Option<i64> = opt_i64(&args, "workspaceId");
@@ -1012,16 +1026,31 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             serde_json::to_value(result).map_err(|e| e.to_string())
         }
 
+        "jj_restore_file" => {
+            let workspace_path = get_str(&args, "workspacePath")?;
+            let file_path = get_str(&args, "filePath")?;
+            let result = treq_lib::jj::jj_restore_file(&workspace_path, &file_path)
+                .map_err(|e| e.to_string())?;
+            Ok(Value::String(result))
+        }
+
+        "jj_restore_all" => {
+            let workspace_path = get_str(&args, "workspacePath")?;
+            let result =
+                treq_lib::jj::jj_restore_all(&workspace_path).map_err(|e| e.to_string())?;
+            Ok(Value::String(result))
+        }
+
         // ── Direct jj::* commands: not implemented — migrate to core::* ───
-        "jj_restore_file"
-        | "jj_restore_all"
-        | "jj_split"
+        "jj_split"
         | "jj_get_commits_ahead"
-        | "resolve_workspace_bookmark_conflict" => Err(format!(
-            "not_implemented: '{}' — this command calls jj::* directly. \
+        | "resolve_workspace_bookmark_conflict" => {
+            Err(format!(
+                "not_implemented: '{}' — this command calls jj::* directly. \
              Migrate UI code to use a core::* equivalent instead.",
-            command
-        )),
+                command
+            ))
+        }
 
         _ => Err(format!("unknown_command: '{}'", command)),
     }

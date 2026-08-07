@@ -2828,6 +2828,68 @@ pub fn jj_restore_all(workspace_path: &str) -> Result<String, JjError> {
     Ok(String::new())
 }
 
+/// Capture a token for the current working-copy content, so it can later be
+/// restored with `jj_restore_snapshot` (used to undo a discard).
+///
+/// The token is the hex id of the current working-copy commit. Since jj
+/// backends are content-addressed and don't delete objects until an explicit
+/// gc, this commit's tree remains fetchable even after the working copy is
+/// rewritten out from under it (e.g. by `jj_restore_file`/`jj_restore_all`).
+pub fn jj_snapshot_working_copy(workspace_path: &str) -> Result<String, JjError> {
+    let loaded = load_workspace_repo_for_history_edit(workspace_path)?;
+    let wc_commit = get_workspace_wc_commit(&loaded)?
+        .ok_or_else(|| JjError::IoError("No working-copy commit".to_string()))?;
+    Ok(wc_commit.id().hex())
+}
+
+/// Restore the working copy to a snapshot previously captured with
+/// `jj_snapshot_working_copy`.
+pub fn jj_restore_snapshot(workspace_path: &str, snapshot_id: &str) -> Result<String, JjError> {
+    let mut loaded = load_workspace_repo_for_history_edit(workspace_path)?;
+    let ws_name = loaded.workspace.workspace_name().to_owned();
+    let wc_commit = get_workspace_wc_commit(&loaded)?
+        .ok_or_else(|| JjError::IoError("No working-copy commit".to_string()))?;
+    let snapshot_commit_id = jj_lib::backend::CommitId::try_from_hex(snapshot_id)
+        .ok_or_else(|| JjError::IoError("Invalid snapshot id".to_string()))?;
+    let snapshot_commit = loaded
+        .repo
+        .store()
+        .get_commit(&snapshot_commit_id)
+        .map_err(|e| {
+            JjError::IoError(format!("Snapshot is no longer available to restore: {}", e))
+        })?;
+    let source_tree = snapshot_commit.tree();
+    let destination_tree = wc_commit.tree();
+    if source_tree.tree_ids() == destination_tree.tree_ids() {
+        return Ok(String::new());
+    }
+    let mut tx = loaded.repo.start_transaction();
+    let rewritten = block_on(
+        tx.repo_mut()
+            .rewrite_commit(&wc_commit)
+            .set_tree(source_tree)
+            .write(),
+    )
+    .map_err(|e| JjError::IoError(format!("Failed to rewrite working-copy commit: {}", e)))?;
+    block_on(tx.repo_mut().edit(ws_name, &rewritten)).map_err(|e| {
+        JjError::IoError(format!(
+            "Failed to update working-copy commit pointer: {}",
+            e
+        ))
+    })?;
+    block_on(tx.repo_mut().rebase_descendants())
+        .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
+    let new_repo = block_on(tx.commit("undo discard"))
+        .map_err(|e| JjError::IoError(format!("Failed to commit restore: {}", e)))?;
+    update_workspace_after_history_edit(
+        &mut loaded,
+        &new_repo,
+        Some(&wc_commit),
+        CheckoutMode::Immediate,
+    )?;
+    Ok(String::new())
+}
+
 /// Set (or create) a jj bookmark to point at a specific revision
 /// Uses: jj bookmark set <name> -r <revision>
 pub fn jj_set_bookmark(
