@@ -1715,7 +1715,6 @@ fn test_workspace_status_with_workspace_id() {
     );
 }
 
-
 #[test]
 fn test_pull_workspace_surfaces_file_conflicts_after_divergent_same_file_edits() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
@@ -1939,21 +1938,11 @@ fn test_retarget_workspace_lifts_bridge_when_parent_moves_below_child() {
     )
     .expect("Failed to create child");
 
-    treq_lib::core::retarget_workspace(
-        &repo.repo_path,
-        child.id,
-        "feat/parent",
-        &default_branch,
-    )
-    .expect("Failed to stack child on parent");
+    treq_lib::core::retarget_workspace(&repo.repo_path, child.id, "feat/parent", &default_branch)
+        .expect("Failed to stack child on parent");
 
-    treq_lib::core::retarget_workspace(
-        &repo.repo_path,
-        parent.id,
-        "feat/child",
-        &default_branch,
-    )
-    .expect("Failed to move parent below child");
+    treq_lib::core::retarget_workspace(&repo.repo_path, parent.id, "feat/child", &default_branch)
+        .expect("Failed to move parent below child");
 
     let after_parent = treq_lib::local_db::get_workspace_by_id(&repo.repo_path, parent.id)
         .expect("db lookup")

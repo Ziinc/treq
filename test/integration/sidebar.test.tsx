@@ -75,8 +75,6 @@ describe("Dashboard - workspace list", () => {
 		const alphaWorkspace = findWorkspaceByBranchName(workspaces, "feat/alpha");
 		expect(alphaWorkspace).toBeTruthy();
 
-		// Seed malformed self-target via DB — retarget_workspace correctly
-		// rejects this path, but the sidebar must still render the workspace.
 		setWorkspaceTargetBranchRaw(repoPath, alphaWorkspace!.id, "feat/alpha");
 
 		render(<Dashboard />);

@@ -52,8 +52,12 @@ fn test_workspace_list_statuses_show_conflict_state() {
         .expect("Failed to write conflict.txt in main repo");
     treq_lib::jj::jj_commit(&repo.repo_path, "main commit").expect("Failed to commit in main repo");
 
-    let rebase_result = treq_lib::jj::jj_rebase_onto(workspace_path_str, default_branch, "diff")
-        .expect("Failed to rebase workspace onto main");
+    let rebase_result = treq_lib::jj::jj_rebase_workspace_bookmark_onto(
+        workspace_path_str,
+        &workspace.branch_name,
+        default_branch,
+    )
+    .expect("Failed to rebase workspace onto main");
     assert!(
         rebase_result.success,
         "Expected rebase command to succeed with recorded conflict, got: {}",

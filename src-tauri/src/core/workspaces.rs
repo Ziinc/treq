@@ -974,9 +974,13 @@ mod tests {
         let parent = test_workspace(1, "feat/parent", Some("main"));
         let child = test_workspace(2, "feat/child", Some("feat/parent"));
 
-        let steps =
-            plan_workspace_target_move(&[parent.clone(), child.clone()], "feat/parent", "feat/child", "main")
-                .expect("plan should succeed");
+        let steps = plan_workspace_target_move(
+            &[parent.clone(), child.clone()],
+            "feat/parent",
+            "feat/child",
+            "main",
+        )
+        .expect("plan should succeed");
 
         assert_eq!(
             steps,
@@ -1381,11 +1385,7 @@ pub struct WorkspaceTargetMoveStep {
     pub new_target_branch: String,
 }
 
-fn is_descendant_of(
-    workspaces: &[local_db::Workspace],
-    candidate: &str,
-    ancestor: &str,
-) -> bool {
+fn is_descendant_of(workspaces: &[local_db::Workspace], candidate: &str, ancestor: &str) -> bool {
     if candidate == ancestor {
         return false;
     }
@@ -1465,10 +1465,7 @@ pub fn plan_workspace_target_move(
         }
 
         if let Some(bridge) = bridge {
-            let lift_target = moving
-                .target_branch
-                .as_deref()
-                .unwrap_or(default_branch);
+            let lift_target = moving.target_branch.as_deref().unwrap_or(default_branch);
             if lift_target != bridge.branch_name {
                 steps.push(WorkspaceTargetMoveStep {
                     workspace_id: bridge.id,

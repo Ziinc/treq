@@ -34,10 +34,12 @@ function sidebarOrder(workspaces: Awaited<ReturnType<typeof getWorkspaces>>) {
 
 describe("workspace sidebar stack reorder", () => {
 	let repoPath: string;
+	let user: ReturnType<typeof userEvent.setup>;
 
 	beforeEach(() => {
 		({ repoPath } = createTestRepo(false));
 		openRepo(repoPath);
+		user = userEvent.setup();
 	});
 
 	it("moves a parent below its child without creating a cycle", async () => {
@@ -60,7 +62,6 @@ describe("workspace sidebar stack reorder", () => {
 			{ branch: "feat/child", depth: 1 },
 		]);
 
-		// Single retarget — Rust core lifts the bridge child first.
 		await setWorkspaceTargetBranch(
 			repoPath,
 			getFullWorkspacePath(parent),
@@ -136,7 +137,6 @@ describe("workspace sidebar stack reorder", () => {
 	});
 
 	it("reorders parent below child via the workspace target selector", async () => {
-		const user = userEvent.setup();
 		await createWorkspace(repoPath, "feat/parent");
 		await createWorkspace(repoPath, "feat/child");
 
