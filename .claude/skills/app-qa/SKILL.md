@@ -99,7 +99,7 @@ part of the scenario being verified.
    headless Chromium (`playwright-core`, pinned to the pre-installed browser) purely
    to rasterize it into a PNG. jsdom itself never paints a pixel — Chromium is only
    there for the pixels. It also writes `<name>.json` next to the PNG recording the
-   `expectations` you passed (see step 4 below).
+   `expectations` you passed (see step 3 in Steps below).
 
 `test/setup.screenshot.ts` is a near-duplicate of `test/setup.integration.ts` with one
 difference: `test/integration/**` fails a run the moment any still-un-migrated `jj_*`
@@ -184,7 +184,7 @@ command code as a separate, bigger decision and check with the user first.
    should be able to confirm by *looking at the screenshot* (colors, layout, which
    button is visible, what a toast says, whether a list has the right items). These
    are not code assertions and `captureDocument` does not execute them; they're
-   written to `<name>.json` next to the PNG specifically so that step 4 has a
+   written to `<name>.json` next to the PNG specifically so that step 5 has a
    concrete, per-screenshot checklist instead of "eyeball it and hope you notice
    something wrong." Keep the real `screen.findBy*`/`expect` calls in the spec body
    too (still required, still what proves the DOM reached that state) — the two are
@@ -218,6 +218,18 @@ command code as a separate, bigger decision and check with the user first.
 6. **Show the result.** Use SendUserFile to deliver the before/after PNGs together,
    with a short caption naming what changed and what to look at, and call out any
    expectation that didn't hold.
+
+7. **Lint, format, and typecheck the whole change, last.** Only after the behavior is
+   visually verified and shown, run:
+   - `npm run format` — Biome (`./src ./test`) + `cargo fmt`, auto-fixes what it can.
+   - `npm run lint` — oxlint + eslint over `./src ./test/integration`, plus
+     `ast-grep scan --warning`.
+   - `npm run check` — `tsc` (typecheck) + `ast-grep test`.
+
+   Fix everything these flag — including in any spec file you added or extended in
+   step 2. Doing this last, after all edits (source and spec) have settled, catches
+   what an earlier check-then-edit ordering would miss and leaves the working tree in
+   a genuinely clean state before you tell the user the task is done.
 
 ## Keep specs around
 
