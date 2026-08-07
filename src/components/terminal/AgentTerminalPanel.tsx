@@ -250,10 +250,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 			// Codex CLI: pass system prompt via -c instructions override, then prompt as positional arg
 			autoCommand = `codex -c ${shellQuote(`instructions="${treqSystemPrompt}"`)}`;
 			if (pendingPromptRef.current) {
-				autoCommand = appendAgentPrompt(
-					autoCommand,
-					pendingPromptRef.current,
-				);
+				autoCommand = appendAgentPrompt(autoCommand, pendingPromptRef.current);
 			}
 		} else if (sessionData.agent === "cursor") {
 			// cursor-agent: no system-prompt flag; prepend treq instructions into the prompt arg.
