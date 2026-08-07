@@ -98,7 +98,9 @@ pub fn check_and_rebase_all(
             }
 
             // Rebase using roots() from workspace dir and only committed bookmark history.
-            let revset = format!("roots({}..{})", jj_target_branch, workspace.branch_name);
+            let rebase_base = jj::jj_resolve_workspace_rebase_base(&full_path, &jj_target_branch)
+                .unwrap_or_else(|_| jj_target_branch.clone());
+            let revset = format!("roots({}..{})", rebase_base, workspace.branch_name);
 
             match jj::jj_rebase_with_revset(
                 &full_path,

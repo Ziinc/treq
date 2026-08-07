@@ -4510,6 +4510,26 @@ fn format_revset_symbol(symbol: &str) -> String {
     revset::format_symbol(symbol)
 }
 
+/// A squash merge rewrites a branch to a new commit while preserving its final
+/// tree. When importing a tracked bookmark, jj represents that as a conflict
+/// between the old local tip and the new remote tip. In that specific case the
+/// remote commit is the resolved branch: retaining the old tip makes stacked
+/// children compare against the unsquashed history as well as the squash.
+fn select_equivalent_remote_tip<T: PartialEq>(
+    candidates: &[(String, T)],
+    remote_id: Option<&String>,
+) -> Option<String> {
+    let remote_id = remote_id?;
+    let remote_tree = candidates
+        .iter()
+        .find(|(id, _)| id == remote_id)
+        .map(|(_, tree)| tree)?;
+    candidates
+        .iter()
+        .any(|(id, tree)| id != remote_id && tree == remote_tree)
+        .then(|| remote_id.clone())
+}
+
 /// Resolves the revset for a local target-branch bookmark.
 /// When the bookmark is conflicted, prefers the commit matching the git local branch tip;
 /// otherwise picks the newest non-immutable tip (author timestamp, then commit id).
@@ -4531,6 +4551,37 @@ fn resolve_local_target_branch_revision(
     }
     if ids.len() == 1 {
         return Ok(format_revset_symbol(target_branch));
+    }
+
+    // GitHub squash-and-merge replaces the remote tip with a commit that has
+    // the same tree as the old branch tip. Resolve that imported bookmark
+    // conflict to the squash commit before considering the (stale) git-local
+    // branch or timestamp heuristics.
+    let remote_symbol = RemoteRefSymbol {
+        name: RefName::new(target_branch),
+        remote: RemoteName::new("origin"),
+    };
+    let remote_id = loaded
+        .repo
+        .view()
+        .get_remote_bookmark(remote_symbol)
+        .target
+        .added_ids()
+        .next()
+        .map(|id| id.hex());
+    let candidates: Vec<_> = ids
+        .iter()
+        .filter_map(|id| {
+            loaded
+                .repo
+                .store()
+                .get_commit(id)
+                .ok()
+                .map(|commit| (id.hex(), commit.tree_ids().clone()))
+        })
+        .collect();
+    if let Some(selected) = select_equivalent_remote_tip(&candidates, remote_id.as_ref()) {
+        return Ok(selected);
     }
 
     // Prefer git local branch tip when it matches a conflict term.
@@ -4578,6 +4629,38 @@ fn resolve_local_target_branch_revision(
     Ok(selected)
 }
 
+/// Find the newest workspace ancestor whose tree is identical to the target.
+/// This recognizes the old tip represented by a GitHub squash commit, allowing
+/// stacked child commits to be separated from the already-merged parent commits.
+fn resolve_tree_equivalent_workspace_base(
+    loaded: &LoadedWorkspaceRepo,
+    target_revision: &str,
+) -> Option<String> {
+    let target = resolve_commit_by_revision(loaded, target_revision).ok()?;
+    let ancestors = evaluate_revset(loaded, "::@-").ok()?;
+    ancestors
+        .iter()
+        .commits(loaded.repo.store())
+        .filter_map(Result::ok)
+        .find(|commit| commit.tree_ids() == target.tree_ids())
+        .map(|commit| commit.id().hex())
+}
+
+/// Resolve the graph base to use when rebasing a workspace onto `target_revision`.
+/// If a squash commit has the same tree as an ancestor in the workspace's old
+/// lineage, that ancestor is the correct source boundary; commits below it have
+/// already landed in the target as part of the squash.
+pub fn jj_resolve_workspace_rebase_base(
+    workspace_path: &str,
+    target_revision: &str,
+) -> Result<String, JjError> {
+    let loaded = load_workspace_repo(workspace_path)?;
+    Ok(
+        resolve_tree_equivalent_workspace_base(&loaded, target_revision)
+            .unwrap_or_else(|| target_revision.to_string()),
+    )
+}
+
 /// Resolve a branch/bookmark to a concrete commit ID for rebase operations.
 ///
 /// This avoids embedding conflicted bookmark names in revsets or move-commit targets.
@@ -4611,8 +4694,14 @@ pub fn jj_get_log(
         .flatten();
     let selected_target_ref =
         resolve_local_target_branch_revision(&loaded, workspace_path, target_branch)?;
+    let comparison_base = if is_home_repo.unwrap_or(false) {
+        selected_target_ref.clone()
+    } else {
+        resolve_tree_equivalent_workspace_base(&loaded, &selected_target_ref)
+            .unwrap_or_else(|| selected_target_ref.clone())
+    };
     let revset_expr =
-        build_jj_get_log_revset(&selected_target_ref, is_home_repo.unwrap_or(false), limit);
+        build_jj_get_log_revset(&comparison_base, is_home_repo.unwrap_or(false), limit);
     let mut last_error = None;
     let mut revset = match evaluate_revset(&loaded, &revset_expr) {
         Ok(evaluated) => Some((revset_expr, evaluated)),
@@ -4832,10 +4921,9 @@ pub fn jj_get_commits_ahead(
     let loaded = load_workspace_repo(workspace_path)?;
     let selected_target_ref =
         resolve_local_target_branch_revision(&loaded, workspace_path, target_branch)?;
-    let revset_expr = format!(
-        "({}..@-) ~ empty()",
-        format_revset_symbol(&selected_target_ref)
-    );
+    let comparison_base = resolve_tree_equivalent_workspace_base(&loaded, &selected_target_ref)
+        .unwrap_or_else(|| selected_target_ref.clone());
+    let revset_expr = format!("({}..@-) ~ empty()", format_revset_symbol(&comparison_base));
     let revset = evaluate_revset(&loaded, &revset_expr).map_err(|e| {
         JjError::IoError(format!(
             "Failed to evaluate commits-ahead revset '{}': {}",
@@ -6503,6 +6591,36 @@ mod tests {
             resolved_commit.id().hex(),
             expected.id().hex(),
             "helper should resolve to the bookmark tip commit"
+        );
+    }
+
+    #[test]
+    fn prefers_remote_tip_when_conflicted_bookmark_trees_match_after_squash() {
+        let local_id = "unsquashed".to_string();
+        let remote_id = "squashed".to_string();
+        let candidates = vec![
+            (local_id.clone(), "same-tree".to_string()),
+            (remote_id.clone(), "same-tree".to_string()),
+        ];
+
+        assert_eq!(
+            select_equivalent_remote_tip(&candidates, Some(&remote_id)),
+            Some(remote_id)
+        );
+    }
+
+    #[test]
+    fn keeps_normal_conflict_resolution_when_remote_tip_changes_content() {
+        let local_id = "local".to_string();
+        let remote_id = "remote".to_string();
+        let candidates = vec![
+            (local_id, "local-tree".to_string()),
+            (remote_id.clone(), "remote-tree".to_string()),
+        ];
+
+        assert_eq!(
+            select_equivalent_remote_tip(&candidates, Some(&remote_id)),
+            None
         );
     }
 

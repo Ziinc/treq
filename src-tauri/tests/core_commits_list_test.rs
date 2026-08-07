@@ -170,6 +170,153 @@ fn test_list_commits_workspace_after_home_repo_jj_commits() {
 }
 
 #[test]
+fn list_commits_excludes_unsquashed_parent_after_stacked_base_is_squash_merged() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo");
+    let base = repo
+        .create_workspace_with_commit("feat/stack-base", "base-one.txt", "base one\n", None)
+        .expect("Failed to create stack base");
+    repo.commit_workspace_file(&base, "base-two.txt", "base two\n", "Base commit two")
+        .expect("Failed to create second base commit");
+    treq_lib::jj::jj_push(&repo.workspace_full_path(&base)).expect("Failed to push stack base");
+
+    let child = repo
+        .create_workspace_with_commit(
+            "feat/stack-child",
+            "child.txt",
+            "child only\n",
+            Some("feat/stack-base"),
+        )
+        .expect("Failed to create stacked child");
+
+    let base_tree = TestRepo::run_git(&repo.repo_path, &["rev-parse", "feat/stack-base^{tree}"])
+        .expect("Failed to resolve base tree");
+    let parent = TestRepo::run_git(&repo.repo_path, &["rev-parse", repo.default_branch()])
+        .expect("Failed to resolve default branch");
+    let squash = TestRepo::run_git(
+        &repo.repo_path,
+        &[
+            "commit-tree",
+            base_tree.trim(),
+            "-p",
+            parent.trim(),
+            "-m",
+            "Squashed stack base",
+        ],
+    )
+    .expect("Failed to create squash commit");
+    TestRepo::run_git(
+        &repo.repo_path,
+        &[
+            "update-ref",
+            &format!("refs/heads/{}", repo.default_branch()),
+            squash.trim(),
+        ],
+    )
+    .expect("Failed to advance default branch");
+    treq_lib::jj::jj_util_import_git_refs(&repo.repo_path).expect("Failed to import squash");
+    treq_lib::core::delete_workspace(&repo.repo_path, &base.id)
+        .expect("Failed to remove merged stack base");
+
+    let result = treq_lib::core::list_commits(&repo.repo_path, Some(child.id), true, None, None)
+        .expect("Failed to list stacked child commits");
+    let workspace_descriptions: Vec<_> = result
+        .commits
+        .iter()
+        .filter(|commit| !commit.on_target_only)
+        .map(|commit| commit.description.as_str())
+        .collect();
+
+    assert_eq!(workspace_descriptions, vec!["Add child.txt"]);
+    assert_eq!(
+        result
+            .commits
+            .iter()
+            .filter(|commit| commit.description == "Squashed stack base")
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn list_commits_resolves_squash_merges_at_every_stack_level() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo");
+    let level_one = repo
+        .create_workspace_with_commit("feat/level-one", "one.txt", "one\n", None)
+        .expect("Failed to create level one");
+    let level_two = repo
+        .create_workspace_with_commit("feat/level-two", "two.txt", "two\n", Some("feat/level-one"))
+        .expect("Failed to create level two");
+    let level_three = repo
+        .create_workspace_with_commit(
+            "feat/level-three",
+            "three.txt",
+            "three\n",
+            Some("feat/level-two"),
+        )
+        .expect("Failed to create level three");
+
+    for (level, message) in [
+        (&level_one, "Squashed level one"),
+        (&level_two, "Squashed level two"),
+    ] {
+        let level_tree = TestRepo::run_git(
+            &repo.repo_path,
+            &["rev-parse", &format!("{}^{{tree}}", level.branch_name)],
+        )
+        .expect("Failed to resolve level tree");
+        let parent = TestRepo::run_git(&repo.repo_path, &["rev-parse", repo.default_branch()])
+            .expect("Failed to resolve squash parent");
+        let squash = TestRepo::run_git(
+            &repo.repo_path,
+            &[
+                "commit-tree",
+                level_tree.trim(),
+                "-p",
+                parent.trim(),
+                "-m",
+                message,
+            ],
+        )
+        .expect("Failed to create squash commit");
+        TestRepo::run_git(
+            &repo.repo_path,
+            &[
+                "update-ref",
+                &format!("refs/heads/{}", repo.default_branch()),
+                squash.trim(),
+            ],
+        )
+        .expect("Failed to advance default branch");
+        treq_lib::jj::jj_util_import_git_refs(&repo.repo_path).expect("Failed to import squash");
+        treq_lib::core::delete_workspace(&repo.repo_path, &level.id)
+            .expect("Failed to remove merged stack level");
+    }
+
+    let result =
+        treq_lib::core::list_commits(&repo.repo_path, Some(level_three.id), true, None, None)
+            .expect("Failed to list level three commits");
+    let workspace_descriptions: Vec<_> = result
+        .commits
+        .iter()
+        .filter(|commit| !commit.on_target_only)
+        .map(|commit| commit.description.as_str())
+        .collect();
+
+    assert_eq!(workspace_descriptions, vec!["Add three.txt"]);
+    for message in ["Squashed level one", "Squashed level two"] {
+        assert_eq!(
+            result
+                .commits
+                .iter()
+                .filter(|commit| commit.description == message)
+                .count(),
+            1,
+            "{message} should appear exactly once"
+        );
+    }
+}
+
+#[test]
 fn test_list_commits_with_target_branch_history() {
     let repo = TestRepo::new().expect("Failed to create test repo");
 
