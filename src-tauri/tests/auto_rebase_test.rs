@@ -248,6 +248,116 @@ fn test_auto_rebase_no_conflict_still_works() {
 }
 
 #[test]
+fn auto_rebase_preserves_only_unmerged_commits_across_multiple_squashed_levels() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+    let default_branch = repo.default_branch().to_string();
+    let level_one = repo
+        .create_workspace_with_commit("feat/rebase-one", "one.txt", "one\n", None)
+        .expect("Failed to create level one");
+    let level_two = repo
+        .create_workspace_with_commit(
+            "feat/rebase-two",
+            "two.txt",
+            "two\n",
+            Some("feat/rebase-one"),
+        )
+        .expect("Failed to create level two");
+    let level_three = repo
+        .create_workspace_with_commit(
+            "feat/rebase-three",
+            "three.txt",
+            "three\n",
+            Some("feat/rebase-two"),
+        )
+        .expect("Failed to create level three");
+
+    for (merged, child, message) in [
+        (&level_one, &level_two, "Squashed rebase level one"),
+        (&level_two, &level_three, "Squashed rebase level two"),
+    ] {
+        let merged_tree = TestRepo::run_git(
+            &repo.repo_path,
+            &["rev-parse", &format!("{}^{{tree}}", merged.branch_name)],
+        )
+        .expect("Failed to resolve merged tree");
+        let parent = TestRepo::run_git(&repo.repo_path, &["rev-parse", &default_branch])
+            .expect("Failed to resolve default branch");
+        let squash = TestRepo::run_git(
+            &repo.repo_path,
+            &[
+                "commit-tree",
+                merged_tree.trim(),
+                "-p",
+                parent.trim(),
+                "-m",
+                message,
+            ],
+        )
+        .expect("Failed to create squash commit");
+        TestRepo::run_git(
+            &repo.repo_path,
+            &[
+                "update-ref",
+                &format!("refs/heads/{default_branch}"),
+                squash.trim(),
+            ],
+        )
+        .expect("Failed to advance default branch");
+        jj::jj_util_import_git_refs(&repo.repo_path).expect("Failed to import squash");
+        treq_lib::core::delete_workspace(&repo.repo_path, &merged.id)
+            .expect("Failed to delete merged workspace");
+
+        let result = treq_lib::auto_rebase::rebase_single_workspace(
+            &repo.repo_path,
+            child.id,
+            &default_branch,
+            true,
+            "diff",
+        )
+        .expect("Failed to rebase child after squash")
+        .expect("Rebase should run");
+        assert!(
+            result.rebase_result.success,
+            "{}",
+            result.rebase_result.message
+        );
+
+        let child_path = repo.workspace_full_path(child);
+        let rebased_ids = jj::jj_log_revset_commit_ids(
+            &child_path,
+            &format!("{default_branch}..{}", child.branch_name),
+        )
+        .expect("Failed to inspect rebased topology");
+        assert_eq!(
+            rebased_ids.len(),
+            1,
+            "rebase should not retain already-squashed ancestor commits"
+        );
+
+        let commits =
+            treq_lib::core::list_commits(&repo.repo_path, Some(child.id), false, None, None)
+                .expect("Failed to list rebased child commits");
+        let descriptions: Vec<_> = commits
+            .commits
+            .iter()
+            .filter(|commit| !commit.on_target_only)
+            .map(|commit| commit.description.as_str())
+            .collect();
+        assert_eq!(
+            descriptions,
+            vec![format!(
+                "Add {}.txt",
+                if child.id == level_two.id {
+                    "two"
+                } else {
+                    "three"
+                }
+            )]
+        );
+    }
+}
+
+#[test]
 fn test_force_rebase_rooted_subtree_handles_conflicted_local_main_target() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
     let default_branch = repo.default_branch();

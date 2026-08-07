@@ -195,7 +195,9 @@ pub fn rebase_workspaces_for_target(
         }
 
         // Use roots() from the workspace directory and rebase committed bookmark history only.
-        let revset = format!("roots({}..{})", jj_target_branch, workspace.branch_name);
+        let rebase_base = jj::jj_resolve_workspace_rebase_base(&full_path, &jj_target_branch)
+            .unwrap_or_else(|_| jj_target_branch.clone());
+        let revset = format!("roots({}..{})", rebase_base, workspace.branch_name);
 
         let rebase_result = jj::jj_rebase_with_revset(
             &full_path, // Run from workspace directory
@@ -315,9 +317,11 @@ pub fn rebase_single_workspace(
         .map_err(|e| format!("Failed to resolve bookmark conflict: {}", e))?;
 
     // Rebase mutable committed history only, excluding @ to keep working copy anchored.
+    let rebase_base = jj::jj_resolve_workspace_rebase_base(&full_path, &jj_target_branch)
+        .unwrap_or_else(|_| jj_target_branch.clone());
     let revset = format!(
         "roots(mutable() & ({}..{}) ~ @)",
-        jj_target_branch, workspace.branch_name
+        rebase_base, workspace.branch_name
     );
     let rebase_result = jj::jj_rebase_with_revset(
         &full_path, // Run from workspace directory
