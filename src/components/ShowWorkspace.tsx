@@ -363,17 +363,12 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			data: workspaceStatusData,
 			isPending: workspaceStatusPending,
 			refetch: refetchWorkspaceStatus,
-		} =
-			useQuery({
-				queryKey: [
-					"workspace-status",
-					effectiveRepoPath,
-					workspace?.id ?? null,
-				],
-				enabled: Boolean(effectiveRepoPath),
-				queryFn: () =>
-					getWorkspaceStatus(effectiveRepoPath, workspace?.id ?? null),
-			});
+		} = useQuery({
+			queryKey: ["workspace-status", effectiveRepoPath, workspace?.id ?? null],
+			enabled: Boolean(effectiveRepoPath),
+			queryFn: () =>
+				getWorkspaceStatus(effectiveRepoPath, workspace?.id ?? null),
+		});
 
 		const { data: overviewData, isPending: overviewPending } = useQuery({
 			queryKey: [

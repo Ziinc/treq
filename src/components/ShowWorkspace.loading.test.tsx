@@ -5,7 +5,8 @@ import type { Workspace } from "../lib/api";
 import { ShowWorkspace } from "./ShowWorkspace";
 
 vi.mock("../lib/api", async () => {
-	const actual = await vi.importActual<typeof import("../lib/api")>("../lib/api");
+	const actual =
+		await vi.importActual<typeof import("../lib/api")>("../lib/api");
 	return {
 		...actual,
 		getWorkspaceStatus: vi.fn().mockResolvedValue({
