@@ -581,28 +581,22 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 					effectiveRepoPath,
 					workspace?.id ?? null,
 				);
-
-				// After a conflicting remote rebase, stop and let the user resolve locally.
-				// Pushing would either no-op (old bug) or publish unresolved conflict markers.
-				if (pullResult.has_conflicts) {
-					addToast({
-						title: "Conflicts to resolve",
-						description: pullResult.was_diverged
-							? pullResult.message ||
-								"Remote changes were rebased; resolve conflicts locally, then push"
-							: "Resolve conflicts locally, then push",
-						type: "warning",
-					});
-					return;
-				}
-
 				await pushWorkspaceToRemote(effectiveRepoPath, workspace?.id ?? null);
 
-				addToast({
-					title: "Synced with remote",
-					description: "Fetched and pushed changes",
-					type: "success",
-				});
+				if (pullResult.has_conflicts) {
+					addToast({
+						title: "Synced with conflicts",
+						description:
+							"Fetched and pushed; resolve remaining conflicts locally",
+						type: "warning",
+					});
+				} else {
+					addToast({
+						title: "Synced with remote",
+						description: "Fetched and pushed changes",
+						type: "success",
+					});
+				}
 			} catch (error) {
 				console.error("Sync failed:", error);
 				addToast({
@@ -612,7 +606,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 				});
 			} finally {
 				// Always refresh so conflicted_files / sync counts reflect pull outcome,
-				// including when push is skipped or fails after a divergent pull.
+				// including when push fails after a divergent pull.
 				await refetchWorkspaceStatus();
 				queryClient?.invalidateQueries();
 				_setActionPending(null);

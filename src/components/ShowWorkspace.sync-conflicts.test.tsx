@@ -64,7 +64,7 @@ describe("ShowWorkspace Sync with remote conflicts", () => {
 		vi.clearAllMocks();
 	});
 
-	it("skips push and refreshes status when pull leaves conflicts", async () => {
+	it("still pushes when pull leaves conflicts, then refreshes status", async () => {
 		const user = userEvent.setup();
 
 		vi.mocked(api.pullWorkspaceFromRemote).mockResolvedValue({
@@ -114,8 +114,11 @@ describe("ShowWorkspace Sync with remote conflicts", () => {
 				workspace.repo_path,
 				workspace.id,
 			);
+			expect(api.pushWorkspaceToRemote).toHaveBeenCalledWith(
+				workspace.repo_path,
+				workspace.id,
+			);
 		});
-		expect(api.pushWorkspaceToRemote).not.toHaveBeenCalled();
 
 		await waitFor(() => {
 			expect(screen.getByText(/1\s+conflict/i)).toBeTruthy();
