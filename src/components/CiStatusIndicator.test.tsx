@@ -1,4 +1,6 @@
 import { waitFor } from "@testing-library/react";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CiStatusIndicator } from "./CiStatusIndicator";
 import * as api from "../lib/api";
@@ -58,5 +60,35 @@ describe("CiStatusIndicator", () => {
 		expect(
 			await screen.findByRole("button", { name: /CI failed: 1\/2/ }),
 		).toBeInTheDocument();
+	});
+
+	it("lists failed checks first and opens the selected check URL", async () => {
+		const user = userEvent.setup();
+		vi.spyOn(api, "getPrChecksViaGh").mockResolvedValue({
+			...baseStatus,
+			state: "failure",
+			passed: 1,
+			failed: 1,
+			checks: [
+				{ name: "build", bucket: "pass", link: "https://x/build" },
+				{ name: "test", bucket: "fail", link: "https://x/test" },
+			],
+		});
+
+		render(<CiStatusIndicator repoPath="/repo" branchName="feat" />);
+		await user.click(
+			await screen.findByRole("button", { name: /CI failed: 1\/2/ }),
+		);
+
+		const checkButtons = screen.getAllByRole("button", {
+			name: /^(test|build)/i,
+		});
+		expect(checkButtons.map((button) => button.textContent)).toEqual([
+			"testFailed",
+			"buildSuccess",
+		]);
+
+		await user.click(screen.getByRole("button", { name: /^test/i }));
+		expect(openUrl).toHaveBeenCalledWith("https://x/test");
 	});
 });
