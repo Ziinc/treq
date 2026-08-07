@@ -171,7 +171,7 @@ export const WorkspaceTerminalPaneView: React.FC<
 							<TooltipTrigger asChild>
 								<Button
 									type="button"
-									onClick={handleAddShell}
+									onClick={() => handleAddShell()}
 									variant="ghost"
 									className="h-6 px-2 rounded-sm gap-1 text-muted-foreground hover:text-foreground"
 									aria-label="New Shell"

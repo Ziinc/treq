@@ -15,6 +15,7 @@ import { type ClaudeSessionData } from "./terminal/types";
 import { WorkspaceTerminalPaneView } from "./WorkspaceTerminalPaneView";
 import { buildWorkspaceGroups } from "./workspace-terminal-pane/buildWorkspaceGroups";
 import { useTerminalPaneHeightResize } from "./workspace-terminal-pane/useTerminalPaneHeightResize";
+import { useScrollContainerWidth } from "./workspace-terminal-pane/useScrollContainerWidth";
 import {
 	type ShellTerminalData,
 	type WorkspaceTerminalPaneHandle,
@@ -70,39 +71,10 @@ const WorkspaceTerminalPaneInner = forwardRef<
 		}, [activePtySessionId]);
 
 		// Track scroll container width for computing 40% min terminal width
-		const [containerWidth, setContainerWidth] = useState(0);
-		useEffect(() => {
-			const el = scrollContainerRef.current;
-			if (!el) return;
-			const getEntryWidth = (entry: ResizeObserverEntry): number => {
-				const sizeFrom = (
-					size:
-						| ResizeObserverSize
-						| ReadonlyArray<ResizeObserverSize>
-						| undefined,
-				): number | undefined => {
-					if (!size) return undefined;
-					if ("inlineSize" in size) return size.inlineSize;
-					return size[0]?.inlineSize;
-				};
-
-				return (
-					entry.contentRect?.width ??
-					sizeFrom(entry.contentBoxSize) ??
-					sizeFrom(entry.borderBoxSize) ??
-					(entry.target as Element).clientWidth
-				);
-			};
-			// Set immediately so sticky headers work from first render
-			setContainerWidth(el.clientWidth);
-			const ro = new ResizeObserver((entries) => {
-				for (const entry of entries) {
-					setContainerWidth(getEntryWidth(entry));
-				}
-			});
-			ro.observe(el);
-			return () => ro.disconnect();
-		}, [collapsed]);
+		const containerWidth = useScrollContainerWidth(
+			scrollContainerRef,
+			collapsed,
+		);
 
 		// Shell terminals - start empty (agent sessions are opened by default instead)
 		const [shellTerminals, setShellTerminals] = useState<ShellTerminalData[]>(
@@ -320,6 +292,30 @@ const WorkspaceTerminalPaneInner = forwardRef<
 			],
 		);
 
+		// Close every terminal (shell + agent) belonging to a workspace, killing their
+		// PTY processes. Used when the owning workspace itself is being deleted, so
+		// terminals don't linger as orphaned processes.
+		const closeTerminalsForWorkspace = useCallback(
+			(workspaceKey: string) => {
+				shellTerminals
+					.filter((t) => t.workingDirectory === workspaceKey)
+					.forEach((t) => handleCloseShell(t.id));
+
+				claudeSessions
+					.filter((s) => (s.workspacePath || s.repoPath) === workspaceKey)
+					.forEach((s) => {
+						ptyClose(s.ptySessionId).catch(console.error);
+						handleCloseClaudeSession(s.sessionId);
+					});
+			},
+			[
+				shellTerminals,
+				claudeSessions,
+				handleCloseShell,
+				handleCloseClaudeSession,
+			],
+		);
+
 		// Expose methods via ref for command palette
 		useImperativeHandle(
 			ref,
@@ -335,8 +331,14 @@ const WorkspaceTerminalPaneInner = forwardRef<
 				},
 				createAgentSession: handleCreateAgentSession,
 				createShellSession: handleAddShell,
+				closeTerminalsForWorkspace,
 			}),
-			[maximized, handleCreateAgentSession, handleAddShell],
+			[
+				maximized,
+				handleCreateAgentSession,
+				handleAddShell,
+				closeTerminalsForWorkspace,
+			],
 		);
 
 		// Terminal width resize handler
