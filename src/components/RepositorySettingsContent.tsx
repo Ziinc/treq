@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
@@ -8,18 +8,22 @@ import { useToast } from "./ui/toast";
 
 interface RepositorySettingsContentProps {
 	repoPath: string;
-	onClose?: () => void;
+	onSavingChange?: (saving: boolean) => void;
 }
 
-export const RepositorySettingsContent: React.FC<
+export interface RepositorySettingsContentHandle {
+	save: () => Promise<void>;
+}
+
+export const RepositorySettingsContent = forwardRef<
+	RepositorySettingsContentHandle,
 	RepositorySettingsContentProps
-> = ({ repoPath, onClose }) => {
+>(({ repoPath, onSavingChange }, ref) => {
 	const [branchNamePattern, setBranchNamePattern] = useState("treq/{name}");
 	const [includedFiles, setIncludedFiles] = useState("");
 	const [defaultModel, setDefaultModel] = useState<string>("");
 	const [defaultAgent, setDefaultAgent] = useState<string>("");
 	const [loading, setLoading] = useState(false);
-	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [availableFiles, setAvailableFiles] = useState<string[]>([]);
 	const { addToast } = useToast();
@@ -59,7 +63,7 @@ export const RepositorySettingsContent: React.FC<
 	}, [repoPath]);
 
 	const handleSave = async () => {
-		setSaving(true);
+		onSavingChange?.(true);
 		setError(null);
 
 		try {
@@ -83,9 +87,11 @@ export const RepositorySettingsContent: React.FC<
 				type: "error",
 			});
 		} finally {
-			setSaving(false);
+			onSavingChange?.(false);
 		}
 	};
+
+	useImperativeHandle(ref, () => ({ save: handleSave }));
 
 	const addPattern = (pattern: string) => {
 		if (includedFiles.trim()) {
@@ -196,17 +202,8 @@ export const RepositorySettingsContent: React.FC<
 			</div>
 
 			{error && <div className="text-sm text-destructive">{error}</div>}
-
-			<div className="flex justify-end gap-2 pt-4">
-				{onClose && (
-					<Button variant="outline" onClick={onClose} disabled={saving}>
-						Cancel
-					</Button>
-				)}
-				<Button onClick={handleSave} disabled={saving}>
-					{saving ? "Saving..." : "Save Settings"}
-				</Button>
-			</div>
 		</div>
 	);
-};
+});
+
+RepositorySettingsContent.displayName = "RepositorySettingsContent";
