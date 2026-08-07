@@ -74,7 +74,6 @@ describe("ShowWorkspace - stack panel", () => {
 		const header = await screen.findByTestId("show-workspace-header");
 		await within(header).findByText("feat/alpha");
 
-		// Stack root still shows the card so you can navigate back up the stack.
 		const rootPanel = await screen.findByTestId("workspace-stack-panel");
 		expect(within(rootPanel).getByText("2 of 2")).toBeTruthy();
 		expect(within(rootPanel).getByText("feat/beta")).toBeTruthy();
