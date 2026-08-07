@@ -359,18 +359,16 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			onActiveTabChange?.(activeTab);
 		}, [activeTab, onActiveTabChange]);
 
-		const { data: workspaceStatusData, refetch: refetchWorkspaceStatus } =
-			useQuery({
-				queryKey: [
-					"workspace-status",
-					effectiveRepoPath,
-					workspace?.id ?? null,
-				],
-				enabled: Boolean(effectiveRepoPath),
-				placeholderData: (previousData) => previousData,
-				queryFn: () =>
-					getWorkspaceStatus(effectiveRepoPath, workspace?.id ?? null),
-			});
+		const {
+			data: workspaceStatusData,
+			isPending: workspaceStatusPending,
+			refetch: refetchWorkspaceStatus,
+		} = useQuery({
+			queryKey: ["workspace-status", effectiveRepoPath, workspace?.id ?? null],
+			enabled: Boolean(effectiveRepoPath),
+			queryFn: () =>
+				getWorkspaceStatus(effectiveRepoPath, workspace?.id ?? null),
+		});
 
 		const { data: overviewData, isPending: overviewPending } = useQuery({
 			queryKey: [
@@ -379,7 +377,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 				workspace?.id ?? null,
 			],
 			enabled: Boolean(effectiveRepoPath) && activeTab === "overview",
-			placeholderData: (previousData) => previousData,
 			queryFn: async () => {
 				try {
 					const [entries, readme] = await Promise.all([
@@ -1600,11 +1597,21 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 												baseBranch={targetBranch ?? defaultTargetBranch}
 												hasCommits={
 													(workspaceStatusData?.commits_ahead_of_target
-														.length ?? 0) > 0
+														?.length ?? 0) > 0
 												}
 											/>
 										</>
 									)}
+
+								{/* Status is independent of the header and overview requests. Keep
+								    the already-known workspace controls interactive while it loads. */}
+								{workspaceStatusPending && (
+									<div
+										className="h-6 w-14 animate-pulse rounded bg-muted/60"
+										data-testid="workspace-status-skeleton"
+										aria-label="Loading workspace status"
+									/>
+								)}
 
 								{/* Sync control - status + icon in one clickable button */}
 								{(!workspace || !workspace.not_on_remote) &&
