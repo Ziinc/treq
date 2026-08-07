@@ -75,10 +75,9 @@ function remoteCommitOnBranch(
 	fs.rmSync(clonePath, { recursive: true, force: true });
 }
 
-// After Sync against a diverged remote that edits the same file, ShowWorkspace
-// must materialize conflicts on the bookmark tip and show the conflict alert
-// so the user can resolve locally and push — instead of Sync looking InSync.
-it("captures Sync surfacing remote same-file conflicts for local resolve", async () => {
+// Divergent same-file remote edits must surface conflicts in ShowWorkspace, and
+// Sync must still complete (pull+push) while those conflicts remain — not block.
+it("captures Sync completing while remote conflicts remain for local resolve", async () => {
 	const { repoPath, tempDirPath } = createTestRepo(true);
 	openRepo(repoPath);
 
@@ -119,7 +118,9 @@ it("captures Sync surfacing remote same-file conflicts for local resolve", async
 	// materializes same-file conflicts onto the bookmark for local resolve.
 	await waitFor(
 		() => {
-			expect(screen.getByRole("alert")).toHaveTextContent(/1 conflict detected/i);
+			expect(screen.getByRole("alert")).toHaveTextContent(
+				/1 conflict detected/i,
+			);
 			expect(
 				screen.getByTestId(`workspace-conflict-indicator-${workspaceId}`),
 			).toBeInTheDocument();
@@ -127,24 +128,53 @@ it("captures Sync surfacing remote same-file conflicts for local resolve", async
 		{ timeout: 20000 },
 	);
 
+	// Sync control remains available (ahead of remote after bookmark advance).
+	await waitFor(
+		() => {
+			expect(screen.getByText("↑1")).toBeInTheDocument();
+		},
+		{ timeout: 20000 },
+	);
+
 	await captureDocument(document, {
-		name: "sync-remote-conflict-01-conflicts-visible",
+		name: "sync-remote-conflict-01-before-sync",
 		expectations: [
 			'A red "1 conflict detected" alert is visible in the Code tab.',
-			"The sidebar shows a conflict indicator on the workspace.",
+			"The Sync control shows ↑1 and is available despite the conflict alert.",
+		],
+	});
+
+	await user.click(screen.getByText("↑1").closest("button")!);
+
+	await waitFor(
+		() => {
+			expect(
+				screen.getByText(/Synced with conflicts|Synced with remote/i),
+			).toBeInTheDocument();
+		},
+		{ timeout: 20000 },
+	);
+
+	// Conflicts remain after Sync — Sync must not clear or hide them.
+	expect(screen.getByRole("alert")).toHaveTextContent(/1 conflict detected/i);
+
+	await captureDocument(document, {
+		name: "sync-remote-conflict-02-after-sync",
+		expectations: [
+			"A toast confirms Sync completed (synced with conflicts or synced with remote).",
+			'The "1 conflict detected" alert is still visible after Sync.',
 		],
 	});
 
 	await user.click(await screen.findByRole("tab", { name: /^Review/ }));
 	await screen.findByRole("tab", { name: /^Review/, selected: true });
-
 	await screen.findByRole("button", { name: "Conflicts" });
 
 	await captureDocument(document, {
-		name: "sync-remote-conflict-02-review-conflicts",
+		name: "sync-remote-conflict-03-review-conflicts",
 		expectations: [
 			'The Review tab shows a "Conflicts" section listing shared.txt.',
-			"The conflicted file is available for local resolution before push.",
+			"The conflicted file remains available for local resolution after Sync.",
 		],
 	});
 }, 90000);

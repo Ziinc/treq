@@ -99,6 +99,7 @@ describe("ShowWorkspace Sync with remote conflicts", () => {
 			<ShowWorkspace
 				repositoryPath={workspace.repo_path}
 				workspace={workspace}
+				initialSelectedFile={null}
 				onSessionCreated={vi.fn()}
 				onDeleteWorkspace={vi.fn()}
 			/>,
