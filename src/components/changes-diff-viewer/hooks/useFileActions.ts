@@ -42,7 +42,7 @@ interface UseFileActionsParams {
 	setContextMenuPosition: (pos: { x: number; y: number } | null) => void;
 	invalidateCache: () => Promise<void>;
 	refresh: () => void;
-	loadChangedFiles: () => void;
+	loadChangedFiles: () => Promise<void>;
 	refreshCommittedChanges: () => void;
 	setCommittedSectionCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
 	addToast: ReturnType<typeof useToast>["addToast"];
@@ -96,6 +96,7 @@ export function useFileActions({
 				await jjRestoreSnapshot(workspacePath, snapshotId);
 				await invalidateCache();
 				refresh();
+				await loadChangedFiles();
 				addToast({
 					description: "Discarded changes have been restored",
 					title: "Restored",
@@ -109,7 +110,7 @@ export function useFileActions({
 				});
 			}
 		},
-		[workspacePath, refresh, addToast, invalidateCache],
+		[workspacePath, refresh, addToast, invalidateCache, loadChangedFiles],
 	);
 
 	const handleDiscardAll = useCallback(async () => {
@@ -128,6 +129,7 @@ export function useFileActions({
 			});
 			await invalidateCache();
 			refresh();
+			await loadChangedFiles();
 		} catch (error) {
 			addToast({
 				description: error instanceof Error ? error.message : String(error),
@@ -135,7 +137,15 @@ export function useFileActions({
 				type: "error",
 			});
 		}
-	}, [workspacePath, readOnly, refresh, addToast, invalidateCache, handleUndoDiscard]);
+	}, [
+		workspacePath,
+		readOnly,
+		refresh,
+		addToast,
+		invalidateCache,
+		loadChangedFiles,
+		handleUndoDiscard,
+	]);
 
 	const handleDiscardFiles = useCallback(
 		async (filePath: string) => {
@@ -166,6 +176,7 @@ export function useFileActions({
 				setSelectedUnstagedFiles(new Set());
 				await invalidateCache();
 				refresh();
+				await loadChangedFiles();
 			} catch (error) {
 				addToast({
 					description: error instanceof Error ? error.message : String(error),
@@ -182,6 +193,7 @@ export function useFileActions({
 			refresh,
 			addToast,
 			invalidateCache,
+			loadChangedFiles,
 			workspacePath,
 			setSelectedUnstagedFiles,
 			handleUndoDiscard,

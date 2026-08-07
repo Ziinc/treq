@@ -16,7 +16,7 @@ import {
 	resolveWorkspacePath,
 	writeWorkspaceFile,
 } from "../../../test/utils";
-import { render, screen, within } from "../../../test/test-utils";
+import { render, screen, waitFor, within } from "../../../test/test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
 import { createWorkspace, getWorkspaces } from "../../../src/lib/api";
 import { captureDocument } from "../capture";
@@ -62,14 +62,16 @@ it("captures Undo on the discard-all toast restoring the change", async () => {
 
 	await user.click(discardAllTrigger);
 	const toast = await screen.findByText("All changes discarded");
-	// The backend restore has already completed by the time the toast text is
-	// in the DOM (the toast is added after `await jjRestoreAll(...)`
-	// resolves), so this is a real, independent, disk-level check of the
-	// discard -- not just a UI-state assertion. (The sidebar's own refresh
-	// after a discard is driven by a `workspace-files-changed` Tauri event
-	// from the backend file watcher, which this jsdom harness doesn't
-	// simulate, so the file list itself may not visibly update here.)
+	// Disk-level check, independent of the UI: the backend restore actually
+	// happened (the toast is added after `await jjRestoreAll(...)` resolves).
 	expect(fs.existsSync(filePathOnDisk)).toBe(false);
+	// UI-level check: the sidebar list and diff panel re-fetch immediately
+	// (via the explicit `loadChangedFiles()` call after discard) rather than
+	// waiting on the backend file watcher's debounced event, which this
+	// jsdom harness doesn't simulate anyway.
+	await waitFor(() =>
+		expect(screen.queryByText("example.ts")).not.toBeInTheDocument(),
+	);
 	const undoButton = within(toast.closest('[role="status"]')!).getByRole(
 		"button",
 		{ name: /^undo$/i },
@@ -78,6 +80,7 @@ it("captures Undo on the discard-all toast restoring the change", async () => {
 		name: "review-discard-undo-02-toast-with-undo",
 		expectations: [
 			'A toast titled "Discarded" reading "All changes discarded" is visible with an underlined "Undo" action button inside it.',
+			"The Changes section in the sidebar and the main diff panel no longer show example.ts -- the list refreshed to reflect the discard.",
 		],
 	});
 
@@ -86,11 +89,17 @@ it("captures Undo on the discard-all toast restoring the change", async () => {
 	// Same independent, disk-level check for the restore.
 	expect(fs.existsSync(filePathOnDisk)).toBe(true);
 	expect(fs.readFileSync(filePathOnDisk, "utf8")).toBe(FILE_CONTENT);
+	// UI-level check: the file reappears in the sidebar/diff panel without
+	// any further user action.
+	await waitFor(() =>
+		expect(screen.getAllByText("example.ts").length).toBeGreaterThan(0),
+	);
 
 	await captureDocument(document, {
 		name: "review-discard-undo-03-after-undo",
 		expectations: [
 			'A "Restored" toast reading "Discarded changes have been restored" is visible.',
+			"example.ts is listed again in the Changes section and its diff hunk is visible in the main panel, exactly as before the discard.",
 		],
 	});
 }, 60000);
