@@ -76,6 +76,13 @@ const CommitInput = memo(
 						}`
 					: "Commit";
 
+			const pendingLabel =
+				pendingAction === "push"
+					? "Pushing…"
+					: pendingAction === "pr"
+						? "Creating PR…"
+						: "Committing…";
+
 			return (
 				<div className="px-4 py-3 border-b border-border space-y-2">
 					<Textarea
@@ -90,13 +97,16 @@ const CommitInput = memo(
 					/>
 					<div className="flex w-full">
 						<Button
-							className="flex-1 text-sm !h-auto py-1.5 rounded-r-none"
+							className="flex-1 text-sm !h-auto py-1.5 rounded-r-none gap-1.5"
 							disabled={disabled || pending}
 							onClick={() => runAction(onCommit)}
 							size="sm"
 						>
-							{pending && pendingAction === "commit" ? (
-								<Loader2 className="w-4 h-4 animate-spin" />
+							{pending ? (
+								<>
+									<Loader2 className="w-4 h-4 animate-spin" />
+									{pendingLabel}
+								</>
 							) : (
 								commitLabel
 							)}
@@ -109,29 +119,19 @@ const CommitInput = memo(
 									size="sm"
 									aria-label="More commit options"
 								>
-									{pending && pendingAction !== "commit" ? (
-										<Loader2 className="w-4 h-4 animate-spin" />
-									) : (
-										<ChevronDown className="w-4 h-4" />
-									)}
+									<ChevronDown className="w-4 h-4" />
 								</Button>
 							</DropdownMenuTrigger>
 							<DropdownMenuContent align="end" sideOffset={4}>
 								<DropdownMenuItem
 									disabled={disabled || pending}
-									onSelect={(event) => {
-										event.preventDefault();
-										runAction(onCommitAndPush);
-									}}
+									onSelect={() => runAction(onCommitAndPush)}
 								>
 									Commit and push
 								</DropdownMenuItem>
 								<DropdownMenuItem
 									disabled={disabled || pending || !canCreatePr}
-									onSelect={(event) => {
-										event.preventDefault();
-										runAction(onCommitAndCreatePR);
-									}}
+									onSelect={() => runAction(onCommitAndCreatePR)}
 								>
 									Commit and create PR
 								</DropdownMenuItem>
