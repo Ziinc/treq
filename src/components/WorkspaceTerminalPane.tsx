@@ -451,6 +451,31 @@ const WorkspaceTerminalPaneInner = forwardRef<
 			[handleAddShell],
 		);
 
+		// Cmd+W: Close the selected terminal (never closes the treq window)
+		useKeyboardShortcut(
+			"w",
+			true,
+			() => {
+				if (!activePtySessionId) return;
+				if (activePtySessionId.startsWith("shell-")) {
+					handleCloseShell(activePtySessionId);
+					return;
+				}
+				const claudeSession = claudeSessions.find(
+					(s) => s.ptySessionId === activePtySessionId,
+				);
+				if (claudeSession) {
+					handleCloseClaudeSession(claudeSession.sessionId);
+				}
+			},
+			[
+				activePtySessionId,
+				claudeSessions,
+				handleCloseShell,
+				handleCloseClaudeSession,
+			],
+		);
+
 		// Build ordered list of all terminals for rendering based on terminalOrder
 		const shellTerminalMap = new Map(shellTerminals.map((t) => [t.id, t]));
 		const claudeSessionMap = new Map(
