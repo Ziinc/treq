@@ -4320,7 +4320,7 @@ pub fn jj_get_sync_status(
         Ok(ids) => ids,
         Err(e) => {
             if !not_on_remote {
-                eprintln!("[sync_status] Failed to get ahead count: {}", e);
+                tracing::warn!("[sync_status] Failed to get ahead count: {}", e);
             }
             Vec::new()
         }
@@ -4329,7 +4329,7 @@ pub fn jj_get_sync_status(
         Ok(ids) => ids,
         Err(e) => {
             if !not_on_remote {
-                eprintln!("[sync_status] Failed to get behind count: {}", e);
+                tracing::warn!("[sync_status] Failed to get behind count: {}", e);
             }
             Vec::new()
         }

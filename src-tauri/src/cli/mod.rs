@@ -45,39 +45,29 @@ pub fn init_cli_binary_paths() {
     binary_paths::init_binary_paths_cache(paths);
 }
 
-/// Top-level CLI dispatch. Returns `true` if a CLI command was handled.
-pub fn handle_cli_command(subcommand: &SubcommandMatches) -> bool {
-    match subcommand.name.as_str() {
-        "add" => {
-            workspace_handlers::handle_workspace_add(&subcommand.matches);
-            true
-        }
-        "set" => {
-            workspace_handlers::handle_workspace_set(&subcommand.matches);
-            true
-        }
-        "st" => {
-            workspace_handlers::handle_workspace_status(&subcommand.matches);
-            true
-        }
-        "mv" => {
-            workspace_handlers::handle_workspace_move(&subcommand.matches);
-            true
-        }
-        "agent" => {
-            workspace_handlers::handle_workspace_agent(&subcommand.matches);
-            true
-        }
-        "commit" => {
-            workspace_handlers::handle_workspace_commit(&subcommand.matches);
-            true
-        }
+/// Top-level CLI dispatch. Returns the process exit code if the subcommand was
+/// recognized, or `None` if it was not (caller should print usage and exit).
+pub fn handle_cli_command(subcommand: &SubcommandMatches) -> Option<i32> {
+    let success = match subcommand.name.as_str() {
+        "add" => workspace_handlers::handle_workspace_add(&subcommand.matches),
+        "set" => workspace_handlers::handle_workspace_set(&subcommand.matches),
+        "st" => workspace_handlers::handle_workspace_status(&subcommand.matches),
+        "mv" => workspace_handlers::handle_workspace_move(&subcommand.matches),
+        "agent" => workspace_handlers::handle_workspace_agent(&subcommand.matches),
+        "commit" => workspace_handlers::handle_workspace_commit(&subcommand.matches),
         "help" => {
             print_cli_help();
             true
         }
-        _ => false,
-    }
+        _ => return None,
+    };
+    Some(if success { 0 } else { 1 })
+}
+
+/// Prints an error to stderr and records it in the app's log file.
+pub(super) fn log_cli_error(msg: &str) {
+    eprintln!("{}", msg);
+    tracing::error!("{}", msg);
 }
 
 /// Handles top-level CLI args that do not map to subcommands.

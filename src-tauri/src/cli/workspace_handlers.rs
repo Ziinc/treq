@@ -61,15 +61,15 @@ fn get_arg_values(matches: &Matches, name: &str) -> Vec<String> {
     }
 }
 
-pub(super) fn handle_workspace_add(matches: &Matches) {
+pub(super) fn handle_workspace_add(matches: &Matches) -> bool {
     let branch_name = match get_arg_value(matches, "branch_name") {
         Some(name) => name,
         None => {
-            eprintln!("Error: branch name is required");
+            super::log_cli_error("Error: branch name is required");
             eprintln!(
                 "Usage: treq add <branch_name> [-d description] [-l title] [-s source_branch] [-p sparse_path]..."
             );
-            return;
+            return false;
         }
     };
 
@@ -81,15 +81,15 @@ pub(super) fn handle_workspace_add(matches: &Matches) {
     let repo_path = match detect_repo_path() {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("Error: {}", e);
-            return;
+            super::log_cli_error(&format!("Error: {}", e));
+            return false;
         }
     };
 
     // Ensure the repo is initialized
     if let Err(e) = core::init(&repo_path) {
-        eprintln!("Error initializing repo: {}", e);
-        return;
+        super::log_cli_error(&format!("Error initializing repo: {}", e));
+        return false;
     }
 
     match core::create_workspace(
@@ -111,22 +111,24 @@ pub(super) fn handle_workspace_add(matches: &Matches) {
                 .join("workspaces")
                 .join(&workspace.workspace_path);
             println!("  Path: {}", full_path.display());
+            true
         }
         Err(e) => {
-            eprintln!("Error creating workspace: {}", e);
+            super::log_cli_error(&format!("Error creating workspace: {}", e));
+            false
         }
     }
 }
 
-pub(super) fn handle_workspace_set(matches: &Matches) {
+pub(super) fn handle_workspace_set(matches: &Matches) -> bool {
     let workspace_name = match get_arg_value(matches, "workspace_name") {
         Some(name) => name,
         None => {
-            eprintln!("Error: workspace name is required");
+            super::log_cli_error("Error: workspace name is required");
             eprintln!(
                 "Usage: treq set <workspace_name> [-d description] [-l title] [-t target_branch]"
             );
-            return;
+            return false;
         }
     };
 
@@ -135,17 +137,17 @@ pub(super) fn handle_workspace_set(matches: &Matches) {
     let target_branch = get_arg_value(matches, "target-branch");
 
     if description.is_none() && target_branch.is_none() && title.is_none() {
-        eprintln!(
-            "Error: specify at least one of -d (description), -l (title), or -t (target branch)"
+        super::log_cli_error(
+            "Error: specify at least one of -d (description), -l (title), or -t (target branch)",
         );
-        return;
+        return false;
     }
 
     let repo_path = match detect_repo_path() {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("Error: {}", e);
-            return;
+            super::log_cli_error(&format!("Error: {}", e));
+            return false;
         }
     };
 
@@ -153,12 +155,12 @@ pub(super) fn handle_workspace_set(matches: &Matches) {
     let workspace = match local_db::get_workspace_by_branch(&repo_path, &workspace_name) {
         Ok(Some(ws)) => ws,
         Ok(None) => {
-            eprintln!("Error: workspace '{}' not found", workspace_name);
-            return;
+            super::log_cli_error(&format!("Error: workspace '{}' not found", workspace_name));
+            return false;
         }
         Err(e) => {
-            eprintln!("Error looking up workspace: {}", e);
-            return;
+            super::log_cli_error(&format!("Error looking up workspace: {}", e));
+            return false;
         }
     };
 
@@ -192,21 +194,23 @@ pub(super) fn handle_workspace_set(matches: &Matches) {
             if let Some(ref target) = updated.target_branch {
                 println!("  Target: {}", target);
             }
+            true
         }
         Err(e) => {
-            eprintln!("Error updating workspace: {}", e);
+            super::log_cli_error(&format!("Error updating workspace: {}", e));
+            false
         }
     }
 }
 
-pub(super) fn handle_workspace_status(matches: &Matches) {
+pub(super) fn handle_workspace_status(matches: &Matches) -> bool {
     let workspace_name = get_arg_value(matches, "workspace_name");
 
     let repo_path = match detect_repo_path() {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("Error: {}", e);
-            return;
+            super::log_cli_error(&format!("Error: {}", e));
+            return false;
         }
     };
 
@@ -216,12 +220,12 @@ pub(super) fn handle_workspace_status(matches: &Matches) {
             let workspace = match local_db::get_workspace_by_branch(&repo_path, &name) {
                 Ok(Some(ws)) => ws,
                 Ok(None) => {
-                    eprintln!("Error: workspace '{}' not found", name);
-                    return;
+                    super::log_cli_error(&format!("Error: workspace '{}' not found", name));
+                    return false;
                 }
                 Err(e) => {
-                    eprintln!("Error looking up workspace: {}", e);
-                    return;
+                    super::log_cli_error(&format!("Error looking up workspace: {}", e));
+                    return false;
                 }
             };
 
@@ -232,9 +236,11 @@ pub(super) fn handle_workspace_status(matches: &Matches) {
                         &status.partial.current.branch_name,
                     );
                     print_workspace_status_detail(&status, pr.as_ref());
+                    true
                 }
                 Err(e) => {
-                    eprintln!("Error getting workspace status: {}", e);
+                    super::log_cli_error(&format!("Error getting workspace status: {}", e));
+                    false
                 }
             }
         }
@@ -244,7 +250,7 @@ pub(super) fn handle_workspace_status(matches: &Matches) {
                 Ok(statuses) => {
                     if statuses.is_empty() {
                         println!("No workspaces found.");
-                        return;
+                        return true;
                     }
                     for line in format_workspace_stack_lines(&statuses) {
                         println!("{line}");
@@ -257,34 +263,36 @@ pub(super) fn handle_workspace_status(matches: &Matches) {
                         );
                         print_workspace_partial_status(status, pr.as_ref());
                     }
+                    true
                 }
                 Err(e) => {
-                    eprintln!("Error listing workspace statuses: {}", e);
+                    super::log_cli_error(&format!("Error listing workspace statuses: {}", e));
+                    false
                 }
             }
         }
     }
 }
 
-pub(super) fn handle_workspace_move(matches: &Matches) {
+pub(super) fn handle_workspace_move(matches: &Matches) -> bool {
     let source = match get_arg_value(matches, "source") {
         Some(value) => value,
         None => {
-            eprintln!("Error: source workspace is required");
+            super::log_cli_error("Error: source workspace is required");
             eprintln!(
                 "Usage: treq mv <source> <destination> -f [FILES...] -r [RANGES...] -c [COMMITS...]  (use '.' for the home repo)"
             );
-            return;
+            return false;
         }
     };
     let destination = match get_arg_value(matches, "destination") {
         Some(value) => value,
         None => {
-            eprintln!("Error: destination workspace is required");
+            super::log_cli_error("Error: destination workspace is required");
             eprintln!(
                 "Usage: treq mv <source> <destination> -f [FILES...] -r [RANGES...] -c [COMMITS...]  (use '.' for the home repo)"
             );
-            return;
+            return false;
         }
     };
 
@@ -296,8 +304,8 @@ pub(super) fn handle_workspace_move(matches: &Matches) {
         match core::parse_hunk_spec(&raw_hunk) {
             Ok(spec) => hunks.push(spec),
             Err(error) => {
-                eprintln!("Error: {}", error);
-                return;
+                super::log_cli_error(&format!("Error: {}", error));
+                return false;
             }
         }
     }
@@ -308,15 +316,15 @@ pub(super) fn handle_workspace_move(matches: &Matches) {
         commits,
     };
     if !request.has_selectors() {
-        eprintln!("Error: specify at least one of -f, -r, or -c");
-        return;
+        super::log_cli_error("Error: specify at least one of -f, -r, or -c");
+        return false;
     }
 
     let repo_path = match detect_repo_path() {
         Ok(path) => path,
         Err(error) => {
-            eprintln!("Error: {}", error);
-            return;
+            super::log_cli_error(&format!("Error: {}", error));
+            return false;
         }
     };
 
@@ -333,66 +341,69 @@ pub(super) fn handle_workspace_move(matches: &Matches) {
             );
             for warning in result.warnings {
                 eprintln!("Warning: {}", warning);
+                tracing::warn!("{}", warning);
             }
+            true
         }
         Err(error) => {
-            eprintln!("Error moving workspace changes: {}", error);
+            super::log_cli_error(&format!("Error moving workspace changes: {}", error));
+            false
         }
     }
 }
 
-pub(super) fn handle_workspace_agent(matches: &Matches) {
+pub(super) fn handle_workspace_agent(matches: &Matches) -> bool {
     let branch = match get_arg_value(matches, "branch") {
         Some(value) => value,
         None => {
-            eprintln!("Error: branch is required");
+            super::log_cli_error("Error: branch is required");
             eprintln!("Usage: treq agent <branch> <prompt> [-m <edit|plan>]");
-            return;
+            return false;
         }
     };
 
     let prompt = match get_arg_value(matches, "prompt") {
         Some(value) => value,
         None => {
-            eprintln!("Error: prompt is required");
+            super::log_cli_error("Error: prompt is required");
             eprintln!("Usage: treq agent <branch> <prompt> [-m <edit|plan>]");
-            return;
+            return false;
         }
     };
 
     let mode = match parse_agent_mode_or_default(get_arg_value(matches, "mode").as_deref()) {
         Ok(mode) => mode.to_string(),
         Err(error) => {
-            eprintln!("Error: {}", error);
-            return;
+            super::log_cli_error(&format!("Error: {}", error));
+            return false;
         }
     };
 
     let repo_path = match detect_repo_path() {
         Ok(path) => path,
         Err(error) => {
-            eprintln!("Error: {}", error);
-            return;
+            super::log_cli_error(&format!("Error: {}", error));
+            return false;
         }
     };
 
     if let Err(error) = core::init(&repo_path) {
-        eprintln!("Error initializing repo: {}", error);
-        return;
+        super::log_cli_error(&format!("Error initializing repo: {}", error));
+        return false;
     }
 
     let workspace = match local_db::get_workspace_by_branch(&repo_path, &branch) {
         Ok(Some(workspace)) => workspace,
         Ok(None) => {
-            eprintln!(
+            super::log_cli_error(&format!(
                 "Error: workspace branch '{}' not found. Create it first with `treq add {}`.",
                 branch, branch
-            );
-            return;
+            ));
+            return false;
         }
         Err(error) => {
-            eprintln!("Error looking up workspace: {}", error);
-            return;
+            super::log_cli_error(&format!("Error looking up workspace: {}", error));
+            return false;
         }
     };
 
@@ -410,27 +421,28 @@ pub(super) fn handle_workspace_agent(matches: &Matches) {
         &agent,
         &request_id,
     ) {
-        eprintln!("Error dispatching agent request: {}", error);
-        std::process::exit(1);
+        super::log_cli_error(&format!("Error dispatching agent request: {}", error));
+        return false;
     }
+    true
 }
 
-pub(super) fn handle_workspace_commit(matches: &Matches) {
+pub(super) fn handle_workspace_commit(matches: &Matches) -> bool {
     let workspace_name = match get_arg_value(matches, "workspace_name") {
         Some(value) => value,
         None => {
-            eprintln!("Error: workspace name is required");
+            super::log_cli_error("Error: workspace name is required");
             eprintln!("Usage: treq commit <workspace_name> -m <message> [--push]");
-            return;
+            return false;
         }
     };
 
     let message = match get_arg_value(matches, "message") {
         Some(value) => value,
         None => {
-            eprintln!("Error: commit message is required (-m)");
+            super::log_cli_error("Error: commit message is required (-m)");
             eprintln!("Usage: treq commit <workspace_name> -m <message> [--push]");
-            return;
+            return false;
         }
     };
 
@@ -439,28 +451,28 @@ pub(super) fn handle_workspace_commit(matches: &Matches) {
     let repo_path = match detect_repo_path() {
         Ok(path) => path,
         Err(error) => {
-            eprintln!("Error: {}", error);
-            return;
+            super::log_cli_error(&format!("Error: {}", error));
+            return false;
         }
     };
 
     let workspace = match local_db::get_workspace_by_branch(&repo_path, &workspace_name) {
         Ok(Some(ws)) => ws,
         Ok(None) => {
-            eprintln!("Error: workspace '{}' not found", workspace_name);
-            return;
+            super::log_cli_error(&format!("Error: workspace '{}' not found", workspace_name));
+            return false;
         }
         Err(error) => {
-            eprintln!("Error looking up workspace: {}", error);
-            return;
+            super::log_cli_error(&format!("Error looking up workspace: {}", error));
+            return false;
         }
     };
 
     match core::commit_workspace(&repo_path, workspace.id, &message) {
         Ok(result) => println!("{}", result),
         Err(error) => {
-            eprintln!("Error creating commit: {}", error);
-            std::process::exit(1);
+            super::log_cli_error(&format!("Error creating commit: {}", error));
+            return false;
         }
     }
 
@@ -468,9 +480,11 @@ pub(super) fn handle_workspace_commit(matches: &Matches) {
         match core::push_workspace_to_remote(&repo_path, Some(workspace.id)) {
             Ok(result) => println!("{}", result),
             Err(error) => {
-                eprintln!("Error pushing to remote: {}", error);
-                std::process::exit(1);
+                super::log_cli_error(&format!("Error pushing to remote: {}", error));
+                return false;
             }
         }
     }
+
+    true
 }
