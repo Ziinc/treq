@@ -910,11 +910,13 @@ pub fn workspace_status(
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_hunk_spec, parse_workspace_metadata,
+        parse_hunk_spec, parse_workspace_metadata, plan_workspace_target_move,
         resolve_workspace_diff_base_revision_from_last_rebased,
         resolve_workspace_diff_conflict_marker_style,
         resolve_workspace_diff_tip_revision_from_workspace_state, HunkSpec, WorkspaceMoveRequest,
+        WorkspaceTargetMoveStep,
     };
+    use crate::local_db::Workspace;
     use rusqlite::Connection;
     use std::sync::{Mutex, OnceLock};
     use tempfile::TempDir;
@@ -922,6 +924,167 @@ mod tests {
     fn env_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    fn test_workspace(id: i64, branch: &str, target: Option<&str>) -> Workspace {
+        Workspace {
+            id,
+            repo_path: "/tmp/repo".to_string(),
+            workspace_name: branch.to_string(),
+            workspace_path: format!("ws/{}", branch),
+            branch_name: branch.to_string(),
+            created_at: "2026-01-01T00:00:00.000Z".to_string(),
+            refreshed_at: None,
+            metadata: None,
+            target_branch: target.map(str::to_string),
+            title: branch.to_string(),
+            description: None,
+            moved_files: None,
+            not_on_remote: false,
+            sparse_patterns: None,
+        }
+    }
+
+    #[test]
+    fn plan_move_onto_non_descendant_is_single_step() {
+        let parent = test_workspace(1, "feat/parent", Some("main"));
+        let other = test_workspace(2, "feat/other", Some("main"));
+        let child = test_workspace(3, "feat/child", Some("feat/parent"));
+
+        let steps = plan_workspace_target_move(
+            &[parent.clone(), other, child.clone()],
+            "feat/child",
+            "feat/other",
+            "main",
+        )
+        .expect("plan should succeed");
+
+        assert_eq!(
+            steps,
+            vec![WorkspaceTargetMoveStep {
+                workspace_id: child.id,
+                branch_name: "feat/child".to_string(),
+                new_target_branch: "feat/other".to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn plan_parent_below_child_lifts_child_first() {
+        let parent = test_workspace(1, "feat/parent", Some("main"));
+        let child = test_workspace(2, "feat/child", Some("feat/parent"));
+
+        let steps =
+            plan_workspace_target_move(&[parent.clone(), child.clone()], "feat/parent", "feat/child", "main")
+                .expect("plan should succeed");
+
+        assert_eq!(
+            steps,
+            vec![
+                WorkspaceTargetMoveStep {
+                    workspace_id: child.id,
+                    branch_name: "feat/child".to_string(),
+                    new_target_branch: "main".to_string(),
+                },
+                WorkspaceTargetMoveStep {
+                    workspace_id: parent.id,
+                    branch_name: "feat/parent".to_string(),
+                    new_target_branch: "feat/child".to_string(),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn plan_three_level_root_below_tip_lifts_bridge() {
+        let a = test_workspace(1, "feat/a", Some("main"));
+        let b = test_workspace(2, "feat/b", Some("feat/a"));
+        let c = test_workspace(3, "feat/c", Some("feat/b"));
+
+        let steps =
+            plan_workspace_target_move(&[a.clone(), b.clone(), c], "feat/a", "feat/c", "main")
+                .expect("plan should succeed");
+
+        assert_eq!(
+            steps,
+            vec![
+                WorkspaceTargetMoveStep {
+                    workspace_id: b.id,
+                    branch_name: "feat/b".to_string(),
+                    new_target_branch: "main".to_string(),
+                },
+                WorkspaceTargetMoveStep {
+                    workspace_id: a.id,
+                    branch_name: "feat/a".to_string(),
+                    new_target_branch: "feat/c".to_string(),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn plan_middle_below_child_in_three_level_stack() {
+        let a = test_workspace(1, "feat/a", Some("main"));
+        let b = test_workspace(2, "feat/b", Some("feat/a"));
+        let c = test_workspace(3, "feat/c", Some("feat/b"));
+
+        let steps =
+            plan_workspace_target_move(&[a, b.clone(), c.clone()], "feat/b", "feat/c", "main")
+                .expect("plan should succeed");
+
+        assert_eq!(
+            steps,
+            vec![
+                WorkspaceTargetMoveStep {
+                    workspace_id: c.id,
+                    branch_name: "feat/c".to_string(),
+                    new_target_branch: "feat/a".to_string(),
+                },
+                WorkspaceTargetMoveStep {
+                    workspace_id: b.id,
+                    branch_name: "feat/b".to_string(),
+                    new_target_branch: "feat/c".to_string(),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn plan_rejects_self_target() {
+        let parent = test_workspace(1, "feat/parent", Some("main"));
+        let err = plan_workspace_target_move(&[parent], "feat/parent", "feat/parent", "main")
+            .expect_err("self target should fail");
+        assert!(err.to_lowercase().contains("cycle"));
+    }
+
+    #[test]
+    fn plan_uses_default_branch_when_lifting_off_null_target_root() {
+        let parent = test_workspace(1, "feat/parent", None);
+        let child = test_workspace(2, "feat/child", Some("feat/parent"));
+
+        let steps = plan_workspace_target_move(
+            &[parent.clone(), child.clone()],
+            "feat/parent",
+            "feat/child",
+            "develop",
+        )
+        .expect("plan should succeed");
+
+        assert_eq!(
+            steps,
+            vec![
+                WorkspaceTargetMoveStep {
+                    workspace_id: child.id,
+                    branch_name: "feat/child".to_string(),
+                    new_target_branch: "develop".to_string(),
+                },
+                WorkspaceTargetMoveStep {
+                    workspace_id: parent.id,
+                    branch_name: "feat/parent".to_string(),
+                    new_target_branch: "feat/child".to_string(),
+                },
+            ]
+        );
     }
 
     #[test]
@@ -1210,6 +1373,197 @@ fn sync_home_and_workspace_for_branch(
     Ok(())
 }
 
+/// One target_branch update in a cycle-safe retarget plan.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceTargetMoveStep {
+    pub workspace_id: i64,
+    pub branch_name: String,
+    pub new_target_branch: String,
+}
+
+fn is_descendant_of(
+    workspaces: &[local_db::Workspace],
+    candidate: &str,
+    ancestor: &str,
+) -> bool {
+    if candidate == ancestor {
+        return false;
+    }
+
+    let by_branch: HashMap<&str, &local_db::Workspace> = workspaces
+        .iter()
+        .map(|ws| (ws.branch_name.as_str(), ws))
+        .collect();
+
+    let mut current = candidate;
+    let mut visited = HashSet::new();
+
+    loop {
+        if !visited.insert(current) {
+            return false;
+        }
+        let Some(ws) = by_branch.get(current) else {
+            return false;
+        };
+        let Some(target) = ws.target_branch.as_deref() else {
+            return false;
+        };
+        if target == ancestor {
+            return true;
+        }
+        current = target;
+    }
+}
+
+/// Plan `target_branch` updates so `moving_branch` can target `new_target_branch`
+/// without creating a cycle.
+///
+/// When the new target is a descendant (parent dragged below a child), the
+/// immediate child of `moving_branch` on the path to the new target is lifted
+/// onto `moving_branch`'s current parent first, then the move is applied.
+pub fn plan_workspace_target_move(
+    workspaces: &[local_db::Workspace],
+    moving_branch: &str,
+    new_target_branch: &str,
+    default_branch: &str,
+) -> Result<Vec<WorkspaceTargetMoveStep>, String> {
+    let by_branch: HashMap<&str, &local_db::Workspace> = workspaces
+        .iter()
+        .map(|ws| (ws.branch_name.as_str(), ws))
+        .collect();
+
+    let Some(moving) = by_branch.get(moving_branch) else {
+        return Ok(vec![]);
+    };
+
+    if moving_branch == new_target_branch {
+        return Err("Cannot target self: would create a cycle".to_string());
+    }
+
+    let mut steps = Vec::new();
+
+    if is_descendant_of(workspaces, new_target_branch, moving_branch) {
+        let mut current = new_target_branch;
+        let mut visited = HashSet::new();
+        let mut bridge: Option<&local_db::Workspace> = None;
+
+        loop {
+            if !visited.insert(current) {
+                break;
+            }
+            let Some(ws) = by_branch.get(current) else {
+                break;
+            };
+            let Some(target) = ws.target_branch.as_deref() else {
+                break;
+            };
+            if target == moving_branch {
+                bridge = Some(ws);
+                break;
+            }
+            current = target;
+        }
+
+        if let Some(bridge) = bridge {
+            let lift_target = moving
+                .target_branch
+                .as_deref()
+                .unwrap_or(default_branch);
+            if lift_target != bridge.branch_name {
+                steps.push(WorkspaceTargetMoveStep {
+                    workspace_id: bridge.id,
+                    branch_name: bridge.branch_name.clone(),
+                    new_target_branch: lift_target.to_string(),
+                });
+            }
+        }
+    }
+
+    steps.push(WorkspaceTargetMoveStep {
+        workspace_id: moving.id,
+        branch_name: moving.branch_name.clone(),
+        new_target_branch: new_target_branch.to_string(),
+    });
+
+    Ok(steps)
+}
+
+/// Rebase a single workspace onto `target_branch` and persist the target.
+pub fn apply_workspace_target_branch(
+    repo_path: &str,
+    workspace_id: i64,
+    target_branch: &str,
+) -> Result<local_db::Workspace, String> {
+    let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
+        .map_err(|e| format!("Failed to get workspace from db: {}", e))?
+        .ok_or("Workspace not found in database")?;
+
+    let workspace_path = Path::new(repo_path)
+        .join(".treq")
+        .join("workspaces")
+        .join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path
+        .to_str()
+        .ok_or("Failed to convert workspace path to string")?;
+
+    let _ = jj::jj_git_fetch(repo_path);
+
+    let rebase_result = jj::jj_rebase_workspace_bookmark_onto(
+        workspace_path_str,
+        &workspace.branch_name,
+        target_branch,
+    )
+    .map_err(|e| format!("Failed to rebase workspace: {}", e))?;
+
+    if !rebase_result.success {
+        return Err(format!("Rebase failed: {}", rebase_result.message));
+    }
+
+    local_db::update_workspace_target_branch(repo_path, workspace_id, target_branch)
+        .map_err(|e| format!("Failed to update target branch: {}", e))?;
+
+    local_db::get_workspace_by_id(repo_path, workspace_id)
+        .map_err(|e| format!("Failed to get updated workspace: {}", e))?
+        .ok_or_else(|| "Workspace not found after update".to_string())
+}
+
+/// Retarget a workspace onto `new_target_branch`, lifting bridge children first
+/// when needed so parent/child stack reorders stay acyclic.
+///
+/// Shared by the UI (`set_workspace_target_branch` / `update_workspace`) and CLI
+/// (`treq set -t`).
+pub fn retarget_workspace(
+    repo_path: &str,
+    workspace_id: i64,
+    new_target_branch: &str,
+    default_branch: &str,
+) -> Result<local_db::Workspace, String> {
+    let workspaces = local_db::get_workspaces(repo_path)
+        .map_err(|e| format!("Failed to list workspaces: {}", e))?;
+    let moving = workspaces
+        .iter()
+        .find(|ws| ws.id == workspace_id)
+        .ok_or("Workspace not found in database")?;
+
+    let steps = plan_workspace_target_move(
+        &workspaces,
+        &moving.branch_name,
+        new_target_branch,
+        default_branch,
+    )?;
+
+    let mut updated = None;
+    for step in steps {
+        updated = Some(apply_workspace_target_branch(
+            repo_path,
+            step.workspace_id,
+            &step.new_target_branch,
+        )?);
+    }
+
+    updated.ok_or_else(|| "No retarget steps produced".to_string())
+}
+
 /// Updates a workspace's target branch and/or description.
 /// Rebases the workspace to the target branch and updates metadata.
 /// The workspace's branch name remains unchanged.
@@ -1235,44 +1589,16 @@ pub fn update_workspace_with_title(
     title: MaybeEmptyParam<String>,
     description: MaybeEmptyParam<String>,
 ) -> Result<local_db::Workspace, String> {
-    let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
+    let _workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
         .map_err(|e| format!("Failed to get workspace from db: {}", e))?
         .ok_or("Workspace not found in database")?;
 
-    let workspace_path = Path::new(repo_path)
-        .join(".treq")
-        .join("workspaces")
-        .join(&workspace.workspace_path);
-    let workspace_path_str = workspace_path
-        .to_str()
-        .ok_or("Failed to convert workspace path to string")?;
-
     match target_branch {
         MaybeEmptyParam::EmptyValue => {
-            local_db::update_workspace_target_branch(repo_path, workspace_id, "main")
-                .map_err(|e| format!("Failed to update target branch: {}", e))?;
-            jj::jj_rebase_onto(workspace_path_str, "main", "diff")
-                .map_err(|e| format!("Failed to rebase workspace: {}", e))?;
+            retarget_workspace(repo_path, workspace_id, "main", "main")?;
         }
         MaybeEmptyParam::Some(branch) => {
-            // // First, fetch in the main repo to ensure git branches are available
-            let _ = jj::jj_git_fetch(repo_path);
-
-            // Rebase workspace onto the target commit
-            let rebase_result = jj::jj_rebase_workspace_bookmark_onto(
-                workspace_path_str,
-                &workspace.branch_name,
-                &branch,
-            )
-            .map_err(|e| format!("Failed to rebase workspace: {}", e))?;
-
-            if !rebase_result.success {
-                return Err(format!("Rebase failed: {}", rebase_result.message));
-            }
-
-            // Update database with new target branch
-            local_db::update_workspace_target_branch(repo_path, workspace_id, &branch)
-                .map_err(|e| format!("Failed to update target branch: {}", e))?;
+            retarget_workspace(repo_path, workspace_id, &branch, "main")?;
         }
         MaybeEmptyParam::Omitted => {}
     }

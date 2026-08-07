@@ -6,13 +6,13 @@ import {
 	createWorkspace,
 	getWorkspaces,
 	setWorkspaceTargetBranch,
+	updateWorkspace,
 } from "../../../src/lib/api";
 import type { WorkspaceSidebarStatus } from "../../../src/lib/api-types";
 import { getFullWorkspacePath } from "../../../src/lib/utils";
 import {
 	buildWorkspaceTree,
 	flattenWorkspaceTree,
-	planWorkspaceTargetMove,
 } from "../../../src/lib/workspace-tree";
 import { render, screen, waitFor } from "../../test-utils";
 import {
@@ -20,28 +20,6 @@ import {
 	findSidebarBranchElement,
 	openRepo,
 } from "../../utils";
-
-async function applyTargetMove(
-	repoPath: string,
-	movingBranch: string,
-	newTargetBranch: string,
-) {
-	const workspaces = await getWorkspaces(repoPath);
-	const steps = planWorkspaceTargetMove(
-		workspaces,
-		movingBranch,
-		newTargetBranch,
-	);
-
-	for (const step of steps) {
-		await setWorkspaceTargetBranch(
-			repoPath,
-			getFullWorkspacePath(step.workspace),
-			step.workspace.id,
-			step.newTargetBranch,
-		);
-	}
-}
 
 function sidebarOrder(workspaces: Awaited<ReturnType<typeof getWorkspaces>>) {
 	const statuses: WorkspaceSidebarStatus[] = workspaces.map((current) => ({
@@ -82,7 +60,13 @@ describe("workspace sidebar stack reorder", () => {
 			{ branch: "feat/child", depth: 1 },
 		]);
 
-		await applyTargetMove(repoPath, "feat/parent", "feat/child");
+		// Single retarget — Rust core lifts the bridge child first.
+		await setWorkspaceTargetBranch(
+			repoPath,
+			getFullWorkspacePath(parent),
+			parent.id,
+			"feat/child",
+		);
 
 		const after = await getWorkspaces(repoPath);
 		expect(after.find((w) => w.branch_name === "feat/child")?.target_branch).toBe(
@@ -127,7 +111,12 @@ describe("workspace sidebar stack reorder", () => {
 			{ branch: "feat/c", depth: 2 },
 		]);
 
-		await applyTargetMove(repoPath, "feat/a", "feat/c");
+		await setWorkspaceTargetBranch(
+			repoPath,
+			getFullWorkspacePath(a),
+			a.id,
+			"feat/c",
+		);
 
 		const after = await getWorkspaces(repoPath);
 		expect(after.find((w) => w.branch_name === "feat/b")?.target_branch).toBe(
@@ -186,5 +175,26 @@ describe("workspace sidebar stack reorder", () => {
 				{ branch: "feat/parent", depth: 1 },
 			]);
 		});
+	});
+
+	it("retargets through updateWorkspace (CLI path) without cycles", async () => {
+		await createWorkspace(repoPath, "feat/parent");
+		await createWorkspace(repoPath, "feat/child");
+
+		const initial = await getWorkspaces(repoPath);
+		const parent = initial.find((w) => w.branch_name === "feat/parent")!;
+		const child = initial.find((w) => w.branch_name === "feat/child")!;
+
+		await updateWorkspace(repoPath, child.id, "feat/parent");
+		await updateWorkspace(repoPath, parent.id, "feat/child");
+
+		const after = await getWorkspaces(repoPath);
+		expect(after.find((w) => w.branch_name === "feat/parent")?.target_branch).toBe(
+			"feat/child",
+		);
+		expect(sidebarOrder(after)).toEqual([
+			{ branch: "feat/child", depth: 0 },
+			{ branch: "feat/parent", depth: 1 },
+		]);
 	});
 });

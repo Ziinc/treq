@@ -48,7 +48,6 @@ import {
 	getWorkspaceStatus,
 	type HomeRebaseDryRunResult,
 	type JjLogResult,
-	getWorkspaces,
 	listCommits,
 	lsWorkspace,
 	pullWorkspaceFromRemote,
@@ -64,7 +63,6 @@ import { FEATURES } from "../lib/features";
 import { getStatusBgColor } from "../lib/git-status-colors";
 import type { ParsedFileChange } from "../lib/git-utils";
 import { cn, getFullWorkspacePath, resolveReadmeImageSrc } from "../lib/utils";
-import { planWorkspaceTargetMove } from "../lib/workspace-tree";
 import type { SessionCreationInfo } from "../types/sessions";
 import {
 	ChangesDiffViewer,
@@ -479,21 +477,9 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 
 				setRebasing(true);
 				try {
-					const workspaces = await getWorkspaces(effectiveRepoPath);
-					const steps = planWorkspaceTargetMove(
-						workspaces,
-						workspace.branch_name,
-						branch,
-						defaultTargetBranch,
-					);
-
-					for (const step of steps) {
-						await updateWorkspace(
-							effectiveRepoPath,
-							step.workspace.id,
-							step.newTargetBranch,
-						);
-					}
+					// Cycle-safe retarget (bridge lift) lives in Rust core so the
+					// CLI and UI share one plan via update_workspace / retarget_workspace.
+					await updateWorkspace(effectiveRepoPath, workspace.id, branch);
 
 					addToast({
 						title: "Rebased successfully",
@@ -523,14 +509,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 					setRebasing(false);
 				}
 			},
-			[
-				targetBranch,
-				workspace,
-				effectiveRepoPath,
-				addToast,
-				queryClient,
-				defaultTargetBranch,
-			],
+			[targetBranch, workspace, effectiveRepoPath, addToast, queryClient],
 		);
 
 		// Helper to get status for a directory entry

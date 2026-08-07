@@ -297,7 +297,7 @@ pub async fn update_workspace(
 
 #[tauri::command]
 pub async fn set_workspace_target_branch(
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
     repo_path: String,
     workspace_path: String,
     id: i64,
@@ -316,58 +316,23 @@ pub async fn set_workspace_target_branch(
         ));
     }
 
-    let conflict_style = crate::core::resolve_conflict_marker_style(&state.db);
     tauri::async_runtime::spawn_blocking(move || {
-        // Convert Git remote branch format (origin/main) to jj format (main@origin)
-        let jj_target_branch =
-            crate::jj::convert_git_branch_to_jj_format_public(&target_branch, &repo_path);
-
-        // Use workspace branch name to build a precise revset that avoids immutable history.
-        let workspace = local_db::get_workspace_by_id(&repo_path, id).map_err(|e| e.to_string())?;
-
         log::debug!(
-            "set_workspace_target_branch rebase start: repo_path={}, workspace_id={}, workspace_path={}, target_branch={}",
+            "set_workspace_target_branch retarget start: repo_path={}, workspace_id={}, target_branch={}",
             repo_path,
             id,
-            workspace_path,
             target_branch
         );
-        let rebase_result = if let Some(ws) = workspace {
-            // Convert workspace branch name to jj format as well
-            let jj_workspace_branch =
-                crate::jj::convert_git_branch_to_jj_format_public(&ws.branch_name, &repo_path);
-
-            // Rebase only mutable commits and exclude @ so working copy stays anchored to branch history.
-            let revset = format!(
-                "roots(mutable() & ({}..{}) ~ @)",
-                jj_target_branch, jj_workspace_branch
-            );
-            jj::jj_rebase_with_revset(
-                &workspace_path,
-                &revset,
-                &jj_target_branch,
-                &jj_workspace_branch,
-                &conflict_style,
-            )
-            .map_err(|e| e.to_string())?
-        } else {
-            // Fallback if workspace not found in DB
-            jj::jj_rebase_onto(&workspace_path, &jj_target_branch, &conflict_style)
-                .map_err(|e| e.to_string())?
-        };
+        crate::core::retarget_workspace(&repo_path, id, &target_branch, "main")?;
         log::debug!(
-            "set_workspace_target_branch rebase end: repo_path={}, workspace_id={}, success={}",
+            "set_workspace_target_branch retarget end: repo_path={}, workspace_id={}",
             repo_path,
-            id,
-            rebase_result.success
+            id
         );
-
-        // If rebase succeeded, save the target branch (in Git format for UI)
-        if rebase_result.success {
-            local_db::update_workspace_target_branch(&repo_path, id, &target_branch)?;
-        }
-
-        Ok(rebase_result)
+        Ok(JjRebaseResult {
+            success: true,
+            message: format!("Retargeted workspace onto {}", target_branch),
+        })
     })
     .await
     .map_err(|e| format!("Failed to join set_workspace_target_branch task: {}", e))?

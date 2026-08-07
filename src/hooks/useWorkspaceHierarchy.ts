@@ -6,7 +6,6 @@ import {
 	setWorkspaceTargetBranch,
 } from "../lib/api";
 import { getFullWorkspacePath } from "../lib/utils";
-import { planWorkspaceTargetMove } from "../lib/workspace-tree";
 import { useCreateStackedWorkspace } from "./useCreateStackedWorkspace";
 
 interface UseWorkspaceHierarchyOptions {
@@ -17,7 +16,6 @@ interface UseWorkspaceHierarchyOptions {
 
 export function useWorkspaceHierarchy({
 	repoPath,
-	workspaces,
 	defaultBranch = "main",
 }: UseWorkspaceHierarchyOptions) {
 	const queryClient = useQueryClient();
@@ -79,35 +77,24 @@ export function useWorkspaceHierarchy({
 		[repoPath, defaultBranch, createStackedWorkspace, invalidate],
 	);
 
-	// Move a workspace to a new target branch. When the target is a descendant
-	// (e.g. dragging a parent below a child), lift the bridge child first so
-	// the resulting stack stays acyclic.
+	// Move a workspace to a new target branch. Cycle-safe bridge lifting lives
+	// in Rust core (`retarget_workspace`) so the CLI shares the same plan.
 	const moveWorkspace = useCallback(
 		async (
 			workspace: Workspace,
 			newTargetBranch: string | null,
 		): Promise<void> => {
 			const targetBranch = newTargetBranch ?? defaultBranch;
-			const steps = planWorkspaceTargetMove(
-				workspaces,
-				workspace.branch_name,
+			const fullPath = getFullWorkspacePath(workspace);
+			await setWorkspaceTargetBranch(
+				repoPath,
+				fullPath,
+				workspace.id,
 				targetBranch,
-				defaultBranch,
 			);
-
-			for (const step of steps) {
-				const fullPath = getFullWorkspacePath(step.workspace);
-				await setWorkspaceTargetBranch(
-					repoPath,
-					fullPath,
-					step.workspace.id,
-					step.newTargetBranch,
-				);
-			}
-
 			invalidate();
 		},
-		[repoPath, workspaces, defaultBranch, invalidate],
+		[repoPath, defaultBranch, invalidate],
 	);
 
 	return { addAfter, addBefore, moveWorkspace };

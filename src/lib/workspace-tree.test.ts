@@ -5,7 +5,6 @@ import {
 	flattenWorkspaceTree,
 	getValidTargets,
 	getWorkspaceStack,
-	planWorkspaceTargetMove,
 } from "./workspace-tree";
 
 function makeWorkspace(
@@ -185,80 +184,6 @@ describe("getWorkspaceStack", () => {
 			workspace: workspaces[1],
 			isCurrent: true,
 		});
-	});
-});
-
-describe("planWorkspaceTargetMove", () => {
-	it("moves onto a non-descendant with a single reparent step", () => {
-		const parent = makeWorkspace(1, "feat/parent", "main");
-		const other = makeWorkspace(2, "feat/other", "main");
-		const child = makeWorkspace(3, "feat/child", "feat/parent");
-
-		expect(
-			planWorkspaceTargetMove(
-				[parent, other, child],
-				"feat/child",
-				"feat/other",
-			),
-		).toEqual([{ workspace: child, newTargetBranch: "feat/other" }]);
-	});
-
-	it("swaps parent below child by lifting the child first", () => {
-		const parent = makeWorkspace(1, "feat/parent", "main");
-		const child = makeWorkspace(2, "feat/child", "feat/parent");
-
-		expect(
-			planWorkspaceTargetMove([parent, child], "feat/parent", "feat/child"),
-		).toEqual([
-			{ workspace: child, newTargetBranch: "main" },
-			{ workspace: parent, newTargetBranch: "feat/child" },
-		]);
-	});
-
-	it("moves a root below a three-level tip by lifting the bridge child", () => {
-		const a = makeWorkspace(1, "feat/a", "main");
-		const b = makeWorkspace(2, "feat/b", "feat/a");
-		const c = makeWorkspace(3, "feat/c", "feat/b");
-
-		expect(planWorkspaceTargetMove([a, b, c], "feat/a", "feat/c")).toEqual([
-			{ workspace: b, newTargetBranch: "main" },
-			{ workspace: a, newTargetBranch: "feat/c" },
-		]);
-	});
-
-	it("swaps a middle parent below its child in a three-level stack", () => {
-		const a = makeWorkspace(1, "feat/a", "main");
-		const b = makeWorkspace(2, "feat/b", "feat/a");
-		const c = makeWorkspace(3, "feat/c", "feat/b");
-
-		expect(planWorkspaceTargetMove([a, b, c], "feat/b", "feat/c")).toEqual([
-			{ workspace: c, newTargetBranch: "feat/a" },
-			{ workspace: b, newTargetBranch: "feat/c" },
-		]);
-	});
-
-	it("throws when targeting self", () => {
-		const parent = makeWorkspace(1, "feat/parent", "main");
-		expect(() =>
-			planWorkspaceTargetMove([parent], "feat/parent", "feat/parent"),
-		).toThrow(/cycle/i);
-	});
-
-	it("uses defaultBranch when lifting a bridge off a null-target root", () => {
-		const parent = makeWorkspace(1, "feat/parent", null);
-		const child = makeWorkspace(2, "feat/child", "feat/parent");
-
-		expect(
-			planWorkspaceTargetMove(
-				[parent, child],
-				"feat/parent",
-				"feat/child",
-				"develop",
-			),
-		).toEqual([
-			{ workspace: child, newTargetBranch: "develop" },
-			{ workspace: parent, newTargetBranch: "feat/child" },
-		]);
 	});
 });
 
