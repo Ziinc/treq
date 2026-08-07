@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { CommitInput } from "./CommitInput";
 import { render, screen } from "../../../test/test-utils";
@@ -9,9 +9,14 @@ const defaultProps = {
 	onCommitAndCreatePR: vi.fn(),
 	disabled: false,
 	pending: false,
+	workspacePath: "/tmp/test-workspace",
 };
 
 describe("CommitInput", () => {
+	beforeEach(() => {
+		sessionStorage.clear();
+	});
+
 	it("shows inline error and does not call onCommit when message is empty", async () => {
 		const user = userEvent.setup();
 		const onCommit = vi.fn();

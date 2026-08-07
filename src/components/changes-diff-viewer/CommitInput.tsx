@@ -20,6 +20,29 @@ import {
 import { cn } from "../../lib/utils";
 import type { CommitInputHandle, CommitInputProps } from "./types";
 
+const draftStorageKey = (workspacePath: string) =>
+	`treq.commitDraft.${workspacePath}`;
+
+const readDraft = (workspacePath: string): string => {
+	try {
+		return sessionStorage.getItem(draftStorageKey(workspacePath)) ?? "";
+	} catch {
+		return "";
+	}
+};
+
+const writeDraft = (workspacePath: string, message: string) => {
+	try {
+		if (message) {
+			sessionStorage.setItem(draftStorageKey(workspacePath), message);
+		} else {
+			sessionStorage.removeItem(draftStorageKey(workspacePath));
+		}
+	} catch {
+		// ignore storage failures (e.g. disabled/full storage)
+	}
+};
+
 const CommitInput = memo(
 	forwardRef<CommitInputHandle, CommitInputProps>(
 		(
@@ -33,12 +56,21 @@ const CommitInput = memo(
 				canCreatePr = false,
 				hasPr = false,
 				selectedFileCount = 0,
+				workspacePath,
 			},
 			ref,
 		) => {
-			const [message, setMessage] = useState("");
+			const [message, setMessage] = useState(() => readDraft(workspacePath));
 			const [error, setError] = useState<string | null>(null);
 			const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+			const updateMessage = useCallback(
+				(value: string) => {
+					setMessage(value);
+					writeDraft(workspacePath, value);
+				},
+				[workspacePath],
+			);
 
 			useImperativeHandle(
 				ref,
@@ -67,19 +99,19 @@ const CommitInput = memo(
 					}
 					setError(null);
 					action(trimmed);
-					setMessage("");
+					updateMessage("");
 				},
-				[message],
+				[message, updateMessage],
 			);
 
 			const handleMessageChange = useCallback(
 				(event: ChangeEvent<HTMLTextAreaElement>) => {
-					setMessage(event.target.value);
+					updateMessage(event.target.value);
 					if (error) {
 						setError(null);
 					}
 				},
-				[error],
+				[error, updateMessage],
 			);
 
 			const handleKeyDown = useCallback(
