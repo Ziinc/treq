@@ -3344,6 +3344,35 @@ fn set_git_head_branch_with_gix(repo_path: &str, branch: &str) -> Result<(), Str
     Ok(())
 }
 
+/// Reattach a detached colocated Git HEAD when it still points at the default branch tip.
+///
+/// jj history rewrites and ref export can leave Git's HEAD direct even though the checkout
+/// is still exactly on the default branch. In that state the UI displays a commit hash and
+/// subsequent workspace creation can import the detached HEAD as a separate line of history.
+/// A genuinely detached checkout is preserved unless its commit exactly matches the default
+/// branch ref.
+pub fn repair_detached_home_head_at_default_branch(
+    repo_path: &str,
+) -> Result<Option<String>, JjError> {
+    if read_git_head_branch(repo_path).map_err(JjError::IoError)? != "HEAD" {
+        return Ok(None);
+    }
+
+    let head_path = Path::new(repo_path).join(".git").join("HEAD");
+    let detached_commit = fs::read_to_string(head_path)
+        .map_err(|e| JjError::IoError(format!("Failed to read detached Git HEAD: {e}")))?;
+    let default_branch = get_default_branch(repo_path)?;
+    let Some(default_tip) = git_local_branch_commit_hex(repo_path, &default_branch) else {
+        return Ok(None);
+    };
+    if detached_commit.trim() != default_tip {
+        return Ok(None);
+    }
+
+    set_git_head_branch_with_gix(repo_path, &default_branch).map_err(JjError::IoError)?;
+    Ok(Some(default_branch))
+}
+
 fn reset_git_index_to_head_with_gix(repo_path: &str) -> Result<(), String> {
     let repo =
         gix::open(repo_path).map_err(|e| format!("Failed to open git repo with gix: {e}"))?;

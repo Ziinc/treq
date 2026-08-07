@@ -2354,6 +2354,12 @@ pub fn check_and_rebase_workspaces(
     force: Option<bool>,
     conflict_style: &str,
 ) -> Result<SingleRebaseResult, String> {
+    // Dashboard/ShowWorkspace refreshes and post-commit auto-rebase can overlap. jj transactions
+    // share one operation store across all workspaces, so serialize these history rewrites with
+    // commits to prevent stale operations, competing checkouts, and conflicted bookmarks.
+    let repo_commit_lock = commit_lock_for_repo(repo_path);
+    let _repo_commit_guard = repo_commit_lock.lock().unwrap();
+
     if let Some(id) = workspace_id {
         let default_branch = default_branch.unwrap_or_else(|| "main".to_string());
         let force = force.unwrap_or(false);
