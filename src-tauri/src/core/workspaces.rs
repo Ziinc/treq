@@ -767,6 +767,10 @@ pub fn workspace_status(
                 log::warn!("Home repo fetch: {}", err);
             }
             let default_branch = resolve_status_default_branch();
+            let home_branch = jj::resolve_home_repo_branch(repo_path)
+                .ok()
+                .filter(|branch| !branch.is_empty() && branch != "HEAD")
+                .unwrap_or_else(|| default_branch.clone());
 
             // Synthesize a Workspace-like entry for the home repo
             let home_workspace = local_db::Workspace {
@@ -774,20 +778,20 @@ pub fn workspace_status(
                 repo_path: repo_path.to_string(),
                 workspace_name: "home".to_string(),
                 workspace_path: repo_path.to_string(),
-                branch_name: default_branch.clone(),
+                branch_name: home_branch.clone(),
                 created_at: String::new(),
                 refreshed_at: None,
                 metadata: None,
                 target_branch: None,
-                title: default_branch.clone(),
+                title: home_branch.clone(),
                 description: None,
                 moved_files: None,
-                not_on_remote: false,
+                not_on_remote: matches!(rs.remote_sync, RemoteSyncStatus::NotOnRemote),
                 sparse_patterns: None,
             };
 
             let conflicted_files =
-                jj::get_conflicted_files(repo_path, Some(&default_branch)).unwrap_or_default();
+                jj::get_conflicted_files(repo_path, Some(&home_branch)).unwrap_or_default();
 
             return Ok(WorkspaceStatus {
                 partial: WorkspacePartialStatus {
