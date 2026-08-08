@@ -88,12 +88,23 @@ export function useFileActions({
 		? "pr"
 		: localPendingAction;
 
+	const invalidateReviewChangeCount = useCallback(() => {
+		return queryClient.invalidateQueries({
+			queryKey: [
+				"workspace-review-change-count",
+				repoPath,
+				workspaceId ?? null,
+			],
+		});
+	}, [queryClient, repoPath, workspaceId]);
+
 	const handleUndoDiscard = useCallback(
 		async (snapshotId: string) => {
 			try {
 				await jjRestoreSnapshot(workspacePath, snapshotId);
 				await invalidateCache();
 				await loadChangedFiles();
+				await invalidateReviewChangeCount();
 				addToast({
 					description: "Discarded changes have been restored",
 					title: "Restored",
@@ -107,7 +118,13 @@ export function useFileActions({
 				});
 			}
 		},
-		[workspacePath, addToast, invalidateCache, loadChangedFiles],
+		[
+			workspacePath,
+			addToast,
+			invalidateCache,
+			loadChangedFiles,
+			invalidateReviewChangeCount,
+		],
 	);
 
 	const handleDiscardAll = useCallback(async () => {
@@ -126,6 +143,7 @@ export function useFileActions({
 			});
 			await invalidateCache();
 			await loadChangedFiles();
+			await invalidateReviewChangeCount();
 		} catch (error) {
 			addToast({
 				description: error instanceof Error ? error.message : String(error),
@@ -140,6 +158,7 @@ export function useFileActions({
 		invalidateCache,
 		loadChangedFiles,
 		handleUndoDiscard,
+		invalidateReviewChangeCount,
 	]);
 
 	const handleDiscardFiles = useCallback(
@@ -171,6 +190,7 @@ export function useFileActions({
 				setSelectedUnstagedFiles(new Set());
 				await invalidateCache();
 				await loadChangedFiles();
+				await invalidateReviewChangeCount();
 			} catch (error) {
 				addToast({
 					description: error instanceof Error ? error.message : String(error),
@@ -190,6 +210,7 @@ export function useFileActions({
 			workspacePath,
 			setSelectedUnstagedFiles,
 			handleUndoDiscard,
+			invalidateReviewChangeCount,
 		],
 	);
 
@@ -309,6 +330,14 @@ export function useFileActions({
 					// The stack panel's per-workspace line-change counts.
 					queryClient.invalidateQueries({
 						queryKey: ["workspace-commits", repoPath, workspaceId ?? null],
+					}),
+					// Review tab badge: unique WC + committed file total.
+					queryClient.invalidateQueries({
+						queryKey: [
+							"workspace-review-change-count",
+							repoPath,
+							workspaceId ?? null,
+						],
 					}),
 				]);
 				return true;

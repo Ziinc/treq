@@ -36,6 +36,7 @@ import {
 	usePrCiStatus,
 } from "../hooks/useMergeQueueStatus";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
+import { listen } from "@tauri-apps/api/event";
 import {
 	checkAndRebaseWorkspaces,
 	createSession,
@@ -44,6 +45,8 @@ import {
 	dryRunHomeRepoRebase,
 	getRepoSetting,
 	getSetting,
+	getWorkspaceChangedFiles,
+	getWorkspaceDiff,
 	getWorkspaceReadme,
 	getWorkspaceStatus,
 	type HomeRebaseDryRunResult,
@@ -61,7 +64,10 @@ import {
 } from "../lib/api";
 import { FEATURES } from "../lib/features";
 import { getStatusBgColor } from "../lib/git-status-colors";
-import type { ParsedFileChange } from "../lib/git-utils";
+import {
+	countUniqueReviewChangePaths,
+	type ParsedFileChange,
+} from "../lib/git-utils";
 import { cn, getFullWorkspacePath, resolveReadmeImageSrc } from "../lib/utils";
 import type { SessionCreationInfo } from "../types/sessions";
 import {
@@ -370,6 +376,41 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 				getWorkspaceStatus(effectiveRepoPath, workspace?.id ?? null),
 		});
 
+		// Review badge: unique working-copy + committed files, independent of
+		// whether the Review tab (ChangesDiffViewer) is mounted. Mounting Review
+		// must not change this number.
+		const includeCommittedInReviewCount =
+			Boolean(workspace) && workspace!.branch_name !== defaultTargetBranch;
+		const { data: reviewChangeCount = 0 } = useQuery({
+			queryKey: [
+				"workspace-review-change-count",
+				effectiveRepoPath,
+				workspace?.id ?? null,
+				includeCommittedInReviewCount,
+			],
+			enabled: Boolean(effectiveRepoPath),
+			queryFn: async () => {
+				if (
+					includeCommittedInReviewCount &&
+					workspace?.id !== undefined
+				) {
+					const diff = await getWorkspaceDiff(
+						effectiveRepoPath,
+						workspace.id,
+					);
+					return countUniqueReviewChangePaths(
+						diff.uncommitted_files ?? [],
+						diff.committed_files ?? [],
+					);
+				}
+				const files = await getWorkspaceChangedFiles(
+					effectiveRepoPath,
+					workspace?.id ?? null,
+				);
+				return countUniqueReviewChangePaths(files);
+			},
+		});
+
 		const { data: overviewData, isPending: overviewPending } = useQuery({
 			queryKey: [
 				"workspace-overview",
@@ -433,6 +474,27 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 
 		// Invalidate sidebar query when conflicts change
 		const queryClient = useQueryClient();
+
+		useEffect(() => {
+			if (workspace?.id === undefined || !effectiveRepoPath) return;
+			const workspaceId = workspace.id;
+			const unlisten = listen<{ workspace_id: number }>(
+				"workspace-files-changed",
+				(event) => {
+					if (event.payload.workspace_id !== workspaceId) return;
+					void queryClient.invalidateQueries({
+						queryKey: [
+							"workspace-review-change-count",
+							effectiveRepoPath,
+							workspaceId,
+						],
+					});
+				},
+			);
+			return () => {
+				void unlisten.then((fn) => fn());
+			};
+		}, [workspace?.id, effectiveRepoPath, queryClient]);
 
 		useEffect(() => {
 			if (!workspaceStatusData) return;
@@ -1005,8 +1067,9 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 							>
 								<FileDiff className="w-4 h-4" />
 								<span>Review</span>
-								{changedFiles.size > 0 && (
+								{reviewChangeCount > 0 && (
 									<span
+										data-testid="review-change-count"
 										className={cn(
 											"rounded-full px-2 py-0.5 text-xs font-medium transition-colors",
 											conflictCount > 0
@@ -1014,7 +1077,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 												: "bg-muted text-muted-foreground",
 										)}
 									>
-										{changedFiles.size}
+										{reviewChangeCount}
 									</span>
 								)}
 							</TabsTrigger>
