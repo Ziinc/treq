@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Readability and house-voice checker for treq docs.
+"""Readability and house-voice checker for treq prose.
 
 No third-party dependencies. Reads a Markdown or MDX file, masks frontmatter,
 code, and JSX (preserving line numbers), then reports readability scores and
-every banlist / AI-tell hit from the writing skill.
+every banlist / AI-tell hit from the explain-to-me skill.
 
 The banlists draw on: oliviacal.com/post/ai-writing-tells, the Forbes "Seven
 Tells of AI Writing", Wikipedia:Signs_of_AI_writing, github.com/kdgbalmer/ai-tells,
