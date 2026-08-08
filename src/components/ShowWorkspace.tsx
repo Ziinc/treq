@@ -67,7 +67,6 @@ import {
 } from "../lib/api";
 import { FEATURES } from "../lib/features";
 import { getStatusBgColor } from "../lib/git-status-colors";
-<<<<<<< HEAD
 import {
 	countUniqueReviewChangePaths,
 	type ParsedFileChange,
@@ -77,10 +76,6 @@ import {
 	getReviewTabPill,
 	reviewTabPillClassName,
 } from "../lib/reviewTabPill";
-=======
-import type { ParsedFileChange } from "../lib/git-utils";
-import { getReviewTabPill, reviewTabPillClassName } from "../lib/reviewTabPill";
->>>>>>> 307799c4 (test: add Review tab pill color screenshot QA)
 import { cn, getFullWorkspacePath, resolveReadmeImageSrc } from "../lib/utils";
 import type { SessionCreationInfo } from "../types/sessions";
 import {
