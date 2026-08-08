@@ -50,6 +50,87 @@ fn assert_no_revert_hunk(workspace_path: &str, content: &str) {
     );
 }
 
+fn assert_remote_feature_lineage_preserved(deferred_checkout: bool) {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+    let default_branch = repo.default_branch().to_string();
+
+    // Make the pre-existing feature bookmark remote-only, as it is when a Treq
+    // workspace is recreated on a different machine (or after local deletion).
+    TestRepo::run_git(&repo.repo_path, &["branch", "-D", "feature-remote"])
+        .expect("Failed to remove local feature branch");
+    jj::jj_git_fetch(&repo.repo_path).expect("Failed to import remote-only feature bookmark");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feature-remote",
+        Some("recreated remote workspace".to_string()),
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to recreate workspace from remote feature branch");
+    let workspace_path = repo.workspace_full_path(&workspace);
+
+    // Workspace creation intentionally leaves an empty working-copy commit above
+    // the non-empty remote feature commit. Advance main before syncing that stack.
+    repo.commit_file(
+        "advanced-main.txt",
+        "advanced main\n",
+        "chore: advance main before workspace sync",
+    )
+    .expect("Failed to advance main");
+
+    if deferred_checkout {
+        jj::jj_rebase_workspace_bookmark_onto_deferred_checkout(
+            &workspace_path,
+            &workspace.branch_name,
+            &default_branch,
+        )
+        .expect("Failed to rebase recreated workspace with deferred checkout");
+    } else {
+        jj::jj_rebase_workspace_bookmark_onto(
+            &workspace_path,
+            &workspace.branch_name,
+            &default_branch,
+        )
+        .expect("Failed to rebase recreated workspace");
+    }
+
+    let branch_only_log = TestRepo::run_jj(
+        &repo.repo_path,
+        &[
+            "log",
+            "--no-graph",
+            "-r",
+            &format!("{}..{}", default_branch, workspace.branch_name),
+            "-T",
+            "description.first_line() ++ \"\\n\"",
+        ],
+    )
+    .expect("Failed to inspect rebased branch lineage");
+    assert!(
+        branch_only_log.contains("Add feature.txt"),
+        "remote feature commit must remain in branch-only lineage; got:\n{}",
+        branch_only_log
+    );
+    assert_eq!(
+        std::fs::read_to_string(std::path::Path::new(&workspace_path).join("feature.txt"))
+            .expect("feature tree change must remain checked out"),
+        "This is a feature from remote branch"
+    );
+}
+
+#[test]
+fn rebase_recreated_remote_workspace_preserves_complete_lineage() {
+    assert_remote_feature_lineage_preserved(false);
+}
+
+#[test]
+fn deferred_rebase_recreated_remote_workspace_preserves_complete_lineage() {
+    assert_remote_feature_lineage_preserved(true);
+}
+
 // ─── test 1: the reported bug ─────────────────────────────────────────────────
 
 /// After rebasing workspace A's lineage, workspace B (which descends from A) must not

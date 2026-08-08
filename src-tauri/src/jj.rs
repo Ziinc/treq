@@ -3599,6 +3599,30 @@ fn jj_rebase_workspace_bookmark_onto_with_checkout_mode(
     let workspace_tip_commit = resolve_commit_by_revision(&loaded, &workspace_revision)?;
     let target_commit = resolve_commit_by_revision(&loaded, &target_revision)?;
 
+    // Select the complete ancestry that belongs to this bookmark, stopping at
+    // the target's ancestry. Workspace creation can put the bookmark on a new
+    // empty working-copy commit above an existing remote branch tip; selecting
+    // only that tip would detach the authored remote commits during the move.
+    // An explicit commit set (rather than Roots) also prevents descendants on
+    // sibling bookmarks from becoming part of the move target.
+    let branch_only_commits = evaluate_revset(
+        &loaded,
+        &format!(
+            "{}..{}",
+            target_commit.id().hex(),
+            workspace_tip_commit.id().hex()
+        ),
+    )?
+    .iter()
+    .commits(loaded.repo.store())
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| {
+        JjError::IoError(format!(
+            "Failed to collect workspace bookmark lineage: {}",
+            e
+        ))
+    })?;
+
     let rebase_options = RebaseOptions {
         empty: EmptyBehavior::Keep,
         rewrite_refs: RewriteRefsOptions {
@@ -3611,7 +3635,12 @@ fn jj_rebase_workspace_bookmark_onto_with_checkout_mode(
     let location = MoveCommitsLocation {
         new_parent_ids: vec![target_commit.id().clone()],
         new_child_ids: Vec::new(),
-        target: MoveCommitsTarget::Roots(vec![workspace_tip_commit.id().clone()]),
+        target: MoveCommitsTarget::Commits(
+            branch_only_commits
+                .iter()
+                .map(|commit| commit.id().clone())
+                .collect(),
+        ),
     };
     let stats = block_on(async {
         rewrite::compute_move_commits(tx.repo_mut(), &location)
