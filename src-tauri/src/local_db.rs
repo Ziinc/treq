@@ -1394,7 +1394,10 @@ pub fn add_prompt_history(
 /// Get every prompt ever sent in this repository, most recent first.
 pub fn get_prompt_history(repo_path: &str) -> Result<Vec<PromptHistoryEntry>, String> {
     let conn = get_connection(repo_path)?;
-    let sql = format!("{} ORDER BY ph.created_at DESC, ph.id DESC", PROMPT_HISTORY_SELECT);
+    let sql = format!(
+        "{} ORDER BY ph.created_at DESC, ph.id DESC",
+        PROMPT_HISTORY_SELECT
+    );
     let mut stmt = conn
         .prepare(&sql)
         .map_err(|e| format!("Failed to prepare prompt history query: {}", e))?;
@@ -2518,9 +2521,14 @@ mod tests {
         )
         .expect("add_workspace should succeed");
 
-        let first_id =
-            add_prompt_history(repo_path, Some(workspace_id), None, "first prompt", Some("claude"))
-                .expect("add_prompt_history should succeed");
+        let first_id = add_prompt_history(
+            repo_path,
+            Some(workspace_id),
+            None,
+            "first prompt",
+            Some("claude"),
+        )
+        .expect("add_prompt_history should succeed");
         std::thread::sleep(std::time::Duration::from_millis(2));
         let second_id = add_prompt_history(repo_path, None, None, "second prompt", None)
             .expect("add_prompt_history should succeed");
