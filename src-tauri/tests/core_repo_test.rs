@@ -286,6 +286,126 @@ fn test_repo_status_with_remote_ahead() {
 }
 
 #[test]
+fn test_repo_status_ahead_on_checked_out_non_default_branch() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+    let default_branch = repo.default_branch().to_string();
+
+    // Park the home WC on the default branch tip (not the jj root). This is the
+    // normal healthy state after opening the home repo.
+    let _ = treq_lib::jj::jj_get_changed_files(&repo.repo_path);
+
+    TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "feature-sync"])
+        .expect("Failed to create feature-sync branch");
+    repo.push_branch("feature-sync")
+        .expect("Failed to push feature-sync");
+
+    // Advance only the checked-out branch via git. The jj working copy stays on
+    // the default-branch tip, so bookmarks-on-@- still see the in-sync default
+    // branch and miss the ahead feature branch.
+    repo.commit_file(
+        "feature_local_only.txt",
+        "local feature content",
+        "Unpushed commit on feature-sync",
+    )
+    .expect("Failed to commit on feature-sync");
+    treq_lib::jj::jj_util_import_git_refs(&repo.repo_path).expect("import git refs");
+
+    assert_eq!(
+        treq_lib::jj::resolve_home_repo_branch(&repo.repo_path).expect("resolve branch"),
+        "feature-sync"
+    );
+    assert_eq!(
+        treq_lib::jj::jj_get_sync_status(&repo.repo_path, &default_branch, false)
+            .expect("default sync"),
+        (0, 0),
+        "default branch should still be in sync"
+    );
+    let (feature_ahead, feature_behind) =
+        treq_lib::jj::jj_get_sync_status(&repo.repo_path, "feature-sync", false)
+            .expect("feature sync");
+    assert!(
+        feature_ahead > 0,
+        "feature-sync should be ahead of origin, got ahead={feature_ahead} behind={feature_behind}"
+    );
+
+    let bookmarks_on_parent =
+        treq_lib::jj::get_bookmarks_on_revision(&repo.repo_path, "@-").unwrap_or_default();
+    assert!(
+        bookmarks_on_parent.iter().any(|b| b == &default_branch),
+        "expected default branch bookmark on @- (WC lag); got {:?}",
+        bookmarks_on_parent
+    );
+    assert!(
+        !bookmarks_on_parent.iter().any(|b| b == "feature-sync"),
+        "expected feature-sync bookmark not on @-; got {:?}",
+        bookmarks_on_parent
+    );
+
+    let status = repo_status(&repo.repo_path).expect("repo_status should succeed");
+    match status.remote_sync {
+        RemoteSyncStatus::Ahead { count } => {
+            assert!(
+                count > 0,
+                "home sync indicator should report ahead for checked-out feature-sync"
+            );
+        }
+        other => panic!(
+            "expected Ahead for checked-out feature-sync, got {:?}",
+            other
+        ),
+    }
+}
+
+#[test]
+fn test_repo_status_behind_on_checked_out_non_default_branch() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+    let default_branch = repo.default_branch().to_string();
+
+    // Park the home WC on the default branch tip before switching.
+    let _ = treq_lib::jj::jj_get_changed_files(&repo.repo_path);
+
+    TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "feature-behind"])
+        .expect("Failed to create feature-behind branch");
+    repo.push_branch("feature-behind")
+        .expect("Failed to push feature-behind");
+
+    repo.remote_commit_on_branch(
+        "feature-behind",
+        "remote_feature_only.txt",
+        "remote feature content",
+        "Remote-only commit on feature-behind",
+    )
+    .expect("Failed to create remote commit on feature-behind");
+
+    assert_eq!(
+        treq_lib::jj::resolve_home_repo_branch(&repo.repo_path).expect("resolve branch"),
+        "feature-behind"
+    );
+
+    // repo_status fetches + imports, so behind should follow the checked-out branch
+    // even when default remains in sync and the jj WC still sits on the default tip.
+    let status = repo_status(&repo.repo_path).expect("repo_status should succeed");
+    assert_eq!(
+        treq_lib::jj::jj_get_sync_status(&repo.repo_path, &default_branch, false)
+            .expect("default sync after status"),
+        (0, 0),
+        "default branch should still be in sync"
+    );
+    match status.remote_sync {
+        RemoteSyncStatus::Behind { count } => {
+            assert!(
+                count > 0,
+                "home sync indicator should report behind for checked-out feature-behind"
+            );
+        }
+        other => panic!(
+            "expected Behind for checked-out feature-behind, got {:?}",
+            other
+        ),
+    }
+}
+
+#[test]
 fn test_repo_status_with_remote_behind() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
 

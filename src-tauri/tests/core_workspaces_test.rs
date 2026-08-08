@@ -1638,6 +1638,38 @@ fn test_workspace_status_home_repo() {
 }
 
 #[test]
+fn test_workspace_status_home_repo_ahead_on_checked_out_branch() {
+    let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+    let default_branch = repo.default_branch().to_string();
+
+    let _ = treq_lib::jj::jj_get_changed_files(&repo.repo_path);
+
+    TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "home-ahead"])
+        .expect("Failed to create home-ahead branch");
+    repo.push_branch("home-ahead")
+        .expect("Failed to push home-ahead");
+    repo.commit_file(
+        "home_ahead.txt",
+        "ahead content",
+        "Unpushed home-ahead commit",
+    )
+    .expect("Failed to commit on home-ahead");
+    treq_lib::jj::jj_util_import_git_refs(&repo.repo_path).expect("import git refs");
+
+    let status = treq_lib::core::workspace_status(&repo.repo_path, None)
+        .expect("workspace_status(None) should succeed");
+
+    assert_eq!(status.partial.current.branch_name, "home-ahead");
+    assert_ne!(status.partial.current.branch_name, default_branch);
+    assert_eq!(
+        status.remote_sync,
+        RemoteSyncStatus::Ahead { count: 1 },
+        "home workspace_status should follow checked-out branch sync, got {:?}",
+        status.remote_sync
+    );
+}
+
+#[test]
 fn test_workspace_status_with_workspace_id() {
     let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
 

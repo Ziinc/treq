@@ -130,37 +130,26 @@ pub fn repo_status(repo_path: &str) -> Result<RepoStatus, String> {
         .map(|files| !files.is_empty())
         .unwrap_or(false);
 
-    // Step 5: remote sync status (same logic as workspace_status home-repo path)
-    let branches = jj::get_bookmarks_on_revision(repo_path, "@-").unwrap_or_default();
-    let branches_to_check: Vec<String> = if branches.is_empty() {
-        vec![default_branch.clone()]
-    } else {
-        branches
-    };
+    // Step 5: remote sync status for the checked-out branch (same branch pull/push use).
+    // Do not use bookmarks on `@-`: the home WC can lag on the default-branch tip while
+    // git HEAD is on a different branch that is ahead/behind its remote.
+    let checked_out_branch = jj::resolve_home_repo_branch(repo_path)
+        .ok()
+        .filter(|branch| !branch.is_empty() && branch != "HEAD")
+        .unwrap_or_else(|| default_branch.clone());
 
-    let mut total_ahead: usize = 0;
-    let mut total_behind: usize = 0;
-    let mut any_on_remote = false;
-    for branch in &branches_to_check {
-        if let Ok((ahead, behind)) = jj::jj_get_sync_status(repo_path, branch, false) {
-            any_on_remote = true;
-            total_ahead += ahead;
-            total_behind += behind;
-        }
-    }
-
-    let remote_sync = if !any_on_remote {
-        RemoteSyncStatus::NotOnRemote
-    } else {
-        match (total_ahead, total_behind) {
-            (0, 0) => RemoteSyncStatus::InSync,
-            (a, 0) => RemoteSyncStatus::Ahead { count: a },
-            (0, b) => RemoteSyncStatus::Behind { count: b },
-            (a, b) => RemoteSyncStatus::Diverged {
+    let remote_sync = match jj::check_branch_exists(repo_path, &checked_out_branch) {
+        Ok(status) if !status.remote_exists => RemoteSyncStatus::NotOnRemote,
+        _ => match jj::jj_get_sync_status(repo_path, &checked_out_branch, false) {
+            Ok((0, 0)) => RemoteSyncStatus::InSync,
+            Ok((a, 0)) => RemoteSyncStatus::Ahead { count: a },
+            Ok((0, b)) => RemoteSyncStatus::Behind { count: b },
+            Ok((a, b)) => RemoteSyncStatus::Diverged {
                 ahead: a,
                 behind: b,
             },
-        }
+            Err(_) => RemoteSyncStatus::NotOnRemote,
+        },
     };
 
     Ok(RepoStatus {
