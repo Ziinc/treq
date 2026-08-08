@@ -96,6 +96,7 @@ vi.mock("../../../src/lib/api", async () => {
 		...actual,
 		getCachedPrInfo: mockGetCachedPrInfo,
 		startPrStatusPolling: vi.fn(async () => undefined),
+		refreshPrBranchStatus: vi.fn(async () => undefined),
 		stopPrStatusPolling: vi.fn(async () => undefined),
 		refreshPrStatuses: vi.fn(async () => undefined),
 		// createTestRepo's remote is a local bare repo, so the real

@@ -43,6 +43,7 @@ vi.mock("../../../src/lib/api", async () => {
 		startPrStatusPolling: vi.fn(async () => undefined),
 		stopPrStatusPolling: vi.fn(async () => undefined),
 		refreshPrStatuses: vi.fn(async () => undefined),
+		refreshPrBranchStatus: vi.fn(async () => undefined),
 		getCachedPrCiStatus: mockGetCachedPrCiStatus,
 		// createTestRepo's remote is a local bare repo, so the real
 		// get_git_remote_url returns null and the PR/CI hooks short-circuit.

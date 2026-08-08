@@ -10,6 +10,7 @@ import {
 	getPrInfoViaGh,
 	listCachedPrCiStatuses,
 	listCachedPrStatuses,
+	refreshPrBranchStatus,
 	refreshPrStatuses,
 	startPrStatusPolling,
 	stopPrStatusPolling,
@@ -147,6 +148,8 @@ export function usePrStatusPolling(repoPath: string | undefined) {
 /**
  * PR info for a branch, served from the Rust background cache.
  * Starts the poller if needed; never invokes `gh` from the UI thread.
+ * Also queues an out-of-band PR+CI refresh for this branch so opening a
+ * workspace does not wait for the next poll tick.
  */
 export function usePrInfoViaGh(
 	repoPath: string | undefined,
@@ -157,7 +160,10 @@ export function usePrInfoViaGh(
 	useEffect(() => {
 		if (!repoPath) return;
 		void startPrStatusPolling(repoPath);
-	}, [repoPath]);
+		if (branchName) {
+			void refreshPrBranchStatus(repoPath, branchName);
+		}
+	}, [repoPath, branchName]);
 
 	useEffect(() => {
 		if (!repoPath) return;
@@ -221,8 +227,8 @@ export async function invalidatePrStatuses(
 /**
  * CI status for the branch's PR, served from the Rust background cache.
  * Starts the poller if needed; never invokes `gh` from the UI thread.
- * Rust refreshes CI every 30s; the UI only reads the cache (and pauses
- * automatically once the tab/window loses focus).
+ * Rust refreshes CI every 30s; opening a workspace also queues an immediate
+ * PR+CI refresh so the indicator is not left on a stale poll snapshot.
  */
 export function usePrCiStatus(
 	repoPath: string | undefined,
@@ -233,7 +239,10 @@ export function usePrCiStatus(
 	useEffect(() => {
 		if (!repoPath) return;
 		void startPrStatusPolling(repoPath);
-	}, [repoPath]);
+		if (branchName) {
+			void refreshPrBranchStatus(repoPath, branchName);
+		}
+	}, [repoPath, branchName]);
 
 	useEffect(() => {
 		if (!repoPath) return;
@@ -439,17 +448,17 @@ export function useEnqueueWorkspace(
 			if (error) throw error;
 
 			// Refresh every view of the queue, not just this workspace's button.
-			await Promise.all([
-				queryClient.invalidateQueries({
-					queryKey: ["merge-queue-status", remoteInfo.full_name, branchName],
-				}),
-				queryClient.invalidateQueries({
-					queryKey: ["repo-branch-queue-statuses", remoteInfo.full_name],
-				}),
-				queryClient.invalidateQueries({
-					queryKey: ["repo-branch-queue-statuses-panel", remoteInfo.full_name],
-				}),
-			]);
+			// Do not await — invalidation refetches must not block the mutation
+			// (and must not stall tests if a matching observer is mid-flight).
+			void queryClient.invalidateQueries({
+				queryKey: ["merge-queue-status", remoteInfo.full_name, branchName],
+			});
+			void queryClient.invalidateQueries({
+				queryKey: ["repo-branch-queue-statuses", remoteInfo.full_name],
+			});
+			void queryClient.invalidateQueries({
+				queryKey: ["repo-branch-queue-statuses-panel", remoteInfo.full_name],
+			});
 		},
 		[
 			remoteInfo,

@@ -108,6 +108,18 @@ pub async fn refresh_pr_statuses(repo_path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Queue an out-of-band PR info + CI refresh for one branch.
+/// Returns immediately; the background poller fetches `gh pr view` and
+/// (when a PR exists) `gh pr checks`, updates the cache, and emits
+/// `pr-statuses-updated`. Used when the user opens a workspace so they
+/// do not wait for the next poll tick to see fresh data.
+#[tauri::command]
+pub fn refresh_pr_branch_status(repo_path: String, branch_name: String) -> Result<(), String> {
+    crate::pr_status::global().watch_repo(&repo_path);
+    crate::pr_status::global().queue_branch_refresh(repo_path, branch_name);
+    Ok(())
+}
+
 /// Run `gh pr checks` for the given branch in the given repo directory and
 /// roll the individual check runs up into an overall CI status.
 /// Returns None if gh is not installed, not authenticated, there is no PR,

@@ -318,3 +318,15 @@ export const getCachedPrCiStatus = (
 /** Force a full-repo cache refresh (e.g. after bulk workspace changes). */
 export const refreshPrStatuses = (repoPath: string): Promise<void> =>
 	invoke("refresh_pr_statuses", { repoPath });
+
+/**
+ * Queue an out-of-band PR+CI refresh for one branch. Returns immediately;
+ * the Rust background worker updates the cache and emits
+ * `pr-statuses-updated` when done. Call when opening a workspace so the
+ * UI does not wait for the next poll tick.
+ */
+export const refreshPrBranchStatus = (
+	repoPath: string,
+	branchName: string,
+): Promise<void> =>
+	invoke("refresh_pr_branch_status", { repoPath, branchName });

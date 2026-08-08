@@ -103,6 +103,17 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             Ok(Value::Null)
         }
 
+        "refresh_pr_branch_status" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let branch_name = get_str(&args, "branchName")?;
+            treq_lib::pr_status::global().watch_repo(&repo_path);
+            // Fire-and-forget — same as the Tauri command. Must not block the
+            // JS event loop on `gh` (which is what caused test timeouts when
+            // a spy was briefly restored to the real invoke).
+            treq_lib::pr_status::global().queue_branch_refresh(repo_path, branch_name);
+            Ok(Value::Null)
+        }
+
         "get_pr_checks_via_gh" => {
             let repo_path = get_str(&args, "repoPath")?;
             let branch_name = get_str(&args, "branchName")?;

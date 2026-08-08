@@ -56,6 +56,8 @@ struct Inner {
     on_update: Mutex<Option<OnUpdateFn>>,
     poll_interval: Duration,
     ci_poll_interval: Duration,
+    /// In-flight single-branch refreshes keyed by `repo_path\\0branch_name`.
+    branch_refresh_inflight: Mutex<HashSet<String>>,
     /// Signaled to wake the background loop early (watch/refresh/shutdown).
     wake: (Mutex<()>, Condvar),
     /// Set while a wake should trigger an immediate poll of all watched repos.
@@ -111,6 +113,7 @@ impl PrStatusManager {
                 on_update: Mutex::new(None),
                 poll_interval,
                 ci_poll_interval,
+                branch_refresh_inflight: Mutex::new(HashSet::new()),
                 wake: (Mutex::new(()), Condvar::new()),
                 pending_wake: AtomicBool::new(false),
                 shutdown: AtomicBool::new(false),
@@ -190,6 +193,37 @@ impl PrStatusManager {
     /// tests.
     pub fn refresh_ci_now(&self, repo_path: &str) {
         poll_ci_only(&self.inner, repo_path);
+    }
+
+    /// Synchronously refresh PR info + CI for a single branch (one logical
+    /// refresh; CI is skipped when there is no PR). Used when the user opens
+    /// a workspace so the cache is not left stale until the next poll tick.
+    pub fn refresh_branch_now(&self, repo_path: &str, branch_name: &str) {
+        poll_one_branch(&self.inner, repo_path, branch_name);
+    }
+
+    /// Queue an out-of-band single-branch PR+CI refresh on a background
+    /// thread. Returns immediately; results land in the cache and fire
+    /// `on_update` when ready. Concurrent queues for the same
+    /// `(repo, branch)` coalesce so opening a workspace twice does not
+    /// double-shell `gh`.
+    pub fn queue_branch_refresh(&self, repo_path: String, branch_name: String) {
+        self.ensure_started();
+        let key = format!("{repo_path}\0{branch_name}");
+        {
+            let mut inflight = self.inner.branch_refresh_inflight.lock().unwrap();
+            if !inflight.insert(key.clone()) {
+                return;
+            }
+        }
+        let inner = Arc::clone(&self.inner);
+        thread::Builder::new()
+            .name("pr-status-branch-refresh".into())
+            .spawn(move || {
+                poll_one_branch(&inner, &repo_path, &branch_name);
+                inner.branch_refresh_inflight.lock().unwrap().remove(&key);
+            })
+            .expect("failed to spawn pr-status-branch-refresh thread");
     }
 
     /// Overwrite a single branch entry (e.g. after an on-demand `gh pr view`).
@@ -427,6 +461,83 @@ fn poll_ci_only(inner: &Inner, repo_path: &str) {
     }
 }
 
+/// Refresh PR info + CI for a single branch, merging into the existing repo
+/// caches so sibling branches stay intact. Emits `on_update` with the full
+/// repo snapshot afterward.
+fn poll_one_branch(inner: &Inner, repo_path: &str, branch_name: &str) {
+    let pr_info = match (inner.fetch)(repo_path, branch_name) {
+        Ok(info) => info,
+        Err(e) => {
+            log::warn!("pr-status: branch fetch failed for {repo_path}#{branch_name}: {e}");
+            // Keep prior entry on transient failure.
+            if let Some(prev) = inner
+                .cache
+                .lock()
+                .unwrap()
+                .get(repo_path)
+                .and_then(|m| m.get(branch_name).cloned())
+            {
+                prev
+            } else {
+                return;
+            }
+        }
+    };
+
+    {
+        let mut cache = inner.cache.lock().unwrap();
+        cache
+            .entry(repo_path.to_string())
+            .or_default()
+            .insert(branch_name.to_string(), pr_info.clone());
+    }
+
+    let mut next_ci_entry: Option<PrCiStatus> = None;
+    let mut wrote_ci = false;
+    if pr_info.is_some() {
+        match (inner.ci_fetch)(repo_path, branch_name) {
+            Ok(status) => {
+                next_ci_entry = status;
+                wrote_ci = true;
+            }
+            Err(e) => {
+                log::warn!("pr-status: branch CI fetch failed for {repo_path}#{branch_name}: {e}");
+                // Leave prior CI entry alone on failure.
+            }
+        }
+    } else {
+        next_ci_entry = None;
+        wrote_ci = true;
+    }
+
+    if wrote_ci {
+        let mut ci_cache = inner.ci_cache.lock().unwrap();
+        ci_cache
+            .entry(repo_path.to_string())
+            .or_default()
+            .insert(branch_name.to_string(), next_ci_entry);
+    }
+
+    let statuses = inner
+        .cache
+        .lock()
+        .unwrap()
+        .get(repo_path)
+        .cloned()
+        .unwrap_or_default();
+    let ci_statuses = inner
+        .ci_cache
+        .lock()
+        .unwrap()
+        .get(repo_path)
+        .cloned()
+        .unwrap_or_default();
+
+    if let Some(cb) = inner.on_update.lock().unwrap().as_ref() {
+        cb(repo_path, &statuses, &ci_statuses);
+    }
+}
+
 fn fetch_ci_for_branch(
     inner: &Inner,
     repo_path: &str,
@@ -573,6 +684,151 @@ mod tests {
     fn default_ci_poll_interval_is_thirty_seconds() {
         assert_eq!(DEFAULT_CI_POLL_INTERVAL, Duration::from_secs(30));
         assert!(DEFAULT_CI_POLL_INTERVAL < DEFAULT_POLL_INTERVAL);
+    }
+
+    #[test]
+    fn refresh_branch_now_fetches_pr_and_ci_for_one_branch() {
+        let fetch: PrFetchFn = Arc::new(|_, branch| {
+            if branch == "feat/open" {
+                Ok(Some(sample_pr(11, branch)))
+            } else {
+                Ok(None)
+            }
+        });
+        let ci_fetch: CiFetchFn = Arc::new(|_, branch| {
+            assert_eq!(branch, "feat/open");
+            Ok(Some(sample_ci("success")))
+        });
+        let list: BranchListFn = Arc::new(|_| Ok(vec!["feat/open".into(), "feat/other".into()]));
+        let mgr = PrStatusManager::new_with_ci(fetch, ci_fetch, list);
+
+        mgr.refresh_branch_now("/tmp/repo", "feat/open");
+
+        assert_eq!(
+            mgr.get_cached("/tmp/repo", "feat/open")
+                .unwrap()
+                .unwrap()
+                .number,
+            11
+        );
+        assert_eq!(
+            mgr.get_cached_ci("/tmp/repo", "feat/open")
+                .unwrap()
+                .unwrap()
+                .state,
+            "success"
+        );
+        // Sibling branch left untouched (not yet polled).
+        assert_eq!(mgr.get_cached("/tmp/repo", "feat/other"), None);
+        assert_eq!(mgr.get_cached_ci("/tmp/repo", "feat/other"), None);
+    }
+
+    #[test]
+    fn refresh_branch_now_skips_ci_when_branch_has_no_pr() {
+        let fetch: PrFetchFn = Arc::new(|_, _| Ok(None));
+        let ci_fetch: CiFetchFn = Arc::new(|_, _| {
+            panic!("ci fetch must not run when there is no PR");
+        });
+        let list: BranchListFn = Arc::new(|_| Ok(vec!["feat".into()]));
+        let mgr = PrStatusManager::new_with_ci(fetch, ci_fetch, list);
+
+        mgr.refresh_branch_now("/tmp/repo", "feat");
+
+        assert_eq!(mgr.get_cached("/tmp/repo", "feat"), Some(None));
+        assert_eq!(mgr.get_cached_ci("/tmp/repo", "feat"), Some(None));
+    }
+
+    #[test]
+    fn refresh_branch_now_emits_on_update_with_repo_caches() {
+        let fetch: PrFetchFn = Arc::new(|_, b| Ok(Some(sample_pr(3, b))));
+        let ci_fetch: CiFetchFn = Arc::new(|_, _| Ok(Some(sample_ci("pending"))));
+        let list: BranchListFn = Arc::new(|_| Ok(vec!["feat".into()]));
+        let mgr = PrStatusManager::new_with_ci(fetch, ci_fetch, list);
+        let seen = Arc::new(Mutex::new(Vec::<String>::new()));
+        let seen_cb = Arc::clone(&seen);
+        mgr.set_on_update(Arc::new(move |repo, statuses, ci| {
+            seen_cb
+                .lock()
+                .unwrap()
+                .push(format!("{repo}:pr={}ci={}", statuses.len(), ci.len()));
+        }));
+
+        mgr.refresh_branch_now("/tmp/repo", "feat");
+        assert_eq!(
+            seen.lock().unwrap().clone(),
+            vec!["/tmp/repo:pr=1ci=1".to_string()]
+        );
+    }
+
+    #[test]
+    fn queue_branch_refresh_updates_pr_and_ci_asynchronously() {
+        let fetch: PrFetchFn = Arc::new(|_, b| Ok(Some(sample_pr(9, b))));
+        let ci_fetch: CiFetchFn = Arc::new(|_, _| Ok(Some(sample_ci("success"))));
+        let list: BranchListFn = Arc::new(|_| Ok(vec!["feat".into()]));
+        let mgr = PrStatusManager::new_with_ci(fetch, ci_fetch, list);
+
+        mgr.queue_branch_refresh("/tmp/repo".into(), "feat".into());
+
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        while std::time::Instant::now() < deadline {
+            if mgr.get_cached("/tmp/repo", "feat").is_some()
+                && mgr.get_cached_ci("/tmp/repo", "feat").is_some()
+            {
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        assert_eq!(
+            mgr.get_cached("/tmp/repo", "feat")
+                .unwrap()
+                .unwrap()
+                .number,
+            9
+        );
+        assert_eq!(
+            mgr.get_cached_ci("/tmp/repo", "feat")
+                .unwrap()
+                .unwrap()
+                .state,
+            "success"
+        );
+    }
+
+    #[test]
+    fn queue_branch_refresh_coalesces_inflight_duplicate() {
+        let started = Arc::new(std::sync::Barrier::new(2));
+        let started_fetch = Arc::clone(&started);
+        let release = Arc::new(std::sync::Barrier::new(2));
+        let release_fetch = Arc::clone(&release);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_fetch = Arc::clone(&calls);
+        let fetch: PrFetchFn = Arc::new(move |_, b| {
+            calls_fetch.fetch_add(1, Ordering::SeqCst);
+            started_fetch.wait();
+            release_fetch.wait();
+            Ok(Some(sample_pr(1, b)))
+        });
+        let ci_fetch: CiFetchFn = Arc::new(|_, _| Ok(Some(sample_ci("pending"))));
+        let list: BranchListFn = Arc::new(|_| Ok(vec!["feat".into()]));
+        let mgr = PrStatusManager::new_with_ci(fetch, ci_fetch, list);
+
+        mgr.queue_branch_refresh("/tmp/repo".into(), "feat".into());
+        started.wait();
+        // Second queue while first is in-flight must not start another fetch.
+        mgr.queue_branch_refresh("/tmp/repo".into(), "feat".into());
+        release.wait();
+
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        while std::time::Instant::now() < deadline {
+            if mgr.get_cached("/tmp/repo", "feat").is_some() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(mgr.get_cached("/tmp/repo", "feat").unwrap().is_some());
     }
 
     #[test]

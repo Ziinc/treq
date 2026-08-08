@@ -27,6 +27,7 @@ describe("CiStatusIndicator", () => {
 	it("renders nothing while there is no CI status", async () => {
 		const spy = vi.spyOn(api, "getCachedPrCiStatus").mockResolvedValue(null);
 		vi.spyOn(api, "startPrStatusPolling").mockResolvedValue(undefined);
+		vi.spyOn(api, "refreshPrBranchStatus").mockResolvedValue(undefined);
 
 		render(<CiStatusIndicator repoPath="/repo" branchName="feat" />);
 		await waitFor(() => expect(spy).toHaveBeenCalled());
@@ -36,6 +37,7 @@ describe("CiStatusIndicator", () => {
 	it("shows the passed/total ratio when CI succeeded", async () => {
 		vi.spyOn(api, "getCachedPrCiStatus").mockResolvedValue(baseStatus);
 		vi.spyOn(api, "startPrStatusPolling").mockResolvedValue(undefined);
+		vi.spyOn(api, "refreshPrBranchStatus").mockResolvedValue(undefined);
 
 		render(<CiStatusIndicator repoPath="/repo" branchName="feat" />);
 
@@ -57,6 +59,7 @@ describe("CiStatusIndicator", () => {
 			],
 		});
 		vi.spyOn(api, "startPrStatusPolling").mockResolvedValue(undefined);
+		vi.spyOn(api, "refreshPrBranchStatus").mockResolvedValue(undefined);
 
 		render(<CiStatusIndicator repoPath="/repo" branchName="feat" />);
 
@@ -78,6 +81,7 @@ describe("CiStatusIndicator", () => {
 			],
 		});
 		vi.spyOn(api, "startPrStatusPolling").mockResolvedValue(undefined);
+		vi.spyOn(api, "refreshPrBranchStatus").mockResolvedValue(undefined);
 
 		render(<CiStatusIndicator repoPath="/repo" branchName="feat" />);
 		await user.click(
