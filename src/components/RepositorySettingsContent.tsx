@@ -1,5 +1,4 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
-import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Label } from "./ui/label";
@@ -87,19 +86,8 @@ export const RepositorySettingsContent = forwardRef<
 		}
 	};
 
-<<<<<<< HEAD
 	useImperativeHandle(ref, () => ({ save: handleSave }));
 
-	const addPattern = (pattern: string) => {
-		if (includedFiles.trim()) {
-			setIncludedFiles(`${includedFiles}\n${pattern}`);
-		} else {
-			setIncludedFiles(pattern);
-		}
-	};
-
-=======
->>>>>>> accae8c6 (Move symlink dirs into create-workspace Advanced options)
 	if (loading) {
 		return (
 			<div className="py-8 text-center text-muted-foreground">
