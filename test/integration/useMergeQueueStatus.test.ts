@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
@@ -11,8 +12,11 @@ import {
 	usePrInfoViaGh,
 } from "../../src/hooks/useMergeQueueStatus";
 import * as api from "../../src/lib/api";
-import type { PrCiStatus, PrInfo } from "../../src/lib/api-types";
-import { createTestRepo } from "../utils";
+import type {
+	GitRemoteInfo,
+	PrCiStatus,
+	PrInfo,
+} from "../../src/lib/api-types";
 
 const { mockEdgeFn, mockRpc, queueEnabled } = vi.hoisted(() => {
 	const queueEnabled = { current: true };
@@ -33,6 +37,20 @@ vi.mock("../../src/lib/supabase", () => ({
 	},
 }));
 
+vi.mock("../../src/lib/api", async () => {
+	const actual =
+		await vi.importActual<typeof import("../../src/lib/api")>(
+			"../../src/lib/api",
+		);
+	return {
+		...actual,
+		startPrStatusPolling: vi.fn(async () => undefined),
+		stopPrStatusPolling: vi.fn(async () => undefined),
+		refreshPrBranchStatus: vi.fn(async () => undefined),
+		refreshPrStatuses: vi.fn(async () => undefined),
+	};
+});
+
 function makeWrapper() {
 	const qc = new QueryClient({
 		defaultOptions: { queries: { retry: false } },
@@ -51,21 +69,38 @@ const OPEN_PR: PrInfo = {
 	merge_state_status: "CLEAN",
 };
 
-function addGitHubRemote(repoPath: string, remoteUrl: string) {
-	const configPath = path.join(repoPath, ".git", "config");
-	const existing = fs.existsSync(configPath)
-		? fs.readFileSync(configPath, "utf-8")
-		: "";
-	fs.writeFileSync(
-		configPath,
-		`${existing}[remote "origin"]\n\turl = ${remoteUrl}\n`,
-	);
+const GITHUB_REMOTE: GitRemoteInfo = {
+	owner: "ziinc",
+	repo: "treq",
+	full_name: "ziinc/treq",
+};
+
+function makeGitDir(remoteUrl?: string): string {
+	const repoPath = fs.mkdtempSync(path.join(os.tmpdir(), "treq-remote-"));
+	fs.mkdirSync(path.join(repoPath, ".git"));
+	if (remoteUrl) {
+		fs.writeFileSync(
+			path.join(repoPath, ".git", "config"),
+			`[remote "origin"]\n\turl = ${remoteUrl}\n`,
+		);
+	} else {
+		fs.writeFileSync(path.join(repoPath, ".git", "config"), "");
+	}
+	return repoPath;
 }
 
 describe("useGitRemoteInfo", () => {
+	const tempDirs: string[] = [];
+
+	afterEach(() => {
+		for (const dir of tempDirs.splice(0)) {
+			fs.rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
 	it("returns null when repo has no .git directory", async () => {
-		const { repoPath } = createTestRepo(false);
-		fs.rmSync(path.join(repoPath, ".git"), { recursive: true, force: true });
+		const repoPath = fs.mkdtempSync(path.join(os.tmpdir(), "treq-nongit-"));
+		tempDirs.push(repoPath);
 
 		const { result } = renderHook(() => useGitRemoteInfo(repoPath), {
 			wrapper: makeWrapper(),
@@ -75,8 +110,8 @@ describe("useGitRemoteInfo", () => {
 	});
 
 	it("returns null when origin is not a GitHub URL", async () => {
-		const { repoPath } = createTestRepo(false);
-		addGitHubRemote(repoPath, "https://gitlab.com/owner/repo.git");
+		const repoPath = makeGitDir("https://gitlab.com/owner/repo.git");
+		tempDirs.push(repoPath);
 
 		const { result } = renderHook(() => useGitRemoteInfo(repoPath), {
 			wrapper: makeWrapper(),
@@ -86,8 +121,8 @@ describe("useGitRemoteInfo", () => {
 	});
 
 	it("parses SSH GitHub remote from .git/config", async () => {
-		const { repoPath } = createTestRepo(false);
-		addGitHubRemote(repoPath, "git@github.com:ziinc/treq.git");
+		const repoPath = makeGitDir("git@github.com:ziinc/treq.git");
+		tempDirs.push(repoPath);
 
 		const { result } = renderHook(() => useGitRemoteInfo(repoPath), {
 			wrapper: makeWrapper(),
@@ -101,8 +136,8 @@ describe("useGitRemoteInfo", () => {
 	});
 
 	it("parses HTTPS GitHub remote from .git/config", async () => {
-		const { repoPath } = createTestRepo(false);
-		addGitHubRemote(repoPath, "https://github.com/ziinc/treq.git");
+		const repoPath = makeGitDir("https://github.com/ziinc/treq.git");
+		tempDirs.push(repoPath);
 
 		const { result } = renderHook(() => useGitRemoteInfo(repoPath), {
 			wrapper: makeWrapper(),
@@ -120,22 +155,37 @@ describe("useGitRemoteInfo", () => {
 });
 
 describe("usePrInfoViaGh", () => {
-	it("reads from the Rust PR-status cache", async () => {
-		const { repoPath } = createTestRepo(false);
-		const spy = vi.spyOn(api, "getCachedPrInfo").mockResolvedValue(OPEN_PR);
-		vi.spyOn(api, "startPrStatusPolling").mockResolvedValue(undefined);
+	const repoPath = "/tmp/fake-pr-info-repo";
 
+	beforeEach(() => {
+		vi.mocked(api.startPrStatusPolling).mockClear();
+		vi.mocked(api.refreshPrBranchStatus).mockClear();
+		vi.spyOn(api, "getCachedPrInfo").mockResolvedValue(OPEN_PR);
+	});
+
+	afterEach(() => {
+		vi.mocked(api.getCachedPrInfo).mockReset();
+	});
+
+	it("reads from the Rust PR-status cache", async () => {
 		const { result } = renderHook(() => usePrInfoViaGh(repoPath, "feat"), {
 			wrapper: makeWrapper(),
 		});
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 		expect(result.current.data).toEqual(OPEN_PR);
-		expect(spy).toHaveBeenCalledWith(repoPath, "feat");
-		spy.mockRestore();
+		expect(api.getCachedPrInfo).toHaveBeenCalledWith(repoPath, "feat");
+	});
+
+	it("queues an out-of-band PR+CI refresh when a branch is opened", async () => {
+		renderHook(() => usePrInfoViaGh(repoPath, "feat"), {
+			wrapper: makeWrapper(),
+		});
+		await waitFor(() =>
+			expect(api.refreshPrBranchStatus).toHaveBeenCalledWith(repoPath, "feat"),
+		);
 	});
 
 	it("is disabled when branchName is undefined", () => {
-		const { repoPath } = createTestRepo(false);
 		const { result } = renderHook(() => usePrInfoViaGh(repoPath, undefined), {
 			wrapper: makeWrapper(),
 		});
@@ -156,34 +206,37 @@ const SUCCESS_CI: PrCiStatus = {
 };
 
 describe("usePrCiStatus", () => {
-	it("returns the rolled-up CI status", async () => {
-		const { repoPath } = createTestRepo(false);
-		const spy = vi.spyOn(api, "getPrChecksViaGh").mockResolvedValue(SUCCESS_CI);
+	const repoPath = "/tmp/fake-pr-ci-repo";
 
+	beforeEach(() => {
+		vi.mocked(api.startPrStatusPolling).mockClear();
+		vi.mocked(api.refreshPrBranchStatus).mockClear();
+		vi.spyOn(api, "getCachedPrCiStatus").mockResolvedValue(SUCCESS_CI);
+	});
+
+	afterEach(() => {
+		vi.mocked(api.getCachedPrCiStatus).mockReset();
+	});
+
+	it("reads from the Rust CI-status cache", async () => {
 		const { result } = renderHook(() => usePrCiStatus(repoPath, "feat"), {
 			wrapper: makeWrapper(),
 		});
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 		expect(result.current.data).toEqual(SUCCESS_CI);
-		spy.mockRestore();
+		expect(api.getCachedPrCiStatus).toHaveBeenCalledWith(repoPath, "feat");
 	});
 
-	it("surfaces gh operational failures", async () => {
-		const { repoPath } = createTestRepo(false);
-		const spy = vi
-			.spyOn(api, "getPrChecksViaGh")
-			.mockRejectedValue(new Error("gh authentication failed"));
-
-		const { result } = renderHook(() => usePrCiStatus(repoPath, "feat"), {
+	it("queues an out-of-band PR+CI refresh when a branch is opened", async () => {
+		renderHook(() => usePrCiStatus(repoPath, "feat"), {
 			wrapper: makeWrapper(),
 		});
-		await waitFor(() => expect(result.current.isError).toBe(true));
-		expect(result.current.error).toEqual(new Error("gh authentication failed"));
-		spy.mockRestore();
+		await waitFor(() =>
+			expect(api.refreshPrBranchStatus).toHaveBeenCalledWith(repoPath, "feat"),
+		);
 	});
 
 	it("is disabled when branchName is undefined", () => {
-		const { repoPath } = createTestRepo(false);
 		const { result } = renderHook(() => usePrCiStatus(repoPath, undefined), {
 			wrapper: makeWrapper(),
 		});
@@ -192,23 +245,23 @@ describe("usePrCiStatus", () => {
 });
 
 describe("useEnqueueWorkspace", () => {
-	let ghSpy: ReturnType<typeof vi.spyOn>;
+	const repoPath = "/tmp/fake-enqueue-repo";
 
 	beforeEach(() => {
 		mockEdgeFn.mockReset();
 		queueEnabled.current = true;
-		ghSpy = vi.spyOn(api, "getCachedPrInfo");
-		vi.spyOn(api, "startPrStatusPolling").mockResolvedValue(undefined);
+		vi.mocked(api.startPrStatusPolling).mockClear();
+		vi.mocked(api.refreshPrBranchStatus).mockClear();
+		vi.spyOn(api, "getCachedPrInfo").mockResolvedValue(null);
+		vi.spyOn(api, "getGitRemoteUrl").mockResolvedValue(GITHUB_REMOTE);
 	});
 
 	afterEach(() => {
-		ghSpy.mockRestore();
+		vi.mocked(api.getCachedPrInfo).mockReset();
+		vi.mocked(api.getGitRemoteUrl).mockReset();
 	});
 
 	it("calls enqueue-workspace edge function with correct payload", async () => {
-		const { repoPath } = createTestRepo(false);
-		addGitHubRemote(repoPath, "git@github.com:ziinc/treq.git");
-		ghSpy.mockResolvedValue(null);
 		mockEdgeFn.mockResolvedValue({ error: null });
 
 		const { result } = renderHook(() => useEnqueueWorkspace(repoPath, "feat"), {
@@ -228,9 +281,10 @@ describe("useEnqueueWorkspace", () => {
 	});
 
 	it("blocks enqueue when gh reports PR state is not OPEN", async () => {
-		const { repoPath } = createTestRepo(false);
-		addGitHubRemote(repoPath, "git@github.com:ziinc/treq.git");
-		ghSpy.mockResolvedValue({ ...OPEN_PR, state: "MERGED" });
+		vi.mocked(api.getCachedPrInfo).mockResolvedValue({
+			...OPEN_PR,
+			state: "MERGED",
+		});
 
 		const { result } = renderHook(() => useEnqueueWorkspace(repoPath, "feat"), {
 			wrapper: makeWrapper(),
@@ -247,9 +301,10 @@ describe("useEnqueueWorkspace", () => {
 	});
 
 	it("allows dequeue even when gh reports PR state is MERGED", async () => {
-		const { repoPath } = createTestRepo(false);
-		addGitHubRemote(repoPath, "git@github.com:ziinc/treq.git");
-		ghSpy.mockResolvedValue({ ...OPEN_PR, state: "MERGED" });
+		vi.mocked(api.getCachedPrInfo).mockResolvedValue({
+			...OPEN_PR,
+			state: "MERGED",
+		});
 		mockEdgeFn.mockResolvedValue({ error: null });
 
 		const { result } = renderHook(() => useEnqueueWorkspace(repoPath, "feat"), {
@@ -268,9 +323,6 @@ describe("useEnqueueWorkspace", () => {
 	});
 
 	it("skips pre-flight and proceeds when gh returns null", async () => {
-		const { repoPath } = createTestRepo(false);
-		addGitHubRemote(repoPath, "https://github.com/ziinc/treq.git");
-		ghSpy.mockResolvedValue(null);
 		mockEdgeFn.mockResolvedValue({ error: null });
 
 		const { result } = renderHook(() => useEnqueueWorkspace(repoPath, "feat"), {
@@ -283,9 +335,9 @@ describe("useEnqueueWorkspace", () => {
 	});
 
 	it("does not enqueue when the gh pre-flight fails", async () => {
-		const { repoPath } = createTestRepo(false);
-		addGitHubRemote(repoPath, "https://github.com/ziinc/treq.git");
-		ghSpy.mockRejectedValue(new Error("gh authentication failed"));
+		vi.mocked(api.getCachedPrInfo).mockRejectedValue(
+			new Error("gh authentication failed"),
+		);
 
 		const { result } = renderHook(() => useEnqueueWorkspace(repoPath, "feat"), {
 			wrapper: makeWrapper(),
@@ -299,14 +351,15 @@ describe("useEnqueueWorkspace", () => {
 	});
 
 	it("throws when no GitHub remote is detected", async () => {
-		const { repoPath } = createTestRepo(false);
-		ghSpy.mockResolvedValue(null);
+		vi.mocked(api.getGitRemoteUrl).mockResolvedValue(null);
 
 		const { result } = renderHook(() => useEnqueueWorkspace(repoPath, "feat"), {
 			wrapper: makeWrapper(),
 		});
 
-		await new Promise((r) => setTimeout(r, 200));
+		await waitFor(() => {
+			expect(result.current.remoteInfo).toBeNull();
+		});
 
 		await expect(result.current.enqueue.mutateAsync()).rejects.toThrow(
 			"Repository or branch not detected",
@@ -315,17 +368,19 @@ describe("useEnqueueWorkspace", () => {
 	});
 
 	it("refuses to enqueue when the repo has not enabled the merge queue", async () => {
-		const { repoPath } = createTestRepo(false);
-		addGitHubRemote(repoPath, "git@github.com:ziinc/treq.git");
 		queueEnabled.current = false;
-		ghSpy.mockResolvedValue(OPEN_PR);
+		vi.mocked(api.getCachedPrInfo).mockResolvedValue(OPEN_PR);
 		mockEdgeFn.mockResolvedValue({ error: null });
 
 		const { result } = renderHook(() => useEnqueueWorkspace(repoPath, "feat"), {
 			wrapper: makeWrapper(),
 		});
 
-		await waitFor(() => expect(result.current.remoteInfo).toBeTruthy());
+		await waitFor(() => {
+			expect(result.current.remoteInfo).toBeTruthy();
+			expect(result.current.enqueue.isPending).toBe(false);
+		});
+
 		await expect(result.current.enqueue.mutateAsync()).rejects.toThrow(
 			/not enabled for this repository/i,
 		);

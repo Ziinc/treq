@@ -49,6 +49,7 @@ vi.mock("../../../src/lib/api", async () => {
 		getGitRemoteUrl: mockGetGitRemoteUrl,
 		getCachedPrInfo: mockGetCachedPrInfo,
 		startPrStatusPolling: vi.fn(async () => undefined),
+		refreshPrBranchStatus: vi.fn(async () => undefined),
 		stopPrStatusPolling: vi.fn(async () => undefined),
 		refreshPrStatuses: vi.fn(async () => undefined),
 		ghListPrReviewThreads: mockGhListPrReviewThreads,

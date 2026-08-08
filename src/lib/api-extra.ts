@@ -5,6 +5,7 @@ import type {
 	FileSearchResult,
 	LineComment,
 	PendingReview,
+	PrCiStatus,
 	PrInfo,
 	Session,
 } from "./api-types";
@@ -298,6 +299,34 @@ export const getCachedPrInfo = (
 ): Promise<PrInfo | null> =>
 	invoke("get_cached_pr_info", { repoPath, branchName });
 
+/**
+ * Cached CI rollups (`branch -> PrCiStatus | null`) from the Rust background
+ * poller. Never shells out to `gh` from the UI thread.
+ */
+export const listCachedPrCiStatuses = (
+	repoPath: string,
+): Promise<Record<string, PrCiStatus | null>> =>
+	invoke("list_cached_pr_ci_statuses", { repoPath });
+
+/** Single-branch CI read from the Rust cache (no `gh` call). */
+export const getCachedPrCiStatus = (
+	repoPath: string,
+	branchName: string,
+): Promise<PrCiStatus | null> =>
+	invoke("get_cached_pr_ci_status", { repoPath, branchName });
+
 /** Force a full-repo cache refresh (e.g. after bulk workspace changes). */
 export const refreshPrStatuses = (repoPath: string): Promise<void> =>
 	invoke("refresh_pr_statuses", { repoPath });
+
+/**
+ * Queue an out-of-band PR+CI refresh for one branch. Returns immediately;
+ * the Rust background worker updates the cache and emits
+ * `pr-statuses-updated` when done. Call when opening a workspace so the
+ * UI does not wait for the next poll tick.
+ */
+export const refreshPrBranchStatus = (
+	repoPath: string,
+	branchName: string,
+): Promise<void> =>
+	invoke("refresh_pr_branch_status", { repoPath, branchName });

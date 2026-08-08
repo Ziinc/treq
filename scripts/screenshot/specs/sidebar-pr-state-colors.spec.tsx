@@ -32,6 +32,7 @@ vi.mock("../../../src/lib/api", async () => {
 			return map[branchName] ?? null;
 		},
 		startPrStatusPolling: vi.fn(async () => undefined),
+		refreshPrBranchStatus: vi.fn(async () => undefined),
 		stopPrStatusPolling: vi.fn(async () => undefined),
 		refreshPrStatuses: vi.fn(async () => undefined),
 		getGitRemoteUrl: mockGetGitRemoteUrl,

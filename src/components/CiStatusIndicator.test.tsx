@@ -25,7 +25,9 @@ const baseStatus: PrCiStatus = {
 
 describe("CiStatusIndicator", () => {
 	it("renders nothing while there is no CI status", async () => {
-		const spy = vi.spyOn(api, "getPrChecksViaGh").mockResolvedValue(null);
+		const spy = vi.spyOn(api, "getCachedPrCiStatus").mockResolvedValue(null);
+		vi.spyOn(api, "startPrStatusPolling").mockResolvedValue(undefined);
+		vi.spyOn(api, "refreshPrBranchStatus").mockResolvedValue(undefined);
 
 		render(<CiStatusIndicator repoPath="/repo" branchName="feat" />);
 		await waitFor(() => expect(spy).toHaveBeenCalled());
@@ -33,7 +35,9 @@ describe("CiStatusIndicator", () => {
 	});
 
 	it("shows the passed/total ratio when CI succeeded", async () => {
-		vi.spyOn(api, "getPrChecksViaGh").mockResolvedValue(baseStatus);
+		vi.spyOn(api, "getCachedPrCiStatus").mockResolvedValue(baseStatus);
+		vi.spyOn(api, "startPrStatusPolling").mockResolvedValue(undefined);
+		vi.spyOn(api, "refreshPrBranchStatus").mockResolvedValue(undefined);
 
 		render(<CiStatusIndicator repoPath="/repo" branchName="feat" />);
 
@@ -44,7 +48,7 @@ describe("CiStatusIndicator", () => {
 	});
 
 	it("shows failing check names when CI failed", async () => {
-		vi.spyOn(api, "getPrChecksViaGh").mockResolvedValue({
+		vi.spyOn(api, "getCachedPrCiStatus").mockResolvedValue({
 			...baseStatus,
 			state: "failure",
 			passed: 1,
@@ -54,6 +58,8 @@ describe("CiStatusIndicator", () => {
 				{ name: "test", bucket: "fail", link: "https://x/2" },
 			],
 		});
+		vi.spyOn(api, "startPrStatusPolling").mockResolvedValue(undefined);
+		vi.spyOn(api, "refreshPrBranchStatus").mockResolvedValue(undefined);
 
 		render(<CiStatusIndicator repoPath="/repo" branchName="feat" />);
 
@@ -64,7 +70,7 @@ describe("CiStatusIndicator", () => {
 
 	it("lists failed checks first and opens the selected check URL", async () => {
 		const user = userEvent.setup();
-		vi.spyOn(api, "getPrChecksViaGh").mockResolvedValue({
+		vi.spyOn(api, "getCachedPrCiStatus").mockResolvedValue({
 			...baseStatus,
 			state: "failure",
 			passed: 1,
@@ -74,6 +80,8 @@ describe("CiStatusIndicator", () => {
 				{ name: "test", bucket: "fail", link: "https://x/test" },
 			],
 		});
+		vi.spyOn(api, "startPrStatusPolling").mockResolvedValue(undefined);
+		vi.spyOn(api, "refreshPrBranchStatus").mockResolvedValue(undefined);
 
 		render(<CiStatusIndicator repoPath="/repo" branchName="feat" />);
 		await user.click(
