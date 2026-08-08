@@ -2635,6 +2635,52 @@ pub fn check_and_rebase_workspaces(
     }
 }
 
+/// Reads the repo-level "auto_push" setting from the app database.
+/// Defaults to `false` when unset, unparseable, or the database is unavailable.
+fn resolve_auto_push(repo_path: &str) -> bool {
+    let app_db_path = crate::core::resolve_app_db_path(repo_path);
+    if !app_db_path.exists() {
+        return false;
+    }
+    let Ok(db) = crate::db::Database::new(app_db_path) else {
+        return false;
+    };
+    db.get_repo_setting(repo_path, "auto_push")
+        .ok()
+        .flatten()
+        .map(|value| value == "true")
+        .unwrap_or(false)
+}
+
+/// Commits the workspace (or home repo) and, when the repository's "auto_push"
+/// setting is enabled, pushes the result to the remote.
+///
+/// # Arguments
+/// * `repo_path`     - Path to the repository root
+/// * `workspace_id`  - ID of the workspace to commit, or `None` for the home repo
+/// * `message`       - Commit message
+///
+/// # Returns
+/// The commit result message on success, or an error string. A failed auto-push
+/// is returned as an error even though the commit itself already succeeded.
+pub fn commit_workspace_with_auto_push<T>(
+    repo_path: &str,
+    workspace_id: T,
+    message: &str,
+) -> Result<String, String>
+where
+    T: Into<Option<i64>>,
+{
+    let workspace_id = workspace_id.into();
+    let result = commit_workspace(repo_path, workspace_id, message)?;
+
+    if resolve_auto_push(repo_path) {
+        push_workspace_to_remote(repo_path, workspace_id)?;
+    }
+
+    Ok(result)
+}
+
 pub fn commit_workspace<T>(
     repo_path: &str,
     workspace_id: T,
