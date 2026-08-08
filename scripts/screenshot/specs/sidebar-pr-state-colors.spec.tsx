@@ -125,8 +125,8 @@ it("captures sidebar workspace icons colored by GitHub PR state", async () => {
 	await createSiblingWorkspace(user, CLOSED_BRANCH);
 	await createSiblingWorkspace(user, NO_PR_BRANCH);
 
-	// Deselect back to the home row so every sidebar icon shows its PR-state
-	// color rather than the "selected" primary-color override.
+	// Deselect back to the home row so the all-states capture shows every
+	// PR icon color without a selected-row highlight competing for attention.
 	await user.click(await screen.findByTestId("home-repo-row"));
 
 	const workspaces = await getWorkspaces(repoPath);
@@ -170,6 +170,28 @@ it("captures sidebar workspace icons colored by GitHub PR state", async () => {
 		name: "sidebar-pr-state-colors-02-hover-tooltip",
 		expectations: [
 			`A tooltip is visible next to the "${OPEN_BRANCH}" sidebar row showing the branch name and a green "Open PR" line below it.`,
+		],
+	});
+
+	// Selecting a workspace must not override the PR-state icon color with
+	// the primary (blue) selection tint — selection is already shown via the
+	// row background.
+	const openIcon = screen.getByTestId(
+		`workspace-pr-icon-${idFor(OPEN_BRANCH)}`,
+	);
+	const openRow = openIcon.parentElement;
+	if (!openRow) throw new Error("Expected open-PR icon to have a parent row");
+	await user.click(openRow);
+	await waitFor(() => {
+		expect(openRow).toHaveClass("bg-primary/20");
+		expect(openIcon).toHaveClass("text-green-600");
+		expect(openIcon).not.toHaveClass("text-primary");
+	});
+	await captureDocument(document, {
+		name: "sidebar-pr-state-colors-03-selected-keeps-pr-color",
+		expectations: [
+			`The "${OPEN_BRANCH}" workspace row is selected (highlighted background) but its branch icon stays green for Open PR, not blue.`,
+			"The other PR-state icons (draft gray, merged purple, closed red) are still visible with their status colors.",
 		],
 	});
 }, 120000);

@@ -244,10 +244,10 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 												data-testid={`workspace-pr-icon-${workspace.id}`}
 												aria-label={prStatus ? prStatus.label : undefined}
 												className={`w-3 h-3 mr-1 shrink-0 -scale-y-100 ${
-													isSelected
-														? "text-primary"
-														: prStatus
-															? prStatus.color
+													prStatus
+														? prStatus.color
+														: isSelected
+															? "text-primary"
 															: "text-muted-foreground"
 												}`}
 											/>
