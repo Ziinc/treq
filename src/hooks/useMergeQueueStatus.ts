@@ -208,8 +208,8 @@ export async function invalidatePrStatuses(
 /**
  * CI status for the branch's PR, served from the Rust background cache.
  * Starts the poller if needed; never invokes `gh` from the UI thread.
- * Cache reads poll every 15s so the indicator stays live once Rust refreshes;
- * React Query pauses the interval automatically once the tab/window loses focus.
+ * Rust refreshes CI every 30s; the UI only reads the cache (and pauses
+ * automatically once the tab/window loses focus).
  */
 export function usePrCiStatus(
 	repoPath: string | undefined,
@@ -245,17 +245,17 @@ export function usePrCiStatus(
 		queryKey: ["pr-ci-status", repoPath, branchName],
 		queryFn: () => getCachedPrCiStatus(repoPath!, branchName!),
 		enabled: !!repoPath && !!branchName,
-		staleTime: 5_000,
-		// Cache-only refetch; Rust owns the `gh` polling.
-		refetchInterval: 15_000,
+		staleTime: 10_000,
+		// Cache-only; Rust owns the 30s `gh pr checks` cadence.
+		refetchInterval: 30_000,
 	});
 }
 
 /**
  * CI status for a specific PR, rolled up from `gh pr checks`. Used by the
  * GitHub panel's PR detail view, which browses PRs by number rather than by
- * a locally checked-out branch. Shares the same rollup and polling cadence
- * as `usePrCiStatus` so both surfaces always agree.
+ * a locally checked-out branch. Cadence matches the branch-based cache (30s);
+ * runs via spawn_blocking on the command side so it does not stall IPC.
  */
 export function usePrChecksForPr(
 	repoFullName: string | undefined,
@@ -266,7 +266,7 @@ export function usePrChecksForPr(
 		queryFn: () => getPrChecksForPr(repoFullName!, prNumber!),
 		enabled: !!repoFullName && prNumber !== undefined,
 		staleTime: 10_000,
-		refetchInterval: 15_000,
+		refetchInterval: 30_000,
 	});
 }
 

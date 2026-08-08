@@ -2,11 +2,11 @@
 //!
 //! The UI used to call `gh pr view` / `gh pr checks` on a React Query
 //! interval from the WebView. With many workspaces (and ShowWorkspace's
-//! 15s CI poll) that flooded IPC with concurrent subprocess work and caused
+//! CI poll) that flooded IPC with concurrent subprocess work and caused
 //! periodic stutter. This module owns the polling: a single background thread
-//! refreshes PR info and CI rollups for every watched repo's workspace
-//! branches and serves results from an in-memory cache. Frontend reads are
-//! cache-only and never shell out to `gh`.
+//! refreshes PR info (~60s) and CI rollups (~30s) for every watched repo's
+//! workspace branches and serves results from an in-memory cache. Frontend
+//! reads are cache-only and never shell out to `gh`.
 
 use crate::github::{PrCiStatus, PrInfo};
 use std::collections::{HashMap, HashSet};
@@ -15,8 +15,13 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::Duration;
 
-/// Default cadence matching the previous frontend `refetchInterval`.
+/// Default cadence for `gh pr view` (PR metadata).
 pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);
+
+/// Default cadence for `gh pr checks` (CI rollups). Faster than PR metadata
+/// because check status changes more often while a PR is open; still owned by
+/// the background thread so the UI never blocks on `gh`.
+pub const DEFAULT_CI_POLL_INTERVAL: Duration = Duration::from_secs(30);
 
 /// Fetch PR info for `(repo_path, branch_name)`.
 pub type PrFetchFn = Arc<dyn Fn(&str, &str) -> Result<Option<PrInfo>, String> + Send + Sync>;
@@ -50,6 +55,7 @@ struct Inner {
     list_branches: BranchListFn,
     on_update: Mutex<Option<OnUpdateFn>>,
     poll_interval: Duration,
+    ci_poll_interval: Duration,
     /// Signaled to wake the background loop early (watch/refresh/shutdown).
     wake: (Mutex<()>, Condvar),
     /// Set while a wake should trigger an immediate poll of all watched repos.
@@ -82,6 +88,22 @@ impl PrStatusManager {
         list_branches: BranchListFn,
         poll_interval: Duration,
     ) -> Self {
+        Self::new_with_intervals(
+            fetch,
+            ci_fetch,
+            list_branches,
+            poll_interval,
+            DEFAULT_CI_POLL_INTERVAL,
+        )
+    }
+
+    pub fn new_with_intervals(
+        fetch: PrFetchFn,
+        ci_fetch: CiFetchFn,
+        list_branches: BranchListFn,
+        poll_interval: Duration,
+        ci_poll_interval: Duration,
+    ) -> Self {
         Self {
             inner: Arc::new(Inner {
                 cache: Mutex::new(HashMap::new()),
@@ -92,6 +114,7 @@ impl PrStatusManager {
                 list_branches,
                 on_update: Mutex::new(None),
                 poll_interval,
+                ci_poll_interval,
                 wake: (Mutex::new(()), Condvar::new()),
                 pending_wake: AtomicBool::new(false),
                 shutdown: AtomicBool::new(false),
@@ -102,11 +125,17 @@ impl PrStatusManager {
 
     /// Convenience for tests that want a custom interval after `new`.
     pub fn with_interval(self, poll_interval: Duration) -> Self {
+        self.with_intervals(poll_interval, DEFAULT_CI_POLL_INTERVAL)
+    }
+
+    /// Convenience for tests that want custom PR + CI intervals.
+    pub fn with_intervals(self, poll_interval: Duration, ci_poll_interval: Duration) -> Self {
         let fetch = Arc::clone(&self.inner.fetch);
         let ci_fetch = Arc::clone(&self.inner.ci_fetch);
         let list_branches = Arc::clone(&self.inner.list_branches);
         let on_update = self.inner.on_update.lock().unwrap().clone();
-        let mgr = Self::new_with_interval(fetch, ci_fetch, list_branches, poll_interval);
+        let mgr =
+            Self::new_with_intervals(fetch, ci_fetch, list_branches, poll_interval, ci_poll_interval);
         if let Some(cb) = on_update {
             mgr.set_on_update(cb);
         }
@@ -153,6 +182,13 @@ impl PrStatusManager {
     /// Synchronously refresh one repo (tests + post-create-PR invalidation).
     pub fn refresh_repo_now(&self, repo_path: &str) {
         poll_one_repo(&self.inner, repo_path);
+    }
+
+    /// Synchronously refresh CI only for branches that already have cached PR
+    /// info. Does not re-run `gh pr view`. Used by the 30s CI poll cadence and
+    /// tests.
+    pub fn refresh_ci_now(&self, repo_path: &str) {
+        poll_ci_only(&self.inner, repo_path);
     }
 
     /// Overwrite a single branch entry (e.g. after an on-demand `gh pr view`).
@@ -248,28 +284,74 @@ impl PrStatusManager {
 }
 
 fn background_loop(inner: Arc<Inner>) {
+    use std::time::Instant;
+
+    let mut last_pr: Option<Instant> = None;
+    let mut last_ci: Option<Instant> = None;
+
     loop {
         if inner.shutdown.load(Ordering::SeqCst) {
             break;
         }
 
-        let repos: Vec<String> = inner.watched.lock().unwrap().iter().cloned().collect();
-        for repo in &repos {
-            if inner.shutdown.load(Ordering::SeqCst) {
-                break;
+        let now = Instant::now();
+        let wake_requested = inner.pending_wake.swap(false, Ordering::SeqCst);
+        let pr_due = wake_requested
+            || last_pr
+                .map(|t| now.duration_since(t) >= inner.poll_interval)
+                .unwrap_or(true);
+        let ci_due = wake_requested
+            || last_ci
+                .map(|t| now.duration_since(t) >= inner.ci_poll_interval)
+                .unwrap_or(true);
+
+        if pr_due || ci_due {
+            let repos: Vec<String> = inner.watched.lock().unwrap().iter().cloned().collect();
+            for repo in &repos {
+                if inner.shutdown.load(Ordering::SeqCst) {
+                    break;
+                }
+                if pr_due {
+                    // Full refresh also updates CI for branches with PRs.
+                    poll_one_repo(&inner, repo);
+                } else {
+                    poll_ci_only(&inner, repo);
+                }
             }
-            poll_one_repo(&inner, repo);
+            let stamped = Instant::now();
+            if pr_due {
+                last_pr = Some(stamped);
+                last_ci = Some(stamped);
+            } else if ci_due {
+                last_ci = Some(stamped);
+            }
         }
 
-        // Wait for the poll interval, or wake early on watch/refresh/shutdown.
+        if inner.shutdown.load(Ordering::SeqCst) {
+            break;
+        }
+
+        // Sleep until the sooner of the next PR or CI deadline (or wake early).
+        let now = Instant::now();
+        let until_pr = last_pr
+            .map(|t| inner.poll_interval.saturating_sub(now.duration_since(t)))
+            .unwrap_or(Duration::ZERO);
+        let until_ci = last_ci
+            .map(|t| {
+                inner
+                    .ci_poll_interval
+                    .saturating_sub(now.duration_since(t))
+            })
+            .unwrap_or(Duration::ZERO);
+        let wait = until_pr.min(until_ci).max(Duration::from_millis(5));
+
         let (lock, cvar) = &inner.wake;
         let guard = lock.lock().unwrap();
         let (_guard, _timeout) = cvar
-            .wait_timeout_while(guard, inner.poll_interval, |_| {
+            .wait_timeout_while(guard, wait, |_| {
                 !inner.pending_wake.load(Ordering::SeqCst) && !inner.shutdown.load(Ordering::SeqCst)
             })
             .unwrap();
-        inner.pending_wake.store(false, Ordering::SeqCst);
     }
 }
 
@@ -309,28 +391,7 @@ fn poll_one_repo(inner: &Inner, repo_path: &str) {
             }
         };
 
-        // Only shell out to `gh pr checks` when a PR exists for this branch.
-        if pr_info.is_some() {
-            match (inner.ci_fetch)(repo_path, &branch) {
-                Ok(status) => {
-                    next_ci.insert(branch, status);
-                }
-                Err(e) => {
-                    log::warn!("pr-status: CI fetch failed for {repo_path}#{branch}: {e}");
-                    if let Some(prev) = inner
-                        .ci_cache
-                        .lock()
-                        .unwrap()
-                        .get(repo_path)
-                        .and_then(|m| m.get(&branch).cloned())
-                    {
-                        next_ci.insert(branch, prev);
-                    }
-                }
-            }
-        } else {
-            next_ci.insert(branch, None);
-        }
+        fetch_ci_for_branch(inner, repo_path, &branch, pr_info.is_some(), &mut next_ci);
     }
 
     {
@@ -344,6 +405,69 @@ fn poll_one_repo(inner: &Inner, repo_path: &str) {
 
     if let Some(cb) = inner.on_update.lock().unwrap().as_ref() {
         cb(repo_path, &next, &next_ci);
+    }
+}
+
+/// Refresh CI using the existing PR cache (no `gh pr view`). Falls back to a
+/// full poll when the PR cache is empty so the first CI cycle is not a no-op.
+fn poll_ci_only(inner: &Inner, repo_path: &str) {
+    let pr_cache = inner
+        .cache
+        .lock()
+        .unwrap()
+        .get(repo_path)
+        .cloned()
+        .unwrap_or_default();
+
+    if pr_cache.is_empty() {
+        poll_one_repo(inner, repo_path);
+        return;
+    }
+
+    let mut next_ci: RepoCiCache = HashMap::new();
+    for (branch, pr_info) in &pr_cache {
+        fetch_ci_for_branch(inner, repo_path, branch, pr_info.is_some(), &mut next_ci);
+    }
+
+    {
+        let mut ci_cache = inner.ci_cache.lock().unwrap();
+        ci_cache.insert(repo_path.to_string(), next_ci.clone());
+    }
+
+    if let Some(cb) = inner.on_update.lock().unwrap().as_ref() {
+        cb(repo_path, &pr_cache, &next_ci);
+    }
+}
+
+fn fetch_ci_for_branch(
+    inner: &Inner,
+    repo_path: &str,
+    branch: &str,
+    has_pr: bool,
+    next_ci: &mut RepoCiCache,
+) {
+    // Only shell out to `gh pr checks` when a PR exists for this branch.
+    if !has_pr {
+        next_ci.insert(branch.to_string(), None);
+        return;
+    }
+
+    match (inner.ci_fetch)(repo_path, branch) {
+        Ok(status) => {
+            next_ci.insert(branch.to_string(), status);
+        }
+        Err(e) => {
+            log::warn!("pr-status: CI fetch failed for {repo_path}#{branch}: {e}");
+            if let Some(prev) = inner
+                .ci_cache
+                .lock()
+                .unwrap()
+                .get(repo_path)
+                .and_then(|m| m.get(branch).cloned())
+            {
+                next_ci.insert(branch.to_string(), prev);
+            }
+        }
     }
 }
 
@@ -455,6 +579,60 @@ mod tests {
             PrStatusManager::new(wrapped, list).with_interval(Duration::from_secs(60)),
             fetch_count,
         )
+    }
+
+    #[test]
+    fn default_ci_poll_interval_is_thirty_seconds() {
+        assert_eq!(DEFAULT_CI_POLL_INTERVAL, Duration::from_secs(30));
+        assert!(DEFAULT_CI_POLL_INTERVAL < DEFAULT_POLL_INTERVAL);
+    }
+
+    #[test]
+    fn refresh_ci_now_updates_ci_without_refetching_pr_info() {
+        let pr_count = Arc::new(AtomicUsize::new(0));
+        let pr_count_clone = Arc::clone(&pr_count);
+        let fetch: PrFetchFn = Arc::new(move |_, branch| {
+            pr_count_clone.fetch_add(1, Ordering::SeqCst);
+            Ok(Some(sample_pr(1, branch)))
+        });
+        let ci_count = Arc::new(AtomicUsize::new(0));
+        let ci_count_clone = Arc::clone(&ci_count);
+        let ci_state = Arc::new(Mutex::new("pending".to_string()));
+        let ci_state_clone = Arc::clone(&ci_state);
+        let ci_fetch: CiFetchFn = Arc::new(move |_, _| {
+            ci_count_clone.fetch_add(1, Ordering::SeqCst);
+            Ok(Some(sample_ci(&ci_state_clone.lock().unwrap())))
+        });
+        let list: BranchListFn = Arc::new(|_| Ok(vec!["feat".into()]));
+        let mgr = PrStatusManager::new_with_ci(fetch, ci_fetch, list)
+            .with_intervals(Duration::from_secs(60), Duration::from_secs(30));
+
+        mgr.refresh_repo_now("/tmp/repo");
+        assert_eq!(pr_count.load(Ordering::SeqCst), 1);
+        assert_eq!(ci_count.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            mgr.get_cached_ci("/tmp/repo", "feat")
+                .unwrap()
+                .unwrap()
+                .state,
+            "pending"
+        );
+
+        *ci_state.lock().unwrap() = "success".into();
+        mgr.refresh_ci_now("/tmp/repo");
+        assert_eq!(
+            pr_count.load(Ordering::SeqCst),
+            1,
+            "CI-only refresh must not re-run gh pr view"
+        );
+        assert_eq!(ci_count.load(Ordering::SeqCst), 2);
+        assert_eq!(
+            mgr.get_cached_ci("/tmp/repo", "feat")
+                .unwrap()
+                .unwrap()
+                .state,
+            "success"
+        );
     }
 
     #[test]
