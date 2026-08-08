@@ -16,6 +16,7 @@ import { WorkspaceTerminalPaneView } from "./WorkspaceTerminalPaneView";
 import { buildWorkspaceGroups } from "./workspace-terminal-pane/buildWorkspaceGroups";
 import { useTerminalPaneHeightResize } from "./workspace-terminal-pane/useTerminalPaneHeightResize";
 import { useScrollContainerWidth } from "./workspace-terminal-pane/useScrollContainerWidth";
+import { useScrollTerminalIntoView } from "./workspace-terminal-pane/useScrollTerminalIntoView";
 import {
 	type ShellTerminalData,
 	type WorkspaceTerminalPaneHandle,
@@ -49,6 +50,8 @@ const WorkspaceTerminalPaneInner = forwardRef<
 			useTerminalPaneHeightResize(maximized);
 		const scrollContainerRef = useRef<HTMLDivElement>(null);
 		const paneRef = useRef<HTMLDivElement>(null);
+		const { scrollToTerminal, handleTerminalDoubleClick } =
+			useScrollTerminalIntoView(scrollContainerRef);
 
 		// Track which terminal is focused (last-clicked)
 		const [activePtySessionId, setActivePtySessionId] = useState<string | null>(
@@ -99,24 +102,6 @@ const WorkspaceTerminalPaneInner = forwardRef<
 			new Map(),
 		);
 
-		// Scroll a specific terminal element into view after render
-		const scrollToTerminal = useCallback((terminalId: string) => {
-			requestAnimationFrame(() => {
-				requestAnimationFrame(() => {
-					const el = scrollContainerRef.current?.querySelector(
-						`[data-terminal-id="${CSS.escape(terminalId)}"]`,
-					);
-					if (el) {
-						el.scrollIntoView({
-							behavior: "smooth",
-							block: "nearest",
-							inline: "nearest",
-						});
-					}
-				});
-			});
-		}, []);
-
 		// Auto-mount active session when it changes (after creation or selection)
 		useEffect(() => {
 			if (activeClaudeSessionId === null) return;
@@ -139,7 +124,7 @@ const WorkspaceTerminalPaneInner = forwardRef<
 
 			// Scroll to the new terminal after it's rendered
 			scrollToTerminal(claudeTerminalId);
-		}, [activeClaudeSessionId]);
+		}, [activeClaudeSessionId, scrollToTerminal]);
 
 		// Derive the working directory for new terminals based on the active terminal's workspace.
 		// Falls back to the sidebar-selected workspace (workingDirectory prop).
@@ -587,6 +572,7 @@ const WorkspaceTerminalPaneInner = forwardRef<
 				terminalWidths={terminalWidths}
 				handleTerminalResize={handleTerminalResize}
 				handleCloseClaudeSession={handleCloseClaudeSession}
+				onTerminalDoubleClick={handleTerminalDoubleClick}
 			/>
 		);
 	},

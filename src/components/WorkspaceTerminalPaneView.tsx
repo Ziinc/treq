@@ -69,6 +69,7 @@ interface WorkspaceTerminalPaneViewProps {
 		deltaX: number,
 	) => void;
 	handleCloseClaudeSession: (sessionId: number) => void | Promise<void>;
+	onTerminalDoubleClick: (terminalId: string) => void;
 }
 
 export const WorkspaceTerminalPaneView: React.FC<
@@ -99,6 +100,7 @@ export const WorkspaceTerminalPaneView: React.FC<
 	terminalWidths,
 	handleTerminalResize,
 	handleCloseClaudeSession,
+	onTerminalDoubleClick,
 }) => (
 	<div
 		ref={paneRef as React.Ref<HTMLDivElement>}
@@ -288,6 +290,7 @@ export const WorkspaceTerminalPaneView: React.FC<
 			{!collapsed && (
 				<div
 					ref={scrollContainerRef as React.Ref<HTMLDivElement>}
+					data-testid="terminal-scroll-container"
 					className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden flex"
 					style={{ backgroundColor: "#1e1e1e" }}
 				>
@@ -356,6 +359,9 @@ export const WorkspaceTerminalPaneView: React.FC<
 														collapsed={collapsed}
 														isActive={activePtySessionId === terminalId}
 														onFocus={() => setActivePtySessionId(terminalId)}
+														onDoubleClick={() =>
+															onTerminalDoubleClick(terminalId)
+														}
 														onClose={() => handleCloseShell(terminalId)}
 														canClose={true}
 														onSessionError={onSessionError}
@@ -394,6 +400,9 @@ export const WorkspaceTerminalPaneView: React.FC<
 													collapsed={collapsed}
 													isActive={activePtySessionId === ptyId}
 													onFocus={() => setActivePtySessionId(ptyId)}
+													onDoubleClick={() =>
+														onTerminalDoubleClick(terminalId)
+													}
 													onClose={() =>
 														handleCloseClaudeSession(terminal.data.sessionId)
 													}

@@ -18,6 +18,7 @@ interface ShellTerminalPanelProps {
 	collapsed: boolean;
 	isActive?: boolean;
 	onFocus?: () => void;
+	onDoubleClick?: () => void;
 	onClose?: () => void;
 	canClose: boolean;
 	onSessionError?: (message: string) => void;
@@ -31,6 +32,7 @@ export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
 		collapsed,
 		isActive,
 		onFocus,
+		onDoubleClick,
 		onClose,
 		canClose,
 		onSessionError,
@@ -70,6 +72,7 @@ export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
 						"h-7 min-h-[28px] flex items-center justify-between px-2 border-b border-r border-border flex-shrink-0",
 						isActive ? "bg-primary/20" : "bg-background",
 					)}
+					onDoubleClick={onDoubleClick}
 				>
 					<div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground min-w-0">
 						<Terminal className="w-3 h-3 flex-shrink-0" />

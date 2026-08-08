@@ -1,5 +1,5 @@
 import * as React from "react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	createTestRepo,
 	findSidebarBranchElement,
@@ -139,5 +139,58 @@ describe("WorkspaceTerminalPane integration", () => {
 		expect(scrollButton.nextElementSibling).toBe(resetButton);
 
 		await user.click(scrollButton);
+	});
+
+	it("double-clicking a terminal scrolls it fully into view", async () => {
+		const { workspace } = await setupWorkspace("feat/terminal-dblclick-scroll");
+
+		render(<Dashboard />);
+		await user.click(await findSidebarBranchElement(workspace.branch_name));
+		await screen.findByText(/Terminals/i);
+
+		await user.keyboard("{Meta>}]{/Meta}");
+		await user.keyboard("{Meta>}\\{/Meta}");
+
+		const shellPanel = await waitFor(() => {
+			const el = document.querySelector('[data-terminal-id^="shell-"]');
+			expect(el).not.toBeNull();
+			return el as HTMLElement;
+		});
+
+		const scrollContainer = screen.getByTestId("terminal-scroll-container");
+		expect(scrollContainer.contains(shellPanel)).toBe(true);
+
+		const scrollBy = vi.fn();
+		scrollContainer.scrollBy = scrollBy;
+
+		vi.spyOn(scrollContainer, "getBoundingClientRect").mockReturnValue({
+			x: 0,
+			y: 0,
+			top: 0,
+			left: 0,
+			bottom: 200,
+			right: 400,
+			width: 400,
+			height: 200,
+			toJSON: () => ({}),
+		});
+		vi.spyOn(shellPanel, "getBoundingClientRect").mockReturnValue({
+			x: 250,
+			y: 0,
+			top: 0,
+			left: 250,
+			bottom: 200,
+			right: 650,
+			width: 400,
+			height: 200,
+			toJSON: () => ({}),
+		});
+
+		await user.dblClick(within(shellPanel).getByText("Shell"));
+
+		expect(scrollBy).toHaveBeenCalledWith({
+			left: 250,
+			behavior: "smooth",
+		});
 	});
 });

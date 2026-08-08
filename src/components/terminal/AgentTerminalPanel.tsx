@@ -52,6 +52,7 @@ export interface AgentTerminalPanelProps {
 	collapsed: boolean;
 	isActive?: boolean;
 	onFocus?: () => void;
+	onDoubleClick?: () => void;
 	onClose?: () => void;
 	onSessionError?: (message: string) => void;
 	onTerminalOutput?: (output: string) => void;
@@ -68,6 +69,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 		collapsed,
 		isActive,
 		onFocus,
+		onDoubleClick,
 		onClose,
 		onSessionError,
 		onTerminalOutput,
@@ -302,6 +304,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 						"h-7 min-h-[28px] flex items-center justify-between px-2 border-b border-r border-border flex-shrink-0",
 						isActive ? "bg-primary/40" : "bg-gray-700",
 					)}
+					onDoubleClick={onDoubleClick}
 				>
 					<div className="flex items-center gap-1 text-sm font-medium text-gray-200">
 						{sessionData.agent === "codex" ? (
