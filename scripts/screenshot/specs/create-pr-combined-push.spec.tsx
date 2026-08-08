@@ -30,7 +30,10 @@ vi.mock("../../../src/lib/api", async () => {
 	);
 	return {
 		...actual,
-		getPrInfoViaGh: vi.fn().mockResolvedValue(null),
+		getCachedPrInfo: vi.fn().mockResolvedValue(null),
+		startPrStatusPolling: vi.fn(async () => undefined),
+		stopPrStatusPolling: vi.fn(async () => undefined),
+		refreshPrStatuses: vi.fn(async () => undefined),
 		pushWorkspaceToRemote: vi.fn(
 			() =>
 				new Promise<string>((resolve) => {

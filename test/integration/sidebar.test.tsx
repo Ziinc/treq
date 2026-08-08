@@ -179,7 +179,11 @@ describe("Dashboard - workspace list", () => {
 				base_ref_name: "main",
 				merge_state_status: "CLEAN",
 			};
-			const spy = vi.spyOn(api, "getPrInfoViaGh").mockResolvedValue(openPr);
+			const spy = vi
+				.spyOn(api, "listCachedPrStatuses")
+				.mockResolvedValue({ "feat/alpha": openPr });
+			vi.spyOn(api, "startPrStatusPolling").mockResolvedValue(undefined);
+			vi.spyOn(api, "stopPrStatusPolling").mockResolvedValue(undefined);
 
 			render(<Dashboard />);
 
@@ -196,7 +200,11 @@ describe("Dashboard - workspace list", () => {
 		});
 
 		it("should not show the copy PR link option when there is no PR", async () => {
-			const spy = vi.spyOn(api, "getPrInfoViaGh").mockResolvedValue(null);
+			const spy = vi
+				.spyOn(api, "listCachedPrStatuses")
+				.mockResolvedValue({ "feat/alpha": null });
+			vi.spyOn(api, "startPrStatusPolling").mockResolvedValue(undefined);
+			vi.spyOn(api, "stopPrStatusPolling").mockResolvedValue(undefined);
 
 			render(<Dashboard />);
 

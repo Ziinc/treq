@@ -50,7 +50,42 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
                 &branch_name,
                 &extended_path,
             )?;
+            treq_lib::pr_status::global().put_cached(&repo_path, &branch_name, info.clone());
             serde_json::to_value(info).map_err(|e| e.to_string())
+        }
+
+        "start_pr_status_polling" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            treq_lib::pr_status::global().watch_repo(&repo_path);
+            Ok(Value::Null)
+        }
+
+        "stop_pr_status_polling" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            treq_lib::pr_status::global().unwatch_repo(&repo_path);
+            Ok(Value::Null)
+        }
+
+        "list_cached_pr_statuses" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let statuses = treq_lib::pr_status::global().list_cached(&repo_path);
+            serde_json::to_value(statuses).map_err(|e| e.to_string())
+        }
+
+        "get_cached_pr_info" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let branch_name = get_str(&args, "branchName")?;
+            let info = treq_lib::pr_status::global()
+                .get_cached(&repo_path, &branch_name)
+                .flatten();
+            serde_json::to_value(info).map_err(|e| e.to_string())
+        }
+
+        "refresh_pr_statuses" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            treq_lib::pr_status::global().watch_repo(&repo_path);
+            treq_lib::pr_status::global().refresh_repo_now(&repo_path);
+            Ok(Value::Null)
         }
 
         "get_pr_checks_via_gh" => {

@@ -11,6 +11,7 @@ pub mod file_indexer;
 pub mod github;
 pub mod jj;
 pub mod local_db;
+pub mod pr_status;
 pub mod pty;
 pub mod telemetry;
 
@@ -178,6 +179,9 @@ pub fn run() {
             // Initialize file watcher
             let watcher_manager = WatcherManager::new();
             watcher_manager.set_app_handle(app.handle().clone());
+
+            // Background PR-status poller (sidebar reads from its cache)
+            crate::pr_status::set_app_handle(app.handle().clone());
 
             let (dispatch_listener, dispatch_endpoint) = agent_dispatch::bind_ephemeral_listener()?;
             let dispatch_instance_id = uuid::Uuid::new_v4().to_string();
@@ -558,6 +562,11 @@ pub fn run() {
             commands::dry_run_home_repo_rebase,
             commands::get_git_remote_url,
             commands::get_pr_info_via_gh,
+            commands::start_pr_status_polling,
+            commands::stop_pr_status_polling,
+            commands::list_cached_pr_statuses,
+            commands::get_cached_pr_info,
+            commands::refresh_pr_statuses,
             commands::get_pr_checks_via_gh,
             commands::get_pr_checks_for_pr,
             commands::gh_list_issues,

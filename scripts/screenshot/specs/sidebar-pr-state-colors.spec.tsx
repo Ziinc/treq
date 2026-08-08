@@ -8,11 +8,12 @@ import { createTestRepo, openRepo } from "../../../test/utils";
 import { captureDocument } from "../capture";
 
 // Real jj repo, real Rust dispatch, real React tree throughout. The only
-// stubbed boundary is the GitHub-facing pair (`getGitRemoteUrl`/
-// `getPrInfoViaGh`), since the real versions shell out to a real git remote
-// and the real `gh` CLI, neither of which exist in this harness.
-const { mockGetPrInfoViaGh, mockGetGitRemoteUrl } = vi.hoisted(() => ({
-	mockGetPrInfoViaGh: vi.fn(),
+// stubbed boundary is the GitHub-facing pair (`getGitRemoteUrl` /
+// cached PR statuses), since the real versions shell out to a real git remote
+// and the real `gh` CLI, neither of which exist in this harness. PR status
+// polling is owned by Rust; the UI only reads the cache.
+const { mockListCachedPrStatuses, mockGetGitRemoteUrl } = vi.hoisted(() => ({
+	mockListCachedPrStatuses: vi.fn(),
 	mockGetGitRemoteUrl: vi.fn(),
 }));
 
@@ -22,7 +23,17 @@ vi.mock("../../../src/lib/api", async () => {
 	);
 	return {
 		...actual,
-		getPrInfoViaGh: mockGetPrInfoViaGh,
+		listCachedPrStatuses: mockListCachedPrStatuses,
+		getCachedPrInfo: async (repoPath: string, branchName: string) => {
+			const map = (await mockListCachedPrStatuses(repoPath)) as Record<
+				string,
+				PrInfo | null
+			>;
+			return map[branchName] ?? null;
+		},
+		startPrStatusPolling: vi.fn(async () => undefined),
+		stopPrStatusPolling: vi.fn(async () => undefined),
+		refreshPrStatuses: vi.fn(async () => undefined),
 		getGitRemoteUrl: mockGetGitRemoteUrl,
 	};
 });
@@ -100,10 +111,7 @@ async function createSiblingWorkspace(
 
 it("captures sidebar workspace icons colored by GitHub PR state", async () => {
 	mockGetGitRemoteUrl.mockResolvedValue(REMOTE_INFO);
-	mockGetPrInfoViaGh.mockImplementation(
-		async (_repoPath: string, branchName: string) =>
-			PR_BY_BRANCH[branchName] ?? null,
-	);
+	mockListCachedPrStatuses.mockResolvedValue(PR_BY_BRANCH);
 
 	const { repoPath } = createTestRepo(false);
 	openRepo(repoPath);

@@ -13,7 +13,6 @@ import {
 	Trash2,
 } from "lucide-react";
 import { useEditorApps } from "../hooks/useEditorApps";
-import { useGitRemoteInfo, usePrInfoViaGh } from "../hooks/useMergeQueueStatus";
 import type { QueueEntryStatus, Workspace } from "../lib/api";
 import type { PrInfo } from "../lib/api-types";
 import { cn, getFullWorkspacePath } from "../lib/utils";
@@ -128,6 +127,10 @@ interface WorkspaceSidebarItemProps {
 	onRenameWorkspace: (workspace: Workspace) => void;
 	onDoubleClick?: (workspace: Workspace, event: React.MouseEvent) => void;
 	queueStatus?: QueueEntryStatus;
+	/** Cached PR info from the Rust background poller (null = no PR / not yet known). */
+	prInfo?: PrInfo | null;
+	/** Whether the repo has a GitHub remote (gates PR icon coloring). */
+	hasRemote?: boolean;
 }
 
 function prIconStyle(prInfo: PrInfo): { color: string; label: string } {
@@ -191,6 +194,8 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 	onRenameWorkspace,
 	onDoubleClick,
 	queueStatus,
+	prInfo = null,
+	hasRemote = false,
 }) => {
 	const workspace = node.status.current;
 	const isSelected =
@@ -201,9 +206,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 	};
 	const isConflicted = node.status.has_conflicts;
 	const workspaceTitle = getWorkspaceTitleFromUtils(workspace);
-	const { data: remoteInfo } = useGitRemoteInfo(repoPath);
-	const { data: prInfo } = usePrInfoViaGh(repoPath, workspace.branch_name);
-	const prStatus = remoteInfo && prInfo ? prIconStyle(prInfo) : null;
+	const prStatus = hasRemote && prInfo ? prIconStyle(prInfo) : null;
 
 	return (
 		<div key={workspace.id}>
