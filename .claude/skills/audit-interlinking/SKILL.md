@@ -20,7 +20,8 @@ description: >-
 
 This skill is the fix-it counterpart to the `writing` skill's interlinking
 section. Read that section first for link syntax, placement, and anchor-text
-rules. This skill is about finding what to fix.
+rules. For voice and banlists while you edit link copy, use `explain-to-me`.
+This skill is about finding what to fix.
 
 ## The tool only finds candidates
 
