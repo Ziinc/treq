@@ -12,7 +12,11 @@ import {
 	usePrInfoViaGh,
 } from "../../src/hooks/useMergeQueueStatus";
 import * as api from "../../src/lib/api";
-import type { GitRemoteInfo, PrCiStatus, PrInfo } from "../../src/lib/api-types";
+import type {
+	GitRemoteInfo,
+	PrCiStatus,
+	PrInfo,
+} from "../../src/lib/api-types";
 
 const { mockEdgeFn, mockRpc, queueEnabled } = vi.hoisted(() => {
 	const queueEnabled = { current: true };
@@ -33,13 +37,11 @@ vi.mock("../../src/lib/supabase", () => ({
 	},
 }));
 
-// Never shell out to the Rust PR/CI poller from these hook unit tests.
-// Avoid createTestRepo here — NAPI repo init is intermittently multi-second
-// slow and trips the 15s vitest timeout when many cases share a worker.
 vi.mock("../../src/lib/api", async () => {
-	const actual = await vi.importActual<typeof import("../../src/lib/api")>(
-		"../../src/lib/api",
-	);
+	const actual =
+		await vi.importActual<typeof import("../../src/lib/api")>(
+			"../../src/lib/api",
+		);
 	return {
 		...actual,
 		startPrStatusPolling: vi.fn(async () => undefined),
@@ -73,7 +75,6 @@ const GITHUB_REMOTE: GitRemoteInfo = {
 	full_name: "ziinc/treq",
 };
 
-/** Minimal on-disk git dir so `get_git_remote_url` can parse origin — no jj. */
 function makeGitDir(remoteUrl?: string): string {
 	const repoPath = fs.mkdtempSync(path.join(os.tmpdir(), "treq-remote-"));
 	fs.mkdirSync(path.join(repoPath, ".git"));

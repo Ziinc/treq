@@ -780,10 +780,7 @@ mod tests {
         }
 
         assert_eq!(
-            mgr.get_cached("/tmp/repo", "feat")
-                .unwrap()
-                .unwrap()
-                .number,
+            mgr.get_cached("/tmp/repo", "feat").unwrap().unwrap().number,
             9
         );
         assert_eq!(
