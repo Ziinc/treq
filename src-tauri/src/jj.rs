@@ -1175,15 +1175,9 @@ pub fn create_workspace(
     // partial initialization and is safe to clean up before retrying.
     if workspace_dir.join(".jj").exists() {
         let workspace_dir_str = workspace_dir.to_string_lossy();
-        // Attempt a full jj-aware teardown first; fall back to raw removal for orphans.
-        if remove_workspace(repo_path, &workspace_dir_str).is_err() {
-            remove_workspace_directory_only(&workspace_dir_str).map_err(|e| {
-                JjError::GitWorkspaceError(format!(
-                    "Failed to remove existing workspace dir: {}",
-                    e
-                ))
-            })?;
-        }
+        remove_workspace_directory_only(&workspace_dir_str).map_err(|e| {
+            JjError::GitWorkspaceError(format!("Failed to remove orphaned workspace dir: {}", e))
+        })?;
     }
 
     // Ensure workspace directory exists (init_workspace_with_existing_repo requires it)
@@ -1465,11 +1459,11 @@ pub fn create_workspace(
     let _committed_repo = block_on(tx.commit("create_workspace"))
         .map_err(|e| JjError::GitWorkspaceError(format!("Failed to commit transaction: {}", e)))?;
 
-    let final_repo =
+    let verified_repo =
         verify_created_workspace_bookmark(&new_workspace, branch_name, &new_ws_name, new_wc.id())?;
 
     // Update the physical working copy to match the new wc commit
-    block_on(new_workspace.check_out(final_repo.op_id().clone(), None, &new_wc))
+    block_on(new_workspace.check_out(verified_repo.op_id().clone(), None, &new_wc))
         .map_err(|e| JjError::GitWorkspaceError(format!("Failed to checkout workspace: {}", e)))?;
 
     Ok(sanitized_name)
