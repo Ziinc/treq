@@ -330,8 +330,7 @@ export function DiffContentArea({
 					<Loader2 className="w-6 h-6 animate-spin" />
 					<span className="ml-2">Loading diffs...</span>
 				</div>
-			) : files.length === 0 &&
-				!(showCommittedChanges && committedFiles.length > 0) ? (
+			) : files.length === 0 && committedFiles.length === 0 ? (
 				<div className="h-full flex flex-col items-center justify-center text-muted-foreground">
 					<CheckCircle2 className="w-12 h-12 mb-3 text-muted-foreground/40" />
 					<p className="text-sm">No changes to review</p>
@@ -411,8 +410,7 @@ export function DiffContentArea({
 										saveEditComment={saveEditComment}
 									/>
 								))}
-								{showCommittedChanges &&
-									committedFiles.map((file) => (
+								{committedFiles.map((file) => (
 										<FileRowComponent
 											key={`committed-${file.path}`}
 											file={

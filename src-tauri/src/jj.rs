@@ -3920,40 +3920,105 @@ fn get_conflicted_files_from_branch_diff(
     let snapshotted_tree_override =
         snapshot_working_copy_tree(&mut loaded, workspace_path)?.map(|(_, tree)| tree);
 
+    // Prefer walking each tree's own unresolved conflicts. Pairwise tree-diffs
+    // miss conflicts that live only in a committed tip when before/after trees
+    // are identical (e.g. empty WC child of a conflicted bookmark tip queried
+    // against that same tip).
+    let mut conflicts = collect_conflict_paths_from_tree(&working_copy_tree);
+    if let Some(snapshotted_tree) = snapshotted_tree_override.as_ref() {
+        conflicts.extend(collect_conflict_paths_from_tree(snapshotted_tree));
+    }
+
     let target_commit =
         resolve_target_commit_for_conflict_diff(&loaded, workspace_path, target_branch)?;
     let target_tree = target_commit.tree();
 
-    let mut conflicts = collect_unresolved_conflict_paths(&target_tree, &working_copy_tree)?;
-
     if conflicts.is_empty() {
-        let wc_parent_tree = block_on(wc_commit.parent_tree(loaded.repo.as_ref()))
-            .map_err(|e| JjError::IoError(format!("Failed to load wc parent tree: {}", e)))?;
-        conflicts = collect_unresolved_conflict_paths(&wc_parent_tree, &working_copy_tree)?;
-    }
-
-    if conflicts.is_empty() {
-        if let Some(snapshotted_tree) = snapshotted_tree_override.as_ref() {
-            conflicts = collect_unresolved_conflict_paths(&target_tree, snapshotted_tree)?;
+        // Legacy pairwise fallback for materialization edge cases where a tree
+        // reports resolved ids but a path still differs as unresolved in a diff.
+        conflicts = collect_unresolved_conflict_paths(&target_tree, &working_copy_tree)?;
+        if conflicts.is_empty() {
+            if let Ok(wc_parent_tree) = block_on(wc_commit.parent_tree(loaded.repo.as_ref())) {
+                conflicts = collect_unresolved_conflict_paths(&wc_parent_tree, &working_copy_tree)?;
+            }
+        }
+        if conflicts.is_empty() {
+            if let Some(snapshotted_tree) = snapshotted_tree_override.as_ref() {
+                conflicts = collect_unresolved_conflict_paths(&target_tree, snapshotted_tree)?;
+            }
         }
     }
 
     if conflicts.is_empty() {
-        let changed_files = jj_get_changed_files(workspace_path)?;
-        for changed in changed_files {
-            let full_path = Path::new(workspace_path).join(&changed.path);
-            let Ok(contents) = fs::read_to_string(&full_path) else {
-                continue;
-            };
-            if !conflict_markers::parse_conflict_markers(&contents, &changed.path).is_empty() {
-                conflicts.push(changed.path);
-            }
+        conflicts.extend(collect_conflict_marker_paths_from_files(
+            workspace_path,
+            jj_get_changed_files(workspace_path).unwrap_or_default(),
+        ));
+    }
+
+    // When the WC is clean, scan paths that differ between the merge target and the
+    // WC tip for materialized conflict markers living only in committed content.
+    if conflicts.is_empty() {
+        if let Ok(committed_paths) =
+            collect_changed_paths_between_trees(&target_tree, &working_copy_tree)
+        {
+            let files = committed_paths
+                .into_iter()
+                .map(|path| JjFileChange {
+                    path,
+                    status: "M".to_string(),
+                    previous_path: None,
+                    changed_line_count: 0,
+                    diff_deferred: false,
+                })
+                .collect();
+            conflicts.extend(collect_conflict_marker_paths_from_files(
+                workspace_path,
+                files,
+            ));
         }
     }
 
     conflicts.sort();
     conflicts.dedup();
     Ok(conflicts)
+}
+
+/// Paths with unresolved conflicts inside a single tree (not a pairwise diff).
+fn collect_conflict_paths_from_tree(tree: &MergedTree) -> Vec<String> {
+    tree.conflicts()
+        .map(|(path, _value)| path.as_internal_file_string().to_string())
+        .collect()
+}
+
+fn collect_conflict_marker_paths_from_files(
+    workspace_path: &str,
+    files: Vec<JjFileChange>,
+) -> Vec<String> {
+    let mut conflicts = Vec::new();
+    for file in files {
+        let full_path = Path::new(workspace_path).join(&file.path);
+        let Ok(contents) = fs::read_to_string(&full_path) else {
+            continue;
+        };
+        if !conflict_markers::parse_conflict_markers(&contents, &file.path).is_empty() {
+            conflicts.push(file.path);
+        }
+    }
+    conflicts
+}
+
+fn collect_changed_paths_between_trees(
+    before: &MergedTree,
+    after: &MergedTree,
+) -> Result<Vec<String>, JjError> {
+    let mut paths = Vec::new();
+    let diff_matcher = repo_root_matcher();
+    let diff_entries = block_on(before.diff_stream(after, &diff_matcher).collect::<Vec<_>>());
+    for entry in diff_entries {
+        paths.push(entry.path.as_internal_file_string().to_string());
+    }
+    Ok(paths)
 }
 
 fn collect_unresolved_conflict_paths(
@@ -5820,7 +5885,10 @@ pub fn workspace_has_unresolved_conflicts(workspace_path: &str) -> Result<bool, 
         .store()
         .get_commit(&wc_commit_id)
         .map_err(|e| JjError::IoError(format!("Failed to load working-copy commit: {}", e)))?;
-    Ok(!wc_commit.tree_ids().is_resolved())
+    // Walk the WC tree itself — tree_ids().is_resolved() is equivalent to
+    // has_conflict() for the root, but pairing this with get_conflicted_files
+    // (which uses tree.conflicts()) keeps the boolean and path list in sync.
+    Ok(wc_commit.tree().has_conflict())
 }
 
 fn get_workspace_wc_commit(loaded: &LoadedWorkspaceRepo) -> Result<Option<Commit>, JjError> {

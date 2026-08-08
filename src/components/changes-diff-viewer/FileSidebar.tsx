@@ -169,8 +169,7 @@ export function FileSidebar({
 								}}
 							/>
 						)}
-						{files.length === 0 &&
-						!(showCommittedChanges && committedFiles.length > 0) ? (
+						{files.length === 0 && committedFiles.length === 0 ? (
 							<div className="flex flex-col items-center justify-center h-full text-center py-12">
 								<CheckCircle2 className="w-12 h-12 text-muted-foreground/40 mb-3" />
 								<p className="text-sm text-muted-foreground">No changes</p>

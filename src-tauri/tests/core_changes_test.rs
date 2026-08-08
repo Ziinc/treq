@@ -334,3 +334,100 @@ fn test_list_conflicted_files_none_target_defaults_to_repo_default_branch() {
         "None target must default to repo default-branch diff semantics"
     );
 }
+
+/// Conflicts that live only in the committed tip (clean working copy on top of a
+/// conflicted tree) must still be discovered — including when the "target" for the
+/// conflict query is the workspace's own branch tip (same tree as WC, so a
+/// pairwise tree-diff emits nothing). Detection must walk the tree's own conflicts.
+#[test]
+fn test_detects_conflicts_in_committed_tip_when_tree_diff_is_empty() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let workspace = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/committed-conflict",
+        Some("committed conflict".to_string()),
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create workspace");
+    let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+    let workspace_path_str = workspace_path.to_str().unwrap();
+
+    TestRepo::write_workspace_file(workspace_path_str, "shared.txt", "workspace side\n")
+        .expect("Failed to write workspace shared.txt");
+    treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "workspace commit")
+        .expect("Failed to commit workspace");
+    let ws_change_id =
+        get_change_id(workspace_path_str, "@-").expect("Failed to get workspace change_id");
+
+    repo.create_file("shared.txt", "main side\n")
+        .expect("Failed to write main shared.txt");
+    treq_lib::jj::jj_commit(&repo.repo_path, "main commit").expect("Failed to commit main");
+    let main_change_id =
+        get_change_id(&repo.repo_path, "@-").expect("Failed to get main change_id");
+
+    // Conflicted merge becomes the working-copy commit.
+    TestRepo::run_jj(workspace_path_str, &["new", &ws_change_id, &main_change_id])
+        .expect("Failed to create conflicted merge");
+
+    // Point the workspace bookmark at the conflicted tip, then create an empty
+    // working-copy child so the conflict lives only in "committed" history while
+    // the WC itself has no dirty files.
+    TestRepo::run_jj(
+        workspace_path_str,
+        &[
+            "bookmark",
+            "set",
+            "feat/committed-conflict",
+            "-r",
+            "@",
+            "--allow-backwards",
+        ],
+    )
+    .expect("Failed to point bookmark at conflicted tip");
+    TestRepo::run_jj(workspace_path_str, &["new", "@"])
+        .expect("Failed to create empty WC on conflicted tip");
+
+    let changed = treq_lib::jj::jj_get_changed_files(workspace_path_str)
+        .expect("jj_get_changed_files should succeed");
+    assert!(
+        changed.is_empty(),
+        "WC must be clean so the conflict is committed-only, got {:?}",
+        changed
+    );
+    assert!(
+        treq_lib::jj::workspace_has_unresolved_conflicts(workspace_path_str)
+            .expect("workspace_has_unresolved_conflicts should succeed"),
+        "conflicted tip must leave WC tree unresolved"
+    );
+
+    // Querying with the workspace branch as target makes before/after trees
+    // identical — pairwise diff finds nothing. Tree.conflicts() must still win.
+    let conflicted_files = treq_lib::jj::get_conflicted_files(
+        workspace_path_str,
+        Some("feat/committed-conflict"),
+    )
+    .expect("get_conflicted_files should succeed for committed-tip conflicts");
+    assert!(
+        conflicted_files.contains(&"shared.txt".to_string()),
+        "committed-tip conflict must be reported even when tree-diff is empty, got {:?}",
+        conflicted_files
+    );
+
+    let status = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+        .expect("workspace_status should succeed");
+    assert!(
+        status.partial.has_conflicts,
+        "workspace status must flag conflicts that live in committed tip"
+    );
+    assert!(
+        status
+            .conflicted_files
+            .contains(&"shared.txt".to_string()),
+        "workspace status must list committed-tip conflicted files, got {:?}",
+        status.conflicted_files
+    );
+}

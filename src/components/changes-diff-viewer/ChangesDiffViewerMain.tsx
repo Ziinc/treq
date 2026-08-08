@@ -98,6 +98,7 @@ export const ChangesDiffViewer = memo(
 				repoPath,
 				workspaceId,
 				showCommittedChanges,
+				conflictedFilesHint: conflictedFiles,
 				onRefreshingChange,
 				setLargeChangesetExpandedRef,
 				applyChangedFilesRef,
