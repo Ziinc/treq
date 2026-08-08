@@ -67,13 +67,18 @@ pub fn get_cached_pr_info(
         .flatten())
 }
 
-/// Force a synchronous refresh of all workspace PR statuses for a repo.
+/// Force a refresh of all workspace PR statuses for a repo.
 /// Used after creating a PR so the sidebar updates immediately.
+/// Runs off the UI/command thread via `spawn_blocking`.
 #[tauri::command]
-pub fn refresh_pr_statuses(repo_path: String) -> Result<(), String> {
-    // Ensure the repo is watched so subsequent background polls continue.
-    crate::pr_status::global().watch_repo(&repo_path);
-    crate::pr_status::global().refresh_repo_now(&repo_path);
+pub async fn refresh_pr_statuses(repo_path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        // Ensure the repo is watched so subsequent background polls continue.
+        crate::pr_status::global().watch_repo(&repo_path);
+        crate::pr_status::global().refresh_repo_now(&repo_path);
+    })
+    .await
+    .map_err(|e| format!("Failed to join refresh_pr_statuses task: {e}"))?;
     Ok(())
 }
 
